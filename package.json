@@ -1,0 +1,9 @@
+{
+  "name": "smart-asset-management",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node scripts/start-backend.js",
+    "dev": "node --watch backend/src/app.js"
+  }
+}
