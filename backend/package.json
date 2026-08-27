@@ -20,4 +20,6 @@
     "speakeasy": "^2.0.0"
   },
   "devDependencies": {
-    "
+    "nodemon": "^3.0.1"
+  }
+}

@@ -755,4 +755,66 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
         asset: assets.find((asset) => asset.id === log.assetId)?.name || `Asset ${log.assetId}`,
         location: log.location || 'Unknown',
         timestamp: log.createdAt,
- 
+      })),
+      rfidMetrics: {
+        detectedTags: rfidLogs.length,
+        uniqueTags: new Set(rfidLogs.map((log) => log.tag)).size,
+        latestActivity: rfidLogs[0]?.createdAt || null,
+        totalDevices: new Set(rfidLogs.map((log) => log.location).filter(Boolean)).size,
+        onlineDevices: rfidLogs.length ? 1 : 0,
+        offlineDevices: rfidLogs.length ? 0 : 0,
+        unknownAlerts: rfidLogs.filter((log) => !assets.some((asset) => asset.id === log.assetId)).length,
+      },
+      maintenanceSummary: {
+        open: maintenance.filter((item) => ['pending', 'approved'].includes(normalizeStatus(item.status))).length,
+        inProgress: maintenance.filter((item) => ['assigned', 'in-progress', 'in progress'].includes(normalizeStatus(item.status))).length,
+        completed: maintenance.filter((item) => normalizeStatus(item.status) === 'completed').length,
+        overdue: overdueMaintenance.length,
+        scheduled: maintenance.filter((item) => normalizeStatus(item.status) === 'scheduled').length,
+      },
+      userSummary: { active: users.filter((account) => account.active !== false).length, inactive: users.filter((account) => account.active === false).length, byRole: roleCounts },
+      departmentSummary: { mostAssets: Object.entries(departmentCounts).sort((left, right) => right[1] - left[1])[0]?.[0] || null, attention: departments.filter((department) => !departmentCounts[department.name]).map((department) => department.name) },
+      recentAssets: assets.slice(0, 10).map((asset) => ({ id: asset.id, name: asset.name, category: asset.category, department: asset.department, status: displayStatus(asset.status), rfid: asset.rfidTag, updatedAt: asset.updatedAt })),
+      searchCatalog: {
+        assets: assets.map((asset) => ({ id: asset.id, name: asset.name, category: asset.category, department: asset.department, rfid: asset.rfidTag, status: displayStatus(asset.status) })),
+        users: users.map((account) => ({ id: account.id, username: account.username, name: account.fullName, role: account.role })),
+        departments: departments.map((department) => ({ id: department.id, name: department.name })),
+      },
+      alerts: [
+        ...(overdueMaintenance.length ? [{ type: 'danger', category: 'maintenance', count: overdueMaintenance.length, message: `${overdueMaintenance.length} maintenance request(s) are overdue.` }] : []),
+        ...(expiredWarranties.length ? [{ type: 'warning', category: 'warranty', count: expiredWarranties.length, message: `${expiredWarranties.length} asset warranty(ies) have expired.` }] : []),
+        ...(lowStockAssets.length ? [{ type: 'warning', category: 'inventory', count: lowStockAssets.length, message: `${lowStockAssets.length} inventory item(s) are low on stock.` }] : []),
+        ...(assets.filter((asset) => ['missing', 'lost'].includes(normalizeStatus(asset.status))).length ? [{ type: 'danger', category: 'asset', count: assets.filter((asset) => ['missing', 'lost'].includes(normalizeStatus(asset.status))).length, message: 'Assets are marked missing or lost.' }] : []),
+        ...(assets.filter((asset) => normalizeStatus(asset.condition) === 'damaged').length ? [{ type: 'warning', category: 'asset', count: assets.filter((asset) => normalizeStatus(asset.condition) === 'damaged').length, message: 'Assets require damage review.' }] : []),
+        ...(rfidLogs.filter((log) => !assets.some((asset) => asset.id === log.assetId)).length ? [{ type: 'danger', category: 'rfid', count: rfidLogs.filter((log) => !assets.some((asset) => asset.id === log.assetId)).length, message: 'Unknown RFID activity detected.' }] : []),
+      ],
+      weeklySummary,
+      recentActivities,
+      alerts: [
+        ...(assets.filter((asset) => normalizeStatus(asset.status) === 'missing').length > 0
+          ? [{ type: 'danger', message: 'One or more assets are marked as missing.' }]
+          : []),
+        ...(maintenanceCounts.pending > 3
+          ? [{ type: 'warning', message: `${maintenanceCounts.pending} maintenance requests are pending.` }]
+          : []),
+      ],
+      quickActions: [
+        { icon: '➕', label: 'Create Asset', path: '/admin/assets/create' },
+        { icon: '📋', label: 'Assign Asset', path: '/admin/assets/assign' },
+        { icon: '🔄', label: 'Transfer Asset', path: '/admin/assets/transfer' },
+        { icon: '🔧', label: 'Maintenance', path: '/admin/maintenance' },
+        { icon: '📡', label: 'RFID Tracking', path: '/admin/rfid' },
+        { icon: '👥', label: 'Manage Users', path: '/admin/users' },
+        { icon: '🏛️', label: 'Departments', path: '/admin/departments' },
+        { icon: '📊', label: 'Reports', path: '/admin/reports' },
+        { icon: '📋', label: 'Audit Logs', path: '/admin/audit-logs' },
+      ],
+    };
+
+    return res.json({ success: true, data, ...data });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+module.exports = router;

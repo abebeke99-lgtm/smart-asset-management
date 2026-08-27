@@ -71,4 +71,16 @@ module.exports = {
   Transfer,
   AuditLog,
   AuditLogArchive,
-  Categ
+  Category,
+  Department,
+  Maintenance,
+  Notification,
+  RFIDLog,
+  Inventory,
+  InventoryTransaction,
+  Approval,
+  FinancialRecord,
+  Config,
+  SettingsVersion,
+  MfaSetting,
+};
