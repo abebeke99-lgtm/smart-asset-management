@@ -41,6 +41,32 @@ const User = sequelize.define('User', {
     type: DataTypes.BOOLEAN,
     defaultValue: true,
   },
+  failedLoginAttempts: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'failed_login_attempts',
+  },
+  lockoutUntil: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'lockout_until',
+  },
+  lastLoginAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'last_login_at',
+  },
+  resetTokenHash: {
+    type: DataTypes.STRING(128),
+    allowNull: true,
+    field: 'reset_token_hash',
+  },
+  resetTokenExpiresAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'reset_token_expires_at',
+  },
 }, {
   tableName: 'users',
   timestamps: true,

@@ -11,8 +11,8 @@ router.get('/next-id', requireAuth, getNextAssetId);
 router.get('/check-id/:value', requireAuth, checkAssetField('assetCode'));
 router.get('/check-serial/:value', requireAuth, checkAssetField('serialNumber'));
 router.get('/check-rfid/:value', requireAuth, checkAssetField('rfidTag'));
-router.get('/:id/history', requireAuth, getAssetHistory);
-router.post('/:id/assign', requireAuth, requireRole('admin'), async (req, res, next) => {
+router.get('/:id/history', requireAuth, requireRole('admin', 'ict_officer', 'department_head'), getAssetHistory);
+router.post('/:id/assign', requireAuth, requireRole('admin', 'ict_officer'), async (req, res, next) => {
 	const transaction = await require('../models').sequelize.transaction();
 	try {
 		const asset = await require('../models').Asset.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
@@ -29,7 +29,7 @@ router.post('/:id/assign', requireAuth, requireRole('admin'), async (req, res, n
 		res.status(201).json({ success: true, assignment, asset: asset.toJSON() });
 	} catch (error) { await transaction.rollback(); next(error); }
 });
-router.post('/:id/transfer', requireAuth, requireRole('admin'), async (req, res, next) => {
+router.post('/:id/transfer', requireAuth, requireRole('admin', 'ict_officer'), async (req, res, next) => {
 	try {
 		const asset = await require('../models').Asset.findByPk(req.params.id);
 		if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
@@ -60,9 +60,9 @@ const linkRfid = async (req, res, next) => {
 		res.json({ success: true, asset: asset.toJSON() });
 	} catch (error) { next(error); }
 };
-router.post('/:id/rfid', requireAuth, requireRole('admin'), linkRfid);
-router.put('/:id/rfid', requireAuth, requireRole('admin'), linkRfid);
-router.delete('/:id/rfid', requireAuth, requireRole('admin'), async (req, res, next) => {
+router.post('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer'), linkRfid);
+router.put('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer'), linkRfid);
+router.delete('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer'), async (req, res, next) => {
 	try {
 		const asset = await require('../models').Asset.findByPk(req.params.id);
 		if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });

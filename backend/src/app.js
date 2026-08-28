@@ -20,6 +20,7 @@ const transactionRoutes = require('./routes/transactionRoutes');
 const approvalRoutes = require('./routes/approvalRoutes');
 const financeRoutes = require('./routes/financeRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const departmentRoutes = require('./routes/departmentRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -85,6 +86,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/approvals', approvalRoutes);
 app.use('/api/finance', financeRoutes);
+app.use('/api/departments', departmentRoutes);
 app.use('/api', notificationRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api', adminSupportRoutes);

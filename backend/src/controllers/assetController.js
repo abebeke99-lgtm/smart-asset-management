@@ -192,6 +192,11 @@ const checkAssetField = (field) => async (req, res, next) => {
 const getAssetHistory = async (req, res, next) => {
   try {
     const assetId = Number(req.params.id);
+    const asset = await Asset.findByPk(assetId, { attributes: ['id', 'department'] });
+    if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
+    if (req.user.role === 'department_head' && asset.department !== req.user.department) {
+      return res.status(403).json({ success: false, message: 'Department access denied' });
+    }
     const [assignments, transfers, maintenance, rfid, audits] = await Promise.all([
       Assignment.findAll({ where: { assetId }, order: [['createdAt', 'DESC']] }),
       Transfer.findAll({ where: { assetId }, order: [['createdAt', 'DESC']] }),

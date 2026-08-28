@@ -1,4 +1,4 @@
-const { sequelize, Asset, Department, Inventory, InventoryTransaction, User } = require('../models');
+const { sequelize, Asset, Department, Inventory, InventoryTransaction, User, Maintenance } = require('../models');
 const { Op } = require('sequelize');
 
 const roles = ['admin', 'store_manager', 'ict_officer'];
@@ -13,6 +13,7 @@ const normalizeInventory = (item) => {
     asset_tag: item.Asset?.assetCode,
     name: item.Asset?.name,
     category: item.Asset?.category,
+    department: item.Department?.name || data.department || '',
     serial_number: item.Asset?.serialNumber,
     current_value: item.Asset?.currentValue,
     purchase_cost: item.Asset?.purchasePrice,
@@ -49,6 +50,70 @@ const getTransactions = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+const getStoreDashboard = async (req, res, next) => {
+  try {
+    const [items, transactions, activeUsers, departments, pendingMaintenance, rfidTagged] = await Promise.all([
+      Inventory.findAll({ include, order: [['updatedAt', 'DESC']] }),
+      InventoryTransaction.findAll({
+        include: [{ model: Asset, attributes: ['assetCode', 'name'] }, { model: User, attributes: ['username', 'fullName'] }],
+        order: [['createdAt', 'DESC']],
+        limit: 500,
+      }),
+      User.count({ where: { active: true } }),
+      Department.count(),
+      Maintenance.count({ where: { status: 'Pending' } }),
+      Asset.count({ where: { rfidTag: { [Op.ne]: '' } } }),
+    ]);
+
+    const inventory = items.map(normalizeInventory);
+    const countBy = (key) => inventory.reduce((counts, item) => {
+      const value = item[key] || 'Unassigned';
+      counts[value] = (counts[value] || 0) + 1;
+      return counts;
+    }, {});
+    const totalInventory = inventory.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const available = inventory.reduce((sum, item) => sum + Number(item.available_quantity || 0), 0);
+    const issued = inventory.reduce((sum, item) => sum + Number(item.issued_quantity || 0), 0);
+    const days = req.query.range === 'month' ? 30 : req.query.range === 'year' ? 365 : 7;
+    const movement = Array.from({ length: req.query.range === 'year' ? 12 : days }, (_, index) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (days - index - 1));
+      const day = date.toISOString().slice(0, 10);
+      const dayTransactions = transactions.filter((item) => String(item.createdAt || '').slice(0, 10) === day);
+      return {
+        date: req.query.range === 'week' ? date.toLocaleDateString('en', { weekday: 'short' }) : date.toLocaleDateString('en', { month: 'short', day: 'numeric' }),
+        issued: dayTransactions.filter((item) => item.type === 'issue').length,
+        returned: dayTransactions.filter((item) => item.type === 'return').length,
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        summary: {
+          totalInventory,
+          available,
+          issued,
+          lowStock: inventory.filter((item) => item.is_low_stock).length,
+          pendingRequests: pendingMaintenance,
+        },
+        distribution: {
+          byStatus: countBy('stock_status'),
+          byCategory: countBy('category'),
+          byLocation: countBy('location'),
+          byDepartment: countBy('department'),
+        },
+        activeUsers,
+        departments,
+        rfidTagged,
+        movement,
+        recentTransactions: transactions.slice(0, 10),
+        health: { server: 'Connected', database: 'Connected', rfid: rfidTagged ? 'Active' : 'No events', backup: 'Not configured' },
+      },
+    });
+  } catch (error) { next(error); }
+};
+
 const createTransaction = async (req, res, next) => {
   if (!canManage(req.user)) return res.status(403).json({ success: false, message: 'Store or ICT authorization required' });
   const { asset_id, type, quantity, to_location, from_location, reason, notes, department_id } = req.body;
@@ -72,4 +137,4 @@ const createTransaction = async (req, res, next) => {
   } catch (error) { await transaction.rollback(); next(error); }
 };
 
-module.exports = { getInventory, getTransactions, createTransaction };
+module.exports = { getInventory, getTransactions, getStoreDashboard, createTransaction };

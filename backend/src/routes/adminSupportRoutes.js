@@ -322,7 +322,7 @@ router.get('/audit/stream', ...requireAdmin, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-const SETTINGS_FIELDS = ['university_name', 'logo_url', 'address', 'contact_phone', 'contact_email', 'asset_code_format', 'default_currency', 'date_format', 'notification_enabled', 'notification_email', 'notification_sms', 'timezone'];
+const SETTINGS_FIELDS = ['university_name', 'institution_name', 'website', 'logo_url', 'favicon_url', 'address', 'contact_phone', 'contact_email', 'organization_code', 'description', 'asset_code_format', 'default_currency', 'date_format', 'time_format', 'number_format', 'language', 'timezone', 'theme', 'sidebar_behavior', 'dashboard_layout', 'maintenance_alerts', 'rfid_alerts', 'missing_asset_alerts', 'warranty_alerts', 'financial_alerts', 'assignment_alerts', 'transfer_alerts', 'security_alerts', 'asset_statuses', 'condition_types', 'warranty_default_months', 'useful_life_default_years', 'rfid_enabled', 'rfid_format', 'rfid_scan_interval', 'rfid_location_tracking', 'rfid_missing_detection', 'rfid_alert_threshold', 'maintenance_default_priority', 'maintenance_reminder_days', 'maintenance_overdue_days', 'fiscal_year', 'tax_rate', 'depreciation_method', 'financial_approval_threshold', 'budget_warning_threshold', 'report_default_format', 'report_default_date_range', 'report_page_size', 'report_footer', 'workflow_asset_request', 'workflow_assignment', 'workflow_transfer', 'workflow_return', 'workflow_maintenance', 'workflow_purchase', 'workflow_financial_approval', 'workflow_retirement', 'smtp_host', 'smtp_port', 'smtp_sender_name', 'smtp_sender_email', 'smtp_encryption', 'audit_login', 'audit_logout', 'audit_crud', 'audit_operations', 'audit_financial', 'audit_settings', 'monitoring_refresh_seconds', 'error_monitoring_enabled', 'cleanup_enabled', 'archive_after_days', 'notification_enabled', 'notification_email', 'notification_sms'];
 const SECURITY_FIELDS = ['password_min_length', 'password_require_uppercase', 'password_require_lowercase', 'password_require_numbers', 'password_require_special', 'session_timeout', 'max_login_attempts', 'account_lockout_duration', 'two_factor_auth', 'jwt_expiry', 'ip_whitelist', 'enable_audit_log'];
 const DEFAULT_SECURITY_SETTINGS = { password_min_length: 8, password_require_uppercase: true, password_require_lowercase: true, password_require_numbers: true, password_require_special: true, session_timeout: 60, max_login_attempts: 5, account_lockout_duration: 30, two_factor_auth: false, jwt_expiry: 7, ip_whitelist: '', enable_audit_log: true };
 
@@ -338,6 +338,14 @@ router.put('/settings', ...requireAdmin, async (req, res, next) => {
   try {
     const settings = Object.fromEntries(SETTINGS_FIELDS.filter((field) => Object.prototype.hasOwnProperty.call(req.body, field)).map((field) => [field, req.body[field]]));
     if (settings.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(settings.contact_email))) return res.status(400).json({ success: false, message: 'Invalid contact email' });
+    if (settings.website) {
+      try {
+        const website = new URL(String(settings.website));
+        if (!['http:', 'https:'].includes(website.protocol)) throw new Error('Unsupported protocol');
+      } catch (error) {
+        return res.status(400).json({ success: false, message: 'Website must be a valid HTTP or HTTPS URL' });
+      }
+    }
     const record = await Config.findByPk('system');
     const previous = record ? JSON.parse(record.value) : {};
     const nextSettings = { ...previous, ...settings };

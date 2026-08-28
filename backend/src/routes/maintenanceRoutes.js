@@ -4,10 +4,11 @@ const { requireAuth, requireRole } = require('../middlewares/auth');
 
 const router = express.Router();
 
-router.get('/', requireAuth, getAllMaintenance);
-router.get('/scheduled', requireAuth, getAllMaintenance);
-router.get('/history', requireAuth, getAllMaintenance);
-router.get('/dashboard', requireAuth, dashboard);
+const maintenanceReadAccess = [requireAuth, requireRole('admin', 'ict_officer', 'maintenance', 'department_head')];
+router.get('/', ...maintenanceReadAccess, getAllMaintenance);
+router.get('/scheduled', ...maintenanceReadAccess, getAllMaintenance);
+router.get('/history', ...maintenanceReadAccess, getAllMaintenance);
+router.get('/dashboard', ...maintenanceReadAccess, dashboard);
 const ictMaintenanceAccess = [requireAuth, requireRole('admin', 'ict_officer', 'maintenance')];
 router.post('/', requireAuth, requireRole('admin', 'ict_officer', 'maintenance', 'department_head'), createMaintenance);
 router.put('/:id', ...ictMaintenanceAccess, updateMaintenance);

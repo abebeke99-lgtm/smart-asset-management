@@ -13,13 +13,14 @@ const normalize = (item) => {
   return { ...data, status: displayStatus(data.status), asset_id: data.assetId, requested_by: data.requestedBy, assigned_to: data.assignedTo, asset: item.Asset, asset_name: item.Asset?.name, asset_tag: item.Asset?.assetCode, requested_by_name: item.Requester?.fullName || item.Requester?.username, assigned_to_name: item.Technician?.fullName || item.Technician?.username, created_at: data.createdAt, updated_at: data.updatedAt };
 };
 const normalizeStatus = (status) => String(status || '').trim().toLowerCase().replace(/\s+/g, '-');
-const displayStatus = (status) => ({ 'pending': 'Pending', 'approved': 'Approved', 'assigned': 'Assigned', 'in-progress': 'In Progress', 'waiting-for-parts': 'Waiting for Parts', 'completed': 'Completed', 'rejected': 'Rejected', 'cancelled': 'Cancelled' }[status] || status);
+const displayStatus = (status) => ({ 'pending': 'Pending', 'approved': 'Approved', 'assigned': 'Assigned', 'in-progress': 'In Progress', 'waiting-for-parts': 'Waiting for Parts', 'testing': 'Testing', 'completed': 'Completed', 'rejected': 'Rejected', 'cancelled': 'Cancelled' }[status] || status);
 const allowedTransitions = {
   pending: ['approved', 'rejected', 'cancelled'],
   approved: ['assigned', 'rejected', 'cancelled'],
   assigned: ['in-progress', 'cancelled'],
-  'in-progress': ['waiting-for-parts', 'completed'],
+  'in-progress': ['waiting-for-parts', 'testing', 'completed'],
   'waiting-for-parts': ['in-progress', 'completed'],
+  testing: ['in-progress', 'completed'],
   completed: [],
   rejected: [],
   cancelled: []
@@ -114,7 +115,7 @@ const setStatus = async (req, res, next) => {
       await transaction.rollback();
       return res.status(400).json({ success: false, message: 'Actual cost cannot be negative' });
     }
-    if (!['pending', 'approved', 'assigned', 'in-progress', 'waiting-for-parts', 'completed', 'rejected', 'cancelled'].includes(status)) {
+    if (!['pending', 'approved', 'assigned', 'in-progress', 'waiting-for-parts', 'testing', 'completed', 'rejected', 'cancelled'].includes(status)) {
       await transaction.rollback();
       return res.status(400).json({ success: false, message: 'Invalid maintenance status' });
     }
@@ -128,6 +129,8 @@ const setStatus = async (req, res, next) => {
     await item.update({ status }, { transaction });
     if (status === 'in-progress') {
       await asset.update({ status: 'under-maintenance' }, { transaction });
+    } else if (status === 'testing') {
+      await asset.update({ status: 'testing' }, { transaction });
     } else if (status === 'completed') {
       const activeAssignment = await Assignment.findOne({ where: { assetId: asset.id, status: 'active' }, transaction });
       await asset.update({ status: activeAssignment ? 'assigned' : 'available' }, { transaction });

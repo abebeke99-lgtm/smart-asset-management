@@ -1,9 +1,11 @@
 {
   "format": "smart-asset-management-backup",
   "version": 1,
-  "createdAt": "2026-08-26T12:03:16.205Z",
+  "type": "JSON",
+  "createdAt": "2026-08-28T12:07:11.366Z",
+  "createdBy": "admin",
   "counts": {
-    "users": 6,
+    "users": 7,
     "assets": 2,
     "assignments": 4,
     "transfers": 0,
@@ -28,6 +30,8 @@
         "department": "ICT",
         "phone": "0912345678",
         "active": true,
+        "resetTokenHash": null,
+        "resetTokenExpiresAt": null,
         "createdAt": "2026-08-17T07:54:50.000Z",
         "updatedAt": "2026-08-24T09:00:46.000Z"
       },
@@ -40,8 +44,10 @@
         "department": "Engineering",
         "phone": "0922345678",
         "active": true,
+        "resetTokenHash": null,
+        "resetTokenExpiresAt": null,
         "createdAt": "2026-08-17T07:54:50.000Z",
-        "updatedAt": "2026-08-17T07:54:50.000Z"
+        "updatedAt": "2026-08-27T06:55:58.000Z"
       },
       {
         "id": 4,
@@ -52,6 +58,8 @@
         "department": "Finance",
         "phone": "0932345678",
         "active": true,
+        "resetTokenHash": null,
+        "resetTokenExpiresAt": null,
         "createdAt": "2026-08-17T07:54:50.000Z",
         "updatedAt": "2026-08-17T07:54:50.000Z"
       },
@@ -64,6 +72,8 @@
         "department": "Store",
         "phone": "0942345678",
         "active": true,
+        "resetTokenHash": null,
+        "resetTokenExpiresAt": null,
         "createdAt": "2026-08-17T07:54:50.000Z",
         "updatedAt": "2026-08-17T07:54:50.000Z"
       },
@@ -76,6 +86,8 @@
         "department": "Maintenance",
         "phone": "0952345678",
         "active": true,
+        "resetTokenHash": null,
+        "resetTokenExpiresAt": null,
         "createdAt": "2026-08-17T07:54:50.000Z",
         "updatedAt": "2026-08-26T07:57:53.000Z"
       },
@@ -88,8 +100,24 @@
         "department": "Administration",
         "phone": "0986481821",
         "active": true,
+        "resetTokenHash": null,
+        "resetTokenExpiresAt": null,
         "createdAt": "2026-08-20T13:48:08.000Z",
         "updatedAt": "2026-08-20T13:48:08.000Z"
+      },
+      {
+        "id": 22,
+        "username": "bekele",
+        "email": "beke@gmail.com",
+        "fullName": "bekele",
+        "role": "ict_officer",
+        "department": "bekele",
+        "phone": "0986481221",
+        "active": true,
+        "resetTokenHash": null,
+        "resetTokenExpiresAt": null,
+        "createdAt": "2026-08-27T07:51:36.000Z",
+        "updatedAt": "2026-08-27T07:52:13.000Z"
       }
     ],
     "assets": [
@@ -219,10 +247,10 @@
         "assignedTo": null,
         "title": "t",
         "description": "ii",
-        "status": "pending",
+        "status": "approved",
         "priority": "Medium",
         "createdAt": "2026-08-21T11:14:37.000Z",
-        "updatedAt": "2026-08-21T11:14:37.000Z"
+        "updatedAt": "2026-08-26T12:34:13.000Z"
       }
     ],
     "rfidLogs": [],
