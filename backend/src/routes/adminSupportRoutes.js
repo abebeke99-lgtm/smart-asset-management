@@ -798,14 +798,6 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
       ],
       weeklySummary,
       recentActivities,
-      alerts: [
-        ...(assets.filter((asset) => normalizeStatus(asset.status) === 'missing').length > 0
-          ? [{ type: 'danger', message: 'One or more assets are marked as missing.' }]
-          : []),
-        ...(maintenanceCounts.pending > 3
-          ? [{ type: 'warning', message: `${maintenanceCounts.pending} maintenance requests are pending.` }]
-          : []),
-      ],
       quickActions: [
         { icon: '➕', label: 'Create Asset', path: '/admin/assets/create' },
         { icon: '📋', label: 'Assign Asset', path: '/admin/assets/assign' },
@@ -819,7 +811,7 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
       ],
     };
 
-    return res.json({ success: true, data, ...data });
+    return res.json({ success: true, data });
   } catch (error) {
     return next(error);
   }

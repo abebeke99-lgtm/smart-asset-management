@@ -2,7 +2,7 @@ const { Op } = require('sequelize');
 const { User, Department, AuditLog } = require('../models');
 const bcrypt = require('bcryptjs');
 
-const roles = ['admin', 'ict_officer', 'department_head', 'finance', 'store_manager', 'maintenance', 'student'];
+const roles = ['admin', 'ict_officer', 'department_head', 'finance', 'store_manager', 'maintenance', 'staff', 'student'];
 const safeUser = (user) => {
   const data = user.toJSON ? user.toJSON() : { ...user };
   delete data.password;
@@ -62,7 +62,7 @@ const createUser = async (req, res) => {
     const user = await User.create({
       username: input.username,
       email: input.email || null,
-      role: input.role || 'student',
+      role: input.role || 'staff',
       department: input.department || '',
       fullName: req.body.fullName || full_name || req.body.username,
       phone: req.body.phone || phone_number || '',
