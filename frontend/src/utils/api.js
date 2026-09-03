@@ -2,8 +2,9 @@ import axios from 'axios';
 
 // Helper to resolve API base URL used across the app.
 export function apiBase() {
-  if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL && process.env.REACT_APP_API_URL.trim()) {
-    return process.env.REACT_APP_API_URL.trim().replace(/\/+$/, '').replace(/\/api$/, '');
+  const configuredApiUrl = process.env.REACT_APP_API_URL;
+  if (configuredApiUrl && configuredApiUrl.trim()) {
+    return configuredApiUrl.trim().replace(/\/+$/, '').replace(/\/api$/, '');
   }
   // In development prefer relative URLs so CRA's `proxy` forwards requests to backend-next
   if (typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost') {
