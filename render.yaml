@@ -25,3 +25,13 @@ services:
         value: "true"
       - key: CLIENT_URL
         sync: false
+
+  - type: web
+    name: smart-asset-management-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://smart-asset-management-2f5p.onrender.com
