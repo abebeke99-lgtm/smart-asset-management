@@ -1,0 +1,82 @@
+/* ==============================================
+   src/index.css
+   ============================================== */
+
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* ==========================================
+   CSS Variables
+   ========================================== */
+
+:root {
+  --mau-blue: #1a365d;
+  --mau-sky: #2b6cb0;
+  --mau-light: #ebf4ff;
+  --mau-gold: #ffdd57;
+  --mau-gold-dark: #ffc107;
+  --mau-text: #1a2332;
+  --mau-text-light: #4a5568;
+}
+
+/* ==========================================
+   Dark Mode
+   ========================================== */
+
+body.dark {
+  background-color: #1a202c;
+  color: #e2e8f0;
+}
+
+body.dark .App {
+  background-color: #1a202c;
+}
+
+/* ==========================================
+   Scrollbar
+   ========================================== */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2b6cb0;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #1a365d;
+}
+
+body.dark ::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+body.dark ::-webkit-scrollbar-thumb {
+  background: #4a5568;
+}
+
+body.dark ::-webkit-scrollbar-thumb:hover {
+  background: #63b3ed;
+}
