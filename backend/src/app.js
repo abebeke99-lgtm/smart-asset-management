@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const passport = require('./config/passport');
-const { sequelize, testConnection } = require('./config/database');
+const { testConnection } = require('./config/database');
 const { syncDatabase } = require('./config/sync');
 const { seedDatabase } = require('./config/seed');
 
@@ -68,8 +68,7 @@ app.use(passport.initialize());
 let databaseReady = false;
 
 app.get('/api/health', (req, res) => {
-  const status = databaseReady ? 200 : 503;
-  res.status(status).json({
+  res.status(200).json({
     success: databaseReady,
     status: databaseReady ? 'ok' : 'unavailable',
     database: databaseReady ? 'connected' : 'disconnected',
@@ -104,31 +103,40 @@ app.use((err, req, res, next) => {
 });
 
 async function startServer() {
-  const connected = await testConnection();
-  if (!connected) {
-    console.error('Database connection failed. Server will not start.');
-    await sequelize.close();
-    process.exitCode = 1;
-    return;
-  }
+  await new Promise((resolve, reject) => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on port ${PORT}`);
+      resolve();
+    });
+    server.once('error', reject);
+  });
 
-  const synced = await syncDatabase();
-  if (!synced) {
-    console.error('Database synchronization failed. Server will not start.');
-    await sequelize.close();
-    process.exitCode = 1;
-    return;
-  }
+  const initializeDatabase = async () => {
+    while (!databaseReady) {
+      const connected = await testConnection();
+      if (connected && await syncDatabase()) {
+        await seedDatabase();
+        databaseReady = true;
+        console.log('Database initialization completed.');
+        return;
+      }
 
-  await seedDatabase();
-  databaseReady = true;
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+      console.error('Database is unavailable. Retrying initialization in 10 seconds.');
+      await new Promise((resolve) => setTimeout(resolve, 10000));
+    }
+  };
+
+  initializeDatabase().catch((error) => {
+    console.error('Database initialization failed:', error);
   });
 }
 
 if (require.main === module) {
-  startServer();
+  startServer().catch((error) => {
+    console.error('Application startup failed:', error);
+    process.exitCode = 1;
+  });
 }
 
 module.exports = app;
+module.exports.startServer = startServer;
