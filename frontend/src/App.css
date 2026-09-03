@@ -45,19 +45,19 @@ body {
   position: sticky !important;
   top: 0;
   z-index: 50;
-  background: #09dfe5 !important;
-  color: #073b4c !important;
-  border-bottom-color: #073b4c !important;
+  background: #00b2ee !important;
+  color: #ffffff !important;
+  border-bottom-color: #ffdd57 !important;
 }
 
 .public-site-header a,
 .public-site-header .public-login-button {
-  color: #073b4c !important;
+  color: #ffffff !important;
 }
 
 .public-site-footer {
-  background: #09dfe5 !important;
-  color: #073b4c !important;
+  background: #00b2ee !important;
+  color: #ffffff !important;
 }
 
 .public-site-footer a,

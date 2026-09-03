@@ -1376,17 +1376,17 @@ function AppContent() {
 
   const themeStyles = {
     light: {
-      headerBg: '#2864E8',
+      headerBg: '#00b2ee',
       headerText: '#ffffff',
-      footerBg: '#2864E8',
+      footerBg: '#00b2ee',
       footerText: '#ffffff',
       mainBg: '#f7f9fc',
       mainText: '#17305f',
       cardBg: '#ffffff',
       cardBorder: '#d9e2f2',
       cardShadow: '0 4px 12px rgba(40, 100, 232, 0.1)',
-      sidebarBg: '#2864E8',
-      sidebarHover: '#1f50c4',
+      sidebarBg: '#00b2ee',
+      sidebarHover: '#009bd1',
       accent: '#2864E8',
       accentLight: '#eaf0ff',
       subText: '#4a5568',
@@ -1394,17 +1394,17 @@ function AppContent() {
       success: '#48bb78'
     },
     dark: {
-      headerBg: '#2864E8',
+      headerBg: '#00b2ee',
       headerText: '#ffffff',
-      footerBg: '#2864E8',
+      footerBg: '#00b2ee',
       footerText: '#ffffff',
       mainBg: '#eef3fb',
       mainText: '#17305f',
       cardBg: '#ffffff',
       cardBorder: '#c8d5ea',
       cardShadow: '0 4px 12px rgba(23, 48, 95, 0.14)',
-      sidebarBg: '#2864E8',
-      sidebarHover: '#1f50c4',
+      sidebarBg: '#00b2ee',
+      sidebarHover: '#009bd1',
       accent: '#2864E8',
       accentLight: '#dce7ff',
       subText: '#a0aec0',
@@ -1444,7 +1444,7 @@ function AppContent() {
         <div style={{
           width: '55px',
           height: '55px',
-          borderRadius: '50%',
+          borderRadius: '8px',
           border: '2px solid #ffdd57',
           background: 'white',
           display: 'flex',
@@ -1458,7 +1458,7 @@ function AppContent() {
             <img 
               src={UNIVERSITY_LOGO}
               alt="Mekdela Amba University"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
               onError={handleLogoError}
             />
           ) : (
@@ -1561,8 +1561,8 @@ function AppContent() {
 
   const Footer = () => (
     <footer className={`app-footer${!user ? ' public-site-footer bg-sky-900' : ''}`} style={{ 
-      backgroundColor: user ? currentTheme.footerBg : '#0c4a6e',
-      color: currentTheme.footerText,
+      backgroundColor: '#00b2ee',
+      color: '#ffffff',
       padding: '30px 20px 15px',
       borderTop: '1px solid rgba(255,255,255,0.1)',
       marginTop: 'auto'
