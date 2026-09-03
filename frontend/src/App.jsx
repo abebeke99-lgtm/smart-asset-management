@@ -9,7 +9,7 @@ import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate, useLocation,
 import React, { useState, useEffect, useRef, Suspense, lazy, useMemo } from 'react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { ArrowLeftRight, BarChart3, Bell, Building2, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, DatabaseBackup, LayoutDashboard, LogOut, Menu, Package, Radio, Settings, Users, Wrench, X } from 'lucide-react';
+import { ArrowLeftRight, BarChart3, Bell, Building2, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, DatabaseBackup, Github, LayoutDashboard, Linkedin, LogOut, Menu, Package, Radio, Settings, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
@@ -1426,7 +1426,7 @@ function AppContent() {
   );
 
   const Header = () => (
-    <header className={`app-header${!user ? ' public-site-header' : ''}`} style={{
+    <header className={`app-header${!user ? ' public-site-header sticky top-0 z-50' : ''}`} style={{
       background: currentTheme.headerBg,
       color: currentTheme.headerText,
       padding: '0.75rem 2rem',
@@ -1560,8 +1560,8 @@ function AppContent() {
   // ==========================================
 
   const Footer = () => (
-    <footer className="app-footer" style={{ 
-      backgroundColor: currentTheme.footerBg,
+    <footer className={`app-footer${!user ? ' public-site-footer bg-sky-900' : ''}`} style={{ 
+      backgroundColor: user ? currentTheme.footerBg : '#0c4a6e',
       color: currentTheme.footerText,
       padding: '30px 20px 15px',
       borderTop: '1px solid rgba(255,255,255,0.1)',
@@ -1579,6 +1579,10 @@ function AppContent() {
           <h4 style={{ color: 'white', marginBottom: '12px', fontSize: '1rem' }}>{t.companyName}</h4>
           <p style={{ opacity: 0.8, fontSize: '0.9rem', lineHeight: '1.6' }}>{t.systemName}</p>
           <div style={{ marginTop: '10px' }}><span style={{ opacity: 0.6, fontSize: '0.8rem' }}>🔒 256-bit SSL Secured</span></div>
+          {!user && <div className="flex items-center gap-2" style={{ marginTop: '16px' }} aria-label="Social media links">
+            <a href="https://github.com" target="_blank" rel="noreferrer" aria-label="GitHub" style={{ color: 'white', opacity: 0.8 }}><Github size={18} /></a>
+            <a href="https://linkedin.com" target="_blank" rel="noreferrer" aria-label="LinkedIn" style={{ color: 'white', opacity: 0.8 }}><Linkedin size={18} /></a>
+          </div>}
         </div>
         <div>
           <h4 style={{ color: 'white', marginBottom: '12px', fontSize: '1rem' }}>Quick Links</h4>
@@ -1612,7 +1616,7 @@ function AppContent() {
       </div>
       <div style={{
         borderTop: '1px solid rgba(255,255,255,0.1)',
-        backgroundColor: '#1f50c4',
+        backgroundColor: user ? '#1f50c4' : '#075985',
         padding: '15px 20px 0',
         display: 'flex',
         justifyContent: 'space-between',

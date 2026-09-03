@@ -25,8 +25,8 @@ const serializeAsset = (asset, assignment = null) => {
 const getAllAssets = async (req, res) => {
   try {
     const where = {};
-    if (req.user.role === 'department_head' && req.query.department && req.query.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
-    const department = req.user.role === 'department_head' ? req.user.department : req.query.department;
+    if (req.user.role === 'college' && req.query.department && req.query.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
+    const department = req.user.role === 'college' ? req.user.department : req.query.department;
     if (department) where.department = department;
     if (req.query.status) where.status = { [Op.in]: [req.query.status, String(req.query.status).toLowerCase(), String(req.query.status).replace(/[_ ]/g, '-').toLowerCase()] };
     if (req.query.category) where.category = req.query.category;
@@ -75,7 +75,7 @@ const getAssetById = async (req, res) => {
   try {
     const asset = await Asset.findByPk(req.params.id);
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
-    if (req.user.role === 'department_head' && asset.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
+    if (req.user.role === 'college' && asset.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
     const assignment = await Assignment.findOne({ where: { assetId: asset.id, status: 'active' }, include: [{ model: User, attributes: ['username', 'fullName'] }] });
     res.json({ success: true, data: serializeAsset(asset, assignment), asset: serializeAsset(asset, assignment) });
   } catch (error) {
@@ -194,7 +194,7 @@ const getAssetHistory = async (req, res, next) => {
     const assetId = Number(req.params.id);
     const asset = await Asset.findByPk(assetId, { attributes: ['id', 'department'] });
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
-    if (req.user.role === 'department_head' && asset.department !== req.user.department) {
+    if (req.user.role === 'college' && asset.department !== req.user.department) {
       return res.status(403).json({ success: false, message: 'Department access denied' });
     }
     const [assignments, transfers, maintenance, rfid, audits] = await Promise.all([

@@ -11,7 +11,7 @@ router.get('/next-id', requireAuth, getNextAssetId);
 router.get('/check-id/:value', requireAuth, checkAssetField('assetCode'));
 router.get('/check-serial/:value', requireAuth, checkAssetField('serialNumber'));
 router.get('/check-rfid/:value', requireAuth, checkAssetField('rfidTag'));
-router.get('/:id/history', requireAuth, requireRole('admin', 'ict_officer', 'department_head'), getAssetHistory);
+router.get('/:id/history', requireAuth, requireRole('admin', 'ict_officer', 'college'), getAssetHistory);
 router.post('/:id/assign', requireAuth, requireRole('admin', 'ict_officer'), async (req, res, next) => {
 	const transaction = await require('../models').sequelize.transaction();
 	try {

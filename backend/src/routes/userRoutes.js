@@ -5,7 +5,7 @@ const { requireAuth, requireRole } = require('../middlewares/auth');
 
 const router = express.Router();
 
-router.get('/', requireAuth, requireRole('admin', 'department_head', 'store_manager', 'ict_officer', 'maintenance'), getAllUsers);
+router.get('/', requireAuth, requireRole('admin', 'college', 'store_manager', 'ict_officer', 'maintenance'), getAllUsers);
 router.get('/technicians', requireAuth, requireRole('admin', 'maintenance', 'ict_officer'), getAllUsers);
 router.put('/profile', requireAuth, updateProfile);
 router.get('/activity', requireAuth, requireRole('admin'), async (req, res, next) => {

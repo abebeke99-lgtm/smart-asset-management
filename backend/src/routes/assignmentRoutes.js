@@ -25,10 +25,10 @@ const assignmentInclude = [
   { model: User, attributes: ['username', 'fullName'] },
 ];
 
-router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'department_head'), async (req, res, next) => {
+router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college'), async (req, res, next) => {
   try {
     const where = req.query.assigned_to ? { assignedTo: req.query.assigned_to } : undefined;
-    const include = req.user.role === 'department_head'
+    const include = req.user.role === 'college'
       ? [{ model: Asset, attributes: ['assetCode', 'name', 'department'], where: { department: req.user.department }, required: true }, { model: User, attributes: ['username', 'fullName'] }]
       : assignmentInclude;
     const assignments = await Assignment.findAll({ where, include, order: [['createdAt', 'DESC']] });
@@ -38,9 +38,9 @@ router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'
   }
 });
 
-router.get('/history', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'department_head'), async (req, res, next) => {
+router.get('/history', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college'), async (req, res, next) => {
   try {
-    const include = req.user.role === 'department_head'
+    const include = req.user.role === 'college'
       ? [{ model: Asset, attributes: ['assetCode', 'name', 'department'], where: { department: req.user.department }, required: true }, { model: User, attributes: ['username', 'fullName'] }]
       : assignmentInclude;
     const assignments = await Assignment.findAll({ include, order: [['createdAt', 'DESC']] });
@@ -50,9 +50,9 @@ router.get('/history', requireAuth, requireRole('admin', 'ict_officer', 'store_m
   }
 });
 
-router.get('/history/:assetId', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'department_head'), async (req, res, next) => {
+router.get('/history/:assetId', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college'), async (req, res, next) => {
   try {
-    if (req.user.role === 'department_head') {
+    if (req.user.role === 'college') {
       const asset = await Asset.findByPk(req.params.assetId, { attributes: ['department'] });
       if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
       if (asset.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });

@@ -15,7 +15,7 @@ const listApprovals = async (req, res, next) => {
     if (req.query.requested_by) where.requestedBy = req.query.requested_by;
     const items = await Approval.findAll({ where, include, order: [['createdAt', 'DESC']] });
     const result = items.filter((item) => {
-      if (req.user.role !== 'department_head') return true;
+      if (req.user.role !== 'college') return true;
       return item.Department?.id === Number(req.user.department_id || req.user.departmentId)
         || item.Department?.name === req.user.department
         || item.Asset?.department === req.user.department
@@ -31,9 +31,9 @@ const createApproval = async (req, res, next) => {
     if (!type || !reason || !Number.isInteger(Number(quantity)) || Number(quantity) <= 0) return res.status(400).json({ success: false, message: 'Type, reason, and positive quantity are required' });
     const asset = asset_id ? await Asset.findByPk(asset_id) : null;
     if (asset_id && !asset) return res.status(404).json({ success: false, message: 'Asset not found' });
-    if (req.user.role === 'department_head' && asset && asset.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department authorization required' });
+    if (req.user.role === 'college' && asset && asset.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department authorization required' });
     const authenticatedDepartment = req.user.department_id || req.user.departmentId || (Number.isInteger(Number(req.user.department)) ? Number(req.user.department) : null);
-    if (req.user.role === 'department_head' && department_id && String(department_id) !== String(authenticatedDepartment) && String(department_id) !== String(req.user.department)) return res.status(403).json({ success: false, message: 'Department authorization required' });
+    if (req.user.role === 'college' && department_id && String(department_id) !== String(authenticatedDepartment) && String(department_id) !== String(req.user.department)) return res.status(403).json({ success: false, message: 'Department authorization required' });
     const record = await Approval.create({ type, assetId: asset_id || null, requestedBy: req.user.id, departmentId: authenticatedDepartment || department_id || null, item: item || '', quantity, priority, reason });
     res.status(201).json({ success: true, request: normalize(record) });
   } catch (error) { next(error); }
@@ -41,12 +41,12 @@ const createApproval = async (req, res, next) => {
 
 const decideApproval = async (req, res, next) => {
   try {
-    if (!['admin', 'department_head', 'finance', 'store_manager'].includes(req.user.role)) return res.status(403).json({ success: false, message: 'Approval authorization required' });
+    if (!['admin', 'college', 'finance', 'store_manager'].includes(req.user.role)) return res.status(403).json({ success: false, message: 'Approval authorization required' });
     const status = String(req.body.status || '').toLowerCase();
     if (!['approved', 'rejected', 'cancelled'].includes(status)) return res.status(400).json({ success: false, message: 'Invalid approval status' });
     const record = await Approval.findByPk(req.params.id, { include });
     if (!record) return res.status(404).json({ success: false, message: 'Approval not found' });
-    if (req.user.role === 'department_head' && record.Department?.name && record.Department.name !== req.user.department) return res.status(403).json({ success: false, message: 'Department authorization required' });
+    if (req.user.role === 'college' && record.Department?.name && record.Department.name !== req.user.department) return res.status(403).json({ success: false, message: 'Department authorization required' });
     await record.update({ status, reviewedBy: req.user.id, comment: req.body.comment || req.body.reason || '' });
     res.json({ success: true, request: normalize(record) });
   } catch (error) { next(error); }

@@ -46,7 +46,7 @@ const getAllMaintenance = async (req, res, next) => {
     if (req.query.assigned_to) where.assignedTo = req.query.assigned_to; 
     if (req.query.scope === 'assigned' && req.user.role === 'maintenance') where.assignedTo = req.user.id;
     if (req.query.asset_id) where.assetId = req.query.asset_id;
-      const scopedInclude = req.user.role === 'department_head' ? [{ model: Asset, attributes: ['id', 'name', 'assetCode', 'category', 'department', 'location', 'status', 'condition', 'warrantyExpiry'], where: { department: req.user.department }, required: true }, include[1], include[2]] : include; 
+      const scopedInclude = req.user.role === 'college' ? [{ model: Asset, attributes: ['id', 'name', 'assetCode', 'category', 'department', 'location', 'status', 'condition', 'warrantyExpiry'], where: { department: req.user.department }, required: true }, include[1], include[2]] : include;
       const items = await Maintenance.findAll({ where, include: scopedInclude, order: [['id', 'DESC']] }); 
     const requests = items.map(normalize); 
     res.json({ success: true, data: requests, requests, total: requests.length }); 
@@ -60,7 +60,7 @@ const createMaintenance = async (req, res, next) => {
     if (!asset_id || !requestTitle) return res.status(400).json({ success: false, message: 'Asset and problem are required' }); 
     const asset = await Asset.findByPk(asset_id);
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
-    if (req.user.role === 'department_head' && asset.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department authorization required' });
+    if (req.user.role === 'college' && asset.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department authorization required' });
     const normalizedPriority = String(priority).toLowerCase();
     if (!['low', 'medium', 'high', 'critical'].includes(normalizedPriority)) return res.status(400).json({ success: false, message: 'Invalid maintenance priority' });
     const requestDescription = String(description || problem || '').trim();

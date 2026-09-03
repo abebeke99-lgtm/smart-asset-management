@@ -5,7 +5,7 @@ const { requireAuth, requireRole } = require('../middlewares/auth');
 
 const router = express.Router();
 const canManageTransfers = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager')];
-const canRequestTransfers = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'department_head')];
+const canRequestTransfers = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college')];
 
 const toTransferResponse = (transfer) => {
   const data = transfer.toJSON();
@@ -56,9 +56,9 @@ const getTransferBlockedStatus = (asset) => {
 };
 
 // Get all transfers
-router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'department_head'), async (req, res, next) => {
+router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college'), async (req, res, next) => {
   try {
-    const assetScope = req.user.role === 'department_head' ? { department: req.user.department } : undefined;
+    const assetScope = req.user.role === 'college' ? { department: req.user.department } : undefined;
     const transfers = await Transfer.findAll({
       include: assetScope ? [{ model: Asset, attributes: ['assetCode', 'name', 'department'], where: assetScope, required: true }, ...transferInclude.slice(1)] : transferInclude,
       order: [['createdAt', 'DESC']]
@@ -74,13 +74,13 @@ router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'
 });
 
 // Get transfer by ID
-router.get('/:id', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'department_head'), async (req, res, next) => {
+router.get('/:id', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college'), async (req, res, next) => {
   try {
     const transfer = await Transfer.findByPk(req.params.id, { include: transferInclude });
     if (!transfer) {
       return res.status(404).json({ success: false, message: 'Transfer not found' });
     }
-    if (req.user.role === 'department_head' && transfer.Asset?.department !== req.user.department) {
+    if (req.user.role === 'college' && transfer.Asset?.department !== req.user.department) {
       return res.status(403).json({ success: false, message: 'Department access denied' });
     }
     res.json({ success: true, data: toTransferResponse(transfer) });
@@ -114,7 +114,7 @@ router.post('/', ...canRequestTransfers, async (req, res, next) => {
       await transaction.rollback();
       return res.status(404).json({ success: false, message: 'Asset not found' });
     }
-    if (req.user.role === 'department_head' && asset.department !== req.user.department) {
+    if (req.user.role === 'college' && asset.department !== req.user.department) {
       await transaction.rollback();
       return res.status(403).json({ success: false, message: 'Department access denied' });
     }

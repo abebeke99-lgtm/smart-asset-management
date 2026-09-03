@@ -3,7 +3,7 @@ const router = express.Router();
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const { Notification, User } = require('../models');
 
-const notificationAccess = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'department_head', 'finance', 'maintenance', 'student')];
+const notificationAccess = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college', 'finance', 'maintenance', 'student')];
 
 const serialize = (notification) => ({
   ...notification.toJSON(),

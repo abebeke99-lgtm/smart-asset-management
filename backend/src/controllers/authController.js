@@ -8,11 +8,14 @@ const { isValidEmail, isValidUsername } = require('../utils/validators');
 const LOGIN_ALIASES = {
   admin: ['admin'],
   ict_officer: ['ict_officer', 'ict-officer', 'ict'],
-  department_head: ['department_head', 'dept_head', 'department head', 'department'],
+  college: ['college', 'department_head', 'dept_head', 'department head', 'department'],
   finance: ['finance'],
   store_manager: ['store_manager', 'store-manager'],
   maintenance: ['maintenance'],
+  infrastructure: ['infrastructure', 'infrastructure_directorate', 'infra', 'infrastructure directorate'],
 };
+
+const normalizeAlias = (value = '') => String(value || '').trim().toLowerCase().replace(/[_\-\s]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 const normalizeLoginIdentity = (value = '') => {
   if (typeof value !== 'string') {
@@ -20,7 +23,7 @@ const normalizeLoginIdentity = (value = '') => {
   }
 
   const raw = value.trim();
-  const normalized = raw.toLowerCase().replace(/[_\-\s]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const normalized = normalizeAlias(raw);
 
   for (const [role, aliases] of Object.entries(LOGIN_ALIASES)) {
     if (aliases.some((alias) => normalizeAlias(alias) === normalized)) {
@@ -30,8 +33,6 @@ const normalizeLoginIdentity = (value = '') => {
 
   return normalized.replace(/\s+/g, '_');
 };
-
-const normalizeAlias = (value = '') => String(value || '').trim().toLowerCase().replace(/[_\-\s]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 const resolveLoginAliases = (value = '') => {
   const raw = String(value || '').trim();

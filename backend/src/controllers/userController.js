@@ -2,7 +2,7 @@ const { Op } = require('sequelize');
 const { User, Department, AuditLog } = require('../models');
 const bcrypt = require('bcryptjs');
 
-const roles = ['admin', 'ict_officer', 'department_head', 'finance', 'store_manager', 'maintenance', 'staff', 'student'];
+const roles = ['admin', 'ict_officer', 'college', 'finance', 'store_manager', 'maintenance', 'infrastructure', 'staff', 'student'];
 const safeUser = (user) => {
   const data = user.toJSON ? user.toJSON() : { ...user };
   delete data.password;
@@ -24,8 +24,8 @@ const validateUserInput = async (input, { requirePassword = false } = {}) => {
 const getAllUsers = async (req, res) => {
   try {
     const where = {};
-    if (req.user.role === 'department_head' && req.query.department && req.query.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
-    if (req.user.role === 'department_head') where.department = req.user.department;
+    if (req.user.role === 'college' && req.query.department && req.query.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
+    if (req.user.role === 'college') where.department = req.user.department;
     else if (req.query.department) where.department = req.query.department;
     if (req.query.role) where.role = req.query.role;
     if (req.query.active !== undefined) where.active = req.query.active === 'true';
@@ -45,7 +45,7 @@ const getUserById = async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    if (req.user.role === 'department_head' && user.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
+    if (req.user.role === 'college' && user.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
     res.json({ success: true, data: safeUser(user) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

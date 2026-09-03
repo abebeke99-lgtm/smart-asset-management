@@ -23,11 +23,11 @@ const DEMO_USERS = [
     active: true,
   },
   {
-    username: 'department_head',
-    email: 'department@bekelei.com',
+    username: 'college',
+    email: 'college@bekelei.com',
     password: 'bekelei123',
-    fullName: 'Department Head',
-    role: 'department_head',
+    fullName: 'College Manager',
+    role: 'college',
     department: 'Engineering',
     phone: '0922345678',
     active: true,
@@ -62,15 +62,26 @@ const DEMO_USERS = [
     phone: '0952345678',
     active: true,
   },
+  {
+    username: 'infrastructure',
+    email: 'infrastructure@bekelei.com',
+    password: 'bekelei123',
+    fullName: 'Infrastructure Directorate',
+    role: 'infrastructure',
+    department: 'Infrastructure',
+    phone: '0962345678',
+    active: true,
+  },
 ];
 
 const LEGACY_USERNAME_ALIASES = {
   admin: ['admin'],
   ict_officer: ['ict_officer', 'ict officer', 'ict-officer', 'ict'],
-  department_head: ['department_head', 'department head', 'dept_head', 'dept-head', 'department'],
+  college: ['college', 'department_head', 'department head', 'dept_head', 'dept-head', 'department'],
   finance: ['finance'],
   store_manager: ['store_manager', 'store manager', 'store-manager', 'store'],
   maintenance: ['maintenance'],
+  infrastructure: ['infrastructure', 'infrastructure_directorate', 'infra', 'infrastructure directorate'],
 };
 
 async function ensureDemoUser(userData) {
@@ -142,7 +153,7 @@ async function seedDatabase() {
           password: hashedPassword,
         });
       }
-      console.log('✅ Seeded all demo accounts with roles: admin, ict_officer, department_head, finance, store_manager, maintenance');
+      console.log('✅ Seeded all demo accounts with roles: admin, ict_officer, college, finance, store_manager, maintenance, infrastructure');
       console.log('📝 All users use password: bekelei123');
       return;
     }
