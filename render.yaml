@@ -24,7 +24,7 @@ services:
       - key: DB_SSL
         value: "true"
       - key: CLIENT_URL
-        sync: false
+        value: https://smart-asset-management-3.onrender.com
 
   - type: web
     name: smart-asset-management-frontend
