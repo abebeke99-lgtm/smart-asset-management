@@ -1511,9 +1511,9 @@ function AppContent() {
             </div>
           </div>
         ) : (
-          <Link to="/login" style={{
-            background: '#ffdd57',
-            color: '#1a365d',
+          <Link className="public-login-button" to="/login" style={{
+            background: '#09dfe5',
+            color: '#073b4c',
             textDecoration: 'none',
             padding: '7px 16px',
             borderRadius: 20,
@@ -1521,8 +1521,8 @@ function AppContent() {
             fontSize: '0.9rem',
             transition: '0.2s'
           }}
-          onMouseEnter={e => e.target.style.background = '#ffc107'}
-          onMouseLeave={e => e.target.style.background = '#ffdd57'}>
+          onMouseEnter={e => e.target.style.background = '#64f3f5'}
+          onMouseLeave={e => e.target.style.background = '#09dfe5'}>
             🔐 {t.login}
           </Link>
         )}

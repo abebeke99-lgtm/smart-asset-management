@@ -15,6 +15,19 @@ npm install
 npm run dev
 ```
 
+## Deploy backend to Render
+
+The repository includes `render.yaml` for the backend web service. Render uses:
+
+```text
+Root Directory: backend
+Build Command: npm install
+Start Command: node server.js
+Health Check: /api/health
+```
+
+Set the database and `JWT_SECRET` values in Render Environment Variables. For Aiven MySQL, set `DB_SSL=true`; do not commit database credentials.
+
 ## Run frontend
 
 ```bash

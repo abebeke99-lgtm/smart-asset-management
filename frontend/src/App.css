@@ -45,6 +45,27 @@ body {
   position: sticky !important;
   top: 0;
   z-index: 50;
+  background: #09dfe5 !important;
+  color: #073b4c !important;
+  border-bottom-color: #073b4c !important;
+}
+
+.public-site-header a,
+.public-site-header .public-login-button {
+  color: #073b4c !important;
+}
+
+.public-site-footer {
+  background: #09dfe5 !important;
+  color: #073b4c !important;
+}
+
+.public-site-footer a,
+.public-site-footer h4,
+.public-site-footer span,
+.public-site-footer p,
+.public-site-footer div {
+  color: inherit;
 }
 
 .public-site-header + .app-public-content {
