@@ -26,8 +26,12 @@ const collegeRoutes = require('./routes/collegeRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const allowedOrigins = [
-  process.env.CLIENT_URL,
+const configuredOrigins = [process.env.CLIENT_URL, process.env.CORS_ORIGIN]
+  .filter(Boolean)
+  .flatMap((value) => value.split(','))
+  .map((value) => value.trim())
+  .filter(Boolean);
+const localOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
   'http://localhost:3001',
@@ -36,7 +40,10 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'http://127.0.0.1:3001',
   'http://127.0.0.1:5000'
-].filter(Boolean);
+];
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? configuredOrigins
+  : [...configuredOrigins, ...localOrigins];
 
 const normalizeOrigin = (value = '') => value.replace(/\/+$/, '');
 
