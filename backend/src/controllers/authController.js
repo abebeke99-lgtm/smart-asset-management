@@ -274,7 +274,8 @@ const forgotPassword = async (req, res) => {
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
     await user.update({ resetTokenHash: tokenHash, resetTokenExpiresAt: expiresAt });
 
-    const resetBaseUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+    const resetBaseUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL
+      || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000');
     const resetUrl = `${resetBaseUrl.replace(/\/$/, '')}/reset-password/${rawToken}`;
     if (mailer) {
       await mailer.transporter.sendMail({
