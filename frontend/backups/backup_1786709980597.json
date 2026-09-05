@@ -1,0 +1,147 @@
+{
+  "createdAt": "2026-08-14T12:19:40.299Z",
+  "database": "asset_management_db",
+  "users": [
+    {
+      "id": 1,
+      "username": "admin",
+      "password": "bekelei123",
+      "role": "admin",
+      "fullName": "",
+      "email": "bekelei906@gmail.com",
+      "phone": "",
+      "fingerprintId": "",
+      "responsibility": "member",
+      "universityID": "",
+      "department": "",
+      "active": 1,
+      "createdAt": "2026-08-10T01:56:55.000Z",
+      "updatedAt": "2026-08-10T05:17:30.000Z"
+    },
+    {
+      "id": 9,
+      "username": "ict_officer",
+      "password": "bekelei123",
+      "role": "ict_officer",
+      "fullName": "",
+      "email": "bekelei906@gmail.com",
+      "phone": "",
+      "fingerprintId": "",
+      "responsibility": "member",
+      "universityID": "",
+      "department": "",
+      "active": 1,
+      "createdAt": "2026-08-10T04:41:26.000Z",
+      "updatedAt": "2026-08-12T00:57:38.000Z"
+    },
+    {
+      "id": 10,
+      "username": "dept_head",
+      "password": "bekelei123",
+      "role": "department_head",
+      "fullName": "",
+      "email": "bekelei906@gmail.com",
+      "phone": "",
+      "fingerprintId": "",
+      "responsibility": "member",
+      "universityID": "",
+      "department": "",
+      "active": 1,
+      "createdAt": "2026-08-10T04:41:26.000Z",
+      "updatedAt": "2026-08-12T00:57:38.000Z"
+    },
+    {
+      "id": 11,
+      "username": "store_manager",
+      "password": "bekelei123",
+      "role": "store_manager",
+      "fullName": "",
+      "email": "bekelei906@gmail.com",
+      "phone": "",
+      "fingerprintId": "",
+      "responsibility": "member",
+      "universityID": "",
+      "department": "",
+      "active": 1,
+      "createdAt": "2026-08-10T04:41:26.000Z",
+      "updatedAt": "2026-08-12T00:57:38.000Z"
+    },
+    {
+      "id": 12,
+      "username": "finance",
+      "password": "bekelei123",
+      "role": "finance",
+      "fullName": "",
+      "email": "bekelei906@gmail.com",
+      "phone": "",
+      "fingerprintId": "",
+      "responsibility": "member",
+      "universityID": "",
+      "department": "",
+      "active": 1,
+      "createdAt": "2026-08-10T04:41:26.000Z",
+      "updatedAt": "2026-08-12T00:57:38.000Z"
+    },
+    {
+      "id": 13,
+      "username": "maintenance",
+      "password": "bekelei123",
+      "role": "maintenance",
+      "fullName": "",
+      "email": "bekelei906@gmail.com",
+      "phone": "",
+      "fingerprintId": "",
+      "responsibility": "member",
+      "universityID": "",
+      "department": "",
+      "active": 1,
+      "createdAt": "2026-08-10T04:41:26.000Z",
+      "updatedAt": "2026-08-12T00:57:38.000Z"
+    }
+  ],
+  "departments": [
+    {
+      "id": 1,
+      "name": "ICT",
+      "description": "Information and Communication Technology",
+      "createdAt": "2026-08-13T05:27:17.000Z",
+      "updatedAt": "2026-08-13T05:27:17.000Z"
+    },
+    {
+      "id": 2,
+      "name": "Finance",
+      "description": "Finance and Accounting",
+      "createdAt": "2026-08-13T05:27:17.000Z",
+      "updatedAt": "2026-08-13T05:27:17.000Z"
+    },
+    {
+      "id": 3,
+      "name": "Administration",
+      "description": "Administration and Operations",
+      "createdAt": "2026-08-13T05:27:17.000Z",
+      "updatedAt": "2026-08-13T05:27:17.000Z"
+    },
+    {
+      "id": 4,
+      "name": "Maintenance",
+      "description": "Facilities and Maintenance",
+      "createdAt": "2026-08-13T05:27:17.000Z",
+      "updatedAt": "2026-08-13T05:27:17.000Z"
+    },
+    {
+      "id": 5,
+      "name": "Store",
+      "description": "Store and Inventory",
+      "createdAt": "2026-08-13T05:27:17.000Z",
+      "updatedAt": "2026-08-13T05:27:17.000Z"
+    }
+  ],
+  "assets": [],
+  "maintenance": [],
+  "inventory": [],
+  "notifications": [],
+  "menu": [],
+  "feedback": [],
+  "config": [],
+  "lostIds": []
+}

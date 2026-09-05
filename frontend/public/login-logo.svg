@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1c64f2" />
+      <stop offset="100%" stop-color="#0ea5e9" />
+    </linearGradient>
+  </defs>
+  <rect width="240" height="240" rx="48" fill="#f8fafc" />
+  <rect x="48" y="72" width="144" height="96" rx="22" fill="url(#grad)" />
+  <path d="M72 108h96v44H72z" fill="#fff" opacity="0.85" />
+  <path d="M96 108v44M120 108v44M144 108v44" stroke="#0f172a" stroke-width="6" stroke-linecap="round" opacity="0.5" />
+  <path d="M120 72v-28" stroke="#f59e0b" stroke-width="8" stroke-linecap="round" />
+  <path d="M108 56c0-8 6.5-14 14.5-14S137 48 137 56c0 8-6.5 14-14.5 14S108 64 108 56Z" fill="#fde68a" />
+  <path d="M120 42c-12 0-24 10-24 24 0 22 24 40 24 40s24-18 24-40c0-14-12-24-24-24Z" fill="#fb923c" opacity="0.9" />
+  <path d="M64 92l112-20 8 44-112 20z" fill="#fff" opacity="0.6" />
+  <path d="M64 92c0 18 16 32 36 32h40c20 0 36-14 36-32" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.8" />
+  <circle cx="120" cy="104" r="8" fill="#0f172a" />
+  <path d="M90 126c-8 8-9 22-2 32m44-32c8 8 9 22 2 32" stroke="#0f172a" stroke-width="8" stroke-linecap="round" />
+</svg>
