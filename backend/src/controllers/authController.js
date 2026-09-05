@@ -241,7 +241,7 @@ const logout = async (req, res) => {
   res.json({ success: true });
 };
 
-const genericResetMessage = 'If an account is associated with that email, you\'ll receive instructions to reset your password.';
+const genericResetMessage = 'If an account exists for this email address, password reset instructions have been sent.';
 
 const getMailer = () => {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM } = process.env;
@@ -271,7 +271,7 @@ const forgotPassword = async (req, res) => {
 
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 20 * 60 * 1000);
     await user.update({ resetTokenHash: tokenHash, resetTokenExpiresAt: expiresAt });
 
     const resetBaseUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL
@@ -282,7 +282,7 @@ const forgotPassword = async (req, res) => {
         from: mailer.from,
         to: user.email,
         subject: 'Password reset instructions',
-        text: `Use this link to reset your password. It expires in 1 hour: ${resetUrl}`,
+        text: `Use this link to reset your password. It expires in 20 minutes: ${resetUrl}`,
       });
     } else {
       console.warn(`[DEVELOPMENT ONLY] Password reset URL for ${user.email}: ${resetUrl}`);
@@ -298,13 +298,23 @@ const forgotPassword = async (req, res) => {
 const resetPassword = async (req, res) => {
   try {
     const { token, password, confirmPassword } = req.body;
-    if (!token || !password || password.length < 8 || password !== confirmPassword) {
-      return res.status(400).json({ success: false, message: 'A valid token and matching password of at least 8 characters are required.' });
+    if (!token) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired password reset link.' });
+    }
+    if (!password) {
+      return res.status(400).json({ success: false, message: 'Password is required.' });
+    }
+    if (password !== confirmPassword) {
+      return res.status(400).json({ success: false, message: 'Passwords do not match.' });
+    }
+    const passwordError = validatePassword(password, await getSecuritySettings());
+    if (passwordError) {
+      return res.status(400).json({ success: false, message: passwordError });
     }
     const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex');
     const user = await User.findOne({ where: { resetTokenHash: tokenHash } });
     if (!user || !user.resetTokenExpiresAt || new Date(user.resetTokenExpiresAt) < new Date()) {
-      return res.status(400).json({ success: false, message: 'This password reset link is invalid or expired.' });
+      return res.status(400).json({ success: false, message: 'Invalid or expired password reset link.' });
     }
     await user.update({
       password: await bcrypt.hash(password, 10),

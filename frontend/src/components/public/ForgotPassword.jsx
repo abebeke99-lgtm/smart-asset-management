@@ -21,7 +21,12 @@ const ForgotPassword = () => {
     const normalizedEmail = email.trim();
     setError('');
 
-    if (!normalizedEmail || !/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
+    if (!normalizedEmail) {
+      setError(t.requiredEmail);
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       setError(t.invalidEmail);
       return;
     }
@@ -131,7 +136,7 @@ const ForgotPassword = () => {
                 </p>
               </div>
 
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSubmit} noValidate>
                 <label style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', marginLeft: '4px' }}>
                   {t.emailLabel.toUpperCase()}
                 </label>
@@ -142,7 +147,7 @@ const ForgotPassword = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={t.emailPlaceholder}
                   disabled={loading}
-                  required
+                  aria-invalid={Boolean(error)}
                 />
 
                 {error && <div className="error-msg">{error}</div>}
@@ -184,6 +189,7 @@ const englishTranslations = {
   checkEmail: "We've sent password reset instructions to your email if an account exists.",
   backToLogin: 'Back to Login',
   invalidEmail: 'Please enter a valid email address.',
+  requiredEmail: 'Email address is required.',
   errorMessage: 'Something went wrong. Please try again later.',
   successMessage: 'Reset link sent successfully.'
 };
@@ -199,6 +205,7 @@ const amharicTranslations = {
   checkEmail: 'መለያ ካለዎት የይለፍ ቃል መቀየሪያ መመሪያ በኢሜልዎ ልከናል።',
   backToLogin: 'ወደ መግቢያ ተመለስ',
   invalidEmail: 'እባክዎ ትክክለኛ የኢሜል አድራሻ ያስገቡ።',
+  requiredEmail: 'የኢሜል አድራሻ ያስፈልጋል።',
   errorMessage: 'ችግር ተፈጥሯል። እባክዎ ቆይተው እንደገና ይሞክሩ።',
   successMessage: 'ሊንኩ በተሳካ ሁኔታ ተልኳል።'
 };

@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
 import { toast } from 'react-toastify';
+import { Eye, EyeOff } from 'lucide-react';
 
 const ResetPassword = () => {
   const { token } = useParams();
@@ -14,6 +15,8 @@ const ResetPassword = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   const isDark = theme === 'dark';
   const t = language === 'en' ? translations.en : translations.am;
@@ -22,9 +25,16 @@ const ResetPassword = () => {
     event.preventDefault();
     setError('');
 
-    // Validation
+    if (!password) {
+      setError(t.required);
+      return;
+    }
     if (password.length < 8) {
       setError(t.min);
+      return;
+    }
+    if (!confirmPassword) {
+      setError(t.confirmRequired);
       return;
     }
     if (password !== confirmPassword) {
@@ -47,7 +57,9 @@ const ResetPassword = () => {
         throw new Error(response.data?.message || t.error);
       }
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || t.error;
+      const msg = err.response?.status === 400 && /invalid|expired|reset link/i.test(err.response?.data?.message || '')
+        ? t.invalidLink
+        : err.response?.data?.message || err.message || t.error;
       setError(msg);
       toast.error(msg);
     } finally {
@@ -108,6 +120,9 @@ const ResetPassword = () => {
           transition: all 0.2s; outline: none;
         }
         .input-field:focus { border-color: #3b82f6; background: ${isDark ? '#020617' : '#fff'}; }
+        .password-field { position: relative; }
+        .password-field .input-field { padding-right: 48px; }
+        .password-toggle { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); border: 0; background: transparent; color: #64748b; cursor: pointer; display: grid; place-items: center; padding: 4px; }
 
         .btn-submit {
           background: linear-gradient(135deg, #2563eb, #4f46e5);
@@ -144,7 +159,6 @@ const ResetPassword = () => {
         <main className="reset-card">
           {success ? (
             <div className="success-state">
-              <span className="success-icon">CheckCircle</span> {/* Replace with Icon or Emoji */}
               <div style={{ fontSize: '50px', marginBottom: '15px' }}>✅</div>
               <h1 style={{ fontSize: '24px', fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a' }}>
                 {t.successTitle}
@@ -168,28 +182,22 @@ const ResetPassword = () => {
               <form onSubmit={handleSubmit}>
                 <div className="input-group">
                   <label className="input-label">{t.password}</label>
-                  <input
-                    className="input-field"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    disabled={loading}
-                    autoComplete="new-password"
-                  />
+                  <div className="password-field">
+                    <input className="input-field" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" disabled={loading} autoComplete="new-password" />
+                    <button type="button" className="password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="input-group">
                   <label className="input-label">{t.confirm}</label>
-                  <input
-                    className="input-field"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
-                    disabled={loading}
-                    autoComplete="new-password"
-                  />
+                  <div className="password-field">
+                    <input className="input-field" type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="••••••••" disabled={loading} autoComplete="new-password" />
+                    <button type="button" className="password-toggle" onClick={() => setShowConfirmPassword((visible) => !visible)} aria-label={showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'}>
+                      {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </div>
 
                 {error && <div className="error-box">{error}</div>}
@@ -199,7 +207,10 @@ const ResetPassword = () => {
                 </button>
               </form>
               
-              <div style={{ marginTop: '25px', textAlign: 'center' }}>
+              <div style={{ marginTop: '25px', textAlign: 'center', display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                <Link to="/forgot-password" style={{ color: '#3b82f6', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px' }}>
+                  ← Back to Forgot Password
+                </Link>
                 <Link to="/login" style={{ color: '#3b82f6', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px' }}>
                   ← {t.login}
                 </Link>
@@ -219,11 +230,14 @@ const translations = {
     confirm: 'Confirm New Password',
     submit: 'Update Password',
     mismatch: 'Passwords do not match.',
+    required: 'Password is required.',
+    confirmRequired: 'Please confirm your password.',
     min: 'Password must be at least 8 characters.',
     successTitle: 'Password Updated!',
     success: 'Your password has been reset successfully. You can now log in with your new credentials.',
     login: 'Go to Login',
-    error: 'This password reset link is invalid or expired.'
+    error: 'This password reset link is invalid or expired.',
+    invalidLink: 'Invalid or expired password reset link.'
   },
   am: {
     title: 'አዲስ የይለፍ ቃል ይፍጠሩ',
@@ -231,11 +245,14 @@ const translations = {
     confirm: 'የይለፍ ቃልዎን ያረጋግጡ',
     submit: 'የይለፍ ቃል ቀይር',
     mismatch: 'የይለፍ ቃሎቹ መመሳሰል አለባቸው።',
+    required: 'የይለፍ ቃል ያስፈልጋል።',
+    confirmRequired: 'እባክዎ የይለፍ ቃሉን ያረጋግጡ።',
     min: 'የይለፍ ቃሉ ቢያንስ 8 ቁምፊዎች መሆን አለበት።',
     successTitle: 'ተቀይሯል!',
     success: 'የይለፍ ቃልዎ በተሳካ ሁኔታ ተቀይሯል። አሁን በአዲሱ የይለፍ ቃልዎ መግባት ይችላሉ።',
     login: 'ወደ መግቢያ ይሂዱ',
-    error: 'ይህ ሊንክ ልክ ያልሆነ ወይም ጊዜው ያለፈበት ነው።'
+    error: 'ይህ ሊንክ ልክ ያልሆነ ወይም ጊዜው ያለፈበት ነው።',
+    invalidLink: 'የይለፍ ቃል መቀየሪያ ሊንኩ ልክ ያልሆነ ወይም ጊዜው ያለፈ ነው።'
   }
 };
 
