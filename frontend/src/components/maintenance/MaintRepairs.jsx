@@ -66,7 +66,7 @@ const MaintRepairs = () => {
                   </span>
                 </td>
                 <td style={{ padding: '12px', display: 'flex', gap: '6px' }}>
-                  <button style={{ padding: '6px 10px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>View</button>
+                  <button style={{ padding: '6px 10px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>View</button>
                   <button style={{ padding: '6px 10px', backgroundColor: '#06b6d4', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>Edit</button>
                 </td>
               </tr>

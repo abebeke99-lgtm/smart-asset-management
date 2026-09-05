@@ -1378,7 +1378,7 @@ function AppContent() {
     light: {
       headerBg: '#00ADEF',
       headerText: '#ffffff',
-      footerBg: '#4A59E1',
+      footerBg: '#003366',
       footerText: '#ffffff',
       mainBg: '#f7f9fc',
       mainText: '#17305f',
@@ -1396,7 +1396,7 @@ function AppContent() {
     dark: {
       headerBg: '#00ADEF',
       headerText: '#ffffff',
-      footerBg: '#4A59E1',
+      footerBg: '#003366',
       footerText: '#ffffff',
       mainBg: '#eef3fb',
       mainText: '#17305f',
@@ -1570,7 +1570,7 @@ function AppContent() {
 
   const Footer = () => (
     <footer className={`app-footer${!user ? ' public-site-footer bg-sky-900' : ''}`} style={{ 
-      backgroundColor: '#4A59E1',
+      backgroundColor: '#003366',
       color: '#ffffff',
       padding: '30px 20px 15px',
       borderTop: '1px solid rgba(255,255,255,0.1)',
@@ -1625,7 +1625,7 @@ function AppContent() {
       </div>
       <div style={{
         borderTop: '1px solid rgba(255,255,255,0.1)',
-        backgroundColor: '#4A59E1',
+        backgroundColor: '#003366',
         padding: '15px 20px 0',
         display: 'flex',
         justifyContent: 'space-between',

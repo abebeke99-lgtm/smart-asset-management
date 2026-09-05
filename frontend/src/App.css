@@ -60,7 +60,7 @@ body {
 }
 
 .public-site-footer {
-  background: #4A59E1 !important;
+  background: var(--university-navy) !important;
   color: #ffffff !important;
 }
 
@@ -333,11 +333,11 @@ body.dark .App {
 }
 
 body.dark .site-header {
-  background: #2864E8 !important;
+  background: var(--university-blue) !important;
 }
 
 body.dark .site-footer {
-  background-color: #2864E8 !important;
+  background-color: var(--university-navy) !important;
   color: #ffffff !important;
 }
 

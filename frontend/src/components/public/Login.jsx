@@ -31,7 +31,7 @@ const Login = () => {
 
   const roles = [
     { id: 'admin', label: 'Admin', emoji: '👑', color: '#f59e0b' },
-    { id: 'store_manager', label: 'Store Mgr', emoji: '📦', color: '#8b5cf6' },
+    { id: 'store_manager', label: 'Store Mgr', emoji: '📦', color: '#00ADEF' },
     { id: 'ict_officer', label: 'ICT Officer', emoji: '💻', color: '#3b82f6' },
     { id: 'college', label: 'College', emoji: '🏫', color: '#10b981' },
     { id: 'finance', label: 'Finance', emoji: '💰', color: '#06b6d4' },
@@ -135,12 +135,12 @@ const Login = () => {
           overflow-x: hidden;
           font-family: Inter, system-ui, sans-serif;
         }
-        .login-light { background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%); }
-        .login-dark { background: linear-gradient(135deg, #020617 0%, #111827 100%); }
+        .login-light { background: #F4F7FE; }
+        .login-dark { background: #003366; }
         .login-background { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
         .login-orb { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .7; }
-        .login-orb-one { width: 430px; height: 430px; top: -170px; left: -130px; background: rgba(59,130,246,.20); }
-        .login-orb-two { width: 430px; height: 430px; right: -140px; bottom: -180px; background: rgba(139,92,246,.20); }
+        .login-orb-one { width: 430px; height: 430px; top: -170px; left: -130px; background: rgba(0,173,239,.18); }
+        .login-orb-two { width: 430px; height: 430px; right: -140px; bottom: -180px; background: rgba(255,215,0,.12); }
         .login-card {
           position: relative;
           z-index: 2;
@@ -181,7 +181,7 @@ const Login = () => {
         .login-dark .login-input-wrapper input { background: #1e293b; color: #f8fafc; border-color: #334155; }
         .forgot-link { display: block; text-align: right; margin-bottom: 15px; font-size: 11px; color: #2563eb; text-decoration: none; font-weight: 600; }
         .forgot-link:hover { text-decoration: underline; }
-        .login-submit { width: 100%; height: 48px; border-radius: 12px; border: none; background: linear-gradient(135deg, #2563eb, #6366f1); color: white; font-weight: 800; cursor: pointer; transition: transform .18s; }
+        .login-submit { width: 100%; height: 48px; border-radius: 12px; border: none; background: #00ADEF; color: white; font-weight: 800; cursor: pointer; transition: transform .18s; }
         .login-submit:hover { transform: translateY(-1px); }
         .login-footer { margin-top: 20px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid rgba(100,116,139,0.2); padding-top: 15px; }
       `}</style>

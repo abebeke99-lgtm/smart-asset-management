@@ -41,7 +41,7 @@ const MaintAssetInspection = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold' }}>🔍 Asset Inspection</h1>
-        <button onClick={() => setShowForm(!showForm)} style={{ padding: '10px 20px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>+ New Inspection</button>
+        <button onClick={() => setShowForm(!showForm)} style={{ padding: '10px 20px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>+ New Inspection</button>
       </div>
 
       {showForm && (
@@ -131,7 +131,7 @@ const MaintAssetInspection = () => {
                   </div>
                 </td>
                 <td style={{ padding: '12px', display: 'flex', gap: '6px' }}>
-                  <button style={{ padding: '6px 10px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>View</button>
+                  <button style={{ padding: '6px 10px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>View</button>
                   <button style={{ padding: '6px 10px', backgroundColor: '#06b6d4', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>Edit</button>
                 </td>
               </tr>
@@ -150,7 +150,7 @@ const MaintAssetInspection = () => {
                 <div style={{ fontSize: '2rem', marginBottom: '8px' }}>📄</div>
                 <div style={{ fontWeight: '600', fontSize: '0.9rem', marginBottom: '4px' }}>{photo.name}</div>
                 <div style={{ fontSize: '0.8rem', color: isDark ? '#94a3b8' : '#4a5568', marginBottom: '8px' }}>{photo.date}</div>
-                <button style={{ padding: '6px 12px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem', width: '100%' }}>Download</button>
+                <button style={{ padding: '6px 12px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem', width: '100%' }}>Download</button>
               </div>
             ))}
           </div>

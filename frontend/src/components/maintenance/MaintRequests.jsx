@@ -82,7 +82,7 @@ const MaintRequests = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold' }}>🔧 Maintenance Requests</h1>
-        <button onClick={() => { setEditingId(null); setFormData({ asset: '', requester: '', department: '', problem: '', priority: 'Medium' }); setShowForm(!showForm); }} style={{ padding: '10px 20px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>+ New Request</button>
+        <button onClick={() => { setEditingId(null); setFormData({ asset: '', requester: '', department: '', problem: '', priority: 'Medium' }); setShowForm(!showForm); }} style={{ padding: '10px 20px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>+ New Request</button>
       </div>
 
       {showForm && (
@@ -175,7 +175,7 @@ const MaintRequests = () => {
                 </td>
                 <td style={{ padding: '12px', fontSize: '0.9rem' }}>{req.assignedTech || '—'}</td>
                 <td style={{ padding: '12px', fontSize: '0.9rem', display: 'flex', gap: '6px' }}>
-                  <button onClick={() => handleEdit(req)} style={{ padding: '6px 10px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>Edit</button>
+                  <button onClick={() => handleEdit(req)} style={{ padding: '6px 10px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>Edit</button>
                   <button onClick={() => handleDelete(req.id)} style={{ padding: '6px 10px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>Delete</button>
                 </td>
               </tr>
@@ -187,15 +187,15 @@ const MaintRequests = () => {
       {/* Pagination */}
       {totalPages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '16px' }}>
-          <button onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1} style={{ padding: '8px 12px', backgroundColor: currentPage === 1 ? '#cbd5e1' : '#2864E8', color: 'white', border: 'none', borderRadius: '6px', cursor: currentPage === 1 ? 'default' : 'pointer' }}>← Previous</button>
+          <button onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1} style={{ padding: '8px 12px', backgroundColor: currentPage === 1 ? '#cbd5e1' : '#00ADEF', color: 'white', border: 'none', borderRadius: '6px', cursor: currentPage === 1 ? 'default' : 'pointer' }}>← Previous</button>
           <div style={{ display: 'flex', gap: '4px' }}>
             {Array.from({length: totalPages}, (_, i) => i + 1).map(page => (
-              <button key={page} onClick={() => setCurrentPage(page)} style={{ padding: '8px 12px', backgroundColor: currentPage === page ? '#2864E8' : cardBg, color: currentPage === page ? 'white' : 'inherit', border: `1px solid ${cardBorder}`, borderRadius: '6px', cursor: 'pointer', fontWeight: currentPage === page ? '600' : '400' }}>
+              <button key={page} onClick={() => setCurrentPage(page)} style={{ padding: '8px 12px', backgroundColor: currentPage === page ? '#00ADEF' : cardBg, color: currentPage === page ? 'white' : 'inherit', border: `1px solid ${cardBorder}`, borderRadius: '6px', cursor: 'pointer', fontWeight: currentPage === page ? '600' : '400' }}>
                 {page}
               </button>
             ))}
           </div>
-          <button onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} style={{ padding: '8px 12px', backgroundColor: currentPage === totalPages ? '#cbd5e1' : '#2864E8', color: 'white', border: 'none', borderRadius: '6px', cursor: currentPage === totalPages ? 'default' : 'pointer' }}>Next →</button>
+          <button onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} style={{ padding: '8px 12px', backgroundColor: currentPage === totalPages ? '#cbd5e1' : '#00ADEF', color: 'white', border: 'none', borderRadius: '6px', cursor: currentPage === totalPages ? 'default' : 'pointer' }}>Next →</button>
         </div>
       )}
 

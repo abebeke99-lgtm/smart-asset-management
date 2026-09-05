@@ -28,13 +28,13 @@ const MaintReports = () => {
       {/* Report Type Selector */}
       <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button onClick={() => setReportType('summary')} style={{ padding: '8px 12px', backgroundColor: reportType === 'summary' ? '#2864E8' : isDark ? '#334155' : '#e5e7eb', color: reportType === 'summary' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Summary</button>
-          <button onClick={() => setReportType('workOrders')} style={{ padding: '8px 12px', backgroundColor: reportType === 'workOrders' ? '#2864E8' : isDark ? '#334155' : '#e5e7eb', color: reportType === 'workOrders' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Work Orders</button>
-          <button onClick={() => setReportType('repairs')} style={{ padding: '8px 12px', backgroundColor: reportType === 'repairs' ? '#2864E8' : isDark ? '#334155' : '#e5e7eb', color: reportType === 'repairs' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Repairs</button>
-          <button onClick={() => setReportType('preventive')} style={{ padding: '8px 12px', backgroundColor: reportType === 'preventive' ? '#2864E8' : isDark ? '#334155' : '#e5e7eb', color: reportType === 'preventive' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Preventive</button>
-          <button onClick={() => setReportType('technicians')} style={{ padding: '8px 12px', backgroundColor: reportType === 'technicians' ? '#2864E8' : isDark ? '#334155' : '#e5e7eb', color: reportType === 'technicians' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Technicians</button>
-          <button onClick={() => setReportType('spareParts')} style={{ padding: '8px 12px', backgroundColor: reportType === 'spareParts' ? '#2864E8' : isDark ? '#334155' : '#e5e7eb', color: reportType === 'spareParts' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Spare Parts</button>
-          <button onClick={() => setReportType('downtime')} style={{ padding: '8px 12px', backgroundColor: reportType === 'downtime' ? '#2864E8' : isDark ? '#334155' : '#e5e7eb', color: reportType === 'downtime' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Downtime</button>
+          <button onClick={() => setReportType('summary')} style={{ padding: '8px 12px', backgroundColor: reportType === 'summary' ? '#00ADEF' : isDark ? '#334155' : '#e5e7eb', color: reportType === 'summary' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Summary</button>
+          <button onClick={() => setReportType('workOrders')} style={{ padding: '8px 12px', backgroundColor: reportType === 'workOrders' ? '#00ADEF' : isDark ? '#334155' : '#e5e7eb', color: reportType === 'workOrders' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Work Orders</button>
+          <button onClick={() => setReportType('repairs')} style={{ padding: '8px 12px', backgroundColor: reportType === 'repairs' ? '#00ADEF' : isDark ? '#334155' : '#e5e7eb', color: reportType === 'repairs' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Repairs</button>
+          <button onClick={() => setReportType('preventive')} style={{ padding: '8px 12px', backgroundColor: reportType === 'preventive' ? '#00ADEF' : isDark ? '#334155' : '#e5e7eb', color: reportType === 'preventive' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Preventive</button>
+          <button onClick={() => setReportType('technicians')} style={{ padding: '8px 12px', backgroundColor: reportType === 'technicians' ? '#00ADEF' : isDark ? '#334155' : '#e5e7eb', color: reportType === 'technicians' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Technicians</button>
+          <button onClick={() => setReportType('spareParts')} style={{ padding: '8px 12px', backgroundColor: reportType === 'spareParts' ? '#00ADEF' : isDark ? '#334155' : '#e5e7eb', color: reportType === 'spareParts' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Spare Parts</button>
+          <button onClick={() => setReportType('downtime')} style={{ padding: '8px 12px', backgroundColor: reportType === 'downtime' ? '#00ADEF' : isDark ? '#334155' : '#e5e7eb', color: reportType === 'downtime' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Downtime</button>
         </div>
       </div>
 
@@ -42,7 +42,7 @@ const MaintReports = () => {
       {reportType === 'summary' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
           <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '24px', textAlign: 'center' }}>
-            <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#2864E8', marginBottom: '8px' }}>{reports.summary.total}</div>
+            <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#00ADEF', marginBottom: '8px' }}>{reports.summary.total}</div>
             <div style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '12px' }}>Total Maintenance</div>
             <div style={{ fontSize: '0.9rem', color: isDark ? '#94a3b8' : '#4a5568' }}>All Time</div>
           </div>

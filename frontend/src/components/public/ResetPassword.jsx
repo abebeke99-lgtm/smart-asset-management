@@ -82,15 +82,15 @@ const ResetPassword = () => {
           font-family: Inter, system-ui, sans-serif;
         }
 
-        .reset-light { background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%); }
-        .reset-dark { background: linear-gradient(135deg, #020617 0%, #111827 100%); }
+        .reset-light { background: #F4F7FE; }
+        .reset-dark { background: #003366; }
 
         .orb {
           position: absolute; border-radius: 50%; filter: blur(80px); z-index: 0;
           animation: float 15s infinite alternate ease-in-out;
         }
-        .orb-1 { width: 450px; height: 450px; background: rgba(37, 99, 235, 0.15); top: -10%; left: -10%; }
-        .orb-2 { width: 550px; height: 550px; background: rgba(139, 92, 246, 0.12); bottom: -10%; right: -10%; }
+        .orb-1 { width: 450px; height: 450px; background: rgba(0, 173, 239, 0.14); top: -10%; left: -10%; }
+        .orb-2 { width: 550px; height: 550px; background: rgba(255, 215, 0, 0.10); bottom: -10%; right: -10%; }
         @keyframes float { from { transform: translate(0, 0); } to { transform: translate(50px, 50px); } }
 
         .reset-card {
@@ -125,7 +125,7 @@ const ResetPassword = () => {
         .password-toggle { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); border: 0; background: transparent; color: #64748b; cursor: pointer; display: grid; place-items: center; padding: 4px; }
 
         .btn-submit {
-          background: linear-gradient(135deg, #2563eb, #4f46e5);
+          background: #00ADEF;
           width: 100%; padding: 15px; border-radius: 12px; border: none; color: white;
           font-weight: 700; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
           margin-top: 10px; font-size: 15px;

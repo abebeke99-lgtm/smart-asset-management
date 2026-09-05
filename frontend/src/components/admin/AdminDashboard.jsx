@@ -562,7 +562,7 @@ const AdminDashboard = () => {
       success: '#48bb78',
       warning: '#ed8936',
       danger: '#fc8181',
-      purple: '#805ad5',
+      purple: '#FFD700',
       teal: '#38b2ac',
       background: 'rgba(43, 108, 176, 0.2)'
     },
@@ -572,7 +572,7 @@ const AdminDashboard = () => {
       success: '#48bb78',
       warning: '#ed8936',
       danger: '#fc8181',
-      purple: '#b794f4',
+      purple: '#FFD700',
       teal: '#4fd1c5',
       background: 'rgba(99, 179, 237, 0.2)'
     }
@@ -615,7 +615,7 @@ const AdminDashboard = () => {
       datasets: [{
         label: t.assetsByDepartment,
         data: values.length > 0 ? values : [0],
-        backgroundColor: ['#4299e1', '#48bb78', '#ed8936', '#fc8181', '#805ad5', '#9f7aea', '#f687b3', '#4fd1c5', '#f6ad55', '#63b3ed'],
+        backgroundColor: ['#00ADEF', '#003366', '#FFD700', '#94a3b8', '#38bdf8', '#64748b', '#cbd5e1', '#0e7490', '#d4ad00', '#0284c7'],
         borderColor: isDark ? '#1e2d45' : '#ffffff',
         borderWidth: 2
       }]
@@ -630,7 +630,7 @@ const AdminDashboard = () => {
       datasets: [{
         label: t.assetsByCategory,
         data: values.length > 0 ? values : [0],
-        backgroundColor: ['#2864E8', '#48bb78', '#ed8936', '#fc8181', '#805ad5', '#4fd1c5'],
+        backgroundColor: ['#00ADEF', '#003366', '#FFD700', '#94a3b8', '#38bdf8', '#64748b'],
         borderWidth: 2
       }]
     };

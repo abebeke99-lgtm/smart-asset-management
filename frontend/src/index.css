@@ -24,11 +24,11 @@ code {
    ========================================== */
 
 :root {
-  --mau-blue: #1a365d;
-  --mau-sky: #2b6cb0;
-  --mau-light: #ebf4ff;
-  --mau-gold: #ffdd57;
-  --mau-gold-dark: #ffc107;
+  --mau-blue: #003366;
+  --mau-sky: #00ADEF;
+  --mau-light: #F4F7FE;
+  --mau-gold: #FFD700;
+  --mau-gold-dark: #d4ad00;
   --mau-text: #1a2332;
   --mau-text-light: #4a5568;
 }

@@ -16,7 +16,7 @@ const MaintWorkOrders = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold' }}>📋 Work Orders</h1>
-        <button onClick={() => setShowForm(!showForm)} style={{ padding: '10px 20px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>+ Create Work Order</button>
+        <button onClick={() => setShowForm(!showForm)} style={{ padding: '10px 20px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>+ Create Work Order</button>
       </div>
 
       {showForm && (
@@ -67,7 +67,7 @@ const MaintWorkOrders = () => {
                 <td style={{ padding: '12px', fontWeight: '600' }}>${wo.totalCost}</td>
                 <td style={{ padding: '12px' }}>{wo.dueDate}</td>
                 <td style={{ padding: '12px', display: 'flex', gap: '6px' }}>
-                  <button style={{ padding: '6px 10px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>View</button>
+                  <button style={{ padding: '6px 10px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>View</button>
                   <button style={{ padding: '6px 10px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>Update</button>
                 </td>
               </tr>

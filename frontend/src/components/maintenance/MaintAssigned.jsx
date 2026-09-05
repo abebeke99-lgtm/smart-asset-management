@@ -34,7 +34,7 @@ const MaintAssigned = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '24px' }}>
         {statusGroups.map(status => (
           <div key={status} style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
-            <div style={{ fontSize: '1.6rem', fontWeight: 'bold', color: '#2864E8' }}>{tasks.filter(t => t.status === status).length}</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 'bold', color: '#00ADEF' }}>{tasks.filter(t => t.status === status).length}</div>
             <div style={{ fontSize: '0.85rem', color: isDark ? '#94a3b8' : '#4a5568' }}>{status}</div>
           </div>
         ))}
@@ -60,10 +60,10 @@ const MaintAssigned = () => {
                   <div style={{ marginBottom: '8px' }}>
                     <div style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Progress: {task.progress}%</div>
                     <div style={{ width: '100%', height: '6px', backgroundColor: isDark ? '#334155' : '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{ width: `${task.progress}%`, height: '100%', backgroundColor: '#2864E8' }} />
+                      <div style={{ width: `${task.progress}%`, height: '100%', backgroundColor: '#00ADEF' }} />
                     </div>
                   </div>
-                  <button style={{ padding: '6px 10px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem', width: '100%' }}>View Details</button>
+                  <button style={{ padding: '6px 10px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem', width: '100%' }}>View Details</button>
                 </div>
               ))}
             </div>

@@ -26,7 +26,7 @@ const MaintPreventive = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold' }}>🔄 Preventive Maintenance</h1>
-        <button onClick={() => setShowForm(!showForm)} style={{ padding: '10px 20px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>+ Create Schedule</button>
+        <button onClick={() => setShowForm(!showForm)} style={{ padding: '10px 20px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>+ Create Schedule</button>
       </div>
 
       {/* KPI Cards */}
@@ -107,7 +107,7 @@ const MaintPreventive = () => {
                   <span style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: sch.status === 'Overdue' ? '#fee2e2' : '#fef3c7', color: sch.status === 'Overdue' ? '#991b1b' : '#92400e', fontSize: '0.85rem', fontWeight: '600' }}>{sch.status}</span>
                 </td>
                 <td style={{ padding: '12px', display: 'flex', gap: '6px' }}>
-                  <button style={{ padding: '6px 10px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>View</button>
+                  <button style={{ padding: '6px 10px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>View</button>
                   <button style={{ padding: '6px 10px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>Complete</button>
                 </td>
               </tr>

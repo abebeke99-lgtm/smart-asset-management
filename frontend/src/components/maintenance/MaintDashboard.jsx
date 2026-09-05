@@ -109,7 +109,7 @@ const MaintDashboard = () => {
   const getStatusColor = (status) => {
     const colors = {
       Pending: '#f59e0b',
-      'In Progress': '#3b82f6',
+      'In Progress': '#00ADEF',
       Completed: '#10b981',
       Overdue: '#ef4444',
     };
@@ -193,7 +193,7 @@ const MaintDashboard = () => {
                 <div className="status-segment" style={{ width: '35%', backgroundColor: '#f59e0b' }}>
                   <span>Pending (35%)</span>
                 </div>
-                <div className="status-segment" style={{ width: '30%', backgroundColor: '#3b82f6' }}>
+                <div className="status-segment" style={{ width: '30%', backgroundColor: '#00ADEF' }}>
                   <span>In Progress (30%)</span>
                 </div>
                 <div className="status-segment" style={{ width: '25%', backgroundColor: '#10b981' }}>

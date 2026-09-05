@@ -31,7 +31,7 @@ const MaintAssetsUnderMaintenance = () => {
           <div style={{ fontSize: '0.9rem', color: isDark ? '#94a3b8' : '#4a5568' }}>Total Downtime</div>
         </div>
         <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
-          <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#2864E8' }}>{avgDowntime.toFixed(1)}h</div>
+          <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#00ADEF' }}>{avgDowntime.toFixed(1)}h</div>
           <div style={{ fontSize: '0.9rem', color: isDark ? '#94a3b8' : '#4a5568' }}>Avg Downtime</div>
         </div>
       </div>
@@ -56,7 +56,7 @@ const MaintAssetsUnderMaintenance = () => {
                 <td style={{ padding: '12px', fontWeight: '600' }}>{asset.asset}</td>
                 <td style={{ padding: '12px', fontSize: '0.9rem' }}>{asset.problem}</td>
                 <td style={{ padding: '12px' }}>{asset.technician}</td>
-                <td style={{ padding: '12px', fontWeight: '600', color: '#2864E8' }}>{asset.workOrder}</td>
+                <td style={{ padding: '12px', fontWeight: '600', color: '#00ADEF' }}>{asset.workOrder}</td>
                 <td style={{ padding: '12px' }}>{asset.startDate}</td>
                 <td style={{ padding: '12px', fontWeight: '600', color: asset.downtime > 7 ? '#ef4444' : '#fbbf24' }}>{asset.downtime}</td>
                 <td style={{ padding: '12px' }}>
@@ -65,7 +65,7 @@ const MaintAssetsUnderMaintenance = () => {
                   </span>
                 </td>
                 <td style={{ padding: '12px', display: 'flex', gap: '6px' }}>
-                  <button style={{ padding: '6px 10px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>View</button>
+                  <button style={{ padding: '6px 10px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>View</button>
                 </td>
               </tr>
             ))}

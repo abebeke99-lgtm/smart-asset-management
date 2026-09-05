@@ -42,7 +42,7 @@ const MaintSpareParts = () => {
             <option value="all">All Categories</option>
             {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
           </select>
-          <button style={{ padding: '10px 20px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>+ Add Part</button>
+          <button style={{ padding: '10px 20px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>+ Add Part</button>
         </div>
       </div>
 
@@ -80,7 +80,7 @@ const MaintSpareParts = () => {
                     </span>
                   </td>
                   <td style={{ padding: '12px', display: 'flex', gap: '6px' }}>
-                    <button style={{ padding: '6px 10px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>Edit</button>
+                    <button style={{ padding: '6px 10px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>Edit</button>
                   </td>
                 </tr>
               );

@@ -1,6 +1,6 @@
 :root {
-  --admin-primary: #2563eb;
-  --admin-primary-dark: #1d4ed8;
+  --admin-primary: #00ADEF;
+  --admin-primary-dark: #003366;
   --admin-slate-950: #0f172a;
   --admin-slate-900: #1e293b;
   --admin-slate-700: #334155;
@@ -8,7 +8,7 @@
   --admin-slate-300: #cbd5e1;
   --admin-slate-100: #f1f5f9;
   --admin-surface: #ffffff;
-  --admin-page: #f4f7fb;
+  --admin-page: #F4F7FE;
   --admin-text: #172033;
   --admin-muted: #64748b;
   --admin-border: #dbe4ef;
@@ -34,7 +34,7 @@
 }
 
 .admin-sidebar-profile {
-  background: linear-gradient(145deg, #1d4ed8, #2563eb) !important;
+  background: #003366 !important;
 }
 
 .admin-nav-link {
@@ -46,7 +46,7 @@
 
 .admin-nav-link:hover,
 .admin-nav-link.is-active {
-  background: #1e293b !important;
+  background: #00ADEF !important;
   color: #ffffff !important;
   transform: translateX(2px);
 }

@@ -67,15 +67,15 @@ const ForgotPassword = () => {
           font-family: Inter, system-ui, sans-serif;
         }
 
-        .forgot-light { background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%); }
-        .forgot-dark { background: linear-gradient(135deg, #020617 0%, #111827 100%); }
+        .forgot-light { background: #F4F7FE; }
+        .forgot-dark { background: #003366; }
 
         .orb {
           position: absolute; border-radius: 50%; filter: blur(80px); z-index: 0;
           animation: float 15s infinite alternate ease-in-out;
         }
-        .orb-1 { width: 400px; height: 400px; background: rgba(59, 130, 246, 0.15); top: -10%; left: -10%; }
-        .orb-2 { width: 500px; height: 500px; background: rgba(139, 92, 246, 0.12); bottom: -10%; right: -10%; }
+        .orb-1 { width: 400px; height: 400px; background: rgba(0, 173, 239, 0.14); top: -10%; left: -10%; }
+        .orb-2 { width: 500px; height: 500px; background: rgba(255, 215, 0, 0.10); bottom: -10%; right: -10%; }
         @keyframes float { from { transform: translate(0, 0); } to { transform: translate(40px, 40px); } }
 
         .forgot-card {
@@ -102,7 +102,7 @@ const ForgotPassword = () => {
         .input-field:focus { border-color: #3b82f6; background: ${isDark ? '#020617' : '#fff'}; }
 
         .btn-reset {
-          background: linear-gradient(135deg, #2563eb, #4f46e5);
+          background: #00ADEF;
           width: 100%; padding: 14px; border-radius: 12px; border: none; color: white;
           font-weight: 700; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
           margin-top: 20px;

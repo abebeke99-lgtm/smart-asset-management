@@ -23,7 +23,7 @@ const MaintTestingQuality = () => {
       {/* Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '24px' }}>
         <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
-          <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#2864E8' }}>{tests.length}</div>
+          <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#00ADEF' }}>{tests.length}</div>
           <div style={{ fontSize: '0.9rem', color: isDark ? '#94a3b8' : '#4a5568' }}>Total Tests</div>
         </div>
         <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
@@ -63,7 +63,7 @@ const MaintTestingQuality = () => {
                 </td>
                 <td style={{ padding: '12px', fontSize: '0.85rem' }}>{test.notes.substring(0, 30)}...</td>
                 <td style={{ padding: '12px', display: 'flex', gap: '6px' }}>
-                  <button style={{ padding: '6px 10px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>View</button>
+                  <button style={{ padding: '6px 10px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>View</button>
                 </td>
               </tr>
             ))}

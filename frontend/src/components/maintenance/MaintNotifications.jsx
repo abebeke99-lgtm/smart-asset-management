@@ -52,9 +52,9 @@ const MaintNotifications = () => {
       {/* Type Filters with Counters */}
       <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button onClick={() => setFilterType('all')} style={{ padding: '8px 12px', backgroundColor: filterType === 'all' ? '#2864E8' : isDark ? '#334155' : '#e5e7eb', color: filterType === 'all' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}>All ({notifications.length})</button>
+          <button onClick={() => setFilterType('all')} style={{ padding: '8px 12px', backgroundColor: filterType === 'all' ? '#00ADEF' : isDark ? '#334155' : '#e5e7eb', color: filterType === 'all' ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}>All ({notifications.length})</button>
           {types.map(type => (
-            <button key={type} onClick={() => setFilterType(type)} style={{ padding: '8px 12px', backgroundColor: filterType === type ? '#2864E8' : isDark ? '#334155' : '#e5e7eb', color: filterType === type ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}>
+            <button key={type} onClick={() => setFilterType(type)} style={{ padding: '8px 12px', backgroundColor: filterType === type ? '#00ADEF' : isDark ? '#334155' : '#e5e7eb', color: filterType === type ? 'white' : 'inherit', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}>
               {type} ({typeCount(type)})
             </button>
           ))}
@@ -73,14 +73,14 @@ const MaintNotifications = () => {
                   <span style={{ padding: '2px 8px', borderRadius: '3px', backgroundColor: typeStyle.bg, color: typeStyle.text, fontSize: '0.8rem', fontWeight: '600' }}>
                     {notif.type}
                   </span>
-                  {!notif.read && <div style={{ width: '8px', height: '8px', backgroundColor: '#2864E8', borderRadius: '50%' }} />}
+                  {!notif.read && <div style={{ width: '8px', height: '8px', backgroundColor: '#00ADEF', borderRadius: '50%' }} />}
                 </div>
                 <div style={{ fontSize: '0.95rem', marginBottom: '6px' }}>{notif.message}</div>
                 <div style={{ fontSize: '0.8rem', color: isDark ? '#94a3b8' : '#4a5568' }}>{notif.date}</div>
               </div>
               <div style={{ display: 'flex', gap: '6px' }}>
                 {!notif.read && (
-                  <button onClick={() => handleMarkAsRead(notif.id)} style={{ padding: '6px 12px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>Read</button>
+                  <button onClick={() => handleMarkAsRead(notif.id)} style={{ padding: '6px 12px', backgroundColor: '#00ADEF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>Read</button>
                 )}
                 <button onClick={() => handleDelete(notif.id)} style={{ padding: '6px 12px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>Delete</button>
               </div>
