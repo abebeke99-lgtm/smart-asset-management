@@ -165,7 +165,7 @@ const StoreAssetRequests = () => {
 
     try {
       const results = await Promise.allSettled([
-        axios.get('/api/asset-requests'),
+        axios.get('/api/approvals'),
         axios.get('/api/assets', {
           params: { limit: 500 }
         }),
@@ -393,7 +393,7 @@ const StoreAssetRequests = () => {
     setProcessing(true);
 
     try {
-      await axios.post('/api/asset-requests', {
+      await axios.post('/api/approvals', {
         asset_id: form.assetId,
         quantity: Number(form.quantity),
         department_id: form.departmentId,

@@ -33,7 +33,6 @@ const ICTTechnicalSupport = () => {
   });
 
   const isDark = theme === 'dark';
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
 
   const englishTranslations = {
     technicalSupport: 'Technical Support',
@@ -64,7 +63,6 @@ const ICTTechnicalSupport = () => {
     loading: 'Loading tickets...',
     fetchError: 'Failed to load tickets',
     comment: 'Comment',
-    resolution: 'Resolution',
     submitButton: 'Submit Update',
     cancel: 'Cancel',
     critical: 'Critical',
@@ -120,7 +118,6 @@ const ICTTechnicalSupport = () => {
     loading: 'አስጫዋ በማስጫን ላይ...',
     fetchError: 'አስጫዋ ማስጫን ወደ ውድቅ ደረሰ',
     comment: 'አስተያየት',
-    resolution: 'ቅል',
     submitButton: 'ዝማሪያ ያስገቡ',
     cancel: 'ተወው',
     critical: 'ወሳኝ',
@@ -147,6 +144,8 @@ const ICTTechnicalSupport = () => {
     nextPage: 'ተከታዩ'
   };
 
+  const t = language === 'en' ? englishTranslations : amharicTranslations;
+
   const pageSize = 20;
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -154,73 +153,26 @@ const ICTTechnicalSupport = () => {
   const fetchTickets = useCallback(async () => {
     setLoading(true);
     try {
-      // Try to fetch from support endpoints
-      try {
-        const response = await axios.get('/api/support', { params: { limit: 200 } });
-        const data = response.data.tickets || response.data.requests || [];
-        setTickets(data);
-        setBackendLimit(false);
-        calculateStats(data);
-        applyFilters(data);
-        setLoading(false);
-        return;
-      } catch (error) {
-        // Support endpoint doesn't exist, use demo data
-      }
-
-      // If no support endpoint, generate demo data
-      const demoTickets = generateDemoTickets();
-      setTickets(demoTickets);
-      setBackendLimit(true);
-      calculateStats(demoTickets);
-      applyFilters(demoTickets);
+      const response = await axios.get('/api/support', { params: { limit: 200 } });
+      const data = Array.isArray(response.data?.tickets)
+        ? response.data.tickets
+        : Array.isArray(response.data?.data)
+          ? response.data.data
+          : [];
+      setTickets(data);
+      setBackendLimit(false);
+      calculateStats(data);
+      applyFilters(data);
     } catch (error) {
+      console.error('Failed to load support tickets:', error);
       toast.error(t.fetchError || 'Failed to load tickets');
       setTickets([]);
+      setBackendLimit(false);
+      calculateStats([]);
+      applyFilters([]);
     }
     setLoading(false);
   }, [t]);
-
-  // Generate demo data for demonstration
-  const generateDemoTickets = () => {
-    const problems = [
-      'Network connectivity issue',
-      'Printer malfunction',
-      'Email server down',
-      'Password reset required',
-      'Software installation needed',
-      'Hardware failure',
-      'VPN connection issues',
-      'Database performance problem'
-    ];
-
-    const assets = ['PC-001', 'LAP-002', 'PRT-003', 'SRV-001', 'NET-001'];
-    const statuses = ['Open', 'In Progress', 'Resolved'];
-    const priorities = ['Critical', 'High', 'Medium', 'Low'];
-
-    return Array.from({ length: 15 }, (_, i) => {
-      const createdDate = new Date(Date.now() - (i + 1) * 2 * 24 * 3600000);
-      const status = statuses[i % statuses.length];
-
-      return {
-        id: `ticket_${i + 1}`,
-        ticket_id: `TKT-${String(i + 1).padStart(5, '0')}`,
-        problem: problems[i % problems.length],
-        description: `Description for ticket ${i + 1}: Technical issue requiring immediate attention`,
-        priority: priorities[i % priorities.length],
-        status: status,
-        requester: `User ${i + 1}`,
-        requester_id: `user_${i + 1}`,
-        asset: assets[i % assets.length],
-        asset_id: `asset_${i + 1}`,
-        assigned_to: status !== 'Resolved' ? `Technician ${(i % 3) + 1}` : `Technician ${(i % 3) + 1}`,
-        created_at: createdDate.toISOString(),
-        resolved_at: status === 'Resolved' ? new Date(createdDate.getTime() + 3 * 24 * 3600000).toISOString() : null,
-        resolution: status === 'Resolved' ? 'Issue has been successfully resolved' : null,
-        notes: `Technical notes for ticket ${i + 1}`
-      };
-    });
-  };
 
   // Calculate stats
   const calculateStats = (data) => {

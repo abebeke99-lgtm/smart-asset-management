@@ -269,7 +269,7 @@ const StoreTracking = () => {
             limit: 1000
           }
         }),
-        axios.get('/api/tracking', {
+        axios.get('/api/rfid', {
           params: {
             limit: 500
           }

@@ -7,9 +7,7 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Inter', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -24,13 +22,38 @@ code {
    ========================================== */
 
 :root {
-  --mau-blue: #1a365d;
-  --mau-sky: #2b6cb0;
-  --mau-light: #ebf4ff;
-  --mau-gold: #ffdd57;
-  --mau-gold-dark: #ffc107;
-  --mau-text: #1a2332;
-  --mau-text-light: #4a5568;
+  --primary: var(--color-primary);
+  --primary-dark: var(--color-secondary);
+  --primary-hover: var(--color-secondary-hover);
+  --sidebar: var(--sidebar-background);
+  --sidebar-hover: #0284C7;
+  --sidebar-active: #0284C7;
+  --body-bg: var(--color-background);
+  --surface: var(--color-surface);
+  --surface-muted: #f1f5f9;
+  --surface-hover: #eff6ff;
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-muted: #94a3b8;
+  --text-on-dark: #cbd5e1;
+  --success: #16a34a;
+  --success-light: #dcfce7;
+  --warning: #f59e0b;
+  --warning-light: #fef3c7;
+  --danger: #dc2626;
+  --danger-light: #fee2e2;
+  --info: #0ea5e9;
+  --info-light: #e0f2fe;
+  --purple: #7c3aed;
+  --purple-light: #ede9fe;
+  --border: var(--color-border);
+  --border-light: #f1f5f9;
+  --focus: var(--color-primary);
+  --mau-blue: var(--primary-dark);
+  --mau-sky: var(--primary);
+  --mau-light: var(--info-light);
+  --mau-text: var(--text-primary);
+  --mau-text-light: var(--text-secondary);
 }
 
 /* ==========================================

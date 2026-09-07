@@ -23,6 +23,7 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const departmentRoutes = require('./routes/departmentRoutes');
 const infrastructureRoutes = require('./routes/infrastructureRoutes');
 const collegeRoutes = require('./routes/collegeRoutes');
+const supportRoutes = require('./routes/supportRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -79,20 +80,24 @@ app.use(passport.initialize());
 
 let databaseReady = false;
 
-app.get('/api/health', (req, res) => {
+const healthHandler = (req, res) => {
   res.status(200).json({
-    success: databaseReady,
-    status: databaseReady ? 'ok' : 'unavailable',
+    success: true,
+    status: 'ok',
     database: databaseReady ? 'connected' : 'disconnected',
-    message: databaseReady ? 'Smart Asset Management API is running.' : 'Database connection is unavailable.'
+    message: 'Smart Asset Management API is running.'
   });
-});
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/rfid', rfidRoutes);
+app.use('/api/tracking', rfidRoutes);
 app.use('/api/assignments', assignmentRoutes);
 app.use('/api/transfers', transferRoutes);
 app.use('/api/inventory', inventoryRoutes);
@@ -104,6 +109,7 @@ app.use('/api/college', collegeRoutes);
 app.use('/api/infrastructure', infrastructureRoutes);
 app.use('/api', notificationRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/support', supportRoutes);
 app.use('/api', adminSupportRoutes);
 
 app.use((err, req, res, next) => {

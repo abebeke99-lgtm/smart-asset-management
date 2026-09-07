@@ -3,6 +3,10 @@ import { Link } from 'react-router-dom';
 import { useLanguage } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { Eye, Pencil, Plus, Search, Package } from 'lucide-react';
+import LoadingSpinner from '../common/ui/LoadingSpinner';
+import EmptyState from '../common/ui/EmptyState';
+import StatusBadge from '../common/ui/StatusBadge';
 
 const AssetList = () => {
   const { language, theme } = useLanguage();
@@ -53,7 +57,7 @@ const AssetList = () => {
   const styles = {
     container: { padding: '20px' },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' },
-    title: { color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1.5rem', fontWeight: 700 },
+    title: { display: 'flex', alignItems: 'center', gap: '8px', color: isDark ? '#c8dcf5' : '#0f172a', fontSize: '1.75rem', fontWeight: 700 },
     controls: { display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '16px' },
     input: { padding: '10px 16px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#f7fafc', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', minWidth: '200px' },
     select: { padding: '10px 16px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#f7fafc', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', cursor: 'pointer' },
@@ -71,8 +75,8 @@ const AssetList = () => {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h1 style={styles.title}>📦 {t.assets}</h1>
-        <Link to="/assets/create"><button style={styles.button()}>➕ {t.createAsset}</button></Link>
+        <h1 style={styles.title}><Package size={24} aria-hidden="true" /> {t.assets}</h1>
+        <Link to="/assets/create"><button className="btn btn-primary" type="button"><Plus size={16} aria-hidden="true" /> {t.createAsset}</button></Link>
       </div>
 
       <div style={styles.controls}>
@@ -84,10 +88,10 @@ const AssetList = () => {
           <option value="Under-Maintenance">{t.underMaintenance}</option>
           <option value="Disposed">{t.disposed}</option>
         </select>
-        <button style={styles.button('linear-gradient(135deg, #2b6cb0, #4299e1)')} onClick={fetchAssets}>🔍 {t.search}</button>
+        <button className="btn btn-primary" type="button" onClick={fetchAssets}><Search size={16} aria-hidden="true" /> {t.search}</button>
       </div>
 
-      {loading ? <div style={styles.emptyState}>⏳ {t.loading}</div> : assets.length === 0 ? <div style={styles.emptyState}>{t.noAssets}</div> :
+      {loading ? <div style={styles.emptyState}><LoadingSpinner label={t.loading} /></div> : assets.length === 0 ? <EmptyState title={t.noAssets} message={t.searchPlaceholder} /> :
         <>
           <div style={{ overflowX: 'auto' }}>
             <table style={styles.table}>
@@ -104,12 +108,12 @@ const AssetList = () => {
                     <td style={styles.td}><Link to={`/assets/${asset.id}`} style={{ color: '#2b6cb0', textDecoration: 'none' }}>{asset.asset_tag}</Link></td>
                     <td style={styles.td}>{asset.name}</td>
                     <td style={styles.td}>{asset.department_name || '-'}</td>
-                    <td style={styles.td}><span style={styles.statusBadge(asset.status)}>{asset.status}</span></td>
+                    <td style={styles.td}><StatusBadge status={asset.status}>{asset.status}</StatusBadge></td>
                     <td style={styles.td}>{asset.location || '-'}</td>
                     <td style={styles.td}>${(asset.current_value || 0).toLocaleString()}</td>
                     <td style={styles.td}>
-                      <Link to={`/assets/${asset.id}`}><button style={styles.actionButton('#4299e1')}>👁️</button></Link>
-                      <Link to={`/assets/${asset.id}/edit`}><button style={styles.actionButton('#ed8936')}>✏️</button></Link>
+                      <Link to={`/assets/${asset.id}`}><button className="btn btn-outline btn-sm" type="button" aria-label={`View ${asset.name}`}><Eye size={16} /></button></Link>
+                      <Link to={`/assets/${asset.id}/edit`}><button className="btn btn-outline btn-sm" type="button" aria-label={`Edit ${asset.name}`}><Pencil size={16} /></button></Link>
                     </td>
                   </tr>
                 ))}

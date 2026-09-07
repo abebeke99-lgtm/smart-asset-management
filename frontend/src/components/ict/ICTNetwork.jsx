@@ -29,7 +29,6 @@ const ICTNetwork = () => {
   });
 
   const isDark = theme === 'dark';
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
 
   const englishTranslations = {
     networkEquipment: 'Network & Technical Equipment',
@@ -112,6 +111,8 @@ const ICTNetwork = () => {
     nextPage: 'ተከታዩ',
     note: 'IP መረጃ በስርዓቱ ውስጥ ከተዋቀረ ብቻ ይታያል'
   };
+
+  const t = language === 'en' ? englishTranslations : amharicTranslations;
 
   const networkCategories = [
     { value: 'routers', label: t.routers, filter: c => c && c.toLowerCase().includes('router') },

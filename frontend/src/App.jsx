@@ -9,7 +9,7 @@ import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate, useLocation,
 import React, { useState, useEffect, useRef, Suspense, lazy, useMemo } from 'react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { ArrowLeftRight, BarChart3, Bell, Building2, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, DatabaseBackup, Github, LayoutDashboard, Linkedin, LogOut, Menu, Package, Radio, Settings, Users, Wrench, X } from 'lucide-react';
+import { ArrowLeftRight, BarChart3, Bell, Building2, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, DatabaseBackup, FileText, Github, LayoutDashboard, Linkedin, LogOut, Menu, Package, Radio, Settings, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
@@ -1218,9 +1218,9 @@ const RoleLayout = () => {
   
   return (
     <div style={{
-      backgroundColor: isDark ? '#141e2d' : '#f0f5ff',
-      color: isDark ? '#c8dcf5' : '#1a375d',
-      padding: '30px',
+      backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+      color: isDark ? '#cbd5e1' : '#1e293b',
+      padding: '24px',
       minHeight: 'calc(100vh - var(--header-height))'
     }}>
       <Suspense fallback={<LoadingFallback />}>
@@ -1239,7 +1239,7 @@ const AdminLayout = () => {
     <div style={{
       display: 'flex',
       gap: 0,
-      backgroundColor: isDark ? '#141e2d' : '#f0f5ff',
+      backgroundColor: isDark ? '#0f172a' : '#f8fafc',
       minHeight: 'calc(100vh - var(--header-height))'
     }}>
       {/* Main Content */}
@@ -1247,8 +1247,8 @@ const AdminLayout = () => {
         flex: 1,
         overflowY: 'auto',
         maxHeight: 'calc(100vh - var(--header-height))',
-        padding: '30px',
-        color: isDark ? '#c8dcf5' : '#1a375d'
+        padding: '24px',
+        color: isDark ? '#cbd5e1' : '#1e293b'
       }}>
         <Suspense fallback={<LoadingFallback />}>
           <Outlet />
@@ -1376,40 +1376,40 @@ function AppContent() {
 
   const themeStyles = {
     light: {
-      headerBg: '#00b2ee',
-      headerText: '#ffffff',
-      footerBg: '#00b2ee',
-      footerText: '#ffffff',
-      mainBg: '#f7f9fc',
-      mainText: '#17305f',
+      headerBg: '#0EA5E9',
+      headerText: '#FFFFFF',
+      footerBg: '#0EA5E9',
+      footerText: '#CBD5E1',
+      mainBg: '#FFFFFF',
+      mainText: '#1E293B',
       cardBg: '#ffffff',
-      cardBorder: '#d9e2f2',
-      cardShadow: '0 4px 12px rgba(40, 100, 232, 0.1)',
-      sidebarBg: '#00b2ee',
-      sidebarHover: '#009bd1',
-      accent: '#2864E8',
-      accentLight: '#eaf0ff',
-      subText: '#4a5568',
-      danger: '#e53e3e',
-      success: '#48bb78'
+      cardBorder: '#E2E8F0',
+      cardShadow: '0 4px 12px rgba(15, 23, 42, 0.05)',
+      sidebarBg: '#0F172A',
+      sidebarHover: '#1E293B',
+      accent: '#2563EB',
+      accentLight: '#EFF6FF',
+      subText: '#64748B',
+      danger: '#DC2626',
+      success: '#16A34A'
     },
     dark: {
-      headerBg: '#00b2ee',
-      headerText: '#ffffff',
-      footerBg: '#00b2ee',
-      footerText: '#ffffff',
-      mainBg: '#eef3fb',
-      mainText: '#17305f',
+      headerBg: '#0EA5E9',
+      headerText: '#FFFFFF',
+      footerBg: '#0EA5E9',
+      footerText: '#CBD5E1',
+      mainBg: '#FFFFFF',
+      mainText: '#1E293B',
       cardBg: '#ffffff',
-      cardBorder: '#c8d5ea',
-      cardShadow: '0 4px 12px rgba(23, 48, 95, 0.14)',
-      sidebarBg: '#00b2ee',
-      sidebarHover: '#009bd1',
-      accent: '#2864E8',
-      accentLight: '#dce7ff',
-      subText: '#a0aec0',
-      danger: '#fc8181',
-      success: '#48bb78'
+      cardBorder: '#E2E8F0',
+      cardShadow: '0 4px 12px rgba(15, 23, 42, 0.05)',
+      sidebarBg: '#0F172A',
+      sidebarHover: '#1E293B',
+      accent: '#2563EB',
+      accentLight: '#EFF6FF',
+      subText: '#64748B',
+      danger: '#DC2626',
+      success: '#16A34A'
     }
   };
 
@@ -1420,7 +1420,7 @@ function AppContent() {
   // ==========================================
 
   const HeaderLink = ({ to, children }) => (
-    <Link to={to} onClick={(event) => requestPublicNavigation(to, event)} style={{ color: 'white', textDecoration: 'none', fontWeight: 600, opacity: 0.95, cursor: 'pointer' }}>
+    <Link to={to} onClick={(event) => requestPublicNavigation(to, event)} style={{ color: currentTheme.headerText, textDecoration: 'none', fontWeight: 600, opacity: 0.95, cursor: 'pointer' }}>
       {children}
     </Link>
   );
@@ -1430,7 +1430,7 @@ function AppContent() {
       background: currentTheme.headerBg,
       color: currentTheme.headerText,
       padding: '0.75rem 2rem',
-      borderBottom: '3px solid #ffdd57',
+      borderBottom: '1px solid rgba(255,255,255,0.18)',
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
@@ -1440,12 +1440,12 @@ function AppContent() {
       boxSizing: 'border-box',
       boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
+      <div className="app-header-brand" style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
         <div style={{
           width: '55px',
           height: '55px',
           borderRadius: '8px',
-          border: '2px solid #ffdd57',
+          border: '2px solid rgba(255,255,255,0.65)',
           background: 'white',
           display: 'flex',
           alignItems: 'center',
@@ -1469,26 +1469,26 @@ function AppContent() {
           <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, letterSpacing: '0.25px', textShadow: '0 1px 2px rgba(0,0,0,0.25)' }}>
             {t.university}
           </h1>
-          <p style={{ margin: 0, fontSize: '0.9rem', color: '#ffffff', opacity: 0.9, fontWeight: 500 }}>
+          <p style={{ margin: 0, fontSize: '0.9rem', color: currentTheme.headerText, opacity: 0.72, fontWeight: 500 }}>
             {t.systemName}
           </p>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="app-header-actions" style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
         <nav style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
           <HeaderLink to="/home">{t.home}</HeaderLink>
           <HeaderLink to="/about">{t.about}</HeaderLink>
           <HeaderLink to="/contact">{t.contact}</HeaderLink>
         </nav>
 
-        <div style={{ fontSize: '0.85rem', textAlign: 'right', color: '#ffffff', fontFamily: 'monospace', fontWeight: 600 }}>
+        <div style={{ fontSize: '0.85rem', textAlign: 'right', color: currentTheme.headerText, fontFamily: 'monospace', fontWeight: 600 }}>
           <div>{currentTime.toLocaleTimeString()}</div>
           <div>🇪🇹 {ethiopianTime}</div>
         </div>
 
         {user ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="app-header-user" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
               width: '36px',
               height: '36px',
@@ -1505,35 +1505,35 @@ function AppContent() {
                 {(user.username || 'U').split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
               </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', color: 'white', lineHeight: 1.1 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', color: currentTheme.headerText, lineHeight: 1.1 }}>
               <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{user.username}</div>
               <div style={{ fontSize: '0.6rem', opacity: 0.8, textTransform: 'capitalize' }}>{user.role}</div>
             </div>
           </div>
         ) : (
           <Link className="public-login-button" to="/login" style={{
-            background: '#09dfe5',
-            color: '#073b4c',
+            background: '#ffffff',
+            color: '#1d4ed8',
             textDecoration: 'none',
             padding: '7px 16px',
-            borderRadius: 20,
+            borderRadius: 8,
             fontWeight: 700,
             fontSize: '0.9rem',
             transition: '0.2s'
           }}
-          onMouseEnter={e => e.target.style.background = '#64f3f5'}
-          onMouseLeave={e => e.target.style.background = '#09dfe5'}>
+          onMouseEnter={e => e.target.style.background = '#eff6ff'}
+          onMouseLeave={e => e.target.style.background = '#ffffff'}>
             🔐 {t.login}
           </Link>
         )}
 
         <button onClick={toggleLanguage} style={{
-          background: 'rgba(0,0,0,0.3)',
-          border: '1px solid #ffdd57',
+          background: '#FFFFFF',
+          border: '1px solid #CBD5E1',
           padding: '4px 10px',
           borderRadius: '5px',
           cursor: 'pointer',
-          color: 'white',
+          color: '#0F172A',
           fontSize: '0.8rem',
           fontWeight: 600
         }}>
@@ -1541,12 +1541,12 @@ function AppContent() {
         </button>
 
         <button onClick={toggleTheme} style={{
-          background: 'rgba(0,0,0,0.3)',
-          border: '1px solid #ffdd57',
+          background: '#E2E8F0',
+          border: '1px solid #CBD5E1',
           padding: '4px 10px',
           borderRadius: '5px',
           cursor: 'pointer',
-          color: 'white',
+          color: '#0F172A',
           fontSize: '0.9rem'
         }}>
           {theme === 'light' ? '🌙' : '☀️'}
@@ -1561,7 +1561,7 @@ function AppContent() {
 
   const Footer = () => (
     <footer className={`app-footer${!user ? ' public-site-footer bg-sky-900' : ''}`} style={{ 
-      backgroundColor: '#00b2ee',
+      backgroundColor: '#0EA5E9',
       color: '#ffffff',
       padding: '30px 20px 15px',
       borderTop: '1px solid rgba(255,255,255,0.1)',
@@ -1616,7 +1616,7 @@ function AppContent() {
       </div>
       <div style={{
         borderTop: '1px solid rgba(255,255,255,0.1)',
-        backgroundColor: user ? '#1f50c4' : '#075985',
+        backgroundColor: '#1E293B',
         padding: '15px 20px 0',
         display: 'flex',
         justifyContent: 'space-between',
@@ -1894,9 +1894,28 @@ function AppContent() {
     .find((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))?.path
     || getDashboardRoute(user?.role);
 
+  const getNavigationIcon = (item) => {
+    if (item.icon) return item.icon;
+    const path = item.path || '';
+    if (path === '/admin' || /\/dashboard$/.test(path)) return LayoutDashboard;
+    if (path.includes('create')) return ClipboardList;
+    if (path.includes('asset') || path.includes('inventory')) return Package;
+    if (path.includes('assignment') || path.includes('request') || path.includes('approval')) return ClipboardList;
+    if (path.includes('transfer') || path.includes('return')) return ArrowLeftRight;
+    if (path.includes('maintenance') || path.includes('repair')) return Wrench;
+    if (path.includes('rfid') || path.includes('tracking')) return Radio;
+    if (path.includes('report') || path.includes('analytics')) return BarChart3;
+    if (path.includes('user') || path.includes('staff') || path.includes('technician')) return Users;
+    if (path.includes('department') || path.includes('college') || path.includes('location')) return Building2;
+    if (path.includes('notification')) return Bell;
+    if (path.includes('setting')) return Settings;
+    if (path.includes('backup')) return DatabaseBackup;
+    return FileText;
+  };
+
   const renderSidebarLink = (item, nested = false) => {
     const isActive = item.path === currentActiveSidebar;
-    const Icon = item.icon || LayoutDashboard;
+    const Icon = getNavigationIcon(item);
     return (
       <Link
         key={item.path}
@@ -1940,7 +1959,7 @@ function AppContent() {
       {sidebarOpen && <button className="sidebar-backdrop is-visible" type="button" onClick={() => setSidebarOpen(false)} aria-label="Close navigation menu" />}
       <div className={`authenticated-shell${isStoreManager ? ' store-manager-body' : ''}`}>
         <aside className={`admin-sidebar${isStoreManager ? ' store-manager-sidebar' : ''}${sidebarOpen ? ' is-open' : ''}`} style={{
-          backgroundColor: currentTheme.sidebarBg,
+          backgroundColor: '#0F172A',
           borderRight: `1px solid ${currentTheme.cardBorder}`,
           display: 'flex',
           flexDirection: 'column',

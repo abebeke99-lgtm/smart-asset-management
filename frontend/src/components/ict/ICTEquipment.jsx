@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '../../contexts/UiContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-toastify';
-import axios from 'axios';
+import apiClient from '../../services/apiClient';
 import * as XLSX from 'xlsx';
 
 const ICTEquipment = () => {
@@ -29,7 +29,6 @@ const ICTEquipment = () => {
   });
 
   const isDark = theme === 'dark';
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
 
   const englishTranslations = {
     itEquipment: 'IT Equipment',
@@ -127,6 +126,8 @@ const ICTEquipment = () => {
     nextPage: 'ተከታዩ'
   };
 
+  const t = language === 'en' ? englishTranslations : amharicTranslations;
+
   const equipmentCategories = [
     { value: 'computers', label: t.computers, filter: c => c && (c.toLowerCase().includes('computer') || c.toLowerCase().includes('desktop')) },
     { value: 'laptops', label: t.laptops, filter: c => c && c.toLowerCase().includes('laptop') },
@@ -142,25 +143,26 @@ const ICTEquipment = () => {
   const fetchEquipment = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/assets', {
+      const response = await apiClient.get('/api/assets', {
         params: { limit: 1000 }
       });
 
-      let assets = response.data.assets || [];
+      let assets = response.data?.assets || response.data?.data || [];
+      if (!Array.isArray(assets)) assets = [];
       
       // Filter for ICT equipment
       assets = assets.filter(a => 
-        a.category_name && (
-          a.category_name.toLowerCase().includes('computer') ||
-          a.category_name.toLowerCase().includes('printer') ||
-          a.category_name.toLowerCase().includes('server') ||
-          a.category_name.toLowerCase().includes('network') ||
-          a.category_name.toLowerCase().includes('monitor') ||
-          a.category_name.toLowerCase().includes('ups') ||
-          a.category_name.toLowerCase().includes('keyboard') ||
-          a.category_name.toLowerCase().includes('mouse') ||
-          a.category_name.toLowerCase().includes('device') ||
-          a.category_name.toLowerCase().includes('equipment')
+        String(a.category_name || a.category || '').toLowerCase() && (
+          String(a.category_name || a.category).toLowerCase().includes('computer') ||
+          String(a.category_name || a.category).toLowerCase().includes('printer') ||
+          String(a.category_name || a.category).toLowerCase().includes('server') ||
+          String(a.category_name || a.category).toLowerCase().includes('network') ||
+          String(a.category_name || a.category).toLowerCase().includes('monitor') ||
+          String(a.category_name || a.category).toLowerCase().includes('ups') ||
+          String(a.category_name || a.category).toLowerCase().includes('keyboard') ||
+          String(a.category_name || a.category).toLowerCase().includes('mouse') ||
+          String(a.category_name || a.category).toLowerCase().includes('device') ||
+          String(a.category_name || a.category).toLowerCase().includes('equipment')
         )
       );
 
@@ -168,10 +170,13 @@ const ICTEquipment = () => {
       calculateStats(assets);
       applyFilters(assets);
     } catch (error) {
+      console.error('Failed to load ICT equipment:', error);
       toast.error(t.fetchError || 'Failed to load equipment');
       setAllAssets([]);
+      setFilteredAssets([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [t]);
 
   // Calculate statistics

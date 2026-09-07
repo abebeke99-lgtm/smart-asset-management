@@ -472,10 +472,8 @@ const AdminRFIDTracking = () => {
     }
 
     try {
-      await axios.post('/api/rfid/register', {
-        asset_id: registerForm.asset_id,
-        tag_type: registerForm.tag_type,
-        tag_code: registerForm.tag_code.trim(),
+      await axios.post(`/api/assets/${registerForm.asset_id}/rfid`, {
+        rfid_tag: registerForm.tag_code.trim(),
         location: registerForm.location
       });
 

@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
 import { apiBase } from '../../utils/api';
+import { Eye, EyeOff, Lock, LogIn, Mail, Radio } from 'lucide-react';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -135,23 +136,21 @@ const Login = () => {
           overflow-x: hidden;
           font-family: Inter, system-ui, sans-serif;
         }
-        .login-light { background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%); }
-        .login-dark { background: linear-gradient(135deg, #020617 0%, #111827 100%); }
+        .login-light { background: linear-gradient(135deg, #e0f2fe, #f8fafc, #dbeafe); }
+        .login-dark { background: #0f172a; }
         .login-background { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
-        .login-orb { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .7; }
-        .login-orb-one { width: 430px; height: 430px; top: -170px; left: -130px; background: rgba(59,130,246,.20); }
-        .login-orb-two { width: 430px; height: 430px; right: -140px; bottom: -180px; background: rgba(139,92,246,.20); }
+        .login-orb { display: none; }
         .login-card {
           position: relative;
           z-index: 2;
           width: 100%;
           max-width: 470px;
           padding: 40px 32px 30px;
-          border-radius: 26px;
-          backdrop-filter: blur(22px);
+          border-radius: 20px;
+          backdrop-filter: blur(16px);
           animation: loginIn .55s ease-out;
         }
-        .login-light .login-card { background: rgba(255,255,255,.90); border: 1px solid rgba(255,255,255,.9); box-shadow: 0 30px 80px rgba(15,23,42,.14); }
+        .login-light .login-card { background: rgba(255,255,255,.92); border: 1px solid rgba(255,255,255,.7); box-shadow: 0 20px 50px rgba(37,99,235,.12); }
         .login-dark .login-card { background: rgba(15,23,42,.90); border: 1px solid rgba(148,163,184,.13); box-shadow: 0 30px 80px rgba(0,0,0,.58); }
         @keyframes loginIn { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
         .login-heading { text-align: center; margin-bottom: 21px; }
@@ -177,11 +176,13 @@ const Login = () => {
         .login-dark .role-button { background: rgba(255,255,255,.035); color: #e2e8f0; border-color: rgba(255,255,255,.04); }
         .role-button.role-active { border-color: var(--role-color); box-shadow: 0 0 0 1px var(--role-color); }
         .login-error { padding: 10px 12px; border-left: 4px solid #ef4444; border-radius: 8px; font-size: 12px; color: #ef4444; background: rgba(239,68,68,0.1); margin-bottom: 15px; }
-        .login-input-wrapper input { width: 100%; height: 46px; padding: 0 15px 0 40px; border-radius: 11px; outline: none; border: 1px solid #cbd5e1; margin-bottom: 5px; }
+        .login-input-wrapper input { width: 100%; height: 48px; padding: 0 15px 0 40px; border-radius: 10px; outline: none; border: 1px solid #cbd5e1; margin-bottom: 5px; transition: border-color .2s, box-shadow .2s; }
+        .login-input-wrapper input:focus { border-color: #0ea5e9; box-shadow: 0 0 0 4px rgba(14,165,233,.12); }
         .login-dark .login-input-wrapper input { background: #1e293b; color: #f8fafc; border-color: #334155; }
         .forgot-link { display: block; text-align: right; margin-bottom: 15px; font-size: 11px; color: #2563eb; text-decoration: none; font-weight: 600; }
         .forgot-link:hover { text-decoration: underline; }
-        .login-submit { width: 100%; height: 48px; border-radius: 12px; border: none; background: linear-gradient(135deg, #2563eb, #6366f1); color: white; font-weight: 800; cursor: pointer; transition: transform .18s; }
+        .login-submit { width: 100%; height: 48px; border-radius: 12px; border: none; background: linear-gradient(135deg, #0ea5e9, #2563eb); color: white; font-weight: 600; cursor: pointer; transition: background .18s, transform .18s; }
+        .login-submit:hover { background: linear-gradient(135deg, #0284c7, #1d4ed8); }
         .login-submit:hover { transform: translateY(-1px); }
         .login-footer { margin-top: 20px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid rgba(100,116,139,0.2); padding-top: 15px; }
       `}</style>
@@ -204,7 +205,7 @@ const Login = () => {
               <span>System {backendStatus}</span>
             </div>
             <button type="button" className="rfid-button" onClick={fetchRfidData} disabled={rfidLoading}>
-              {rfidLoading ? 'Scanning...' : '📡 Scan RFID'}
+              <Radio size={14} aria-hidden="true" /> {rfidLoading ? 'Scanning...' : 'Scan RFID'}
             </button>
           </div>
 
@@ -235,7 +236,7 @@ const Login = () => {
 
           <form onSubmit={handleLogin}>
             <div className="login-input-wrapper" style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: '13px', top: '15px', opacity: 0.5 }}>👤</span>
+              <Mail size={17} style={{ position: 'absolute', left: '13px', top: '15px', opacity: 0.5 }} aria-hidden="true" />
               <input
                 type="text"
                 value={username}
@@ -246,7 +247,7 @@ const Login = () => {
             </div>
 
             <div className="login-input-wrapper" style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: '13px', top: '15px', opacity: 0.5 }}>🔒</span>
+              <Lock size={17} style={{ position: 'absolute', left: '13px', top: '15px', opacity: 0.5 }} aria-hidden="true" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
@@ -259,7 +260,7 @@ const Login = () => {
                 style={{ position: 'absolute', right: '10px', top: '12px', background: 'none', border: 'none', cursor: 'pointer' }}
                 onClick={() => setShowPassword(!showPassword)}
               >
-                {showPassword ? '🙈' : '👁️'}
+                {showPassword ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
               </button>
             </div>
 
@@ -268,7 +269,7 @@ const Login = () => {
             </Link>
 
             <button type="submit" className="login-submit" disabled={loading}>
-              {loading ? 'Logging in...' : t.signIn}
+              {loading ? 'Logging in...' : <><LogIn size={17} aria-hidden="true" /> {t.signIn}</>}
             </button>
           </form>
 
