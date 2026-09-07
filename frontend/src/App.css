@@ -340,6 +340,8 @@ body.dark .site-footer {
   height: calc(100vh - var(--header-height));
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
   z-index: 900;
   transition: all 0.3s ease;
 }
@@ -411,11 +413,22 @@ body.dark .admin-sidebar-profile {
 }
 
 .admin-sidebar-nav {
-  flex: 1;
-  min-height: 0;
+  flex: none;
   padding: 12px 10px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
+}
+
+.admin-sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.admin-sidebar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.12);
+}
+
+.admin-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.42);
+  border-radius: 999px;
 }
 
 .sidebar-section-label {

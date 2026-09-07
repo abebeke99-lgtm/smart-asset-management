@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '../../contexts/UiContext';
-import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
+import LoadingSpinner from '../common/ui/LoadingSpinner';
 
 const ICTTechnicalSupport = () => {
-  const { user } = useAuth();
   const { language, theme } = useLanguage();
 
   // State
@@ -70,8 +69,6 @@ const ICTTechnicalSupport = () => {
     medium: 'Medium',
     low: 'Low',
     open: 'Open',
-    inProgress: 'In Progress',
-    resolved: 'Resolved',
     closed: 'Closed',
     pending: 'Pending',
     backendLimitationMessage: 'Technical Support ticketing system requires backend API support. The following data is displayed for demonstration purposes.',
@@ -125,8 +122,6 @@ const ICTTechnicalSupport = () => {
     medium: 'መካከለኛ',
     low: 'ዝቅተኛ',
     open: 'ክፍት',
-    inProgress: 'በሂደት ላይ',
-    resolved: 'ተፈታ',
     closed: 'ታሸገ',
     pending: 'በመጠባበቅ ላይ',
     backendLimitationMessage: 'ቴክኒካል ድጋፍ አስጫዋ ስርዓት በ backend API ድጋፍ ይፈልጋል። ከዚህ በታች ያለው ውሂብ ለማሳያ ስሪት ተገቢ ነው።',
@@ -298,8 +293,8 @@ const ICTTechnicalSupport = () => {
   const styles = {
     container: {
       padding: '20px',
-      backgroundColor: isDark ? '#0f1419' : '#f8f9fa',
-      borderRadius: '8px',
+      backgroundColor: isDark ? '#e2e8f0' : '#f8fafc',
+      borderRadius: '12px',
       minHeight: 'calc(100vh - 120px)'
     },
     header: {
@@ -313,7 +308,7 @@ const ICTTechnicalSupport = () => {
     title: {
       fontSize: '24px',
       fontWeight: '700',
-      color: isDark ? '#ffffff' : '#000000'
+      color: '#0f172a'
     },
     buttonGroup: {
       display: 'flex',
@@ -322,14 +317,14 @@ const ICTTechnicalSupport = () => {
     },
     button: {
       padding: '8px 16px',
-      borderRadius: '6px',
+      borderRadius: '10px',
       border: 'none',
       cursor: 'pointer',
       fontWeight: '500',
       fontSize: '14px'
     },
     primaryButton: {
-      backgroundColor: '#3b82f6',
+      backgroundColor: '#0EA5E9',
       color: '#ffffff'
     },
     secondaryButton: {
@@ -354,14 +349,14 @@ const ICTTechnicalSupport = () => {
     statCard: {
       backgroundColor: isDark ? '#1f2937' : '#ffffff',
       border: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`,
-      borderRadius: '8px',
+      borderRadius: '12px',
       padding: '16px',
       textAlign: 'center'
     },
     statValue: {
       fontSize: '28px',
       fontWeight: '700',
-      color: '#3b82f6',
+      color: '#0EA5E9',
       margin: '8px 0 0 0'
     },
     statLabel: {
@@ -377,6 +372,10 @@ const ICTTechnicalSupport = () => {
     },
     tab: {
       padding: '12px 16px',
+      background: 'transparent',
+      borderTop: 'none',
+      borderLeft: 'none',
+      borderRight: 'none',
       borderBottom: '3px solid transparent',
       cursor: 'pointer',
       fontWeight: '500',
@@ -385,8 +384,8 @@ const ICTTechnicalSupport = () => {
       transition: 'all 0.3s ease'
     },
     tabActive: {
-      borderBottomColor: '#3b82f6',
-      color: '#3b82f6'
+      borderBottomColor: '#0EA5E9',
+      color: '#0284C7'
     },
     filterContainer: {
       display: 'flex',
@@ -398,7 +397,7 @@ const ICTTechnicalSupport = () => {
       flex: 1,
       minWidth: '200px',
       padding: '10px 14px',
-      borderRadius: '6px',
+      borderRadius: '10px',
       border: `1px solid ${isDark ? '#374151' : '#d1d5db'}`,
       backgroundColor: isDark ? '#1f2937' : '#ffffff',
       color: isDark ? '#f3f4f6' : '#000000',
@@ -406,7 +405,7 @@ const ICTTechnicalSupport = () => {
     },
     select: {
       padding: '10px 14px',
-      borderRadius: '6px',
+      borderRadius: '10px',
       border: `1px solid ${isDark ? '#374151' : '#d1d5db'}`,
       backgroundColor: isDark ? '#1f2937' : '#ffffff',
       color: isDark ? '#f3f4f6' : '#000000',
@@ -579,8 +578,11 @@ const ICTTechnicalSupport = () => {
       {/* Tabs */}
       <div style={styles.tabsContainer}>
         {['all', 'open', 'in progress', 'resolved'].map(tab => (
-          <div
+          <button
             key={tab}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
             style={{
               ...styles.tab,
               ...(activeTab === tab ? styles.tabActive : {})
@@ -588,7 +590,7 @@ const ICTTechnicalSupport = () => {
             onClick={() => setActiveTab(tab)}
           >
             {tab === 'all' ? t.allTickets : tab === 'open' ? t.openTickets : tab === 'in progress' ? t.inProgress : t.resolved}
-          </div>
+          </button>
         ))}
       </div>
 
@@ -596,6 +598,7 @@ const ICTTechnicalSupport = () => {
       <div style={styles.filterContainer}>
         <input
           type="text"
+          aria-label={t.search}
           placeholder={t.search}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
@@ -613,12 +616,10 @@ const ICTTechnicalSupport = () => {
       {/* Table */}
       {loading ? (
         <div style={styles.emptyState}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-          <p>{t.loading}</p>
+          <LoadingSpinner label={t.loading} size={28} />
         </div>
       ) : paginatedTickets.length === 0 ? (
         <div style={styles.emptyState}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎫</div>
           <p>{t.noTickets}</p>
         </div>
       ) : (

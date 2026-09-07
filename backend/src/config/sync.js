@@ -16,6 +16,12 @@ async function syncDatabase() {
         allowNull: true,
       });
     }
+    if (!table.reset_token_used_at) {
+      await sequelize.getQueryInterface().addColumn('users', 'reset_token_used_at', {
+        type: require('sequelize').DataTypes.DATE,
+        allowNull: true,
+      });
+    }
     const userColumns = await sequelize.getQueryInterface().describeTable('users');
     if (!userColumns.failed_login_attempts) {
       await sequelize.getQueryInterface().addColumn('users', 'failed_login_attempts', {

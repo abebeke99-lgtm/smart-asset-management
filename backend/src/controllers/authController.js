@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const { Op } = require('sequelize');
 const { User, AuditLog, Config } = require('../models');
 const { isValidEmail, isValidUsername } = require('../utils/validators');
 
@@ -241,11 +242,19 @@ const logout = async (req, res) => {
   res.json({ success: true });
 };
 
-const genericResetMessage = 'If an account is associated with that email, you\'ll receive instructions to reset your password.';
+const genericResetMessage = 'If an account exists for this email address, a password reset link has been sent.';
+const RESET_TOKEN_TTL_MINUTES = Math.min(30, Math.max(15, Number(process.env.PASSWORD_RESET_TTL_MINUTES) || 20));
+
+const escapeHtml = (value = '') => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
 
 const getMailer = () => {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM } = process.env;
-  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASSWORD || !SMTP_FROM) return null;
+  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, MAIL_FROM, SMTP_FROM } = process.env;
+  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASSWORD || !(MAIL_FROM || SMTP_FROM)) return null;
   return {
     transporter: nodemailer.createTransport({
       host: SMTP_HOST,
@@ -253,8 +262,19 @@ const getMailer = () => {
       secure: Number(SMTP_PORT) === 465,
       auth: { user: SMTP_USER, pass: SMTP_PASSWORD },
     }),
-    from: SMTP_FROM,
+    from: MAIL_FROM || SMTP_FROM,
   };
+};
+
+const getResetFrontendUrl = () => {
+  const configuredUrl = String(process.env.FRONTEND_URL || process.env.CLIENT_URL || '').trim().replace(/\/$/, '');
+  if (process.env.NODE_ENV === 'production') {
+    if (!configuredUrl || !configuredUrl.startsWith('https://')) {
+      throw new Error('FRONTEND_URL must be configured with HTTPS in production');
+    }
+    return configuredUrl;
+  }
+  return configuredUrl || 'http://localhost:3000';
 };
 
 const forgotPassword = async (req, res) => {
@@ -263,34 +283,36 @@ const forgotPassword = async (req, res) => {
     if (!isValidEmail(email)) return res.status(400).json({ success: false, message: 'Valid email is required' });
 
     const user = await User.findOne({ where: { email } });
+    if (!user || !user.active) return res.json({ success: true, message: genericResetMessage });
     const mailer = getMailer();
-    if (!user) return res.json({ success: true, message: genericResetMessage });
-    if (!mailer && process.env.NODE_ENV === 'production') {
-      return res.status(503).json({ success: false, message: 'Password reset email service is not configured.' });
+    if (!mailer) {
+      console.error('Password reset email service is not configured');
+      return res.status(503).json({ success: false, message: 'Password reset email service is temporarily unavailable.' });
     }
 
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-    await user.update({ resetTokenHash: tokenHash, resetTokenExpiresAt: expiresAt });
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000);
+    const resetUrl = `${getResetFrontendUrl()}/reset-password?token=${encodeURIComponent(rawToken)}`;
+    const greetingName = escapeHtml(user.fullName || user.username);
 
-    const resetBaseUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL
-      || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000');
-    const resetUrl = `${resetBaseUrl.replace(/\/$/, '')}/reset-password/${rawToken}`;
-    if (mailer) {
+    await user.update({ resetTokenHash: tokenHash, resetTokenExpiresAt: expiresAt, resetTokenUsedAt: null });
+    try {
       await mailer.transporter.sendMail({
         from: mailer.from,
         to: user.email,
-        subject: 'Password reset instructions',
-        text: `Use this link to reset your password. It expires in 1 hour: ${resetUrl}`,
+        subject: 'Reset Your Smart Asset Management System Password',
+        text: `Mekdela Amba University Smart Asset Management System\n\nHello ${user.fullName || user.username},\n\nA password reset was requested for your account. Reset your password here:\n${resetUrl}\n\nThis link expires in ${RESET_TOKEN_TTL_MINUTES} minutes and can only be used once. If you did not request this, you can safely ignore this email.`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#172033"><div style="background:#0EA5E9;padding:24px;color:#fff"><h1 style="margin:0;font-size:22px">Mekdela Amba University</h1><p style="margin:8px 0 0">Smart Asset Management System</p></div><div style="padding:28px;border:1px solid #dbe4ef"><h2>Reset Your Password</h2><p>Hello ${greetingName},</p><p>A password reset was requested for your account.</p><p><a href="${resetUrl}" style="display:inline-block;background:#0EA5E9;color:#fff;padding:12px 20px;text-decoration:none;border-radius:8px;font-weight:700">Reset Password</a></p><p>This link expires in ${RESET_TOKEN_TTL_MINUTES} minutes and can only be used once.</p><p>If you did not request this, you can safely ignore this email.</p></div></div>`,
       });
-    } else {
-      console.warn(`[DEVELOPMENT ONLY] Password reset URL for ${user.email}: ${resetUrl}`);
+    } catch (mailError) {
+      await user.update({ resetTokenHash: null, resetTokenExpiresAt: null, resetTokenUsedAt: null });
+      throw mailError;
     }
 
     return res.json({ success: true, message: genericResetMessage });
   } catch (error) {
-    console.error('Password reset request failed:', error.message);
+    console.error('Password reset request failed:', error.code || error.name || 'mail delivery error');
     return res.status(503).json({ success: false, message: 'Password reset email could not be delivered.' });
   }
 };
@@ -298,19 +320,33 @@ const forgotPassword = async (req, res) => {
 const resetPassword = async (req, res) => {
   try {
     const { token, password, confirmPassword } = req.body;
-    if (!token || !password || password.length < 8 || password !== confirmPassword) {
-      return res.status(400).json({ success: false, message: 'A valid token and matching password of at least 8 characters are required.' });
+    if (!token || !password || password !== confirmPassword) {
+      return res.status(400).json({ success: false, message: 'A valid token and matching password are required.' });
     }
+    const passwordError = validatePassword(password, await getSecuritySettings());
+    if (passwordError) return res.status(400).json({ success: false, message: passwordError });
     const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex');
-    const user = await User.findOne({ where: { resetTokenHash: tokenHash } });
-    if (!user || !user.resetTokenExpiresAt || new Date(user.resetTokenExpiresAt) < new Date()) {
+    const user = await User.findOne({ where: { resetTokenHash: tokenHash, resetTokenUsedAt: null } });
+    if (!user || user.resetTokenUsedAt || !user.resetTokenExpiresAt || new Date(user.resetTokenExpiresAt) < new Date()) {
       return res.status(400).json({ success: false, message: 'This password reset link is invalid or expired.' });
     }
-    await user.update({
-      password: await bcrypt.hash(password, 10),
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const [updatedCount] = await User.update({
+      password: hashedPassword,
       resetTokenHash: null,
       resetTokenExpiresAt: null,
+      resetTokenUsedAt: new Date(),
+    }, {
+      where: {
+        id: user.id,
+        resetTokenHash: tokenHash,
+        resetTokenUsedAt: null,
+        resetTokenExpiresAt: { [Op.gt]: new Date() },
+      },
     });
+    if (!updatedCount) {
+      return res.status(400).json({ success: false, message: 'This password reset link is invalid or expired.' });
+    }
     return res.json({ success: true, message: 'Your password has been reset successfully.' });
   } catch (error) {
     console.error('Password reset failed:', error.message);

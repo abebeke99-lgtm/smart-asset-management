@@ -5,7 +5,7 @@ import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
 import { apiBase } from '../../utils/api';
-import { Eye, EyeOff, Lock, LogIn, Mail, Radio } from 'lucide-react';
+import { Building2, Eye, EyeOff, Landmark, Lock, LogIn, Mail, Radio, ShieldCheck, ShoppingCart, UserRound, Wrench, Laptop } from 'lucide-react';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -31,13 +31,14 @@ const Login = () => {
   const t = language === 'en' ? englishTranslations : amharicTranslations;
 
   const roles = [
-    { id: 'admin', label: 'Admin', emoji: '👑', color: '#f59e0b' },
-    { id: 'store_manager', label: 'Store Mgr', emoji: '📦', color: '#8b5cf6' },
-    { id: 'ict_officer', label: 'ICT Officer', emoji: '💻', color: '#3b82f6' },
-    { id: 'college', label: 'College', emoji: '🏫', color: '#10b981' },
-    { id: 'finance', label: 'Finance', emoji: '💰', color: '#06b6d4' },
-    { id: 'maintenance', label: 'Maintenance', emoji: '🔧', color: '#f97316' },
-    { id: 'infrastructure', label: 'Infrastructure', emoji: '🏗️', color: '#059669' },
+    { id: 'admin', label: 'Admin', icon: ShieldCheck },
+    { id: 'store_manager', label: 'Store Mgr', icon: ShoppingCart },
+    { id: 'ict_officer', label: 'ICT Officer', icon: Laptop },
+    { id: 'college', label: 'College', icon: Building2 },
+    { id: 'finance', label: 'Finance', icon: Landmark },
+    { id: 'maintenance', label: 'Maintenance', icon: Wrench },
+    { id: 'infrastructure', label: 'Infrastructure', icon: Building2 },
+    { id: 'staff', label: 'Staff', icon: UserRound },
   ];
 
   const handleQuickFillRole = (roleId) => {
@@ -136,8 +137,8 @@ const Login = () => {
           overflow-x: hidden;
           font-family: Inter, system-ui, sans-serif;
         }
-        .login-light { background: linear-gradient(135deg, #e0f2fe, #f8fafc, #dbeafe); }
-        .login-dark { background: #0f172a; }
+        .login-light { background: #f8fafc; }
+        .login-dark { background: #e2e8f0; }
         .login-background { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
         .login-orb { display: none; }
         .login-card {
@@ -150,17 +151,17 @@ const Login = () => {
           backdrop-filter: blur(16px);
           animation: loginIn .55s ease-out;
         }
-        .login-light .login-card { background: rgba(255,255,255,.92); border: 1px solid rgba(255,255,255,.7); box-shadow: 0 20px 50px rgba(37,99,235,.12); }
-        .login-dark .login-card { background: rgba(15,23,42,.90); border: 1px solid rgba(148,163,184,.13); box-shadow: 0 30px 80px rgba(0,0,0,.58); }
+        .login-light .login-card { background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 20px 50px rgba(15,23,42,.12); }
+        .login-dark .login-card { background: #ffffff; border: 1px solid #cbd5e1; box-shadow: 0 30px 80px rgba(15,23,42,.18); }
         @keyframes loginIn { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
         .login-heading { text-align: center; margin-bottom: 21px; }
         .login-heading h1 { margin: 0; font-size: 25px; font-weight: 850; }
         .login-light .login-heading h1 { color: #0f172a; }
-        .login-dark .login-heading h1 { color: #f8fafc; }
+        .login-dark .login-heading h1 { color: #0f172a; }
         .login-heading p { margin: 7px auto 0; font-size: 13px; color: #64748b; }
         .login-status-card { min-height: 42px; display: flex; align-items: center; justify-content: space-between; padding: 7px 12px; margin-bottom: 13px; border-radius: 12px; }
         .login-light .login-status-card { background: #f1f5f9; border: 1px solid #e2e8f0; }
-        .login-dark .login-status-card { background: rgba(30,41,59,.65); border: 1px solid rgba(148,163,184,.08); }
+        .login-dark .login-status-card { background: #f1f5f9; border: 1px solid #e2e8f0; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; }
         .status-online { background: #10b981; box-shadow: 0 0 9px rgba(16,185,129,.8); }
         .status-offline { background: #ef4444; }
@@ -169,19 +170,19 @@ const Login = () => {
         .rfid-button { background: transparent; border: none; color: #2563eb; font-size: 11px; font-weight: 700; cursor: pointer; }
         .role-selector { margin-bottom: 17px; padding: 12px; border-radius: 14px; }
         .login-light .role-selector { background: #f8fafc; border: 1px solid #e2e8f0; }
-        .login-dark .role-selector { background: rgba(30,41,59,.42); border: 1px solid rgba(148,163,184,.08); }
+        .login-dark .role-selector { background: #f8fafc; border: 1px solid #e2e8f0; }
         .role-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; }
         .role-button { padding: 8px 5px; border-radius: 9px; border: 1px solid transparent; cursor: pointer; font-size: 10px; font-weight: 700; transition: transform .15s ease; }
         .login-light .role-button { background: #fff; color: #1e293b; border-color: #e2e8f0; }
-        .login-dark .role-button { background: rgba(255,255,255,.035); color: #e2e8f0; border-color: rgba(255,255,255,.04); }
-        .role-button.role-active { border-color: var(--role-color); box-shadow: 0 0 0 1px var(--role-color); }
+        .login-dark .role-button { background: #ffffff; color: #1e293b; border-color: #e2e8f0; }
+        .role-button.role-active { border-color: var(--primary-blue); box-shadow: 0 0 0 1px var(--primary-blue); }
         .login-error { padding: 10px 12px; border-left: 4px solid #ef4444; border-radius: 8px; font-size: 12px; color: #ef4444; background: rgba(239,68,68,0.1); margin-bottom: 15px; }
         .login-input-wrapper input { width: 100%; height: 48px; padding: 0 15px 0 40px; border-radius: 10px; outline: none; border: 1px solid #cbd5e1; margin-bottom: 5px; transition: border-color .2s, box-shadow .2s; }
         .login-input-wrapper input:focus { border-color: #0ea5e9; box-shadow: 0 0 0 4px rgba(14,165,233,.12); }
-        .login-dark .login-input-wrapper input { background: #1e293b; color: #f8fafc; border-color: #334155; }
+        .login-dark .login-input-wrapper input { background: #ffffff; color: #0f172a; border-color: #cbd5e1; }
         .forgot-link { display: block; text-align: right; margin-bottom: 15px; font-size: 11px; color: #2563eb; text-decoration: none; font-weight: 600; }
         .forgot-link:hover { text-decoration: underline; }
-        .login-submit { width: 100%; height: 48px; border-radius: 12px; border: none; background: linear-gradient(135deg, #0ea5e9, #2563eb); color: white; font-weight: 600; cursor: pointer; transition: background .18s, transform .18s; }
+        .login-submit { width: 100%; height: 48px; border-radius: 12px; border: none; background: linear-gradient(135deg, var(--primary-blue), #2563eb); color: white; font-weight: 600; cursor: pointer; transition: background .18s, transform .18s; }
         .login-submit:hover { background: linear-gradient(135deg, #0284c7, #1d4ed8); }
         .login-submit:hover { transform: translateY(-1px); }
         .login-footer { margin-top: 20px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid rgba(100,116,139,0.2); padding-top: 15px; }
@@ -222,10 +223,9 @@ const Login = () => {
                   key={role.id}
                   type="button"
                   className={`role-button ${activeRole === role.id ? 'role-active' : ''}`}
-                  style={activeRole === role.id ? { '--role-color': role.color } : undefined}
                   onClick={() => handleQuickFillRole(role.id)}
                 >
-                  <span style={{ fontSize: '13px' }}>{role.emoji}</span>
+                  <role.icon size={15} aria-hidden="true" />
                   <span className="role-label">{role.label}</span>
                 </button>
               ))}
@@ -239,6 +239,7 @@ const Login = () => {
               <Mail size={17} style={{ position: 'absolute', left: '13px', top: '15px', opacity: 0.5 }} aria-hidden="true" />
               <input
                 type="text"
+                aria-label={t.usernamePlaceholder}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder={t.usernamePlaceholder}
@@ -250,6 +251,7 @@ const Login = () => {
               <Lock size={17} style={{ position: 'absolute', left: '13px', top: '15px', opacity: 0.5 }} aria-hidden="true" />
               <input
                 type={showPassword ? 'text' : 'password'}
+                aria-label={t.passwordPlaceholder}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={t.passwordPlaceholder}
@@ -257,6 +259,7 @@ const Login = () => {
               />
               <button
                 type="button"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
                 style={{ position: 'absolute', right: '10px', top: '12px', background: 'none', border: 'none', cursor: 'pointer' }}
                 onClick={() => setShowPassword(!showPassword)}
               >

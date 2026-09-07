@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
 import { toast } from 'react-toastify';
+import { ArrowLeft, CheckCircle2, LockKeyhole, Save } from 'lucide-react';
 
 const ResetPassword = () => {
-  const { token } = useParams();
+  const { token: pathToken } = useParams();
+  const [searchParams] = useSearchParams();
+  const token = pathToken || searchParams.get('token') || '';
   const navigate = useNavigate();
   const { language, theme } = useLanguage();
   
@@ -23,8 +26,8 @@ const ResetPassword = () => {
     setError('');
 
     // Validation
-    if (password.length < 8) {
-      setError(t.min);
+    if (password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+      setError(t.requirements);
       return;
     }
     if (password !== confirmPassword) {
@@ -107,10 +110,10 @@ const ResetPassword = () => {
           color: ${isDark ? '#f8fafc' : '#0f172a'};
           transition: all 0.2s; outline: none;
         }
-        .input-field:focus { border-color: #3b82f6; background: ${isDark ? '#020617' : '#fff'}; }
+        .input-field:focus { border-color: #0EA5E9; background: ${isDark ? '#020617' : '#fff'}; }
 
         .btn-submit {
-          background: linear-gradient(135deg, #2563eb, #4f46e5);
+          background: linear-gradient(135deg, #0EA5E9, #2563EB);
           width: 100%; padding: 15px; border-radius: 12px; border: none; color: white;
           font-weight: 700; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
           margin-top: 10px; font-size: 15px;
@@ -144,8 +147,7 @@ const ResetPassword = () => {
         <main className="reset-card">
           {success ? (
             <div className="success-state">
-              <span className="success-icon">CheckCircle</span> {/* Replace with Icon or Emoji */}
-              <div style={{ fontSize: '50px', marginBottom: '15px' }}>✅</div>
+              <CheckCircle2 className="success-icon" size={60} aria-hidden="true" />
               <h1 style={{ fontSize: '24px', fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a' }}>
                 {t.successTitle}
               </h1>
@@ -159,7 +161,7 @@ const ResetPassword = () => {
           ) : (
             <>
               <div style={{ textAlign: 'center', marginBottom: '35px' }}>
-                <div style={{ fontSize: '40px', marginBottom: '10px' }}>🔐</div>
+                <LockKeyhole size={40} color="#0EA5E9" aria-hidden="true" />
                 <h1 style={{ fontSize: '24px', fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a' }}>
                   {t.title}
                 </h1>
@@ -176,6 +178,7 @@ const ResetPassword = () => {
                     placeholder="••••••••"
                     disabled={loading}
                     autoComplete="new-password"
+                    aria-label={t.password}
                   />
                 </div>
 
@@ -189,19 +192,20 @@ const ResetPassword = () => {
                     placeholder="••••••••"
                     disabled={loading}
                     autoComplete="new-password"
+                    aria-label={t.confirm}
                   />
                 </div>
 
                 {error && <div className="error-box">{error}</div>}
 
                 <button className="btn-submit" type="submit" disabled={loading}>
-                  {loading ? '...' : t.submit}
+                  {loading ? '...' : <><Save size={16} aria-hidden="true" /> {t.submit}</>}
                 </button>
               </form>
               
               <div style={{ marginTop: '25px', textAlign: 'center' }}>
-                <Link to="/login" style={{ color: '#3b82f6', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px' }}>
-                  ← {t.login}
+                <Link to="/login" style={{ color: '#0284C7', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <ArrowLeft size={16} aria-hidden="true" /> {t.login}
                 </Link>
               </div>
             </>
@@ -220,6 +224,7 @@ const translations = {
     submit: 'Update Password',
     mismatch: 'Passwords do not match.',
     min: 'Password must be at least 8 characters.',
+    requirements: 'Use at least 8 characters with uppercase, lowercase, number, and special character.',
     successTitle: 'Password Updated!',
     success: 'Your password has been reset successfully. You can now log in with your new credentials.',
     login: 'Go to Login',
@@ -232,6 +237,7 @@ const translations = {
     submit: 'የይለፍ ቃል ቀይር',
     mismatch: 'የይለፍ ቃሎቹ መመሳሰል አለባቸው።',
     min: 'የይለፍ ቃሉ ቢያንስ 8 ቁምፊዎች መሆን አለበት።',
+    requirements: 'ቢያንስ 8 ቁምፊዎች፣ አቢይ ሆሄ፣ ትንሽ ሆሄ፣ ቁጥር እና ልዩ ምልክት ይጠቀሙ።',
     successTitle: 'ተቀይሯል!',
     success: 'የይለፍ ቃልዎ በተሳካ ሁኔታ ተቀይሯል። አሁን በአዲሱ የይለፍ ቃልዎ መግባት ይችላሉ።',
     login: 'ወደ መግቢያ ይሂዱ',

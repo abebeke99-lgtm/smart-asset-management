@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
 import { toast } from 'react-toastify';
+import { ArrowLeft, CheckCircle2, LockKeyhole, Send } from 'lucide-react';
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
@@ -94,10 +95,10 @@ const ForgotPassword = () => {
           color: ${isDark ? '#f8fafc' : '#0f172a'};
           transition: all 0.2s; margin-top: 8px; outline: none;
         }
-        .input-field:focus { border-color: #3b82f6; background: ${isDark ? '#020617' : '#fff'}; }
+        .input-field:focus { border-color: #0EA5E9; background: ${isDark ? '#020617' : '#fff'}; }
 
         .btn-reset {
-          background: linear-gradient(135deg, #2563eb, #4f46e5);
+          background: linear-gradient(135deg, #0EA5E9, #2563EB);
           width: 100%; padding: 14px; border-radius: 12px; border: none; color: white;
           font-weight: 700; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
           margin-top: 20px;
@@ -122,7 +123,7 @@ const ForgotPassword = () => {
           {!submitted ? (
             <>
               <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-                <span style={{ fontSize: '40px' }}>🔐</span>
+                <LockKeyhole size={40} color="#0EA5E9" aria-hidden="true" />
                 <h1 style={{ fontSize: '24px', fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a', marginTop: '10px' }}>
                   {t.forgotPassword}
                 </h1>
@@ -138,6 +139,9 @@ const ForgotPassword = () => {
                 <input
                   className="input-field"
                   type="email"
+                  name="email"
+                  autoComplete="email"
+                  aria-label={t.emailLabel}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={t.emailPlaceholder}
@@ -148,13 +152,13 @@ const ForgotPassword = () => {
                 {error && <div className="error-msg">{error}</div>}
 
                 <button className="btn-reset" type="submit" disabled={loading}>
-                  {loading ? t.sending : t.resetPassword}
+                  {loading ? t.sending : <><Send size={16} aria-hidden="true" /> {t.resetPassword}</>}
                 </button>
               </form>
             </>
           ) : (
             <div className="success-box">
-              <span className="success-icon">📧</span>
+              <CheckCircle2 className="success-icon" size={50} aria-hidden="true" />
               <h2 style={{ fontSize: '22px', fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a' }}>{t.emailSent}</h2>
               <p style={{ color: '#64748b', fontSize: '14px', marginTop: '10px', lineHeight: '1.6' }}>
                 {t.checkEmail}
@@ -163,8 +167,8 @@ const ForgotPassword = () => {
           )}
 
           <div style={{ marginTop: '25px', textAlign: 'center', borderTop: '1px solid rgba(100,116,139,0.1)', paddingTop: '20px' }}>
-            <Link to="/login" style={{ color: '#3b82f6', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px' }}>
-              ← {t.backToLogin}
+            <Link to="/login" style={{ color: '#0284C7', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <ArrowLeft size={16} aria-hidden="true" /> {t.backToLogin}
             </Link>
           </div>
         </main>
