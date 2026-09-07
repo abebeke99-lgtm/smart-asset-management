@@ -121,9 +121,7 @@ const Home = () => {
       <main style={{ flex: 1 }}>
         {/* Hero Section */}
         <section className="bg-sky-400 rounded-3xl shadow-lg" style={{
-          background: isDark
-            ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f4c75 100%)'
-            : 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #1e40af 100%)',
+          background: '#0EA5E9',
           color: 'white',
           padding: '100px 20px 80px',
           textAlign: 'center',

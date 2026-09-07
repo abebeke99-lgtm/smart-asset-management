@@ -139,9 +139,7 @@ const AboutUs = () => {
       <main style={{ flex: 1 }}>
         {/* Hero Section */}
         <section style={{
-          background: isDark
-            ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f4c75 100%)'
-            : 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #1e40af 100%)',
+          background: '#0EA5E9',
           color: 'white',
           padding: '80px 20px',
           textAlign: 'center',
