@@ -175,7 +175,7 @@ const StoreIssue = () => {
     }
   };
 
-  const tabs = [
+  const tabItems = [
     ['new', `➕ ${t.newIssue}`],
     ['pending', `⏳ ${t.pending}`],
     ['approved', `✅ ${t.approved}`],
@@ -233,7 +233,7 @@ const StoreIssue = () => {
       </div>
 
       <div style={tabs}>
-        {tabs.map(([id, label]) => (
+        {tabItems.map(([id, label]) => (
           <button
             key={id}
             onClick={() => {
