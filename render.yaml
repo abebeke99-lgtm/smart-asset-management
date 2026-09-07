@@ -41,4 +41,4 @@ services:
         destination: /index.html
     envVars:
       - key: REACT_APP_API_URL
-        sync: false
+        value: https://smart-asset-management-2f5p.onrender.com/api
