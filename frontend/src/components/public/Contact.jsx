@@ -20,10 +20,10 @@ const Contact = () => {
     phone: 'Phone',
     address: 'Address',
     workingHours: 'Working Hours',
-    emailValue: 'support@suams.edu',
-    phoneValue: '+251-111-222-333',
-    addressValue: 'Addis Ababa, Ethiopia',
-    hoursValue: 'Monday - Friday, 8:00 AM - 5:00 PM',
+    emailValue: 'bekelea906@gmail.com',
+    phoneValue: '+251-986481821',
+    addressValue: 'tulu awliya, Ethiopia',
+    hoursValue: 'Monday - Friday, 2:30 AM - 11:30 AM',
     name: 'Full Name',
     subject: 'Subject',
     message: 'Message',
@@ -46,10 +46,10 @@ const Contact = () => {
     phone: 'ስልክ',
     address: 'አድራሻ',
     workingHours: 'የሥራ ጊዜ',
-    emailValue: 'support@suams.edu',
-    phoneValue: '+251-111-222-333',
-    addressValue: 'አዲስ አበባ፣ ኢትዮጵያ',
-    hoursValue: 'ሰኞ - አርብ, 8:00 ጠዋት - 5:00 ከሰዓት',
+    emailValue: 'bekelea906@gmail.com',
+    phoneValue: '+251-986481821',
+    addressValue: 'ቱሉ አውሊያ፣ ኢትዮጵያ',
+    hoursValue: 'ሰኞ - አርብ, 2:30 ጠዋት - 11:30 ጠዋት',
     name: 'ሙሉ ስም',
     subject: 'ርዕስ',
     message: 'መልዕክት',
@@ -110,9 +110,7 @@ const Contact = () => {
       <main style={{ flex: 1 }}>
         {/* Hero Section */}
         <section style={{
-          background: isDark
-            ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f4c75 100%)'
-            : 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #1e40af 100%)',
+          background: '#0EA5E9',
           color: 'white',
           padding: '80px 20px',
           textAlign: 'center',
@@ -196,7 +194,7 @@ const Contact = () => {
                         justifyContent: 'center',
                         flexShrink: 0
                       }}>
-                        <IconComponent size={24} color='#2563eb' />
+                        <IconComponent size={24} color='#0EA5E9' />
                       </div>
                       <div>
                         <div style={{
@@ -295,8 +293,8 @@ const Contact = () => {
                         boxSizing: 'border-box'
                       }}
                       onFocus={(e) => {
-                        e.target.style.borderColor = '#2563eb';
-                        e.target.style.boxShadow = '0 0 0 3px rgba(37, 99, 235, 0.1)';
+                        e.target.style.borderColor = '#0EA5E9';
+                        e.target.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.16)';
                       }}
                       onBlur={(e) => {
                         e.target.style.borderColor = isDark ? '#334155' : '#d0d8e8';

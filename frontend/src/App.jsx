@@ -357,10 +357,14 @@ const translations = {
     dark: "Dark",
     language: "Language",
     companyName: "Mekdela Amba University",
-    address: "Addis Ababa, Ethiopia",
-    phone: "+251-111-222-333",
-    email: "support@suams.edu",
-    workingHours: "Mon-Fri: 8:00 - 17:00",
+    address: "tulu awliya, Ethiopia",
+    phone: "+251-986481821",
+    email: "bekelea906@gmail.com",
+    workingHours: "Monday - Friday, 2:30 AM - 11:30 AM",
+    emailValue: "bekelea906@gmail.com",
+    phoneValue: "+251-986481821",
+    addressValue: "tulu awliya, Ethiopia",
+    workingHoursValue: "Monday - Friday, 2:30 AM - 11:30 AM",
     privacyPolicy: "Privacy Policy",
     termsOfService: "Terms of Service",
     cookiePolicy: "Cookie Policy",
@@ -439,10 +443,14 @@ const translations = {
     dark: "ጨለማ",
     language: "ቋንቋ",
     companyName: "መቅደላ አምባ ዩኒቨርሲቲ",
-    address: "አዲስ አበባ፣ ኢትዮጵያ",
-    phone: "+251-111-222-333",
-    email: "support@suams.edu",
-    workingHours: "ሰኞ-አርብ: 8:00 - 17:00",
+    address: "ቱሉ አውሊያ፣ ኢትዮጵያ",
+    phone: "+251-986481821",
+    email: "bekelea906@gmail.com",
+    workingHours: "ሰኞ - አርብ, 2:30 ጠዋት - 11:30 ጠዋት",
+    emailValue: "bekelea906@gmail.com",
+    phoneValue: "+251-986481821",
+    addressValue: "ቱሉ አውሊያ፣ ኢትዮጵያ",
+    workingHoursValue: "ሰኞ - አርብ, 2:30 ጠዋት - 11:30 ጠዋት",
     privacyPolicy: "የግላዊነት ፖሊሲ",
     termsOfService: "የአገልግሎት ውሎች",
     cookiePolicy: "የኩኪ ፖሊሲ",
@@ -1580,12 +1588,12 @@ function AppContent() {
           <p style={{ opacity: 0.8, fontSize: '0.9rem', lineHeight: '1.6' }}>{t.systemName}</p>
           <div style={{ marginTop: '10px' }}><span style={{ opacity: 0.6, fontSize: '0.8rem' }}>🔒 256-bit SSL Secured</span></div>
           {!user && <div className="flex items-center gap-2" style={{ marginTop: '16px' }} aria-label="Social media links">
-            <a href="https://github.com" target="_blank" rel="noreferrer" aria-label="GitHub" style={{ color: 'white', opacity: 0.8 }}><Github size={18} /></a>
-            <a href="https://linkedin.com" target="_blank" rel="noreferrer" aria-label="LinkedIn" style={{ color: 'white', opacity: 0.8 }}><Linkedin size={18} /></a>
+            <a href="https://github.com" target="_blank" rel="noreferrer" aria-label="GitHub" style={{ color: currentTheme.footerText, opacity: 0.8 }}><Github size={18} /></a>
+            <a href="https://linkedin.com" target="_blank" rel="noreferrer" aria-label="LinkedIn" style={{ color: currentTheme.footerText, opacity: 0.8 }}><Linkedin size={18} /></a>
           </div>}
         </div>
         <div>
-          <h4 style={{ color: 'white', marginBottom: '12px', fontSize: '1rem' }}>Quick Links</h4>
+          <h4 style={{ color: currentTheme.footerText, marginBottom: '12px', fontSize: '1rem' }}>Quick Links</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <Link to="/home" onClick={(event) => requestPublicNavigation('/home', event)} style={{ color: currentTheme.footerText, textDecoration: 'none', opacity: 0.8, fontSize: '0.9rem' }}>{t.home}</Link>
             <Link to="/about" onClick={(event) => requestPublicNavigation('/about', event)} style={{ color: currentTheme.footerText, textDecoration: 'none', opacity: 0.8, fontSize: '0.9rem' }}>{t.about}</Link>
@@ -1594,16 +1602,16 @@ function AppContent() {
           </div>
         </div>
         <div>
-          <h4 style={{ color: 'white', marginBottom: '12px', fontSize: '1rem' }}>Contact Info</h4>
+          <h4 style={{ color: currentTheme.footerText, marginBottom: '12px', fontSize: '1rem' }}>Contact Info</h4>
           <div style={{ opacity: 0.8, fontSize: '0.9rem', lineHeight: '1.8' }}>
-            <div>📧 {t.email}</div>
-            <div>📞 {t.phone}</div>
-            <div>📍 {t.address}</div>
-            <div>🕐 {t.workingHours}</div>
+            <div>📧 {t.emailValue}</div>
+            <div>📞 {t.phoneValue}</div>
+            <div>📍 {t.addressValue}</div>
+            <div>🕐 {t.workingHoursValue}</div>
           </div>
         </div>
         <div>
-          <h4 style={{ color: 'white', marginBottom: '12px', fontSize: '1rem' }}>System Status</h4>
+          <h4 style={{ color: currentTheme.footerText, marginBottom: '12px', fontSize: '1rem' }}>System Status</h4>
           <div style={{ opacity: 0.8, fontSize: '0.9rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
               <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#48bb78', display: 'inline-block', animation: 'pulse 2s infinite' }}></span>
