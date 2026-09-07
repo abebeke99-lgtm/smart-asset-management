@@ -1376,7 +1376,7 @@ function AppContent() {
 
   const themeStyles = {
     light: {
-      headerBg: '#0EA5E9',
+      headerBg: 'var(--primary-blue)',
       headerText: '#FFFFFF',
       footerBg: '#0EA5E9',
       footerText: '#CBD5E1',
@@ -1385,8 +1385,8 @@ function AppContent() {
       cardBg: '#ffffff',
       cardBorder: '#E2E8F0',
       cardShadow: '0 4px 12px rgba(15, 23, 42, 0.05)',
-      sidebarBg: '#0F172A',
-      sidebarHover: '#1E293B',
+      sidebarBg: 'var(--primary-blue)',
+      sidebarHover: 'var(--primary-blue-hover)',
       accent: '#2563EB',
       accentLight: '#EFF6FF',
       subText: '#64748B',
@@ -1394,7 +1394,7 @@ function AppContent() {
       success: '#16A34A'
     },
     dark: {
-      headerBg: '#0EA5E9',
+      headerBg: 'var(--primary-blue)',
       headerText: '#FFFFFF',
       footerBg: '#0EA5E9',
       footerText: '#CBD5E1',
@@ -1403,8 +1403,8 @@ function AppContent() {
       cardBg: '#ffffff',
       cardBorder: '#E2E8F0',
       cardShadow: '0 4px 12px rgba(15, 23, 42, 0.05)',
-      sidebarBg: '#0F172A',
-      sidebarHover: '#1E293B',
+      sidebarBg: 'var(--primary-blue)',
+      sidebarHover: 'var(--primary-blue-hover)',
       accent: '#2563EB',
       accentLight: '#EFF6FF',
       subText: '#64748B',
@@ -1959,7 +1959,7 @@ function AppContent() {
       {sidebarOpen && <button className="sidebar-backdrop is-visible" type="button" onClick={() => setSidebarOpen(false)} aria-label="Close navigation menu" />}
       <div className={`authenticated-shell${isStoreManager ? ' store-manager-body' : ''}`}>
         <aside className={`admin-sidebar${isStoreManager ? ' store-manager-sidebar' : ''}${sidebarOpen ? ' is-open' : ''}`} style={{
-          backgroundColor: '#0F172A',
+          backgroundColor: 'var(--primary-blue)',
           borderRight: `1px solid ${currentTheme.cardBorder}`,
           display: 'flex',
           flexDirection: 'column',

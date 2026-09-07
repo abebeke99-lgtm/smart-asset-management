@@ -345,21 +345,21 @@ body.dark .site-footer {
 }
 
 body.dark .admin-sidebar {
-  background: var(--sidebar) !important;
+  background: var(--primary-blue) !important;
   border-right-color: rgba(148, 163, 184, 0.16) !important;
 }
 
 .admin-sidebar-profile {
   position: relative;
   padding: 22px 18px 20px;
-  color: #fff;
+  color: #0f172a;
   text-align: center;
-  background: var(--sidebar);
+  background: var(--primary-blue);
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 body.dark .admin-sidebar-profile {
-  background: var(--sidebar);
+  background: var(--primary-blue);
 }
 
 .sidebar-avatar {
@@ -420,7 +420,7 @@ body.dark .admin-sidebar-profile {
 
 .sidebar-section-label {
   padding: 14px 10px 6px;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(15, 23, 42, 0.78);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .12em;
@@ -428,7 +428,7 @@ body.dark .admin-sidebar-profile {
 }
 
 body.dark .sidebar-section-label {
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(15, 23, 42, 0.78);
 }
 
 .admin-nav-link {
@@ -451,23 +451,23 @@ body.dark .admin-nav-link {
 }
 
 .admin-nav-link:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
+  color: #0f172a;
+  background: var(--sidebar-hover);
 }
 
 body.dark .admin-nav-link:hover {
-  color: #ffffff;
+  color: #0f172a;
   background: var(--sidebar-hover);
 }
 
 .admin-nav-link.is-active {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.16);
+  color: #0f172a;
+  background: var(--sidebar-active);
   font-weight: 700;
 }
 
 body.dark .admin-nav-link.is-active {
-  color: #ffffff;
+  color: #0f172a;
 }
 
 .admin-nav-link.is-active::before {
@@ -484,11 +484,11 @@ body.dark .admin-nav-link.is-active {
 .admin-sidebar-footer {
   padding: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.25);
-  background: var(--sidebar);
+  background: var(--primary-blue);
 }
 
 body.dark .admin-sidebar-footer {
-  background: var(--sidebar);
+  background: var(--primary-blue);
   border-top-color: rgba(255, 255, 255, 0.25);
 }
 
@@ -497,11 +497,11 @@ body.dark .admin-sidebar-footer {
   align-items: center;
   gap: 9px;
   padding: 4px 2px 12px;
-  color: #ffffff;
+  color: #0f172a;
 }
 
 body.dark .sidebar-account {
-  color: #ffffff;
+  color: #0f172a;
 }
 
 .sidebar-account-avatar {
@@ -529,12 +529,12 @@ body.dark .sidebar-account-avatar {
 .sidebar-account span {
   display: block;
   margin-top: 2px;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(15, 23, 42, 0.78);
   font-size: 10px;
 }
 
 body.dark .sidebar-account span {
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(15, 23, 42, 0.78);
 }
 
 .sidebar-logout {
@@ -544,9 +544,9 @@ body.dark .sidebar-account span {
   gap: 7px;
   width: 100%;
   padding: 9px;
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(15, 23, 42, 0.45);
   border-radius: 8px;
   cursor: pointer;
   font-size: 12px;
@@ -555,8 +555,8 @@ body.dark .sidebar-account span {
 }
 
 body.dark .sidebar-logout {
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.45);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.45);
 }
 
 .sidebar-logout:hover {
@@ -582,7 +582,7 @@ body.dark .sidebar-logout:hover {
   background: rgba(0, 0, 0, 0.2);
   border: none;
   border-radius: 6px;
-  color: white;
+  color: #0f172a;
   cursor: pointer;
   transition: all 0.2s ease;
   align-items: center;

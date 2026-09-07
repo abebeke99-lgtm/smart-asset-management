@@ -26,8 +26,8 @@ code {
   --primary-dark: var(--color-secondary);
   --primary-hover: var(--color-secondary-hover);
   --sidebar: var(--sidebar-background);
-  --sidebar-hover: #0284C7;
-  --sidebar-active: #0284C7;
+  --sidebar-hover: var(--primary-blue-hover);
+  --sidebar-active: var(--primary-blue-hover);
   --body-bg: var(--color-background);
   --surface: var(--color-surface);
   --surface-muted: #f1f5f9;
