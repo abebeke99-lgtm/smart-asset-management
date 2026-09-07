@@ -668,6 +668,12 @@ body.dark .mobile-sidebar-toggle:hover {
 
 .store-manager-sidebar {
   width: var(--sidebar-width);
+  height: calc(100dvh - var(--header-height));
+  max-height: calc(100dvh - var(--header-height));
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .store-manager-main {
@@ -705,6 +711,9 @@ body.dark .mobile-sidebar-toggle:hover {
 
   .store-manager-sidebar {
     width: var(--sidebar-width);
+    height: calc(100dvh - var(--header-height));
+    max-height: calc(100dvh - var(--header-height));
+    overflow-y: scroll !important;
   }
 
   .store-manager-main {
@@ -780,6 +789,8 @@ body.dark .mobile-sidebar-toggle:hover {
 
   .store-manager-sidebar {
     width: var(--sidebar-width);
+    height: calc(100dvh - var(--header-height));
+    max-height: calc(100dvh - var(--header-height));
   }
   
   .mobile-sidebar-toggle {
