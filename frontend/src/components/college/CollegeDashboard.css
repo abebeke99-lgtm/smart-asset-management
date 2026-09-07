@@ -1,0 +1,316 @@
+.college-section-wrapper {
+  width: 100%;
+  min-height: 100%;
+  background: #f8fafc;
+}
+
+.college-section-header {
+  margin-bottom: 20px;
+  padding: 20px 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.college-section-header h2 {
+  margin: 0 0 6px;
+  color: #0f172a;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.college-section-header div {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.college-dashboard {
+  width: 100%;
+  min-height: 100%;
+  padding: 24px;
+  box-sizing: border-box;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.college-dashboard-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.college-kpi-card,
+.college-dashboard-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+
+.college-kpi-card {
+  min-width: 0;
+  padding: 20px;
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.college-kpi-card:hover,
+.college-action-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
+}
+
+.college-kpi-icon,
+.college-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+
+.college-kpi-icon--blue { color: #2563eb; background: #dbeafe; }
+.college-kpi-icon--green { color: #15803d; background: #dcfce7; }
+.college-kpi-icon--cyan { color: #0e7490; background: #cffafe; }
+.college-kpi-icon--orange { color: #c2410c; background: #ffedd5; }
+.college-kpi-icon--amber { color: #b45309; background: #fef3c7; }
+.college-kpi-icon--purple { color: #6d28d9; background: #ede9fe; }
+.college-kpi-icon--navy { color: #1a237e; background: #e0e7ff; }
+.college-kpi-icon--teal { color: #0f766e; background: #ccfbf1; }
+
+.college-kpi-value {
+  display: block;
+  margin-top: 16px;
+  color: #0f172a;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.college-kpi-label {
+  display: block;
+  margin-top: 7px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.college-dashboard-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.college-dashboard-card {
+  min-width: 0;
+  padding: 20px;
+}
+
+.college-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.college-section-heading h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.college-section-heading p {
+  margin: 5px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.college-section-heading > svg {
+  flex: 0 0 auto;
+  color: #0ea5e9;
+}
+
+.college-chart-list {
+  display: grid;
+  gap: 16px;
+}
+
+.college-chart-row-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.college-chart-row-label strong {
+  color: #0f172a;
+}
+
+.college-chart-track {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.college-chart-track span {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: inherit;
+}
+
+.college-chart-bar--status { background: #0ea5e9; }
+.college-chart-bar--category { background: #2563eb; }
+
+.college-empty-state {
+  margin: 0;
+  padding: 24px 0;
+  color: #64748b;
+  font-size: 13px;
+  text-align: center;
+}
+
+.college-actions-section {
+  margin-bottom: 0;
+}
+
+.college-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.college-action-card {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  color: #0f172a;
+  text-decoration: none;
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+
+.college-action-card:hover {
+  border-color: #2563eb;
+}
+
+.college-action-icon {
+  flex: 0 0 auto;
+  color: #2563eb;
+  background: rgba(37, 99, 235, .08);
+}
+
+.college-action-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.college-action-copy strong,
+.college-action-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.college-action-copy strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.college-action-copy small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.college-action-arrow {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: #64748b;
+}
+
+.college-dashboard-state {
+  display: flex;
+  min-height: 256px;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  color: #64748b;
+  text-align: center;
+}
+
+.college-dashboard-state--error {
+  flex-direction: column;
+  gap: 10px;
+  color: #991b1b;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.college-dashboard-state--error button {
+  min-height: 40px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 9px;
+  background: #dc2626;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.college-dashboard-state--error button:focus-visible,
+.college-action-card:focus-visible {
+  outline: 3px solid rgba(14, 165, 233, .35);
+  outline-offset: 3px;
+}
+
+@media (max-width: 1199px) {
+  .college-dashboard-kpis,
+  .college-actions-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .college-section-header {
+    padding: 16px;
+  }
+
+  .college-section-header h2 {
+    font-size: 22px;
+  }
+
+  .college-dashboard {
+    padding: 16px;
+  }
+
+  .college-dashboard-kpis,
+  .college-dashboard-charts,
+  .college-actions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .college-kpi-card,
+  .college-dashboard-card {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 420px) {
+  .college-action-card {
+    padding: 14px;
+  }
+}

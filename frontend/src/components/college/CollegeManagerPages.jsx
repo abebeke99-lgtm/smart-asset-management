@@ -7,23 +7,13 @@ import DeptApprovals from '../department/DeptApprovals';
 import DeptReports from '../department/DeptReports';
 import DeptNotifications from '../department/DeptNotifications';
 import DeptAssetHistory from '../department/DeptAssetHistory';
-
-const sectionStyle = {
-  width: '100%',
-  minHeight: '100%' 
-};
+import './CollegeDashboard.css';
 
 const CollegeSectionWrapper = ({ title, subtitle, children }) => (
-  <div style={sectionStyle}>
-    <div style={{
-      marginBottom: '20px',
-      padding: '18px 22px',
-      borderRadius: '14px',
-      background: 'linear-gradient(135deg, rgba(40,100,232,0.08), rgba(71,153,255,0.02))',
-      border: '1px solid rgba(40,100,232,0.14)'
-    }}>
-      <h2 style={{ margin: '0 0 6px', fontSize: '1.8rem', fontWeight: 700, color: '#17305f' }}>{title}</h2>
-      <div style={{ color: '#4a5568', fontSize: '0.95rem' }}>{subtitle}</div>
+  <div className="college-section-wrapper">
+    <div className="college-section-header">
+      <h2>{title}</h2>
+      <div>{subtitle}</div>
     </div>
     {children}
   </div>

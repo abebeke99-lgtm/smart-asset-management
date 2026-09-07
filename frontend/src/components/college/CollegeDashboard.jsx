@@ -1,15 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BarChart3, CheckCircle2, ClipboardList, Package, Users, Wrench } from 'lucide-react';
+import { ArrowRight, BarChart3, Building2, CheckCircle2, ClipboardList, DollarSign, Package, Users, Wrench } from 'lucide-react';
+import './CollegeDashboard.css';
 
 const metricNames = [
-  ['totalAssets', 'Total Assets'], ['activeAssets', 'Active Assets'], ['availableAssets', 'Available Assets'],
-  ['underMaintenance', 'Under Maintenance'], ['pendingRequests', 'Pending Requests'], ['pendingApprovals', 'Pending Approvals'],
-  ['totalDepartments', 'Departments'], ['totalStaff', 'Staff'], ['totalAssetValue', 'Total Asset Value']
+  { key: 'totalAssets', label: 'Total Assets', icon: Package, tone: 'blue' },
+  { key: 'activeAssets', label: 'Active Assets', icon: CheckCircle2, tone: 'green' },
+  { key: 'availableAssets', label: 'Available Assets', icon: Package, tone: 'cyan' },
+  { key: 'underMaintenance', label: 'Under Maintenance', icon: Wrench, tone: 'orange' },
+  { key: 'pendingRequests', label: 'Pending Requests', icon: ClipboardList, tone: 'amber' },
+  { key: 'pendingApprovals', label: 'Pending Approvals', icon: CheckCircle2, tone: 'purple' },
+  { key: 'totalDepartments', label: 'Departments', icon: Building2, tone: 'navy' },
+  { key: 'totalStaff', label: 'Staff', icon: Users, tone: 'teal' },
+  { key: 'totalAssetValue', label: 'Total Asset Value', icon: DollarSign, tone: 'green' }
 ];
 
-const metricIcons = [Package, CheckCircle2, Package, Wrench, ClipboardList, CheckCircle2, BarChart3, Users, BarChart3];
+const quickActions = [
+  ['/college/requests', 'Create Request', ClipboardList],
+  ['/college/approvals', 'Review Approvals', CheckCircle2],
+  ['/college/assets', 'View Assets', Package],
+  ['/college/inventory', 'View Inventory', BarChart3],
+  ['/college/maintenance', 'View Maintenance', Wrench],
+  ['/college/departments', 'View Departments', Building2]
+];
+
+const maxValue = (items = []) => Math.max(...items.map((item) => Number(item.value) || 0), 1);
 
 const CollegeDashboard = () => {
   const [state, setState] = useState({ loading: true, error: '', data: null });
@@ -27,23 +43,22 @@ const CollegeDashboard = () => {
 
   useEffect(() => { loadDashboard(); }, []);
 
-  if (state.loading) return <div className="flex min-h-64 items-center justify-center rounded-2xl border border-sky-100 bg-white p-8 text-sky-700 shadow-sm">Loading college dashboard...</div>;
-  if (state.error) return <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-red-100 bg-red-50 p-8 text-center text-red-800"><strong>Failed to load dashboard data.</strong><span className="text-sm">{state.error}</span><button className="rounded-lg bg-red-700 px-4 py-2 font-semibold text-white transition hover:bg-red-800" type="button" onClick={loadDashboard}>Retry</button></div>;
-  if (!state.data) return <div className="flex min-h-64 items-center justify-center rounded-2xl border border-dashed border-sky-200 bg-white p-8 text-slate-500">No college dashboard data is available.</div>;
+  if (state.loading) return <div className="college-dashboard-state" role="status">Loading college dashboard...</div>;
+  if (state.error) return <div className="college-dashboard-state college-dashboard-state--error"><strong>Failed to load dashboard data.</strong><span>{state.error}</span><button type="button" onClick={loadDashboard}>Retry</button></div>;
+  if (!state.data) return <div className="college-dashboard-state">No college dashboard data is available.</div>;
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {metricNames.map(([key, label], index) => {
-          const Icon = metricIcons[index];
-          return <div className="group rounded-2xl border border-sky-100 bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl" key={key}><div className="mb-4 flex items-center justify-between"><span className="rounded-xl bg-sky-100 p-2 text-sky-700"><Icon size={20} aria-hidden="true" /></span><span className="text-xs font-semibold uppercase tracking-wider text-slate-400">College</span></div><strong className="block text-3xl font-extrabold text-sky-950">{key === 'totalAssetValue' ? Number(state.data[key] || 0).toLocaleString() : state.data[key] || 0}</strong><span className="mt-1 block text-sm font-medium text-slate-500">{label}</span></div>;
-        })}
+    <div className="college-dashboard">
+      <div className="college-dashboard-kpis">
+        {metricNames.map(({ key, label, icon: Icon, tone }) => <article className="college-kpi-card" key={key}><div className={`college-kpi-icon college-kpi-icon--${tone}`}><Icon size={21} aria-hidden="true" /></div><strong className="college-kpi-value">{key === 'totalAssetValue' ? Number(state.data[key] ?? 0).toLocaleString() : Number(state.data[key] ?? 0).toLocaleString()}</strong><span className="college-kpi-label">{label}</span></article>)}
       </div>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <section className="rounded-2xl border border-sky-100 bg-white p-6 shadow-sm"><h3 className="mb-5 text-lg font-bold text-sky-950">Assets by Status</h3>{state.data.assetByStatus?.length ? state.data.assetByStatus.map((item) => <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-3 text-sm last:mb-0 last:border-0" key={item.label}><span className="capitalize text-slate-600">{item.label}</span><strong className="rounded-full bg-sky-100 px-3 py-1 text-sky-800">{item.value}</strong></div>) : <p className="text-sm text-slate-500">No asset status data.</p>}</section>
-        <section className="rounded-2xl border border-sky-100 bg-white p-6 shadow-sm"><h3 className="mb-5 text-lg font-bold text-sky-950">Assets by Category</h3>{state.data.assetByCategory?.length ? state.data.assetByCategory.map((item) => <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-3 text-sm last:mb-0 last:border-0" key={item.label}><span className="text-slate-600">{item.label}</span><strong className="rounded-full bg-cyan-100 px-3 py-1 text-cyan-800">{item.value}</strong></div>) : <p className="text-sm text-slate-500">No asset category data.</p>}</section>
-        <section className="rounded-2xl border border-sky-100 bg-white p-6 shadow-sm"><h3 className="mb-5 text-lg font-bold text-sky-950">Quick Actions</h3><div className="grid gap-2">{[['/college/requests', 'Create Request'], ['/college/approvals', 'Review Approvals'], ['/college/assets', 'View Assets'], ['/college/inventory', 'View Inventory'], ['/college/maintenance', 'View Maintenance'], ['/college/departments', 'View Departments']].map(([to, label]) => <Link className="flex items-center justify-between rounded-xl border border-sky-100 px-3 py-2.5 text-sm font-semibold text-sky-800 transition hover:border-sky-300 hover:bg-sky-50" key={to} to={to}>{label}<ArrowRight size={16} aria-hidden="true" /></Link>)}</div></section>
+      <div className="college-dashboard-charts">
+        {[
+          ['Assets by Status', state.data.assetByStatus, 'college-chart-bar--status', 'No asset status data.'],
+          ['Assets by Category', state.data.assetByCategory, 'college-chart-bar--category', 'No asset category data.']
+        ].map(([title, items, tone, emptyMessage]) => <section className="college-dashboard-card" key={title}><div className="college-section-heading"><div><h2>{title}</h2><p>Current distribution from the college asset overview.</p></div><BarChart3 size={20} aria-hidden="true" /></div>{items?.length ? <div className="college-chart-list">{items.map((item) => <div className="college-chart-row" key={item.label}><div className="college-chart-row-label"><span>{item.label}</span><strong>{Number(item.value) || 0}</strong></div><div className="college-chart-track"><span className={tone} style={{ width: `${((Number(item.value) || 0) / maxValue(items)) * 100}%` }} /></div></div>)}</div> : <p className="college-empty-state">{emptyMessage}</p>}</section>)}
       </div>
+      <section className="college-dashboard-card college-actions-section"><div className="college-section-heading"><div><h2>Quick Actions</h2><p>Common college asset management workflows.</p></div><ArrowRight size={20} aria-hidden="true" /></div><div className="college-actions-grid">{quickActions.map(([to, label, Icon]) => <Link className="college-action-card" key={to} to={to}><span className="college-action-icon"><Icon size={19} aria-hidden="true" /></span><span className="college-action-copy"><strong>{label}</strong><small>Open {label.toLowerCase()}</small></span><ArrowRight className="college-action-arrow" size={18} aria-hidden="true" /></Link>)}</div></section>
     </div>
   );
 };
