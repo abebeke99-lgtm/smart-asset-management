@@ -2,7 +2,7 @@ const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
 const isProduction = process.env.NODE_ENV === 'production';
-const requiredProductionVariables = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
+const requiredProductionVariables = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
 
 function getDatabaseConfig() {
   const missing = isProduction ? requiredProductionVariables.filter((name) => !String(process.env[name] || '').trim()) : [];
@@ -12,7 +12,11 @@ function getDatabaseConfig() {
     throw error;
   }
 
-  const port = Number(process.env.DB_PORT || 3306);
+  const portValue = process.env.DB_PORT || '3306';
+  if (isProduction && !process.env.DB_PORT) {
+    console.warn('DB_PORT is not configured; using the standard MySQL port 3306.');
+  }
+  const port = Number(portValue);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     const error = new Error('DB_PORT must be a valid TCP port');
     error.code = 'DB_CONFIG_INVALID';
