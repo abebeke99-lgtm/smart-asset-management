@@ -14,11 +14,11 @@ services:
       - key: DB_HOST
         sync: false
       - key: DB_PORT
-        value: "3306"
+        value: "11713"
       - key: DB_NAME
-        sync: false
+        value: "defaultdb"
       - key: DB_USER
-        sync: false
+        value: "avnadmin"
       - key: DB_PASSWORD
         sync: false
       - key: DB_SSL
