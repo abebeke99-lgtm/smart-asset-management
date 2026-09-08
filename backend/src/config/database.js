@@ -1,23 +1,60 @@
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
-const sequelize = new Sequelize(
-  process.env.DB_NAME || 'smart_asset_db',
-  process.env.DB_USER || 'root',
-  process.env.DB_PASSWORD || '',
-  {
+const isProduction = process.env.NODE_ENV === 'production';
+const requiredProductionVariables = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
+
+function getDatabaseConfig() {
+  const missing = isProduction ? requiredProductionVariables.filter((name) => !String(process.env[name] || '').trim()) : [];
+  if (missing.length) {
+    const error = new Error(`Missing production database configuration: ${missing.join(', ')}`);
+    error.code = 'DB_CONFIG_MISSING';
+    throw error;
+  }
+
+  const port = Number(process.env.DB_PORT || 3306);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    const error = new Error('DB_PORT must be a valid TCP port');
+    error.code = 'DB_CONFIG_INVALID';
+    throw error;
+  }
+
+  return {
+    database: process.env.DB_NAME || 'smart_asset_db',
+    username: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
     host: process.env.DB_HOST || 'localhost',
-    port: Number(process.env.DB_PORT) || 3306,
+    port,
+  };
+}
+
+const databaseConfig = getDatabaseConfig();
+const sslEnabled = process.env.DB_SSL === 'true' || databaseConfig.host.includes('aivencloud.com');
+const sslRejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false';
+const ssl = sslEnabled ? {
+  rejectUnauthorized: sslRejectUnauthorized,
+  ...(process.env.DB_SSL_CA ? { ca: process.env.DB_SSL_CA } : {}),
+} : undefined;
+
+const sequelize = new Sequelize(
+  databaseConfig.database,
+  databaseConfig.username,
+  databaseConfig.password,
+  {
+    host: databaseConfig.host,
+    port: databaseConfig.port,
     dialect: 'mysql',
     logging: false,
-    dialectOptions: process.env.DB_SSL === 'true' || process.env.DB_HOST?.includes('aivencloud.com')
-      ? { ssl: { rejectUnauthorized: false } }
-      : {},
+    dialectOptions: {
+      connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT_MS) || 10000,
+      ...(ssl ? { ssl } : {}),
+    },
     pool: {
-      max: 10,
+      max: Number(process.env.DB_POOL_MAX) || 10,
       min: 0,
-      acquire: 30000,
-      idle: 10000,
+      acquire: Number(process.env.DB_POOL_ACQUIRE_MS) || 30000,
+      idle: Number(process.env.DB_POOL_IDLE_MS) || 10000,
+      evict: Number(process.env.DB_POOL_EVICT_MS) || 1000,
     },
     define: {
       timestamps: true,
@@ -29,12 +66,20 @@ const sequelize = new Sequelize(
 async function testConnection() {
   try {
     await sequelize.authenticate();
-    console.log('Database connected successfully.');
+    console.log(`Database connection established (host=${databaseConfig.host}, port=${databaseConfig.port}, database=${databaseConfig.database}).`);
     return true;
   } catch (error) {
-    console.error('Unable to connect to the database:', error.message);
+    const code = error.code || error.parent?.code || error.original?.code || 'UNKNOWN';
+    const details = [`code=${code}`, `host=${databaseConfig.host}`, `port=${databaseConfig.port}`, `database=${databaseConfig.database}`];
+    if (code === 'ENOTFOUND') details.push('diagnosis=database DNS resolution failed');
+    else if (code === 'ECONNREFUSED') details.push('diagnosis=database connection refused');
+    else if (code === 'ETIMEDOUT') details.push('diagnosis=database connection timed out');
+    else if (code === 'ER_ACCESS_DENIED_ERROR') details.push('diagnosis=database authentication failed');
+    else if (code === 'ER_BAD_DB_ERROR') details.push('diagnosis=database does not exist');
+    else if (code === 'HANDSHAKE_SSL_ERROR') details.push('diagnosis=database SSL/TLS handshake failed');
+    console.error(`Database connection failed (${details.join(', ')}).`);
     return false;
   }
 }
 
-module.exports = { sequelize, testConnection };
+module.exports = { sequelize, testConnection, getDatabaseConfig };

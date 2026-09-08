@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const passport = require('./config/passport');
-const { testConnection } = require('./config/database');
+const { sequelize, testConnection } = require('./config/database');
 const { syncDatabase } = require('./config/sync');
 const { seedDatabase } = require('./config/seed');
 
@@ -80,12 +80,22 @@ app.use(passport.initialize());
 
 let databaseReady = false;
 
-const healthHandler = (req, res) => {
-  res.status(200).json({
-    success: true,
-    status: 'ok',
-    database: databaseReady ? 'connected' : 'disconnected',
-    message: 'Smart Asset Management API is running.'
+const healthHandler = async (req, res) => {
+  let connected = databaseReady;
+  if (connected) {
+    try {
+      await sequelize.authenticate();
+    } catch (error) {
+      connected = false;
+      databaseReady = false;
+    }
+  }
+  const status = connected ? 'ok' : 'degraded';
+  res.status(connected ? 200 : 503).json({
+    success: connected,
+    status,
+    database: connected ? 'connected' : 'unavailable',
+    message: connected ? 'Smart Asset Management API is ready.' : 'Database unavailable.'
   });
 };
 
@@ -121,31 +131,30 @@ app.use((err, req, res, next) => {
 });
 
 async function startServer() {
+  const retryDelays = [5000, 10000, 20000, 30000, 60000];
+  for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
+    if (await testConnection() && await syncDatabase()) {
+      if (process.env.NODE_ENV !== 'production' && process.env.SEED_DEMO_DATA === 'true') await seedDatabase();
+      databaseReady = true;
+      console.log('Database initialization completed.');
+      break;
+    }
+
+    if (attempt === retryDelays.length) {
+      throw new Error('Database initialization failed after retry limit. Verify Render DB_HOST, DB_PORT, credentials, SSL, and provider firewall settings.');
+    }
+
+    const delay = retryDelays[attempt];
+    console.error(`Database unavailable. Retrying in ${delay / 1000} seconds (attempt ${attempt + 1}/${retryDelays.length}).`);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+
   await new Promise((resolve, reject) => {
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
       resolve();
     });
     server.once('error', reject);
-  });
-
-  const initializeDatabase = async () => {
-    while (!databaseReady) {
-      const connected = await testConnection();
-      if (connected && await syncDatabase()) {
-        await seedDatabase();
-        databaseReady = true;
-        console.log('Database initialization completed.');
-        return;
-      }
-
-      console.error('Database is unavailable. Retrying initialization in 10 seconds.');
-      await new Promise((resolve) => setTimeout(resolve, 10000));
-    }
-  };
-
-  initializeDatabase().catch((error) => {
-    console.error('Database initialization failed:', error);
   });
 }
 
