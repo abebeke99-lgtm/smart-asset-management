@@ -1,4 +1,4 @@
-const { Op } = require('sequelize');
+const { Op, Sequelize } = require('sequelize');
 const { Asset, Inventory, InventoryTransaction, User, Department, Maintenance } = require('../models');
 const inventoryController = require('./inventoryController');
 

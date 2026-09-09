@@ -95,6 +95,7 @@ const StoreWarranty = lazy(() => import('./components/store/StoreWarranty'));
 const StoreReports = lazy(() => import('./components/store/StoreReports'));
 const StoreNotifications = lazy(() => import('./components/store/StoreNotifications'));
 const StoreHistory = lazy(() => import('./components/store/StoreHistory'));
+const StoreProfile = lazy(() => import('./components/store/StoreProfile'));
 
 // Finance Components
 const FinanceDashboard = lazy(() => import('./components/finance/FinanceDashboard'));
@@ -2451,7 +2452,7 @@ function AppContent() {
                 <Route path="reports/returns" element={<StoreReports />} />
                 <Route path="reports/movements" element={<StoreReports />} />
                 <Route path="notifications" element={<StoreNotifications />} />
-                <Route path="profile" element={<StoreDashboard />} />
+                <Route path="profile" element={<StoreProfile />} />
               </Route>
 
               {/* MAINTENANCE ROUTES - Fixed with RoleLayout */}
