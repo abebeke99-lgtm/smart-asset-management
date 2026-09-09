@@ -10,6 +10,7 @@ import React, { useState, useEffect, useRef, Suspense, lazy, useMemo } from 'rea
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Archive, ArrowLeftRight, BarChart3, Bell, Building2, CalendarClock, Check, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, Github, LayoutDashboard, Linkedin, LogOut, MapPin, Menu, MoreHorizontal, Package, Radio, RefreshCw, Search, Settings, SlidersHorizontal, Trash2, UserCircle, Users, Wrench, X } from 'lucide-react';
+import { FaFacebookF, FaTelegramPlane } from 'react-icons/fa';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
@@ -95,7 +96,6 @@ const StoreWarranty = lazy(() => import('./components/store/StoreWarranty'));
 const StoreReports = lazy(() => import('./components/store/StoreReports'));
 const StoreNotifications = lazy(() => import('./components/store/StoreNotifications'));
 const StoreHistory = lazy(() => import('./components/store/StoreHistory'));
-const StoreProfile = lazy(() => import('./components/store/StoreProfile'));
 
 // Finance Components
 const FinanceDashboard = lazy(() => import('./components/finance/FinanceDashboard'));
@@ -1636,6 +1636,8 @@ function AppContent() {
           {!user && <div className="flex items-center gap-2" style={{ marginTop: '16px' }} aria-label="Social media links">
             <a href="https://github.com" target="_blank" rel="noreferrer" aria-label="GitHub" style={{ color: currentTheme.footerText, opacity: 0.8 }}><Github size={18} /></a>
             <a href="https://linkedin.com" target="_blank" rel="noreferrer" aria-label="LinkedIn" style={{ color: currentTheme.footerText, opacity: 0.8 }}><Linkedin size={18} /></a>
+            <a href="https://www.facebook.com" target="_blank" rel="noreferrer" aria-label="Facebook" style={{ color: currentTheme.footerText, opacity: 0.8 }}><FaFacebookF size={17} /></a>
+            <a href="https://t.me" target="_blank" rel="noreferrer" aria-label="Telegram" style={{ color: currentTheme.footerText, opacity: 0.8 }}><FaTelegramPlane size={18} /></a>
           </div>}
         </div>
         <div>
@@ -1857,8 +1859,7 @@ function AppContent() {
         { path: '/store/reports/issues', label: '📝 Issue Reports', section: 'REPORTING' },
         { path: '/store/reports/returns', label: '↩️ Return Reports', section: 'REPORTING' },
         { path: '/store/reports/movements', label: '🔄 Movement Reports', section: 'REPORTING' },
-        { path: '/store/notifications', label: '🔔 ' + t.notifications, section: 'SYSTEM' },
-        { path: '/store/profile', label: '👤 ' + t.profile, section: 'SYSTEM' }
+        { path: '/store/notifications', label: '🔔 ' + t.notifications, section: 'SYSTEM' }
       ],
       'maintenance': [
         { path: '/maintenance', label: '📊 ' + t.dashboard, section: 'Dashboard' },
@@ -2453,7 +2454,6 @@ function AppContent() {
                 <Route path="reports/returns" element={<StoreReports />} />
                 <Route path="reports/movements" element={<StoreReports />} />
                 <Route path="notifications" element={<StoreNotifications />} />
-                <Route path="profile" element={<StoreProfile />} />
                 <Route path="available" element={<Navigate to="/store/available-assets" replace />} />
                 <Route path="rfid" element={<Navigate to="/store/tracking" replace />} />
                 <Route path="movement-history" element={<Navigate to="/store/history" replace />} />

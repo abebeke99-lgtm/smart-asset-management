@@ -19,10 +19,10 @@ const ForgotPassword = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const normalizedEmail = email.trim();
+    const normalizedEmail = email.trim().toLowerCase();
     setError('');
 
-    if (!normalizedEmail || !/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
+    if (!isValidEmail(normalizedEmail)) {
       setError(t.invalidEmail);
       return;
     }
@@ -175,6 +175,16 @@ const ForgotPassword = () => {
       </div>
     </>
   );
+};
+
+const isValidEmail = (value) => {
+  if (value.length > 254 || value.includes('..')) return false;
+  const [localPart, domain] = value.split('@');
+  if (!localPart || !domain || localPart.length > 64 || localPart.startsWith('.') || localPart.endsWith('.')) return false;
+  const domainParts = domain.split('.');
+  return domainParts.length >= 2 && domainParts.every((part) => (
+    part.length > 0 && part.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(part)
+  ));
 };
 
 const englishTranslations = {

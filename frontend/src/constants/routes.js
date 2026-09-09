@@ -163,7 +163,6 @@ export const ROUTES = {
   STORE_RETURN_REPORTS: '/store/reports/returns',
   STORE_MOVEMENT_REPORTS: '/store/reports/movements',
   STORE_NOTIFICATIONS: '/store/notifications',
-  STORE_PROFILE: '/store/profile',
 
   // Shared Routes
   ASSETS: '/assets',
@@ -326,8 +325,7 @@ export const getRoutesByRole = (role) => {
       ROUTES.STORE_ISSUE_REPORTS,
       ROUTES.STORE_RETURN_REPORTS,
       ROUTES.STORE_MOVEMENT_REPORTS,
-      ROUTES.STORE_NOTIFICATIONS,
-      ROUTES.STORE_PROFILE
+      ROUTES.STORE_NOTIFICATIONS
     ],
     store_manager: [
       ROUTES.STORE_DASHBOARD,

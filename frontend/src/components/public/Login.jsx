@@ -5,7 +5,7 @@ import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
 import { apiBase } from '../../utils/api';
-import { Building2, Eye, EyeOff, Landmark, Lock, LogIn, Mail, Radio, ShieldCheck, ShoppingCart, UserRound, Wrench, Laptop } from 'lucide-react';
+import { Building2, Eye, EyeOff, Landmark, Lock, LogIn, Mail, Radio, ShieldCheck, ShoppingCart, Wrench, Laptop } from 'lucide-react';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -38,7 +38,6 @@ const Login = () => {
     { id: 'finance', label: 'Finance', icon: Landmark },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench },
     { id: 'infrastructure', label: 'Infrastructure', icon: Building2 },
-    { id: 'staff', label: 'Staff', icon: UserRound },
   ];
 
   const handleQuickFillRole = (roleId) => {
