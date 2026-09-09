@@ -1,0 +1,33 @@
+const router = require('express').Router();
+const { requireDepartmentHead, resolveDepartmentScope } = require('../middlewares/organizationScope');
+const { getDepartmentDashboard, listDepartmentAssets, listDepartmentStaff } = require('../controllers/departmentController');
+const { listRequests, getRequest, createRequest, decideRequest } = require('../controllers/workspaceRequestController');
+const verification = require('../controllers/verificationController');
+const maintenance = require('../controllers/maintenanceRequestWorkflowController');
+
+router.use(...requireDepartmentHead, resolveDepartmentScope);
+router.get('/dashboard', getDepartmentDashboard);
+router.get('/assets', listDepartmentAssets);
+router.get('/staff', listDepartmentStaff);
+router.get('/inventory', getDepartmentDashboard);
+router.get('/requests', listRequests);
+router.post('/requests', createRequest);
+router.get('/requests/:id', getRequest);
+router.get('/approvals', listRequests);
+router.post('/approvals/:id/approve', (req, res, next) => { req.body.decision = 'approved'; return decideRequest(req, res, next); });
+router.post('/approvals/:id/reject', (req, res, next) => { req.body.decision = 'rejected'; return decideRequest(req, res, next); });
+router.post('/approvals/:id/request-changes', (req, res, next) => { req.body.decision = 'changes_requested'; return decideRequest(req, res, next); });
+router.get('/verification', verification.listSessions);
+router.post('/verification', verification.createSession);
+router.get('/verification/:id', verification.getSession);
+router.post('/verification/:id/items', verification.addItem);
+router.post('/verification/:id/submit', verification.submitSession);
+router.post('/verification/:id/finalize', verification.finalizeSession);
+router.get('/maintenance', maintenance.listRequests);
+router.post('/maintenance', maintenance.createRequest);
+router.get('/maintenance/:id', maintenance.getRequest);
+router.post('/maintenance/:id/cancel', maintenance.cancelRequest);
+router.get('/maintenance-requests', maintenance.listRequests);
+router.post('/maintenance-requests', maintenance.createRequest);
+
+module.exports = router;

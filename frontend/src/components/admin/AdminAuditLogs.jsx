@@ -626,7 +626,7 @@ const AdminAuditLogs = () => {
     setLoading(true);
 
     try {
-      const response = await apiClient.get('/api/audit', {
+      const response = await apiClient.get('/api/admin/audit-logs', {
         params: {
           page: currentPage,
           limit: itemsPerPage,
@@ -753,7 +753,7 @@ const AdminAuditLogs = () => {
     const streamAuditEvents = async () => {
       try {
         const response = await fetch(
-          `${apiBase()}/api/audit/stream`,
+          `${apiBase()}/api/admin/audit/stream`,
           {
             method: 'GET',
             headers: {
@@ -1109,7 +1109,7 @@ const AdminAuditLogs = () => {
 
     try {
       const response = await apiClient.get(
-        '/api/audit/export',
+        '/api/admin/audit-logs/export',
         {
           params: {
             format,

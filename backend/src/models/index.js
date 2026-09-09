@@ -1,5 +1,6 @@
 const { sequelize } = require('../config/database');
 const User = require('./User');
+const College = require('./College');
 const Asset = require('./Asset');
 const Infrastructure = require('./Infrastructure')(sequelize);
 const Assignment = require('./Assignment');
@@ -20,6 +21,7 @@ const MaintenanceTest = require('./MaintenanceTest');
 const MaintenanceCost = require('./MaintenanceCost');
 const MaintenanceHistory = require('./MaintenanceHistory');
 const Notification = require('./Notification');
+const NotificationDelivery = require('./NotificationDelivery');
 const RFIDLog = require('./RFIDLog');
 const Inventory = require('./Inventory');
 const InventoryTransaction = require('./InventoryTransaction');
@@ -27,10 +29,32 @@ const Approval = require('./Approval');
 const FinancialRecord = require('./FinancialRecord');
 const Config = require('./Config');
 const SettingsVersion = require('./SettingsVersion');
+const SystemAlert = require('./SystemAlert');
 const MfaSetting = require('./MfaSetting');
+const VerificationSession = require('./VerificationSession');
+const VerificationItem = require('./VerificationItem');
+const AssetMovement = require('./AssetMovement');
+const AssetReturn = require('./AssetReturn');
+const DisposalRequest = require('./DisposalRequest');
 
 Asset.hasMany(Assignment, { foreignKey: 'assetId' });
 Assignment.belongsTo(Asset, { foreignKey: 'assetId' });
+College.hasMany(Department, { foreignKey: 'collegeId' });
+Department.belongsTo(College, { foreignKey: 'collegeId' });
+Department.belongsTo(User, { foreignKey: 'headId', as: 'Head' });
+College.hasMany(User, { foreignKey: 'collegeId' });
+User.belongsTo(College, { foreignKey: 'collegeId' });
+College.hasMany(Asset, { foreignKey: 'collegeId' });
+Asset.belongsTo(College, { foreignKey: 'collegeId' });
+Asset.hasMany(AssetMovement, { foreignKey: 'assetId' });
+AssetMovement.belongsTo(Asset, { foreignKey: 'assetId' });
+Asset.hasMany(AssetReturn, { foreignKey: 'assetId' });
+AssetReturn.belongsTo(Asset, { foreignKey: 'assetId' });
+Transfer.hasMany(AssetMovement, { foreignKey: 'referenceId', constraints: false, scope: { referenceType: 'transfer' } });
+Department.hasMany(User, { foreignKey: 'departmentId' });
+User.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
+Department.hasMany(Asset, { foreignKey: 'departmentId' });
+Asset.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
 User.hasMany(Assignment, { foreignKey: 'assignedTo' });
 Assignment.belongsTo(User, { foreignKey: 'assignedTo' });
 Asset.hasMany(Transfer, { foreignKey: 'assetId' });
@@ -61,6 +85,21 @@ Asset.hasMany(FinancialRecord, { foreignKey: 'assetId' });
 FinancialRecord.belongsTo(Asset, { foreignKey: 'assetId' });
 User.hasMany(FinancialRecord, { foreignKey: 'recordedBy' });
 FinancialRecord.belongsTo(User, { foreignKey: 'recordedBy' });
+
+Asset.hasMany(DisposalRequest, { foreignKey: 'assetId' });
+DisposalRequest.belongsTo(Asset, { foreignKey: 'assetId' });
+User.hasMany(DisposalRequest, { foreignKey: 'requestedBy', as: 'RequestedDisposals' });
+DisposalRequest.belongsTo(User, { foreignKey: 'requestedBy', as: 'Requester' });
+User.hasMany(DisposalRequest, { foreignKey: 'reviewedBy', as: 'ReviewedDisposals' });
+DisposalRequest.belongsTo(User, { foreignKey: 'reviewedBy', as: 'Reviewer' });
+User.hasMany(DisposalRequest, { foreignKey: 'approvedBy', as: 'ApprovedDisposals' });
+DisposalRequest.belongsTo(User, { foreignKey: 'approvedBy', as: 'Approver' });
+User.hasMany(DisposalRequest, { foreignKey: 'executedBy', as: 'ExecutedDisposals' });
+DisposalRequest.belongsTo(User, { foreignKey: 'executedBy', as: 'Executor' });
+Department.hasMany(DisposalRequest, { foreignKey: 'departmentId' });
+DisposalRequest.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
+College.hasMany(DisposalRequest, { foreignKey: 'collegeId' });
+DisposalRequest.belongsTo(College, { foreignKey: 'collegeId', as: 'CollegeRecord' });
 
 // Maintenance Relationships
 Asset.hasMany(Maintenance, { foreignKey: 'assetId' });
@@ -157,12 +196,29 @@ Asset.hasMany(RFIDLog, { foreignKey: 'assetId' });
 RFIDLog.belongsTo(Asset, { foreignKey: 'assetId' });
 User.hasMany(AuditLog, { foreignKey: 'userId' });
 AuditLog.belongsTo(User, { foreignKey: 'userId' });
+User.hasMany(Notification, { foreignKey: 'userId', as: 'Notifications' });
+Notification.belongsTo(User, { foreignKey: 'userId', as: 'Recipient' });
+Notification.hasMany(NotificationDelivery, { foreignKey: 'notificationId' });
+NotificationDelivery.belongsTo(Notification, { foreignKey: 'notificationId' });
+User.hasMany(NotificationDelivery, { foreignKey: 'recipientId', as: 'NotificationDeliveries' });
+NotificationDelivery.belongsTo(User, { foreignKey: 'recipientId', as: 'DeliveryRecipient' });
 User.hasOne(MfaSetting, { foreignKey: 'userId', onDelete: 'CASCADE' });
 MfaSetting.belongsTo(User, { foreignKey: 'userId' });
+College.hasMany(VerificationSession, { foreignKey: 'collegeId' });
+VerificationSession.belongsTo(College, { foreignKey: 'collegeId' });
+Department.hasMany(VerificationSession, { foreignKey: 'departmentId' });
+VerificationSession.belongsTo(Department, { foreignKey: 'departmentId' });
+User.hasMany(VerificationSession, { foreignKey: 'startedBy' });
+VerificationSession.belongsTo(User, { foreignKey: 'startedBy', as: 'Starter' });
+VerificationSession.hasMany(VerificationItem, { foreignKey: 'sessionId' });
+VerificationItem.belongsTo(VerificationSession, { foreignKey: 'sessionId' });
+Asset.hasMany(VerificationItem, { foreignKey: 'assetId' });
+VerificationItem.belongsTo(Asset, { foreignKey: 'assetId' });
 
 module.exports = {
   sequelize,
   User,
+  College,
   Asset,
   Infrastructure,
   Assignment,
@@ -183,6 +239,7 @@ module.exports = {
   MaintenanceCost,
   MaintenanceHistory,
   Notification,
+  NotificationDelivery,
   RFIDLog,
   Inventory,
   InventoryTransaction,
@@ -190,5 +247,11 @@ module.exports = {
   FinancialRecord,
   Config,
   SettingsVersion,
+  SystemAlert,
   MfaSetting,
+  VerificationSession,
+  VerificationItem,
+  AssetMovement,
+  AssetReturn,
+  DisposalRequest,
 };

@@ -82,7 +82,14 @@ const generateToken = async (user) => {
   const sessionSeconds = Math.max(1, Number(settings.session_timeout) || 60) * 60;
   const expiresIn = Math.min(jwtSeconds, sessionSeconds);
   return jwt.sign(
-  { id: user.id, role: user.role, email: user.email },
+  {
+    id: user.id,
+    role: user.role,
+    email: user.email,
+    sessionVersion: user.sessionVersion || 0,
+    collegeId: user.collegeId ?? null,
+    departmentId: user.departmentId ?? null,
+  },
   process.env.JWT_SECRET || 'smart_asset_secret_key_2026',
   { expiresIn }
   );
@@ -160,6 +167,7 @@ const login = async (req, res) => {
       phone: user.phone,
       active: user.active,
       lastLoginAt: user.lastLoginAt,
+      forcePasswordChange: Boolean(user.forcePasswordChange),
     };
 
     await recordAuthEvent({ userId: user.id, action: 'LOGIN', result: 'Success', req });
@@ -231,7 +239,7 @@ const changePassword = async (req, res) => {
     if (passwordError) return res.status(400).json({ success: false, message: passwordError });
     const user = await User.findByPk(req.user.id);
     if (!user || !(await bcrypt.compare(currentPassword, user.password))) return res.status(401).json({ success: false, message: 'Current password is incorrect' });
-    await user.update({ password: await bcrypt.hash(newPassword, 10) });
+    await user.update({ password: await bcrypt.hash(newPassword, 10), forcePasswordChange: false, sessionVersion: (user.sessionVersion || 0) + 1 });
     await AuditLog.create({ userId: user.id, action: 'PASSWORD_CHANGED', entity: `user:${user.id}`, details: JSON.stringify({ userId: user.id }) });
     res.json({ success: true, message: 'Password changed successfully' });
   } catch (error) { res.status(500).json({ success: false, message: error.message }); }

@@ -27,6 +27,12 @@ const AdminTransfer = () => {
   const [filterStatus, setFilterStatus] = useState('all');
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [serverPagination, setServerPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 1,
+  });
   const itemsPerPage = 10;
 
   const [selectedAsset, setSelectedAsset] = useState(null);
@@ -226,19 +232,43 @@ const AdminTransfer = () => {
     status: transfer.status || 'Pending'
   });
 
-  const fetchTransfers = useCallback(async () => {
+  const fetchTransfers = useCallback(async (page = currentPage, query = searchQuery, selectedStatus = filterStatus) => {
     setLoading(true);
     setError('');
 
     try {
-      const response = await axios.get('/api/transfers');
+      const response = await axios.get('/api/transfers', {
+        params: {
+          page,
+          limit: itemsPerPage,
+          search: query,
+          status: selectedStatus === 'all' ? '' : selectedStatus,
+          sortBy: 'createdAt',
+          sortOrder: 'DESC',
+        }
+      });
 
-      const list = normalizeArray(response, [
+      const payload = response?.data || {};
+      const list = normalizeArray(payload, [
         'transfers',
-        'results'
+        'results',
+        'data'
       ]);
 
-      setTransfers(list.map(normalizeTransfer));
+      const normalized = list.map(normalizeTransfer);
+      setTransfers(normalized);
+
+      const pagination = payload?.pagination || payload?.summary || {};
+      const nextPage = Number.parseInt(pagination.page || page, 10) || page;
+      const nextTotalPages = Number.parseInt(pagination.totalPages || pagination.pages || Math.max(1, Math.ceil((pagination.total || normalized.length) / itemsPerPage)), 10) || 1;
+      const nextTotal = Number.parseInt(pagination.total || payload?.summary?.total || normalized.length, 10) || normalized.length;
+
+      setServerPagination({
+        page: nextPage,
+        limit: Number.parseInt(pagination.limit || itemsPerPage, 10) || itemsPerPage,
+        total: nextTotal,
+        totalPages: nextTotalPages,
+      });
     } catch (err) {
       console.error('Failed to load transfers:', err);
 
@@ -251,7 +281,7 @@ const AdminTransfer = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage, searchQuery, filterStatus, itemsPerPage]);
 
   const fetchAssets = useCallback(async () => {
     setAssetsLoading(true);
@@ -302,10 +332,10 @@ const AdminTransfer = () => {
   }, []);
 
   useEffect(() => {
-    fetchTransfers();
+    fetchTransfers(currentPage, searchQuery, filterStatus);
     fetchAssets();
     fetchDepartments();
-  }, [fetchTransfers, fetchAssets, fetchDepartments]);
+  }, [fetchTransfers, fetchAssets, fetchDepartments, currentPage, searchQuery, filterStatus]);
 
   const loadAsset = async (assetId) => {
     if (!assetId) {
@@ -910,85 +940,12 @@ const AdminTransfer = () => {
     );
   };
 
-  const filteredTransfers = useMemo(() => {
-    const query =
-      searchQuery.trim().toLowerCase();
-
-    return transfers.filter((transfer) => {
-      const searchableValues = [
-        transfer.assetName,
-        transfer.assetCode,
-        transfer.sourceDepartment,
-        transfer.destinationDepartment,
-        transfer.currentLocation,
-        transfer.newLocation,
-        transfer.requestedBy,
-        transfer.approvedBy,
-        transfer.reason,
-        transfer.status
-      ];
-
-      const matchesSearch =
-        !query ||
-        searchableValues.some(
-          (value) =>
-            String(value || '')
-              .toLowerCase()
-              .includes(query)
-        );
-
-      const matchesStatus =
-        filterStatus === 'all' ||
-        String(
-          transfer.status || ''
-        ).toLowerCase() ===
-          filterStatus.toLowerCase();
-
-      return (
-        matchesSearch &&
-        matchesStatus
-      );
-    });
-  }, [
-    transfers,
-    searchQuery,
-    filterStatus
-  ]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [
-    searchQuery,
-    filterStatus
-  ]);
-
   const totalPages = Math.max(
     1,
-    Math.ceil(
-      filteredTransfers.length /
-        itemsPerPage
-    )
+    serverPagination.totalPages || 1
   );
 
-  useEffect(() => {
-    if (
-      currentPage >
-      totalPages
-    ) {
-      setCurrentPage(totalPages);
-    }
-  }, [
-    currentPage,
-    totalPages
-  ]);
-
-  const paginatedTransfers =
-    filteredTransfers.slice(
-      (currentPage - 1) *
-        itemsPerPage,
-      currentPage *
-        itemsPerPage
-    );
+  const paginatedTransfers = transfers;
 
   const totalTransfers =
     transfers.length;
@@ -1242,9 +1199,8 @@ const AdminTransfer = () => {
             type="text"
             value={searchQuery}
             onChange={(event) => {
-              setSearchQuery(
-                event.target.value
-              );
+              setSearchQuery(event.target.value);
+              setCurrentPage(1);
             }}
             placeholder="Search asset, department, location, user, reason..."
             style={{
@@ -1257,9 +1213,8 @@ const AdminTransfer = () => {
           <select
             value={filterStatus}
             onChange={(event) => {
-              setFilterStatus(
-                event.target.value
-              );
+              setFilterStatus(event.target.value);
+              setCurrentPage(1);
             }}
             style={{
               ...inputStyle,
@@ -2512,7 +2467,7 @@ const AdminTransfer = () => {
             >
               <div>
                 Showing{' '}
-                {filteredTransfers.length ===
+                {serverPagination.total ===
                 0
                   ? 0
                   : (currentPage -
@@ -2523,10 +2478,10 @@ const AdminTransfer = () => {
                 {Math.min(
                   currentPage *
                     itemsPerPage,
-                  filteredTransfers.length
+                  serverPagination.total
                 )}{' '}
                 of{' '}
-                {filteredTransfers.length}
+                {serverPagination.total}
               </div>
 
               <div

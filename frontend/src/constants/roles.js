@@ -6,7 +6,7 @@ export const ROLES = {
   ICT_OFFICER: 'ict_officer',
   COLLEGE: 'college',
   COLLEGE_HEAD: 'college',
-  DEPARTMENT_HEAD: 'college',
+  DEPARTMENT_HEAD: 'department_head',
   FINANCE_MANAGER: 'finance',
   MAINTENANCE_STAFF: 'maintenance',
   STORE_MANAGER: 'store_manager',

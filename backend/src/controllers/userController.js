@@ -33,9 +33,11 @@ const getAllUsers = async (req, res) => {
       const search = `%${String(req.query.search).trim()}%`;
       where[Op.or] = [{ username: { [Op.like]: search } }, { fullName: { [Op.like]: search } }, { email: { [Op.like]: search } }, { phone: { [Op.like]: search } }];
     }
-    const users = await User.findAll({ where, attributes: { exclude: ['password'] }, order: [['id', 'ASC']] });
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 20));
+    const { count, rows: users } = await User.findAndCountAll({ where, attributes: { exclude: ['password'] }, order: [['id', 'ASC']], limit, offset: (page - 1) * limit });
     const safeUsers = users.map(safeUser);
-    res.json({ success: true, data: safeUsers, users: safeUsers, total: safeUsers.length, roles });
+    res.json({ success: true, message: 'Users retrieved successfully', data: safeUsers, users: safeUsers, total: count, roles, pagination: { page, limit, total: count, pages: Math.ceil(count / limit) } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -46,7 +48,7 @@ const getUserById = async (req, res) => {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     if (req.user.role === 'college' && user.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
-    res.json({ success: true, data: safeUser(user) });
+    res.json({ success: true, message: 'User retrieved successfully', data: safeUser(user) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -102,8 +104,9 @@ const updateUser = async (req, res) => {
     }
     const before = safeUser(user);
     await user.update(updates);
-    await AuditLog.create({ userId: req.user.id, action: 'UPDATE_USER', entity: `user:${user.id}`, details: JSON.stringify({ before: { role: before.role, department: before.department, active: before.active }, after: { role: user.role, department: user.department, active: user.active } }) });
-    res.json({ success: true, data: safeUser(user) });
+    const action = updates.active !== undefined && updates.active !== before.active ? (updates.active ? 'ACTIVATE_USER' : 'DEACTIVATE_USER') : 'UPDATE_USER';
+    await AuditLog.create({ userId: req.user.id, action, entity: `user:${user.id}`, details: JSON.stringify({ before: { role: before.role, department: before.department, active: before.active }, after: { role: user.role, department: user.department, active: user.active } }) });
+    res.json({ success: true, message: 'User updated successfully', data: safeUser(user) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -138,4 +141,40 @@ const updateProfile = async (req, res) => {
   } catch (error) { res.status(500).json({ success: false, message: error.message }); }
 };
 
-module.exports = { getAllUsers, getUserById, createUser, updateUser, deleteUser, updateProfile };
+const setUserSecurityState = async (req, res, state) => {
+  const user = await User.findByPk(req.params.id);
+  if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+  if (user.id === req.user.id && state === 'lock') return res.status(400).json({ success: false, message: 'You cannot lock your own account' });
+  const updates = state === 'unlock' ? { lockoutUntil: null, failedLoginAttempts: 0 } : { lockoutUntil: new Date('2099-12-31T23:59:59.999Z'), failedLoginAttempts: 0 };
+  await user.update(updates);
+  await AuditLog.create({ userId: req.user.id, action: state === 'unlock' ? 'UNLOCK_USER' : 'LOCK_USER', entity: `user:${user.id}`, details: JSON.stringify({ userId: user.id }) });
+  return res.json({ success: true, message: `User ${state}ed successfully`, data: safeUser(user) });
+};
+
+const resetUserPassword = async (req, res) => {
+  const user = await User.findByPk(req.params.id);
+  if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+  const temporaryPassword = String(req.body.password || '').trim();
+  if (temporaryPassword && temporaryPassword.length < 8) return res.status(400).json({ success: false, message: 'Temporary password must be at least 8 characters' });
+  await user.update({ password: await bcrypt.hash(temporaryPassword || require('crypto').randomBytes(18).toString('base64url'), 10), forcePasswordChange: true, sessionVersion: (user.sessionVersion || 0) + 1 });
+  await AuditLog.create({ userId: req.user.id, action: 'RESET_USER_PASSWORD', entity: `user:${user.id}`, details: JSON.stringify({ userId: user.id, forcePasswordChange: true }) });
+  return res.json({ success: true, message: 'Password reset successfully; the user must change it at next login' });
+};
+
+const forcePasswordChange = async (req, res) => {
+  const user = await User.findByPk(req.params.id);
+  if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+  await user.update({ forcePasswordChange: true });
+  await AuditLog.create({ userId: req.user.id, action: 'FORCE_PASSWORD_CHANGE', entity: `user:${user.id}`, details: JSON.stringify({ userId: user.id }) });
+  return res.json({ success: true, message: 'Password change required at next login', data: safeUser(user) });
+};
+
+const terminateUserSession = async (req, res) => {
+  const user = await User.findByPk(req.params.id);
+  if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+  await user.update({ sessionVersion: (user.sessionVersion || 0) + 1 });
+  await AuditLog.create({ userId: req.user.id, action: 'TERMINATE_USER_SESSION', entity: `user:${user.id}`, details: JSON.stringify({ userId: user.id }) });
+  return res.json({ success: true, message: 'User sessions terminated' });
+};
+
+module.exports = { getAllUsers, getUserById, createUser, updateUser, deleteUser, updateProfile, setUserSecurityState, resetUserPassword, forcePasswordChange, terminateUserSession };

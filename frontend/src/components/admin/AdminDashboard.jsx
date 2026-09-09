@@ -38,6 +38,7 @@ import {
   Package,
   AlertTriangle,
   CheckCircle,
+  ClipboardCheck,
   XCircle
 } from 'lucide-react';
 
@@ -442,16 +443,16 @@ const AdminDashboard = () => {
       ...DEFAULT_STATS,
       totalAssets: safeNumber(source.totalAssets),
       activeAssets: safeNumber(source.activeAssets),
-      availableAssets: safeNumber(source.availableAssets, safeNumber(source.activeAssets)),
+      availableAssets: safeNumber(source.availableAssets || source.availableAssets === 0 ? source.availableAssets : source.activeAssets),
       retiredAssets: safeNumber(source.retiredAssets),
       missingAssets: safeNumber(source.missingAssets),
       damagedAssets: safeNumber(source.damagedAssets),
-      underMaintenance: safeNumber(source.underMaintenance),
+      underMaintenance: safeNumber(source.underMaintenance || source.maintenanceAssets),
       totalDepartments: safeNumber(source.totalDepartments),
       totalUsers: safeNumber(source.totalUsers),
       pendingMaintenance: safeNumber(source.pendingMaintenance),
       rfidActivity: safeNumber(source.rfidActivity),
-      totalValue: safeNumber(source.totalValue),
+      totalValue: safeNumber(source.totalAssetValue || source.totalValue),
       assignedAssets: safeNumber(source.assignedAssets),
       overdueReturns: safeNumber(source.overdueReturns),
       assetByStatus: safeArray(source.assetByStatus),
@@ -800,17 +801,17 @@ const AdminDashboard = () => {
     return tasks;
   }, [stats.missingAssets, stats.damagedAssets, stats.pendingMaintenance, stats.overdueReturns, stats.rfidMetrics, t]);
 
-  // Quick actions
+  // Quick actions aligned to the requested System Administrator dashboard view.
   const dashboardActions = useMemo(() => {
-    const defaultActions = [
-      { icon: '🏢', label: t.addDepartment, path: '/admin/departments' },
-      { icon: '🔧', label: t.createMaintenance, path: '/admin/maintenance' }
+    return [
+      { icon: Users, label: 'Manage Users', path: '/admin/users' },
+      { icon: Building2, label: 'Manage Organization', path: '/admin/departments' },
+      { icon: Package, label: 'View Assets', path: '/admin/assets' },
+      { icon: FileText, label: 'View Reports', path: '/admin/reports' },
+      { icon: ClipboardCheck, label: 'Audit Logs', path: '/admin/audit-logs' },
+      { icon: Settings, label: 'System Settings', path: '/admin/settings' }
     ];
-    const apiActions = safeArray(stats.quickActions);
-    return [...apiActions, ...defaultActions]
-      .filter(action => action?.path && action?.label && !action.path.endsWith('/assets/create'))
-      .filter((action, index, actions) => actions.findIndex(item => item.path === action.path) === index);
-  }, [stats.quickActions, t]);
+  }, []);
 
   // Loading state
   if (loading && !lastUpdated) {
@@ -841,12 +842,16 @@ const AdminDashboard = () => {
         gap: '16px'
       }}>
         <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, margin: 0, color: isDark ? '#c8dcf5' : '#1a365d' }}>
-            {t.welcome}, {user?.fullName || user?.username || 'Admin'}
-          </h1>
-          <p style={{ margin: '4px 0 0 0', color: isDark ? '#8896b0' : '#4a5568' }}>{t.adminRole}</p>
-          <p style={{ margin: '4px 0 0 0', color: isDark ? '#8896b0' : '#4a5568' }}>{currentDateTime.toLocaleString()}</p>
-          {lastUpdated && <p style={{ margin: '4px 0 0 0', color: isDark ? '#8896b0' : '#4a5568' }}>{t.lastUpdated}: {lastUpdated.toLocaleString()}</p>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: 700, margin: 0, color: isDark ? '#c8dcf5' : '#1a365d' }}>
+              Welcome, System Administrator
+            </h1>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: '999px', background: isDark ? '#243652' : '#ebf4ff', color: isDark ? '#c8dcf5' : '#2b6cb0', fontSize: '0.88rem', fontWeight: 700 }}>
+              <Bell size={14} />
+            </span>
+          </div>
+          <p style={{ margin: '4px 0 0 0', color: isDark ? '#8896b0' : '#4a5568' }}>Administration</p>
+          <p style={{ margin: '4px 0 0 0', color: isDark ? '#8896b0' : '#4a5568' }}>{currentDateTime.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })} • Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '—'}</p>
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative' }}>
@@ -980,18 +985,14 @@ const AdminDashboard = () => {
         marginBottom: '24px'
       }}>
         {[
-          { label: t.totalAssets, value: stats.totalAssets, icon: Package, color: colors.primary, path: '/admin/assets' },
-          { label: t.availableAssets, value: stats.availableAssets, icon: CheckCircle, color: colors.success, path: '/admin/assets?status=available' },
-          { label: t.assignedAssets, value: stats.assignedAssets, icon: Users, color: colors.secondary, path: '/admin/assets?status=assigned' },
-          { label: t.underMaintenance, value: stats.underMaintenance, icon: Wrench, color: colors.warning, path: '/admin/maintenance' },
-          { label: t.missingAssets, value: stats.missingAssets, icon: XCircle, color: colors.danger, path: '/admin/assets?status=missing' },
-          { label: t.damagedAssets, value: stats.damagedAssets, icon: AlertTriangle, color: colors.warning, path: '/admin/assets?status=damaged' },
-          { label: t.totalUsers, value: stats.totalUsers, icon: Users, color: colors.purple, path: '/admin/users' },
-          { label: t.totalDepartments, value: stats.totalDepartments, icon: Building2, color: colors.teal, path: '/admin/departments' },
-          { label: t.pendingMaintenance, value: stats.pendingMaintenance, icon: Wrench, color: colors.warning, path: '/admin/maintenance' },
-          { label: t.rfidActivity, value: stats.rfidActivity, icon: Radio, color: colors.primary, path: '/admin/rfid' },
-          { label: t.overdueReturns, value: stats.overdueReturns, icon: Activity, color: colors.danger, path: '/admin/assets' },
-          { label: t.totalValueLabel, value: stats.totalValue.toLocaleString(), icon: FileText, color: colors.success, path: '/admin/reports' }
+          { label: t.totalAssets, value: stats.totalAssets.toLocaleString(), icon: Package, color: colors.primary, path: '/admin/assets' },
+          { label: t.availableAssets, value: stats.availableAssets.toLocaleString(), icon: CheckCircle, color: colors.success, path: '/admin/assets?status=available' },
+          { label: t.assignedAssets, value: stats.assignedAssets.toLocaleString(), icon: Users, color: colors.secondary, path: '/admin/assets?status=assigned' },
+          { label: t.underMaintenance, value: stats.underMaintenance.toLocaleString(), icon: Wrench, color: colors.warning, path: '/admin/maintenance' },
+          { label: t.missingAssets, value: stats.missingAssets.toLocaleString(), icon: XCircle, color: colors.danger, path: '/admin/assets?status=missing' },
+          { label: t.damagedAssets, value: stats.damagedAssets.toLocaleString(), icon: AlertTriangle, color: colors.warning, path: '/admin/assets?status=damaged' },
+          { label: t.totalUsers, value: stats.totalUsers.toLocaleString(), icon: Users, color: colors.purple, path: '/admin/users' },
+          { label: t.totalValueLabel, value: '$' + safeNumber(stats.totalValue).toLocaleString(), icon: FileText, color: colors.success, path: '/admin/reports' }
         ].map((stat, idx) => (
           <div
             key={idx}
@@ -1086,27 +1087,30 @@ const AdminDashboard = () => {
           <Plus size={18} /> {t.quickActions}
         </h3>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px' }}>
-          {dashboardActions.map((action, index) => (
-            <button
-              key={action?.path || `action-${index}`}
-              style={{
-                padding: '10px 18px',
-                borderRadius: '8px',
-                background: isDark ? '#2b4a6b' : '#ebf4ff',
-                color: isDark ? '#c8dcf5' : '#2b6cb0',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '0.9rem',
-                fontWeight: 500,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '7px'
-              }}
-              onClick={() => navigate(action.path)}
-            >
-              {action.icon || '⚡'} {action.label}
-            </button>
-          ))}
+          {dashboardActions.map((action, index) => {
+            const Icon = action.icon;
+            return (
+              <button
+                key={action?.path || `action-${index}`}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: '8px',
+                  background: isDark ? '#2b4a6b' : '#ebf4ff',
+                  color: isDark ? '#c8dcf5' : '#2b6cb0',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  fontWeight: 500,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '7px'
+                }}
+                onClick={() => navigate(action.path)}
+              >
+                {Icon ? <Icon size={15} /> : <Plus size={15} />} <span>{action.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

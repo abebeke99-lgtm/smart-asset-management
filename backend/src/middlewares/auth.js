@@ -3,9 +3,7 @@ const passport = require('../config/passport');
 const normalizeRoleValue = (role) => {
   if (!role) return '';
   const value = String(role).trim().toLowerCase();
-  if (['department_head', 'department head', 'dept_head', 'department-head', 'department'].includes(value)) {
-    return 'college';
-  }
+  if (['department head', 'dept_head', 'department-head', 'department'].includes(value)) return 'department_head';
   return value;
 };
 

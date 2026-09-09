@@ -1,5 +1,5 @@
 const express = require('express');
-const { getAllUsers, getUserById, createUser, updateUser, deleteUser, updateProfile } = require('../controllers/userController');
+const { getAllUsers, getUserById, createUser, updateUser, deleteUser, updateProfile, setUserSecurityState, resetUserPassword, forcePasswordChange, terminateUserSession } = require('../controllers/userController');
 const { AuditLog, User } = require('../models');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 
@@ -8,6 +8,11 @@ const router = express.Router();
 router.get('/', requireAuth, requireRole('admin', 'college', 'store_manager', 'ict_officer', 'maintenance'), getAllUsers);
 router.get('/technicians', requireAuth, requireRole('admin', 'maintenance', 'ict_officer'), getAllUsers);
 router.put('/profile', requireAuth, updateProfile);
+router.post('/:id/lock', requireAuth, requireRole('admin'), (req, res, next) => setUserSecurityState(req, res, 'lock').catch(next));
+router.post('/:id/unlock', requireAuth, requireRole('admin'), (req, res, next) => setUserSecurityState(req, res, 'unlock').catch(next));
+router.post('/:id/reset-password', requireAuth, requireRole('admin'), (req, res, next) => resetUserPassword(req, res).catch(next));
+router.post('/:id/force-password-change', requireAuth, requireRole('admin'), (req, res, next) => forcePasswordChange(req, res).catch(next));
+router.post('/:id/terminate-session', requireAuth, requireRole('admin'), (req, res, next) => terminateUserSession(req, res).catch(next));
 router.get('/activity', requireAuth, requireRole('admin'), async (req, res, next) => {
 	try {
 		const where = req.query.userId ? { userId: req.query.userId } : {};

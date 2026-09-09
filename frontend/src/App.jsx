@@ -9,10 +9,13 @@ import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate, useLocation,
 import React, { useState, useEffect, useRef, Suspense, lazy, useMemo } from 'react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { ArrowLeftRight, BarChart3, Bell, Building2, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, DatabaseBackup, FileText, Github, LayoutDashboard, Linkedin, LogOut, Menu, Package, Radio, Settings, Users, Wrench, X } from 'lucide-react';
+import { Archive, ArrowLeftRight, BarChart3, Bell, Building2, CalendarClock, Check, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, Github, LayoutDashboard, Linkedin, LogOut, Menu, MoreHorizontal, Package, Radio, RefreshCw, Search, Settings, SlidersHorizontal, Trash2, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
+import CollegeDepartments from './components/college/CollegeDepartments';
+import DepartmentDetails from './components/college/DepartmentDetails';
+import ScopedWorkflowPage from './components/shared/ScopedWorkflowPage';
 
 // ==========================================
 // IMPORT UI CONTEXT
@@ -42,10 +45,15 @@ const AdminRFIDTracking = lazy(() => import('./components/admin/AdminRFIDTrackin
 const AdminReports = lazy(() => import('./components/admin/AdminReports'));
 const AdminUserManagement = lazy(() => import('./components/admin/AdminUserManagement'));
 const AdminSettings = lazy(() => import('./components/admin/AdminSettings'));
+const SystemMonitoring = lazy(() => import('./components/admin/SystemMonitoring'));
 const AdminNotifications = lazy(() => import('./components/admin/AdminNotifications'));
+const AdminNotificationDetails = lazy(() => import('./components/admin/AdminNotificationDetails'));
 const AdminBackup = lazy(() => import('./components/admin/AdminBackup'));
 const AdminDepartmentManagement = lazy(() => import('./components/admin/AdminDepartmentManagement'));
+const AdminCollegeManagement = lazy(() => import('./components/admin/AdminCollegeManagement'));
+const AdminCollegeDetails = lazy(() => import('./components/admin/AdminCollegeDetails'));
 const AdminAuditLogs = lazy(() => import('./components/admin/AdminAuditLogs'));
+const AdminAnalyticsCenter = lazy(() => import('./components/admin/AdminAnalyticsCenter'));
 
 // ICT Components
 const ICTDashboard = lazy(() => import('./components/ict/ICTDashboard'));
@@ -167,12 +175,12 @@ const normalizeRole = (role) => {
     'ict_officer': 'ict_officer',
     'ict-officer': 'ict_officer',
     'college': 'college',
-    'department head': 'college',
-    'department_head': 'college',
-    'department-head': 'college',
-    'dept_head': 'college',
-    'dept-head': 'college',
-    'department': 'college',
+    'department head': 'department_head',
+    'department_head': 'department_head',
+    'department-head': 'department_head',
+    'dept_head': 'department_head',
+    'dept-head': 'department_head',
+    'department': 'department_head',
     'finance': 'finance',
     'finance officer': 'finance',
     'store manager': 'store_manager',
@@ -195,6 +203,7 @@ const getDashboardRoute = (role) => {
     admin: '/admin',
     ict_officer: '/ict',
     college: '/college',
+    department_head: '/department',
     finance: '/finance',
     store_manager: '/store',
     maintenance: '/maintenance',
@@ -223,7 +232,7 @@ const DepartmentWorkspaceRoute = () => {
   const { user } = useAuth();
   const role = normalizeRole(user?.role || user?.roles);
   const responsibility = String(user?.departmentRole || user?.responsibility || user?.position || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
-  const canUseDepartmentWorkspace = role === 'staff' || responsibility === 'department staff' || responsibility === 'department dean' || responsibility === 'dean';
+  const canUseDepartmentWorkspace = role === 'staff' || role === 'department_head' || responsibility === 'department staff' || responsibility === 'department dean' || responsibility === 'dean';
 
   if (!canUseDepartmentWorkspace) {
     return <Navigate to={getDashboardRoute(user?.role)} replace />;
@@ -234,8 +243,9 @@ const DepartmentWorkspaceRoute = () => {
 
 const DepartmentDeanRoute = () => {
   const { user } = useAuth();
+  const role = normalizeRole(user?.role || user?.roles);
   const responsibility = String(user?.departmentRole || user?.responsibility || user?.position || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
-  return responsibility === 'department dean' || responsibility === 'dean'
+  return role === 'department_head' || responsibility === 'department dean' || responsibility === 'dean'
     ? <DeptApprovals />
     : <Navigate to="/department" replace />;
 };
@@ -546,50 +556,31 @@ const getAssetLocationFallback = (assets = []) => {
 
 const AdminAssetCategories = () => {
   const [categories, setCategories] = useState([]);
-  const [assets, setAssets] = useState([]);
   const [search, setSearch] = useState('');
-  const [form, setForm] = useState({ name: '', description: '' });
+  const [form, setForm] = useState({
+    name: '',
+    code: '',
+    description: '',
+    icon: 'layers',
+    status: 'active'
+  });
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const loadData = async () => {
     setLoading(true);
     setError('');
     try {
-      const [categoriesResponse, assetsResponse] = await Promise.all([
-        axios.get('/api/categories').catch(() => ({ data: { categories: [] } })),
-        axios.get('/api/assets').catch(() => ({ data: { assets: [] } }))
-      ]);
-
-      const categoryRows = normalizeListResponse(categoriesResponse?.data ?? []);
-      const assetRows = normalizeListResponse(assetsResponse?.data ?? []);
-      const fallback = getAssetCategoryFallback(assetRows);
-      const merged = [...categoryRows, ...fallback].reduce((accumulator, category) => {
-        const key = String(category?.name || category?.category || '').trim() || 'Uncategorized';
-        if (!accumulator[key]) {
-          accumulator[key] = {
-            id: category?.id || `${key}-${Date.now()}`,
-            name: key,
-            description: category?.description || `Category for ${key}`,
-            assetCount: 0
-          };
-        }
-        accumulator[key].assetCount += Number(category?.assetCount || 0);
-        return accumulator;
-      }, {});
-
-      const finalRows = Object.values(merged).map((category) => ({
-        ...category,
-        assetCount: assetRows.filter((asset) => String(asset?.category || asset?.category_name || 'Uncategorized').trim() === category.name).length || category.assetCount || 0
-      }));
-
-      setAssets(assetRows);
-      setCategories(finalRows.sort((left, right) => left.name.localeCompare(right.name)));
+      const response = await axios.get('/api/categories', { params: { page: 1, limit: 100 } });
+      const rows = normalizeListResponse(response?.data ?? []);
+      const usableRows = Array.isArray(rows) ? rows : [];
+      setCategories(usableRows);
     } catch (loadError) {
-      const fallback = getAssetCategoryFallback(assets);
-      setCategories(fallback);
-      setError('Category service is not available right now. Showing local category data.');
+      console.error('Category load failed:', loadError);
+      setCategories([]);
+      setError('Category service is not available right now.');
     } finally {
       setLoading(false);
     }
@@ -602,35 +593,80 @@ const AdminAssetCategories = () => {
   const filteredCategories = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return categories;
-    return categories.filter((category) => [category.name, category.description].some((value) => String(value || '').toLowerCase().includes(query)));
+    return categories.filter((category) => [category.name, category.code, category.description, category.icon, category.status].some((value) => String(value || '').toLowerCase().includes(query)));
   }, [categories, search]);
 
-  const saveCategory = () => {
-    const name = form.name.trim();
-    if (!name) return;
+  const saveCategory = async () => {
+    const name = String(form.name || '').trim();
+    const code = String(form.code || '').trim().toUpperCase();
+    const description = String(form.description || '').trim();
+    const icon = String(form.icon || 'layers').trim();
+    const status = String(form.status || 'active').trim().toLowerCase();
 
-    if (editingId) {
-      setCategories((previous) => previous.map((category) => category.id === editingId ? { ...category, name, description: form.description.trim() || category.description } : category));
-    } else {
-      setCategories((previous) => [{
-        id: `local-${Date.now()}`,
-        name,
-        description: form.description.trim() || `${name} category`,
-        assetCount: 0
-      }, ...previous]);
+    if (!name) {
+      setError('Category name is required.');
+      return;
     }
 
-    setForm({ name: '', description: '' });
-    setEditingId(null);
+    if (!['active', 'inactive'].includes(status)) {
+      setError('Category status must be active or inactive.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    try {
+      const payload = { name, code, description, icon, status };
+
+      if (editingId) {
+        const response = await axios.put(`/api/categories/${editingId}`, payload);
+        const updatedItem = response?.data?.category || response?.data?.data || response?.data;
+        setCategories((previous) => previous.map((category) => String(category.id) === String(editingId) ? { ...category, ...updatedItem } : category));
+      } else {
+        const response = await axios.post('/api/categories', payload);
+        const createdItem = response?.data?.category || response?.data?.data || response?.data;
+        setCategories((previous) => [createdItem, ...previous]);
+      }
+
+      setForm({ name: '', code: '', description: '', icon: 'layers', status: 'active' });
+      setEditingId(null);
+      await loadData();
+    } catch (saveError) {
+      const message = saveError?.response?.data?.message || 'Unable to save category.';
+      setError(message);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const removeCategory = (categoryId) => {
-    setCategories((previous) => previous.filter((category) => category.id !== categoryId));
+  const removeCategory = async (categoryId) => {
+    if (!window.confirm('Delete this category? The backend will block deletion when assets still use it.')) {
+      return;
+    }
+
+    try {
+      await axios.delete(`/api/categories/${categoryId}`);
+      setCategories((previous) => previous.filter((category) => String(category.id) !== String(categoryId)));
+      if (editingId === categoryId) {
+        setEditingId(null);
+        setForm({ name: '', code: '', description: '', icon: 'layers', status: 'active' });
+      }
+    } catch (deleteError) {
+      const message = deleteError?.response?.data?.message || 'Unable to delete category.';
+      setError(message);
+    }
   };
 
   const startEdit = (category) => {
     setEditingId(category.id);
-    setForm({ name: category.name, description: category.description || '' });
+    setForm({
+      name: category.name || '',
+      code: category.code || '',
+      description: category.description || '',
+      icon: category.icon || 'layers',
+      status: category.status || 'active'
+    });
   };
 
   return (
@@ -640,19 +676,26 @@ const AdminAssetCategories = () => {
           <div style={{ color: '#5a6b8a', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Admin / Assets</div>
           <h2 style={{ margin: '8px 0 0', color: '#1a365d', fontSize: '2rem' }}>📂 Categories</h2>
         </div>
+        <button type="button" onClick={() => { setEditingId(null); setForm({ name: '', code: '', description: '', icon: 'layers', status: 'active' }); }} style={{ background: '#e2e8f0', color: '#1a365d', border: 'none', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600 }}>Reset</button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 360px) minmax(0, 1fr)', gap: '20px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 420px) minmax(0, 1fr)', gap: '20px', marginBottom: '20px' }}>
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
           <h3 style={{ margin: '0 0 16px', color: '#1a365d' }}>{editingId ? 'Edit Category' : 'Create Category'}</h3>
           <div style={{ display: 'grid', gap: '12px' }}>
             <input value={form.name} onChange={(event) => setForm((previous) => ({ ...previous, name: event.target.value }))} placeholder="Category name" style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+            <input value={form.code} onChange={(event) => setForm((previous) => ({ ...previous, code: event.target.value }))} placeholder="Category code" style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+            <input value={form.icon} onChange={(event) => setForm((previous) => ({ ...previous, icon: event.target.value }))} placeholder="Icon name" style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+            <select value={form.status} onChange={(event) => setForm((previous) => ({ ...previous, status: event.target.value }))} style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
             <textarea value={form.description} onChange={(event) => setForm((previous) => ({ ...previous, description: event.target.value }))} placeholder="Category description" rows={4} style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', resize: 'vertical' }} />
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <button type="button" onClick={saveCategory} style={{ background: '#2b6cb0', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600 }}>
-                {editingId ? 'Save Changes' : 'Create Category'}
+              <button type="button" disabled={saving} onClick={saveCategory} style={{ background: '#2b6cb0', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
+                {saving ? 'Saving...' : (editingId ? 'Save Changes' : 'Create Category')}
               </button>
-              {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ name: '', description: '' }); }} style={{ background: '#e2e8f0', color: '#1a365d', border: 'none', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>}
+              {editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ name: '', code: '', description: '', icon: 'layers', status: 'active' }); }} style={{ background: '#e2e8f0', color: '#1a365d', border: 'none', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>}
             </div>
           </div>
         </div>
@@ -677,10 +720,12 @@ const AdminAssetCategories = () => {
                 <div key={category.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '14px 16px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', flexWrap: 'wrap' }}>
                   <div>
                     <div style={{ fontWeight: 700, color: '#1a365d', fontSize: '1rem' }}>{category.name}</div>
+                    <div style={{ color: '#4a5568', fontSize: '0.85rem' }}>{category.code || 'No code'}</div>
                     <div style={{ color: '#4a5568', fontSize: '0.85rem' }}>{category.description || 'No description'}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                     <span style={{ background: '#e6fffa', color: '#0f766e', borderRadius: '999px', padding: '5px 10px', fontSize: '0.8rem', fontWeight: 600 }}>{category.assetCount || 0} assets</span>
+                    <span style={{ background: category.status === 'active' ? '#dcfce7' : '#e2e8f0', color: category.status === 'active' ? '#166534' : '#475569', borderRadius: '999px', padding: '5px 10px', fontSize: '0.8rem', fontWeight: 600 }}>{String(category.status || 'active').toUpperCase()}</span>
                     <button type="button" onClick={() => startEdit(category)} style={{ background: '#edf2ff', color: '#2b6cb0', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}>Edit</button>
                     <button type="button" onClick={() => removeCategory(category.id)} style={{ background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}>Delete</button>
                   </div>
@@ -1212,7 +1257,7 @@ const AdminAssetDocuments = () => {
 const AdminComponentStub = ({ title = 'Section' }) => (
   <div style={{ padding: '24px', background: '#fff', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
     <h2 style={{ margin: '0 0 12px' }}>{title}</h2>
-    <p style={{ margin: 0, color: '#4a5568' }}>This section is currently under development.</p>
+    <p style={{ margin: 0, color: '#4a5568' }}>No configured workspace is available for this route.</p>
   </div>
 );
 
@@ -1708,34 +1753,47 @@ function AppContent() {
     const items = {
       'admin': [
         { path: '/admin', label: t.dashboard, icon: LayoutDashboard, group: 'Overview' },
-        { path: '/admin/assets', label: t.assets, icon: Package, group: 'Asset Management' },
-        { path: '/admin/assets/assign', label: 'Asset Assignment', icon: ClipboardList, group: 'Asset Management' },
-        { path: '/admin/assets/transfer', label: 'Asset Transfer', icon: ArrowLeftRight, group: 'Asset Management' },
-        { path: '/admin/maintenance', label: t.maintenance, icon: Wrench, group: 'Asset Management' },
-        { path: '/admin/rfid', label: t.rfidTracking, icon: Radio, group: 'Asset Management' },
-        { path: '/admin/reports', label: t.reports, icon: BarChart3, group: 'Analytics' },
-        { path: '/admin/users', label: t.users, icon: Users, group: 'Organization' },
-        { path: '/admin/departments', label: t.departmentManagement, icon: Building2, group: 'Organization' },
+        { path: '/admin/assets', label: 'All Assets', icon: Package, group: 'Asset Governance' },
+        { path: '/admin/assets/categories', label: 'Asset Categories', icon: Package, group: 'Asset Governance' },
+        { path: '/admin/assets/assign', label: 'Asset Assignment', icon: ClipboardList, group: 'Asset Governance' },
+        { path: '/admin/assets/transfer', label: 'Asset Transfer', icon: ArrowLeftRight, group: 'Asset Governance' },
+        { path: '/admin/assets/disposal', label: 'Asset Disposal', icon: Package, group: 'Asset Governance' },
+        { path: '/admin/maintenance', label: 'Maintenance Oversight', icon: Wrench, group: 'Asset Governance' },
+        { path: '/admin/rfid', label: 'RFID / QR Tracking', icon: Radio, group: 'Asset Governance' },
+        { path: '/admin/users', label: 'Users', icon: Users, group: 'Organization' },
+        { path: '/admin/users/roles', label: 'Roles & Permissions', icon: Users, group: 'Organization' },
+        { path: '/admin/colleges', label: 'Colleges', icon: Building2, group: 'Organization' },
+        { path: '/admin/departments', label: 'Departments', icon: Building2, group: 'Organization' },
+        { path: '/admin/locations', label: 'Locations', icon: Building2, group: 'Organization' },
+        { path: '/admin/reports', label: 'Reports', icon: BarChart3, group: 'Analytics' },
+        { path: '/admin/reports/analytics', label: 'Asset Analytics', icon: BarChart3, group: 'Analytics' },
+        { path: '/admin/analytics/system', label: 'System Analytics', icon: BarChart3, group: 'Analytics' },
         { path: '/admin/settings', label: t.settings, icon: Settings, group: 'System' },
         { path: '/admin/notifications', label: t.notifications, icon: Bell, group: 'System' },
+        { path: '/admin/audit-logs', label: 'Audit Logs', icon: ClipboardCheck, group: 'System' },
         { path: '/admin/backup', label: t.backup, icon: DatabaseBackup, group: 'System' },
-        { path: '/admin/audit-logs', label: 'Audit Logs', icon: ClipboardCheck, group: 'System' }
+        { path: '/admin/monitoring', label: 'System Monitoring', icon: BarChart3, group: 'System' }
       ],
       'ict_officer': [
-        { path: '/ict', label: '📊 ' + t.dashboard },
-        { path: '/ict/assets', label: '📦 ' + t.assets },
-        { path: '/ict/assets/create', label: '➕ ' + t.createAsset },
-        { path: '/ict/assets/assign', label: '� ' + t.assignments },
-        { path: '/ict/maintenance', label: '🔧 ' + t.maintenance },
-        { path: '/ict/rfid', label: '📡 ' + t.rfidTracking },
-        { path: '/ict/reports', label: '📊 ' + t.reports },
-        { path: '/ict/inventory', label: '📋 ' + t.inventory },
-        { path: '/ict/requests', label: '📝 Asset Requests' },
-        { path: '/ict/equipment', label: '💻 IT Equipment' },
-        { path: '/ict/network', label: '🌐 Network / Technical' },
-        { path: '/ict/support', label: '🛠️ Technical Support' },
-        { path: '/ict/notifications', label: '🔔 ' + t.notifications },
-        { path: '/ict/assets/history', label: '📜 Asset History' }
+        { path: '/ict', label: '📊 ' + t.dashboard, section: 'Overview' },
+        { path: '/ict/assets', label: '📦 ICT Assets', section: 'IT ASSET MANAGEMENT' },
+        { path: '/ict/assets/create', label: '➕ Create Asset', section: 'IT ASSET MANAGEMENT' },
+        { path: '/ict/inventory', label: '📋 Inventory', section: 'IT ASSET MANAGEMENT' },
+        { path: '/ict/assets/assign', label: '👤 Assignments', section: 'IT ASSET MANAGEMENT' },
+        { path: '/ict/requests', label: '📝 Asset Requests', section: 'IT ASSET MANAGEMENT' },
+        { path: '/ict/equipment', label: '💻 IT Equipment', section: 'TECHNICAL OPERATIONS' },
+        { path: '/ict/network', label: '🌐 Network Equipment', section: 'TECHNICAL OPERATIONS' },
+        { path: '/ict/software-licenses', label: '📜 Software Licenses', section: 'TECHNICAL OPERATIONS' },
+        { path: '/ict/support', label: '🛠️ Technical Support', section: 'TECHNICAL OPERATIONS' },
+        { path: '/ict/incidents', label: '⚠️ Incident Management', section: 'TECHNICAL OPERATIONS' },
+        { path: '/ict/maintenance', label: '🔧 ICT Maintenance', section: 'MAINTENANCE' },
+        { path: '/ict/repair-history', label: '🕘 Repair History', section: 'MAINTENANCE' },
+        { path: '/ict/device-health', label: '❤️ Device Health', section: 'MAINTENANCE' },
+        { path: '/ict/rfid', label: '📡 RFID / QR Tracking', section: 'TRACKING' },
+        { path: '/ict/assets/history', label: '📜 Asset History', section: 'TRACKING' },
+        { path: '/ict/reports', label: '📊 ICT Reports', section: 'ANALYTICS' },
+        { path: '/ict/asset-analytics', label: '📈 Asset Analytics', section: 'ANALYTICS' },
+        { path: '/ict/notifications', label: '🔔 Notifications', section: 'SYSTEM' }
       ],
       'college': [
         { path: '/college', label: '📊 ' + t.dashboard },
@@ -1758,75 +1816,97 @@ function AppContent() {
       ],
       'staff': [],
       'finance': [
-        { path: '/finance', label: '📊 ' + t.dashboard },
-        { path: '/finance/purchases', label: '🛒 Purchase Management' },
-        { path: '/finance/invoices', label: '🧾 Invoice Management' },
-        { path: '/finance/payments', label: '💳 Payment Management' },
-        { path: '/finance/budget', label: '🏦 Budget Management' },
-        { path: '/finance/assets', label: '📦 ' + t.valuation },
-        { path: '/finance/depreciation', label: '💰 ' + t.depreciation },
-        { path: '/finance/suppliers', label: '🤝 Suppliers' },
-        { path: '/finance/reports', label: '📊 ' + t.financial },
-        { path: '/finance/transactions', label: '🧾 Transactions' },
-        { path: '/finance/audit', label: '📋 ' + t.audit },
-        { path: '/finance/notifications', label: '🔔 ' + t.notifications }
+        { path: '/finance', label: '📊 ' + t.dashboard, section: 'Overview' },
+        { path: '/finance/purchase-requests', label: '📝 Purchase Requests', section: 'PROCUREMENT' },
+        { path: '/finance/purchase-orders', label: '📦 Purchase Orders', section: 'PROCUREMENT' },
+        { path: '/finance/suppliers', label: '🤝 Suppliers', section: 'PROCUREMENT' },
+        { path: '/finance/purchase-history', label: '🕘 Purchase History', section: 'PROCUREMENT' },
+        { path: '/finance/invoices', label: '🧾 Invoices', section: 'FINANCIAL OPERATIONS' },
+        { path: '/finance/payments', label: '💳 Payments', section: 'FINANCIAL OPERATIONS' },
+        { path: '/finance/transactions', label: '🧾 Transactions', section: 'FINANCIAL OPERATIONS' },
+        { path: '/finance/budget-management', label: '🏦 Budget Management', section: 'FINANCIAL OPERATIONS' },
+        { path: '/finance/valuation', label: '📦 Asset Valuation', section: 'ASSET FINANCE' },
+        { path: '/finance/depreciation', label: '💰 Depreciation', section: 'ASSET FINANCE' },
+        { path: '/finance/capitalization', label: '🏛️ Capitalization', section: 'ASSET FINANCE' },
+        { path: '/finance/disposal-financial-records', label: '♻️ Disposal Financial Records', section: 'ASSET FINANCE' },
+        { path: '/finance/financial-reports', label: '📊 Financial Reports', section: 'REPORTING' },
+        { path: '/finance/budget-reports', label: '🏦 Budget Reports', section: 'REPORTING' },
+        { path: '/finance/depreciation-reports', label: '💰 Depreciation Reports', section: 'REPORTING' },
+        { path: '/finance/asset-value-reports', label: '📦 Asset Value Reports', section: 'REPORTING' },
+        { path: '/finance/audit', label: '📋 Audit Trail', section: 'CONTROL' },
+        { path: '/finance/notifications', label: '🔔 Notifications', section: 'CONTROL' }
       ],
       'store_manager': [
-        { path: '/store', label: '📊 ' + t.dashboard },
-        { path: '/store/inventory', label: '� ' + t.inventory },
-        { path: '/store/assets', label: '📦 ' + t.assets },
-        { path: '/store/receive', label: '📥 Receive Assets' },
-        { path: '/store/issue', label: '📤 Issue Assets' },
-        { path: '/store/returns', label: '↩️ Returns' },
-        { path: '/store/transfers', label: '🔄 Transfers' },
-        { path: '/store/requests', label: '📝 Asset Requests' },
-        { path: '/store/tracking', label: '📡 RFID / QR Tracking' },
-        { path: '/store/maintenance', label: '🔧 Maintenance' },
-        { path: '/store/warranty', label: '🛡️ Warranty' },
-        { path: '/store/reports', label: '📊 ' + t.reports },
-        { path: '/store/notifications', label: '🔔 ' + t.notifications },
-        { path: '/store/history', label: '📜 Asset History' }
+        { path: '/store', label: '📊 ' + t.dashboard, section: 'Overview' },
+        { path: '/store/inventory', label: '📦 Inventory', section: 'INVENTORY MANAGEMENT' },
+        { path: '/store/available-assets', label: '📦 Available Assets', section: 'INVENTORY MANAGEMENT' },
+        { path: '/store/low-stock', label: '⚠️ Low Stock Alerts', section: 'INVENTORY MANAGEMENT' },
+        { path: '/store/stock-adjustments', label: '⚙️ Stock Adjustments', section: 'INVENTORY MANAGEMENT' },
+        { path: '/store/receive', label: '📥 Receive Assets', section: 'ASSET OPERATIONS' },
+        { path: '/store/issue', label: '📤 Issue Assets', section: 'ASSET OPERATIONS' },
+        { path: '/store/returns', label: '↩️ Returns', section: 'ASSET OPERATIONS' },
+        { path: '/store/transfers', label: '🔄 Transfers', section: 'ASSET OPERATIONS' },
+        { path: '/store/requests', label: '📝 Asset Requests', section: 'ASSET OPERATIONS' },
+        { path: '/store/tracking', label: '📡 RFID / QR Tracking', section: 'TRACKING' },
+        { path: '/store/history', label: '📜 Asset Movement History', section: 'TRACKING' },
+        { path: '/store/verification', label: '✅ Asset Verification', section: 'TRACKING' },
+        { path: '/store/maintenance', label: '🔧 Send to Maintenance', section: 'MAINTENANCE' },
+        { path: '/store/maintenance/status', label: '📋 Maintenance Status', section: 'MAINTENANCE' },
+        { path: '/store/reports/inventory', label: '📊 Inventory Reports', section: 'REPORTING' },
+        { path: '/store/reports/issues', label: '📝 Issue Reports', section: 'REPORTING' },
+        { path: '/store/reports/returns', label: '↩️ Return Reports', section: 'REPORTING' },
+        { path: '/store/reports/movements', label: '🔄 Movement Reports', section: 'REPORTING' },
+        { path: '/store/notifications', label: '🔔 ' + t.notifications, section: 'SYSTEM' },
+        { path: '/store/profile', label: '👤 ' + t.profile, section: 'SYSTEM' }
       ],
       'maintenance': [
-        { path: '/maintenance', label: '📊 ' + t.dashboard },
-        { path: '/maintenance/requests', label: '🔧 ' + t.requests },
-        { path: '/maintenance/inspection', label: '🔍 Asset Inspection' },
-        { path: '/maintenance/work-orders', label: '📋 Work Orders' },
-        { path: '/maintenance/repairs', label: '🛠️ Repairs' },
-        { path: '/maintenance/preventive', label: '📅 Preventive Maintenance' },
-        { path: '/maintenance/technicians', label: '👨‍🔧 Technicians' },
-        { path: '/maintenance/spare-parts', label: '🧰 Spare Parts' },
-        { path: '/maintenance/assets-under-maintenance', label: '📦 Assets Under Maintenance' },
-        { path: '/maintenance/testing-quality', label: '🧪 Testing & Quality' },
-        { path: '/maintenance/assigned-tasks', label: '📋 ' + t.assigned },
-        { path: '/maintenance/history', label: '📜 ' + t.history },
-        { path: '/maintenance/reports', label: '📊 ' + t.reports }
+        { path: '/maintenance', label: '📊 ' + t.dashboard, section: 'Dashboard' },
+        { path: '/maintenance/requests', label: '🔧 ' + t.requests, section: 'OPERATIONS' },
+        { path: '/maintenance/inspection', label: '🔍 Inspection', section: 'OPERATIONS' },
+        { path: '/maintenance/work-orders', label: '📋 Work Orders', section: 'OPERATIONS' },
+        { path: '/maintenance/repairs', label: '🛠️ Repairs', section: 'OPERATIONS' },
+        { path: '/maintenance/assets-under-maintenance', label: '📦 Assets Under Maintenance', section: 'OPERATIONS' },
+        { path: '/maintenance/schedule', label: '📅 Schedule', section: 'PREVENTIVE' },
+        { path: '/maintenance/preventive', label: '🛡️ Preventive Maintenance', section: 'PREVENTIVE' },
+        { path: '/maintenance/calendar', label: '📆 Calendar', section: 'PREVENTIVE' },
+        { path: '/maintenance/technicians', label: '👨‍🔧 Technicians', section: 'RESOURCES' },
+        { path: '/maintenance/spare-parts', label: '🧰 Spare Parts', section: 'RESOURCES' },
+        { path: '/maintenance/vendors', label: '🤝 Vendors', section: 'RESOURCES' },
+        { path: '/maintenance/testing-quality', label: '🧪 Testing', section: 'QUALITY' },
+        { path: '/maintenance/quality-control', label: '✅ Quality Control', section: 'QUALITY' },
+        { path: '/maintenance/history', label: '📜 History', section: 'ANALYTICS' },
+        { path: '/maintenance/cost-analysis', label: '💰 Cost Analysis', section: 'ANALYTICS' },
+        { path: '/maintenance/reports', label: '📊 Reports', section: 'ANALYTICS' }
       ],
       'infrastructure': [
-        { path: '/infrastructure', label: '📊 ' + t.dashboard, group: 'Overview' },
-        { path: '/infrastructure/assets', label: '🏢 Infrastructure Assets', group: 'Asset Management' },
-        { path: '/infrastructure/assets/register', label: '➕ Register Asset', group: 'Asset Management' },
-        { path: '/infrastructure/buildings', label: '🏛️ Buildings & Facilities', group: 'Infrastructure' },
-        { path: '/infrastructure/electrical', label: '⚡ Electrical Systems', group: 'Infrastructure' },
-        { path: '/infrastructure/generators', label: '🔋 Generators', group: 'Power Systems' },
-        { path: '/infrastructure/transformers', label: '🔌 Transformers', group: 'Power Systems' },
-        { path: '/infrastructure/ups', label: '🔋 UPS / Inverters', group: 'Power Systems' },
-        { path: '/infrastructure/solar', label: '☀️ Solar Energy', group: 'Power Systems' },
-        { path: '/infrastructure/water', label: '💧 Water Systems', group: 'Infrastructure' },
-        { path: '/infrastructure/roads', label: '🛣️ Roads & Drainage', group: 'Infrastructure' },
-        { path: '/infrastructure/maintenance', label: '🔧 Facility Maintenance', group: 'Operations' },
-        { path: '/infrastructure/work-orders', label: '📋 Work Orders', group: 'Operations' },
-        { path: '/infrastructure/preventive', label: '📅 Preventive Maintenance', group: 'Operations' },
-        { path: '/infrastructure/spare-parts', label: '🧰 Spare Parts', group: 'Inventory' },
-        { path: '/infrastructure/energy', label: '⚡ Energy Management', group: 'Monitoring' },
-        { path: '/infrastructure/fuel', label: '⛽ Fuel Management', group: 'Inventory' },
-        { path: '/infrastructure/inspection', label: '🔍 Inspection & Condition', group: 'Monitoring' },
-        { path: '/infrastructure/tracking', label: '📡 RFID / QR Tracking', group: 'Monitoring' },
-        { path: '/infrastructure/requests', label: '📝 Requests', group: 'Management' },
-        { path: '/infrastructure/reports', label: '📊 Reports & Analytics', group: 'Analytics' },
-        { path: '/infrastructure/documents', label: '📄 Documents', group: 'Management' },
-        { path: '/infrastructure/notifications', label: '🔔 Notifications', group: 'Management' },
-        { path: '/infrastructure/audit', label: '📜 Audit & History', group: 'Management' }
+        { path: '/infrastructure', label: '📊 Dashboard', section: 'OVERVIEW' },
+        { path: '/infrastructure/assets', label: '🏢 Infrastructure Assets', section: 'ASSET MANAGEMENT' },
+        { path: '/infrastructure/assets/register', label: '➕ Register Asset', section: 'ASSET MANAGEMENT' },
+        { path: '/infrastructure/inventory', label: '📦 Asset Inventory', section: 'ASSET MANAGEMENT' },
+        { path: '/infrastructure/assignment', label: '👤 Asset Assignment', section: 'ASSET MANAGEMENT' },
+        { path: '/infrastructure/transfer', label: '🔄 Asset Transfer', section: 'ASSET MANAGEMENT' },
+        { path: '/infrastructure/verification', label: '✅ Asset Verification', section: 'ASSET MANAGEMENT' },
+        { path: '/infrastructure/buildings', label: '🏛️ Buildings & Facilities', section: 'BUILDINGS & FACILITIES' },
+        { path: '/infrastructure/electrical', label: '⚡ Electrical Systems', section: 'BUILDINGS & FACILITIES' },
+        { path: '/infrastructure/generators', label: '🔋 Generators', section: 'BUILDINGS & FACILITIES' },
+        { path: '/infrastructure/transformers', label: '🔌 Transformers', section: 'BUILDINGS & FACILITIES' },
+        { path: '/infrastructure/ups', label: '🔋 UPS / Inverters', section: 'BUILDINGS & FACILITIES' },
+        { path: '/infrastructure/solar', label: '☀️ Solar Energy', section: 'BUILDINGS & FACILITIES' },
+        { path: '/infrastructure/water', label: '💧 Water Systems', section: 'BUILDINGS & FACILITIES' },
+        { path: '/infrastructure/roads', label: '🛣️ Roads & Drainage', section: 'BUILDINGS & FACILITIES' },
+        { path: '/infrastructure/maintenance', label: '🔧 Facility Maintenance', section: 'MAINTENANCE & WORK ORDERS' },
+        { path: '/infrastructure/work-orders', label: '📋 Work Orders', section: 'MAINTENANCE & WORK ORDERS' },
+        { path: '/infrastructure/preventive', label: '📅 Preventive Maintenance', section: 'MAINTENANCE & WORK ORDERS' },
+        { path: '/infrastructure/inspection', label: '🔍 Inspections & Condition', section: 'MAINTENANCE & WORK ORDERS' },
+        { path: '/infrastructure/spare-parts', label: '🧰 Spare Parts', section: 'MAINTENANCE & WORK ORDERS' },
+        { path: '/infrastructure/energy', label: '⚡ Energy Management', section: 'ENERGY & FUEL' },
+        { path: '/infrastructure/fuel', label: '⛽ Fuel Management', section: 'ENERGY & FUEL' },
+        { path: '/infrastructure/tracking', label: '📡 RFID / QR Tracking', section: 'TRACKING' },
+        { path: '/infrastructure/requests', label: '📝 Requests', section: 'REQUESTS' },
+        { path: '/infrastructure/reports', label: '📊 Reports & Analytics', section: 'ANALYTICS' },
+        { path: '/infrastructure/documents', label: '📄 Documents', section: 'DOCUMENTS' },
+        { path: '/infrastructure/notifications', label: '🔔 Notifications', section: 'SYSTEM' },
+        { path: '/infrastructure/audit', label: '📜 Audit & History', section: 'SYSTEM' }
       ]
     };
     return items[normalizedRole] || items['admin'];
@@ -1840,60 +1920,86 @@ function AppContent() {
   const isDepartmentDean = responsibility === 'department dean' || responsibility === 'dean';
   const showCollegeNavigation = sidebarRole === 'college' && !isDepartmentStaff && !isDepartmentDean;
   const showDepartmentsNavigation = isDepartmentStaff || isDepartmentDean;
-  const collegeManagementItems = [
-    { path: '/college', label: '📊 Dashboard', icon: LayoutDashboard },
-    { path: '/college/profile', label: '🏢 College Profile', icon: Building2 },
-    { path: '/college/staff', label: '👥 Staff', icon: Users },
-    { path: '/college/locations', label: '📍 Locations', icon: Building2 },
-    { path: '/college/assets', label: '📦 Assets', icon: Package },
-    { path: '/college/inventory', label: '📋 Inventory', icon: ClipboardList },
-    { path: '/college/requests', label: '📝 Asset Requests', icon: ClipboardList },
-    { path: '/college/approvals', label: '✅ Approvals', icon: ClipboardCheck },
-    { path: '/college/assignments', label: '👤 Assignments', icon: Users },
-    { path: '/college/transfers', label: '🔄 Transfers', icon: ArrowLeftRight },
-    { path: '/college/returns', label: '↩️ Returns', icon: ArrowLeftRight },
-    { path: '/college/maintenance', label: '🔧 Maintenance', icon: Wrench },
-    { path: '/college/rfid', label: '📡 RFID / QR Tracking', icon: Radio },
-    { path: '/college/reports', label: '📊 Reports', icon: BarChart3 },
-    { path: '/college/notifications', label: '🔔 Notifications', icon: Bell },
-    { path: '/college/history', label: '📜 Audit & History', icon: ClipboardCheck }
+  const financeSectionLabels = {
+    'Overview': 'OVERVIEW',
+    'PROCUREMENT': 'PROCUREMENT',
+    'FINANCIAL OPERATIONS': 'FINANCIAL OPERATIONS',
+    'ASSET FINANCE': 'ASSET FINANCE',
+    'REPORTING': 'REPORTING',
+    'CONTROL': 'CONTROL'
+  };
+  const collegeOverviewItems = [
+    { path: '/college', label: '📊 Dashboard', icon: LayoutDashboard, group: 'Overview' }
   ];
-  const departmentManagementItems = [
-    { path: '/college/departments', label: 'Departments', icon: Building2 },
-    { path: '/college/department-deans', label: 'Department Deans', icon: Users },
-    { path: '/college/department-staff', label: 'Department Staff', icon: Users },
-    { path: '/college/department-assets', label: 'Department Assets', icon: Package },
-    { path: '/college/department-requests', label: 'Department Requests', icon: ClipboardList },
-    { path: '/college/department-approvals', label: 'Department Approvals', icon: ClipboardCheck },
-    { path: '/college/department-assignments', label: 'Department Assignments', icon: Users },
-    { path: '/college/department-transfers', label: 'Department Transfers', icon: ArrowLeftRight },
-    { path: '/college/department-returns', label: 'Department Returns', icon: ArrowLeftRight },
-    { path: '/college/department-maintenance', label: 'Department Maintenance', icon: Wrench },
-    { path: '/college/department-reports', label: 'Department Reports', icon: BarChart3 },
-    { path: '/college/department-history', label: 'Department History', icon: ClipboardCheck }
+  const collegeManagementItems = [
+    { path: '/college/profile', label: '🏢 College Profile', icon: Building2, group: 'College Management' },
+    { path: '/college/staff', label: '👥 Staff', icon: Users, group: 'College Management' },
+    { path: '/college/locations', label: '📍 Locations', icon: Building2, group: 'College Management' },
+    { path: '/college/departments', label: '🏫 Departments', icon: Building2, group: 'College Management' },
+    { path: '/college/departments/1', label: '📘 Department Details', icon: Building2, group: 'College Management' }
+  ];
+  const collegeAssetItems = [
+    { path: '/college/assets', label: '📦 Assets', icon: Package, group: 'Asset Management' },
+    { path: '/college/inventory', label: '📋 Inventory', icon: ClipboardList, group: 'Asset Management' },
+    { path: '/college/requests', label: '📝 Asset Requests', icon: ClipboardList, group: 'Asset Management' },
+    { path: '/college/approvals', label: '✅ Approvals', icon: ClipboardCheck, group: 'Asset Management' },
+    { path: '/college/assignments', label: '👤 Assignments', icon: Users, group: 'Asset Management' },
+    { path: '/college/transfers', label: '🔄 Transfers', icon: ArrowLeftRight, group: 'Asset Management' },
+    { path: '/college/returns', label: '↩️ Returns', icon: ArrowLeftRight, group: 'Asset Management' }
+  ];
+  const collegeDepartmentManagementItems = [
+    { path: '/college/department-overview', label: '📘 Department Overview', icon: Building2, group: 'Department Management' },
+    { path: '/college/department-staff', label: '👥 Department Staff', icon: Users, group: 'Department Management' },
+    { path: '/college/department-assets', label: '📦 Department Assets', icon: Package, group: 'Department Management' },
+    { path: '/college/department-requests', label: '📝 Department Requests', icon: ClipboardList, group: 'Department Management' },
+    { path: '/college/department-performance', label: '📈 Department Performance', icon: BarChart3, group: 'Department Management' }
+  ];
+  const collegeOperationsItems = [
+    { path: '/college/maintenance', label: '🔧 Maintenance', icon: Wrench, group: 'Operations' },
+    { path: '/college/rfid', label: '📡 RFID / QR Tracking', icon: Radio, group: 'Operations' },
+    { path: '/college/verification', label: '✅ Asset Verification', icon: Radio, group: 'Operations' }
+  ];
+  const collegeAnalyticsItems = [
+    { path: '/college/reports', label: '📊 Reports', icon: BarChart3, group: 'Analytics' },
+    { path: '/college/analytics/assets', label: '📈 Asset Analytics', icon: BarChart3, group: 'Analytics' },
+    { path: '/college/analytics/departments', label: '📊 Department Reports', icon: BarChart3, group: 'Analytics' }
+  ];
+  const collegeSystemItems = [
+    { path: '/college/notifications', label: '🔔 Notifications', icon: Bell, group: 'System' },
+    { path: '/college/history', label: '📜 Audit & History', icon: ClipboardCheck, group: 'System' }
   ];
   const departmentDeanItems = [
-    { path: '/department', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/department', label: 'Overview Dashboard', icon: LayoutDashboard },
     { path: '/department/profile', label: 'Department Profile', icon: Users },
-    { path: '/department/staff', label: 'Staff', icon: Users },
     { path: '/department/assets', label: 'Assets', icon: Package },
+    { path: '/department/assignments', label: 'Asset Assignments', icon: ClipboardList },
+    { path: '/department/inventory', label: 'Inventory', icon: Package },
+    { path: '/department/verification', label: 'Asset Verification', icon: Radio },
     { path: '/department/requests', label: 'Asset Requests', icon: ClipboardList },
-    { path: '/department/approvals', label: 'Approvals', icon: ClipboardCheck },
-    { path: '/department/assignments', label: 'Assignments', icon: ClipboardList },
-    { path: '/department/transfers', label: 'Transfers', icon: ArrowLeftRight },
-    { path: '/department/returns', label: 'Returns', icon: ArrowLeftRight },
-    { path: '/department/maintenance', label: 'Maintenance', icon: Wrench },
-    { path: '/department/reports', label: 'Reports', icon: BarChart3 },
+    { path: '/department/approvals', label: 'Pending Approvals', icon: ClipboardCheck },
+    { path: '/department/transfers', label: 'Transfer Requests', icon: ArrowLeftRight },
+    { path: '/department/maintenance', label: 'Maintenance Requests', icon: Wrench },
+    { path: '/department/returns', label: 'Asset Returns', icon: ArrowLeftRight },
+    { path: '/department/movement', label: 'Asset Movement', icon: ArrowLeftRight },
+    { path: '/department/maintenance', label: 'Maintenance Status', icon: Wrench },
+    { path: '/department/reports', label: 'Department Reports', icon: BarChart3 },
+    { path: '/department/utilization', label: 'Asset Utilization', icon: BarChart3 },
+    { path: '/department/notifications', label: 'Notifications', icon: Bell },
     { path: '/department/history', label: 'History', icon: ClipboardCheck }
   ];
   const departmentStaffItems = [
-    { path: '/department', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/department', label: 'Overview Dashboard', icon: LayoutDashboard },
     { path: '/department/profile', label: 'My Profile', icon: Users },
-    { path: '/department/assets', label: 'My Assets', icon: Package },
-    { path: '/department/requests', label: 'Asset Requests', icon: ClipboardList },
+    { path: '/department/assets', label: 'Assets', icon: Package },
     { path: '/department/assignments', label: 'Assigned Assets', icon: ClipboardList },
-    { path: '/department/returns', label: 'Asset Returns', icon: ArrowLeftRight },
+    { path: '/department/inventory', label: 'Inventory', icon: Package },
+    { path: '/department/verification', label: 'Asset Verification', icon: Radio },
+    { path: '/department/requests', label: 'Asset Requests', icon: ClipboardList },
+    { path: '/department/approvals', label: 'Pending Approvals', icon: ClipboardCheck },
+    { path: '/department/transfers', label: 'Transfer Requests', icon: ArrowLeftRight },
     { path: '/department/maintenance', label: 'Maintenance Requests', icon: Wrench },
+    { path: '/department/returns', label: 'Asset Returns', icon: ArrowLeftRight },
+    { path: '/department/movement', label: 'Asset Movement', icon: ArrowLeftRight },
     { path: '/department/notifications', label: 'Notifications', icon: Bell },
     { path: '/department/history', label: 'Asset History', icon: ClipboardCheck }
   ];
@@ -1985,26 +2091,64 @@ function AppContent() {
 
           <nav className="admin-sidebar-nav" aria-label="Application navigation">
             {showCollegeNavigation && <div className="sidebar-subsection-label">COLLEGE MANAGER</div>}
-            {showCollegeNavigation && renderCollapsibleSection(
-              'COLLEGE MANAGEMENT', collegeManagementOpen, setCollegeManagementOpen,
-              collegeManagementItems.map((item) => renderSidebarLink(item, true)), 'college-management'
-            )}
-            {showCollegeNavigation && renderCollapsibleSection(
-              'DEPARTMENT MANAGEMENT', departmentManagementOpen, setDepartmentManagementOpen,
-              departmentManagementItems.map((item) => renderSidebarLink(item, true)), 'department-management'
+            {showCollegeNavigation && (
+              <>
+                <div className="sidebar-subsection-label">OVERVIEW</div>
+                {collegeOverviewItems.map((item) => renderSidebarLink(item, true))}
+                <div className="sidebar-subsection-label">COLLEGE MANAGEMENT</div>
+                {collegeManagementItems.map((item) => renderSidebarLink(item, true))}
+                <div className="sidebar-subsection-label">ASSET MANAGEMENT</div>
+                {collegeAssetItems.map((item) => renderSidebarLink(item, true))}
+                <div className="sidebar-subsection-label">DEPARTMENT MANAGEMENT</div>
+                {collegeDepartmentManagementItems.map((item) => renderSidebarLink(item, true))}
+                <div className="sidebar-subsection-label">OPERATIONS</div>
+                {collegeOperationsItems.map((item) => renderSidebarLink(item, true))}
+                <div className="sidebar-subsection-label">ANALYTICS</div>
+                {collegeAnalyticsItems.map((item) => renderSidebarLink(item, true))}
+                <div className="sidebar-subsection-label">SYSTEM</div>
+                {collegeSystemItems.map((item) => renderSidebarLink(item, true))}
+              </>
             )}
             {showDepartmentsNavigation && renderCollapsibleSection(
-              'DEPARTMENTS',
+              'DEPARTMENT HEAD',
               departmentsNavOpen,
               setDepartmentsNavOpen,
               isDepartmentDean
-                ? <><div className="sidebar-subsection-label">Department Dean</div>{departmentDeanItems.map((item) => renderSidebarLink(item, true))}</>
+                ? <><div className="sidebar-subsection-label">Overview</div>{departmentDeanItems.map((item) => renderSidebarLink(item, true))}</>
                 : isDepartmentStaff
-                  ? <><div className="sidebar-subsection-label">Department Staff</div>{departmentStaffItems.map((item) => renderSidebarLink(item, true))}</>
-                  : <><div className="sidebar-subsection-label">Department Management</div>{renderSidebarLink({ path: '/college/departments', label: 'Departments', icon: Building2 }, true)}</>,
+                  ? <><div className="sidebar-subsection-label">Department Assets</div>{departmentStaffItems.map((item) => renderSidebarLink(item, true))}</>
+                  : <><div className="sidebar-subsection-label">Department Workspace</div>{renderSidebarLink({ path: '/department', label: 'Dashboard', icon: LayoutDashboard }, true)}</>,
               'departments'
             )}
-            {!showCollegeNavigation && !showDepartmentsNavigation && sidebarItems.map((item, index) => {
+            {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'finance' && (
+              <>
+                {Object.keys(financeSectionLabels).map((sectionKey) => {
+                  const visibleItems = sidebarItems.filter((item) => item.section === sectionKey || (sectionKey === 'Overview' && item.path === '/finance'));
+                  if (!visibleItems.length) return null;
+                  return (
+                    <React.Fragment key={sectionKey}>
+                      <div className="sidebar-section-label">{financeSectionLabels[sectionKey]}</div>
+                      {visibleItems.map((item) => renderSidebarLink(item))}
+                    </React.Fragment>
+                  );
+                })}
+              </>
+            )}
+            {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'infrastructure' && (
+              <>
+                {['OVERVIEW','ASSET MANAGEMENT','BUILDINGS & FACILITIES','MAINTENANCE & WORK ORDERS','ENERGY & FUEL','TRACKING','REQUESTS','ANALYTICS','DOCUMENTS','SYSTEM'].map((sectionName) => {
+                  const visibleItems = sidebarItems.filter((item) => item.section === sectionName || (sectionName === 'OVERVIEW' && item.path === '/infrastructure'));
+                  if (!visibleItems.length) return null;
+                  return (
+                    <React.Fragment key={sectionName}>
+                      <div className="sidebar-section-label">{sectionName}</div>
+                      {visibleItems.map((item) => renderSidebarLink(item))}
+                    </React.Fragment>
+                  );
+                })}
+              </>
+            )}
+            {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole !== 'finance' && sidebarRole !== 'infrastructure' && sidebarItems.map((item, index) => {
               const previousItem = sidebarItems[index - 1];
               return (
                 <React.Fragment key={item.path}>
@@ -2042,7 +2186,7 @@ function AppContent() {
                 <Route path="assets/categories" element={<AdminAssetCategories />} />
                 <Route path="assets/locations" element={<AdminAssetLocations />} />
                 <Route path="assets/lifecycle" element={<AdminComponentStub title="Asset Lifecycle" />} />
-                <Route path="assets/disposal" element={<AdminComponentStub title="Disposal/Retirement" />} />
+                <Route path="assets/disposal" element={<AdminAssetDisposal />} />
                 <Route path="assets/documents" element={<AdminComponentStub title="Asset Documents" />} />
                 
                 {/* Asset Assignment */}
@@ -2091,6 +2235,15 @@ function AppContent() {
                 <Route path="procurement/suppliers" element={<AdminComponentStub title="Suppliers" />} />
                 <Route path="procurement/invoices" element={<AdminComponentStub title="Invoices" />} />
                 <Route path="procurement/history" element={<AdminComponentStub title="Purchase History" />} />
+
+                {/* Organization / governance alias routes */}
+                <Route path="colleges" element={<AdminCollegeManagement />} />
+                <Route path="colleges/create" element={<AdminCollegeManagement initialCreate />} />
+                <Route path="colleges/:id" element={<AdminCollegeDetails />} />
+                <Route path="locations" element={<AdminAssetLocations />} />
+                <Route path="monitoring" element={<SystemMonitoring />} />
+                <Route path="analytics/system" element={<AdminAnalyticsCenter system />} />
+                <Route path="analytics/assets" element={<AdminAnalyticsCenter />} />
                 
                 {/* User Management */}
                 <Route path="users" element={<AdminUserManagement />} />
@@ -2123,10 +2276,11 @@ function AppContent() {
                 <Route path="reports/financial" element={<AdminComponentStub title="Financial Reports" />} />
                 <Route path="reports/departments" element={<AdminComponentStub title="Department Reports" />} />
                 <Route path="reports/users" element={<AdminComponentStub title="User Reports" />} />
-                <Route path="reports/analytics" element={<AdminComponentStub title="Analytics" />} />
+                <Route path="reports/analytics" element={<AdminAnalyticsCenter />} />
                 
                 {/* Notifications */}
                 <Route path="notifications" element={<AdminNotifications />} />
+                <Route path="notifications/:id" element={<AdminNotificationDetails />} />
                 <Route path="notifications/unread" element={<AdminComponentStub title="Unread Notifications" />} />
                 <Route path="notifications/maintenance" element={<AdminComponentStub title="Maintenance Alerts" />} />
                 <Route path="notifications/assignment" element={<AdminComponentStub title="Assignment Alerts" />} />
@@ -2145,6 +2299,8 @@ function AppContent() {
                 
                 {/* Settings */}
                 <Route path="settings" element={<AdminSettings />} />
+                <Route path="settings/system-monitoring" element={<SystemMonitoring />} />
+                <Route path="system-monitoring" element={<SystemMonitoring />} />
                 
                 {/* Backup */}
                 <Route path="backup" element={<AdminBackup />} />
@@ -2172,13 +2328,18 @@ function AppContent() {
                 <Route path="assets/assign" element={<ICTAssignments />} />
                 <Route path="assets/:id" element={<AssetDetails />} />
                 <Route path="maintenance" element={<ICTMaintenance />} />
+                <Route path="repair-history" element={<ICTMaintenance />} />
+                <Route path="device-health" element={<ICTMaintenance />} />
                 <Route path="rfid" element={<ICTRFIDTracking />} />
                 <Route path="reports" element={<ICTReports />} />
+                <Route path="asset-analytics" element={<ICTReports />} />
                 <Route path="inventory" element={<ICTInventory />} />
                 <Route path="requests" element={<ICTAssetRequests />} />
                 <Route path="equipment" element={<ICTEquipment />} />
                 <Route path="network" element={<ICTNetwork />} />
+                <Route path="software-licenses" element={<ICTEquipment />} />
                 <Route path="support" element={<ICTTechnicalSupport />} />
+                <Route path="incidents" element={<ICTTechnicalSupport />} />
                 <Route path="notifications" element={<ICTNotifications />} />
                 <Route path="assets/:id/history" element={<ICTAssetHistory />} />
               </Route>
@@ -2187,11 +2348,14 @@ function AppContent() {
               <Route path="/college" element={<ProtectedRoute allowedRoles={['college']}><RoleLayout /></ProtectedRoute>}>
                 <Route index element={<CollegeManagerPages section="dashboard" />} />
                 <Route path="profile" element={<CollegeManagerPages section="profile" />} />
-                <Route path="departments" element={<CollegeManagerPages section="departments" />} />
+                <Route path="departments" element={<CollegeDepartments />} />
+                <Route path="departments/:departmentId" element={<DepartmentDetails />} />
+                <Route path="department-overview" element={<CollegeManagerPages section="departments" />} />
                 <Route path="department-deans" element={<CollegeManagerPages section="department-deans" />} />
                 <Route path="department-staff" element={<CollegeManagerPages section="department-staff" />} />
                 <Route path="department-assets" element={<CollegeManagerPages section="department-assets" />} />
                 <Route path="department-requests" element={<CollegeManagerPages section="department-requests" />} />
+                <Route path="department-performance" element={<CollegeManagerPages section="department-reports" />} />
                 <Route path="department-approvals" element={<CollegeManagerPages section="department-approvals" />} />
                 <Route path="department-assignments" element={<CollegeManagerPages section="department-assignments" />} />
                 <Route path="department-transfers" element={<CollegeManagerPages section="department-transfers" />} />
@@ -2210,7 +2374,10 @@ function AppContent() {
                 <Route path="returns" element={<CollegeManagerPages section="returns" />} />
                 <Route path="maintenance" element={<CollegeManagerPages section="maintenance" />} />
                 <Route path="rfid" element={<CollegeManagerPages section="rfid" />} />
+                <Route path="verification" element={<CollegeManagerPages section="assets" />} />
                 <Route path="reports" element={<CollegeManagerPages section="reports" />} />
+                <Route path="analytics/assets" element={<CollegeManagerPages section="reports" />} />
+                <Route path="analytics/departments" element={<CollegeManagerPages section="department-reports" />} />
                 <Route path="notifications" element={<CollegeManagerPages section="notifications" />} />
                 <Route path="history" element={<CollegeManagerPages section="history" />} />
               </Route>
@@ -2220,12 +2387,17 @@ function AppContent() {
                 <Route path="profile" element={<DeptDashboard />} />
                 <Route path="staff" element={<DeptStaff />} />
                 <Route path="assets" element={<DeptAssets />} />
+                <Route path="inventory" element={<DeptReports />} />
                 <Route path="requests" element={<DeptApprovals />} />
                 <Route path="approvals" element={<DepartmentDeanRoute />} />
                 <Route path="assignments" element={<DeptAssets />} />
-                <Route path="transfers" element={<DeptAssets />} />
-                <Route path="returns" element={<DeptAssets />} />
-                <Route path="maintenance" element={<DeptApprovals />} />
+                <Route path="transfers" element={<ScopedWorkflowPage type="transfers" />} />
+                <Route path="returns" element={<ScopedWorkflowPage type="returns" />} />
+                <Route path="maintenance" element={<ScopedWorkflowPage type="maintenance" />} />
+                <Route path="maintenance-requests" element={<ScopedWorkflowPage type="maintenance" />} />
+                <Route path="movement" element={<DeptAssetHistory />} />
+                <Route path="utilization" element={<DeptReports />} />
+                <Route path="verification" element={<DeptAssets />} />
                 <Route path="reports" element={<DeptReports />} />
                 <Route path="notifications" element={<DeptNotifications />} />
                 <Route path="history" element={<DeptAssetHistory />} />
@@ -2234,15 +2406,23 @@ function AppContent() {
               {/* FINANCE ROUTES - Fixed with RoleLayout */}
               <Route path="/finance" element={<ProtectedRoute allowedRoles={['admin', 'finance']}><RoleLayout /></ProtectedRoute>}>
                 <Route index element={<FinanceDashboard />} />
-                <Route path="purchases" element={<FinanceReports />} />
+                <Route path="purchase-requests" element={<FinanceReports />} />
+                <Route path="purchase-orders" element={<FinanceReports />} />
+                <Route path="suppliers" element={<FinanceReports />} />
+                <Route path="purchase-history" element={<FinanceReports />} />
                 <Route path="invoices" element={<FinanceReports />} />
                 <Route path="payments" element={<FinanceReports />} />
-                <Route path="budget" element={<FinanceReports />} />
-                <Route path="assets" element={<FinanceValuation />} />
-                <Route path="reports" element={<FinanceReports />} />
-                <Route path="depreciation" element={<FinanceDepreciation />} />
-                <Route path="suppliers" element={<FinanceReports />} />
                 <Route path="transactions" element={<FinanceAudit />} />
+                <Route path="budget" element={<FinanceReports />} />
+                <Route path="budget-management" element={<FinanceReports />} />
+                <Route path="valuation" element={<FinanceValuation />} />
+                <Route path="depreciation" element={<FinanceDepreciation />} />
+                <Route path="capitalization" element={<FinanceValuation />} />
+                <Route path="disposal-financial-records" element={<FinanceReports />} />
+                <Route path="financial-reports" element={<FinanceReports />} />
+                <Route path="budget-reports" element={<FinanceReports />} />
+                <Route path="depreciation-reports" element={<FinanceReports />} />
+                <Route path="asset-value-reports" element={<FinanceReports />} />
                 <Route path="audit" element={<FinanceAudit />} />
                 <Route path="notifications" element={<FinanceNotifications />} />
               </Route>
@@ -2251,18 +2431,27 @@ function AppContent() {
               <Route path="/store" element={<ProtectedRoute allowedRoles={['store_manager']}><RoleLayout /></ProtectedRoute>}>
                 <Route index element={<StoreDashboard />} />
                 <Route path="inventory" element={<StoreInventory />} />
-                <Route path="assets" element={<StoreAssets />} />
+                <Route path="available-assets" element={<StoreAssets />} />
+                <Route path="low-stock" element={<StoreInventory />} />
+                <Route path="stock-adjustments" element={<StoreInventory />} />
                 <Route path="receive" element={<StoreReceive />} />
                 <Route path="issue" element={<StoreIssue />} />
                 <Route path="returns" element={<StoreReturns />} />
                 <Route path="transfers" element={<StoreTransfers />} />
                 <Route path="requests" element={<StoreAssetRequests />} />
                 <Route path="tracking" element={<StoreTracking />} />
+                <Route path="history" element={<StoreHistory />} />
+                <Route path="verification" element={<StoreTracking />} />
                 <Route path="maintenance" element={<StoreMaintenance />} />
+                <Route path="maintenance/status" element={<StoreMaintenance />} />
                 <Route path="warranty" element={<StoreWarranty />} />
                 <Route path="reports" element={<StoreReports />} />
+                <Route path="reports/inventory" element={<StoreReports />} />
+                <Route path="reports/issues" element={<StoreReports />} />
+                <Route path="reports/returns" element={<StoreReports />} />
+                <Route path="reports/movements" element={<StoreReports />} />
                 <Route path="notifications" element={<StoreNotifications />} />
-                <Route path="history" element={<StoreHistory />} />
+                <Route path="profile" element={<StoreDashboard />} />
               </Route>
 
               {/* MAINTENANCE ROUTES - Fixed with RoleLayout */}
@@ -2272,13 +2461,19 @@ function AppContent() {
                 <Route path="inspection" element={<MaintAssetInspection />} />
                 <Route path="work-orders" element={<MaintWorkOrders />} />
                 <Route path="repairs" element={<MaintRepairs />} />
+                <Route path="schedule" element={<MaintPreventive />} />
                 <Route path="preventive" element={<MaintPreventive />} />
+                <Route path="calendar" element={<MaintPreventive />} />
                 <Route path="technicians" element={<MaintTechnicians />} />
                 <Route path="spare-parts" element={<MaintSpareParts />} />
+                <Route path="materials" element={<MaintSpareParts />} />
+                <Route path="vendors" element={<MaintSpareParts />} />
                 <Route path="assets-under-maintenance" element={<MaintAssetsUnderMaintenance />} />
                 <Route path="testing-quality" element={<MaintTestingQuality />} />
+                <Route path="quality-control" element={<MaintTestingQuality />} />
                 <Route path="assigned-tasks" element={<MaintAssigned />} />
                 <Route path="history" element={<MaintHistory />} />
+                <Route path="cost-analysis" element={<MaintReports />} />
                 <Route path="reports" element={<MaintReports />} />
                 <Route path="parts" element={<MaintSpareParts />} />
                 <Route path="assets" element={<MaintAssetsUnderMaintenance />} />
@@ -2293,6 +2488,10 @@ function AppContent() {
                 {/* Asset Management */}
                 <Route path="assets" element={<InfrastructureAssets />} />
                 <Route path="assets/register" element={<RegisterInfrastructureAsset />} />
+                <Route path="inventory" element={<InfrastructureAssets />} />
+                <Route path="assignment" element={<InfrastructureAssets />} />
+                <Route path="transfer" element={<InfrastructureAssets />} />
+                <Route path="verification" element={<InfrastructureInspection />} />
                 
                 {/* Infrastructure Categories */}
                 <Route path="buildings" element={<InfrastructureBuildings />} />

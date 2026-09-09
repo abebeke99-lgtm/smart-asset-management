@@ -311,7 +311,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
         limit: pageSize,
       };
 
-      const response = await apiClient.get("/api/users", { params });
+      const response = await apiClient.get("/api/admin/users", { params });
 
       const data =
         response.data?.data ||
@@ -332,7 +332,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
 
   const fetchDepartments = useCallback(async () => {
     try {
-      const response = await apiClient.get("/api/departments");
+      const response = await apiClient.get("/api/admin/departments");
 
       const data =
         response.data?.data ||
@@ -350,7 +350,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
     setActivityLoading(true);
 
     try {
-      const response = await apiClient.get("/api/users/activity");
+      const response = await apiClient.get("/api/admin/users/activity");
 
       const data =
         response.data?.data ||
@@ -630,6 +630,42 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
     }
   };
 
+  const updateSecurityState = async (user, action) => {
+    if (String(user.id) === String(currentUser?.id) && action === "lock") {
+      toast.error("You cannot lock your own account");
+      return;
+    }
+    if (!window.confirm(`${action === "lock" ? "Lock" : "Unlock"} account for "${user.username}"?`)) return;
+    try {
+      await apiClient.post(`/api/admin/users/${user.id}/${action}`);
+      toast.success(`User ${action}ed successfully`);
+      await fetchUsers();
+    } catch (error) {
+      toast.error(error.response?.data?.message || `Failed to ${action} user`);
+    }
+  };
+
+  const forcePasswordChange = async (user) => {
+    if (!window.confirm(`Require "${user.username}" to change their password at next login?`)) return;
+    try {
+      await apiClient.post(`/api/admin/users/${user.id}/force-password-change`);
+      toast.success("Password change required at next login");
+      await fetchUsers();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to require password change");
+    }
+  };
+
+  const terminateSession = async (user) => {
+    if (!window.confirm(`Terminate all sessions for "${user.username}"?`)) return;
+    try {
+      await apiClient.post(`/api/admin/users/${user.id}/terminate-session`);
+      toast.success("User sessions terminated");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to terminate sessions");
+    }
+  };
+
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
       const query = searchQuery.trim().toLowerCase();
@@ -775,7 +811,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
 
   const saveRolePermissions = async () => {
     try {
-      await apiClient.put(`/api/roles/${selectedRole}/permissions`, {
+      await apiClient.put(`/api/admin/roles/${selectedRole}/permissions`, {
         permissions:
           rolePermissions[selectedRole] ||
           PERMISSION_GROUPS.flatMap(
@@ -1137,6 +1173,24 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
 
                             <button
                               type="button"
+                              className="um-action password"
+                              title="Force Password Change"
+                              onClick={() => forcePasswordChange(user)}
+                            >
+                              <Lock size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="um-action password"
+                              title="Terminate Sessions"
+                              onClick={() => terminateSession(user)}
+                            >
+                              <UserCog size={16} />
+                            </button>
+
+                            <button
+                              type="button"
                               className={`um-action ${
                                 active
                                   ? "deactivate"
@@ -1156,6 +1210,15 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
                               ) : (
                                 <UserCheck size={16} />
                               )}
+                            </button>
+
+                            <button
+                              type="button"
+                              className="um-action password"
+                              title={user.lockoutUntil ? "Unlock Account" : "Lock Account"}
+                              onClick={() => updateSecurityState(user, user.lockoutUntil ? "unlock" : "lock")}
+                            >
+                              <Lock size={16} />
                             </button>
 
                             <button

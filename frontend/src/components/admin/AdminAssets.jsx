@@ -490,7 +490,7 @@ const AdminAssets = () => {
         search: search.trim() || undefined
       };
 
-      const response = await axios.get('/api/assets', { params });
+      const response = await axios.get('/api/admin/assets', { params });
 
       const data = response.data || {};
 
@@ -1491,17 +1491,6 @@ const AdminAssets = () => {
           </h2>
 
           <p>{t.tryFilters}</p>
-
-          <button
-            type="button"
-            style={{
-              ...styles.button('#805ad5'),
-              marginTop: '12px'
-            }}
-            onClick={resetFilters}
-          >
-            {t.resetFilters}
-          </button>
         </div>
       ) : (
         <>

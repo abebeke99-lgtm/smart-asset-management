@@ -23,7 +23,17 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const departmentRoutes = require('./routes/departmentRoutes');
 const infrastructureRoutes = require('./routes/infrastructureRoutes');
 const collegeRoutes = require('./routes/collegeRoutes');
+const departmentWorkspaceRoutes = require('./routes/departmentWorkspaceRoutes');
+const transferWorkflowRoutes = require('./routes/transferWorkflowRoutes');
+const returnWorkflowRoutes = require('./routes/returnWorkflowRoutes');
 const supportRoutes = require('./routes/supportRoutes');
+const storeRoutes = require('./routes/storeRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
+const adminNotificationRoutes = require('./routes/adminNotificationRoutes');
+const adminSettingsRoutes = require('./routes/adminSettingsRoutes');
+const adminRoleRoutes = require('./routes/adminRoleRoutes');
+const systemMonitoringRoutes = require('./routes/systemMonitoringRoutes');
+const { requestMetricsMiddleware } = require('./middleware/requestMetrics');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -77,6 +87,7 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
+app.use(requestMetricsMiddleware);
 
 let databaseReady = false;
 
@@ -104,6 +115,7 @@ app.get('/api/health', healthHandler);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/admin/users', userRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/rfid', rfidRoutes);
@@ -112,11 +124,23 @@ app.use('/api/assignments', assignmentRoutes);
 app.use('/api/transfers', transferRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/store', storeRoutes);
 app.use('/api/approvals', approvalRoutes);
 app.use('/api/finance', financeRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/college', collegeRoutes);
+app.use('/api/department', departmentWorkspaceRoutes);
+app.use('/api', transferWorkflowRoutes);
+app.use('/api', returnWorkflowRoutes);
 app.use('/api/infrastructure', infrastructureRoutes);
+app.use('/api/admin', analyticsRoutes);
+app.use('/api/admin', adminNotificationRoutes);
+app.use('/api/admin', adminSettingsRoutes);
+app.use('/api/admin', adminRoleRoutes);
+app.use('/api/admin/monitoring', systemMonitoringRoutes);
+app.use('/api/admin/system-monitoring', systemMonitoringRoutes);
+// Canonical administrator namespace. Legacy /api routes remain available for compatibility.
+app.use('/api/admin', adminSupportRoutes);
 app.use('/api', notificationRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/support', supportRoutes);

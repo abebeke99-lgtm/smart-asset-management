@@ -1,0 +1,24 @@
+const express = require('express');
+const { Op } = require('sequelize');
+const { SystemAlert, AuditLog } = require('../models');
+const { requireAuth, requireRole } = require('../middlewares/auth');
+const monitoring = require('../services/systemMonitoringService');
+
+const router = express.Router();
+const requireAdmin = [requireAuth, requireRole('admin')];
+
+router.get('/overview', ...requireAdmin, async (req, res, next) => { try { return res.json({ success: true, data: await monitoring.getOverview(req.query) }); } catch (error) { next(error); } });
+router.get('/health', ...requireAdmin, async (req, res, next) => { try { const data = await monitoring.getOverview(req.query); return res.json({ success: true, data: data.health }); } catch (error) { next(error); } });
+router.get('/resources', ...requireAdmin, async (req, res, next) => { try { return res.json({ success: true, data: monitoring.getResources() }); } catch (error) { next(error); } });
+router.get('/services', ...requireAdmin, async (req, res, next) => { try { return res.json({ success: true, data: await monitoring.getServices() }); } catch (error) { next(error); } });
+router.get('/performance', ...requireAdmin, async (req, res, next) => { try { return res.json({ success: true, data: monitoring.getRequestMetrics ? monitoring.getRequestMetrics(req.query) : require('../middleware/requestMetrics').getRequestMetrics(req.query) }); } catch (error) { next(error); } });
+router.get('/errors', ...requireAdmin, async (req, res, next) => { try { const data = require('../middleware/requestMetrics').getRequestMetrics(req.query); return res.json({ success: true, data: { total: data.failedRequests, critical: data.requests.filter((item) => item.status >= 500).length, high: data.requests.filter((item) => item.status >= 400 && item.status < 500).length, medium: 0, recent: data.requests.filter((item) => item.status >= 400).slice(-50).map((item) => ({ method: item.method, path: item.path, status: item.status, responseTime: item.duration, timestamp: item.timestamp })) } }); } catch (error) { next(error); } });
+router.get('/security', ...requireAdmin, async (req, res, next) => { try { return res.json({ success: true, data: await monitoring.getSecurity() }); } catch (error) { next(error); } });
+router.get('/activity', ...requireAdmin, async (req, res, next) => { try { return res.json({ success: true, data: await monitoring.getActivity() }); } catch (error) { next(error); } });
+router.get('/history', ...requireAdmin, async (req, res, next) => { try { return res.json({ success: true, data: monitoring.getHistory(req.query) }); } catch (error) { next(error); } });
+router.get('/alerts', ...requireAdmin, async (req, res, next) => { try { const where = {}; if (req.query.status) where.status = req.query.status; if (req.query.severity) where.severity = req.query.severity; return res.json({ success: true, data: await monitoring.getAlerts(where) }); } catch (error) { next(error); } });
+router.post('/alerts/:id/acknowledge', ...requireAdmin, async (req, res, next) => { try { const alert = await SystemAlert.findByPk(req.params.id); if (!alert) return res.status(404).json({ success: false, message: 'System alert not found' }); await alert.update({ status: 'acknowledged' }); await AuditLog.create({ userId: req.user.id, action: 'SYSTEM_ALERT_ACKNOWLEDGED', entity: `system_alert:${alert.id}`, details: JSON.stringify({}) }); return res.json({ success: true, data: alert }); } catch (error) { next(error); } });
+router.post('/alerts/:id/resolve', ...requireAdmin, async (req, res, next) => { try { const alert = await SystemAlert.findByPk(req.params.id); if (!alert) return res.status(404).json({ success: false, message: 'System alert not found' }); await alert.update({ status: 'resolved', resolvedAt: new Date(), resolvedBy: req.user.id }); await AuditLog.create({ userId: req.user.id, action: 'SYSTEM_ALERT_RESOLVED', entity: `system_alert:${alert.id}`, details: JSON.stringify({}) }); return res.json({ success: true, data: alert }); } catch (error) { next(error); } });
+router.get('/export', ...requireAdmin, async (req, res, next) => { try { const data = await monitoring.getOverview(req.query); const rows = [['Metric', 'Value'], ['Overall Status', data.overall.status], ['Database', data.health.database.status], ['Uptime Seconds', data.health.server.uptimeSeconds], ['Requests', data.performance.requestsToday], ['Failed Requests', data.performance.failedRequests], ['Average Response Time', data.performance.averageResponseTime], ['Failed Logins', data.security.failedLogins], ['Locked Accounts', data.security.lockedAccounts]]; res.setHeader('Content-Type', 'text/csv; charset=utf-8'); res.setHeader('Content-Disposition', 'attachment; filename="system-monitoring.csv"'); return res.send(rows.map((row) => row.map((value) => JSON.stringify(value ?? '')).join(',')).join('\n')); } catch (error) { next(error); } });
+
+module.exports = router;

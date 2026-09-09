@@ -10,6 +10,16 @@ const AuditLog = sequelize.define('AuditLog', {
 }, {
   tableName: 'audit_logs',
   timestamps: true,
+  hooks: {
+    beforeUpdate() {
+      throw new Error('Audit logs are immutable and cannot be updated');
+    },
+    beforeDestroy(instance, options) {
+      if (options?.auditRetentionArchive !== true) {
+        throw new Error('Audit logs are immutable and cannot be deleted');
+      }
+    },
+  },
 });
 
 module.exports = AuditLog;

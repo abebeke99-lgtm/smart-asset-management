@@ -12,6 +12,8 @@ const Asset = sequelize.define('Asset', {
   status: { type: DataTypes.STRING(100), defaultValue: 'available' },
   condition: { type: DataTypes.STRING(100), defaultValue: 'Good' },
   department: { type: DataTypes.STRING(255), defaultValue: '' },
+  collegeId: { type: DataTypes.INTEGER, allowNull: true, field: 'college_id' },
+  departmentId: { type: DataTypes.INTEGER, allowNull: true, field: 'department_id' },
   location: { type: DataTypes.STRING(255), defaultValue: '' },
   purchaseDate: { type: DataTypes.DATE, allowNull: true },
   purchasePrice: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },

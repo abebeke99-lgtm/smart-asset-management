@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
@@ -12,71 +12,71 @@ import { toast } from 'react-toastify';
 const CATEGORIES = [
   {
     id: 'organization',
-    label: '1. 🏢 Organization & Branding'
+    label: '1. Organization & Branding'
   },
   {
     id: 'account',
-    label: '2. 👤 Account & Profile'
+    label: '2. Account & Profile'
   },
   {
     id: 'security',
-    label: '3. 🛡️ Security & Authentication'
+    label: '3. Security & Authentication'
   },
   {
     id: 'roles',
-    label: '4. 👥 Roles & Permissions'
+    label: '4. Roles & Permissions'
   },
   {
     id: 'notifications',
-    label: '5. 🔔 Notifications & Alerts'
+    label: '5. Notifications & Alerts'
   },
   {
     id: 'localization',
-    label: '6. 🌐 Localization'
+    label: '6. Localization'
   },
   {
     id: 'assets',
-    label: '7. 📦 Asset Configuration'
+    label: '7. Asset Configuration'
   },
   {
     id: 'workflow',
-    label: '8. 🔄 Workflow & Approval'
+    label: '8. Workflow & Approval'
   },
   {
     id: 'rfid',
-    label: '9. 📡 RFID & Tracking'
+    label: '9. RFID & Tracking'
   },
   {
     id: 'maintenance',
-    label: '10. 🔧 Maintenance Configuration'
+    label: '10. Maintenance Configuration'
   },
   {
     id: 'financial',
-    label: '11. 💰 Financial Configuration'
+    label: '11. Financial Configuration'
   },
   {
     id: 'reports',
-    label: '12. 📊 Reports & Data'
+    label: '12. Reports & Data'
   },
   {
     id: 'audit',
-    label: '13. 📋 Audit & Compliance'
+    label: '13. Audit & Compliance'
   },
   {
     id: 'monitoring',
-    label: '14. 👁️ System Monitoring'
+    label: '14. System Monitoring'
   },
   {
     id: 'integrations',
-    label: '15. 🔗 Integrations'
+    label: '15. Integrations'
   },
   {
     id: 'backup',
-    label: '16. 💾 Backup & Recovery'
+    label: '16. Backup & Recovery'
   },
   {
     id: 'maintenance_sys',
-    label: '17. 🧹 Data & System Maintenance'
+    label: '17. Data & System Maintenance'
   }
 ];
 
@@ -193,8 +193,9 @@ const AdminSettings = () => {
   const { user } = useAuth();
   const { theme } = useTheme();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState('organization');
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('section') || 'organization');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -222,6 +223,10 @@ const AdminSettings = () => {
   }, []);
 
   useEffect(() => {
+    if (searchParams.get('section') !== activeTab) setSearchParams({ section: activeTab }, { replace: true });
+  }, [activeTab, searchParams, setSearchParams]);
+
+  useEffect(() => {
     if (activeTab === 'audit') {
       fetchAuditLogs();
     }
@@ -235,7 +240,7 @@ const AdminSettings = () => {
     setLoading(true);
 
     try {
-      const response = await apiClient.get('/api/settings');
+      const response = await apiClient.get('/api/admin/settings');
 
       const serverSettings =
         response?.data?.settings ||
@@ -289,7 +294,7 @@ const AdminSettings = () => {
 
   const fetchSystemStatus = async () => {
     try {
-      const response = await apiClient.get('/api/health');
+      const response = await apiClient.get('/api/admin/system/health');
 
       const data =
         response?.data?.status ||
@@ -300,31 +305,31 @@ const AdminSettings = () => {
         api:
           data.api ||
           data.apiStatus ||
-          'Operational',
+          'Not available',
 
         db:
           data.db ||
           data.database ||
           data.databaseStatus ||
-          'Connected',
+          'Not available',
 
         storage:
           data.storage ||
           data.storageStatus ||
-          'Healthy',
+          'Not measured',
 
         uptime:
           data.uptime ||
-          'Available'
+          'Not measured'
       });
     } catch (error) {
       console.error('System health error:', error);
 
       setSysStatus({
-        api: 'Offline',
-        db: 'Error',
-        storage: 'Unknown',
-        uptime: 'Unavailable'
+        api: 'Unavailable',
+        db: 'Unavailable',
+        storage: 'Not measured',
+        uptime: 'Not measured'
       });
     }
   };
@@ -337,10 +342,7 @@ const AdminSettings = () => {
     setSaving(true);
 
     try {
-      await apiClient.put('/api/settings', {
-        category,
-        data
-      });
+      await apiClient.put(`/api/admin/settings/${category}`, { data });
 
       setSettings((previous) => ({
         ...previous,
@@ -543,9 +545,11 @@ const AdminSettings = () => {
 
       case 'monitoring':
         return (
-          <MonitoringView
-            status={sysStatus}
-            onRefresh={fetchSystemStatus}
+          <RedirectPanel
+            title="System Monitoring"
+            path="/admin/settings/system-monitoring"
+            description="View measured health, resource, performance, security, alert, and activity metrics."
+            onNavigate={navigate}
           />
         );
 

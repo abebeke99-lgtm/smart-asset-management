@@ -19,6 +19,171 @@
   --admin-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
 }
 
+.admin-workspace-page {
+  min-height: 100%;
+  padding: clamp(16px, 2.5vw, 32px);
+  background: var(--admin-page);
+  color: var(--admin-text);
+}
+
+.admin-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.admin-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 7px;
+  color: var(--admin-primary);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-page-title { margin: 0; color: #1A237E; font-size: clamp(1.45rem, 2vw, 2rem); }
+.admin-page-subtitle { margin: 6px 0; color: var(--admin-muted); }
+.admin-card,
+.admin-table-card { border: 1px solid var(--admin-border); border-radius: 10px; background: var(--admin-surface); box-shadow: var(--admin-shadow); }
+.admin-card { padding: 18px; }
+.admin-kpi-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.admin-analytics-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.admin-analytics-grid .admin-card canvas { max-height: 235px; }
+.admin-health-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.admin-health-grid > div { display: grid; grid-template-columns: auto 1fr; gap: 4px 9px; align-items: center; padding: 14px; border: 1px solid var(--admin-border); border-radius: 8px; }
+.admin-health-grid span { grid-column: 2; color: var(--admin-muted); font-size: 0.86rem; }
+.admin-form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.admin-form-field { display: grid; gap: 6px; color: var(--admin-slate-700); font-size: 0.82rem; font-weight: 700; }
+.admin-form-field input, .admin-form-field select { min-height: 38px; border: 1px solid var(--admin-border); border-radius: 7px; padding: 7px 9px; background: #fff; color: var(--admin-text); }
+.admin-table-card { overflow: hidden; }
+.admin-table-scroll { overflow-x: auto; }
+.admin-table { width: 100%; border-collapse: collapse; }
+.admin-table th, .admin-table td { padding: 12px 16px; border-bottom: 1px solid var(--admin-border); text-align: left; white-space: nowrap; }
+.admin-table th { color: var(--admin-slate-500); font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.admin-tabs { display: flex; gap: 4px; overflow-x: auto; margin: 0 0 18px; border-bottom: 1px solid var(--admin-border); }
+.admin-tab { border: 0; border-bottom: 2px solid transparent; padding: 11px 14px; background: transparent; color: var(--admin-muted); font-weight: 800; text-transform: uppercase; cursor: pointer; }
+.admin-tab.active { border-bottom-color: var(--admin-primary); color: var(--admin-primary); }
+.admin-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 12px 16px; color: var(--admin-muted); font-size: 0.86rem; }
+.admin-empty-state, .admin-error-state { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 130px; color: var(--admin-muted); }
+.admin-error-state { justify-content: space-between; margin-bottom: 18px; padding: 13px 16px; border: 1px solid #fecaca; border-radius: 9px; background: #fff1f2; color: #991b1b; }
+.admin-modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; background: rgba(15, 23, 42, 0.68); }
+.admin-modal { width: min(760px, 100%); max-height: 90vh; overflow: auto; border: 1px solid var(--admin-border); border-radius: 12px; background: var(--admin-surface); box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28); }
+.admin-modal-header, .admin-modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--admin-border); }
+.admin-modal-header h2 { margin: 0; color: #1A237E; font-size: 1.1rem; }
+.admin-modal-body { display: grid; gap: 14px; padding: 20px; }
+.admin-modal-footer { justify-content: flex-end; border-top: 1px solid var(--admin-border); border-bottom: 0; }
+.admin-recipient-list { display: grid; max-height: 180px; overflow: auto; gap: 7px; padding: 10px; border: 1px solid var(--admin-border); border-radius: 8px; }
+.admin-recipient-list label { display: flex; align-items: center; gap: 8px; color: var(--admin-text); font-weight: 500; }
+.admin-recipient-list small { margin-left: auto; color: var(--admin-muted); }
+.admin-alert-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--admin-border); }
+.admin-alert-row p { margin: 5px 0; color: var(--admin-muted); }
+.admin-alert-row small { color: var(--admin-muted); }
+
+/* Colleges workspace */
+.admin-colleges-page {
+  --college-navy: #172554;
+  --college-blue: #2563eb;
+  --college-cyan: #0ea5e9;
+  background: linear-gradient(145deg, #f8fbff 0%, #f3f6fb 52%, #eef4ff 100%);
+}
+.colleges-page-header {
+  padding: 4px 2px 18px;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.7);
+}
+.admin-colleges-page .admin-page-title {
+  color: var(--college-navy);
+  font-size: clamp(1.75rem, 3vw, 2.35rem);
+  letter-spacing: -0.02em;
+}
+.admin-colleges-page .admin-page-subtitle { max-width: 620px; font-size: 0.94rem; }
+.admin-colleges-page .admin-primary-button,
+.admin-colleges-page .admin-secondary-button {
+  min-height: 42px;
+  border-radius: 9px;
+  box-shadow: 0 5px 14px rgba(37, 99, 235, 0.12);
+}
+.colleges-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 18px; }
+.college-kpi-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 132px;
+  border: 1px solid rgba(219, 228, 239, 0.9);
+  border-top: 0;
+  border-radius: 12px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.055);
+}
+.college-kpi-card::after {
+  position: absolute;
+  right: -18px;
+  bottom: -28px;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: currentColor;
+  content: '';
+  opacity: 0.06;
+}
+.college-kpi-card span { display: block; color: var(--admin-muted); font-size: 0.78rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.college-kpi-card strong { display: block; margin-top: 10px; color: var(--college-navy); font-size: 2rem; line-height: 1; }
+.college-kpi-card small { display: block; margin-top: 9px; color: var(--admin-muted); font-size: 0.76rem; }
+.college-kpi-total { color: var(--college-blue); border-left: 4px solid var(--college-blue); }
+.college-kpi-active { color: #16a34a; border-left: 4px solid #16a34a; }
+.college-kpi-inactive { color: #d97706; border-left: 4px solid #d97706; }
+.college-kpi-departments { color: var(--college-cyan); border-left: 4px solid var(--college-cyan); }
+.colleges-toolbar {
+  align-items: center;
+  margin: 18px 0;
+  padding: 11px;
+  border: 1px solid var(--admin-border);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+}
+.colleges-toolbar .admin-search-box { flex: 1 1 360px; min-height: 40px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
+.colleges-toolbar .admin-search-box input { min-height: 38px; border: 0; outline: 0; background: transparent; }
+.colleges-toolbar .admin-select { min-height: 40px; min-width: 150px; border-radius: 8px; }
+.college-form-card { margin-bottom: 18px; border: 1px solid #bfdbfe; border-left: 4px solid var(--college-blue); background: #fbfdff; box-shadow: 0 12px 28px rgba(37, 99, 235, 0.1); }
+.college-form-card .admin-card-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; color: var(--college-navy); font-size: 1.05rem; font-weight: 800; }
+.college-form-card textarea { min-height: 92px; resize: vertical; }
+.college-table-card { border-radius: 12px; box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06); }
+.college-table-card .admin-table th { background: #f8fafc; color: #475569; }
+.college-table-card .admin-table tbody tr { transition: background-color 150ms ease; }
+.college-table-card .admin-table tbody tr:hover { background: #f8fbff; }
+.college-table-card .admin-table td { height: 68px; vertical-align: middle; }
+.college-table-card .admin-table td:first-child { min-width: 260px; white-space: normal; }
+.college-table-card .admin-status-badge { min-width: 72px; justify-content: center; text-transform: capitalize; }
+.college-table-card .admin-row-actions { opacity: 0.72; transition: opacity 150ms ease; }
+.college-table-card tbody tr:hover .admin-row-actions { opacity: 1; }
+
+@media (max-width: 900px) {
+  .colleges-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .colleges-page-header { padding-bottom: 14px; }
+  .colleges-page-header .admin-primary-button { width: 100%; justify-content: center; }
+  .colleges-kpi-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .college-kpi-card { min-height: 116px; padding: 14px; }
+  .college-kpi-card strong { font-size: 1.65rem; }
+  .colleges-toolbar { align-items: stretch; flex-direction: column; }
+  .colleges-toolbar .admin-search-box, .colleges-toolbar .admin-select, .colleges-toolbar .admin-secondary-button { width: 100%; }
+}
+
+@media (max-width: 1100px) {
+  .admin-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .admin-analytics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 680px) {
+  .admin-page-header { flex-direction: column; }
+  .admin-kpi-grid, .admin-analytics-grid, .admin-health-grid, .admin-form-grid { grid-template-columns: 1fr; }
+}
+
 .admin-main-content {
   background: var(--admin-page);
   color: var(--admin-text);

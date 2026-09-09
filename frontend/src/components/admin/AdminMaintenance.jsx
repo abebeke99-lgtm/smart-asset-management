@@ -216,19 +216,19 @@ const AdminMaintenance = () => {
         assetsRes,
         techsRes
       ] = await Promise.all([
-        axios.get('/api/maintenance', { params }),
+        axios.get('/api/admin/maintenance', { params }),
 
-        axios.get('/api/maintenance/scheduled', {
+        axios.get('/api/admin/maintenance/scheduled', {
           params
         }),
 
-        axios.get('/api/maintenance/history', {
+        axios.get('/api/admin/maintenance/history', {
           params: {
             search: historyFilter || undefined
           }
         }),
 
-        axios.get('/api/assets'),
+        axios.get('/api/admin/assets'),
 
         axios.get('/api/users', {
           params: {
@@ -365,7 +365,7 @@ const AdminMaintenance = () => {
       };
 
       await axios.post(
-        '/api/maintenance',
+        '/api/admin/maintenance',
         payload
       );
 
@@ -454,7 +454,7 @@ const AdminMaintenance = () => {
       };
 
       await axios.post(
-        '/api/maintenance',
+        '/api/admin/maintenance',
         payload
       );
 
@@ -481,7 +481,7 @@ const AdminMaintenance = () => {
   const handleApprove = async (id) => {
     try {
       await axios.patch(
-        `/api/maintenance/${id}/approve`
+        `/api/admin/maintenance/${id}/approve`
       );
 
       toast.success(t.requestApproved);
@@ -498,7 +498,7 @@ const AdminMaintenance = () => {
   const handleReject = async (id) => {
     try {
       await axios.patch(
-        `/api/maintenance/${id}/reject`
+        `/api/admin/maintenance/${id}/reject`
       );
 
       toast.success(t.requestRejected);
@@ -522,7 +522,7 @@ const AdminMaintenance = () => {
 
     try {
       await axios.post(
-        `/api/maintenance/${id}/reassign`,
+        `/api/admin/maintenance/${id}/reassign`,
         {
           technician_id: technicianId
         }
@@ -544,7 +544,7 @@ const AdminMaintenance = () => {
   const handleStart = async (id) => {
     try {
       await axios.patch(
-        `/api/maintenance/${id}/start`
+        `/api/admin/maintenance/${id}/start`
       );
 
       toast.success(
@@ -586,7 +586,7 @@ const AdminMaintenance = () => {
 
     try {
       await axios.post(
-        `/api/maintenance/${id}/complete`,
+        `/api/admin/maintenance/${id}/complete`,
         {
           resolution,
           labor_cost: laborCost,

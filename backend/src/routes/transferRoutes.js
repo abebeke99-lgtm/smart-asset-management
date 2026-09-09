@@ -55,18 +55,108 @@ const getTransferBlockedStatus = (asset) => {
   return ['under-maintenance', 'lost', 'retired'].includes(status) ? asset.status : null;
 };
 
-// Get all transfers
+// Get all transfers with server-side pagination, search, filtering, and sorting
 router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college'), async (req, res, next) => {
   try {
+    const page = Math.max(1, Number.parseInt(req.query.page || '1', 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit || '20', 10) || 20));
+    const sortBy = String(req.query.sortBy || req.query.sort_by || 'createdAt').trim();
+    const sortOrder = String(req.query.sortOrder || req.query.sort_order || 'DESC').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+    const search = String(req.query.search || req.query.q || '').trim();
+    const status = String(req.query.status || '').trim();
+    const sourceCollege = String(req.query.sourceCollege || req.query.source_college || '').trim();
+    const destinationCollege = String(req.query.destinationCollege || req.query.destination_college || '').trim();
+    const sourceDepartment = String(req.query.sourceDepartment || req.query.source_department || '').trim();
+    const destinationDepartment = String(req.query.destinationDepartment || req.query.destination_department || '').trim();
+    const sourceLocation = String(req.query.sourceLocation || req.query.source_location || '').trim();
+    const destinationLocation = String(req.query.destinationLocation || req.query.destination_location || '').trim();
+    const dateFrom = String(req.query.dateFrom || req.query.date_from || '').trim();
+    const dateTo = String(req.query.dateTo || req.query.date_to || '').trim();
+
+    const where = {};
+    if (status) where.status = { [Op.like]: `%${status}%` };
+    if (sourceCollege) where.sourceCollegeId = Number(sourceCollege);
+    if (destinationCollege) where.destinationCollegeId = Number(destinationCollege);
+    if (sourceDepartment) where.sourceDepartmentId = Number(sourceDepartment);
+    if (destinationDepartment) where.destinationDepartmentId = Number(destinationDepartment);
+    if (sourceLocation) where.currentLocation = { [Op.like]: `%${sourceLocation}%` };
+    if (destinationLocation) where.newLocation = { [Op.like]: `%${destinationLocation}%` };
+
+    const dateClauses = {};
+    if (dateFrom) dateClauses[Op.gte] = new Date(dateFrom);
+    if (dateTo) dateClauses[Op.lte] = new Date(`${dateTo}T23:59:59.999Z`);
+    if (Object.keys(dateClauses).length > 0) {
+      where.transferDate = dateClauses;
+    }
+
+    if (search) {
+      where[Op.or] = [
+        { transferNumber: { [Op.like]: `%${search}%` } },
+        { sourceDepartment: { [Op.like]: `%${search}%` } },
+        { destinationDepartment: { [Op.like]: `%${search}%` } },
+        { currentLocation: { [Op.like]: `%${search}%` } },
+        { newLocation: { [Op.like]: `%${search}%` } },
+        { transferReason: { [Op.like]: `%${search}%` } },
+        { notes: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    const include = [];
     const assetScope = req.user.role === 'college' ? { department: req.user.department } : undefined;
-    const transfers = await Transfer.findAll({
-      include: assetScope ? [{ model: Asset, attributes: ['assetCode', 'name', 'department'], where: assetScope, required: true }, ...transferInclude.slice(1)] : transferInclude,
-      order: [['createdAt', 'DESC']]
+    if (assetScope) {
+      include.push({ model: Asset, attributes: ['assetCode', 'name', 'department'], where: assetScope, required: true });
+      include.push(...transferInclude.slice(1));
+    } else {
+      include.push(...transferInclude);
+    }
+
+    const order = [];
+    const sortable = {
+      transferNumber: 'transferNumber',
+      assetName: 'assetName',
+      assetCode: 'assetCode',
+      status: 'status',
+      transferDate: 'transferDate',
+      sourceDepartment: 'sourceDepartment',
+      destinationDepartment: 'destinationDepartment',
+      currentLocation: 'currentLocation',
+      newLocation: 'newLocation',
+      requestedBy: 'requestedBy',
+      approvedBy: 'approvedBy',
+      createdAt: 'createdAt',
+    };
+    const field = sortable[sortBy] || 'createdAt';
+    order.push([field, sortOrder]);
+
+    const { count, rows } = await Transfer.findAndCountAll({
+      where,
+      include,
+      order,
+      limit,
+      offset: (page - 1) * limit,
     });
+
+    const transfers = rows.map(toTransferResponse);
+    const totalPages = Math.max(1, Math.ceil(count / limit));
+
     res.json({
       success: true,
-      data: transfers.map(toTransferResponse),
-      transfers: transfers.map(toTransferResponse)
+      data: transfers,
+      transfers,
+      summary: {
+        total: count,
+        page,
+        limit,
+        totalPages,
+        pages: totalPages,
+      },
+      pagination: {
+        page,
+        limit,
+        total: count,
+        totalPages,
+        pages: totalPages,
+      }
     });
   } catch (error) {
     next(error);

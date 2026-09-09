@@ -8,6 +8,8 @@ import DeptReports from '../department/DeptReports';
 import DeptNotifications from '../department/DeptNotifications';
 import DeptAssetHistory from '../department/DeptAssetHistory';
 import './CollegeDashboard.css';
+import CollegeDepartments from './CollegeDepartments';
+import ScopedWorkflowPage from '../shared/ScopedWorkflowPage';
 
 const CollegeSectionWrapper = ({ title, subtitle, children }) => (
   <div className="college-section-wrapper">
@@ -66,21 +68,9 @@ const CollegeManagerPages = ({ section = 'dashboard' }) => {
         <DeptAssets />
       </CollegeSectionWrapper>
     ),
-    transfers: (
-      <CollegeSectionWrapper title="Transfers" subtitle="Incoming and outgoing transfers, destinations and transfer tracking.">
-        <DeptAssets />
-      </CollegeSectionWrapper>
-    ),
-    returns: (
-      <CollegeSectionWrapper title="Returns" subtitle="Returned assets, condition verification, receiving logs and return history.">
-        <DeptAssets />
-      </CollegeSectionWrapper>
-    ),
-    maintenance: (
-      <CollegeSectionWrapper title="College Maintenance" subtitle="Maintenance work orders, alerts and maintenance history for college assets.">
-        <DeptApprovals />
-      </CollegeSectionWrapper>
-    ),
+    transfers: <ScopedWorkflowPage scope="college" type="transfers" />,
+    returns: <ScopedWorkflowPage scope="college" type="returns" />,
+    maintenance: <ScopedWorkflowPage scope="college" type="maintenance" />,
     rfid: (
       <CollegeSectionWrapper title="RFID / QR Tracking" subtitle="Asset lookup, scan history and location tracking for authorized college assets.">
         <DeptAssets />
@@ -101,11 +91,7 @@ const CollegeManagerPages = ({ section = 'dashboard' }) => {
         <DeptAssetHistory />
       </CollegeSectionWrapper>
     ),
-    departments: (
-      <CollegeSectionWrapper title="Departments" subtitle="College departments, dean assignments and department-level operational details.">
-        <DeptDashboard />
-      </CollegeSectionWrapper>
-    ),
+    departments: <CollegeDepartments />,
     'department-deans': (
       <CollegeSectionWrapper title="Department Deans" subtitle="Department dean assignments, dean permissions and department leadership records.">
         <DeptDashboard />

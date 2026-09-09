@@ -33,6 +33,16 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING(255),
     defaultValue: '',
   },
+  collegeId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'college_id',
+  },
+  departmentId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'department_id',
+  },
   phone: {
     type: DataTypes.STRING(50),
     defaultValue: '',
@@ -51,6 +61,18 @@ const User = sequelize.define('User', {
     type: DataTypes.DATE,
     allowNull: true,
     field: 'lockout_until',
+  },
+  forcePasswordChange: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'force_password_change',
+  },
+  sessionVersion: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'session_version',
   },
   lastLoginAt: {
     type: DataTypes.DATE,

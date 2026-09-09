@@ -109,7 +109,7 @@ const AdminRFIDTracking = () => {
     setLoading(true);
 
     try {
-      const response = await axios.get('/api/rfid', {
+      const response = await axios.get('/api/admin/rfid/scans', {
         params: {
           limit: 500
         }
@@ -117,9 +117,11 @@ const AdminRFIDTracking = () => {
 
       const data = Array.isArray(response.data?.logs)
         ? response.data.logs
-        : Array.isArray(response.data)
-          ? response.data
-          : [];
+        : Array.isArray(response.data?.data)
+          ? response.data.data
+          : Array.isArray(response.data)
+            ? response.data
+            : [];
 
       setLogs(data);
     } catch (error) {
@@ -135,20 +137,18 @@ const AdminRFIDTracking = () => {
     setDevicesLoading(true);
 
     try {
-      const response = await axios.get('/api/rfid/devices');
+      const response = await axios.get('/api/admin/rfid/devices');
 
       const data = Array.isArray(response.data?.devices)
         ? response.data.devices
-        : Array.isArray(response.data)
-          ? response.data
-          : [];
+        : Array.isArray(response.data?.data)
+          ? response.data.data
+          : Array.isArray(response.data)
+            ? response.data
+            : [];
 
       setDevices(data);
     } catch (error) {
-      /*
-       * Some backend versions do not have device management yet.
-       * Do not break the whole RFID page.
-       */
       console.warn('RFID device API unavailable:', error.message);
       setDevices([]);
     } finally {
@@ -160,7 +160,7 @@ const AdminRFIDTracking = () => {
     setAssetsLoading(true);
 
     try {
-      const response = await axios.get('/api/assets', {
+      const response = await axios.get('/api/admin/assets', {
         params: {
           limit: 500
         }
@@ -168,9 +168,11 @@ const AdminRFIDTracking = () => {
 
       const data = Array.isArray(response.data?.assets)
         ? response.data.assets
-        : Array.isArray(response.data)
-          ? response.data
-          : [];
+        : Array.isArray(response.data?.data)
+          ? response.data.data
+          : Array.isArray(response.data)
+            ? response.data
+            : [];
 
       setAssets(data);
     } catch (error) {
@@ -472,9 +474,11 @@ const AdminRFIDTracking = () => {
     }
 
     try {
-      await axios.post(`/api/assets/${registerForm.asset_id}/rfid`, {
+      await axios.post('/api/admin/rfid/tags', {
+        asset_id: registerForm.asset_id,
         rfid_tag: registerForm.tag_code.trim(),
-        location: registerForm.location
+        location: registerForm.location,
+        tag_type: registerForm.tag_type
       });
 
       toast.success(t.tagRegistered);
