@@ -9,7 +9,7 @@ import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate, useLocation,
 import React, { useState, useEffect, useRef, Suspense, lazy, useMemo } from 'react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Archive, ArrowLeftRight, BarChart3, Bell, Building2, CalendarClock, Check, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, Github, LayoutDashboard, Linkedin, LogOut, Menu, MoreHorizontal, Package, Radio, RefreshCw, Search, Settings, SlidersHorizontal, Trash2, Users, Wrench, X } from 'lucide-react';
+import { Archive, ArrowLeftRight, BarChart3, Bell, Building2, CalendarClock, Check, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, Github, LayoutDashboard, Linkedin, LogOut, MapPin, Menu, MoreHorizontal, Package, Radio, RefreshCw, Search, Settings, SlidersHorizontal, Trash2, UserCircle, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
@@ -1430,40 +1430,40 @@ function AppContent() {
 
   const themeStyles = {
     light: {
-      headerBg: 'var(--primary-blue)',
-      headerText: '#000000',
-      footerBg: '#0EA5E9',
-      footerText: '#000000',
-      mainBg: '#FFFFFF',
-      mainText: '#1E293B',
-      cardBg: '#ffffff',
+      headerBg: 'var(--header-background)',
+      headerText: '#FFFFFF',
+      footerBg: '#0F172A',
+      footerText: '#FFFFFF',
+      mainBg: '#F8FAFC',
+      mainText: '#0F172A',
+      cardBg: '#FFFFFF',
       cardBorder: '#E2E8F0',
-      cardShadow: '0 4px 12px rgba(15, 23, 42, 0.05)',
-      sidebarBg: 'var(--primary-blue)',
-      sidebarHover: 'var(--primary-blue-hover)',
-      accent: '#2563EB',
-      accentLight: '#EFF6FF',
+      cardShadow: '0 6px 18px rgba(15, 23, 42, 0.08)',
+      sidebarBg: '#0F172A',
+      sidebarHover: 'rgba(14, 165, 233, 0.12)',
+      accent: '#0EA5E9',
+      accentLight: '#E0F2FE',
       subText: '#64748B',
-      danger: '#DC2626',
-      success: '#16A34A'
+      danger: '#EF4444',
+      success: '#10B981'
     },
     dark: {
-      headerBg: 'var(--primary-blue)',
-      headerText: '#000000',
-      footerBg: '#0EA5E9',
-      footerText: '#000000',
-      mainBg: '#FFFFFF',
-      mainText: '#1E293B',
-      cardBg: '#ffffff',
+      headerBg: 'var(--header-background)',
+      headerText: '#FFFFFF',
+      footerBg: '#0F172A',
+      footerText: '#FFFFFF',
+      mainBg: '#F8FAFC',
+      mainText: '#0F172A',
+      cardBg: '#FFFFFF',
       cardBorder: '#E2E8F0',
-      cardShadow: '0 4px 12px rgba(15, 23, 42, 0.05)',
-      sidebarBg: 'var(--primary-blue)',
-      sidebarHover: 'var(--primary-blue-hover)',
-      accent: '#2563EB',
-      accentLight: '#EFF6FF',
+      cardShadow: '0 6px 18px rgba(15, 23, 42, 0.08)',
+      sidebarBg: '#0F172A',
+      sidebarHover: 'rgba(14, 165, 233, 0.12)',
+      accent: '#0EA5E9',
+      accentLight: '#E0F2FE',
       subText: '#64748B',
-      danger: '#DC2626',
-      success: '#16A34A'
+      danger: '#EF4444',
+      success: '#10B981'
     }
   };
 
@@ -1615,10 +1615,10 @@ function AppContent() {
 
   const Footer = () => (
     <footer className={`app-footer${!user ? ' public-site-footer bg-sky-900' : ''}`} style={{ 
-      backgroundColor: '#0EA5E9',
-      color: '#000000',
+      backgroundColor: '#0F172A',
+      color: '#FFFFFF',
       padding: '30px 20px 15px',
-      borderTop: '1px solid rgba(255,255,255,0.1)',
+      borderTop: '1px solid rgba(148, 163, 184, 0.16)',
       marginTop: 'auto'
     }}>
       <div style={{
@@ -1935,9 +1935,9 @@ function AppContent() {
   const collegeManagementItems = [
     { path: '/college/profile', label: '🏢 College Profile', icon: Building2, group: 'College Management' },
     { path: '/college/staff', label: '👥 Staff', icon: Users, group: 'College Management' },
-    { path: '/college/locations', label: '📍 Locations', icon: Building2, group: 'College Management' },
+    { path: '/college/locations', label: '📍 Locations', icon: MapPin, group: 'College Management' },
     { path: '/college/departments', label: '🏫 Departments', icon: Building2, group: 'College Management' },
-    { path: '/college/departments/1', label: '📘 Department Details', icon: Building2, group: 'College Management' }
+    { path: '/college/department-overview', label: '📘 Department Overview', icon: GitBranch, group: 'College Management' }
   ];
   const collegeAssetItems = [
     { path: '/college/assets', label: '📦 Assets', icon: Package, group: 'Asset Management' },
@@ -2024,6 +2024,7 @@ function AppContent() {
     if (path.includes('user') || path.includes('staff') || path.includes('technician')) return Users;
     if (path.includes('department') || path.includes('college') || path.includes('location')) return Building2;
     if (path.includes('notification')) return Bell;
+    if (path.includes('profile')) return UserCircle;
     if (path.includes('setting')) return Settings;
     if (path.includes('backup')) return DatabaseBackup;
     return FileText;
@@ -2375,7 +2376,7 @@ function AppContent() {
                 <Route path="returns" element={<CollegeManagerPages section="returns" />} />
                 <Route path="maintenance" element={<CollegeManagerPages section="maintenance" />} />
                 <Route path="rfid" element={<CollegeManagerPages section="rfid" />} />
-                <Route path="verification" element={<CollegeManagerPages section="assets" />} />
+                <Route path="verification" element={<CollegeManagerPages section="verification" />} />
                 <Route path="reports" element={<CollegeManagerPages section="reports" />} />
                 <Route path="analytics/assets" element={<CollegeManagerPages section="reports" />} />
                 <Route path="analytics/departments" element={<CollegeManagerPages section="department-reports" />} />
@@ -2453,6 +2454,11 @@ function AppContent() {
                 <Route path="reports/movements" element={<StoreReports />} />
                 <Route path="notifications" element={<StoreNotifications />} />
                 <Route path="profile" element={<StoreProfile />} />
+                <Route path="available" element={<Navigate to="/store/available-assets" replace />} />
+                <Route path="rfid" element={<Navigate to="/store/tracking" replace />} />
+                <Route path="movement-history" element={<Navigate to="/store/history" replace />} />
+                <Route path="maintenance-status" element={<Navigate to="/store/maintenance/status" replace />} />
+                <Route path="reports/movement" element={<Navigate to="/store/reports/movements" replace />} />
               </Route>
 
               {/* MAINTENANCE ROUTES - Fixed with RoleLayout */}

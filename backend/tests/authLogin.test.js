@@ -5,6 +5,7 @@ const path = require('node:path');
 const jwt = require('jsonwebtoken');
 
 const { resolveLoginAliases, normalizeLoginIdentity, generateToken } = require('../src/controllers/authController');
+const { findCollegeScopeForUser } = require('../src/middlewares/organizationScope');
 
 test('normalizes canonical college role and legacy department assignments', () => {
   assert.deepEqual(normalizeLoginIdentity('college'), 'college');
@@ -120,4 +121,17 @@ test('generateToken carries organization scope fields needed by the protected co
   const payload = jwt.decode(token);
   assert.equal(payload.collegeId, 7);
   assert.equal(payload.departmentId, 11);
+});
+
+test('college scope lookup resolves the only available college for a college manager when no assignment is present', async () => {
+  assert.equal(typeof findCollegeScopeForUser, 'function');
+  const scope = await findCollegeScopeForUser({
+    id: 99,
+    role: 'college',
+    department: 'Engineering',
+    collegeId: null,
+  });
+  assert.ok(scope && Number.isInteger(scope.collegeId));
+  assert.equal(scope.collegeId, scope.college.id);
+  assert.ok(scope.college);
 });

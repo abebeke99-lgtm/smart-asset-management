@@ -556,7 +556,7 @@ const StoreInventory = () => {
       if (filterCategory) params.category = filterCategory;
       if (filterLocation) params.location = filterLocation;
 
-      const response = await axios.get('/api/inventory', { params });
+      const response = await axios.get('/api/store/inventory', { params });
 
       const inventory =
         response.data?.inventory ||

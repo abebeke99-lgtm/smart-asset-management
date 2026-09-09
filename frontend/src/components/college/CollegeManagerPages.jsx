@@ -43,6 +43,11 @@ const CollegeManagerPages = ({ section = 'dashboard' }) => {
         <DeptDashboard />
       </CollegeSectionWrapper>
     ),
+    verification: (
+      <CollegeSectionWrapper title="Asset Verification" subtitle="Physical verification, discrepancies, inspection results and audit trail for the authorized college.">
+        <DeptDashboard />
+      </CollegeSectionWrapper>
+    ),
     assets: (
       <CollegeSectionWrapper title="College Assets" subtitle="Authorized college assets, search, filters, location details and asset history.">
         <DeptAssets />

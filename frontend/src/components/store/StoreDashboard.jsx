@@ -32,7 +32,7 @@ const StoreDashboard = () => {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/api/inventory/dashboard', { params: { range: timeRange }, timeout: 8000 });
+      const response = await apiClient.get('/api/store/dashboard', { params: { range: timeRange }, timeout: 8000 });
       setStats(response.data?.data || emptyStats);
     } catch (error) {
       toast.error(t.fetchError);

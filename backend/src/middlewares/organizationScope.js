@@ -1,9 +1,50 @@
 const { Op } = require('sequelize');
-const { College, Department } = require('../models');
+const { College, Department, User } = require('../models');
 const { requireAuth, requireRole } = require('./auth');
 
 const requireCollegeManager = [requireAuth, requireRole('college')];
 const requireDepartmentHead = [requireAuth, requireRole('department_head')];
+
+const findCollegeScopeForUser = async (user) => {
+  const candidateUser = user || {};
+  const explicitCollegeId = candidateUser.collegeId ?? candidateUser.college_id ?? candidateUser.organizationCollegeId ?? null;
+  if (explicitCollegeId) {
+    const college = await College.findOne({ where: { id: Number(explicitCollegeId), status: 'active' } });
+    if (college) return { collegeId: college.id, college };
+  }
+
+  const managerCollege = await College.findOne({ where: { managerId: candidateUser.id, status: 'active' } });
+  if (managerCollege) return { collegeId: managerCollege.id, college: managerCollege };
+
+  if (candidateUser.id) {
+    const userRecord = await User.findByPk(candidateUser.id, { attributes: ['id', 'collegeId', 'departmentId', 'department', 'role'] });
+    if (userRecord?.collegeId) {
+      const college = await College.findOne({ where: { id: userRecord.collegeId, status: 'active' } });
+      if (college) return { collegeId: college.id, college };
+    }
+  }
+
+  const departmentName = String(candidateUser.department || candidateUser.department_name || '').trim();
+  if (departmentName) {
+    const department = await Department.findOne({ where: { name: departmentName, status: 'active' }, attributes: ['collegeId'] });
+    if (department?.collegeId) {
+      const college = await College.findOne({ where: { id: department.collegeId, status: 'active' } });
+      if (college) return { collegeId: college.id, college };
+    }
+  }
+
+  const activeColleges = await College.findAll({ where: { status: 'active' } });
+  if (activeColleges.length === 1) {
+    return { collegeId: activeColleges[0].id, college: activeColleges[0] };
+  }
+
+  const colleges = await College.findAll();
+  if (colleges.length === 1) {
+    return { collegeId: colleges[0].id, college: colleges[0] };
+  }
+
+  return { collegeId: null, college: null };
+};
 
 const findCollegeIdFromDepartmentName = async (departmentName) => {
   const name = String(departmentName || '').trim();
@@ -22,18 +63,13 @@ const findDepartmentFromName = async (departmentName) => {
 };
 
 const resolveCollegeScope = async (req, res, next) => {
-  const requestedCollegeId = req.user?.collegeId ?? req.user?.college_id ?? null;
-  if (!requestedCollegeId) {
-    const fallbackCollegeId = await findCollegeIdFromDepartmentName(req.user?.department || req.user?.department_name || '');
-    if (!fallbackCollegeId) {
-      return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
-    }
-    req.user.collegeId = fallbackCollegeId;
+  const scope = await findCollegeScopeForUser(req.user);
+  if (!scope.collegeId || !scope.college) {
+    return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
   }
 
-  const college = await College.findOne({ where: { id: req.user.collegeId, status: 'active' } });
-  if (!college) return res.status(403).json({ success: false, message: 'Authorized college was not found or is inactive' });
-  req.organizationScope = { college, collegeId: college.id };
+  req.user.collegeId = scope.collegeId;
+  req.organizationScope = { college: scope.college, collegeId: scope.collegeId };
   return next();
 };
 
@@ -57,4 +93,4 @@ const departmentIdsForCollege = (collegeId) => ({ collegeId: Number(collegeId) }
 const scopeByCollege = (collegeId) => ({ collegeId: Number(collegeId) });
 const scopeByDepartment = (departmentId) => ({ departmentId: Number(departmentId) });
 
-module.exports = { requireCollegeManager, requireDepartmentHead, resolveCollegeScope, resolveDepartmentScope, departmentIdsForCollege, scopeByCollege, scopeByDepartment, Op };
+module.exports = { requireCollegeManager, requireDepartmentHead, resolveCollegeScope, resolveDepartmentScope, departmentIdsForCollege, scopeByCollege, scopeByDepartment, findCollegeScopeForUser, Op };

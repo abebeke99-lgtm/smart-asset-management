@@ -1,21 +1,21 @@
 :root {
-  --admin-primary: #2563eb;
-  --admin-primary-dark: #1d4ed8;
-  --admin-slate-950: #0f172a;
+  --admin-primary: #0EA5E9;
+  --admin-primary-dark: #2563EB;
+  --admin-slate-950: #0F172A;
   --admin-slate-900: #1e293b;
   --admin-slate-700: #334155;
   --admin-slate-500: #64748b;
   --admin-slate-300: #cbd5e1;
   --admin-slate-100: #f1f5f9;
   --admin-surface: #ffffff;
-  --admin-page: #f4f7fb;
-  --admin-text: #172033;
+  --admin-page: #f8fafc;
+  --admin-text: #0F172A;
   --admin-muted: #64748b;
-  --admin-border: #dbe4ef;
-  --admin-success: #16a34a;
-  --admin-warning: #d97706;
-  --admin-danger: #dc2626;
-  --admin-info: #0891b2;
+  --admin-border: #E2E8F0;
+  --admin-success: #10B981;
+  --admin-warning: #F59E0B;
+  --admin-danger: #EF4444;
+  --admin-info: #0EA5E9;
   --admin-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
 }
 

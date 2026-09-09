@@ -508,6 +508,8 @@ const DeptDashboard = () => {
     );
   }
 
+  const isCollegeManagerRole = ['college', 'college_manager', 'college manager'].includes(String(user?.role || '').toLowerCase());
+
   return (
     <div style={styles.container}>
       {/* Header */}
@@ -516,9 +518,11 @@ const DeptDashboard = () => {
           <h1 style={styles.title}>📊 {t.dashboard}</h1>
           <p style={styles.subtitle}>
             {t.welcome}, {user?.fullName || user?.username || 'User'} 👋
-            <span style={{ marginLeft: '12px', fontSize: '0.85rem', color: isDark ? '#8896b0' : '#4a5568' }}>
-              {user?.department || ''}
-            </span>
+            {!isCollegeManagerRole && (
+              <span style={{ marginLeft: '12px', fontSize: '0.85rem', color: isDark ? '#8896b0' : '#4a5568' }}>
+                {user?.department || ''}
+              </span>
+            )}
           </p>
         </div>
         <div style={styles.headerActions}>

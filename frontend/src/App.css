@@ -11,13 +11,21 @@
 :root {
   --header-height: 72px;
   --sidebar-width: 260px;
+  --app-background: var(--background);
+  --app-surface: var(--surface);
+  --app-muted: var(--text-muted);
+  --app-border: var(--border);
 }
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-  background-color: var(--body-bg);
-  color: var(--text-primary);
+  background: var(--background);
+  color: var(--text);
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+#root {
+  background: var(--background);
 }
 
 .App {
@@ -36,6 +44,9 @@ body {
   height: var(--header-height);
   z-index: 1000;
   backdrop-filter: saturate(130%);
+  background: var(--header-background);
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  box-shadow: var(--shadow-sm);
 }
 
 .app-header-brand h1 {
@@ -87,8 +98,8 @@ body {
 }
 
 .public-site-footer {
-  background: #0EA5E9 !important;
-  color: #000000 !important;
+  background: var(--navy) !important;
+  color: #ffffff !important;
 }
 
 .public-site-footer a,
@@ -330,8 +341,8 @@ body.dark .site-footer {
 
 .admin-sidebar {
   background: var(--sidebar-background) !important;
-  border-right: 1px solid rgba(148, 163, 184, 0.16);
-  box-shadow: 4px 0 18px rgba(15, 23, 42, 0.12);
+  border-right: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: 4px 0 18px rgba(15, 23, 42, 0.14);
   position: fixed;
   top: var(--header-height);
   left: 0;
@@ -457,47 +468,49 @@ body.dark .sidebar-section-label {
   gap: 11px;
   min-height: 42px;
   padding: 9px 12px;
-  color: var(--text-on-dark);
-  border-radius: 8px;
+  color: rgba(255,255,255,0.92);
+  border-radius: 10px;
   text-decoration: none;
   font-size: 13px;
   font-weight: 500;
-  transition: background-color .2s ease, color .2s ease;
+  transition: background-color .2s ease, color .2s ease, transform .2s ease;
 }
 
 body.dark .admin-nav-link {
-  color: var(--text-on-dark);
+  color: rgba(255,255,255,0.92);
 }
 
 .admin-nav-link:hover {
-  color: #0f172a;
-  background: var(--sidebar-hover);
+  color: #ffffff;
+  background: rgba(14, 165, 233, 0.12);
+  transform: translateX(2px);
 }
 
 body.dark .admin-nav-link:hover {
-  color: #0f172a;
-  background: var(--sidebar-hover);
+  color: #ffffff;
+  background: rgba(14, 165, 233, 0.12);
 }
 
 .admin-nav-link.is-active {
-  color: #0f172a;
-  background: var(--sidebar-active);
+  color: #ffffff;
+  background: rgba(14, 165, 233, 0.2);
   font-weight: 700;
+  box-shadow: inset 3px 0 0 var(--primary);
 }
 
 body.dark .admin-nav-link.is-active {
-  color: #0f172a;
+  color: #ffffff;
 }
 
 .admin-nav-link.is-active::before {
   content: '';
   position: absolute;
-  left: -10px;
+  left: 8px;
   top: 8px;
   bottom: 8px;
-  width: 4px;
-  border-radius: 0 3px 3px 0;
-  background: var(--color-primary);
+  width: 3px;
+  border-radius: 999px;
+  background: var(--primary);
 }
 
 .admin-sidebar-footer {
@@ -661,6 +674,7 @@ body.dark .mobile-sidebar-toggle:hover {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  background: var(--background);
 }
 
 .app-main-content > .app-footer,
@@ -810,9 +824,9 @@ body.dark .mobile-sidebar-toggle:hover {
    ========================================== */
 
 .card {
-  background: #ffffff;
+  background: var(--surface);
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--shadow-sm);
   border: 1px solid var(--border);
   padding: 24px;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -820,7 +834,7 @@ body.dark .mobile-sidebar-toggle:hover {
 
 .card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(15, 23, 42, 0.09);
+  box-shadow: var(--shadow-md);
 }
 
 /* Shared UI states */

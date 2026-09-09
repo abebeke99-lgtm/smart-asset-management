@@ -14,9 +14,11 @@ const getLowStock = async (req, res, next) => {
   try {
     const items = await Inventory.findAll({
       include: [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'category', 'status'] }, { model: Department, attributes: ['id', 'name'] }],
-      where: {
-        availableQuantity: { [Op.lte]: Sequelize.col('minimumQuantity') }
-      }
+      where: Sequelize.where(
+        Sequelize.col('available_quantity'),
+        Op.lte,
+        Sequelize.col('minimum_quantity')
+      )
     });
 
     return res.json({
