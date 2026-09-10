@@ -1948,19 +1948,6 @@ const AdminTransfer = () => {
               No asset transfers match the
               current search/filter.
             </p>
-
-            <button
-              type="button"
-              onClick={openNewTransfer}
-              style={{
-                ...buttonBase,
-                backgroundColor:
-                  s.accent,
-                color: '#fff'
-              }}
-            >
-              ➕ Create Transfer
-            </button>
           </div>
         ) : (
           <>

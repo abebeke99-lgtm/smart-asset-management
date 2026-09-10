@@ -1,10 +1,23 @@
+const path = require('path');
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
 const isProduction = process.env.NODE_ENV === 'production';
 const requiredProductionVariables = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
 
+const isSqliteEnabled = process.env.DB_USE_SQLITE === 'true' || (!isProduction && !process.env.DB_HOST && !process.env.DB_NAME && !process.env.DB_USER && !process.env.DB_PASSWORD && !process.env.DB_PORT);
+
+const sqliteStoragePath = path.join(__dirname, '..', '..', 'smart_asset_dev.sqlite');
+
 function getDatabaseConfig() {
+  if (isSqliteEnabled) {
+    return {
+      dialect: 'sqlite',
+      storage: sqliteStoragePath,
+      logging: false,
+    };
+  }
+
   const missing = isProduction ? requiredProductionVariables.filter((name) => !String(process.env[name] || '').trim()) : [];
   if (missing.length) {
     const error = new Error(`Missing production database configuration: ${missing.join(', ')}`);
@@ -33,22 +46,21 @@ function getDatabaseConfig() {
 }
 
 const databaseConfig = getDatabaseConfig();
-const sslEnabled = process.env.DB_SSL === 'true' || databaseConfig.host.includes('aivencloud.com');
+const dbHost = databaseConfig.host || '';
+const sslEnabled = process.env.DB_SSL === 'true' || dbHost.includes('aivencloud.com');
 const sslRejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false';
 const ssl = sslEnabled ? {
   rejectUnauthorized: sslRejectUnauthorized,
   ...(process.env.DB_SSL_CA ? { ca: process.env.DB_SSL_CA } : {}),
 } : undefined;
 
-const sequelize = new Sequelize(
-  databaseConfig.database,
-  databaseConfig.username,
-  databaseConfig.password,
-  {
-    host: databaseConfig.host,
-    port: databaseConfig.port,
-    dialect: 'mysql',
-    logging: false,
+const sequelizeOptions = {
+  dialect: databaseConfig.dialect || 'mysql',
+  logging: databaseConfig.logging !== undefined ? databaseConfig.logging : false,
+  ...(databaseConfig.storage ? { storage: databaseConfig.storage } : {}),
+  ...(databaseConfig.host ? { host: databaseConfig.host } : {}),
+  ...(databaseConfig.port ? { port: databaseConfig.port } : {}),
+  ...(databaseConfig.dialect === 'sqlite' ? {} : {
     dialectOptions: {
       connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT_MS) || 10000,
       ...(ssl ? { ssl } : {}),
@@ -60,12 +72,14 @@ const sequelize = new Sequelize(
       idle: Number(process.env.DB_POOL_IDLE_MS) || 10000,
       evict: Number(process.env.DB_POOL_EVICT_MS) || 1000,
     },
-    define: {
-      timestamps: true,
-      underscored: true,
-    },
-  }
-);
+  }),
+  define: {
+    timestamps: true,
+    underscored: true,
+  },
+};
+
+const sequelize = new Sequelize(sequelizeOptions);
 
 async function testConnection() {
   try {
@@ -86,4 +100,4 @@ async function testConnection() {
   }
 }
 
-module.exports = { sequelize, testConnection, getDatabaseConfig };
+module.exports = { sequelize, testConnection, getDatabaseConfig, isSqliteEnabled };

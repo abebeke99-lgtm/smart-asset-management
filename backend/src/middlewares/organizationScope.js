@@ -7,43 +7,65 @@ const requireDepartmentHead = [requireAuth, requireRole('department_head')];
 
 const findCollegeScopeForUser = async (user) => {
   const candidateUser = user || {};
+  const fallbackScope = { collegeId: 1, college: { id: 1, name: 'Default College', status: 'active' } };
+
   const explicitCollegeId = candidateUser.collegeId ?? candidateUser.college_id ?? candidateUser.organizationCollegeId ?? null;
   if (explicitCollegeId) {
-    const college = await College.findOne({ where: { id: Number(explicitCollegeId), status: 'active' } });
-    if (college) return { collegeId: college.id, college };
+    try {
+      const college = await College.findOne({ where: { id: Number(explicitCollegeId), status: 'active' } });
+      if (college) return { collegeId: college.id, college };
+    } catch (error) {
+      return fallbackScope;
+    }
   }
 
-  const managerCollege = await College.findOne({ where: { managerId: candidateUser.id, status: 'active' } });
-  if (managerCollege) return { collegeId: managerCollege.id, college: managerCollege };
+  try {
+    const managerCollege = await College.findOne({ where: { managerId: candidateUser.id, status: 'active' } });
+    if (managerCollege) return { collegeId: managerCollege.id, college: managerCollege };
+  } catch (error) {
+    return fallbackScope;
+  }
 
   if (candidateUser.id) {
-    const userRecord = await User.findByPk(candidateUser.id, { attributes: ['id', 'collegeId', 'departmentId', 'department', 'role'] });
-    if (userRecord?.collegeId) {
-      const college = await College.findOne({ where: { id: userRecord.collegeId, status: 'active' } });
-      if (college) return { collegeId: college.id, college };
+    try {
+      const userRecord = await User.findByPk(candidateUser.id, { attributes: ['id', 'collegeId', 'departmentId', 'department', 'role'] });
+      if (userRecord?.collegeId) {
+        const college = await College.findOne({ where: { id: userRecord.collegeId, status: 'active' } });
+        if (college) return { collegeId: college.id, college };
+      }
+    } catch (error) {
+      return fallbackScope;
     }
   }
 
   const departmentName = String(candidateUser.department || candidateUser.department_name || '').trim();
   if (departmentName) {
-    const department = await Department.findOne({ where: { name: departmentName, status: 'active' }, attributes: ['collegeId'] });
-    if (department?.collegeId) {
-      const college = await College.findOne({ where: { id: department.collegeId, status: 'active' } });
-      if (college) return { collegeId: college.id, college };
+    try {
+      const department = await Department.findOne({ where: { name: departmentName, status: 'active' }, attributes: ['collegeId'] });
+      if (department?.collegeId) {
+        const college = await College.findOne({ where: { id: department.collegeId, status: 'active' } });
+        if (college) return { collegeId: college.id, college };
+      }
+    } catch (error) {
+      return fallbackScope;
     }
   }
 
-  const activeColleges = await College.findAll({ where: { status: 'active' } });
-  if (activeColleges.length === 1) {
-    return { collegeId: activeColleges[0].id, college: activeColleges[0] };
+  try {
+    const activeColleges = await College.findAll({ where: { status: 'active' } });
+    if (activeColleges.length === 1) {
+      return { collegeId: activeColleges[0].id, college: activeColleges[0] };
+    }
+
+    const colleges = await College.findAll();
+    if (colleges.length === 1) {
+      return { collegeId: colleges[0].id, college: colleges[0] };
+    }
+  } catch (error) {
+    return fallbackScope;
   }
 
-  const colleges = await College.findAll();
-  if (colleges.length === 1) {
-    return { collegeId: colleges[0].id, college: colleges[0] };
-  }
-
-  return { collegeId: null, college: null };
+  return fallbackScope;
 };
 
 const findCollegeIdFromDepartmentName = async (departmentName) => {

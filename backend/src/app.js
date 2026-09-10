@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const passport = require('./config/passport');
-const { sequelize, testConnection } = require('./config/database');
+const { sequelize, testConnection, isSqliteEnabled } = require('./config/database');
 const { syncDatabase } = require('./config/sync');
 const { seedDatabase } = require('./config/seed');
 
@@ -158,7 +158,7 @@ async function startServer() {
   const retryDelays = [5000, 10000, 20000, 30000, 60000];
   for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
     if (await testConnection() && await syncDatabase()) {
-      if (process.env.NODE_ENV !== 'production' && process.env.SEED_DEMO_DATA === 'true') await seedDatabase();
+      if (process.env.NODE_ENV !== 'production' && (process.env.SEED_DEMO_DATA === 'true' || isSqliteEnabled)) await seedDatabase();
       databaseReady = true;
       console.log('Database initialization completed.');
       break;

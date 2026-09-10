@@ -31,6 +31,7 @@ const StoreTransfers = () => {
   const [form, setForm] = useState({
     assetId: '',
     targetDepartment: '',
+    newLocation: '',
     targetUser: '',
     quantity: 1,
     reason: '',
@@ -54,6 +55,7 @@ const StoreTransfers = () => {
         selectAsset: 'ንብረት ይምረጡ',
         targetDepartment: 'የዒላማ ክፍል',
         selectDepartment: 'ክፍል ይምረጡ',
+        location: 'የዒላማ ቦታ',
         targetUser: 'የዒላማ ተጠቃሚ',
         selectUser: 'ተጠቃሚ ይምረጡ',
         quantity: 'ብዛት',
@@ -106,6 +108,7 @@ const StoreTransfers = () => {
         selectAsset: 'Select Asset',
         targetDepartment: 'Target Department',
         selectDepartment: 'Select Department',
+        location: 'Destination Location',
         targetUser: 'Target User',
         selectUser: 'Select User',
         quantity: 'Quantity',
@@ -464,6 +467,7 @@ const StoreTransfers = () => {
     setForm({
       assetId: '',
       targetDepartment: '',
+      newLocation: '',
       targetUser: '',
       quantity: 1,
       reason: '',
@@ -477,6 +481,7 @@ const StoreTransfers = () => {
     if (
       !form.assetId ||
       !form.targetDepartment ||
+      !form.newLocation ||
       Number(form.quantity) <= 0
     ) {
       toast.error(t.required);
@@ -487,13 +492,14 @@ const StoreTransfers = () => {
 
     try {
       const payload = {
-        asset_id: form.assetId,
-        new_department_id: form.targetDepartment,
-        new_user_id: form.targetUser || undefined,
+        assetId: form.assetId,
+        destinationDepartment: form.targetDepartment,
+        newLocation: form.newLocation,
+        transferReason: form.reason,
+        notes: form.remarks,
         quantity: Number(form.quantity),
-        reason: form.reason,
-        remarks: form.remarks,
-        transferred_by: user?.id
+        requestedBy: user?.id,
+        createdBy: user?.id
       };
 
       await axios.post('/api/transfers', payload);
@@ -1090,6 +1096,26 @@ const StoreTransfers = () => {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>
+                    {t.location} *
+                  </label>
+
+                  <input
+                    type="text"
+                    value={form.newLocation}
+                    onChange={(e) =>
+                      handleFormChange(
+                        'newLocation',
+                        e.target.value
+                      )
+                    }
+                    placeholder={t.location}
+                    style={styles.input}
+                    required
+                  />
                 </div>
 
                 <div style={styles.formGroup}>

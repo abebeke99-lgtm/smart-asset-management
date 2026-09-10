@@ -12,6 +12,7 @@ router.post('/department/returns', ...requireDepartmentHead, resolveDepartmentSc
 router.get('/department/returns/:id', ...requireDepartmentHead, resolveDepartmentScope, workflow.getReturn);
 router.post('/department/returns/:id/cancel', ...requireDepartmentHead, resolveDepartmentScope, workflow.cancelReturn);
 router.get('/store/returns', auth.requireAuth, auth.requireRole('store_manager'), workflow.listReturns);
+router.post('/store/returns', auth.requireAuth, auth.requireRole('store_manager'), workflow.processStoreReturn);
 router.post('/store/returns/:id/receive', auth.requireAuth, auth.requireRole('store_manager'), workflow.receiveReturn);
 router.post('/store/returns/:id/inspect', auth.requireAuth, auth.requireRole('store_manager'), workflow.inspectReturn);
 

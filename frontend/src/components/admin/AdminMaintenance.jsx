@@ -32,10 +32,8 @@ const AdminMaintenance = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [showScheduledCreate, setShowScheduledCreate] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [showCostModal, setShowCostModal] = useState(false);
 
   const [selectedAsset, setSelectedAsset] = useState(null);
-  const [selectedMaintenance, setSelectedMaintenance] = useState(null);
 
   const [completionMap, setCompletionMap] = useState({});
 
@@ -657,18 +655,6 @@ const AdminMaintenance = () => {
         t.historyFailed
       );
     }
-  };
-
-  // ============================================================
-  // COST DETAILS
-  // ============================================================
-
-  const openCostModal = (maintenance) => {
-    setSelectedMaintenance(
-      maintenance
-    );
-
-    setShowCostModal(true);
   };
 
   const getLaborCost = (item) => {
@@ -1903,16 +1889,6 @@ const AdminMaintenance = () => {
               📜 {t.history}
             </button>
 
-            <button
-              style={styles.action(
-                '#d69e2e'
-              )}
-              onClick={() =>
-                openCostModal(request)
-              }
-            >
-              💰 {t.cost}
-            </button>
           </div>
         </div>
       </div>
@@ -2205,19 +2181,6 @@ const AdminMaintenance = () => {
               )}
             </div>
 
-            <button
-              style={{
-                ...styles.action(
-                  '#805ad5'
-                ),
-                marginTop: '8px'
-              }}
-              onClick={() =>
-                openCostModal(item)
-              }
-            >
-              💰 {t.viewCost}
-            </button>
           </div>
         </div>
       </div>
@@ -2385,76 +2348,6 @@ const AdminMaintenance = () => {
         </div>
       </div>
 
-      {/* COST SUMMARY */}
-
-      <div
-        style={{
-          ...styles.card,
-          marginBottom: '20px'
-        }}
-      >
-        <div style={styles.cardTitle}>
-          💰 {t.maintenanceCost}
-        </div>
-
-        <div style={styles.costGrid}>
-          <div style={styles.costCard}>
-            <div style={styles.costLabel}>
-              {t.estimatedCost}
-            </div>
-            <div style={styles.costValue}>
-              {formatCurrency(
-                statistics.totalEstimated
-              )}
-            </div>
-          </div>
-
-          <div style={styles.costCard}>
-            <div style={styles.costLabel}>
-              {t.laborCost}
-            </div>
-            <div style={styles.costValue}>
-              {formatCurrency(
-                statistics.totalLabor
-              )}
-            </div>
-          </div>
-
-          <div style={styles.costCard}>
-            <div style={styles.costLabel}>
-              {t.partsCost}
-            </div>
-            <div style={styles.costValue}>
-              {formatCurrency(
-                statistics.totalParts
-              )}
-            </div>
-          </div>
-
-          <div style={styles.costCard}>
-            <div style={styles.costLabel}>
-              {t.serviceCost}
-            </div>
-            <div style={styles.costValue}>
-              {formatCurrency(
-                statistics.totalService
-              )}
-            </div>
-          </div>
-
-          <div style={styles.costCard}>
-            <div style={styles.costLabel}>
-              {t.totalCost}
-            </div>
-            <div style={styles.costValue}>
-              {formatCurrency(
-                statistics.totalActual
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* NAVIGATION */}
 
       <div style={styles.tabs}>
@@ -2522,17 +2415,6 @@ const AdminMaintenance = () => {
           }
         >
           👨‍🔧 {t.technicians}
-        </button>
-
-        <button
-          style={styles.tab(
-            viewMode === 'cost'
-          )}
-          onClick={() =>
-            setViewMode('cost')
-          }
-        >
-          💰 {t.maintenanceCost}
         </button>
 
         <button
@@ -2868,155 +2750,6 @@ const AdminMaintenance = () => {
                 )
               )
             )
-          )}
-
-          {/* COST */}
-
-          {viewMode === 'cost' && (
-            (() => {
-              const costItems =
-                requests.filter(
-                  (item) =>
-                    getTotalCost(item) > 0 ||
-                    normalizeStatusValue(
-                      item?.status
-                    ) === 'Completed'
-                );
-
-              return (
-                <>
-                  <div
-                    style={styles.card}
-                  >
-                    <div
-                      style={
-                        styles.cardTitle
-                      }
-                    >
-                      💰{' '}
-                      {t.costBreakdown}
-                    </div>
-
-                    <div
-                      style={
-                        styles.costGrid
-                      }
-                    >
-                      <div
-                        style={
-                          styles.costCard
-                        }
-                      >
-                        <div
-                          style={
-                            styles.costLabel
-                          }
-                        >
-                          {t.laborCost}
-                        </div>
-
-                        <div
-                          style={
-                            styles.costValue
-                          }
-                        >
-                          {formatCurrency(
-                            statistics.totalLabor
-                          )}
-                        </div>
-                      </div>
-
-                      <div
-                        style={
-                          styles.costCard
-                        }
-                      >
-                        <div
-                          style={
-                            styles.costLabel
-                          }
-                        >
-                          {t.partsCost}
-                        </div>
-
-                        <div
-                          style={
-                            styles.costValue
-                          }
-                        >
-                          {formatCurrency(
-                            statistics.totalParts
-                          )}
-                        </div>
-                      </div>
-
-                      <div
-                        style={
-                          styles.costCard
-                        }
-                      >
-                        <div
-                          style={
-                            styles.costLabel
-                          }
-                        >
-                          {t.serviceCost}
-                        </div>
-
-                        <div
-                          style={
-                            styles.costValue
-                          }
-                        >
-                          {formatCurrency(
-                            statistics.totalService
-                          )}
-                        </div>
-                      </div>
-
-                      <div
-                        style={
-                          styles.costCard
-                        }
-                      >
-                        <div
-                          style={
-                            styles.costLabel
-                          }
-                        >
-                          {t.totalCost}
-                        </div>
-
-                        <div
-                          style={
-                            styles.costValue
-                          }
-                        >
-                          {formatCurrency(
-                            statistics.totalActual
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {costItems.length ===
-                  0 ? (
-                    <div
-                      style={
-                        styles.empty
-                      }
-                    >
-                      {t.noCostRecords}
-                    </div>
-                  ) : (
-                    costItems.map(
-                      renderRequestCard
-                    )
-                  )}
-                </>
-              );
-            })()
           )}
 
           {/* HISTORY */}
@@ -3677,177 +3410,6 @@ const AdminMaintenance = () => {
       )}
 
       {/* ====================================================== */}
-      {/* COST MODAL */}
-      {/* ====================================================== */}
-
-      {showCostModal &&
-        selectedMaintenance && (
-          <div
-            style={styles.modal}
-            onClick={() =>
-              setShowCostModal(false)
-            }
-          >
-            <div
-              style={{
-                ...styles.modalContent,
-                maxWidth: '550px'
-              }}
-              onClick={(event) =>
-                event.stopPropagation()
-              }
-            >
-              <h2
-                style={
-                  styles.modalTitle
-                }
-              >
-                💰 {t.maintenanceCost}
-              </h2>
-
-              <p
-                style={{
-                  color: isDark
-                    ? '#a0aec0'
-                    : '#4a5568'
-                }}
-              >
-                <strong>
-                  {safeText(
-                    selectedMaintenance?.title ||
-                    selectedMaintenance?.problem
-                  )}
-                </strong>
-              </p>
-
-              <div
-                style={
-                  styles.costGrid
-                }
-              >
-                <div
-                  style={
-                    styles.costCard
-                  }
-                >
-                  <div
-                    style={
-                      styles.costLabel
-                    }
-                  >
-                    {t.laborCost}
-                  </div>
-
-                  <div
-                    style={
-                      styles.costValue
-                    }
-                  >
-                    {formatCurrency(
-                      getLaborCost(
-                        selectedMaintenance
-                      )
-                    )}
-                  </div>
-                </div>
-
-                <div
-                  style={
-                    styles.costCard
-                  }
-                >
-                  <div
-                    style={
-                      styles.costLabel
-                    }
-                  >
-                    {t.partsCost}
-                  </div>
-
-                  <div
-                    style={
-                      styles.costValue
-                    }
-                  >
-                    {formatCurrency(
-                      getPartsCost(
-                        selectedMaintenance
-                      )
-                    )}
-                  </div>
-                </div>
-
-                <div
-                  style={
-                    styles.costCard
-                  }
-                >
-                  <div
-                    style={
-                      styles.costLabel
-                    }
-                  >
-                    {t.serviceCost}
-                  </div>
-
-                  <div
-                    style={
-                      styles.costValue
-                    }
-                  >
-                    {formatCurrency(
-                      getServiceCost(
-                        selectedMaintenance
-                      )
-                    )}
-                  </div>
-                </div>
-
-                <div
-                  style={
-                    styles.costCard
-                  }
-                >
-                  <div
-                    style={
-                      styles.costLabel
-                    }
-                  >
-                    {t.totalCost}
-                  </div>
-
-                  <div
-                    style={
-                      styles.costValue
-                    }
-                  >
-                    {formatCurrency(
-                      getTotalCost(
-                        selectedMaintenance
-                      )
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <button
-                style={{
-                  ...styles.button(
-                    '#718096'
-                  ),
-                  marginTop: '20px'
-                }}
-                onClick={() =>
-                  setShowCostModal(false)
-                }
-              >
-                {t.close}
-              </button>
-            </div>
-          </div>
-        )}
-
-      {/* ====================================================== */}
       {/* HISTORY MODAL */}
       {/* ====================================================== */}
 
@@ -3934,9 +3496,6 @@ const englishTranslations = {
 
   technicians: 'Technicians',
 
-  maintenanceCost:
-    'Maintenance Cost',
-
   history: 'Maintenance History',
 
   createRequest:
@@ -3962,9 +3521,6 @@ const englishTranslations = {
 
   manageTechnicians:
     'Manage and assign maintenance technicians',
-
-  manageCosts:
-    'Track maintenance expenses and costs',
 
   viewHistory:
     'View all maintenance records',
@@ -4019,9 +3575,6 @@ const englishTranslations = {
 
   noMaintenanceHistory:
     'No maintenance history for this asset',
-
-  noCostRecords:
-    'No maintenance cost records found',
 
   searchMaintenance:
     'Search maintenance...',
@@ -4164,15 +3717,6 @@ const englishTranslations = {
   reminderSent:
     'Reminder sent successfully',
 
-  cost:
-    'Cost',
-
-  viewCost:
-    'View Cost',
-
-  costBreakdown:
-    'Maintenance Cost Breakdown',
-
   notAssigned:
     'Not assigned',
 
@@ -4258,9 +3802,6 @@ const amharicTranslations = {
   technicians:
     'ቴክኒሺያኖች',
 
-  maintenanceCost:
-    'የጥገና ወጪ',
-
   history:
     'የጥገና ታሪክ',
 
@@ -4287,9 +3828,6 @@ const amharicTranslations = {
 
   manageTechnicians:
     'የጥገና ቴክኒሺያኖችን ያስተዳድሩና ይመድቡ',
-
-  manageCosts:
-    'የጥገና ወጪዎችን ይከታተሉ',
 
   viewHistory:
     'ሁሉንም የጥገና መዝገቦች ይመልከቱ',
@@ -4344,9 +3882,6 @@ const amharicTranslations = {
 
   noMaintenanceHistory:
     'ለዚህ ንብረት የጥገና ታሪክ የለም',
-
-  noCostRecords:
-    'ምንም የጥገና ወጪ መዝገብ አልተገኘም',
 
   searchMaintenance:
     'የጥገና መረጃ ፈልግ...',
@@ -4488,15 +4023,6 @@ const amharicTranslations = {
 
   reminderSent:
     'ማሳሰቢያ ተልኳል',
-
-  cost:
-    'ወጪ',
-
-  viewCost:
-    'ወጪ ይመልከቱ',
-
-  costBreakdown:
-    'የጥገና ወጪ ዝርዝር',
 
   notAssigned:
     'አልተመደበም',

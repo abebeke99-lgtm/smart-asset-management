@@ -86,9 +86,13 @@ router.post('/', ...canManageAssignments, async (req, res, next) => {
     const assignee = await User.findByPk(userId, { transaction, lock: transaction.LOCK.UPDATE });
     if (!assignee) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'User not found' }); }
     if (!assignee.active) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Cannot assign an asset to an inactive user' }); }
+    const userCollegeId = req.user?.collegeId ?? req.user?.college_id;
+    if (userCollegeId && Number(asset.collegeId) !== Number(userCollegeId)) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Asset is outside your organization scope' }); }
+    if (userCollegeId && assignee.collegeId && Number(assignee.collegeId) !== Number(userCollegeId)) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Recipient is outside your organization scope' }); }
     if (department_id) {
       const department = await Department.findByPk(Number(department_id), { transaction });
       if (!department) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Department not found' }); }
+      if (userCollegeId && department.collegeId && Number(department.collegeId) !== Number(userCollegeId)) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Department is outside your organization scope' }); }
     }
     const activeAssignment = await Assignment.findOne({ where: { assetId, status: 'active' }, transaction, lock: transaction.LOCK.UPDATE });
     if (activeAssignment) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Asset is already assigned' }); }
@@ -101,7 +105,7 @@ router.post('/', ...canManageAssignments, async (req, res, next) => {
     const previousStatus = asset.status;
     const assignmentNotes = JSON.stringify({ notes: notes || remarks || '', departmentId: department_id || null, location: location || '', assignedDate: assigned_date || new Date(), expectedReturnDate: expected_return_date || null, condition: condition_at_assignment || '', purpose: purpose || '' });
     await inventory.update({ availableQuantity: inventory.availableQuantity - 1 }, { transaction });
-    await asset.update({ status: 'assigned' }, { transaction });
+    await asset.update({ status: 'assigned', ...(location ? { location } : {}) }, { transaction });
     const assignment = await Assignment.create({
       assetId,
       assignedTo: userId,

@@ -1,99 +1,73 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { BarChart3, Boxes, CheckCircle2, ClipboardCheck, ClipboardList, Clock3, History, PackageCheck, PackageOpen, PackagePlus, PackageX, RefreshCw, ScanLine, TriangleAlert, Truck, Wrench } from 'lucide-react';
+import { Bar } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend } from 'chart.js';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement, PointElement, LineElement, Filler } from 'chart.js';
-import { Bar, Doughnut, Line, Pie } from 'react-chartjs-2';
-import { toast } from 'react-toastify';
 import { apiClient } from '../../utils/api';
-import { useNavigate } from 'react-router-dom';
+import './StoreDashboard.css';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement, PointElement, LineElement, Filler);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
-const emptyStats = {
-  summary: { totalInventory: 0, available: 0, issued: 0, lowStock: 0, pendingRequests: 0 },
-  distribution: { byStatus: {}, byCategory: {}, byLocation: {}, byDepartment: {} },
-  activeUsers: 0, departments: 0, rfidTagged: 0, movement: [], recentTransactions: [],
-  health: { server: 'Unavailable', database: 'Unavailable', rfid: 'Unavailable', backup: 'Unavailable' }
+const emptyData = { kpis: {}, status: {}, today: {}, inventoryHealth: {}, pendingTransactions: [], recentMovements: [], recentTransactions: [], lowStockAlerts: [], verification: {}, maintenance: {}, health: {} };
+const icons = { totalAssets: Boxes, availableAssets: PackageCheck, pendingRequests: ClipboardList, pendingReceipts: PackagePlus, pendingIssues: PackageOpen, pendingReturns: PackageX, pendingTransfers: Truck, lowStock: TriangleAlert };
+const routes = { Inventory: '/store/inventory', Available: '/store/available-assets', LowStock: '/store/low-stock', Receive: '/store/receive', Issue: '/store/issue', Return: '/store/returns', Transfer: '/store/transfers', Verification: '/store/verification', Maintenance: '/store/maintenance' };
+const english = { title: 'Store Manager', subtitle: 'Physical Asset Movement & Inventory Control', online: 'Online', offline: 'Offline', loading: 'Loading dashboard...', error: 'Unable to load Store dashboard', forbidden: 'You do not have permission to view this dashboard.', retry: 'Retry', noActivity: 'No store activity yet', totalAssets: 'Total Store Assets', availableAssets: 'Available Assets', pendingRequests: 'Pending Requests', pendingReceipts: 'Pending Receipts', pendingIssues: 'Pending Issues', pendingReturns: 'Pending Returns', pendingTransfers: 'Pending Transfers', lowStock: 'Low Stock', operational: 'Operational Status', inMaintenance: 'In Maintenance', awaitingVerification: 'Awaiting Verification', discrepancies: 'Verification Discrepancies', inventoryHealth: 'Inventory Health', pending: 'Pending Transactions', recent: 'Recent Asset Movements', alerts: 'Low Stock Alerts', verification: 'Asset Verification', today: "Today's Store Activity", view: 'View', viewLowStock: 'View Low Stock', receive: 'Assets Received', issue: 'Assets Issued', return: 'Assets Returned', transfer: 'Assets Transferred', adjustment: 'Stock Adjustments', scans: 'Verification Scans', verified: 'Verified', missing: 'Missing', damaged: 'Damaged', unverified: 'Unverified', noSession: 'No verification session yet' };
+const amharic = { ...english, title: 'የመጋዘን አስተዳዳሪ', subtitle: 'የንብረት እንቅስቃሴ እና የእቃ ቁጥጥር', online: 'በመስመር ላይ', offline: 'ከመስመር ውጭ', loading: 'ዳሽቦርዱ በመጫን ላይ...', error: 'የመጋዘን ዳሽቦርዱ መጫን አልተቻለም', retry: 'እንደገና ሞክር', noActivity: 'እስካሁን የመጋዘን እንቅስቃሴ የለም', totalAssets: 'የመጋዘን ንብረቶች', availableAssets: 'ዝግጁ ንብረቶች', lowStock: 'ዝቅተኛ ክምችት' };
+const date = (value) => value ? new Date(value).toLocaleDateString() : '-';
+const normalizeDashboardData = (payload) => {
+  const source = payload || {};
+  const summary = source.summary || {};
+  const legacyKpis = {
+    totalAssets: summary.totalInventory ?? summary.totalAssets,
+    availableAssets: summary.available ?? summary.availableAssets,
+    pendingRequests: summary.pendingRequests,
+    lowStock: summary.lowStock,
+  };
+  return {
+    ...emptyData,
+    ...source,
+    kpis: { ...emptyData.kpis, ...legacyKpis, ...(source.kpis || {}) },
+    status: { ...emptyData.status, ...(source.status || {}) },
+    today: { ...emptyData.today, ...(source.today || {}) },
+    inventoryHealth: { ...emptyData.inventoryHealth, ...(source.inventoryHealth || {}) },
+    health: { ...emptyData.health, ...(source.health || {}) },
+  };
 };
 
-const StoreDashboard = () => {
+export default function StoreDashboard() {
   const { user } = useAuth();
-  const { language, theme } = useLanguage();
+  const { language } = useLanguage();
   const navigate = useNavigate();
-  const isDark = theme === 'dark';
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
-  const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState('week');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [stats, setStats] = useState(emptyStats);
-
-  useEffect(() => { fetchDashboardData(); }, [timeRange]);
-
-  const fetchDashboardData = async () => {
-    setLoading(true);
+  const t = language === 'en' ? english : amharic;
+  const [state, setState] = useState({ loading: true, error: '', data: emptyData });
+  const load = async () => {
+    setState((current) => ({ ...current, loading: true, error: '' }));
     try {
-      const response = await apiClient.get('/api/store/dashboard', { params: { range: timeRange }, timeout: 8000 });
-      setStats(response.data?.data || emptyStats);
+      const response = await apiClient.get('/api/store/dashboard', { timeout: 10000 });
+      setState({ loading: false, error: '', data: normalizeDashboardData(response.data?.data) });
     } catch (error) {
-      toast.error(t.fetchError);
-      setStats(emptyStats);
-    } finally { setLoading(false); }
+      setState({ loading: false, error: error.response?.status === 403 ? 'forbidden' : 'error', data: emptyData });
+    }
   };
+  useEffect(() => { load(); }, []);
+  if (state.loading) return <div className="store-dashboard-state"><Clock3 size={22} /> {t.loading}</div>;
+  if (state.error) return <div className="store-dashboard-state store-dashboard-error"><TriangleAlert size={22} /><p>{t[state.error]}</p><button type="button" onClick={load}><RefreshCw size={16} /> {t.retry}</button></div>;
 
-  const filteredTransactions = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return stats.recentTransactions;
-    return stats.recentTransactions.filter(item => [item.transaction_id, item.id, item.type, item.item_name, item.asset_name, item.user, item.department, item.status]
-      .some(value => String(value || '').toLowerCase().includes(query)));
-  }, [searchQuery, stats.recentTransactions]);
-
-  const exportDashboard = () => {
-    const data = { generatedAt: new Date().toISOString(), timeRange, summary: stats.summary, distribution: stats.distribution, recentTransactions: stats.recentTransactions };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `store-dashboard-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    toast.success(t.exported);
-  };
-
-  const colors = { primary: isDark ? '#63b3ed' : '#2b6cb0', success: isDark ? '#68d391' : '#48bb78', warning: isDark ? '#f6ad55' : '#ed8936', danger: isDark ? '#fc8181' : '#e53e3e', purple: isDark ? '#b794f4' : '#805ad5' };
-  const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: isDark ? '#c8dcf5' : '#1a365d', boxWidth: 12 } } }, scales: { y: { ticks: { color: isDark ? '#8896b0' : '#4a5568' }, grid: { color: isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)' } }, x: { ticks: { color: isDark ? '#8896b0' : '#4a5568' }, grid: { color: isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)' } } } };
-  const card = { background: isDark ? '#1e2d45' : '#fff', border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, borderRadius: 12, padding: 20, marginBottom: 20 };
-  const title = { color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', margin: '0 0 16px' };
-  const text = { color: isDark ? '#c8dcf5' : '#1a365d' };
-  const muted = { color: isDark ? '#8896b0' : '#4a5568' };
-  const distributionData = (values, label, palette) => ({ labels: Object.keys(values), datasets: [{ label, data: Object.values(values), backgroundColor: palette, borderColor: isDark ? '#1e2d45' : '#fff', borderWidth: 2 }] });
-  const statClick = type => navigate({ totalInventory: '/store/inventory', available: '/store/inventory?status=Available', issued: '/store/inventory?status=Issued', lowStock: '/store/inventory?status=low-stock' }[type]);
-
-  if (loading) return <div style={{ ...card, margin: 20, textAlign: 'center', ...muted }}>{t.loading}</div>;
-  return <div style={{ padding: 20, maxWidth: 1600, margin: '0 auto', background: isDark ? '#0d1a2e' : '#f0f4f8', minHeight: '100vh' }}>
-    <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
-      <div><h1 style={{ ...text, margin: 0 }}>🏪 {t.dashboard}</h1><p style={muted}>{t.welcome}, {user?.fullName || user?.username || 'Store Manager'}</p></div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <input aria-label={t.search} value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder={t.search} style={{ padding: '8px 12px', borderRadius: 6, border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}` }} />
-        {['week', 'month', 'year'].map(range => <button key={range} onClick={() => setTimeRange(range)} style={{ padding: '8px 12px', borderRadius: 6, border: 0, background: timeRange === range ? colors.primary : isDark ? '#141e2d' : '#fff', color: timeRange === range ? '#fff' : text.color }}>{t[range]}</button>)}
-        <button onClick={() => window.print()} style={{ padding: '8px 12px' }}>🖨️ {t.print}</button><button onClick={exportDashboard} style={{ padding: '8px 12px' }}>⬇️ {t.export}</button>
-      </div>
-    </header>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 20 }}>
-      {[['📦', stats.summary.totalInventory, t.totalInventory, 'totalInventory'], ['✅', stats.summary.available, t.available, 'available'], ['📤', stats.summary.issued, t.issued, 'issued'], ['🔴', stats.summary.lowStock, t.lowStock, 'lowStock'], ['👥', stats.activeUsers, t.activeUsers], ['🏢', stats.departments, t.departments]].map(([icon, value, label, route]) => <button key={label} onClick={() => route && statClick(route)} style={{ ...card, margin: 0, textAlign: 'left', cursor: route ? 'pointer' : 'default' }}><div>{icon}</div><strong style={{ ...text, fontSize: '1.5rem' }}>{value}</strong><div style={muted}>{label}</div></button>)}
-    </div>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 20 }}>
-      <section style={card}><h2 style={title}>{t.inventoryStatus}</h2><div style={{ height: 250 }}><Doughnut data={distributionData(stats.distribution.byStatus, t.inventoryStatus, [colors.success, colors.primary, colors.warning, colors.danger, colors.purple])} options={chartOptions} /></div></section>
-      <section style={card}><h2 style={title}>{t.inventoryByCategory}</h2><div style={{ height: 250 }}><Pie data={distributionData(stats.distribution.byCategory, t.inventoryByCategory, ['#63b3ed', '#68d391', '#f6ad55', '#fc8181', '#b794f4', '#81e6d9'])} options={chartOptions} /></div></section>
-      <section style={card}><h2 style={title}>{t.byLocation}</h2><div style={{ height: 250 }}><Bar data={distributionData(stats.distribution.byLocation, t.byLocation, ['#319795', '#4299e1', '#ed8936', '#805ad5'])} options={chartOptions} /></div></section>
-      <section style={card}><h2 style={title}>{t.byDepartment}</h2><div style={{ height: 250 }}><Bar data={distributionData(stats.distribution.byDepartment, t.byDepartment, ['#48bb78', '#f687b3', '#63b3ed', '#f6ad55'])} options={chartOptions} /></div></section>
-    </div>
-    <section style={card}><h2 style={title}>{t.inventoryMovement} <span style={{ ...muted, fontWeight: 400 }}>({t[timeRange]})</span></h2><div style={{ height: 220 }}><Line data={{ labels: stats.movement.map(item => item.date), datasets: [{ label: t.issued, data: stats.movement.map(item => item.issued), borderColor: colors.primary, backgroundColor: `${colors.primary}33`, fill: true }, { label: t.returned, data: stats.movement.map(item => item.returned), borderColor: colors.success, backgroundColor: `${colors.success}33`, fill: true }] }} options={chartOptions} /></div></section>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 20 }}><section style={card}><h2 style={title}>{t.systemHealth}</h2>{[['Server', stats.health.server], ['Database', stats.health.database], ['RFID', stats.health.rfid], ['Backup', stats.health.backup]].map(([label, value]) => <p key={label} style={{ ...text, display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, paddingBottom: 8 }}><span>{label}</span><strong style={{ color: value === 'Connected' || value === 'Ready' || value === 'Active' ? colors.success : colors.warning }}>{value}</strong></p>)}</section><section style={card}><h2 style={title}>{t.performance}</h2><p style={text}>{t.utilization}: <strong>{stats.summary.totalInventory ? Math.round((stats.summary.issued / stats.summary.totalInventory) * 100) : 0}%</strong></p><p style={text}>{t.rfidTagged}: <strong>{stats.rfidTagged}</strong></p><p style={text}>{t.pendingRequests}: <strong>{stats.summary.pendingRequests}</strong></p></section></div>
-    <section style={card}><h2 style={title}>{t.recentTransactions}</h2>{filteredTransactions.length ? filteredTransactions.slice(0, 8).map(item => <div key={item.id} style={{ ...text, display: 'flex', justifyContent: 'space-between', gap: 8, padding: '9px 0', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}` }}><span>{item.transaction_id || item.id} · {item.type} · {item.item_name || item.asset_name || ''}</span><span style={muted}>{item.status || ''}</span></div>) : <p style={{ ...muted, textAlign: 'center' }}>{searchQuery ? t.noSearchResults : t.noTransactions}</p>}</section>
-    <section style={card}><h2 style={title}>⚡ {t.quickActions}</h2><div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{[[t.receiveStock, '/store/receive'], [t.issueItem, '/store/issue'], [t.returnItem, '/store/returns'], [t.viewRequests, '/store/notifications'], [t.viewReports, '/store/reports']].map(([label, route]) => <button key={route} onClick={() => navigate(route)} style={{ padding: '9px 14px', border: 0, borderRadius: 6, background: colors.primary, color: '#fff', cursor: 'pointer' }}>{label}</button>)}</div></section>
-  </div>;
-};
-
-const englishTranslations = { dashboard: 'Store Dashboard', welcome: 'Welcome', totalInventory: 'Total Inventory', available: 'Available', issued: 'Issued', returned: 'Returned', lowStock: 'Low Stock', pendingRequests: 'Pending Requests', inventoryStatus: 'Inventory Status', inventoryByCategory: 'Inventory by Category', byLocation: 'Assets by Location', byDepartment: 'Assets by Department', inventoryMovement: 'Inventory Movement', recentTransactions: 'Recent Transactions', quickActions: 'Quick Actions', systemHealth: 'System Health', performance: 'Performance Metrics', utilization: 'Asset Utilization', activeUsers: 'Active Users', departments: 'Departments', rfidTagged: 'RFID Tagged', receiveStock: 'Receive Stock', issueItem: 'Issue Item', returnItem: 'Return Item', viewRequests: 'View Requests', viewReports: 'View Reports', week: 'This Week', month: 'This Month', year: 'This Year', search: 'Search dashboard', print: 'Print', export: 'Export JSON', exported: 'Dashboard exported', loading: 'Loading...', fetchError: 'Failed to load dashboard data', noTransactions: 'No recent transactions', noSearchResults: 'No matching transactions' };
-const amharicTranslations = englishTranslations;
-
-export default StoreDashboard;
+  const { data } = state;
+  const kpis = [['totalAssets', data.kpis.totalAssets], ['availableAssets', data.kpis.availableAssets], ['pendingRequests', data.kpis.pendingRequests], ['pendingReceipts', data.kpis.pendingReceipts], ['pendingIssues', data.kpis.pendingIssues], ['pendingReturns', data.kpis.pendingReturns], ['pendingTransfers', data.kpis.pendingTransfers], ['lowStock', data.kpis.lowStock]];
+  const health = data.inventoryHealth || {};
+  const chart = { labels: ['Available', 'Assigned', 'Maintenance', 'Missing', 'Damaged'], datasets: [{ label: 'Assets', data: [health.available || 0, health.assigned || 0, health.maintenance || 0, health.missing || 0, health.damaged || 0], backgroundColor: ['#0ea5e9', '#2563eb', '#f59e0b', '#ef4444', '#64748b'], borderRadius: 5 }] };
+  const quickActions = [['Receive', PackagePlus], ['Issue', PackageOpen], ['Return', PackageX], ['Transfer', Truck], ['Verification', ScanLine], ['Inventory', Boxes], ['Maintenance', Wrench]];
+  return <main className="store-dashboard">
+    <header className="store-dashboard-header"><div><p className="eyebrow">{t.title}</p><h1>{t.subtitle}</h1><p className="store-welcome">{user?.fullName || user?.username || t.title}</p></div><div className="store-connection"><span className="status-dot" /> {data.health?.api === 'online' ? t.online : t.offline}</div></header>
+    <section className="store-kpis" aria-label="Store metrics">{kpis.map(([key, value]) => { const Icon = icons[key]; return <button className="store-kpi" key={key} type="button" onClick={() => navigate(key === 'lowStock' ? routes.LowStock : key === 'availableAssets' ? routes.Available : routes.Inventory)}><span className="kpi-icon"><Icon size={19} /></span><strong>{value ?? 0}</strong><span>{t[key]}</span></button>; })}</section>
+    <section className="store-section"><div className="section-heading"><div><p className="eyebrow">{t.operational}</p><h2>{t.today}</h2></div></div><div className="status-grid">{[['inMaintenance', Wrench], ['awaitingVerification', ScanLine], ['discrepancies', TriangleAlert]].map(([key, Icon]) => <div className="status-tile" key={key}><Icon size={18} /><strong>{data.status?.[key] || 0}</strong><span>{t[key]}</span></div>)}</div></section>
+    <div className="store-columns"><section className="store-section"><div className="section-heading"><h2>{t.inventoryHealth}</h2><BarChart3 size={20} /></div><div className="chart-wrap"><Bar data={chart} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }} /></div></section><section className="store-section"><div className="section-heading"><h2>{t.today}</h2><History size={20} /></div><div className="activity-list">{[['receive', t.receive], ['issue', t.issue], ['return', t.return], ['transfer', t.transfer], ['adjustment', t.adjustment], ['verificationScans', t.scans]].map(([key, label]) => <div key={key}><span>{label}</span><strong>{data.today?.[key] || 0}</strong></div>)}</div></section></div>
+    <section className="store-section"><div className="section-heading"><h2>{t.pending}</h2><ClipboardList size={20} /></div><div className="pending-grid">{(data.pendingTransactions || []).map((item) => <button type="button" className="pending-item" key={item.type} onClick={() => navigate(item.route)}><span>{item.type}</span><strong>{item.count}</strong><small>{t.view} <span aria-hidden="true">›</span></small></button>)}</div></section>
+    <div className="store-columns"><section className="store-section"><div className="section-heading"><h2>{t.alerts}</h2><TriangleAlert size={20} /></div>{data.lowStockAlerts?.length ? <div className="alert-list">{data.lowStockAlerts.map((item) => <div className="alert-row" key={item.id}><div><strong>{item.item}</strong><small>{item.currentQuantity} / {item.reorderLevel}</small></div><span className={`severity severity-${item.severity.toLowerCase()}`}>{item.severity}</span></div>)}<button className="text-link" type="button" onClick={() => navigate(routes.LowStock)}>{t.viewLowStock} <span aria-hidden="true">›</span></button></div> : <p className="empty-copy">{t.noActivity}</p>}</section><section className="store-section"><div className="section-heading"><h2>{t.verification}</h2><ClipboardCheck size={20} /></div>{data.verification?.lastVerification ? <div className="verification-summary"><strong>{date(data.verification.lastVerification)}</strong><div>{[['verified', CheckCircle2], ['missing', TriangleAlert], ['damaged', PackageX], ['unverified', ScanLine]].map(([key, Icon]) => <span key={key}><Icon size={15} /> {t[key]}: {data.verification[key] || 0}</span>)}</div></div> : <p className="empty-copy">{t.noSession}</p>}</section></div>
+    <section className="store-section"><div className="section-heading"><h2>{t.recent}</h2><History size={20} /></div>{data.recentMovements?.length ? <div className="movement-table-wrap"><table><thead><tr><th>Asset</th><th>Type</th><th>From</th><th>To</th><th>Date</th><th>Status</th></tr></thead><tbody>{data.recentMovements.map((movement) => <tr key={movement.id}><td>{movement.asset}</td><td>{movement.type}</td><td>{movement.from}</td><td>{movement.to}</td><td>{date(movement.date)}</td><td><span className="table-status">{movement.status}</span></td></tr>)}</tbody></table></div> : <p className="empty-copy">{t.noActivity}</p>}</section>
+    <section className="store-section"><div className="section-heading"><h2>Quick Actions</h2><PackageCheck size={20} /></div><div className="quick-actions">{quickActions.map(([label, Icon]) => <button type="button" key={label} onClick={() => navigate(routes[label])}><Icon size={18} />{label}</button>)}</div></section>
+  </main>;
+}

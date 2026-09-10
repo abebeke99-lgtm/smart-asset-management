@@ -1,4 +1,4 @@
-const { sequelize, Asset, Department, Inventory, InventoryTransaction, User, Maintenance } = require('../models');
+const { sequelize, Asset, Department, Inventory, InventoryTransaction, User, Maintenance, AssetMovement, AuditLog } = require('../models');
 const { Op } = require('sequelize');
 
 const roles = ['admin', 'store_manager', 'ict_officer'];
@@ -36,7 +36,17 @@ const getInventory = async (req, res, next) => {
     if (req.query.status) where.status = req.query.status;
     if (req.query.location) where.location = req.query.location;
     const items = await Inventory.findAll({ where, include, order: [['id', 'ASC']] });
-    res.json({ success: true, inventory: items.map(normalizeInventory), total: items.length });
+    const normalized = items.map(normalizeInventory);
+    return res.json({
+      success: true,
+      data: normalized,
+      pagination: {
+        page: 1,
+        limit: normalized.length,
+        total: normalized.length,
+        totalPages: 1,
+      }
+    });
   } catch (error) { next(error); }
 };
 
@@ -116,25 +126,60 @@ const getStoreDashboard = async (req, res, next) => {
 
 const createTransaction = async (req, res, next) => {
   if (!canManage(req.user)) return res.status(403).json({ success: false, message: 'Store or ICT authorization required' });
-  const { asset_id, type, quantity, to_location, from_location, reason, notes, department_id } = req.body;
+  const { asset_id, type, quantity, to_location, from_location, reason, notes, department_id, adjustment_type: adjustmentType } = req.body;
   const amount = Number(quantity);
-  if (!asset_id || !type || !Number.isInteger(amount) || amount <= 0 || !['receive', 'issue', 'return', 'transfer', 'damage', 'adjustment'].includes(type)) return res.status(400).json({ success: false, message: 'Valid asset, transaction type, and positive quantity are required' });
+  if (!asset_id || !type || !Number.isSafeInteger(amount) || amount <= 0 || amount > 1000000 || !['receive', 'issue', 'return', 'transfer', 'damage', 'adjustment'].includes(type)) return res.status(400).json({ success: false, message: 'Valid asset, transaction type, and positive quantity are required' });
 
   const transaction = await sequelize.transaction();
   try {
-    const item = await Inventory.findOne({ where: { assetId: asset_id }, transaction, lock: transaction.LOCK.UPDATE });
+    const item = await Inventory.findOne({ where: { assetId: asset_id }, include: [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'collegeId', 'status'] }], transaction, lock: transaction.LOCK.UPDATE });
     if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Inventory record not found' }); }
+    const userCollegeId = req.user?.collegeId ?? req.user?.college_id;
+    if (userCollegeId && Number(item.Asset?.collegeId) !== Number(userCollegeId)) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Inventory item is outside your organization scope' }); }
+    const previous = { quantity: item.quantity, availableQuantity: item.availableQuantity, reservedQuantity: item.reservedQuantity, damagedQuantity: item.damagedQuantity, location: item.location };
     const next = { quantity: item.quantity, availableQuantity: item.availableQuantity, damagedQuantity: item.damagedQuantity, location: to_location || item.location };
     if (type === 'receive') { next.quantity += amount; next.availableQuantity += amount; }
     if (type === 'issue') { if (item.availableQuantity < amount) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Insufficient available stock' }); } next.availableQuantity -= amount; }
     if (type === 'return') next.availableQuantity += amount;
     if (type === 'damage') { if (item.availableQuantity < amount) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Insufficient available stock' }); } next.availableQuantity -= amount; next.damagedQuantity += amount; }
-    if (type === 'adjustment') next.availableQuantity += amount;
+    if (type === 'adjustment') {
+      const direction = adjustmentType === 'decrease' ? -1 : 1;
+      next.quantity += direction * amount;
+      next.availableQuantity += direction * amount;
+      if (next.quantity < 0 || next.availableQuantity < 0) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Insufficient stock for this adjustment' }); }
+    }
+    const adjustmentDetails = type === 'adjustment' ? { adjustmentType, previousQuantity: previous.quantity, adjustmentQuantity: amount, newQuantity: next.quantity, reference: req.body.reference || '', notes: notes || '' } : null;
+    const receiptDetails = type === 'receive' ? { reference: req.body.reference || '', supplier: req.body.supplier || '', purchaseOrder: req.body.purchase_order || '', invoice: req.body.invoice || '', deliveryNote: req.body.delivery_note || '', notes: notes || '' } : null;
+    const transactionNotes = adjustmentDetails ? JSON.stringify(adjustmentDetails) : receiptDetails ? JSON.stringify(receiptDetails) : notes || '';
     await item.update(next, { transaction });
-    const record = await InventoryTransaction.create({ inventoryId: item.id, assetId: asset_id, userId: req.user.id, departmentId: department_id || null, type, quantity: amount, fromLocation: from_location || '', toLocation: to_location || '', reason: reason || '', notes: notes || '' }, { transaction });
+    const record = await InventoryTransaction.create({ inventoryId: item.id, assetId: asset_id, userId: req.user.id, departmentId: department_id || null, type, quantity: amount, fromLocation: from_location || '', toLocation: to_location || '', reason: reason || '', notes: transactionNotes }, { transaction });
+    if (type === 'receive') {
+      await AssetMovement.create({ assetId: asset_id, movementType: 'stock_added', sourceType: 'supplier', sourceId: null, destinationType: 'store', destinationId: null, referenceType: 'inventory_transaction', referenceId: record.id, performedBy: req.user.id, notes: JSON.stringify({ previousQuantity: previous.quantity, addedQuantity: amount, newQuantity: next.quantity, ...receiptDetails }) }, { transaction });
+      await AuditLog.create({ userId: req.user.id, action: 'STORE_STOCK_ADDED', entity: `inventory:${item.id}`, details: JSON.stringify({ assetId: asset_id, transactionId: record.id, previousQuantity: previous.quantity, addedQuantity: amount, newQuantity: next.quantity, location: next.location, ...receiptDetails }) }, { transaction });
+    }
+    if (type === 'adjustment') {
+      await AssetMovement.create({ assetId: asset_id, movementType: 'stock_adjustment', sourceType: 'store', sourceId: null, destinationType: 'store', destinationId: null, referenceType: 'inventory_transaction', referenceId: record.id, performedBy: req.user.id, notes: transactionNotes }, { transaction });
+      await AuditLog.create({ userId: req.user.id, action: 'STORE_STOCK_ADJUSTED', entity: `inventory:${item.id}`, details: JSON.stringify({ assetId: asset_id, transactionId: record.id, ...adjustmentDetails, location: next.location }) }, { transaction });
+    }
     await transaction.commit();
     res.status(201).json({ success: true, transaction: record, inventory: normalizeInventory(await Inventory.findByPk(item.id, { include })) });
   } catch (error) { await transaction.rollback(); next(error); }
 };
 
-module.exports = { getInventory, getTransactions, getStoreDashboard, createTransaction };
+const createStockAdjustment = async (req, res, next) => {
+  const reason = String(req.body.reason || '').trim();
+  const notes = String(req.body.notes || '').trim();
+  if (!['increase', 'decrease'].includes(req.body.adjustment_type) || !reason || (reason.toLowerCase() === 'other' && notes.length < 5)) return res.status(400).json({ success: false, message: 'Adjustment direction and a meaningful reason are required; explain Other adjustments in the notes' });
+  req.body.type = 'adjustment';
+  return createTransaction(req, res, next);
+};
+
+const createReceipt = async (req, res, next) => {
+  const quantity = Number(req.body.quantity);
+  if (!String(req.body.reference || '').trim()) return res.status(400).json({ success: false, message: 'A receiving reference is required' });
+  if (!Number.isSafeInteger(quantity) || quantity <= 0) return res.status(400).json({ success: false, message: 'A positive receiving quantity is required' });
+  req.body.type = 'receive';
+  return createTransaction(req, res, next);
+};
+
+module.exports = { normalizeInventory, getInventory, getTransactions, getStoreDashboard, createTransaction, createStockAdjustment, createReceipt };

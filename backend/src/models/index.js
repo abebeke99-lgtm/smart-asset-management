@@ -48,6 +48,8 @@ College.hasMany(Asset, { foreignKey: 'collegeId' });
 Asset.belongsTo(College, { foreignKey: 'collegeId' });
 Asset.hasMany(AssetMovement, { foreignKey: 'assetId' });
 AssetMovement.belongsTo(Asset, { foreignKey: 'assetId' });
+User.hasMany(AssetMovement, { foreignKey: 'performedBy' });
+AssetMovement.belongsTo(User, { foreignKey: 'performedBy' });
 Asset.hasMany(AssetReturn, { foreignKey: 'assetId' });
 AssetReturn.belongsTo(Asset, { foreignKey: 'assetId' });
 Transfer.hasMany(AssetMovement, { foreignKey: 'referenceId', constraints: false, scope: { referenceType: 'transfer' } });

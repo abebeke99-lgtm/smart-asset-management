@@ -11,7 +11,7 @@ router.get('/next-id', requireAuth, getNextAssetId);
 router.get('/check-id/:value', requireAuth, checkAssetField('assetCode'));
 router.get('/check-serial/:value', requireAuth, checkAssetField('serialNumber'));
 router.get('/check-rfid/:value', requireAuth, checkAssetField('rfidTag'));
-router.get('/:id/history', requireAuth, requireRole('admin', 'ict_officer', 'college'), getAssetHistory);
+router.get('/:id/history', requireAuth, requireRole('admin', 'ict_officer', 'college', 'store_manager'), getAssetHistory);
 router.post('/:id/assign', requireAuth, requireRole('admin', 'ict_officer'), async (req, res, next) => {
 	const transaction = await require('../models').sequelize.transaction();
 	try {
@@ -60,9 +60,9 @@ const linkRfid = async (req, res, next) => {
 		res.json({ success: true, asset: asset.toJSON() });
 	} catch (error) { next(error); }
 };
-router.post('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer'), linkRfid);
-router.put('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer'), linkRfid);
-router.delete('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer'), async (req, res, next) => {
+router.post('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), linkRfid);
+router.put('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), linkRfid);
+router.delete('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), async (req, res, next) => {
 	try {
 		const asset = await require('../models').Asset.findByPk(req.params.id);
 		if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
@@ -87,7 +87,7 @@ router.get('/:id/maintenance', requireAuth, async (req, res, next) => {
 	} catch (error) { next(error); }
 });
 router.post('/', requireAuth, requireRole('admin', 'ict_officer'), createAsset);
-router.put('/:id', requireAuth, requireRole('admin', 'ict_officer'), updateAsset);
+router.put('/:id', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), updateAsset);
 router.delete('/:id', requireAuth, requireRole('admin'), deleteAsset);
 
 module.exports = router;

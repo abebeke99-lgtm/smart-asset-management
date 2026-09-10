@@ -22,6 +22,40 @@ test('resolves legacy login aliases while preserving the college role', () => {
   assert.deepEqual(resolveLoginAliases('ICT Officer'), ['ict officer', 'ict_officer', 'ict-officer', 'ict']);
 });
 
+test('uses a local SQLite database in development when no MySQL config is provided', async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousDbHost = process.env.DB_HOST;
+  const previousDbName = process.env.DB_NAME;
+  const previousDbUser = process.env.DB_USER;
+  const previousDbPassword = process.env.DB_PASSWORD;
+  const previousDbPort = process.env.DB_PORT;
+
+  process.env.NODE_ENV = 'development';
+  delete process.env.DB_HOST;
+  delete process.env.DB_NAME;
+  delete process.env.DB_USER;
+  delete process.env.DB_PASSWORD;
+  delete process.env.DB_PORT;
+
+  delete require.cache[require.resolve('../src/config/database')];
+
+  try {
+    const { getDatabaseConfig, isSqliteEnabled } = require('../src/config/database');
+    const config = getDatabaseConfig();
+    assert.equal(isSqliteEnabled, true);
+    assert.equal(config.dialect, 'sqlite');
+    assert.match(config.storage, /smart_asset_dev\.sqlite$/);
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousNodeEnv;
+    if (previousDbHost === undefined) delete process.env.DB_HOST; else process.env.DB_HOST = previousDbHost;
+    if (previousDbName === undefined) delete process.env.DB_NAME; else process.env.DB_NAME = previousDbName;
+    if (previousDbUser === undefined) delete process.env.DB_USER; else process.env.DB_USER = previousDbUser;
+    if (previousDbPassword === undefined) delete process.env.DB_PASSWORD; else process.env.DB_PASSWORD = previousDbPassword;
+    if (previousDbPort === undefined) delete process.env.DB_PORT; else process.env.DB_PORT = previousDbPort;
+    delete require.cache[require.resolve('../src/config/database')];
+  }
+});
+
 test('accepts infrastructure as a canonical login identity', () => {
   assert.equal(normalizeLoginIdentity('infrastructure'), 'infrastructure');
   assert.equal(normalizeLoginIdentity('Infrastructure Directorate'), 'infrastructure');

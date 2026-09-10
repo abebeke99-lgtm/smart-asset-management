@@ -230,15 +230,18 @@ const StoreAssetRequests = () => {
     const status = String(
       request?.status ||
         request?.request_status ||
+        request?.approval_status ||
         'Pending'
-    ).toLowerCase();
+    ).trim();
 
-    if (status === 'pending') return 'Pending';
-    if (status === 'approved' || status === 'approve') return 'Approved';
-    if (status === 'rejected' || status === 'reject') return 'Rejected';
-    if (status === 'cancelled' || status === 'canceled') return 'Cancelled';
+    const normalized = status.toLowerCase();
 
-    return request?.status || 'Pending';
+    if (normalized === 'pending') return 'Pending';
+    if (normalized === 'approved' || normalized === 'approve') return 'Approved';
+    if (normalized === 'rejected' || normalized === 'reject') return 'Rejected';
+    if (normalized === 'cancelled' || normalized === 'canceled') return 'Cancelled';
+
+    return status || 'Pending';
   };
 
   const getAssetName = (request) =>
@@ -355,6 +358,14 @@ const StoreAssetRequests = () => {
     [requests]
   );
 
+  const cancelledRequests = useMemo(
+    () =>
+      requests.filter(
+        (request) => getStatus(request) === 'Cancelled'
+      ),
+    [requests]
+  );
+
   const resetForm = () => {
     setForm({
       assetId: '',
@@ -393,16 +404,19 @@ const StoreAssetRequests = () => {
     setProcessing(true);
 
     try {
+      const selectedAsset = assets.find(
+        (asset) => String(asset.id) === String(form.assetId)
+      );
+
       await axios.post('/api/approvals', {
+        type: 'asset_issue',
         asset_id: form.assetId,
+        item: selectedAsset?.name || selectedAsset?.asset_name || 'Asset Request',
         quantity: Number(form.quantity),
         department_id: form.departmentId,
-        requested_for: form.requestedFor || null,
-        requested_by: user?.id,
-        priority: form.priority,
-        required_date: form.requiredDate || null,
-        purpose: form.purpose,
-        remarks: form.remarks
+        priority: String(form.priority || 'Normal').toLowerCase(),
+        reason: (form.purpose || form.remarks || 'Asset request').trim(),
+        comment: form.remarks || ''
       });
 
       toast.success(t.success);
@@ -430,13 +444,10 @@ const StoreAssetRequests = () => {
     setProcessing(true);
 
     try {
-      await axios.put(
-        `/api/asset-requests/${id}/approve`,
-        {
-          approved_by: user?.id,
-          remarks: request?.approval_remarks || ''
-        }
-      );
+      await axios.patch(`/api/approvals/${id}`, {
+        status: 'approved',
+        comment: request?.approval_comment || request?.comment || 'Approved by Store Manager'
+      });
 
       toast.success(t.approveSuccess);
 
@@ -462,9 +473,7 @@ const StoreAssetRequests = () => {
 
     if (!id) return;
 
-    const reason = window.prompt(
-      t.rejectionReason
-    );
+    const reason = window.prompt(t.rejectionReason);
 
     if (reason === null) return;
 
@@ -476,13 +485,11 @@ const StoreAssetRequests = () => {
     setProcessing(true);
 
     try {
-      await axios.put(
-        `/api/asset-requests/${id}/reject`,
-        {
-          rejected_by: user?.id,
-          reason: reason.trim()
-        }
-      );
+      await axios.patch(`/api/approvals/${id}`, {
+        status: 'rejected',
+        reason: reason.trim(),
+        comment: reason.trim()
+      });
 
       toast.success(t.rejectSuccess);
 
@@ -754,7 +761,8 @@ const StoreAssetRequests = () => {
           ['📋', requests.length, t.history],
           ['⏳', pendingRequests.length, t.pending],
           ['✅', approvedRequests.length, t.approved],
-          ['❌', rejectedRequests.length, t.rejected]
+          ['❌', rejectedRequests.length, t.rejected],
+          ['🚫', cancelledRequests.length, t.cancelled]
         ].map(([icon, value, label]) => (
           <div
             key={label}

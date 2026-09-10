@@ -85,13 +85,18 @@ const DeptAssetHistory = lazy(() => import('./components/department/DeptAssetHis
 const StoreDashboard = lazy(() => import('./components/store/StoreDashboard'));
 const StoreInventory = lazy(() => import('./components/store/StoreInventory'));
 const StoreAssets = lazy(() => import('./components/store/StoreAssets'));
+const StoreLowStock = lazy(() => import('./components/store/StoreLowStock'));
+const StoreAdjustments = lazy(() => import('./components/store/StoreAdjustments'));
 const StoreReceive = lazy(() => import('./components/store/StoreReceive'));
+const StoreReceivePage = lazy(() => import('./components/store/StoreReceivePage'));
 const StoreIssue = lazy(() => import('./components/store/StoreIssue'));
+const StoreIssuePage = lazy(() => import('./components/store/StoreIssuePage'));
 const StoreReturns = lazy(() => import('./components/store/StoreReturns'));
+const StoreReturnsPage = lazy(() => import('./components/store/StoreReturnsPage'));
 const StoreTransfers = lazy(() => import('./components/store/StoreTransfers'));
 const StoreAssetRequests = lazy(() => import('./components/store/StoreAssetRequests'));
-const StoreTracking = lazy(() => import('./components/store/StoreTracking'));
 const StoreMaintenance = lazy(() => import('./components/store/StoreMaintenance'));
+import StoreTracking from './components/store/StoreTracking';
 const StoreWarranty = lazy(() => import('./components/store/StoreWarranty'));
 const StoreReports = lazy(() => import('./components/store/StoreReports'));
 const StoreNotifications = lazy(() => import('./components/store/StoreNotifications'));
@@ -329,7 +334,7 @@ class ChunkErrorBoundary extends React.Component {
 const translations = {
   en: {
     university: "Mekdela Amba University",
-    systemName: "Smart University Asset Management System",
+    systemName: " University Asset Management System",
     home: "Home",
     about: "About Us",
     contact: "Contact",
@@ -363,7 +368,7 @@ const translations = {
     valuation: "Asset Valuation",
     depreciation: "Depreciation",
     audit: "Audit Trail",
-    footer: "© 2026 Mekdela Amba University - Smart University Asset Management System | All Rights Reserved | Developed by: Bekele :0986481821",
+    footer: "2026 Mekdela Amba University -  University Asset Management System | All Rights Reserved | Developed by: Bekele :0986481821",
     light: "Light",
     dark: "Dark",
     language: "Language",
@@ -415,7 +420,7 @@ const translations = {
   },
   am: {
     university: "መቅደላ አምባ ዩኒቨርሲቲ",
-    systemName: "ስማርት ዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት",
+    systemName: " ዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት",
     home: "መነሻ",
     about: "ስለ እኛ",
     contact: "አግኙን",
@@ -449,7 +454,7 @@ const translations = {
     valuation: "የንብረት ዋጋ ግምት",
     depreciation: "ውድመት",
     audit: "የኦዲት መንገድ",
-    footer: "© 2026 መቅደላ አምባ ዩኒቨርሲቲ - ስማርት ንብረት አስተዳደር ስርዓት | ሁሉም መብቶች ተጠብቀዋል | የተሰራዉ በ: በቀለ :0986481821",
+    footer: "2026 መቅደላ አምባ ዩኒቨርሲቲ -  ንብረት አስተዳደር ስርዓት | ሁሉም መብቶች ተጠብቀዋል | የተሰራዉ በ: በቀለ :0986481821",
     light: "ብርሃን",
     dark: "ጨለማ",
     language: "ቋንቋ",
@@ -2435,11 +2440,11 @@ function AppContent() {
                 <Route index element={<StoreDashboard />} />
                 <Route path="inventory" element={<StoreInventory />} />
                 <Route path="available-assets" element={<StoreAssets />} />
-                <Route path="low-stock" element={<StoreInventory />} />
-                <Route path="stock-adjustments" element={<StoreInventory />} />
-                <Route path="receive" element={<StoreReceive />} />
-                <Route path="issue" element={<StoreIssue />} />
-                <Route path="returns" element={<StoreReturns />} />
+                <Route path="low-stock" element={<StoreLowStock />} />
+                <Route path="stock-adjustments" element={<StoreAdjustments />} />
+                <Route path="receive" element={<StoreReceivePage />} />
+                <Route path="issue" element={<StoreIssuePage />} />
+                <Route path="returns" element={<StoreReturnsPage />} />
                 <Route path="transfers" element={<StoreTransfers />} />
                 <Route path="requests" element={<StoreAssetRequests />} />
                 <Route path="tracking" element={<StoreTracking />} />

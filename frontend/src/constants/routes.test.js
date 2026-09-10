@@ -8,6 +8,7 @@ describe('Store Manager route configuration', () => {
       expect.arrayContaining([
         '/store',
         '/store/inventory',
+        '/store/available-assets',
         '/store/assets',
         '/store/receive',
         '/store/issue',
@@ -18,6 +19,8 @@ describe('Store Manager route configuration', () => {
         '/store/history'
       ])
     );
+
+    expect(routes).not.toContain('/store/profile');
 
     expect(routes).not.toEqual(
       expect.arrayContaining([

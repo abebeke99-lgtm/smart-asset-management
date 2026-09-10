@@ -7,6 +7,12 @@ const router = express.Router();
 const canManageTransfers = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager')];
 const canRequestTransfers = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college')];
 
+const generateTransferNumber = () => {
+  const year = new Date().getFullYear();
+  const sequence = `${Date.now().toString(36).slice(-6).toUpperCase()}${Math.floor(Math.random() * 900 + 100)}`;
+  return `TRF-${year}-${sequence}`;
+};
+
 const toTransferResponse = (transfer) => {
   const data = transfer.toJSON();
   return {
@@ -183,14 +189,24 @@ router.get('/:id', requireAuth, requireRole('admin', 'ict_officer', 'store_manag
 router.post('/', ...canRequestTransfers, async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
-    const { assetId, destinationDepartment, newLocation, transferReason, transferDate, notes } = req.body;
+    const assetId = Number(req.body.assetId ?? req.body.asset_id);
+    const destinationDepartment = req.body.destinationDepartment ?? req.body.destinationDepartmentId ?? req.body.destination_department_id ?? req.body.destination_department;
+    const newLocation = String(req.body.newLocation ?? req.body.new_location ?? req.body.location ?? '').trim();
+    const transferReason = String(req.body.transferReason ?? req.body.reason ?? req.body.transfer_reason ?? '').trim();
+    const notes = String(req.body.notes || '').trim();
+    const transferDate = validateTransferDate(req.body.transferDate ?? req.body.transfer_date ?? req.body.date);
 
-    if (!assetId || !destinationDepartment || !newLocation || !String(transferReason || '').trim()) {
+    if (!assetId || !destinationDepartment || !newLocation || !transferReason) {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
         message: 'Asset, destination department, destination location, and transfer reason are required'
       });
+    }
+
+    if (!transferDate) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Invalid transfer date' });
     }
 
     const date = validateTransferDate(transferDate);
@@ -231,23 +247,35 @@ router.post('/', ...canRequestTransfers, async (req, res, next) => {
       return res.status(409).json({ success: false, message: 'Asset already has a pending transfer' });
     }
 
+    let transferNumber = generateTransferNumber();
+    let existingTransfer = await Transfer.findOne({ where: { transferNumber }, transaction });
+    while (existingTransfer) {
+      transferNumber = generateTransferNumber();
+      existingTransfer = await Transfer.findOne({ where: { transferNumber }, transaction });
+    }
+
     const transfer = await Transfer.create({
+      transferNumber,
       assetId,
       sourceDepartment: asset.department || '',
       destinationDepartment: destination.name,
+      sourceDepartmentId: asset.departmentId || null,
+      destinationDepartmentId: destination.id || null,
       currentLocation: asset.location || '',
-      newLocation: String(newLocation).trim(),
-      transferReason: String(transferReason).trim(),
-      transferDate: date,
+      newLocation,
+      transferReason,
+      transferDate,
       status: 'Pending',
-      notes: notes || '',
-      createdBy: req.user.id
+      notes,
+      createdBy: req.user.id,
+      requestedBy: req.user.id,
+      requestedAt: new Date(),
     }, { transaction });
 
-    await AuditLog.create({ userId: req.user.id, action: 'CREATE_TRANSFER', entity: `asset:${asset.id}`, details: JSON.stringify({ transferId: transfer.id, assetId: asset.id }) }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'CREATE_TRANSFER', entity: `transfer:${transfer.id}`, details: JSON.stringify({ transferId: transfer.id, transferNumber, assetId: asset.id, destinationDepartment: destination.name, destinationLocation: newLocation }) }, { transaction });
     await transaction.commit();
     const populatedTransfer = await Transfer.findByPk(transfer.id, { include: transferInclude });
-    res.status(201).json({ success: true, data: toTransferResponse(populatedTransfer) });
+    res.status(201).json({ success: true, data: toTransferResponse(populatedTransfer), message: 'Transfer created successfully' });
   } catch (error) {
     await transaction.rollback();
     next(error);
@@ -350,3 +378,4 @@ router.delete('/:id', ...canManageTransfers, async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.generateTransferNumber = generateTransferNumber;
