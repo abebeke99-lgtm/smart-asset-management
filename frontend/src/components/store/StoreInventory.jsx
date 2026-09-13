@@ -5,7 +5,7 @@ import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Lege
 import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/UiContext';
-import axios from 'axios';
+import { apiClient } from '../../utils/api';
 import './StoreInventory.css';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
@@ -31,7 +31,7 @@ export default function StoreInventory() {
     setError('');
     refresh ? setRefreshing(true) : setLoading(true);
     try {
-      const response = await axios.get('/api/store/inventory', { params: { ...filters, page, pageSize: 20 } });
+      const response = await apiClient.get('/api/store/inventory', { params: { ...filters, page, pageSize: 20 } });
       setItems(Array.isArray(response.data?.data) ? response.data.data : []);
       setSummary({ ...emptySummary, ...(response.data?.summary || {}) });
       setPagination({ page, pageSize: 20, ...(response.data?.pagination || {}) });
@@ -57,10 +57,10 @@ export default function StoreInventory() {
   const exportInventory = async () => {
     setExporting(true);
     try {
-      const first = await axios.get('/api/store/inventory', { params: { ...filters, page: 1, pageSize: 100 } });
+      const first = await apiClient.get('/api/store/inventory', { params: { ...filters, page: 1, pageSize: 100 } });
       const firstPage = Array.isArray(first.data?.data) ? first.data.data : [];
       const totalPages = first.data?.pagination?.totalPages || 1;
-      const remaining = await Promise.all(Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) => axios.get('/api/store/inventory', { params: { ...filters, page: index + 2, pageSize: 100 } })));
+      const remaining = await Promise.all(Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) => apiClient.get('/api/store/inventory', { params: { ...filters, page: index + 2, pageSize: 100 } })));
       const allItems = firstPage.concat(...remaining.map((response) => Array.isArray(response.data?.data) ? response.data.data : []));
       const rows = allItems.map((item) => ({ 'Asset ID': item.asset_tag || item.asset_id || '', Name: item.name || '', Category: item.category || '', Quantity: value(item, 'quantity'), Available: value(item, 'availableQuantity', 'available_quantity'), Reserved: value(item, 'reservedQuantity', 'reserved_quantity'), Assigned: value(item, 'issuedQuantity', 'issued_quantity'), Status: status(item), Location: item.location || '', Condition: item.condition || '', 'Stock Status': stockStatus(item) }));
       const workbook = XLSX.utils.book_new();

@@ -9,8 +9,9 @@ const canRequestTransfers = [requireAuth, requireRole('admin', 'ict_officer', 's
 
 const generateTransferNumber = () => {
   const year = new Date().getFullYear();
-  const sequence = `${Date.now().toString(36).slice(-6).toUpperCase()}${Math.floor(Math.random() * 900 + 100)}`;
-  return `TRF-${year}-${sequence}`;
+  const timestampPart = `${Date.now()}`.slice(-8);
+  const randomPart = `${Math.floor(Math.random() * 9000) + 1000}`;
+  return `TRF-${year}-${timestampPart}${randomPart}`;
 };
 
 const toTransferResponse = (transfer) => {

@@ -1,7 +1,40 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import { AlertTriangle, CheckCircle2, ClipboardCheck, ClipboardList, RefreshCw, ScanLine, Search, ShieldCheck, XCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { apiClient } from '../../utils/api';
 import { useLanguage } from '../../contexts/UiContext';
+
+const statusOptions = ['available', 'assigned', 'in-use', 'in_store', 'in-store', 'maintenance', 'damaged', 'missing', 'retired'];
+const conditionOptions = ['Good', 'Fair', 'Damaged', 'Poor', 'Needs Repair'];
+const defaultObservation = { presence: 'found', location: '', status: 'available', condition: 'Good', quantity: '1', identifier: '' };
+
+const typeMatches = (candidate, query) => {
+  const value = String(candidate || '').toLowerCase();
+  return value.includes(String(query || '').trim().toLowerCase());
+};
+
+const evaluateResult = (asset, observation, inventoryRow) => {
+  const officialLocation = String(asset?.location || '').trim();
+  const observedLocation = String(observation.location || officialLocation).trim();
+  const officialStatus = String(asset?.status || '').trim() || 'available';
+  const observedStatus = String(observation.status || officialStatus).trim() || 'available';
+  const officialCondition = String(asset?.condition || '').trim() || 'Good';
+  const observedCondition = String(observation.condition || officialCondition).trim() || 'Good';
+  const qty = Number(inventoryRow?.availableQuantity ?? inventoryRow?.quantity ?? 0);
+  const observedQuantity = Number(observation.quantity ?? qty);
+
+  if (observation.presence === 'not_found') return 'missing';
+  const mismatches = [];
+  if (officialLocation && observedLocation && officialLocation !== observedLocation) mismatches.push('wrong_location');
+  if (officialStatus && observedStatus && officialStatus !== observedStatus) mismatches.push('needs_review');
+  if (officialCondition && observedCondition && officialCondition !== observedCondition) mismatches.push('damaged');
+  if (Number.isFinite(qty) && Number.isFinite(observedQuantity) && qty !== observedQuantity) mismatches.push('needs_review');
+
+  if (mismatches.length === 0) return 'verified';
+  if (mismatches.includes('wrong_location')) return 'wrong_location';
+  if (mismatches.includes('damaged')) return 'damaged';
+  return 'needs_review';
+};
 
 const StoreTracking = () => {
   const { language, theme } = useLanguage();
@@ -10,428 +43,398 @@ const StoreTracking = () => {
 
   const [activeTab, setActiveTab] = useState('lookup');
   const [assets, setAssets] = useState([]);
-  const [trackingHistory, setTrackingHistory] = useState([]);
-  const [selectedAsset, setSelectedAsset] = useState(null);
-  const [showDetails, setShowDetails] = useState(false);
+  const [inventoryRows, setInventoryRows] = useState([]);
+  const [sessions, setSessions] = useState([]);
+  const [summary, setSummary] = useState({ totalAssets: 0, verified: 0, pending: 0, discrepancies: 0 });
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
-  const [lookupType, setLookupType] = useState('RFID');
-  const [identifier, setIdentifier] = useState('');
-  const [location, setLocation] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [selectedSessionId, setSelectedSessionId] = useState(null);
+  const [assetQuery, setAssetQuery] = useState('');
   const [lookupMessage, setLookupMessage] = useState('');
+  const [observation, setObservation] = useState(defaultObservation);
+  const [verificationNotes, setVerificationNotes] = useState('');
 
-  const t = isAmharic
-    ? {
-        title: 'RFID / QR ክትትል',
-        subtitle: 'ንብረትን በRFID እና የንብረት ኮድ ይመልከቱ እና ያስተዳድሩ።',
-        lookup: 'ፍለጋ',
-        lookupPlaceholder: 'RFID ወይም የንብረት ኮድ ያስገቡ',
-        findAsset: 'ንብረት ፈልግ',
-        assetFound: 'ንብረት ተገኝቷል።',
-        notFound: 'ምንም ንብረት አልተገኘም።',
-        noRecentActivity: 'ምንም የቅርብ ክትትል መረጃ የለም።',
-        scanEvent: 'የስካን ክስተት መዝግብ',
-        registerRfid: 'RFID መመዝገብ',
-        recentActivity: 'የቅርብ እንቅስቃሴ',
-        assetList: 'ንብረቶች',
-        refresh: 'አድስ',
-        loading: 'በመጫን ላይ...',
-        registerSuccess: 'RFID በተሳካ ሁኔታ ተመዝግቧል።',
-        scanSuccess: 'የስካን ክስተት ተመዝግቧል።',
-        error: 'ሂደቱ አልተሳካም።',
-      }
-    : {
-        title: 'RFID / QR Tracking',
-        subtitle: 'Identify and manage assets using RFID and asset identifiers from the live system.',
-        lookup: 'Lookup',
-        lookupPlaceholder: 'Enter RFID or asset code',
-        findAsset: 'Find Asset',
-        assetFound: 'Asset identified successfully.',
-        notFound: 'No matching asset was found.',
-        noRecentActivity: 'No recent tracking activity.',
-        scanEvent: 'Record Scan Event',
-        registerRfid: 'Register RFID',
-        recentActivity: 'Recent Activity',
-        assetList: 'Asset List',
-        refresh: 'Refresh',
-        loading: 'Loading...',
-        registerSuccess: 'RFID tag registered successfully.',
-        scanSuccess: 'Tracking event recorded successfully.',
-        error: 'The operation failed.',
-      };
-
-  const parseAssetRows = (response) => {
-    const data = response?.data;
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data?.assets)) return data.assets;
-    if (Array.isArray(data?.data)) return data.data;
-    return [];
+  const t = isAmharic ? {
+    title: 'የንብረት ማረጋገጫ',
+    subtitle: 'ለሙሉ የዩኒቨርሲቲ ንብረቶች ልዩነቶችን የሚያሳይ ማረጋገጫ ሥራ።',
+    lookup: 'ፍለጋ',
+    placeholder: 'RFID, QR, asset code ወይም serial ያስገቡ',
+    findAsset: 'ንብረት ፈልግ',
+    pageButton: '+ አዲስ ማረጋገጫ',
+    overview: 'አጠቃላይ እይታ',
+    verified: 'ተረጋግጧል',
+    pending: 'በመጠባበቅ ላይ',
+    discrepancies: 'ልዩነቶች',
+    total: 'አጠቃልለው ንብረቶች',
+    verifyAsset: 'ንብረት ማረጋገጫ',
+    officialRecord: 'የሕጋዊ መዝገብ',
+    observedRecord: 'የተመለከተው መዝገብ',
+    confirm: 'ማረጋገጫ አረጋግጥ',
+    loading: 'በመጫን ላይ...',
+    retry: 'እንደገና ሞክር',
+    notFound: 'ምንም አይነት ንብረት አልተገኘም።',
+    assetFound: 'ንብረት በተሳካ ሁኔታ ተገኝቷል።',
+    noSession: 'እስካሁን ክፍት ማረጋገጫ አልነበረም።',
+    verificationHistory: 'የተረጋገጠ ታሪክ',
+    method: 'ዘዴ',
+    result: 'ውጤት',
+    verifiedBy: 'የተረጋገጠው',
+    notes: 'ማስታወሻ',
+    missing: 'የጎደለ',
+    warning: 'ልዩነት',
+    view: 'ይመልከቱ',
+  } : {
+    title: 'Asset Verification',
+    subtitle: 'Verify physical university assets against their official records and identify discrepancies.',
+    lookup: 'Lookup',
+    placeholder: 'Enter RFID, QR, asset code or serial number',
+    findAsset: 'Find Asset',
+    pageButton: '+ New Verification',
+    overview: 'Overview',
+    verified: 'Verified',
+    pending: 'Pending',
+    discrepancies: 'Discrepancies',
+    total: 'Total Assets',
+    verifyAsset: 'Verify Asset',
+    officialRecord: 'Official Record',
+    observedRecord: 'Observed Record',
+    confirm: 'Confirm Verification',
+    loading: 'Loading...',
+    retry: 'Retry',
+    notFound: 'No matching asset was found.',
+    assetFound: 'Asset identified successfully.',
+    noSession: 'No verification sessions are available yet.',
+    verificationHistory: 'Verification History',
+    method: 'Method',
+    result: 'Result',
+    verifiedBy: 'Verified By',
+    notes: 'Notes',
+    missing: 'Missing',
+    warning: 'Mismatch',
+    view: 'View',
   };
 
-  const parseLogRows = (response) => {
-    const data = response?.data;
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data?.logs)) return data.logs;
-    if (Array.isArray(data?.data)) return data.data;
-    return [];
-  };
-
-  const fetchTrackingData = useCallback(async () => {
-    setLoading(true);
+  const fetchStoreData = useCallback(async () => {
     try {
-      const [assetResponse, logResponse] = await Promise.allSettled([
-        axios.get('/api/assets', { params: { limit: 1000 } }),
-        axios.get('/api/rfid', { params: { limit: 200 } })
+      setLoading(true);
+      const [assetsResponse, inventoryResponse, sessionsResponse] = await Promise.all([
+        apiClient.get('/api/assets', { params: { limit: 1000 } }),
+        apiClient.get('/api/store/inventory', { params: { page: 1, pageSize: 200 } }),
+        apiClient.get('/api/store/verification'),
       ]);
 
-      setAssets(assetResponse.status === 'fulfilled' ? parseAssetRows(assetResponse.value) : []);
-      setTrackingHistory(logResponse.status === 'fulfilled' ? parseLogRows(logResponse.value) : []);
+      const assetRows = assetsResponse.data?.data || assetsResponse.data?.assets || [];
+      const inventory = inventoryResponse.data?.data?.items || inventoryResponse.data?.data || [];
+      const sessionRows = sessionsResponse.data?.data || [];
+      const verificationItems = sessionRows.flatMap((session) => (session.VerificationItems || []).map((item) => ({ ...item, sessionId: session.id, sessionName: session.name })));
+      const verifiedCount = verificationItems.filter((item) => item.state === 'verified').length;
+      const pendingCount = verificationItems.filter((item) => item.state === 'needs_review' || item.state === 'unverified' || item.state === 'wrong_location').length;
+      const discrepancyCount = verificationItems.filter((item) => ['wrong_location', 'damaged', 'missing', 'needs_review', 'unidentified'].includes(item.state)).length;
+
+      setAssets(assetRows);
+      setInventoryRows(inventory);
+      setSessions(sessionRows);
+      setSummary({
+        totalAssets: assetRows.length,
+        verified: verifiedCount,
+        pending: pendingCount,
+        discrepancies: discrepancyCount,
+      });
     } catch (error) {
-      setAssets([]);
-      setTrackingHistory([]);
-      toast.error(t.error);
+      toast.error(error?.response?.data?.message || 'Unable to load verification data');
     } finally {
       setLoading(false);
     }
-  }, [t.error]);
+  }, []);
 
   useEffect(() => {
-    fetchTrackingData();
-  }, [fetchTrackingData]);
+    fetchStoreData();
+  }, [fetchStoreData]);
 
-  const stats = useMemo(() => {
-    const rfidCount = assets.filter((asset) => String(asset.rfidTag || asset.rfid_tag || '').trim()).length;
-    const assetCodeCount = assets.filter((asset) => String(asset.assetCode || asset.asset_tag || '').trim()).length;
-    const today = new Date();
-    const scansToday = trackingHistory.filter((entry) => {
-      const date = new Date(entry.createdAt || entry.timestamp || entry.created_at || 0);
-      return !Number.isNaN(date.getTime()) && date.toDateString() === today.toDateString();
-    }).length;
+  const activeSession = useMemo(
+    () => sessions.find((session) => ['draft', 'in_progress', 'submitted'].includes(session.status)) || sessions[0] || null,
+    [sessions]
+  );
 
-    return {
-      totalAssets: assets.length,
-      rfidCount,
-      assetCodeCount,
-      scansToday,
-      lastScan: trackingHistory[0]?.createdAt || trackingHistory[0]?.timestamp || null,
-    };
-  }, [assets, trackingHistory]);
+  const uniqueLocations = useMemo(
+    () => [...new Set(assets.map((asset) => asset.location).filter(Boolean))],
+    [assets]
+  );
 
-  const handleLookup = async (event) => {
-    event.preventDefault();
-    const query = identifier.trim();
-    if (!query) {
-      toast.error(t.lookupPlaceholder);
-      return;
+  const findAssetByIdentifier = useCallback(async (query) => {
+    const normalized = String(query || '').trim();
+    if (!normalized) {
+      setLookupMessage(t.notFound);
+      return null;
     }
 
-    setProcessing(true);
-    setLookupMessage('');
-
     try {
-      const response = await axios.get('/api/assets', { params: { search: query, limit: 20 } });
-      const rows = parseAssetRows(response);
+      const response = await apiClient.get('/api/assets', { params: { search: normalized, limit: 50 } });
+      const rows = response.data?.data || response.data?.assets || [];
       const match = rows.find((asset) => {
-        const values = [
-          asset.rfidTag || asset.rfid_tag || '',
-          asset.assetCode || asset.asset_tag || '',
-          asset.serialNumber || asset.serial_number || '',
-          asset.name || '',
-        ].map((value) => String(value).toLowerCase());
-
-        const normalized = query.toLowerCase();
-        if (lookupType === 'RFID') {
-          return values.some((value) => value === normalized);
-        }
-        return values.some((value) => value.includes(normalized));
+        const candidates = [
+          asset.assetCode,
+          asset.rfidTag,
+          asset.serialNumber,
+          asset.name,
+          asset.location,
+        ].filter(Boolean);
+        return candidates.some((value) => typeMatches(value, normalized));
       });
 
       if (!match) {
-        setSelectedAsset(null);
         setLookupMessage(t.notFound);
-        toast.info(t.notFound);
-        return;
+        setSelectedAsset(null);
+        return null;
       }
 
+      const inventoryMatch = Array.isArray(inventoryRows)
+        ? inventoryRows.find((row) => Number(row.assetId) === Number(match.id) || String(row.assetId) === String(match.id))
+        : null;
+
       setSelectedAsset(match);
-      setLocation(String(match.location || match.current_location || ''));
+      setObservation((current) => ({
+        ...current,
+        location: match.location || '',
+        status: match.status || 'available',
+        condition: match.condition || 'Good',
+        quantity: inventoryMatch ? String(inventoryMatch.availableQuantity ?? inventoryMatch.quantity ?? 1) : '1',
+        identifier: normalized,
+      }));
       setLookupMessage(t.assetFound);
-      toast.success(t.assetFound);
+      return match;
     } catch (error) {
+      setLookupMessage(error?.response?.data?.message || t.notFound);
       setSelectedAsset(null);
-      setLookupMessage(t.notFound);
-      toast.error(error?.response?.data?.message || t.error);
-    } finally {
-      setProcessing(false);
+      return null;
     }
-  };
+  }, [inventoryRows, t.assetFound, t.notFound]);
 
-  const handleRecordScan = async () => {
+  const handleCreateSession = useCallback(async () => {
+    const nextName = `Store Verification ${new Date().toISOString().slice(0, 10)}`;
+    const response = await apiClient.post('/api/store/verification', { name: nextName });
+    const session = response.data?.data || response.data?.session || null;
+    if (session) {
+      setSelectedSessionId(session.id);
+      setSessions((current) => [session, ...current]);
+      return session.id;
+    }
+    return selectedSessionId;
+  }, [selectedSessionId]);
+
+  const handleVerify = useCallback(async () => {
     if (!selectedAsset) {
       toast.error(t.notFound);
       return;
     }
 
-    const tag = selectedAsset.rfidTag || selectedAsset.rfid_tag || identifier.trim() || selectedAsset.assetCode || selectedAsset.asset_tag;
-    if (!tag) {
-      toast.error(t.error);
+    const sessionId = selectedSessionId || activeSession?.id || await handleCreateSession();
+    if (!sessionId) {
+      toast.error('Unable to create a verification session');
       return;
     }
 
-    setProcessing(true);
+    const inventoryMatch = Array.isArray(inventoryRows)
+      ? inventoryRows.find((row) => Number(row.assetId) === Number(selectedAsset.id) || String(row.assetId) === String(selectedAsset.id))
+      : null;
+    const state = evaluateResult(selectedAsset, observation, inventoryMatch);
+
+    setSaving(true);
     try {
-      await axios.post('/api/rfid', {
+      await apiClient.post(`/api/store/verification/${sessionId}/items`, {
         asset_id: selectedAsset.id,
-        assetId: selectedAsset.id,
-        rfid_tag: tag,
-        tag,
-        location: location || selectedAsset.location || '',
-        action: 'scan',
-        notes: 'Manual verification scan by Store Manager',
+        state,
+        notes: verificationNotes || `${state === 'verified' ? 'Asset physically verified' : 'Asset verification recorded with discrepancy'} | ${observation.identifier || selectedAsset.assetCode || selectedAsset.rfidTag || 'manual scan'}`,
       });
-      toast.success(t.scanSuccess);
-      setIdentifier('');
-      setLocation('');
+      toast.success(state === 'verified' ? 'Asset verified successfully.' : 'Verification completed with discrepancies.');
+      setVerificationNotes('');
       setSelectedAsset(null);
-      await fetchTrackingData();
+      setObservation(defaultObservation);
+      setAssetQuery('');
+      await fetchStoreData();
     } catch (error) {
-      toast.error(error?.response?.data?.message || t.error);
+      toast.error(error?.response?.data?.message || 'Verification could not be saved.');
     } finally {
-      setProcessing(false);
+      setSaving(false);
     }
-  };
-
-  const handleRegisterTag = async () => {
-    if (!selectedAsset) {
-      toast.error(t.notFound);
-      return;
-    }
-
-    const tag = identifier.trim();
-    if (!tag) {
-      toast.error(t.lookupPlaceholder);
-      return;
-    }
-
-    setProcessing(true);
-    try {
-      await axios.post(`/api/assets/${selectedAsset.id}/rfid`, {
-        rfid_tag: tag,
-        location: location || selectedAsset.location || '',
-        notes: 'Store Manager RFID registration',
-      });
-      toast.success(t.registerSuccess);
-      await fetchTrackingData();
-    } catch (error) {
-      toast.error(error?.response?.data?.message || t.error);
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const styles = {
-    page: { minHeight: '100vh', padding: '22px', background: isDark ? '#0f172a' : '#f8fafc', color: isDark ? '#e2e8f0' : '#0f172a' },
-    wrapper: { maxWidth: '1400px', margin: '0 auto' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap', marginBottom: '20px' },
-    title: { margin: 0, fontSize: '1.8rem', fontWeight: 800 },
-    subtitle: { margin: '6px 0 0', color: isDark ? '#94a3b8' : '#64748b' },
-    button: { border: 'none', borderRadius: '10px', background: '#2563eb', color: '#fff', fontWeight: 700, padding: '10px 16px', cursor: 'pointer' },
-    card: { background: isDark ? '#111827' : '#ffffff', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: '14px', boxShadow: '0 8px 24px rgba(15,23,42,0.06)', padding: '20px', marginBottom: '18px' },
-    kpiGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '16px', marginBottom: '20px' },
-    kpiCard: { background: isDark ? '#111827' : '#fff', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: '12px', padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' },
-    kpiLabel: { color: isDark ? '#94a3b8' : '#64748b', fontSize: '0.78rem' },
-    kpiValue: { fontSize: '1.6rem', fontWeight: 800 },
-    tabRow: { display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '18px' },
-    tab: { background: 'transparent', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, padding: '9px 12px', borderRadius: '9px', color: isDark ? '#cbd5e1' : '#334155', cursor: 'pointer', fontWeight: 700 },
-    tabActive: { background: '#2563eb', color: '#fff', borderColor: '#2563eb' },
-    formGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: '16px' },
-    input: { width: '100%', boxSizing: 'border-box', border: `1px solid ${isDark ? '#334155' : '#cbd5e1'}`, background: isDark ? '#0f172a' : '#fff', color: isDark ? '#e2e8f0' : '#0f172a', borderRadius: '8px', padding: '10px 12px' },
-    label: { display: 'block', marginBottom: '6px', fontWeight: 700, color: isDark ? '#cbd5e1' : '#475569' },
-    tableWrapper: { overflowX: 'auto' },
-    table: { width: '100%', borderCollapse: 'collapse', minWidth: '700px' },
-    th: { textAlign: 'left', padding: '12px', color: isDark ? '#cbd5e1' : '#475569', borderBottom: `1px solid ${isDark ? '#334155' : '#e2e8f0'}` },
-    td: { padding: '12px', borderBottom: `1px solid ${isDark ? '#1f2937' : '#e2e8f0'}` },
-    empty: { textAlign: 'center', padding: '34px 20px', color: isDark ? '#94a3b8' : '#64748b' },
-    detailGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '12px', marginTop: '18px' },
-    detailItem: { background: isDark ? '#0f172a' : '#f8fafc', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: '10px', padding: '12px' },
-    detailLabel: { fontSize: '0.72rem', color: isDark ? '#94a3b8' : '#64748b', fontWeight: 700, display: 'block', marginBottom: '6px' },
-    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 2000 },
-    modalCard: { width: '100%', maxWidth: '720px', background: isDark ? '#111827' : '#fff', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: '14px', padding: '20px' },
-    closeButton: { border: 'none', background: 'transparent', fontSize: '24px', cursor: 'pointer', color: isDark ? '#cbd5e1' : '#334155' },
-    primaryButton: { marginTop: '18px', border: 'none', background: '#2563eb', color: '#fff', borderRadius: '10px', padding: '11px 18px', fontWeight: 800, cursor: 'pointer' },
-  };
+  }, [activeSession, fetchStoreData, handleCreateSession, inventoryRows, observation, selectedAsset, selectedSessionId, t.notFound, verificationNotes]);
 
   if (loading) {
     return (
-      <div style={styles.page}>
-        <div style={styles.wrapper}>
-          <div style={{ ...styles.card, textAlign: 'center', padding: '42px 24px', color: isDark ? '#cbd5e1' : '#334155', fontWeight: 700 }}>
-            {t.loading}
-          </div>
+      <div style={{ padding: 24 }}>
+        <div style={{ background: isDark ? '#0f172a' : '#fff', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 16, padding: 30, textAlign: 'center' }}>
+          <RefreshCw size={18} style={{ animation: 'spin 1s linear infinite' }} /> {t.loading}
         </div>
       </div>
     );
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.wrapper}>
-        <div style={styles.header}>
+    <div style={{ padding: 24, background: isDark ? '#020817' : '#f8fafc', minHeight: '100vh', color: isDark ? '#e2e8f0' : '#0f172a' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
           <div>
-            <h1 style={styles.title}>{t.title}</h1>
-            <p style={styles.subtitle}>{t.subtitle}</p>
+            <h1 style={{ margin: 0, fontSize: '2rem' }}>{t.title}</h1>
+            <p style={{ margin: '8px 0 0', color: isDark ? '#94a3b8' : '#64748b' }}>{t.subtitle}</p>
           </div>
-          <button type="button" style={styles.button} onClick={fetchTrackingData}>{t.refresh}</button>
+          <button type="button" onClick={handleCreateSession} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 18px', fontWeight: 700, cursor: 'pointer' }}>
+            {t.pageButton}
+          </button>
         </div>
 
-        <div style={styles.kpiGrid}>
-          <div style={styles.kpiCard}><div style={{ fontSize: '1.8rem' }}>📦</div><div><div style={styles.kpiLabel}>Assets</div><div style={styles.kpiValue}>{stats.totalAssets}</div></div></div>
-          <div style={styles.kpiCard}><div style={{ fontSize: '1.8rem' }}>📡</div><div><div style={styles.kpiLabel}>RFID Tagged</div><div style={styles.kpiValue}>{stats.rfidCount}</div></div></div>
-          <div style={styles.kpiCard}><div style={{ fontSize: '1.8rem' }}>🧾</div><div><div style={styles.kpiLabel}>Asset Codes</div><div style={styles.kpiValue}>{stats.assetCodeCount}</div></div></div>
-          <div style={styles.kpiCard}><div style={{ fontSize: '1.8rem' }}>⏱️</div><div><div style={styles.kpiLabel}>Scans Today</div><div style={styles.kpiValue}>{stats.scansToday}</div></div></div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 20 }}>
+          <div style={{ background: isDark ? '#111827' : '#fff', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 14, padding: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><span>{t.total}</span><ClipboardCheck size={18} /></div>
+            <strong style={{ fontSize: 28 }}>{summary.totalAssets}</strong>
+          </div>
+          <div style={{ background: isDark ? '#111827' : '#fff', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 14, padding: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><span>{t.verified}</span><CheckCircle2 size={18} /></div>
+            <strong style={{ fontSize: 28 }}>{summary.verified}</strong>
+          </div>
+          <div style={{ background: isDark ? '#111827' : '#fff', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 14, padding: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><span>{t.pending}</span><ClipboardList size={18} /></div>
+            <strong style={{ fontSize: 28 }}>{summary.pending}</strong>
+          </div>
+          <div style={{ background: isDark ? '#111827' : '#fff', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 14, padding: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}><span>{t.discrepancies}</span><AlertTriangle size={18} /></div>
+            <strong style={{ fontSize: 28 }}>{summary.discrepancies}</strong>
+          </div>
         </div>
 
-        <div style={styles.tabRow}>
-          {['lookup', 'assets', 'history'].map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              style={{ ...styles.tab, ...(activeTab === tab ? styles.tabActive : {}) }}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab === 'lookup' ? t.lookup : tab === 'assets' ? 'Assets' : t.recentActivity}
-            </button>
-          ))}
-        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 20 }}>
+          <div style={{ background: isDark ? '#111827' : '#fff', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 18, padding: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}><Search size={18} /> <h3 style={{ margin: 0 }}>{t.verifyAsset}</h3></div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
+              <input
+                value={assetQuery}
+                onChange={(event) => setAssetQuery(event.target.value)}
+                placeholder={t.placeholder}
+                style={{ flex: 1, minWidth: 220, borderRadius: 10, border: `1px solid ${isDark ? '#334155' : '#dbe2ea'}`, background: isDark ? '#020817' : '#fff', color: isDark ? '#e2e8f0' : '#0f172a', padding: '10px 12px' }}
+              />
+              <button type="button" onClick={() => findAssetByIdentifier(assetQuery)} style={{ background: '#0f766e', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 14px', fontWeight: 700, cursor: 'pointer' }}>
+                {t.findAsset}
+              </button>
+            </div>
 
-        {activeTab === 'lookup' && (
-          <div style={styles.card}>
-            <form onSubmit={handleLookup}>
-              <div style={styles.formGrid}>
-                <div>
-                  <label style={styles.label}>Identifier Type</label>
-                  <select value={lookupType} onChange={(e) => setLookupType(e.target.value)} style={styles.input}>
-                    <option value="RFID">RFID</option>
-                    <option value="ASSET_CODE">Asset Code</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={styles.label}>Identifier</label>
-                  <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder={t.lookupPlaceholder} style={styles.input} />
-                </div>
-                <div>
-                  <label style={styles.label}>Location</label>
-                  <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Current location" style={styles.input} />
-                </div>
-              </div>
-              <button type="submit" disabled={processing} style={styles.primaryButton}>{processing ? t.loading : t.findAsset}</button>
-              {lookupMessage && <div style={{ marginTop: '14px', color: isDark ? '#cbd5e1' : '#334155', fontWeight: 600 }}>{lookupMessage}</div>}
-            </form>
+            {lookupMessage && <div style={{ marginBottom: 12, color: isDark ? '#cbd5e1' : '#334155', fontWeight: 600 }}>{lookupMessage}</div>}
 
             {selectedAsset && (
-              <div style={{ marginTop: '18px', borderTop: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, paddingTop: '18px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <h3 style={{ margin: 0 }}>{selectedAsset.name || selectedAsset.asset_name || 'Asset'}</h3>
-                  <button type="button" onClick={() => setShowDetails(true)} style={{ ...styles.button, background: '#0f766e' }}>View Details</button>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                  <div>
+                    <div style={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: 12, textTransform: 'uppercase' }}>Asset</div>
+                    <div style={{ fontSize: 24, fontWeight: 800 }}>{selectedAsset.name}</div>
+                  </div>
+                  <div style={{ background: '#ecfeff', color: '#0f766e', borderRadius: 999, padding: '6px 10px', fontWeight: 700 }}>Live Record</div>
                 </div>
-                <div style={styles.detailGrid}>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Asset Code</span><span>{selectedAsset.assetCode || selectedAsset.asset_tag || '-'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Serial Number</span><span>{selectedAsset.serialNumber || selectedAsset.serial_number || '-'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Status</span><span>{selectedAsset.status || 'Available'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Location</span><span>{selectedAsset.location || selectedAsset.current_location || 'Location not available'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>Department</span><span>{selectedAsset.department || '-'}</span></div>
-                  <div style={styles.detailItem}><span style={styles.detailLabel}>RFID Tag</span><span>{selectedAsset.rfidTag || selectedAsset.rfid_tag || '-'}</span></div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                  <div style={{ background: isDark ? '#020817' : '#f8fafc', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
+                    <div style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', marginBottom: 6 }}>Asset Code</div>
+                    <div>{selectedAsset.assetCode || '-'}</div>
+                  </div>
+                  <div style={{ background: isDark ? '#020817' : '#f8fafc', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
+                    <div style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', marginBottom: 6 }}>Serial</div>
+                    <div>{selectedAsset.serialNumber || '-'}</div>
+                  </div>
+                  <div style={{ background: isDark ? '#020817' : '#f8fafc', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
+                    <div style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', marginBottom: 6 }}>RFID</div>
+                    <div>{selectedAsset.rfidTag || '-'}</div>
+                  </div>
+                  <div style={{ background: isDark ? '#020817' : '#f8fafc', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
+                    <div style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', marginBottom: 6 }}>Status</div>
+                    <div>{selectedAsset.status || 'available'}</div>
+                  </div>
+                  <div style={{ background: isDark ? '#020817' : '#f8fafc', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
+                    <div style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', marginBottom: 6 }}>Location</div>
+                    <div>{selectedAsset.location || '-'}</div>
+                  </div>
+                  <div style={{ background: isDark ? '#020817' : '#f8fafc', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
+                    <div style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', marginBottom: 6 }}>Condition</div>
+                    <div>{selectedAsset.condition || 'Good'}</div>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '18px' }}>
-                  <button type="button" style={{ ...styles.button, background: '#16a34a' }} onClick={handleRecordScan}>{t.scanEvent}</button>
-                  <button type="button" style={{ ...styles.button, background: '#7c3aed' }} onClick={handleRegisterTag}>{t.registerRfid}</button>
+
+                <div style={{ marginTop: 20, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span>Physical Presence</span>
+                    <select value={observation.presence} onChange={(event) => setObservation((current) => ({ ...current, presence: event.target.value }))} style={{ background: isDark ? '#020817' : '#fff', border: `1px solid ${isDark ? '#334155' : '#dbe2ea'}`, borderRadius: 10, padding: '10px 12px' }}>
+                      <option value="found">Found</option>
+                      <option value="not_found">Not Found</option>
+                    </select>
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span>Observed Location</span>
+                    <select value={observation.location} onChange={(event) => setObservation((current) => ({ ...current, location: event.target.value }))} style={{ background: isDark ? '#020817' : '#fff', border: `1px solid ${isDark ? '#334155' : '#dbe2ea'}`, borderRadius: 10, padding: '10px 12px' }}>
+                      <option value="">Use official</option>
+                      {uniqueLocations.map((location) => <option key={location} value={location}>{location}</option>)}
+                    </select>
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span>Observed Status</span>
+                    <select value={observation.status} onChange={(event) => setObservation((current) => ({ ...current, status: event.target.value }))} style={{ background: isDark ? '#020817' : '#fff', border: `1px solid ${isDark ? '#334155' : '#dbe2ea'}`, borderRadius: 10, padding: '10px 12px' }}>
+                      {statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}
+                    </select>
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span>Observed Condition</span>
+                    <select value={observation.condition} onChange={(event) => setObservation((current) => ({ ...current, condition: event.target.value }))} style={{ background: isDark ? '#020817' : '#fff', border: `1px solid ${isDark ? '#334155' : '#dbe2ea'}`, borderRadius: 10, padding: '10px 12px' }}>
+                      {conditionOptions.map((status) => <option key={status} value={status}>{status}</option>)}
+                    </select>
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span>Observed Quantity</span>
+                    <input type="number" min="0" value={observation.quantity} onChange={(event) => setObservation((current) => ({ ...current, quantity: event.target.value }))} style={{ background: isDark ? '#020817' : '#fff', border: `1px solid ${isDark ? '#334155' : '#dbe2ea'}`, borderRadius: 10, padding: '10px 12px' }} />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span>Identifier Confirmed</span>
+                    <input value={observation.identifier} onChange={(event) => setObservation((current) => ({ ...current, identifier: event.target.value }))} placeholder={selectedAsset.assetCode || selectedAsset.rfidTag || 'identifier'} style={{ background: isDark ? '#020817' : '#fff', border: `1px solid ${isDark ? '#334155' : '#dbe2ea'}`, borderRadius: 10, padding: '10px 12px' }} />
+                  </label>
+                </div>
+
+                <div style={{ marginTop: 18 }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span>Verification Notes</span>
+                    <textarea value={verificationNotes} onChange={(event) => setVerificationNotes(event.target.value)} rows={4} style={{ background: isDark ? '#020817' : '#fff', border: `1px solid ${isDark ? '#334155' : '#dbe2ea'}`, borderRadius: 10, padding: '10px 12px', resize: 'vertical' }} />
+                  </label>
+                </div>
+
+                <div style={{ marginTop: 18, display: 'flex', justifyContent: 'flex-end' }}>
+                  <button type="button" onClick={handleVerify} disabled={saving} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 16px', fontWeight: 700, cursor: 'pointer' }}>
+                    {saving ? 'Saving...' : t.confirm}
+                  </button>
                 </div>
               </div>
             )}
           </div>
-        )}
 
-        {activeTab === 'assets' && (
-          <div style={styles.card}>
-            {assets.length === 0 ? <div style={styles.empty}>No assets found.</div> : (
-              <div style={styles.tableWrapper}>
-                <table style={styles.table}>
-                  <thead>
-                    <tr>
-                      <th style={styles.th}>Asset</th>
-                      <th style={styles.th}>Code</th>
-                      <th style={styles.th}>RFID</th>
-                      <th style={styles.th}>Location</th>
-                      <th style={styles.th}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {assets.map((asset) => (
-                      <tr key={asset.id}>
-                        <td style={styles.td}>{asset.name || asset.asset_name || '-'}</td>
-                        <td style={styles.td}>{asset.assetCode || asset.asset_tag || '-'}</td>
-                        <td style={styles.td}>{asset.rfidTag || asset.rfid_tag || '-'}</td>
-                        <td style={styles.td}>{asset.location || asset.current_location || '-'}</td>
-                        <td style={styles.td}>{asset.status || 'Available'}</td>
-                      </tr>
+          <div style={{ background: isDark ? '#111827' : '#fff', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 18, padding: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}><ShieldCheck size={18} /> <h3 style={{ margin: 0 }}>{t.verificationHistory}</h3></div>
+            {sessions.length === 0 ? (
+              <div style={{ color: isDark ? '#94a3b8' : '#64748b' }}>{t.noSession}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 12 }}>
+                {sessions.slice(0, 8).map((session) => (
+                  <div key={session.id} style={{ border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
+                      <strong>{session.name}</strong>
+                      <span style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b' }}>{session.status}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b' }}>{new Date(session.createdAt).toLocaleString()}</div>
+                    {(session.VerificationItems || []).slice(0, 3).map((item) => (
+                      <div key={`${session.id}-${item.id}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginTop: 8 }}>
+                        <span>{item.Asset?.assetCode || 'Asset'}</span>
+                        <span style={{ color: item.state === 'verified' ? '#16a34a' : '#f59e0b' }}>{item.state}</span>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                ))}
               </div>
             )}
-          </div>
-        )}
-
-        {activeTab === 'history' && (
-          <div style={styles.card}>
-            {trackingHistory.length === 0 ? <div style={styles.empty}>{t.noRecentActivity}</div> : (
-              <div style={styles.tableWrapper}>
-                <table style={styles.table}>
-                  <thead>
-                    <tr>
-                      <th style={styles.th}>Time</th>
-                      <th style={styles.th}>Asset</th>
-                      <th style={styles.th}>Identifier</th>
-                      <th style={styles.th}>Location</th>
-                      <th style={styles.th}>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trackingHistory.slice(0, 20).map((entry) => (
-                      <tr key={entry.id || `${entry.tag || 'scan'}-${entry.createdAt || entry.timestamp || Math.random()}`}>
-                        <td style={styles.td}>{entry.createdAt || entry.timestamp ? new Date(entry.createdAt || entry.timestamp).toLocaleString() : '-'}</td>
-                        <td style={styles.td}>{entry.asset_name || entry.asset?.name || '-'}</td>
-                        <td style={styles.td}>{entry.tag || entry.rfid_tag || entry.asset_tag || '-'}</td>
-                        <td style={styles.td}>{entry.location || entry.reader_location || '-'}</td>
-                        <td style={styles.td}>{entry.action || 'scan'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {showDetails && selectedAsset && (
-        <div style={styles.modalOverlay} onClick={() => setShowDetails(false)}>
-          <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h3 style={{ margin: 0 }}>Asset Information</h3>
-              <button type="button" style={styles.closeButton} onClick={() => setShowDetails(false)}>×</button>
-            </div>
-            <div style={styles.detailGrid}>
-              <div style={styles.detailItem}><span style={styles.detailLabel}>Asset Code</span><span>{selectedAsset.assetCode || selectedAsset.asset_tag || '-'}</span></div>
-              <div style={styles.detailItem}><span style={styles.detailLabel}>Serial Number</span><span>{selectedAsset.serialNumber || selectedAsset.serial_number || '-'}</span></div>
-              <div style={styles.detailItem}><span style={styles.detailLabel}>Status</span><span>{selectedAsset.status || 'Available'}</span></div>
-              <div style={styles.detailItem}><span style={styles.detailLabel}>Location</span><span>{selectedAsset.location || selectedAsset.current_location || 'Location not available'}</span></div>
-              <div style={styles.detailItem}><span style={styles.detailLabel}>Department</span><span>{selectedAsset.department || '-'}</span></div>
-              <div style={styles.detailItem}><span style={styles.detailLabel}>RFID Tag</span><span>{selectedAsset.rfidTag || selectedAsset.rfid_tag || '-'}</span></div>
-            </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };

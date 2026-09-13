@@ -2,11 +2,11 @@
 // src/App.jsx - COMPLETE WITH FIXED NAVIGATION
 // ==============================================
 
-import './App.css';
-import './admin-design-system.css';
+import React, { useState, useEffect, useRef, Suspense, lazy, useMemo } from 'react';
 import axios from 'axios';
 import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate, useLocation, Outlet } from 'react-router-dom';
-import React, { useState, useEffect, useRef, Suspense, lazy, useMemo } from 'react';
+import './App.css';
+import './admin-design-system.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Archive, ArrowLeftRight, BarChart3, Bell, Building2, CalendarClock, Check, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, Github, LayoutDashboard, Linkedin, LogOut, MapPin, Menu, MoreHorizontal, Package, Radio, RefreshCw, Search, Settings, SlidersHorizontal, Trash2, UserCircle, Users, Wrench, X } from 'lucide-react';
@@ -31,6 +31,7 @@ import { UIProvider, useLanguage, useTheme } from './contexts/UiContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
 import { getDepartmentLabel } from './utils/department';
+import StoreTracking from './components/store/StoreTracking';
 
 // ==========================================
 // LAZY LOAD ALL COMPONENTS
@@ -96,7 +97,6 @@ const StoreReturnsPage = lazy(() => import('./components/store/StoreReturnsPage'
 const StoreTransfers = lazy(() => import('./components/store/StoreTransfers'));
 const StoreAssetRequests = lazy(() => import('./components/store/StoreAssetRequests'));
 const StoreMaintenance = lazy(() => import('./components/store/StoreMaintenance'));
-import StoreTracking from './components/store/StoreTracking';
 const StoreWarranty = lazy(() => import('./components/store/StoreWarranty'));
 const StoreReports = lazy(() => import('./components/store/StoreReports'));
 const StoreNotifications = lazy(() => import('./components/store/StoreNotifications'));
@@ -2156,7 +2156,49 @@ function AppContent() {
                 })}
               </>
             )}
-            {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole !== 'finance' && sidebarRole !== 'infrastructure' && sidebarItems.map((item, index) => {
+            {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'ict_officer' && (
+              <>
+                {['Overview', 'IT ASSET MANAGEMENT', 'TECHNICAL OPERATIONS', 'MAINTENANCE', 'TRACKING', 'ANALYTICS', 'SYSTEM'].map((sectionName) => {
+                  const visibleItems = sidebarItems.filter((item) => item.section === sectionName || (sectionName === 'Overview' && item.path === '/ict'));
+                  if (!visibleItems.length) return null;
+                  return (
+                    <React.Fragment key={sectionName}>
+                      <div className="sidebar-section-label">{sectionName}</div>
+                      {visibleItems.map((item) => renderSidebarLink(item))}
+                    </React.Fragment>
+                  );
+                })}
+              </>
+            )}
+            {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'store_manager' && (
+              <>
+                {['Overview', 'INVENTORY MANAGEMENT', 'ASSET OPERATIONS', 'TRACKING', 'MAINTENANCE', 'REPORTING', 'SYSTEM'].map((sectionName) => {
+                  const visibleItems = sidebarItems.filter((item) => item.section === sectionName || (sectionName === 'Overview' && item.path === '/store'));
+                  if (!visibleItems.length) return null;
+                  return (
+                    <React.Fragment key={sectionName}>
+                      <div className="sidebar-section-label">{sectionName}</div>
+                      {visibleItems.map((item) => renderSidebarLink(item))}
+                    </React.Fragment>
+                  );
+                })}
+              </>
+            )}
+            {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'maintenance' && (
+              <>
+                {['Dashboard', 'OPERATIONS', 'PREVENTIVE', 'RESOURCES', 'QUALITY', 'ANALYTICS'].map((sectionName) => {
+                  const visibleItems = sidebarItems.filter((item) => item.section === sectionName || (sectionName === 'Dashboard' && item.path === '/maintenance'));
+                  if (!visibleItems.length) return null;
+                  return (
+                    <React.Fragment key={sectionName}>
+                      <div className="sidebar-section-label">{sectionName}</div>
+                      {visibleItems.map((item) => renderSidebarLink(item))}
+                    </React.Fragment>
+                  );
+                })}
+              </>
+            )}
+            {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole !== 'finance' && sidebarRole !== 'infrastructure' && sidebarRole !== 'ict_officer' && sidebarRole !== 'store_manager' && sidebarRole !== 'maintenance' && sidebarItems.map((item, index) => {
               const previousItem = sidebarItems[index - 1];
               return (
                 <React.Fragment key={item.path}>

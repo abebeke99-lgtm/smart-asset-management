@@ -3,7 +3,7 @@ import { CheckCircle2, ChevronLeft, ChevronRight, Download, MapPin, PackageCheck
 import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/UiContext';
-import axios from 'axios';
+import { apiClient } from '../../utils/api';
 import './StoreAssets.css';
 
 const english = { title: 'Available Assets', subtitle: 'Assets currently available for issue from Store', refresh: 'Refresh', export: 'Export', search: 'Search assets...', category: 'Category', location: 'Location', condition: 'Condition', all: 'All', total: 'Total Available', today: 'Available Today', awaiting: 'Awaiting Issue', low: 'Low Stock', id: 'Asset ID', name: 'Asset Name', tag: 'Asset Tag', serial: 'Serial Number', status: 'Availability', issue: 'Issue', registered: 'Registered', notRegistered: 'Not registered', loading: 'Loading available assets...', error: 'Unable to load available assets.', forbidden: 'You do not have permission to view available assets.', retry: 'Retry', empty: 'No available assets', emptyText: 'There are currently no assets available for issue.', filtered: 'No available assets match your filters.', clear: 'Clear Filters', previous: 'Previous', next: 'Next', of: 'of' };
@@ -25,7 +25,7 @@ export default function StoreAssets() {
   const load = async (page = 1, refresh = false) => {
     refresh ? setRefreshing(true) : setLoading(true); setError('');
     try {
-      const response = await axios.get('/api/store/available-assets', { params: { ...filters, page, pageSize: 20, sortBy: 'name', sortOrder: 'asc' } });
+      const response = await apiClient.get('/api/store/available-assets', { params: { ...filters, page, pageSize: 20, sortBy: 'name', sortOrder: 'asc' } });
       const payload = response.data?.data || {};
       setItems(Array.isArray(payload.items) ? payload.items : []);
       setSummary({ totalAvailable: 0, availableToday: 0, awaitingIssue: 0, lowStock: 0, ...(payload.summary || {}) });
@@ -38,9 +38,9 @@ export default function StoreAssets() {
   const setFilter = (name, value) => setFilters((current) => ({ ...current, [name]: value }));
   const clearFilters = () => setFilters({ search: '', category: '', location: '', condition: '' });
   const exportItems = async () => {
-    const first = await axios.get('/api/store/available-assets', { params: { ...filters, page: 1, pageSize: 100 } });
+    const first = await apiClient.get('/api/store/available-assets', { params: { ...filters, page: 1, pageSize: 100 } });
     const payload = first.data?.data || {}; const allItems = payload.items || [];
-    const responses = await Promise.all(Array.from({ length: Math.max(0, (payload.pagination?.totalPages || 1) - 1) }, (_, index) => axios.get('/api/store/available-assets', { params: { ...filters, page: index + 2, pageSize: 100 } })));
+    const responses = await Promise.all(Array.from({ length: Math.max(0, (payload.pagination?.totalPages || 1) - 1) }, (_, index) => apiClient.get('/api/store/available-assets', { params: { ...filters, page: index + 2, pageSize: 100 } })));
     responses.forEach((response) => allItems.push(...(response.data?.data?.items || [])));
     const rows = allItems.map((item) => ({ 'Asset ID': item.assetId || item.id, 'Asset Name': item.name || '', Category: item.category || '', 'Asset Tag': item.assetCode || '', 'Serial Number': item.serialNumber || t.notRegistered, Condition: item.condition || '', Location: item.location || '', Availability: item.status || 'Available', RFID: item.rfidTag || t.notRegistered }));
     const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Available Assets'); XLSX.writeFile(workbook, `available-assets-${new Date().toISOString().slice(0, 10)}.xlsx`);

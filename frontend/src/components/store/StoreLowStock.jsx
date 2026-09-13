@@ -3,7 +3,7 @@ import { AlertCircle, AlertTriangle, ChevronLeft, ChevronRight, Download, MapPin
 import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/UiContext';
-import axios from 'axios';
+import { apiClient } from '../../utils/api';
 import './StoreLowStock.css';
 
 const english = { title: 'Low Stock Alerts', subtitle: 'Monitor inventory items that require replenishment.', refresh: 'Refresh', export: 'Export', inventory: 'View Inventory', search: 'Search items, tags, serials...', severity: 'Severity', category: 'Category', location: 'Location', all: 'All', clear: 'Clear Filters', lowStock: 'Total Low Stock', critical: 'Critical', outOfStock: 'Out of Stock', shortage: 'Total Shortage', categories: 'Categories Affected', locations: 'Locations Affected', item: 'Item / Asset', code: 'Asset Tag', current: 'Current Stock', available: 'Available', reserved: 'Reserved', assigned: 'Assigned', reorder: 'Reorder Level', severityCol: 'Severity', updated: 'Last Updated', action: 'Action', addStock: 'Add Stock', low: 'LOW', out: 'OUT OF STOCK', loading: 'Loading low-stock alerts...', error: 'Unable to load low-stock alerts.', forbidden: 'You do not have permission to view low-stock alerts.', retry: 'Retry', empty: 'No low-stock items', emptyText: 'All monitored inventory is currently above its reorder threshold.', filtered: 'No matching low-stock items', filteredText: 'Try changing your filters or search.', previous: 'Previous', next: 'Next', of: 'of', notRegistered: 'Not registered' };
@@ -25,7 +25,7 @@ export default function StoreLowStock() {
   const load = async (page = 1, refresh = false) => {
     refresh ? setRefreshing(true) : setLoading(true); setError('');
     try {
-      const response = await axios.get('/api/store/low-stock', { params: { ...filters, page, pageSize: 25, sortBy: 'shortage', sortOrder: 'desc' } });
+      const response = await apiClient.get('/api/store/low-stock', { params: { ...filters, page, pageSize: 25, sortBy: 'shortage', sortOrder: 'desc' } });
       const payload = response.data?.data || {};
       setItems(Array.isArray(payload.items) ? payload.items : []);
       setSummary({ lowStock: 0, critical: 0, outOfStock: 0, totalShortage: 0, categoriesAffected: 0, locationsAffected: 0, ...(payload.summary || {}) });
@@ -38,9 +38,9 @@ export default function StoreLowStock() {
   const setFilter = (name, value) => setFilters((current) => ({ ...current, [name]: value }));
   const clearFilters = () => setFilters({ search: '', severity: '', category: '', location: '' });
   const exportItems = async () => {
-    const first = await axios.get('/api/store/low-stock', { params: { ...filters, page: 1, pageSize: 100, sortBy: 'shortage', sortOrder: 'desc' } });
+    const first = await apiClient.get('/api/store/low-stock', { params: { ...filters, page: 1, pageSize: 100, sortBy: 'shortage', sortOrder: 'desc' } });
     const firstPayload = first.data?.data || {}; const allItems = [...(firstPayload.items || [])];
-    const responses = await Promise.all(Array.from({ length: Math.max(0, (firstPayload.pagination?.totalPages || 1) - 1) }, (_, index) => axios.get('/api/store/low-stock', { params: { ...filters, page: index + 2, pageSize: 100, sortBy: 'shortage', sortOrder: 'desc' } })));
+    const responses = await Promise.all(Array.from({ length: Math.max(0, (firstPayload.pagination?.totalPages || 1) - 1) }, (_, index) => apiClient.get('/api/store/low-stock', { params: { ...filters, page: index + 2, pageSize: 100, sortBy: 'shortage', sortOrder: 'desc' } })));
     responses.forEach((response) => allItems.push(...(response.data?.data?.items || [])));
     const rows = allItems.map((item) => ({ Item: item.item, Category: item.category, 'Asset Tag': item.assetCode, 'Current Stock': item.currentStock, Available: item.available, Reserved: item.reserved, Assigned: item.assigned, 'Reorder Level': item.reorderLevel, Shortage: item.shortage, Severity: item.severity, Location: item.location, 'Last Updated': item.lastUpdated }));
     const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Low Stock'); XLSX.writeFile(workbook, `low-stock-${new Date().toISOString().slice(0, 10)}.xlsx`);

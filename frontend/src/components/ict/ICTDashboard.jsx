@@ -12,6 +12,60 @@ import { useNavigate } from 'react-router-dom';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement, PointElement, LineElement, Filler);
 
+const normalizeStatusKey = (value = '') => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/[_\s]+/g, '-')
+  .replace(/-+/g, '-');
+
+const statusLabelMap = {
+  available: 'Available',
+  assigned: 'Assigned',
+  'in-use': 'In Use',
+  'under-maintenance': 'Under Maintenance',
+  maintenance: 'Maintenance',
+  'in-maintenance': 'In Maintenance',
+  lost: 'Lost',
+  missing: 'Missing',
+  disposed: 'Disposed',
+  retired: 'Retired',
+  damaged: 'Damaged',
+  returned: 'Returned',
+  pending: 'Pending',
+  approved: 'Approved',
+  'in-progress': 'In Progress',
+  'waiting-for-parts': 'Waiting for Parts',
+  testing: 'Testing',
+  completed: 'Completed',
+  rejected: 'Rejected',
+  cancelled: 'Cancelled',
+  'low-stock': 'Low Stock',
+  'out-of-stock': 'Out of Stock',
+  'normal-stock': 'Normal Stock'
+};
+
+const getStatusLabel = (value) => statusLabelMap[normalizeStatusKey(value)] || String(value || 'Unknown');
+
+const getResponseArray = (payload, keys = []) => {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return [];
+
+  for (const key of keys) {
+    if (Array.isArray(payload[key])) return payload[key];
+  }
+
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.assets)) return payload.assets;
+  if (Array.isArray(payload.inventory)) return payload.inventory;
+  if (Array.isArray(payload.items)) return payload.items;
+  if (Array.isArray(payload.requests)) return payload.requests;
+  if (Array.isArray(payload.logs)) return payload.logs;
+  if (Array.isArray(payload.assignments)) return payload.assignments;
+  if (Array.isArray(payload.history)) return payload.history;
+
+  return [];
+};
+
 const ICTDashboard = () => {
   const { user } = useAuth();
   const { language, theme } = useLanguage();
@@ -63,174 +117,171 @@ const ICTDashboard = () => {
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch assets
-      const assetsRes = await axios.get('/api/assets', { 
-        params: { limit: 1000, ...filters } 
+      const [assetsRes, inventoryRes, maintRes, rfidRes, assignRes] = await Promise.all([
+        axios.get('/api/assets', { params: { limit: 1000, ...filters } }),
+        axios.get('/api/inventory', { params: { limit: 1000 } }),
+        axios.get('/api/maintenance', { params: { limit: 1000 } }),
+        axios.get('/api/rfid', { params: { limit: 500 } }),
+        axios.get('/api/assignments', { params: { limit: 500 } })
+      ]);
+
+      const assets = getResponseArray(assetsRes.data, ['assets', 'data']);
+      const inventory = getResponseArray(inventoryRes.data, ['inventory', 'items', 'data']);
+      const maintenance = getResponseArray(maintRes.data, ['requests', 'data']);
+      const rfidLogs = getResponseArray(rfidRes.data, ['logs', 'data']);
+      const assignments = getResponseArray(assignRes.data, ['assignments', 'data']);
+
+      const ictTerms = ['computer', 'laptop', 'server', 'printer', 'scanner', 'monitor', 'network', 'router', 'switch', 'projector', 'firewall', 'ups', 'storage', 'software', 'telecom', 'access point', 'ict', 'it'];
+      const ictAssets = assets.filter((asset) => {
+        if (!asset || typeof asset !== 'object') return false;
+        const sourceText = [asset.category, asset.category_name, asset.name, asset.department, asset.department_name, asset.location].filter(Boolean).join(' ').toLowerCase();
+        return ictTerms.some((term) => sourceText.includes(term));
       });
-      const assets = assetsRes.data?.assets || [];
 
-      // Fetch inventory
-      const inventoryRes = await axios.get('/api/inventory', { 
-        params: { limit: 1000 } 
-      });
-      const inventory = inventoryRes.data?.inventory || inventoryRes.data?.items || [];
-
-      // Fetch maintenance
-      const maintRes = await axios.get('/api/maintenance', { 
-        params: { limit: 1000 } 
-      });
-      const maintenance = maintRes.data?.requests || [];
-
-      // Fetch RFID logs
-      const rfidRes = await axios.get('/api/rfid', {
-        params: { limit: 500 } 
-      });
-      const rfidLogs = rfidRes.data?.logs || [];
-
-      // Fetch assignments
-      const assignRes = await axios.get('/api/assignments', { 
-        params: { limit: 500 } 
-      });
-      const assignments = assignRes.data?.assignments || [];
-
-      // Filter ICT assets
-      const ictAssets = assets.filter(a => 
-        a.category_name === 'Computers' || 
-        a.category_name === 'Printers' ||
-        a.category_name === 'Servers' ||
-        a.category_name === 'Projectors' ||
-        a.category_name === 'Networking' ||
-        a.category_name === 'Software' ||
-        a.department_name === 'Information Technology'
-      );
-
-      // Asset statistics
-      const byStatus = ictAssets.reduce((acc, a) => {
-        acc[a.status] = (acc[a.status] || 0) + 1;
+      const byStatus = ictAssets.reduce((acc, asset) => {
+        const key = normalizeStatusKey(asset.status);
+        acc[key] = (acc[key] || 0) + 1;
         return acc;
       }, {});
 
-      const byCategory = ictAssets.reduce((acc, a) => {
-        acc[a.category_name || 'Other'] = (acc[a.category_name || 'Other'] || 0) + 1;
+      const byCategory = ictAssets.reduce((acc, asset) => {
+        const key = String(asset.category || asset.category_name || 'Other').trim() || 'Other';
+        acc[key] = (acc[key] || 0) + 1;
         return acc;
       }, {});
 
-      // Inventory statistics
       const inventoryByStatus = inventory.reduce((acc, item) => {
-        const status = item.quantity <= 0 ? 'Out of Stock' : 
-                       item.quantity <= item.minQuantity ? 'Low Stock' : 'Normal Stock';
-        acc[status] = (acc[status] || 0) + 1;
+        const quantity = Number(item.quantity ?? item.total_quantity ?? 0);
+        const available = Number(item.available_quantity ?? item.availableQuantity ?? quantity ?? 0);
+        const minStock = Number(item.min_stock ?? item.minimum_quantity ?? item.minimumQuantity ?? 0);
+        const stockStatus = item.stock_status || item.stockStatus || (quantity <= 0 ? 'out-of-stock' : available <= minStock ? 'low-stock' : 'normal-stock');
+        const key = normalizeStatusKey(stockStatus);
+        acc[key] = (acc[key] || 0) + 1;
         return acc;
       }, {});
 
-      // Maintenance statistics
-      const maintenanceByStatus = maintenance.reduce((acc, m) => {
-        acc[m.status] = (acc[m.status] || 0) + 1;
+      const maintenanceByStatus = maintenance.reduce((acc, item) => {
+        const key = normalizeStatusKey(item.status);
+        acc[key] = (acc[key] || 0) + 1;
         return acc;
       }, {});
 
-      // Calculate overdue
-      const overdue = maintenance.filter(m => {
-        if (m.status !== 'Pending' && m.status !== 'In-Progress') return false;
-        const daysOld = (Date.now() - new Date(m.created_at)) / (1000 * 60 * 60 * 24);
-        return daysOld > 7;
+      const overdue = maintenance.filter((request) => {
+        const status = normalizeStatusKey(request.status);
+        if (!['pending', 'approved', 'assigned', 'in-progress'].includes(status)) return false;
+        const createdAt = request.created_at || request.createdAt || request.requested_date || request.requestedDate;
+        if (!createdAt) return false;
+        const ageDays = (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24);
+        return ageDays > 7;
       }).length;
 
-      // RFID alerts
-      const rfidAlerts = rfidLogs.filter(l => l.is_anomaly).length;
+      const rfidAlerts = rfidLogs.filter((log) => {
+        const anomalyFlag = log.is_anomaly ?? log.isAnomaly ?? log.anomaly ?? false;
+        return Boolean(anomalyFlag) || String(log.action || log.type || '').toLowerCase().includes('alert');
+      }).length;
 
-      // Recent assignments (last 10)
-      const recentAssignments = assignments
-        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      const assetMap = new Map(assets.map((asset) => [String(asset.id), asset]));
+      const recentAssignments = [...assignments]
+        .sort((a, b) => new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0))
         .slice(0, 10)
-        .map(a => ({
-          ...a,
-          assetName: assets.find(asset => asset.id === a.asset_id)?.name || 'Unknown',
-          userName: a.assigned_to_name || 'Unknown'
+        .map((assignment) => {
+          const asset = assetMap.get(String(assignment.asset_id ?? assignment.assetId));
+          return {
+            ...assignment,
+            assetName: asset?.name || assignment.asset_name || assignment.assetName || 'Unknown',
+            userName: assignment.assigned_to_name || assignment.assignedToName || 'Unknown'
+          };
+        });
+
+      const recentMovements = [...rfidLogs]
+        .filter((log) => {
+          const type = String(log.type || log.action || '').toLowerCase();
+          return type.includes('movement') || type.includes('scan') || type.includes('track');
+        })
+        .sort((a, b) => new Date(b.timestamp || b.createdAt || 0) - new Date(a.timestamp || a.createdAt || 0))
+        .slice(0, 10)
+        .map((log) => ({
+          ...log,
+          assetName: assetMap.get(String(log.asset_id || log.assetId))?.name || 'Unknown'
         }));
 
-      // Recent movements (last 10)
-      const recentMovements = rfidLogs
-        .filter(l => l.type === 'movement')
-        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-        .slice(0, 10);
-
-      // Recent activities (combined)
       const activities = [
-        ...ictAssets.slice(0, 5).map(a => ({
+        ...ictAssets.slice(0, 5).map((asset) => ({
           type: 'asset',
-          title: `📦 ${a.name} - ${a.status}`,
-          time: a.updated_at,
+          title: `📦 ${asset.name || 'Asset'} - ${getStatusLabel(asset.status)}`,
+          time: asset.updated_at || asset.updatedAt || asset.created_at || asset.createdAt,
           icon: '📦'
         })),
-        ...maintenance.slice(0, 5).map(m => ({
+        ...maintenance.slice(0, 5).map((item) => ({
           type: 'maintenance',
-          title: `🔧 ${m.title} - ${m.status}`,
-          time: m.updated_at,
+          title: `🔧 ${item.title || 'Maintenance request'} - ${getStatusLabel(item.status)}`,
+          time: item.updated_at || item.updatedAt || item.created_at || item.createdAt,
           icon: '🔧'
         })),
-        ...assignments.slice(0, 5).map(a => ({
+        ...assignments.slice(0, 5).map((assignment) => ({
           type: 'assignment',
-          title: `📋 ${a.asset_name || 'Asset'} assigned to ${a.assigned_to_name || 'User'}`,
-          time: a.created_at,
+          title: `📋 ${assignment.asset_name || assignment.assetName || 'Asset'} assigned to ${assignment.assigned_to_name || assignment.assignedToName || 'User'}`,
+          time: assignment.created_at || assignment.createdAt,
           icon: '📋'
         }))
-      ].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 20);
+      ]
+        .filter((activity) => activity.time)
+        .sort((a, b) => new Date(b.time) - new Date(a.time))
+        .slice(0, 20);
 
-      // Monthly trends (last 6 months)
       const monthlyTrends = [];
-      for (let i = 5; i >= 0; i--) {
+      for (let i = 5; i >= 0; i -= 1) {
         const date = new Date();
         date.setMonth(date.getMonth() - i);
         const month = date.toLocaleString('default', { month: 'short' });
         const year = date.getFullYear();
         const monthStart = new Date(year, date.getMonth(), 1);
         const monthEnd = new Date(year, date.getMonth() + 1, 0);
-        
-        const count = ictAssets.filter(a => {
-          const created = new Date(a.created_at);
+
+        const count = ictAssets.filter((asset) => {
+          const createdAt = asset.created_at || asset.createdAt;
+          if (!createdAt) return false;
+          const created = new Date(createdAt);
           return created >= monthStart && created <= monthEnd;
         }).length;
-        
+
         monthlyTrends.push({ month: `${month} ${year}`, count });
       }
 
-      // Update state
       setStats({
         totalICT: ictAssets.length,
-        available: byStatus['Available'] || 0,
-        assigned: byStatus['Assigned'] || 0,
-        inMaintenance: byStatus['Under-Maintenance'] || 0,
-        lost: byStatus['Lost'] || 0,
-        disposed: byStatus['Disposed'] || 0,
+        available: byStatus.available || 0,
+        assigned: byStatus.assigned || 0,
+        inMaintenance: byStatus['under-maintenance'] || byStatus.maintenance || 0,
+        lost: byStatus.lost || 0,
+        disposed: byStatus.disposed || 0,
         totalInventory: inventory.length,
-        lowStock: inventoryByStatus['Low Stock'] || 0,
-        outOfStock: inventoryByStatus['Out of Stock'] || 0,
-        pendingMaintenance: maintenanceByStatus['Pending'] || 0,
-        inProgressMaintenance: maintenanceByStatus['In-Progress'] || 0,
-        completedMaintenance: maintenanceByStatus['Completed'] || 0,
+        lowStock: inventoryByStatus['low-stock'] || 0,
+        outOfStock: inventoryByStatus['out-of-stock'] || 0,
+        pendingMaintenance: maintenanceByStatus.pending || 0,
+        inProgressMaintenance: maintenanceByStatus['in-progress'] || 0,
+        completedMaintenance: maintenanceByStatus.completed || 0,
         overdueMaintenance: overdue,
-        rfidAlerts: rfidAlerts,
-        recentAssignments: recentAssignments,
-        recentMovements: recentMovements,
+        rfidAlerts,
+        recentAssignments,
+        recentMovements,
         recentActivities: activities,
-        assetByStatus: Object.entries(byStatus).map(([key, value]) => ({ label: key, value })),
+        assetByStatus: Object.entries(byStatus).map(([key, value]) => ({ label: getStatusLabel(key), value })),
         assetByCategory: Object.entries(byCategory).map(([key, value]) => ({ label: key, value })),
-        inventoryByStatus: Object.entries(inventoryByStatus).map(([key, value]) => ({ label: key, value })),
-        maintenanceByStatus: Object.entries(maintenanceByStatus).map(([key, value]) => ({ label: key, value })),
-        monthlyTrends: monthlyTrends
+        inventoryByStatus: Object.entries(inventoryByStatus).map(([key, value]) => ({ label: getStatusLabel(key), value })),
+        maintenanceByStatus: Object.entries(maintenanceByStatus).map(([key, value]) => ({ label: getStatusLabel(key), value })),
+        monthlyTrends
       });
 
-      // Get unique departments and categories for filters
-      const depts = [...new Set(assets.map(a => a.department_name).filter(Boolean))];
-      const cats = [...new Set(assets.map(a => a.category_name).filter(Boolean))];
+      const depts = [...new Set(assets.map((asset) => asset.department_name || asset.department).filter(Boolean))];
+      const cats = [...new Set(assets.map((asset) => asset.category_name || asset.category).filter(Boolean))];
       setDepartments(depts);
       setCategories(cats);
-
     } catch (error) {
       console.error('Dashboard fetch error:', error);
       toast.error(t.fetchError);
     }
+
     setLoading(false);
   }, [filters, t.fetchError]);
 
@@ -285,24 +336,24 @@ const ICTDashboard = () => {
   const handleStatClick = async (statType, status) => {
     setSelectedStat({ type: statType, status });
     setShowDetailModal(true);
-    
+
     try {
       let endpoint = '/api/assets';
-      let params = { limit: 500 };
-      
+      const params = { limit: 500 };
+
       if (statType === 'assets') {
-        params.status = status;
+        params.status = normalizeStatusKey(status);
       } else if (statType === 'inventory') {
         endpoint = '/api/inventory';
-        if (status === 'Low Stock') params.low_stock = true;
-        else if (status === 'Out of Stock') params.out_of_stock = true;
+        if (status === 'Low Stock') params.status = 'low-stock';
+        else if (status === 'Out of Stock') params.status = 'out-of-stock';
       } else if (statType === 'maintenance') {
         endpoint = '/api/maintenance';
-        params.status = status;
+        params.status = normalizeStatusKey(status === 'Overdue' ? 'pending' : status);
       }
-      
+
       const response = await axios.get(endpoint, { params });
-      setDetailData(response.data?.assets || response.data?.items || response.data?.requests || []);
+      setDetailData(getResponseArray(response.data, ['assets', 'items', 'requests', 'data']));
     } catch (error) {
       toast.error('Failed to load details');
     }

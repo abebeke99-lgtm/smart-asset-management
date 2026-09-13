@@ -169,3 +169,13 @@ test('college scope lookup resolves the only available college for a college man
   assert.equal(scope.collegeId, scope.college.id);
   assert.ok(scope.college);
 });
+
+test('store manager routes expose a real verification workflow using the existing session model', () => {
+  const routeSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/storeRoutes.js'), 'utf8');
+  assert.match(routeSource, /router\.get\('\/verification'/);
+  assert.match(routeSource, /router\.post\('\/verification'/);
+  assert.match(routeSource, /router\.get\('\/verification\/:id'/);
+  assert.match(routeSource, /router\.post\('\/verification\/:id\/items'/);
+  assert.match(routeSource, /router\.post\('\/verification\/:id\/submit'/);
+  assert.match(routeSource, /router\.post\('\/verification\/:id\/finalize'/);
+});

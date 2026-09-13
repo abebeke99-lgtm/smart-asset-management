@@ -1,618 +1,664 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { useLanguage } from '../../contexts/UiContext';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
-import axios from 'axios';
-import * as XLSX from 'xlsx';
-import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../../contexts/UiContext';
+import { apiClient } from '../../utils/api';
 
-const StoreMaintenance = () => {
-  const { user } = useAuth();
+const normalizeStatus = (value) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, '-');
+
+const displayStatus = (value) => {
+  const map = {
+    pending: 'Pending',
+    approved: 'Approved',
+    assigned: 'Assigned',
+    'in-progress': 'In Progress',
+    'waiting-for-parts': 'Waiting for Parts',
+    testing: 'Testing',
+    completed: 'Completed',
+    rejected: 'Rejected',
+    cancelled: 'Cancelled',
+    'ready-for-return': 'Ready for Return',
+    returned: 'Returned',
+    'under-maintenance': 'Under Maintenance',
+    inspection: 'Inspection',
+    repair: 'Repair',
+    'on-hold': 'On Hold',
+  };
+  return map[normalizeStatus(value)] || String(value || 'Unknown');
+};
+
+const formatPriority = (value) => {
+  const map = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' };
+  return map[String(value ?? '').toLowerCase()] || String(value || 'Medium');
+};
+
+const formatDate = (value) => {
+  if (!value) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+  return date.toLocaleString();
+};
+
+const withinDateRange = (value, range) => {
+  if (!value || !range || range === 'all') return true;
+  const target = new Date(value);
+  if (Number.isNaN(target.getTime())) return true;
+  const now = new Date();
+
+  switch (range) {
+    case 'today': {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return target >= start;
+    }
+    case 'week': {
+      const start = new Date(now);
+      start.setDate(now.getDate() - 7);
+      return target >= start;
+    }
+    case 'month': {
+      const start = new Date(now);
+      start.setMonth(now.getMonth() - 1);
+      return target >= start;
+    }
+    case 'last-month': {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+      return target >= start && target <= end;
+    }
+    default:
+      return true;
+  }
+};
+
+const isOverdue = (request) => {
+  const status = normalizeStatus(request.status);
+  if (['completed', 'rejected', 'cancelled', 'returned', 'ready-for-return'].includes(status)) {
+    return false;
+  }
+
+  const dueValue = request.expectedCompletionDate || request.expected_completion_date || request.preferredRepairDate || request.preferred_repair_date || request.scheduledDate || request.scheduled_date || request.dueDate || request.due_date;
+  if (!dueValue) return false;
+
+  const dueDate = new Date(dueValue);
+  if (Number.isNaN(dueDate.getTime())) return false;
+  return dueDate < new Date();
+};
+
+const getRequestId = (request) => request.id || request.requestId || request.request_id || 'N/A';
+
+const getAssetInfo = (request) => {
+  const asset = request.Asset || request.asset || request.assetData || {};
+  const name = asset.name || request.assetName || request.asset_name || 'N/A';
+  const code = asset.assetCode || request.assetCode || request.asset_code || request.asset_tag || 'N/A';
+  const location = asset.location || request.location || request.assetLocation || 'N/A';
+  const department = asset.department || request.department || request.assetDepartment || 'N/A';
+  const serial = asset.serialNumber || request.serialNumber || request.serial_number || 'N/A';
+  return { name, code, location, department, serial };
+};
+
+const getTechnicianName = (request) => {
+  const technician = request.Technician || request.technician || request.assignedTechnician || {};
+  const name = technician.fullName || technician.name || request.assignedToName || request.assigned_to_name || 'Not assigned';
+  return name || 'Not assigned';
+};
+
+const StoreMaintenanceStatus = () => {
   const { language, theme } = useLanguage();
-  const navigate = useNavigate();
   const isDark = theme === 'dark';
   const t = language === 'en' ? englishTranslations : amharicTranslations;
 
-  // State
-  const [maintenanceRequests, setMaintenanceRequests] = useState([]);
-  const [filteredRequests, setFilteredRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [activeTab, setActiveTab] = useState('pending');
-  const [selectedRequest, setSelectedRequest] = useState(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showSendModal, setShowSendModal] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-
-  const [sendForm, setSendForm] = useState({
-    assetId: '',
-    problem: '',
-    maintenanceProvider: '',
-    expectedReturnDate: '',
-    notes: ''
-  });
-
+  const [requests, setRequests] = useState([]);
   const [assets, setAssets] = useState([]);
-  const [providers, setProviders] = useState([
-    { id: 1, name: 'Internal Maintenance Team' },
-    { id: 2, name: 'External Service Provider' },
-    { id: 3, name: 'Manufacturer Support' },
-    { id: 4, name: 'Specialized Technician' }
-  ]);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
+  const [technicianFilter, setTechnicianFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('all');
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [showDetail, setShowDetail] = useState(false);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
-  // Fetch data
-  useEffect(() => {
-    fetchMaintenanceRequests();
-    fetchAssets();
-  }, [filterStatus]);
-
-  const fetchMaintenanceRequests = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/maintenance', { params: { limit: 500 } });
-      const data = response.data.maintenance || response.data.data || [];
-      setMaintenanceRequests(data);
+      const [maintenanceResponse, assetsResponse, usersResponse] = await Promise.all([
+        apiClient.get('/api/maintenance', { params: { limit: 1000 } }),
+        apiClient.get('/api/assets', { params: { limit: 1000 } }),
+        apiClient.get('/api/users', { params: { limit: 1000 } }),
+      ]);
+
+      const maintenanceList = Array.isArray(maintenanceResponse.data?.data)
+        ? maintenanceResponse.data.data
+        : Array.isArray(maintenanceResponse.data?.requests)
+          ? maintenanceResponse.data.requests
+          : Array.isArray(maintenanceResponse.data)
+            ? maintenanceResponse.data
+            : [];
+
+      const assetList = Array.isArray(assetsResponse.data?.data)
+        ? assetsResponse.data.data
+        : Array.isArray(assetsResponse.data?.assets)
+          ? assetsResponse.data.assets
+          : Array.isArray(assetsResponse.data)
+            ? assetsResponse.data
+            : [];
+
+      const userList = Array.isArray(usersResponse.data?.data)
+        ? usersResponse.data.data
+        : Array.isArray(usersResponse.data?.users)
+          ? usersResponse.data.users
+          : Array.isArray(usersResponse.data)
+            ? usersResponse.data
+            : [];
+
+      setRequests(maintenanceList);
+      setAssets(assetList);
+      setUsers(userList);
     } catch (error) {
-      toast.error(t.fetchError);
-      setMaintenanceRequests([]);
+      toast.error(error?.response?.data?.message || t.fetchError);
+      setRequests([]);
+      setAssets([]);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [t.fetchError]);
 
-  const fetchAssets = async () => {
-    try {
-      const response = await axios.get('/api/assets');
-      setAssets(response.data.assets || response.data.data || []);
-    } catch (error) {
-      setAssets([]);
-    }
-  };
-
-  // Filter and search
   useEffect(() => {
-    let filtered = maintenanceRequests;
+    fetchData();
+  }, [fetchData]);
 
-    if (activeTab === 'pending') {
-      filtered = filtered.filter(req => ['pending', 'requested', 'awaiting approval'].includes(String(req.status || '').toLowerCase()));
-    } else if (activeTab === 'under-maintenance') {
-      filtered = filtered.filter(req => String(req.status || '').toLowerCase() === 'under maintenance');
-    } else if (activeTab === 'returned') {
-      filtered = filtered.filter(req => ['completed', 'returned', 'finished'].includes(String(req.status || '').toLowerCase()));
+  const assetLookup = useMemo(() => {
+    const map = {};
+    assets.forEach((asset) => {
+      map[asset.id] = asset;
+    });
+    return map;
+  }, [assets]);
+
+  const technicianList = useMemo(() => {
+    const list = users.filter((user) => ['maintenance', 'ict_officer', 'admin'].includes(String(user.role || '').toLowerCase()));
+    return list.map((user) => ({
+      id: user.id,
+      name: user.fullName || user.username || `User ${user.id}`,
+    }));
+  }, [users]);
+
+  const statusOptions = useMemo(() => {
+    const values = new Set();
+    requests.forEach((request) => {
+      if (request.status) values.add(normalizeStatus(request.status));
+    });
+    return ['all', ...Array.from(values).sort()];
+  }, [requests]);
+
+  const priorityOptions = useMemo(() => ['all', 'low', 'medium', 'high', 'critical'], []);
+
+  const departments = useMemo(() => {
+    const values = new Set();
+    requests.forEach((request) => {
+      const asset = assetLookup[request.assetId] || request.Asset || request.asset || {};
+      const dept = asset.department || request.department || request.assetDepartment || request.departmentName;
+      if (dept) values.add(dept);
+    });
+    return Array.from(values).sort();
+  }, [assetLookup, requests]);
+
+  const locations = useMemo(() => {
+    const values = new Set();
+    requests.forEach((request) => {
+      const asset = assetLookup[request.assetId] || request.Asset || request.asset || {};
+      const loc = asset.location || request.location || request.assetLocation;
+      if (loc) values.add(loc);
+    });
+    return Array.from(values).sort();
+  }, [assetLookup, requests]);
+
+  const stats = useMemo(() => {
+    const total = requests.length;
+    const pending = requests.filter((request) => ['pending', 'approved'].includes(normalizeStatus(request.status))).length;
+    const inProgress = requests.filter((request) => ['assigned', 'in-progress', 'waiting-for-parts', 'testing', 'inspection', 'repair', 'on-hold'].includes(normalizeStatus(request.status))).length;
+    const completed = requests.filter((request) => ['completed', 'returned', 'ready-for-return'].includes(normalizeStatus(request.status))).length;
+    const ready = requests.filter((request) => ['ready-for-return', 'returned'].includes(normalizeStatus(request.status))).length;
+    const overdue = requests.filter((request) => isOverdue(request)).length;
+    return { total, pending, inProgress, completed, ready, overdue };
+  }, [requests]);
+
+  const filteredRequests = useMemo(() => {
+    let filtered = [...requests];
+
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter((request) => normalizeStatus(request.status) === statusFilter);
     }
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(req =>
-        (req.assetCode || '').toLowerCase().includes(query) ||
-        (req.assetName || req.asset_name || '').toLowerCase().includes(query) ||
-        (req.problem || '').toLowerCase().includes(query) ||
-        (req.maintenanceProvider || req.provider || '').toLowerCase().includes(query)
-      );
+    if (priorityFilter !== 'all') {
+      filtered = filtered.filter((request) => normalizeStatus(request.priority) === priorityFilter);
     }
 
-    setFilteredRequests(filtered);
-  }, [maintenanceRequests, activeTab, searchQuery]);
-
-  // Handle send for maintenance
-  const handleSendForMaintenance = async (e) => {
-    e.preventDefault();
-
-    if (!sendForm.assetId || !sendForm.problem || !sendForm.maintenanceProvider) {
-      toast.error(t.fillAllFields || 'Please fill all required fields');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      await axios.post('/api/maintenance', {
-        asset_id: sendForm.assetId,
-        problem: sendForm.problem,
-        maintenance_provider: sendForm.maintenanceProvider,
-        expected_return_date: sendForm.expectedReturnDate,
-        notes: sendForm.notes,
-        requested_by: user?.id
+    if (departmentFilter !== 'all') {
+      filtered = filtered.filter((request) => {
+        const asset = assetLookup[request.assetId] || request.Asset || request.asset || {};
+        const dept = asset.department || request.department || request.assetDepartment || request.departmentName;
+        return String(dept || '').toLowerCase() === String(departmentFilter).toLowerCase();
       });
+    }
 
-      toast.success(t.sendSuccess || 'Asset sent for maintenance successfully');
-      setSendForm({
-        assetId: '',
-        problem: '',
-        maintenanceProvider: '',
-        expectedReturnDate: '',
-        notes: ''
+    if (locationFilter !== 'all') {
+      filtered = filtered.filter((request) => {
+        const asset = assetLookup[request.assetId] || request.Asset || request.asset || {};
+        const loc = asset.location || request.location || request.assetLocation;
+        return String(loc || '').toLowerCase() === String(locationFilter).toLowerCase();
       });
-      setShowSendModal(false);
-      await fetchMaintenanceRequests();
-    } catch (error) {
-      toast.error(t.sendError || error.response?.data?.message || 'Failed to send asset for maintenance');
-    } finally {
-      setIsProcessing(false);
     }
-  };
 
-  // Handle update maintenance status
-  const handleUpdateStatus = async (requestId, newStatus) => {
-    try {
-      await axios.patch(`/api/maintenance/${requestId}`, {
-        status: newStatus,
-        updated_by: user?.id
+    if (technicianFilter !== 'all') {
+      filtered = filtered.filter((request) => {
+        const techName = getTechnicianName(request);
+        return String(techName).toLowerCase() === String(technicianFilter).toLowerCase();
       });
-
-      toast.success(t.statusUpdateSuccess || 'Status updated successfully');
-      await fetchMaintenanceRequests();
-      setShowDetailModal(false);
-    } catch (error) {
-      toast.error(t.statusUpdateError || 'Failed to update status');
     }
-  };
 
-  // Export to Excel
-  const handleExport = () => {
-    try {
-      const exportData = filteredRequests.map(req => ({
-        'Asset Tag': req.assetCode || req.asset_tag || '',
-        'Asset Name': req.assetName || req.asset_name || '',
-        'Problem': req.problem || '',
-        'Provider': req.maintenanceProvider || req.provider || '',
-        'Status': req.status || 'N/A',
-        'Requested Date': req.createdAt ? new Date(req.createdAt).toLocaleDateString() : '',
-        'Expected Return': req.expectedReturnDate ? new Date(req.expectedReturnDate).toLocaleDateString() : '',
-        'Notes': req.notes || ''
-      }));
-
-      const ws = XLSX.utils.json_to_sheet(exportData);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Maintenance');
-      XLSX.writeFile(wb, `store_maintenance_${new Date().toISOString().split('T')[0]}.xlsx`);
-      toast.success(t.exportSuccess || 'Exported successfully');
-    } catch (error) {
-      toast.error(t.exportError || 'Export failed');
+    if (search.trim()) {
+      const query = search.trim().toLowerCase();
+      filtered = filtered.filter((request) => {
+        const asset = assetLookup[request.assetId] || request.Asset || request.asset || {};
+        const assetInfo = getAssetInfo(request);
+        const technician = getTechnicianName(request);
+        const text = [
+          getRequestId(request),
+          assetInfo.code,
+          assetInfo.name,
+          assetInfo.serial,
+          request.title,
+          request.problem,
+          request.description,
+          technician,
+          assetInfo.department,
+          assetInfo.location,
+          displayStatus(request.status),
+        ].join(' ').toLowerCase();
+        return text.includes(query);
+      });
     }
+
+    if (dateFilter !== 'all') {
+      filtered = filtered.filter((request) => {
+        const dateValue = request.createdAt || request.created_at || request.requestedDate || request.requested_date;
+        return withinDateRange(dateValue, dateFilter);
+      });
+    }
+
+    return filtered.sort((a, b) => new Date(b.updatedAt || b.updated_at || b.createdAt || b.created_at || 0) - new Date(a.updatedAt || a.updated_at || a.createdAt || a.created_at || 0));
+  }, [assetLookup, dateFilter, departmentFilter, locationFilter, priorityFilter, requests, search, statusFilter, technicianFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / pageSize));
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, priorityFilter, departmentFilter, locationFilter, technicianFilter, dateFilter]);
+
+  const paginatedRequests = filteredRequests.slice((page - 1) * pageSize, page * pageSize);
+
+  const openRequest = (request) => {
+    setSelectedRequest(request);
+    setShowDetail(true);
   };
 
   const styles = {
-    container: {
-      padding: isDark ? '20px' : '24px',
-      background: isDark ? '#1a1a2e' : '#ffffff',
-      borderRadius: '12px',
-      boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,0,0.08)'
+    page: {
+      padding: '24px',
+      background: isDark ? '#020817' : '#f8fafc',
+      minHeight: '100vh',
+      color: isDark ? '#e2e8f0' : '#0f172a',
+    },
+    shell: {
+      maxWidth: '1400px',
+      margin: '0 auto',
     },
     header: {
-      marginBottom: '24px',
-      paddingBottom: '16px',
-      borderBottom: isDark ? '1px solid #333' : '1px solid #e2e8f0'
+      marginBottom: '20px',
     },
     title: {
-      fontSize: '24px',
-      fontWeight: '700',
-      color: isDark ? '#fff' : '#1a365d',
-      margin: '0 0 8px 0'
+      margin: 0,
+      fontSize: '2rem',
+      fontWeight: 800,
     },
     subtitle: {
-      fontSize: '14px',
-      color: isDark ? '#aaa' : '#5a6b8a',
-      margin: 0
+      margin: '8px 0 0',
+      color: isDark ? '#94a3b8' : '#64748b',
+      fontSize: '0.96rem',
     },
-    tabs: {
-      display: 'flex',
-      gap: '12px',
+    metricGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+      gap: '16px',
       marginBottom: '20px',
-      borderBottom: isDark ? '1px solid #333' : '1px solid #e2e8f0',
-      flexWrap: 'wrap'
     },
-    tab: (active) => ({
-      padding: '12px 16px',
-      background: 'transparent',
-      border: 'none',
-      borderBottom: active ? '3px solid #2b6cb0' : '3px solid transparent',
-      color: active ? '#2b6cb0' : isDark ? '#aaa' : '#5a6b8a',
-      cursor: 'pointer',
-      fontWeight: active ? '600' : '500',
-      fontSize: '14px'
-    }),
-    controls: {
-      display: 'flex',
+    card: {
+      background: isDark ? '#111827' : '#fff',
+      border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+      borderRadius: '14px',
+      padding: '16px',
+    },
+    cardLabel: {
+      fontSize: '0.8rem',
+      color: isDark ? '#94a3b8' : '#64748b',
+      marginBottom: '10px',
+    },
+    cardValue: {
+      fontSize: '2rem',
+      fontWeight: 800,
+    },
+    filterBar: {
+      background: isDark ? '#111827' : '#fff',
+      border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+      borderRadius: '14px',
+      padding: '16px',
+      marginBottom: '18px',
+    },
+    filterRow: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
       gap: '12px',
-      marginBottom: '20px',
-      flexWrap: 'wrap',
-      alignItems: 'center'
     },
-    searchInput: {
-      flex: 1,
-      minWidth: '250px',
+    input: {
+      width: '100%',
+      borderRadius: '10px',
+      border: `1px solid ${isDark ? '#334155' : '#dbe2ea'}`,
+      background: isDark ? '#020817' : '#fff',
+      color: isDark ? '#e2e8f0' : '#0f172a',
       padding: '10px 12px',
-      border: isDark ? '1px solid #444' : '1px solid #cbd5e1',
-      borderRadius: '8px',
-      background: isDark ? '#2a2a3e' : '#fff',
-      color: isDark ? '#fff' : '#000',
-      fontSize: '14px'
+      fontSize: '0.95rem',
     },
-    button: {
-      padding: '10px 16px',
-      borderRadius: '8px',
-      border: 'none',
-      cursor: 'pointer',
-      fontWeight: '600',
-      fontSize: '14px',
-      transition: 'all 0.2s'
-    },
-    primaryButton: {
-      background: '#2b6cb0',
-      color: '#fff'
-    },
-    secondaryButton: {
-      background: isDark ? '#444' : '#e2e8f0',
-      color: isDark ? '#fff' : '#1a365d'
+    tablePanel: {
+      background: isDark ? '#111827' : '#fff',
+      border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+      borderRadius: '14px',
+      padding: '16px',
     },
     table: {
       width: '100%',
       borderCollapse: 'collapse',
-      marginTop: '16px'
     },
     th: {
-      padding: '12px',
       textAlign: 'left',
-      background: isDark ? '#2a2a3e' : '#f7fafc',
-      color: isDark ? '#fff' : '#1a365d',
-      fontWeight: '600',
-      fontSize: '13px',
-      borderBottom: isDark ? '1px solid #444' : '1px solid #e2e8f0'
+      padding: '12px',
+      color: isDark ? '#cbd5e1' : '#475569',
+      fontSize: '0.76rem',
+      textTransform: 'uppercase',
+      letterSpacing: '0.04em',
+      borderBottom: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
     },
     td: {
       padding: '12px',
-      borderBottom: isDark ? '1px solid #333' : '1px solid #e2e8f0',
-      color: isDark ? '#ddd' : '#2d3748',
-      fontSize: '14px'
+      borderBottom: `1px solid ${isDark ? '#1f2937' : '#e2e8f0'}`,
+      verticalAlign: 'top',
     },
-    statusBadge: (status) => {
-      const statusLower = String(status || '').toLowerCase();
-      const colors = {
-        'pending': { bg: '#fef3c7', color: '#92400e' },
-        'requested': { bg: '#fef3c7', color: '#92400e' },
-        'awaiting approval': { bg: '#fef3c7', color: '#92400e' },
-        'under maintenance': { bg: '#dbeafe', color: '#0c4a6e' },
-        'completed': { bg: '#dcfce7', color: '#166534' },
-        'returned': { bg: '#dcfce7', color: '#166534' },
-        'finished': { bg: '#dcfce7', color: '#166534' }
+    button: {
+      border: 'none',
+      borderRadius: '10px',
+      padding: '9px 12px',
+      fontWeight: 700,
+      cursor: 'pointer',
+    },
+    primaryButton: {
+      background: '#2563eb',
+      color: '#fff',
+    },
+    secondaryButton: {
+      background: isDark ? '#334155' : '#e2e8f0',
+      color: isDark ? '#e2e8f0' : '#0f172a',
+    },
+    badge: (status) => {
+      const state = normalizeStatus(status);
+      const palette = {
+        pending: { background: '#fef3c7', color: '#92400e' },
+        approved: { background: '#dbeafe', color: '#1d4ed8' },
+        assigned: { background: '#ede9fe', color: '#6d28d9' },
+        'in-progress': { background: '#cffafe', color: '#0f766e' },
+        'waiting-for-parts': { background: '#fce7f3', color: '#be185d' },
+        testing: { background: '#fef9c3', color: '#854d0e' },
+        completed: { background: '#dcfce7', color: '#166534' },
+        rejected: { background: '#fee2e2', color: '#b91c1c' },
+        cancelled: { background: '#f1f5f9', color: '#334155' },
+        'ready-for-return': { background: '#d1fae5', color: '#065f46' },
+        returned: { background: '#d1fae5', color: '#065f46' },
+        'under-maintenance': { background: '#dbeafe', color: '#1e3a8a' },
+        inspection: { background: '#e0e7ff', color: '#3730a3' },
+        repair: { background: '#f3e8ff', color: '#7c3aed' },
+        'on-hold': { background: '#fef2f2', color: '#b91c1c' },
       };
-      const style = colors[statusLower] || colors['pending'];
-      return {
-        display: 'inline-block',
-        padding: '6px 12px',
-        borderRadius: '12px',
-        background: style.bg,
-        color: style.color,
-        fontWeight: '600',
-        fontSize: '12px'
+      const tone = palette[state] || { background: '#f1f5f9', color: '#334155' };
+      return { display: 'inline-block', padding: '5px 10px', borderRadius: '999px', fontWeight: 700, fontSize: '0.72rem', background: tone.background, color: tone.color };
+    },
+    priorityPill: (priority) => {
+      const normalized = String(priority ?? '').toLowerCase();
+      const palette = {
+        low: { background: '#ecfdf5', color: '#166534' },
+        medium: { background: '#fef3c7', color: '#92400e' },
+        high: { background: '#ffedd5', color: '#c2410c' },
+        critical: { background: '#fee2e2', color: '#991b1b' },
       };
+      const tone = palette[normalized] || { background: '#f1f5f9', color: '#334155' };
+      return { display: 'inline-block', padding: '5px 10px', borderRadius: '999px', fontWeight: 700, fontSize: '0.7rem', background: tone.background, color: tone.color };
     },
-    modal: {
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0,0,0,0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    },
-    modalContent: {
-      background: isDark ? '#2a2a3e' : '#fff',
-      borderRadius: '12px',
-      padding: '24px',
-      maxWidth: '500px',
-      width: '90%',
-      maxHeight: '90vh',
-      overflow: 'auto'
-    },
-    modalHeader: {
-      fontSize: '18px',
-      fontWeight: '700',
-      marginBottom: '16px',
-      color: isDark ? '#fff' : '#1a365d'
-    },
-    formGroup: {
-      marginBottom: '16px'
-    },
-    label: {
-      display: 'block',
-      marginBottom: '6px',
-      fontWeight: '600',
-      color: isDark ? '#ddd' : '#2d3748',
-      fontSize: '14px'
-    },
-    input: {
-      width: '100%',
-      padding: '10px 12px',
-      border: isDark ? '1px solid #444' : '1px solid #cbd5e1',
-      borderRadius: '8px',
-      background: isDark ? '#1a1a2e' : '#fff',
-      color: isDark ? '#fff' : '#000',
-      fontSize: '14px',
-      fontFamily: 'inherit'
-    },
-    textarea: {
-      width: '100%',
-      padding: '10px 12px',
-      border: isDark ? '1px solid #444' : '1px solid #cbd5e1',
-      borderRadius: '8px',
-      background: isDark ? '#1a1a2e' : '#fff',
-      color: isDark ? '#fff' : '#000',
-      fontSize: '14px',
-      fontFamily: 'inherit',
-      resize: 'vertical',
-      minHeight: '100px'
-    },
-    select: {
-      width: '100%',
-      padding: '10px 12px',
-      border: isDark ? '1px solid #444' : '1px solid #cbd5e1',
-      borderRadius: '8px',
-      background: isDark ? '#1a1a2e' : '#fff',
-      color: isDark ? '#fff' : '#000',
-      fontSize: '14px',
-      fontFamily: 'inherit'
-    },
-    buttonGroup: {
-      display: 'flex',
-      gap: '12px',
-      justifyContent: 'flex-end',
-      marginTop: '24px'
-    },
-    emptyState: {
-      textAlign: 'center',
-      padding: '40px 20px',
-      color: isDark ? '#aaa' : '#4a5568'
-    }
+    empty: { textAlign: 'center', padding: '36px 20px', color: isDark ? '#94a3b8' : '#64748b' },
+    modalBackdrop: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 1000 },
+    modalCard: { width: '100%', maxWidth: '820px', background: isDark ? '#111827' : '#fff', borderRadius: '16px', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, maxHeight: '90vh', overflowY: 'auto', padding: '20px' },
+    section: { marginBottom: '18px' },
+    sectionTitle: { fontSize: '1rem', fontWeight: 800, marginBottom: '10px' },
+    detailGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' },
+    infoBox: { background: isDark ? '#020817' : '#f8fafc', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: '10px', padding: '12px' },
+    timelineItem: { padding: '10px 0', borderBottom: `1px solid ${isDark ? '#334155' : '#e2e8f0'}` },
+    nav: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px' },
   };
 
   return (
-    <div style={styles.container}>
-      {/* Header */}
-      <div style={styles.header}>
-        <h1 style={styles.title}>🔧 {t.maintenance}</h1>
-        <p style={styles.subtitle}>{t.maintenanceDesc || 'Manage asset maintenance requests and tracking'}</p>
-      </div>
+    <div style={styles.page}>
+      <div style={styles.shell}>
+        <header style={styles.header}>
+          <h1 style={styles.title}>{t.pageTitle}</h1>
+          <p style={styles.subtitle}>{t.pageSubtitle}</p>
+        </header>
 
-      {/* Tabs */}
-      <div style={styles.tabs}>
-        <button
-          style={styles.tab(activeTab === 'pending')}
-          onClick={() => setActiveTab('pending')}
-        >
-          📋 {t.pendingMaintenance || 'Pending'}
-        </button>
-        <button
-          style={styles.tab(activeTab === 'under-maintenance')}
-          onClick={() => setActiveTab('under-maintenance')}
-        >
-          🔧 {t.underMaintenance || 'Under Maintenance'}
-        </button>
-        <button
-          style={styles.tab(activeTab === 'returned')}
-          onClick={() => setActiveTab('returned')}
-        >
-          ✅ {t.returnedMaintenance || 'Returned'}
-        </button>
-      </div>
+        <section style={styles.metricGrid}>
+          <div style={styles.card}>
+            <div style={styles.cardLabel}>{t.total}</div>
+            <div style={styles.cardValue}>{stats.total}</div>
+          </div>
+          <div style={styles.card}>
+            <div style={styles.cardLabel}>{t.pending}</div>
+            <div style={styles.cardValue}>{stats.pending}</div>
+          </div>
+          <div style={styles.card}>
+            <div style={styles.cardLabel}>{t.inProgress}</div>
+            <div style={styles.cardValue}>{stats.inProgress}</div>
+          </div>
+          <div style={styles.card}>
+            <div style={styles.cardLabel}>{t.completed}</div>
+            <div style={styles.cardValue}>{stats.completed}</div>
+          </div>
+          <div style={styles.card}>
+            <div style={styles.cardLabel}>{t.readyForReturn}</div>
+            <div style={styles.cardValue}>{stats.ready}</div>
+          </div>
+          <div style={styles.card}>
+            <div style={styles.cardLabel}>{t.overdue}</div>
+            <div style={styles.cardValue}>{stats.overdue}</div>
+          </div>
+        </section>
 
-      {/* Controls */}
-      <div style={styles.controls}>
-        <input
-          type="text"
-          style={styles.searchInput}
-          placeholder={t.search || 'Search by asset, problem, or provider...'}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-        <button
-          style={{ ...styles.button, ...styles.primaryButton }}
-          onClick={() => setShowSendModal(true)}
-        >
-          ➕ {t.sendMaintenance || 'Send for Maintenance'}
-        </button>
-        <button
-          style={{ ...styles.button, ...styles.secondaryButton }}
-          onClick={handleExport}
-        >
-          📥 {t.export || 'Export'}
-        </button>
-      </div>
-
-      {/* Loading State */}
-      {loading && (
-        <div style={styles.emptyState}>
-          {t.loading || 'Loading...'}
-        </div>
-      )}
-
-      {/* Empty State */}
-      {!loading && filteredRequests.length === 0 && (
-        <div style={styles.emptyState}>
-          {t.noRequests || 'No maintenance requests found'}
-        </div>
-      )}
-
-      {/* Table */}
-      {!loading && filteredRequests.length > 0 && (
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>{t.assetTag || 'Asset Tag'}</th>
-              <th style={styles.th}>{t.assetName || 'Asset Name'}</th>
-              <th style={styles.th}>{t.problem || 'Problem'}</th>
-              <th style={styles.th}>{t.provider || 'Provider'}</th>
-              <th style={styles.th}>{t.status || 'Status'}</th>
-              <th style={styles.th}>{t.expectedReturn || 'Expected Return'}</th>
-              <th style={styles.th}>{t.actions || 'Actions'}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredRequests.map((req) => (
-              <tr key={req.id}>
-                <td style={styles.td}>{req.assetCode || req.asset_tag || 'N/A'}</td>
-                <td style={styles.td}>{req.assetName || req.asset_name || 'N/A'}</td>
-                <td style={styles.td}>{req.problem || 'N/A'}</td>
-                <td style={styles.td}>{req.maintenanceProvider || req.provider || 'N/A'}</td>
-                <td style={styles.td}>
-                  <span style={styles.statusBadge(req.status)}>{req.status || 'Unknown'}</span>
-                </td>
-                <td style={styles.td}>
-                  {req.expectedReturnDate ? new Date(req.expectedReturnDate).toLocaleDateString() : 'N/A'}
-                </td>
-                <td style={styles.td}>
-                  <button
-                    style={{ ...styles.button, ...styles.secondaryButton, fontSize: '12px', padding: '6px 12px' }}
-                    onClick={() => {
-                      setSelectedRequest(req);
-                      setShowDetailModal(true);
-                    }}
-                  >
-                    {t.view || 'View'}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      {/* Send for Maintenance Modal */}
-      {showSendModal && (
-        <div style={styles.modal} onClick={() => setShowSendModal(false)}>
-          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>🔧 {t.sendMaintenance || 'Send for Maintenance'}</div>
-
-            <form onSubmit={handleSendForMaintenance}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>{t.asset || 'Asset'} *</label>
-                <select
-                  style={styles.select}
-                  value={sendForm.assetId}
-                  onChange={(e) => setSendForm({ ...sendForm, assetId: e.target.value })}
-                  required
-                >
-                  <option value="">{t.selectAsset || 'Select Asset'}</option>
-                  {assets.map((asset) => (
-                    <option key={asset.id} value={asset.id}>
-                      {asset.name} ({asset.assetCode || asset.asset_code || 'N/A'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>{t.problem || 'Problem'} *</label>
-                <textarea
-                  style={styles.textarea}
-                  value={sendForm.problem}
-                  onChange={(e) => setSendForm({ ...sendForm, problem: e.target.value })}
-                  placeholder={t.problemDescription || 'Describe the problem...'}
-                  required
-                />
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>{t.maintenanceProvider || 'Maintenance Provider'} *</label>
-                <select
-                  style={styles.select}
-                  value={sendForm.maintenanceProvider}
-                  onChange={(e) => setSendForm({ ...sendForm, maintenanceProvider: e.target.value })}
-                  required
-                >
-                  <option value="">{t.selectProvider || 'Select Provider'}</option>
-                  {providers.map((provider) => (
-                    <option key={provider.id} value={provider.id}>
-                      {provider.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>{t.expectedReturnDate || 'Expected Return Date'}</label>
-                <input
-                  type="date"
-                  style={styles.input}
-                  value={sendForm.expectedReturnDate}
-                  onChange={(e) => setSendForm({ ...sendForm, expectedReturnDate: e.target.value })}
-                />
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>{t.notes || 'Notes'}</label>
-                <textarea
-                  style={styles.textarea}
-                  value={sendForm.notes}
-                  onChange={(e) => setSendForm({ ...sendForm, notes: e.target.value })}
-                  placeholder={t.notesPlaceholder || 'Optional notes...'}
-                />
-              </div>
-
-              <div style={styles.buttonGroup}>
-                <button
-                  type="button"
-                  style={{ ...styles.button, ...styles.secondaryButton }}
-                  onClick={() => setShowSendModal(false)}
-                  disabled={isProcessing}
-                >
-                  {t.cancel || 'Cancel'}
-                </button>
-                <button
-                  type="submit"
-                  style={{ ...styles.button, ...styles.primaryButton }}
-                  disabled={isProcessing}
-                >
-                  {isProcessing ? t.sending || 'Sending...' : t.submit || 'Submit'}
-                </button>
-              </div>
-            </form>
+        <div style={styles.filterBar}>
+          <div style={styles.filterRow}>
+            <input
+              style={styles.input}
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={t.searchPlaceholder}
+            />
+            <select style={styles.input} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              {statusOptions.map((value) => (
+                <option key={value} value={value}>{value === 'all' ? t.allStatuses : displayStatus(value)}</option>
+              ))}
+            </select>
+            <select style={styles.input} value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}>
+              <option value="all">{t.allPriorities}</option>
+              {priorityOptions.filter((value) => value !== 'all').map((value) => (
+                <option key={value} value={value}>{formatPriority(value)}</option>
+              ))}
+            </select>
+            <select style={styles.input} value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)}>
+              <option value="all">{t.allDepartments}</option>
+              {departments.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
+            <select style={styles.input} value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
+              <option value="all">{t.allLocations}</option>
+              {locations.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
+            <select style={styles.input} value={technicianFilter} onChange={(event) => setTechnicianFilter(event.target.value)}>
+              <option value="all">{t.allTechnicians}</option>
+              {technicianList.map((tech) => (
+                <option key={tech.id} value={tech.name}>{tech.name}</option>
+              ))}
+            </select>
+            <select style={styles.input} value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}>
+              <option value="all">{t.allDates}</option>
+              <option value="today">{t.today}</option>
+              <option value="week">{t.thisWeek}</option>
+              <option value="month">{t.thisMonth}</option>
+              <option value="last-month">{t.lastMonth}</option>
+            </select>
+            <button type="button" style={{ ...styles.button, ...styles.primaryButton }} onClick={fetchData}>{t.refresh}</button>
           </div>
         </div>
-      )}
 
-      {/* Detail Modal */}
-      {showDetailModal && selectedRequest && (
-        <div style={styles.modal} onClick={() => setShowDetailModal(false)}>
-          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>📋 {t.maintenanceDetails || 'Maintenance Details'}</div>
+        <div style={styles.tablePanel}>
+          {loading ? (
+            <div style={styles.empty}>{t.loading}</div>
+          ) : filteredRequests.length === 0 ? (
+            <div style={styles.empty}>{t.noData}</div>
+          ) : (
+            <>
+              <div style={{ marginBottom: '12px', color: isDark ? '#94a3b8' : '#64748b' }}>
+                {t.showing} {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, filteredRequests.length)} {t.of} {filteredRequests.length}
+              </div>
 
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ marginBottom: '12px' }}>
-                <strong>{t.assetTag || 'Asset Tag'}:</strong> {selectedRequest.assetCode || 'N/A'}
+              <div style={{ overflowX: 'auto' }}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      <th style={styles.th}>{t.requestId}</th>
+                      <th style={styles.th}>{t.asset}</th>
+                      <th style={styles.th}>{t.problem}</th>
+                      <th style={styles.th}>{t.priority}</th>
+                      <th style={styles.th}>{t.status}</th>
+                      <th style={styles.th}>{t.technician}</th>
+                      <th style={styles.th}>{t.location}</th>
+                      <th style={styles.th}>{t.lastUpdated}</th>
+                      <th style={styles.th}>{t.action}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedRequests.map((request) => {
+                      const assetInfo = getAssetInfo(request);
+                      const isLate = isOverdue(request);
+                      return (
+                        <tr key={request.id || `${request.assetId}-${request.createdAt}`}>
+                          <td style={styles.td}>#{getRequestId(request)}</td>
+                          <td style={styles.td}>
+                            <div style={{ fontWeight: 700 }}>{assetInfo.code}</div>
+                            <div style={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: '0.82rem' }}>{assetInfo.name}</div>
+                          </td>
+                          <td style={styles.td}>
+                            <div>{request.title || request.problem || request.description || 'N/A'}</div>
+                            {isLate && <div style={{ color: '#dc2626', fontSize: '0.75rem', marginTop: '4px', fontWeight: 600 }}>{t.overdue}</div>}
+                          </td>
+                          <td style={styles.td}><span style={styles.priorityPill(request.priority)}>{formatPriority(request.priority)}</span></td>
+                          <td style={styles.td}><span style={styles.badge(request.status)}>{displayStatus(request.status)}</span></td>
+                          <td style={styles.td}>{getTechnicianName(request)}</td>
+                          <td style={styles.td}>{assetInfo.location}</td>
+                          <td style={styles.td}>{formatDate(request.updatedAt || request.updated_at || request.createdAt || request.created_at)}</td>
+                          <td style={styles.td}>
+                            <button type="button" style={{ ...styles.button, ...styles.secondaryButton, padding: '8px 10px' }} onClick={() => openRequest(request)}>{t.view}</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-              <div style={{ marginBottom: '12px' }}>
-                <strong>{t.assetName || 'Asset Name'}:</strong> {selectedRequest.assetName || 'N/A'}
+
+              <div style={styles.nav}>
+                <button type="button" style={{ ...styles.button, ...styles.secondaryButton }} disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>{t.previous}</button>
+                <div>{t.page} {page} {t.of} {totalPages}</div>
+                <button type="button" style={{ ...styles.button, ...styles.secondaryButton }} disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>{t.next}</button>
               </div>
-              <div style={{ marginBottom: '12px' }}>
-                <strong>{t.problem || 'Problem'}:</strong> {selectedRequest.problem || 'N/A'}
-              </div>
-              <div style={{ marginBottom: '12px' }}>
-                <strong>{t.provider || 'Provider'}:</strong> {selectedRequest.maintenanceProvider || 'N/A'}
-              </div>
-              <div style={{ marginBottom: '12px' }}>
-                <strong>{t.status || 'Status'}:</strong> <span style={styles.statusBadge(selectedRequest.status)}>{selectedRequest.status || 'N/A'}</span>
-              </div>
-              <div style={{ marginBottom: '12px' }}>
-                <strong>{t.expectedReturn || 'Expected Return'}:</strong> {selectedRequest.expectedReturnDate ? new Date(selectedRequest.expectedReturnDate).toLocaleDateString() : 'N/A'}
-              </div>
-              <div style={{ marginBottom: '12px' }}>
-                <strong>{t.notes || 'Notes'}:</strong> {selectedRequest.notes || 'N/A'}
+            </>
+          )}
+        </div>
+      </div>
+
+      {showDetail && selectedRequest && (
+        <div style={styles.modalBackdrop} onClick={() => setShowDetail(false)}>
+          <div style={styles.modalCard} onClick={(event) => event.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.5rem' }}>{t.requestDetails}</h3>
+              <button type="button" onClick={() => setShowDetail(false)} style={{ background: 'transparent', border: 'none', color: isDark ? '#e2e8f0' : '#0f172a', fontSize: '1.7rem', cursor: 'pointer' }}>×</button>
+            </div>
+
+            <div style={styles.section}>
+              <div style={styles.sectionTitle}>{t.currentStatus}</div>
+              <div style={styles.detailGrid}>
+                <div style={styles.infoBox}><strong>{t.requestId}:</strong> #{getRequestId(selectedRequest)}</div>
+                <div style={styles.infoBox}><strong>{t.status}:</strong> <span style={styles.badge(selectedRequest.status)}>{displayStatus(selectedRequest.status)}</span></div>
+                <div style={styles.infoBox}><strong>{t.priority}:</strong> <span style={styles.priorityPill(selectedRequest.priority)}>{formatPriority(selectedRequest.priority)}</span></div>
+                <div style={styles.infoBox}><strong>{t.requestedDate}:</strong> {formatDate(selectedRequest.createdAt || selectedRequest.created_at)}</div>
+                <div style={styles.infoBox}><strong>{t.lastUpdated}:</strong> {formatDate(selectedRequest.updatedAt || selectedRequest.updated_at)}</div>
+                <div style={styles.infoBox}><strong>{t.technician}:</strong> {getTechnicianName(selectedRequest)}</div>
               </div>
             </div>
 
-            <div style={styles.buttonGroup}>
-              <button
-                type="button"
-                style={{ ...styles.button, ...styles.secondaryButton }}
-                onClick={() => setShowDetailModal(false)}
-              >
-                {t.close || 'Close'}
-              </button>
+            <div style={styles.section}>
+              <div style={styles.sectionTitle}>{t.assetDetails}</div>
+              <div style={styles.detailGrid}>
+                <div style={styles.infoBox}><strong>{t.assetCode}:</strong> {getAssetInfo(selectedRequest).code}</div>
+                <div style={styles.infoBox}><strong>{t.assetName}:</strong> {getAssetInfo(selectedRequest).name}</div>
+                <div style={styles.infoBox}><strong>{t.department}:</strong> {getAssetInfo(selectedRequest).department}</div>
+                <div style={styles.infoBox}><strong>{t.location}:</strong> {getAssetInfo(selectedRequest).location}</div>
+                <div style={styles.infoBox}><strong>{t.serialNumber}:</strong> {getAssetInfo(selectedRequest).serial}</div>
+                <div style={styles.infoBox}><strong>{t.condition}:</strong> {selectedRequest.Asset?.condition || selectedRequest.condition || 'N/A'}</div>
+              </div>
+            </div>
+
+            <div style={styles.section}>
+              <div style={styles.sectionTitle}>{t.problemSection}</div>
+              <div style={styles.infoBox}>{selectedRequest.title || selectedRequest.problem || selectedRequest.description || 'N/A'}</div>
+            </div>
+
+            <div style={styles.section}>
+              <div style={styles.sectionTitle}>{t.timeline}</div>
+              <div>
+                {[{ label: 'Request Created', date: selectedRequest.createdAt || selectedRequest.created_at, note: 'Request created' }, { label: 'Current Status', date: selectedRequest.updatedAt || selectedRequest.updated_at || selectedRequest.createdAt || selectedRequest.created_at, note: displayStatus(selectedRequest.status) }, { label: 'Assigned Technician', date: selectedRequest.updatedAt || selectedRequest.updated_at, note: getTechnicianName(selectedRequest) }].filter((entry) => entry.date).map((entry, index) => (
+                  <div key={`${entry.label}-${index}`} style={styles.timelineItem}>
+                    <div style={{ fontWeight: 700 }}>{entry.label}</div>
+                    <div style={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: '0.82rem' }}>{formatDate(entry.date)}</div>
+                    <div style={{ marginTop: '4px' }}>{entry.note}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
+              <button type="button" style={{ ...styles.button, ...styles.secondaryButton }} onClick={() => setShowDetail(false)}>{t.close}</button>
             </div>
           </div>
         </div>
@@ -621,87 +667,112 @@ const StoreMaintenance = () => {
   );
 };
 
-// Translations
 const englishTranslations = {
-  maintenance: 'Maintenance',
-  maintenanceDesc: 'Manage asset maintenance requests and tracking',
-  sendMaintenance: 'Send for Maintenance',
-  search: 'Search by asset, problem, or provider...',
-  pendingMaintenance: 'Pending',
-  underMaintenance: 'Under Maintenance',
-  returnedMaintenance: 'Returned',
-  assetTag: 'Asset Tag',
-  assetName: 'Asset Name',
+  pageTitle: 'Maintenance Status',
+  pageSubtitle: 'Monitor assets currently in maintenance and track their repair progress and status.',
+  total: 'Total Maintenance Requests',
+  pending: 'Pending',
+  inProgress: 'In Progress',
+  completed: 'Completed',
+  readyForReturn: 'Ready for Return',
+  overdue: 'Overdue',
+  searchPlaceholder: 'Search by request ID, asset code, name, serial, technician, or issue',
+  allStatuses: 'All statuses',
+  allPriorities: 'All priorities',
+  allDepartments: 'All departments',
+  allLocations: 'All locations',
+  allTechnicians: 'All technicians',
+  allDates: 'All dates',
+  today: 'Today',
+  thisWeek: 'This week',
+  thisMonth: 'This month',
+  lastMonth: 'Last month',
+  refresh: 'Refresh',
+  loading: 'Loading maintenance status...',
+  noData: 'No maintenance records match your search or filters.',
+  showing: 'Showing',
+  of: 'of',
+  requestId: 'Request ID',
+  asset: 'Asset',
   problem: 'Problem',
-  provider: 'Maintenance Provider',
+  priority: 'Priority',
   status: 'Status',
-  expectedReturn: 'Expected Return',
-  actions: 'Actions',
-  export: 'Export',
+  technician: 'Technician',
+  location: 'Location',
+  lastUpdated: 'Last Updated',
+  action: 'Action',
   view: 'View',
-  loading: 'Loading...',
-  noRequests: 'No maintenance requests found',
-  selectAsset: 'Select Asset',
-  problemDescription: 'Describe the problem...',
-  selectProvider: 'Select Provider',
-  expectedReturnDate: 'Expected Return Date',
-  notes: 'Notes',
-  notesPlaceholder: 'Optional notes...',
-  cancel: 'Cancel',
-  submit: 'Submit',
-  sending: 'Sending...',
-  maintenanceDetails: 'Maintenance Details',
+  previous: 'Previous',
+  next: 'Next',
+  page: 'Page',
+  due: 'Due',
+  requestDetails: 'Maintenance Request Details',
+  currentStatus: 'Current Status',
+  requestDate: 'Requested Date',
+  assetDetails: 'Asset Details',
+  assetCode: 'Asset Code',
+  assetName: 'Asset Name',
+  department: 'Department',
+  serialNumber: 'Serial Number',
+  condition: 'Condition',
+  problemSection: 'Problem / Notes',
+  timeline: 'Maintenance Timeline',
   close: 'Close',
-  fillAllFields: 'Please fill all required fields',
-  sendSuccess: 'Asset sent for maintenance successfully',
-  sendError: 'Failed to send asset for maintenance',
-  statusUpdateSuccess: 'Status updated successfully',
-  statusUpdateError: 'Failed to update status',
-  exportSuccess: 'Exported successfully',
-  exportError: 'Export failed',
-  fetchError: 'Failed to load maintenance requests',
-  asset: 'Asset'
+  fetchError: 'Unable to load maintenance status. Please try again.',
 };
 
 const amharicTranslations = {
-  maintenance: 'ጥገና',
-  maintenanceDesc: 'የንብረት ጥገና ጥያቄዎችን እና ክትትልን ያስተዳድሩ',
-  sendMaintenance: 'ለጥገና ይላኩ',
-  search: 'በንብረት፣ ችግር ወይም አቅራቢ ይፈልጉ...',
-  pendingMaintenance: 'በመጠባበቅ ላይ',
-  underMaintenance: 'በጥገናው ላይ',
-  returnedMaintenance: 'ተመልሷል',
-  assetTag: 'የንብረት ትር',
-  assetName: 'የንብረት ስም',
+  pageTitle: 'የጥገና ሁኔታ',
+  pageSubtitle: 'በጥገና ላይ ያሉ ንብረቶችን እና የጥገና ሂደታቸውን ይከታተሉ።',
+  total: 'ጠቅላላ የጥገና ጥያቄዎች',
+  pending: 'በመጠባበቅ ላይ',
+  inProgress: 'በሂደት ላይ',
+  completed: 'ተጠናቋል',
+  readyForReturn: 'ወደ መመለስ ዝግጁ',
+  overdue: 'ዘግይቷል',
+  searchPlaceholder: 'በጥያቄ መለያ፣ ንብረት ኮድ፣ ስም፣ መለያ ኮድ፣ ቴክኒሽያን ወይም ችግር ይፈልጉ',
+  allStatuses: 'ሁሉም ሁኔታዎች',
+  allPriorities: 'ሁሉም ቅድሚያዎች',
+  allDepartments: 'ሁሉም መምሪያዎች',
+  allLocations: 'ሁሉም ቦታዎች',
+  allTechnicians: 'ሁሉም ቴክኒሻኖች',
+  allDates: 'ሁሉም ቀናት',
+  today: 'ዛሬ',
+  thisWeek: 'የዚህ ሳምንት',
+  thisMonth: 'የዚህ ወር',
+  lastMonth: 'ያለፈው ወር',
+  refresh: 'አድስ',
+  loading: 'የጥገና ሁኔታ በመጫን ላይ...',
+  noData: 'ምንም የጥገና መረጃ አልተገኘም።',
+  showing: 'የሚታየው',
+  of: 'ከ',
+  requestId: 'የጥያቄ መለያ',
+  asset: 'ንብረት',
   problem: 'ችግር',
-  provider: 'ጥገና አቅራቢ',
+  priority: 'ቅድሚያ',
   status: 'ሁኔታ',
-  expectedReturn: 'የሚጠበቀው መመለስ',
-  actions: 'ተግባራት',
-  export: 'ላክ',
-  view: 'ተመልከት',
-  loading: 'በመጫን ላይ...',
-  noRequests: 'ምንም ጥገና ጥያቄዎች አልተገኙም',
-  selectAsset: 'ንብረት ይምረጡ',
-  problemDescription: 'ችግሩን ይግለጹ...',
-  selectProvider: 'አቅራቢ ይምረጡ',
-  expectedReturnDate: 'የሚጠበቀው መመለስ ቀን',
-  notes: 'ማስታወሻዎች',
-  notesPlaceholder: '선택 ማስታወሳ...',
-  cancel: 'ይቅር',
-  submit: 'አስገባ',
-  sending: 'በመላክ ላይ...',
-  maintenanceDetails: 'ጥገና ዝርዝሮች',
+  technician: 'ቴክኒሽያን',
+  location: 'ቦታ',
+  lastUpdated: 'የመጨረሻ ዝመና',
+  action: 'እርምጃ',
+  view: 'እይታ',
+  previous: 'ቀዳሚ',
+  next: 'ቀጣይ',
+  page: 'ገጽ',
+  due: 'የሚፈጸም',
+  requestDetails: 'የጥገና ጥያቄ ዝርዝሮች',
+  currentStatus: 'የአሁኑ ሁኔታ',
+  requestDate: 'የተጠየቀበት ቀን',
+  assetDetails: 'የንብረት ዝርዝሮች',
+  assetCode: 'የንብረት ኮድ',
+  assetName: 'የንብረት ስም',
+  department: 'መምሪያ',
+  serialNumber: 'መለያ ቁጥር',
+  condition: 'ሁኔታ',
+  problemSection: 'ችግር / ማስታወሻ',
+  timeline: 'የጥገና ጊዜ መስመር',
   close: 'ዝጋ',
-  fillAllFields: 'እባክዎ ሁሉንም የግዴታ መስኮችን ይሙሉ',
-  sendSuccess: 'ንብረት ለጥገና በተሳካ ሁኔታ ተላከ',
-  sendError: 'ንብረት ለጥገና መላክ አልተቻለም',
-  statusUpdateSuccess: 'ሁኔታ በተሳካ ሁኔታ ተዘመነ',
-  statusUpdateError: 'ሁኔታ ማዘመን አልተቻለም',
-  exportSuccess: 'በተሳካ ሁኔታ ተላከ',
-  exportError: 'ላክ አልተቻለም',
-  fetchError: 'ጥገና ጥያቄዎችን መጫን አልተቻለም',
-  asset: 'ንብረት'
+  fetchError: 'የጥገና ሁኔታ መጫን አልተቻለም።',
 };
 
-export default StoreMaintenance;
+export default StoreMaintenanceStatus;

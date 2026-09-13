@@ -1,7 +1,7 @@
 const { Op } = require('sequelize');
 const { sequelize, Maintenance, Asset, User, Assignment, AuditLog } = require('../models');
 
-const managerRoles = ['admin', 'maintenance', 'ict_officer'];
+const managerRoles = ['admin', 'maintenance', 'ict_officer', 'store_manager'];
 const canManage = (req) => managerRoles.includes(req.user.role);
 const include = [
   { model: Asset, attributes: ['id', 'name', 'assetCode', 'category', 'department', 'location', 'status', 'condition', 'warrantyExpiry'] },

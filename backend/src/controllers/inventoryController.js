@@ -53,10 +53,20 @@ const getInventory = async (req, res, next) => {
 const getTransactions = async (req, res, next) => {
   try {
     const where = {};
+    const userCollegeId = req.user?.collegeId ?? req.user?.college_id;
+    const assetWhere = userCollegeId ? { collegeId: Number(userCollegeId) } : {};
     if (req.query.type) where.type = req.query.type;
     if (req.query.asset_id) where.assetId = req.query.asset_id;
-    const items = await InventoryTransaction.findAll({ where, include: [{ model: Asset, attributes: ['assetCode', 'name'] }, { model: User, attributes: ['username', 'fullName'] }], order: [['createdAt', 'DESC']] });
-    res.json({ success: true, transactions: items, total: items.length });
+    const items = await InventoryTransaction.findAll({
+      where,
+      include: [
+        { model: Asset, attributes: ['id', 'assetCode', 'name', 'department', 'location', 'collegeId'], required: true, where: assetWhere },
+        { model: User, attributes: ['id', 'username', 'fullName', 'role', 'departmentId'] },
+        { model: Department, attributes: ['id', 'name'] },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+    res.json({ success: true, transactions: items.map((item) => item.toJSON()), total: items.length });
   } catch (error) { next(error); }
 };
 

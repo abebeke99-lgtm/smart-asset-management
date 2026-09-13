@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, CheckCircle2, ClipboardList, LoaderCircle, PackagePlus, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/UiContext';
-import axios from 'axios';
+import { apiClient } from '../../utils/api';
 import './StoreReceive.css';
 
 const english = { title: 'Add Stock', subtitle: 'Receive additional quantity into Store inventory', back: 'Back to Inventory', asset: 'Asset / Item', search: 'Search inventory...', quantity: 'Quantity to add', location: 'Location', condition: 'Condition', reference: 'Reference', notes: 'Notes', submit: 'Add Stock', adding: 'Adding Stock...', required: 'Select an inventory item and enter a valid quantity.', success: 'Stock added successfully.', error: 'Stock could not be added.', loading: 'Loading inventory...', current: 'Current quantity', resulting: 'New quantity', good: 'Good', fair: 'Fair', damaged: 'Damaged' };
@@ -24,7 +24,7 @@ export default function StoreReceive() {
   const loadInventory = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/store/inventory', { params: { page: 1, pageSize: 100 } });
+      const response = await apiClient.get('/api/store/inventory', { params: { page: 1, pageSize: 100 } });
       setInventory(Array.isArray(response.data?.data) ? response.data.data : []);
     } catch (error) { setMessage({ type: 'error', text: error.response?.data?.message || t.error }); }
     finally { setLoading(false); }
@@ -39,7 +39,7 @@ export default function StoreReceive() {
     if (!assetId || !Number.isSafeInteger(quantity) || quantity <= 0 || quantity > 1000000) { setMessage({ type: 'error', text: t.required }); return; }
     setSaving(true); setMessage({ type: '', text: '' });
     try {
-      await axios.post(`/api/inventory/${assetId}/movement`, { type: 'receive', quantity, to_location: form.location, condition: form.condition, reference: form.reference, notes: form.notes });
+      await apiClient.post(`/api/inventory/${assetId}/movement`, { type: 'receive', quantity, to_location: form.location, condition: form.condition, reference: form.reference, notes: form.notes });
       setMessage({ type: 'success', text: t.success });
       setForm({ quantity: '1', location: '', condition: 'Good', reference: '', notes: '' });
       await loadInventory();
