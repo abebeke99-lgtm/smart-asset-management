@@ -2405,7 +2405,7 @@ function AppContent() {
                 <Route path="department-staff" element={<CollegeManagerPages section="department-staff" />} />
                 <Route path="department-assets" element={<CollegeManagerPages section="department-assets" />} />
                 <Route path="department-requests" element={<CollegeManagerPages section="department-requests" />} />
-                <Route path="department-performance" element={<CollegeManagerPages section="department-reports" />} />
+                <Route path="department-performance" element={<CollegeManagerPages section="department-performance" />} />
                 <Route path="department-approvals" element={<CollegeManagerPages section="department-approvals" />} />
                 <Route path="department-assignments" element={<CollegeManagerPages section="department-assignments" />} />
                 <Route path="department-transfers" element={<CollegeManagerPages section="department-transfers" />} />
@@ -2426,7 +2426,7 @@ function AppContent() {
                 <Route path="rfid" element={<CollegeManagerPages section="rfid" />} />
                 <Route path="verification" element={<CollegeManagerPages section="verification" />} />
                 <Route path="reports" element={<CollegeManagerPages section="reports" />} />
-                <Route path="analytics/assets" element={<CollegeManagerPages section="reports" />} />
+                <Route path="analytics/assets" element={<CollegeManagerPages section="analytics-assets" />} />
                 <Route path="analytics/departments" element={<CollegeManagerPages section="department-reports" />} />
                 <Route path="notifications" element={<CollegeManagerPages section="notifications" />} />
                 <Route path="history" element={<CollegeManagerPages section="history" />} />

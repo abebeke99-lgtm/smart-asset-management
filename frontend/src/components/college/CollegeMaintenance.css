@@ -1,0 +1,369 @@
+.college-maintenance-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.college-maintenance-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 20px 22px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.college-maintenance-header h1 {
+  margin: 6px 0 8px;
+  font-size: clamp(1.7rem, 2vw, 2.25rem);
+  color: #0f172a;
+}
+
+.college-maintenance-header p {
+  margin: 0;
+  color: #475569;
+}
+
+.college-maintenance-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2563eb;
+}
+
+.college-maintenance-refresh,
+.college-maintenance-clear,
+.college-maintenance-icon-button,
+.college-maintenance-pagination button,
+.college-maintenance-state button {
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.college-maintenance-refresh,
+.college-maintenance-clear,
+.college-maintenance-state button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
+  background: #e0f2fe;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.college-maintenance-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.college-maintenance-stat {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.03);
+}
+
+.college-maintenance-stat span {
+  font-size: 0.75rem;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.college-maintenance-stat strong {
+  font-size: clamp(1.5rem, 2vw, 2.1rem);
+  color: #0f172a;
+}
+
+.college-maintenance-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.college-maintenance-toolbar label {
+  min-width: 160px;
+  flex: 1 1 180px;
+}
+
+.college-maintenance-toolbar label input,
+.college-maintenance-toolbar label select {
+  width: 100%;
+  height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 0 12px;
+  color: #0f172a;
+}
+
+.college-maintenance-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 220px;
+  flex: 2 1 260px;
+}
+
+.college-maintenance-search svg {
+  position: absolute;
+  left: 12px;
+  color: #64748b;
+}
+
+.college-maintenance-search input {
+  padding-left: 38px !important;
+}
+
+.college-maintenance-table-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.03);
+}
+
+.college-maintenance-table-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: #334155;
+  font-size: 0.95rem;
+}
+
+.college-maintenance-table-wrap {
+  overflow-x: auto;
+}
+
+.college-maintenance-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1100px;
+}
+
+.college-maintenance-table-wrap th,
+.college-maintenance-table-wrap td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.college-maintenance-table-wrap th {
+  color: #475569;
+  background: #f8fafc;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.college-maintenance-asset-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.college-maintenance-asset-cell small {
+  color: #64748b;
+}
+
+.college-maintenance-badge,
+.college-maintenance-priority {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.status-open { background: #dbeafe; color: #1d4ed8; }
+.status-progress { background: #fef3c7; color: #b45309; }
+.status-completed { background: #dcfce7; color: #166534; }
+.status-cancelled { background: #fee2e2; color: #b91c1c; }
+.status-overdue { background: #fef2f2; color: #991b1b; }
+.status-default { background: #e2e8f0; color: #334155; }
+
+.priority-critical { background: #fee2e2; color: #b91c1c; }
+.priority-high { background: #fef3c7; color: #b45309; }
+.priority-medium { background: #dbeafe; color: #1d4ed8; }
+.priority-low { background: #dcfce7; color: #166534; }
+.priority-default { background: #e2e8f0; color: #334155; }
+
+.college-maintenance-icon-button {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.college-maintenance-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 34px 18px;
+  color: #475569;
+  text-align: center;
+}
+
+.college-maintenance-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.college-maintenance-pagination button {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  padding: 9px 14px;
+}
+
+.college-maintenance-pagination button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.college-maintenance-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 2000;
+}
+
+.college-maintenance-modal {
+  width: min(820px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  padding: 20px;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+}
+
+.college-maintenance-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.college-maintenance-modal-head h2 {
+  margin: 8px 0 0;
+  color: #0f172a;
+}
+
+.college-maintenance-modal-head button {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.college-maintenance-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.college-maintenance-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.college-maintenance-detail-item span {
+  color: #64748b;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.college-maintenance-detail-item strong {
+  color: #0f172a;
+  line-height: 1.5;
+}
+
+.college-maintenance-modal-loading,
+.college-maintenance-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 200px;
+  color: #475569;
+}
+
+.college-maintenance-error,
+.college-maintenance-error-text {
+  color: #991b1b;
+}
+
+.college-maintenance-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+  .college-maintenance-header {
+    flex-direction: column;
+  }
+
+  .college-maintenance-toolbar {
+    flex-direction: column;
+  }
+
+  .college-maintenance-toolbar label {
+    width: 100%;
+  }
+}

@@ -179,3 +179,16 @@ test('store manager routes expose a real verification workflow using the existin
   assert.match(routeSource, /router\.post\('\/verification\/:id\/submit'/);
   assert.match(routeSource, /router\.post\('\/verification\/:id\/finalize'/);
 });
+
+test('college verification routes enforce college-scoped pagination, filters, and ownership checks', () => {
+  const collegeRoutes = fs.readFileSync(path.resolve(__dirname, '../src/routes/collegeRoutes.js'), 'utf8');
+  const collegeController = fs.readFileSync(path.resolve(__dirname, '../src/controllers/collegeController.js'), 'utf8');
+  assert.match(collegeRoutes, /router\.get\('\/verification'/);
+  assert.match(collegeRoutes, /router\.post\('\/verification'/);
+  assert.match(collegeRoutes, /router\.get\('\/verification\/:id'/);
+  assert.match(collegeRoutes, /router\.post\('\/verification\/:id\/items'/);
+  assert.match(collegeController, /listCollegeVerification/);
+  assert.match(collegeController, /req\.organizationScope\?\.collegeId|req\.organizationScope\.collegeId/);
+  assert.match(collegeController, /page.*limit.*totalPages|totalPages/);
+  assert.match(collegeController, /departmentId.*assetStatus.*location/);
+});

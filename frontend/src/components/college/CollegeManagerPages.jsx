@@ -14,10 +14,18 @@ import CollegeProfile from './CollegeProfile';
 import CollegeStaff from './CollegeStaff';
 import CollegeLocations from './CollegeLocations';
 import CollegeDepartmentOverview from './CollegeDepartmentOverview';
+import CollegeDepartmentPerformance from './CollegeDepartmentPerformance';
 import CollegeAssets from './CollegeAssets';
+import CollegeDepartmentAssets from './CollegeDepartmentAssets';
 import CollegeRequests from './CollegeRequests';
+import CollegeDepartmentRequests from './CollegeDepartmentRequests';
 import CollegeApprovals from './CollegeApprovals';
 import CollegeAssignments from './CollegeAssignments';
+import CollegeVerification from './CollegeVerification';
+import CollegeMaintenance from './CollegeMaintenance';
+import CollegeNotifications from './CollegeNotifications';
+import CollegeReports from './CollegeReports';
+import CollegeAssetAnalytics from './CollegeAssetAnalytics';
 
 const CollegeSectionWrapper = ({ title, subtitle, children }) => (
   <div className="college-section-wrapper">
@@ -53,7 +61,7 @@ const CollegeManagerPages = ({ section = 'dashboard' }) => {
     ),
     verification: (
       <CollegeSectionWrapper title="Asset Verification" subtitle="Physical verification, discrepancies, inspection results and audit trail for the authorized college.">
-        <DeptDashboard />
+        <CollegeVerification />
       </CollegeSectionWrapper>
     ),
     assets: <CollegeAssets />,
@@ -65,20 +73,25 @@ const CollegeManagerPages = ({ section = 'dashboard' }) => {
     assignments: <CollegeAssignments />,
     transfers: <ScopedWorkflowPage scope="college" type="transfers" />,
     returns: <ScopedWorkflowPage scope="college" type="returns" />,
-    maintenance: <ScopedWorkflowPage scope="college" type="maintenance" />,
+    maintenance: <CollegeMaintenance />,
     rfid: (
       <CollegeSectionWrapper title="RFID / QR Tracking" subtitle="Asset lookup, scan history and location tracking for authorized college assets.">
         <DeptAssets />
       </CollegeSectionWrapper>
     ),
     reports: (
-      <CollegeSectionWrapper title="College Reports" subtitle="Asset, assignment, utilization and department comparison reports.">
-        <DeptReports />
+      <CollegeSectionWrapper title="College Reports" subtitle="College-scoped operational reports for assets, assignments, maintenance, transfers, verification and requests.">
+        <CollegeReports />
+      </CollegeSectionWrapper>
+    ),
+    'analytics-assets': (
+      <CollegeSectionWrapper title="Asset Analytics" subtitle="College-scoped asset utilization, status distribution, maintenance trends and operational health.">
+        <CollegeAssetAnalytics />
       </CollegeSectionWrapper>
     ),
     notifications: (
-      <CollegeSectionWrapper title="Notifications" subtitle="Approval, request, transfer, maintenance and missing-asset alerts.">
-        <DeptNotifications />
+      <CollegeSectionWrapper title="Notifications" subtitle="Approval, request, transfer, maintenance and college activity alerts.">
+        <CollegeNotifications />
       </CollegeSectionWrapper>
     ),
     history: (
@@ -99,12 +112,12 @@ const CollegeManagerPages = ({ section = 'dashboard' }) => {
     ),
     'department-assets': (
       <CollegeSectionWrapper title="Department Assets" subtitle="Assets grouped by department, condition, status and maintenance status.">
-        <DeptAssets />
+        <CollegeDepartmentAssets />
       </CollegeSectionWrapper>
     ),
     'department-requests': (
       <CollegeSectionWrapper title="Department Requests" subtitle="Department-level requests, pending requests and request history.">
-        <DeptApprovals />
+        <CollegeDepartmentRequests />
       </CollegeSectionWrapper>
     ),
     'department-approvals': (
@@ -130,6 +143,11 @@ const CollegeManagerPages = ({ section = 'dashboard' }) => {
     'department-maintenance': (
       <CollegeSectionWrapper title="Department Maintenance" subtitle="Maintenance requests, costs and maintenance status by department.">
         <DeptApprovals />
+      </CollegeSectionWrapper>
+    ),
+    'department-performance': (
+      <CollegeSectionWrapper title="Department Performance" subtitle="Operational asset, request and maintenance activity across departments in the authorized college.">
+        <CollegeDepartmentPerformance />
       </CollegeSectionWrapper>
     ),
     'department-reports': (

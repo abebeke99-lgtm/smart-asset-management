@@ -15,3 +15,10 @@ test('college dashboard response exposes the real scoped collection payload expe
   assert.match(controllerSource, /recentActivity/i);
   assert.match(controllerSource, /req\.organizationScope\?\.collegeId|req\.organizationScope\.collegeId/i);
 });
+
+test('college department-assets endpoint is defined with college-scoped filtering and pagination', () => {
+  assert.match(controllerSource, /listCollegeDepartmentAssets/i);
+  assert.match(controllerSource, /req\.organizationScope\.collegeId/i);
+  assert.match(controllerSource, /pagination\s*:\s*\{[^\}]*page[^\}]*limit[^\}]*total[^\}]*totalPages/i);
+  assert.match(controllerSource, /summary\s*:\s*\{[^\}]*totalAssets/i);
+});

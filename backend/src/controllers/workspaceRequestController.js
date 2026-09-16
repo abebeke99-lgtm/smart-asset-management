@@ -41,6 +41,115 @@ const normalizeCollegeRequest = (record) => {
   };
 };
 
+const listCollegeDepartmentRequests = async (req, res, next) => {
+  try {
+    const collegeId = Number(req.organizationScope?.collegeId);
+    if (!collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 10));
+    const offset = (page - 1) * limit;
+    const search = String(req.query.search || '').trim();
+    const departmentId = req.query.departmentId ? Number(req.query.departmentId) : null;
+    const status = String(req.query.status || '').trim().toLowerCase();
+    const priority = String(req.query.priority || '').trim().toLowerCase();
+
+    const departments = await Department.findAll({
+      where: { collegeId },
+      attributes: ['id', 'name', 'code'],
+      order: [['name', 'ASC']],
+    });
+    const departmentIds = departments.map((department) => department.id);
+    const assetIds = await Asset.findAll({ where: { collegeId }, attributes: ['id'], raw: true });
+    const validDepartmentIds = departmentIds.length ? departmentIds : [-1];
+    const validAssetIds = assetIds.length ? assetIds.map((asset) => asset.id) : [-1];
+
+    if (departmentId && !departmentIds.includes(departmentId)) {
+      return res.status(400).json({ success: false, message: 'Department is not part of your college' });
+    }
+
+    const scopeWhere = {
+      [Op.or]: [
+        { departmentId: { [Op.in]: validDepartmentIds } },
+        { assetId: { [Op.in]: validAssetIds } },
+      ],
+    };
+
+    const where = { [Op.and]: [scopeWhere] };
+
+    if (status) where.status = status;
+    if (priority) where.priority = priority;
+    if (departmentId) where[Op.and].push({ departmentId });
+
+    if (search) {
+      const normalizedSearch = `%${search}%`;
+      const idValue = Number(search);
+      where[Op.and].push({
+        [Op.or]: [
+          ...(Number.isInteger(idValue) ? [{ id: idValue }] : []),
+          { item: { [Op.like]: normalizedSearch } },
+          { reason: { [Op.like]: normalizedSearch } },
+          { '$Requester.fullName$': { [Op.like]: normalizedSearch } },
+          { '$Requester.username$': { [Op.like]: normalizedSearch } },
+          { '$Department.name$': { [Op.like]: normalizedSearch } },
+          { '$Asset.name$': { [Op.like]: normalizedSearch } },
+          { '$Asset.assetCode$': { [Op.like]: normalizedSearch } },
+        ],
+      });
+    }
+
+    const allowedSortBy = ['id', 'createdAt', 'updatedAt', 'status', 'priority'];
+    const sortBy = allowedSortBy.includes(req.query.sortBy) ? req.query.sortBy : 'createdAt';
+    const sortOrder = String(req.query.sortOrder || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+    const [result, counts] = await Promise.all([
+      Approval.findAndCountAll({
+        where,
+        include: collegeRequestInclude,
+        distinct: true,
+        limit,
+        offset,
+        order: [[sortBy, sortOrder]],
+      }),
+      Promise.all([
+        ['pending', Approval.count({ where: { [Op.and]: [scopeWhere, { status: 'pending' }] } })],
+        ['approved', Approval.count({ where: { [Op.and]: [scopeWhere, { status: 'approved' }] } })],
+        ['rejected', Approval.count({ where: { [Op.and]: [scopeWhere, { status: 'rejected' }] } })],
+        ['cancelled', Approval.count({ where: { [Op.and]: [scopeWhere, { status: 'cancelled' }] } })],
+      ]),
+    ]);
+
+    const summary = {
+      total: await Approval.count({ where: scopeWhere }),
+      pending: counts[0][1],
+      approved: counts[1][1],
+      rejected: counts[2][1],
+      cancelled: counts[3][1],
+    };
+
+    const payload = result.rows.map(normalizeCollegeRequest);
+    res.json({
+      success: true,
+      data: payload,
+      pagination: {
+        page,
+        limit,
+        total: result.count,
+        totalPages: Math.ceil(result.count / limit),
+        pages: Math.ceil(result.count / limit) || 1,
+      },
+      summary,
+      filters: {
+        departments,
+        statuses: ['pending', 'approved', 'rejected', 'cancelled'],
+        priorities: ['low', 'medium', 'high', 'critical'],
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const listCollegeRequests = async (req, res, next) => {
   try {
     const collegeId = Number(req.organizationScope?.collegeId);
@@ -155,4 +264,13 @@ const decideRequest = async (req, res, next) => {
   } catch (error) { await transaction.rollback(); next(error); }
 };
 
-module.exports = { listRequests, getRequest, createRequest, decideRequest, isCollegeScope, listCollegeRequests, getCollegeRequest };
+module.exports = {
+  listRequests,
+  getRequest,
+  createRequest,
+  decideRequest,
+  isCollegeScope,
+  listCollegeRequests,
+  getCollegeRequest,
+  listCollegeDepartmentRequests,
+};

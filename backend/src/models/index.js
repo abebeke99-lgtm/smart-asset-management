@@ -66,6 +66,8 @@ Transfer.belongsTo(Asset, { foreignKey: 'assetId' });
 User.hasMany(Transfer, { foreignKey: 'createdBy', as: 'CreatedTransfers' });
 Transfer.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
 User.hasMany(Transfer, { foreignKey: 'approvedBy', as: 'ApprovedTransfers' });
+User.hasMany(Transfer, { foreignKey: 'requestedBy', as: 'RequestedTransfers' });
+Transfer.belongsTo(User, { foreignKey: 'requestedBy', as: 'Requester' });
 Transfer.belongsTo(User, { foreignKey: 'approvedBy', as: 'Approver' });
 Asset.hasOne(Inventory, { foreignKey: 'assetId' });
 Inventory.belongsTo(Asset, { foreignKey: 'assetId' });

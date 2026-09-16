@@ -12,23 +12,58 @@ const transitions = {
 };
 const number = () => `TR-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
 const scopeWhere = (req) => !req.organizationScope ? {} : req.organizationScope.departmentId ? { [Op.or]: [{ sourceDepartmentId: req.organizationScope.departmentId }, { destinationDepartmentId: req.organizationScope.departmentId }] } : { [Op.or]: [{ sourceCollegeId: req.organizationScope.collegeId }, { destinationCollegeId: req.organizationScope.collegeId }] };
-const normalize = (item) => ({ ...item.toJSON(), transfer_number: item.transferNumber, source_department_id: item.sourceDepartmentId, destination_department_id: item.destinationDepartmentId });
+const normalize = (item) => {
+  const data = item.toJSON();
+  const asset = item.Asset || {};
+  const requester = item.Requester || item.Creator || {};
+  const approver = item.Approver || {};
+  return {
+    ...data,
+    transfer_number: item.transferNumber,
+    source_department_id: item.sourceDepartmentId,
+    destination_department_id: item.destinationDepartmentId,
+    asset_name: asset.name,
+    asset_code: asset.assetCode,
+    serial_number: asset.serialNumber,
+    asset_status: asset.status,
+    asset_department: asset.department,
+    asset_location: asset.location,
+    requested_by_name: requester.fullName || requester.username || '',
+    approved_by_name: approver.fullName || approver.username || '',
+  };
+};
+
+const transferInclude = [
+  { model: Asset, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'status', 'department', 'location'] },
+  { model: User, attributes: ['id', 'username', 'fullName'], as: 'Requester' },
+  { model: User, attributes: ['id', 'username', 'fullName'], as: 'Creator' },
+  { model: User, attributes: ['id', 'username', 'fullName'], as: 'Approver' },
+];
 
 const listTransfers = async (req, res, next) => {
   try {
     const where = { ...scopeWhere(req) };
     if (req.query.status) where.status = String(req.query.status);
     if (req.query.search) where.transferNumber = { [Op.like]: `%${String(req.query.search).trim()}%` };
-    const rows = await Transfer.findAll({ where, order: [['createdAt', 'DESC']] });
-    res.json({ success: true, data: rows.map(normalize), transfers: rows.map(normalize) });
+    const [rows, counts] = await Promise.all([
+      Transfer.findAll({ where, include: transferInclude, order: [['createdAt', 'DESC']] }),
+      Promise.all(['Requested', 'Approved', 'Ready', 'In Transit', 'Received', 'Rejected', 'Cancelled'].map(async (status) => [status, await Transfer.count({ where: { ...scopeWhere(req), status } })])),
+    ]);
+    const summary = Object.fromEntries(counts);
+    summary.total = counts.reduce((total, [, count]) => total + count, 0);
+    res.json({ success: true, data: rows.map(normalize), transfers: rows.map(normalize), summary });
   } catch (error) { next(error); }
 };
 
 const getTransfer = async (req, res, next) => {
   try {
-    const row = await Transfer.findOne({ where: { id: req.params.id, ...scopeWhere(req) } });
+    const row = await Transfer.findOne({ where: { id: req.params.id, ...scopeWhere(req) }, include: transferInclude });
     if (!row) return res.status(404).json({ success: false, message: 'Transfer not found in your scope' });
-    res.json({ success: true, data: normalize(row) });
+    const [history, audit] = await Promise.all([
+      Transfer.findAll({ where: { assetId: row.assetId, ...scopeWhere(req) }, include: transferInclude, order: [['createdAt', 'DESC']] }),
+      AuditLog.findAll({ where: { entity: `transfer:${row.id}` }, order: [['createdAt', 'DESC']] }),
+    ]);
+    res.json({ success: true, data: { ...normalize(row), history: history.map(normalize), audit } });
   } catch (error) { next(error); }
 };
 
@@ -36,7 +71,7 @@ const createTransfer = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
     const { asset_id: assetId, destination_department_id: destinationDepartmentId, destination_location: destinationLocation, reason } = req.body;
-    if (!assetId || !destinationDepartmentId || !String(reason || '').trim()) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Asset, destination department, and reason are required' }); }
+    if (!assetId || !destinationDepartmentId || !String(destinationLocation || '').trim() || !String(reason || '').trim()) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Asset, destination department, destination location, and reason are required' }); }
     const assetWhere = req.organizationScope.departmentId ? { id: assetId, departmentId: req.organizationScope.departmentId } : { id: assetId, collegeId: req.organizationScope.collegeId };
     const asset = await Asset.findOne({ where: assetWhere, transaction, lock: transaction.LOCK.UPDATE });
     if (!asset) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Asset is outside your organization scope' }); }
@@ -45,7 +80,7 @@ const createTransfer = async (req, res, next) => {
     if (!destination || destination.id === asset.departmentId) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Destination department is invalid' }); }
     const duplicate = await Transfer.findOne({ where: { assetId, status: { [Op.in]: ACTIVE } }, transaction, lock: transaction.LOCK.UPDATE });
     if (duplicate) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Asset already has an active transfer' }); }
-    const row = await Transfer.create({ transferNumber: number(), assetId: asset.id, sourceCollegeId: asset.collegeId, sourceDepartmentId: asset.departmentId, sourceDepartment: asset.department || '', destinationCollegeId: destination.collegeId, destinationDepartmentId: destination.id, destinationDepartment: destination.name, currentLocation: asset.location || '', newLocation: String(destinationLocation || '').trim(), transferReason: String(reason).trim(), requestedBy: req.user.id, createdBy: req.user.id, requestedAt: new Date(), status: 'Requested' }, { transaction });
+    const row = await Transfer.create({ transferNumber: number(), assetId: asset.id, sourceCollegeId: asset.collegeId, sourceDepartmentId: asset.departmentId, sourceDepartment: asset.department || '', destinationCollegeId: destination.collegeId, destinationDepartmentId: destination.id, destinationDepartment: destination.name, currentLocation: asset.location || '', newLocation: String(destinationLocation).trim(), transferReason: String(reason).trim(), requestedBy: req.user.id, createdBy: req.user.id, requestedAt: new Date(), status: 'Requested' }, { transaction });
     await AuditLog.create({ userId: req.user.id, action: 'TRANSFER_CREATED', entity: `transfer:${row.id}`, details: JSON.stringify({ beforeStatus: null, afterStatus: row.status, assetId: asset.id }) }, { transaction });
     await transaction.commit();
     res.status(201).json({ success: true, message: 'Transfer request created', data: normalize(row) });

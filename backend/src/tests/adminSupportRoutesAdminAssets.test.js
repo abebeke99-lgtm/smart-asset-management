@@ -42,3 +42,19 @@ test('admin support router provides the locations endpoint with an Express next 
 
   assert.match(routeSource, /router\.get\('\/locations', requireAuth, async \(req, res, next\)/, 'expected /locations route to accept next for safe error flow');
 });
+
+const collegeRoutes = require('../routes/collegeRoutes');
+
+test('college router exposes a college-scoped RFID tracking route', () => {
+  const rfidRoute = collegeRoutes.stack.find((layer) => layer.route && layer.route.path === '/rfid' && layer.route.methods.get);
+
+  assert.ok(rfidRoute, 'expected /rfid GET route in the college router');
+  assert.equal(rfidRoute.route.path, '/rfid');
+});
+
+test('college controller enforces college scope for RFID tracking lookups', () => {
+  const controllerSource = fs.readFileSync(path.join(__dirname, '../controllers/collegeController.js'), 'utf8');
+
+  assert.match(controllerSource, /listCollegeRFIDTracking|listCollegeRfid|college.*rfid/i, 'expected a dedicated college RFID tracking controller');
+  assert.match(controllerSource, /req\.organizationScope\.collegeId/i, 'expected the college scope to be enforced on every RFID lookup');
+});
