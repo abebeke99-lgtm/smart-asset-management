@@ -10,6 +10,14 @@ import DeptAssetHistory from '../department/DeptAssetHistory';
 import './CollegeDashboard.css';
 import CollegeDepartments from './CollegeDepartments';
 import ScopedWorkflowPage from '../shared/ScopedWorkflowPage';
+import CollegeProfile from './CollegeProfile';
+import CollegeStaff from './CollegeStaff';
+import CollegeLocations from './CollegeLocations';
+import CollegeDepartmentOverview from './CollegeDepartmentOverview';
+import CollegeAssets from './CollegeAssets';
+import CollegeRequests from './CollegeRequests';
+import CollegeApprovals from './CollegeApprovals';
+import CollegeAssignments from './CollegeAssignments';
 
 const CollegeSectionWrapper = ({ title, subtitle, children }) => (
   <div className="college-section-wrapper">
@@ -30,17 +38,17 @@ const CollegeManagerPages = ({ section = 'dashboard' }) => {
     ),
     profile: (
       <CollegeSectionWrapper title="College Profile" subtitle="View, maintain and monitor the authorized college profile and operational statistics.">
-        <DeptDashboard />
+        <CollegeProfile />
       </CollegeSectionWrapper>
     ),
     staff: (
       <CollegeSectionWrapper title="College Staff" subtitle="Staff records within the authorized college, with asset assignments and activity summaries.">
-        <DeptStaff />
+        <CollegeStaff />
       </CollegeSectionWrapper>
     ),
     locations: (
-      <CollegeSectionWrapper title="College Locations" subtitle="Buildings, offices, labs and storage locations managed for the college.">
-        <DeptDashboard />
+      <CollegeSectionWrapper title="College Locations" subtitle="Manage buildings, rooms, and asset locations within your college.">
+        <CollegeLocations />
       </CollegeSectionWrapper>
     ),
     verification: (
@@ -48,31 +56,13 @@ const CollegeManagerPages = ({ section = 'dashboard' }) => {
         <DeptDashboard />
       </CollegeSectionWrapper>
     ),
-    assets: (
-      <CollegeSectionWrapper title="College Assets" subtitle="Authorized college assets, search, filters, location details and asset history.">
-        <DeptAssets />
-      </CollegeSectionWrapper>
-    ),
-    inventory: (
-      <CollegeSectionWrapper title="College Inventory" subtitle="Inventory overview and reconciliation for authorized college assets.">
-        <DeptReports />
-      </CollegeSectionWrapper>
-    ),
-    requests: (
-      <CollegeSectionWrapper title="Asset Requests" subtitle="Create, review, update and track requests for authorized college assets.">
-        <DeptApprovals />
-      </CollegeSectionWrapper>
-    ),
+    assets: <CollegeAssets />,
+    inventory: <CollegeAssets inventory />,
+    requests: <CollegeRequests />,
     approvals: (
-      <CollegeSectionWrapper title="Approvals" subtitle="Pending approvals and decision history across college asset workflows.">
-        <DeptApprovals />
-      </CollegeSectionWrapper>
+      <CollegeApprovals />
     ),
-    assignments: (
-      <CollegeSectionWrapper title="College Assignments" subtitle="Assignment records, reassignment status and staff asset tracking.">
-        <DeptAssets />
-      </CollegeSectionWrapper>
-    ),
+    assignments: <CollegeAssignments />,
     transfers: <ScopedWorkflowPage scope="college" type="transfers" />,
     returns: <ScopedWorkflowPage scope="college" type="returns" />,
     maintenance: <ScopedWorkflowPage scope="college" type="maintenance" />,
@@ -96,7 +86,7 @@ const CollegeManagerPages = ({ section = 'dashboard' }) => {
         <DeptAssetHistory />
       </CollegeSectionWrapper>
     ),
-    departments: <CollegeDepartments />,
+    departments: <CollegeDepartmentOverview />,
     'department-deans': (
       <CollegeSectionWrapper title="Department Deans" subtitle="Department dean assignments, dean permissions and department leadership records.">
         <DeptDashboard />

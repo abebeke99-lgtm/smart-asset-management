@@ -1,0 +1,48 @@
+.college-locations-page { padding: 4px 24px 24px; color: #0f172a; }
+.college-locations-heading { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+.college-locations-eyebrow { color: #0369a1; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.college-locations-subtitle { margin: 5px 0 0; color: #64748b; font-size: 14px; }
+.college-locations-college { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 8px; margin-left: auto; padding: 10px 14px; border: 1px solid #bae6fd; border-radius: 10px; background: #eff6ff; }
+.college-locations-college svg { grid-row: span 2; color: #0284c7; }
+.college-locations-college span { font-size: 13px; font-weight: 700; }
+.college-locations-college small { color: #64748b; font-size: 11px; }
+.college-locations-refresh, .college-locations-view, .college-locations-state button, .college-locations-pagination button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1e3a8a; cursor: pointer; font: inherit; }
+.college-locations-refresh { padding: 9px 12px; font-size: 13px; font-weight: 700; }
+.college-locations-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
+.college-locations-summary-card { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 12px; padding: 17px 20px; border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; box-shadow: 0 4px 12px rgba(15, 23, 42, .05); }
+.college-locations-summary-card span { grid-row: span 2; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; color: #0284c7; background: #e0f2fe; }
+.college-locations-summary-card strong { font-size: 25px; line-height: 1; }
+.college-locations-summary-card small { color: #64748b; font-size: 12px; }
+.college-locations-card { border: 1px solid #e2eaf0; border-radius: 14px; background: #fff; box-shadow: 0 4px 12px rgba(15, 23, 42, .05); }
+.college-locations-toolbar { display: flex; gap: 12px; padding: 16px; border-bottom: 1px solid #e2e8f0; }
+.college-locations-search { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; color: #64748b; }
+.college-locations-search input, .college-locations-toolbar select { min-height: 38px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #0f172a; font: inherit; font-size: 13px; }
+.college-locations-search input { width: 100%; padding: 0 11px; }
+.college-locations-toolbar select { min-width: 190px; padding: 0 10px; }
+.college-locations-table-wrap { overflow-x: auto; }
+.college-locations-table-wrap table { width: 100%; min-width: 700px; border-collapse: collapse; font-size: 13px; }
+.college-locations-table-wrap th, .college-locations-table-wrap td { padding: 13px 16px; border-bottom: 1px solid #f1f5f9; text-align: left; white-space: nowrap; }
+.college-locations-table-wrap th { color: #64748b; font-size: 11px; text-transform: uppercase; }
+.college-locations-table-wrap td { color: #475569; }
+.college-locations-table-wrap td:first-child { color: #0f172a; }
+.college-locations-view { padding: 6px 9px; font-size: 12px; font-weight: 700; }
+.college-locations-state { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 180px; padding: 24px; color: #64748b; text-align: center; }
+.college-locations-state strong, .college-locations-state span { display: block; }
+.college-locations-state strong { color: #334155; }
+.college-locations-state span { font-size: 13px; }
+.college-locations-state button { margin-left: 8px; padding: 7px 11px; font-size: 12px; font-weight: 700; }
+.college-locations-error { flex-direction: column; color: #e61e1e; }
+.college-locations-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; color: #64748b; font-size: 12px; }
+.college-locations-pagination div { display: flex; gap: 8px; }
+.college-locations-pagination button { padding: 7px 10px; font-size: 12px; }
+.college-locations-pagination button:disabled { cursor: not-allowed; opacity: .45; }
+.college-locations-modal-backdrop { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15, 23, 42, .48); }
+.college-locations-modal { width: min(560px, 100%); max-height: calc(100vh - 40px); overflow: auto; padding: 22px; border-radius: 14px; background: #fff; box-shadow: 0 20px 50px rgba(15, 23, 42, .22); }
+.college-locations-modal-heading { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.college-locations-modal-heading h2 { margin: 5px 0 0; font-size: 21px; }
+.college-locations-modal-heading button { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 0; border-radius: 8px; background: #f1f5f9; color: #334155; cursor: pointer; }
+.college-locations-modal dl { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(0, 1.2fr); gap: 0; margin: 0; }
+.college-locations-modal dt, .college-locations-modal dd { margin: 0; padding: 11px 0; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+.college-locations-modal dt { color: #64748b; }
+.college-locations-modal dd { display: flex; align-items: center; gap: 5px; color: #0f172a; font-weight: 600; overflow-wrap: anywhere; }
+@media (max-width: 720px) { .college-locations-page { padding: 4px 14px 18px; } .college-locations-heading { align-items: stretch; flex-direction: column; } .college-locations-college { margin-left: 0; width: fit-content; } .college-locations-refresh { align-self: flex-start; } .college-locations-summary { grid-template-columns: 1fr; } .college-locations-toolbar { flex-direction: column; } .college-locations-toolbar select { width: 100%; } .college-locations-pagination { align-items: stretch; flex-direction: column; } .college-locations-pagination div { justify-content: space-between; } }

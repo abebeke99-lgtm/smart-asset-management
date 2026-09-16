@@ -1,0 +1,49 @@
+.college-staff-page { padding: 24px; background: #f8fafc; color: #0f172a; }
+.college-staff-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+.college-staff-eyebrow { color: #0369a1; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.college-staff-heading h1 { margin: 5px 0; font-size: 28px; }
+.college-staff-heading p { margin: 0; color: #64748b; font-size: 14px; }
+.college-staff-refresh, .college-staff-view, .college-staff-pagination button, .college-staff-error button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 8px 13px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #334155; font-weight: 700; cursor: pointer; }
+.college-staff-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+.college-staff-summary article, .college-staff-card { border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; box-shadow: 0 4px 12px rgba(15,23,42,.05); }
+.college-staff-summary article { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 3px 12px; padding: 17px; }
+.college-staff-summary article > span { grid-row: span 2; display: grid; width: 40px; height: 40px; place-items: center; border-radius: 10px; color: #0369a1; background: #e0f2fe; }
+.college-staff-summary strong { font-size: 23px; line-height: 1; }
+.college-staff-summary small { color: #64748b; font-size: 12px; }
+.college-staff-card { padding: 20px; }
+.college-staff-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(135px, 180px)); gap: 10px; margin-bottom: 18px; }
+.college-staff-search { display: flex; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid #cbd5e1; border-radius: 8px; color: #64748b; }
+.college-staff-search input, .college-staff-toolbar select { min-width: 0; height: 40px; border: 0; color: #334155; background: transparent; font: inherit; outline: 0; }
+.college-staff-search input { width: 100%; }
+.college-staff-toolbar select { padding: 0 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
+.college-staff-search:focus-within, .college-staff-toolbar select:focus, .college-staff-view:focus-visible, .college-staff-refresh:focus-visible, .college-staff-pagination button:focus-visible, .college-staff-modal button:focus-visible, .college-staff-error button:focus-visible { outline: 3px solid rgba(14,165,233,.28); outline-offset: 2px; border-color: #0284c7; }
+.college-staff-table-wrap { overflow-x: auto; }
+.college-staff-table-wrap table { width: 100%; min-width: 850px; border-collapse: collapse; font-size: 13px; }
+.college-staff-table-wrap th { color: #64748b; font-size: 11px; text-align: left; text-transform: uppercase; }
+.college-staff-table-wrap th, .college-staff-table-wrap td { padding: 12px 10px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+.college-staff-table-wrap td { color: #475569; }
+.college-staff-table-wrap td strong, .college-staff-table-wrap td small { display: block; }
+.college-staff-table-wrap td strong { color: #0f172a; }
+.college-staff-table-wrap td small { margin-top: 3px; color: #94a3b8; font-size: 11px; }
+.college-staff-status { display: inline-flex; padding: 5px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; }
+.college-staff-status--active { color: #166534; background: #dcfce7; }
+.college-staff-status--inactive { color: #991b1b; background: #fee2e2; }
+.college-staff-view { min-height: 31px; padding: 5px 9px; border-color: #bae6fd; color: #0369a1; background: #f0f9ff; }
+.college-staff-pagination { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding-top: 17px; color: #64748b; font-size: 12px; }
+.college-staff-pagination div { display: flex; gap: 8px; }
+.college-staff-pagination button:disabled { cursor: not-allowed; opacity: .45; }
+.college-staff-state { display: grid; min-height: 220px; place-items: center; gap: 8px; color: #64748b; text-align: center; }
+.college-staff-error { color: #991b1b; }
+.college-staff-error button { border: 0; background: #dc2626; color: #fff; }
+.college-staff-modal-backdrop { position: fixed; z-index: 10; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(15,23,42,.45); }
+.college-staff-modal { width: min(100%, 540px); max-height: 90vh; overflow-y: auto; padding: 22px; border-radius: 14px; background: #fff; box-shadow: 0 20px 60px rgba(15,23,42,.25); }
+.college-staff-modal-heading { display: flex; justify-content: space-between; gap: 15px; margin-bottom: 18px; }
+.college-staff-modal-heading h2 { margin: 0 0 5px; font-size: 19px; }
+.college-staff-modal-heading p { margin: 0; color: #64748b; font-size: 13px; }
+.college-staff-modal-heading button { display: grid; width: 34px; height: 34px; place-items: center; border: 0; border-radius: 8px; background: #f1f5f9; color: #475569; cursor: pointer; }
+.college-staff-modal dl { display: grid; grid-template-columns: 1fr 1.3fr; gap: 12px 18px; margin: 0; font-size: 13px; }
+.college-staff-modal dt { color: #64748b; }
+.college-staff-modal dd { display: flex; align-items: center; gap: 6px; margin: 0; color: #0f172a; font-weight: 700; overflow-wrap: anywhere; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@media (max-width: 900px) { .college-staff-summary { grid-template-columns: repeat(2, 1fr); } .college-staff-toolbar { grid-template-columns: 1fr 1fr; } .college-staff-search { grid-column: 1 / -1; } }
+@media (max-width: 600px) { .college-staff-page { padding: 16px; } .college-staff-heading { align-items: stretch; flex-direction: column; } .college-staff-heading h1 { font-size: 23px; } .college-staff-summary { grid-template-columns: 1fr 1fr; gap: 10px; } .college-staff-summary article { padding: 12px; } .college-staff-card { padding: 14px; } .college-staff-toolbar { grid-template-columns: 1fr; } .college-staff-search { grid-column: auto; } .college-staff-pagination { align-items: flex-start; flex-direction: column; } }

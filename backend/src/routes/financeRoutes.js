@@ -1,9 +1,11 @@
 const express = require('express');
-const { listValuation, updateValuation, valuationHistory, listAudit } = require('../controllers/financeController');
+const { listValuation, updateValuation, valuationHistory, listAudit, getFinanceDashboard, getFinanceDashboardFilters } = require('../controllers/financeController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 
 const router = express.Router();
 const financeAccess = [requireAuth, requireRole('admin', 'finance')];
+router.get('/dashboard', ...financeAccess, getFinanceDashboard);
+router.get('/dashboard/filters', ...financeAccess, getFinanceDashboardFilters);
 router.get('/valuation', ...financeAccess, listValuation);
 router.put('/valuation/:id', ...financeAccess, updateValuation);
 router.put('/depreciation/:id', ...financeAccess, updateValuation);

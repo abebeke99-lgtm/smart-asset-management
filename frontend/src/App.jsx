@@ -14,7 +14,7 @@ import { FaFacebookF, FaTelegramPlane } from 'react-icons/fa';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
-import CollegeDepartments from './components/college/CollegeDepartments';
+import CollegeDepartments from './pages/college/CollegeDepartments';
 import DepartmentDetails from './components/college/DepartmentDetails';
 import ScopedWorkflowPage from './components/shared/ScopedWorkflowPage';
 
@@ -1936,44 +1936,44 @@ function AppContent() {
     'CONTROL': 'CONTROL'
   };
   const collegeOverviewItems = [
-    { path: '/college', label: '📊 Dashboard', icon: LayoutDashboard, group: 'Overview' }
+    { path: '/college', label: 'Dashboard', icon: LayoutDashboard, group: 'Overview' }
   ];
   const collegeManagementItems = [
-    { path: '/college/profile', label: '🏢 College Profile', icon: Building2, group: 'College Management' },
-    { path: '/college/staff', label: '👥 Staff', icon: Users, group: 'College Management' },
-    { path: '/college/locations', label: '📍 Locations', icon: MapPin, group: 'College Management' },
-    { path: '/college/departments', label: '🏫 Departments', icon: Building2, group: 'College Management' },
-    { path: '/college/department-overview', label: '📘 Department Overview', icon: GitBranch, group: 'College Management' }
+    { path: '/college/profile', label: 'College Profile', icon: Building2, group: 'College Management' },
+    { path: '/college/staff', label: 'Staff', icon: Users, group: 'College Management' },
+    { path: '/college/locations', label: 'Locations', icon: MapPin, group: 'College Management' },
+    { path: '/college/departments', label: 'Departments', icon: Building2, group: 'College Management' },
+    { path: '/college/department-overview', label: 'Department Overview', icon: GitBranch, group: 'College Management' }
   ];
   const collegeAssetItems = [
-    { path: '/college/assets', label: '📦 Assets', icon: Package, group: 'Asset Management' },
-    { path: '/college/inventory', label: '📋 Inventory', icon: ClipboardList, group: 'Asset Management' },
-    { path: '/college/requests', label: '📝 Asset Requests', icon: ClipboardList, group: 'Asset Management' },
-    { path: '/college/approvals', label: '✅ Approvals', icon: ClipboardCheck, group: 'Asset Management' },
-    { path: '/college/assignments', label: '👤 Assignments', icon: Users, group: 'Asset Management' },
-    { path: '/college/transfers', label: '🔄 Transfers', icon: ArrowLeftRight, group: 'Asset Management' },
-    { path: '/college/returns', label: '↩️ Returns', icon: ArrowLeftRight, group: 'Asset Management' }
+    { path: '/college/assets', label: 'Assets', icon: Package, group: 'Asset Management' },
+    { path: '/college/inventory', label: 'Inventory', icon: ClipboardList, group: 'Asset Management' },
+    { path: '/college/requests', label: 'Asset Requests', icon: ClipboardList, group: 'Asset Management' },
+    { path: '/college/approvals', label: 'Approvals', icon: ClipboardCheck, group: 'Asset Management' },
+    { path: '/college/assignments', label: 'Assignments', icon: Users, group: 'Asset Management' },
+    { path: '/college/transfers', label: 'Transfers', icon: ArrowLeftRight, group: 'Asset Management' },
+    { path: '/college/returns', label: 'Returns', icon: ArrowLeftRight, group: 'Asset Management' }
   ];
   const collegeDepartmentManagementItems = [
-    { path: '/college/department-overview', label: '📘 Department Overview', icon: Building2, group: 'Department Management' },
-    { path: '/college/department-staff', label: '👥 Department Staff', icon: Users, group: 'Department Management' },
-    { path: '/college/department-assets', label: '📦 Department Assets', icon: Package, group: 'Department Management' },
-    { path: '/college/department-requests', label: '📝 Department Requests', icon: ClipboardList, group: 'Department Management' },
-    { path: '/college/department-performance', label: '📈 Department Performance', icon: BarChart3, group: 'Department Management' }
+    { path: '/college/department-overview', label: 'Department Overview', icon: Building2, group: 'Department Management' },
+    { path: '/college/department-staff', label: 'Department Staff', icon: Users, group: 'Department Management' },
+    { path: '/college/department-assets', label: 'Department Assets', icon: Package, group: 'Department Management' },
+    { path: '/college/department-requests', label: 'Department Requests', icon: ClipboardList, group: 'Department Management' },
+    { path: '/college/department-performance', label: 'Department Performance', icon: BarChart3, group: 'Department Management' }
   ];
   const collegeOperationsItems = [
-    { path: '/college/maintenance', label: '🔧 Maintenance', icon: Wrench, group: 'Operations' },
-    { path: '/college/rfid', label: '📡 RFID / QR Tracking', icon: Radio, group: 'Operations' },
-    { path: '/college/verification', label: '✅ Asset Verification', icon: Radio, group: 'Operations' }
+    { path: '/college/maintenance', label: 'Maintenance', icon: Wrench, group: 'Operations' },
+    { path: '/college/rfid', label: 'RFID / QR Tracking', icon: Radio, group: 'Operations' },
+    { path: '/college/verification', label: 'Asset Verification', icon: Radio, group: 'Operations' }
   ];
   const collegeAnalyticsItems = [
-    { path: '/college/reports', label: '📊 Reports', icon: BarChart3, group: 'Analytics' },
-    { path: '/college/analytics/assets', label: '📈 Asset Analytics', icon: BarChart3, group: 'Analytics' },
-    { path: '/college/analytics/departments', label: '📊 Department Reports', icon: BarChart3, group: 'Analytics' }
+    { path: '/college/reports', label: 'Reports', icon: BarChart3, group: 'Analytics' },
+    { path: '/college/analytics/assets', label: 'Asset Analytics', icon: BarChart3, group: 'Analytics' },
+    { path: '/college/analytics/departments', label: 'Department Reports', icon: BarChart3, group: 'Analytics' }
   ];
   const collegeSystemItems = [
-    { path: '/college/notifications', label: '🔔 Notifications', icon: Bell, group: 'System' },
-    { path: '/college/history', label: '📜 Audit & History', icon: ClipboardCheck, group: 'System' }
+    { path: '/college/notifications', label: 'Notifications', icon: Bell, group: 'System' },
+    { path: '/college/history', label: 'Audit & History', icon: ClipboardCheck, group: 'System' }
   ];
   const departmentDeanItems = [
     { path: '/department', label: 'Overview Dashboard', icon: LayoutDashboard },
@@ -2159,7 +2159,7 @@ function AppContent() {
             {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'ict_officer' && (
               <>
                 {['Overview', 'IT ASSET MANAGEMENT', 'TECHNICAL OPERATIONS', 'MAINTENANCE', 'TRACKING', 'ANALYTICS', 'SYSTEM'].map((sectionName) => {
-                  const visibleItems = sidebarItems.filter((item) => item.section === sectionName || (sectionName === 'Overview' && item.path === '/ict'));
+                  const visibleItems = sidebarItems.filter((item) => (item.section === sectionName || (sectionName === 'Overview' && item.path === '/ict')) && !(location.pathname === '/ict/assets/create' && item.path === '/ict'));
                   if (!visibleItems.length) return null;
                   return (
                     <React.Fragment key={sectionName}>

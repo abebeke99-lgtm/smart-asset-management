@@ -1,1186 +1,2340 @@
-/*
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { useLanguage } from '../../contexts/UiContext';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
-import { Bar, Doughnut } from 'react-chartjs-2';
-import { toast } from 'react-toastify';
-import axios from 'axios';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import api from "../../services/api";
+import * as XLSX from "xlsx";
+import {
+  Activity,
+  AlertCircle,
+  BarChart3,
+  Building2,
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  CircleDollarSign,
+  FileSpreadsheet,
+  Package,
+  PieChart as PieChartIcon,
+  RefreshCw,
+  Search,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+  Wrench,
+  X,
+} from "lucide-react";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
+const INITIAL_FILTERS = {
+  dateFrom: "",
+  dateTo: "",
+  department: "",
+  category: "",
+  status: "",
+  financialYear: "",
+};
 
-const FinanceDashboard = () => {
-  const { user } = useAuth();
-  const { language, theme } = useLanguage();
-  const [stats, setStats] = useState({
-    totalValue: 0,
-    totalPurchaseCost: 0,
-    depreciation: 0,
-    totalMaintenanceCost: 0,
-    assetCount: 0,
-    byDepartment: {},
-    byCategory: {}
-  });
-  const [loading, setLoading] = useState(true);
+const STATUS_OPTIONS = [
+  "Active",
+  "Under Maintenance",
+  "Inactive",
+  "Disposed",
+];
 
-  const isDark = theme === 'dark';
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
+function firstValue(...values) {
+  return values.find(
+    (value) =>
+      value !== undefined &&
+      value !== null &&
+      value !== ""
+  );
+}
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
-    setLoading(true);
-    try {
-      const [assetsRes, maintRes] = await Promise.all([
-        axios.get('/api/assets', { params: { limit: 500 } }),
-        axios.get('/api/maintenance', { params: { limit: 500 } })
-      ]);
-
-      const assets = assetsRes.data?.assets || [];
-      const maintenance = maintRes.data?.requests || [];
-
-      const totalValue = assets.reduce((sum, a) => sum + (a.current_value || 0), 0);
-      const totalPurchaseCost = assets.reduce((sum, a) => sum + (a.purchase_cost || 0), 0);
-      const totalMaintenanceCost = maintenance.reduce((sum, m) => sum + (m.actual_cost || 0), 0);
-
-      const byDepartment = assets.reduce((acc, a) => {
-        const dept = a.department_name || 'Other';
-        acc[dept] = (acc[dept] || 0) + (a.current_value || 0);
-        return acc;
-      }, {});
-
-      const byCategory = assets.reduce((acc, a) => {
-        const cat = a.category_name || 'Other';
-        acc[cat] = (acc[cat] || 0) + (a.current_value || 0);
-        return acc;
-      }, {});
-
-      setStats({
-        totalValue,
-        totalPurchaseCost,
-        depreciation: totalPurchaseCost - totalValue,
-        totalMaintenanceCost,
-        assetCount: assets.length,
-        byDepartment,
-        byCategory
-      });
-    } catch (error) {
-      toast.error('Failed to load financial data');
-    }
-    setLoading(false);
-  };
-
-  const deptChartData = {
-    labels: Object.keys(stats.byDepartment),
-    datasets: [{
-      label: 'Value by Department',
-      data: Object.values(stats.byDepartment),
-      backgroundColor: ['#2b6cb0', '#4299e1', '#48bb78', '#ed8936', '#805ad5', '#fc8181'],
-      borderColor: isDark ? '#1e2d45' : '#ffffff',
-      borderWidth: 2
-    }]
-  };
-
-  const chartOptions = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: 'bottom',
-        labels: {
-          color: isDark ? '#c8dcf5' : '#1a365d'
-        }
-      }
-    },
-    scales: {
-      y: {
-        ticks: { color: isDark ? '#8896b0' : '#4a5568' },
-        grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
-      },
-      x: {
-        ticks: { color: isDark ? '#8896b0' : '#4a5568' },
-        grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
-      }
-    }
-  };
-
-  const styles = {
-    container: { padding: '20px', maxWidth: '1400px', margin: '0 auto' },
-    title: { color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1.75rem', fontWeight: 700, marginBottom: '8px' },
-    subtitle: { color: isDark ? '#8896b0' : '#4a5568', marginBottom: '24px' },
-    statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '30px' },
-    statCard: { background: isDark ? '#1e2d45' : '#ffffff', padding: '20px', borderRadius: '12px', border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, textAlign: 'center' },
-    statNumber: { fontSize: '1.75rem', fontWeight: 700, color: isDark ? '#c8dcf5' : '#1a365d' },
-    statLabel: { color: isDark ? '#8896b0' : '#4a5568', fontSize: '0.85rem' },
-    chartCard: { background: isDark ? '#1e2d45' : '#ffffff', padding: '20px', borderRadius: '12px', border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, marginBottom: '24px' },
-    chartTitle: { color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px' },
-    emptyState: { textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }
-  };
-
-  if (loading) {
-    return <div style={styles.emptyState}>â³ {t.loading}</div>;
-  }
-
+function getPayload(response) {
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>ðŸ’° {t.dashboard}</h1>
-      <p style={styles.subtitle}>{t.welcome}, {user?.fullName || user?.username} ðŸ‘‹</p>
+    response?.data?.data ??
+    response?.data ??
+    {}
+  );
+}
 
-      <div style={styles.statsGrid}>
-        <div style={styles.statCard}>
-          <div style={styles.statNumber}>${stats.totalValue.toLocaleString()}</div>
-          <div style={styles.statLabel}>{t.totalValue}</div>
+function asArray(value) {
+  if (Array.isArray(value)) return value;
+
+  if (Array.isArray(value?.data))
+    return value.data;
+
+  if (Array.isArray(value?.items))
+    return value.items;
+
+  if (Array.isArray(value?.rows))
+    return value.rows;
+
+  if (Array.isArray(value?.records))
+    return value.records;
+
+  if (Array.isArray(value?.results))
+    return value.results;
+
+  return [];
+}
+
+function numberValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function formatETB(value) {
+  return `${numberValue(value).toLocaleString(
+    "en-US",
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }
+  )} ETB`;
+}
+
+function formatNumber(value) {
+  return numberValue(value).toLocaleString(
+    "en-US"
+  );
+}
+
+function getLabel(item) {
+  return String(
+    firstValue(
+      item?.name,
+      item?.label,
+      item?.department,
+      item?.category,
+      item?.status,
+      item?.year,
+      item?.financialYear,
+      item?.financial_year,
+      item?.month,
+      item?.period,
+      "Unknown"
+    )
+  );
+}
+
+function getValue(item) {
+  return numberValue(
+    firstValue(
+      item?.value,
+      item?.amount,
+      item?.total,
+      item?.count,
+      item?.assetValue,
+      item?.asset_value,
+      item?.cost,
+      0
+    )
+  );
+}
+
+function StatCard({
+  icon: Icon,
+  title,
+  value,
+  subtitle,
+  tone,
+}) {
+  return (
+    <div className="stat-card">
+      <div className="stat-content">
+        <div className="stat-title">
+          {title}
         </div>
-        <div style={styles.statCard}>
-          <div style={styles.statNumber}>${stats.totalPurchaseCost.toLocaleString()}</div>
-          <div style={styles.statLabel}>{t.totalPurchaseCost}</div>
+
+        <div className="stat-value">
+          {value}
         </div>
-        <div style={styles.statCard}>
-          <div style={{ ...styles.statNumber, color: '#fc8181' }}>${stats.depreciation.toLocaleString()}</div>
-          <div style={styles.statLabel}>{t.depreciation}</div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={{ ...styles.statNumber, color: '#ed8936' }}>${stats.totalMaintenanceCost.toLocaleString()}</div>
-          <div style={styles.statLabel}>{t.totalMaintenanceCost}</div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statNumber}>{stats.assetCount}</div>
-          <div style={styles.statLabel}>{t.totalAssets}</div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statNumber}>
-            {stats.totalPurchaseCost > 0 ? Math.round((stats.totalValue / stats.totalPurchaseCost) * 100) + '%' : '0%'}
+
+        {subtitle && (
+          <div className="stat-subtitle">
+            {subtitle}
           </div>
-          <div style={styles.statLabel}>{t.valueRetention}</div>
-        </div>
+        )}
       </div>
 
-      <div style={styles.chartCard}>
-        <h3 style={styles.chartTitle}>{t.valueByDepartment}</h3>
-        <div style={{ height: '300px' }}>
-          <Bar data={deptChartData} options={chartOptions} />
-        </div>
+      <div className={`stat-icon ${tone}`}>
+        <Icon size={21} />
       </div>
     </div>
   );
-};
+}
 
-const englishTranslations = {
-  dashboard: 'Finance Dashboard',
-  welcome: 'Welcome',
-  totalValue: 'Total Current Value',
-  totalPurchaseCost: 'Total Purchase Cost',
-  depreciation: 'Total Depreciation',
-  totalMaintenanceCost: 'Total Maintenance Cost',
-  totalAssets: 'Total Assets',
-  valueRetention: 'Value Retention',
-  valueByDepartment: 'Value by Department',
-  loading: 'Loading...'
-};
+function EmptyChart({ message }) {
+  return (
+    <div className="chart-empty">
+      <BarChart3 size={31} />
+      <span>{message}</span>
+    </div>
+  );
+}
 
-const amharicTranslations = {
-  dashboard: 'á‹¨á‹á‹­áŠ“áŠ•áˆµ á‹³áˆ½á‰¦áˆ­á‹µ',
-  welcome: 'áŠ¥áŠ•áŠ³áŠ• á‹°áˆ…áŠ“ áˆ˜áŒ¡',
-  totalValue: 'áŒ á‰…áˆ‹áˆ‹ áŠ áˆáŠ• á‹«áˆˆá‹ á‹‹áŒ‹',
-  totalPurchaseCost: 'áŒ á‰…áˆ‹áˆ‹ á‹¨áŒá‹¢ á‹‹áŒ‹',
-  depreciation: 'áŒ á‰…áˆ‹áˆ‹ á‹á‹µáˆ˜á‰µ',
-  totalMaintenanceCost: 'áŒ á‰…áˆ‹áˆ‹ á‹¨áŒ¥áŒˆáŠ“ á‹‹áŒ‹',
-  totalAssets: 'áŒ á‰…áˆ‹áˆ‹ áŠ•á‰¥áˆ¨á‰¶á‰½',
-  valueRetention: 'á‹¨á‹‹áŒ‹ áˆ›á‰†á‹¨á‰µ',
-  valueByDepartment: 'á‰ áŠ­ááˆ á‹¨á‰°áŠ¨á‹áˆáˆˆ á‹‹áŒ‹',
-  loading: 'á‰ áˆ˜áŒ«áŠ• áˆ‹á‹­...'
-};
+function BarChart({ data }) {
+  const rows = asArray(data);
 
-export default FinanceDashboard;
-*/
-
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { useLanguage, useTheme } from '../../contexts/UiContext';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement, PointElement, LineElement, Filler } from 'chart.js';
-import { Bar, Doughnut, Line, Pie } from 'react-chartjs-2';
-import { toast } from 'react-toastify';
-import axios from 'axios';
-import * as XLSX from 'xlsx';
-
-ChartJS.register(
-  CategoryScale, 
-  LinearScale, 
-  BarElement, 
-  Title, 
-  Tooltip, 
-  Legend, 
-  ArcElement,
-  PointElement,
-  LineElement,
-  Filler
-);
-
-const FinanceDashboard = () => {
-  const { user } = useAuth();
-  const { language, theme } = useLanguage();
-  const [loading, setLoading] = useState(true);
-  const [assets, setAssets] = useState([]);
-  const [maintenanceRequests, setMaintenanceRequests] = useState([]);
-  const [disposedAssets, setDisposedAssets] = useState([]);
-  const [financialActivities, setFinancialActivities] = useState([]);
-  const [auditAlerts, setAuditAlerts] = useState([]);
-  const [selectedAsset, setSelectedAsset] = useState(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [detailType, setDetailType] = useState('');
-
-  // Filter states
-  const [filters, setFilters] = useState({
-    dateFrom: '',
-    dateTo: '',
-    department: '',
-    category: '',
-    status: '',
-    financialYear: ''
-  });
-
-  const [stats, setStats] = useState({
-    totalAssetCost: 0,
-    currentBookValue: 0,
-    accumulatedDepreciation: 0,
-    totalAssets: 0,
-    activeAssets: 0,
-    underMaintenance: 0,
-    disposed: 0,
-    requiringValuation: 0,
-    byDepartment: {},
-    byCategory: {},
-    byStatus: {},
-    monthlyTrend: [],
-    departmentCosts: {},
-    categoryCosts: {}
-  });
-
-  const isDark = theme === 'dark';
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  useEffect(() => {
-    if (assets.length > 0 || maintenanceRequests.length > 0) {
-      calculateStats();
-    }
-  }, [assets, maintenanceRequests, disposedAssets, filters]);
-
-  const fetchDashboardData = async () => {
-    setLoading(true);
-    try {
-      const [assetsRes, maintRes, auditRes] = await Promise.all([
-        axios.get('/api/finance/valuation', { params: { limit: 1000 } }),
-        axios.get('/api/maintenance', { params: { limit: 500 } }),
-        axios.get('/api/finance/audit', { params: { limit: 50 } })
-      ]);
-
-      const assetData = assetsRes.data?.assets || [];
-      const maintenanceData = maintRes.data?.requests || [];
-      const auditData = auditRes.data?.logs || [];
-      setAssets(assetData);
-      setMaintenanceRequests(maintenanceData);
-      setDisposedAssets(assetData.filter(asset => asset.status === 'disposed' || asset.status === 'Disposed'));
-      setFinancialActivities(auditData);
-      setAuditAlerts([]);
-    } catch (error) {
-      toast.error(t.fetchError || 'Failed to load financial data');
-      setAssets([]);
-      setMaintenanceRequests([]);
-      setDisposedAssets([]);
-      setFinancialActivities([]);
-      setAuditAlerts([]);
-    }
-    setLoading(false);
-  };
-
-  const calculateStats = () => {
-    // Apply filters
-    let filteredAssets = [...assets];
-    
-    if (filters.dateFrom) {
-      filteredAssets = filteredAssets.filter(a => 
-        new Date(a.purchase_date) >= new Date(filters.dateFrom)
-      );
-    }
-    if (filters.dateTo) {
-      filteredAssets = filteredAssets.filter(a => 
-        new Date(a.purchase_date) <= new Date(filters.dateTo)
-      );
-    }
-    if (filters.financialYear) {
-      filteredAssets = filteredAssets.filter(a => {
-        const purchaseDate = new Date(a.purchase_date);
-        return purchaseDate.getFullYear() === Number(filters.financialYear);
-      });
-    }
-    if (filters.department) {
-      filteredAssets = filteredAssets.filter(a => a.department_name === filters.department);
-    }
-    if (filters.category) {
-      filteredAssets = filteredAssets.filter(a => a.category_name === filters.category);
-    }
-    if (filters.status) {
-      filteredAssets = filteredAssets.filter(a => a.status === filters.status);
-    }
-
-    const totalAssetCost = filteredAssets.reduce((sum, a) => sum + (a.purchase_cost || 0), 0);
-    const currentBookValue = filteredAssets.reduce((sum, a) => sum + (a.current_value || 0), 0);
-    const accumulatedDepreciation = totalAssetCost - currentBookValue;
-
-    const byDepartment = filteredAssets.reduce((acc, a) => {
-      const dept = a.department_name || 'Other';
-      acc[dept] = (acc[dept] || 0) + 1;
-      return acc;
-    }, {});
-
-    const byCategory = filteredAssets.reduce((acc, a) => {
-      const cat = a.category_name || 'Other';
-      acc[cat] = (acc[cat] || 0) + 1;
-      return acc;
-    }, {});
-
-    const byStatus = filteredAssets.reduce((acc, a) => {
-      const status = a.status || 'Unknown';
-      acc[status] = (acc[status] || 0) + 1;
-      return acc;
-    }, {});
-
-    const departmentCosts = filteredAssets.reduce((acc, a) => {
-      const dept = a.department_name || 'Other';
-      acc[dept] = (acc[dept] || 0) + (a.current_value || 0);
-      return acc;
-    }, {});
-
-    const categoryCosts = filteredAssets.reduce((acc, a) => {
-      const cat = a.category_name || 'Other';
-      acc[cat] = (acc[cat] || 0) + (a.current_value || 0);
-      return acc;
-    }, {});
-
-    // Monthly trend (last 12 months)
-    const monthlyTrend = Array.from({ length: 12 }, (_, i) => {
-      const month = new Date();
-      month.setMonth(month.getMonth() - (11 - i));
-      const monthAssets = filteredAssets.filter(a => {
-        const date = new Date(a.purchase_date);
-        return date.getMonth() === month.getMonth() && date.getFullYear() === month.getFullYear();
-      });
-      return {
-        month: month.toLocaleString('default', { month: 'short' }),
-        value: monthAssets.reduce((sum, a) => sum + (a.current_value || 0), 0)
-      };
-    });
-
-    setStats({
-      totalAssetCost,
-      currentBookValue,
-      accumulatedDepreciation,
-      totalAssets: filteredAssets.length,
-      activeAssets: filteredAssets.filter(a => a.status === 'Active').length,
-      underMaintenance: maintenanceRequests.length,
-      disposed: disposedAssets.length,
-      requiringValuation: filteredAssets.filter(a => a.requires_valuation).length,
-      byDepartment,
-      byCategory,
-      byStatus,
-      monthlyTrend,
-      departmentCosts,
-      categoryCosts
-    });
-  };
-
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      dateFrom: '',
-      dateTo: '',
-      department: '',
-      category: '',
-      status: '',
-      financialYear: ''
-    });
-  };
-
-  const handleStatClick = (type, filter = {}) => {
-    setDetailType(type);
-    setSelectedAsset(filter);
-    setShowDetailModal(true);
-  };
-
-  const exportToExcel = () => {
-    const data = assets.map(a => ({
-      'Asset Name': a.name || '',
-      'Department': a.department_name || '',
-      'Category': a.category_name || '',
-      'Status': a.status || '',
-      'Purchase Cost': a.purchase_cost || 0,
-      'Current Value': a.current_value || 0,
-      'Depreciation': (a.purchase_cost || 0) - (a.current_value || 0),
-      'Purchase Date': a.purchase_date ? new Date(a.purchase_date).toLocaleDateString() : '',
-      'Last Valuation': a.last_valuation_date ? new Date(a.last_valuation_date).toLocaleDateString() : ''
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Financial Assets');
-    XLSX.writeFile(wb, 'finance_dashboard_data.xlsx');
-    toast.success(t.exportSuccess || 'Data exported successfully');
-  };
-
-  // Chart configurations
-  const chartColors = {
-    primary: isDark ? '#63b3ed' : '#2b6cb0',
-    success: isDark ? '#68d391' : '#38a169',
-    warning: isDark ? '#f6ad55' : '#dd6b20',
-    danger: isDark ? '#fc8181' : '#e53e3e',
-    info: isDark ? '#81e6d9' : '#319795',
-    purple: isDark ? '#b794f4' : '#805ad5',
-    pink: isDark ? '#f687b3' : '#d53f8c',
-    lightBg: isDark ? '#1e2d45' : '#ffffff',
-    darkBg: isDark ? '#141e2d' : '#f7fafc'
-  };
-
-  const getChartOptions = (title) => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'bottom',
-        labels: {
-          color: isDark ? '#c8dcf5' : '#1a365d',
-          boxWidth: 12,
-          padding: 15
-        }
-      },
-      title: {
-        display: !!title,
-        text: title,
-        color: isDark ? '#c8dcf5' : '#1a365d',
-        font: { size: 14, weight: 'bold' }
-      }
-    },
-    scales: {
-      y: {
-        ticks: { 
-          color: isDark ? '#8896b0' : '#4a5568',
-          callback: (value) => {
-            const numericValue = Number(value) || 0;
-            if (numericValue >= 1000000) return `${(numericValue / 1000000).toFixed(1)}M`;
-            if (numericValue >= 1000) return `${(numericValue / 1000).toFixed(1)}K`;
-            return numericValue.toFixed(0);
-          }
-        },
-        grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
-      },
-      x: {
-        ticks: { color: isDark ? '#8896b0' : '#4a5568' },
-        grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
-      }
-    }
-  });
-
-  // Format currency for display
-  const formatCurrency = (value) => {
-    const numericValue = Number(value) || 0;
-    if (numericValue >= 1000000) return `${(numericValue / 1000000).toFixed(1)}M`;
-    if (numericValue >= 1000) return `${(numericValue / 1000).toFixed(1)}K`;
-    return numericValue.toFixed(0);
-  };
-
-  // Styles
-  const styles = {
-    container: { 
-      padding: '20px', 
-      maxWidth: '1600px', 
-      margin: '0 auto',
-      background: isDark ? '#0d1a2e' : '#f0f4f8',
-      minHeight: '100vh'
-    },
-    header: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      flexWrap: 'wrap',
-      marginBottom: '24px'
-    },
-    title: { 
-      color: isDark ? '#c8dcf5' : '#1a365d', 
-      fontSize: '1.75rem', 
-      fontWeight: 700, 
-      marginBottom: '4px' 
-    },
-    subtitle: { 
-      color: isDark ? '#8896b0' : '#4a5568', 
-      fontSize: '0.95rem' 
-    },
-    headerActions: {
-      display: 'flex',
-      gap: '10px',
-      flexWrap: 'wrap',
-      marginTop: '8px'
-    },
-    actionButton: {
-      padding: '8px 16px',
-      borderRadius: '8px',
-      border: 'none',
-      fontWeight: 600,
-      cursor: 'pointer',
-      fontSize: '0.9rem',
-      transition: 'all 0.2s',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '6px'
-    },
-    exportButton: {
-      background: 'linear-gradient(135deg, #48bb78, #38a169)',
-      color: 'white',
-      padding: '8px 16px',
-      borderRadius: '8px',
-      border: 'none',
-      fontWeight: 600,
-      cursor: 'pointer',
-      fontSize: '0.9rem'
-    },
-    filtersBar: {
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: '12px',
-      padding: '16px',
-      background: isDark ? '#1e2d45' : '#ffffff',
-      borderRadius: '12px',
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      marginBottom: '24px',
-      alignItems: 'center'
-    },
-    filterGroup: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '4px',
-      flex: '1 1 140px',
-      minWidth: '120px'
-    },
-    filterLabel: {
-      color: isDark ? '#8896b0' : '#4a5568',
-      fontSize: '0.7rem',
-      fontWeight: 600,
-      textTransform: 'uppercase',
-      letterSpacing: '0.5px'
-    },
-    filterInput: {
-      padding: '6px 10px',
-      borderRadius: '6px',
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      background: isDark ? '#141e2d' : '#ffffff',
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontSize: '0.85rem',
-      outline: 'none',
-      transition: 'border-color 0.2s'
-    },
-    filterSelect: {
-      padding: '6px 10px',
-      borderRadius: '6px',
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      background: isDark ? '#141e2d' : '#ffffff',
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontSize: '0.85rem',
-      cursor: 'pointer',
-      outline: 'none'
-    },
-    clearFiltersButton: {
-      padding: '6px 16px',
-      borderRadius: '6px',
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      background: isDark ? '#141e2d' : '#f7fafc',
-      color: isDark ? '#8896b0' : '#4a5568',
-      cursor: 'pointer',
-      fontSize: '0.85rem',
-      marginTop: '16px',
-      alignSelf: 'flex-end'
-    },
-    mainStatsGrid: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-      gap: '16px',
-      marginBottom: '30px'
-    },
-    statCard: { 
-      background: isDark ? '#1e2d45' : '#ffffff', 
-      padding: '18px', 
-      borderRadius: '12px', 
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      cursor: 'pointer',
-      transition: 'transform 0.2s, box-shadow 0.2s',
-      ':hover': {
-        transform: 'translateY(-2px)',
-        boxShadow: isDark ? '0 8px 24px rgba(0,0,0,0.3)' : '0 8px 24px rgba(0,0,100,0.08)'
-      }
-    },
-    statIcon: {
-      fontSize: '1.5rem',
-      marginBottom: '6px'
-    },
-    statNumber: { 
-      fontSize: '1.6rem', 
-      fontWeight: 700, 
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      lineHeight: 1.2
-    },
-    statLabel: { 
-      color: isDark ? '#8896b0' : '#4a5568', 
-      fontSize: '0.8rem',
-      marginTop: '2px'
-    },
-    statTrend: {
-      fontSize: '0.75rem',
-      color: isDark ? '#68d391' : '#38a169',
-      marginTop: '4px'
-    },
-    chartsRow: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
-      gap: '20px',
-      marginBottom: '24px'
-    },
-    chartCard: { 
-      background: isDark ? '#1e2d45' : '#ffffff', 
-      padding: '20px', 
-      borderRadius: '12px', 
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      transition: 'box-shadow 0.2s'
-    },
-    chartTitle: { 
-      color: isDark ? '#c8dcf5' : '#1a365d', 
-      fontSize: '0.95rem', 
-      marginBottom: '16px',
-      fontWeight: 600
-    },
-    alertCard: {
-      background: isDark ? '#1e2d45' : '#ffffff',
-      padding: '16px 20px',
-      borderRadius: '12px',
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      marginBottom: '12px',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      flexWrap: 'wrap'
-    },
-    alertSeverity: {
-      padding: '4px 12px',
-      borderRadius: '20px',
-      fontSize: '0.75rem',
-      fontWeight: 600,
-      textTransform: 'uppercase'
-    },
-    emptyState: { 
-      textAlign: 'center', 
-      padding: '40px', 
-      color: isDark ? '#8896b0' : '#4a5568' 
-    },
-    modal: {
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0,0,0,0.7)',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 1000,
-      padding: '20px'
-    },
-    modalContent: {
-      background: isDark ? '#1e2d45' : '#ffffff',
-      borderRadius: '16px',
-      padding: '24px',
-      maxWidth: '900px',
-      width: '100%',
-      maxHeight: '80vh',
-      overflow: 'auto',
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`
-    },
-    modalHeader: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '16px'
-    },
-    modalTitle: {
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontSize: '1.3rem',
-      fontWeight: 700
-    },
-    modalClose: {
-      background: 'none',
-      border: 'none',
-      fontSize: '1.5rem',
-      color: isDark ? '#8896b0' : '#4a5568',
-      cursor: 'pointer',
-      padding: '4px 8px',
-      borderRadius: '4px',
-      ':hover': {
-        background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
-      }
-    },
-    detailTable: {
-      width: '100%',
-      borderCollapse: 'collapse'
-    },
-    detailTh: {
-      padding: '8px 12px',
-      textAlign: 'left',
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontWeight: 600,
-      borderBottom: `2px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      background: isDark ? '#141e2d' : '#f7fafc'
-    },
-    detailTd: {
-      padding: '8px 12px',
-      borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontSize: '0.9rem'
-    },
-    activitiesList: {
-      maxHeight: '300px',
-      overflow: 'auto'
-    },
-    activityItem: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      padding: '10px 0',
-      borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      alignItems: 'center'
-    },
-    '@media print': {
-      container: { background: 'white' },
-      statCard: { background: 'white', border: '1px solid #ddd' },
-      chartCard: { background: 'white', border: '1px solid #ddd' },
-      filtersBar: { display: 'none' },
-      headerActions: { display: 'none' }
-    }
-  };
-
-  if (loading) {
+  if (!rows.length) {
     return (
-      <div style={styles.container}>
-        <div style={styles.emptyState}>
-          <div style={{ fontSize: '2rem', marginBottom: '12px' }}>⏳</div>
-          <div>{t.loading}</div>
-        </div>
-      </div>
+      <EmptyChart message="No department data available." />
     );
   }
 
+  const normalized = rows
+    .map((item) => ({
+      label: getLabel(item),
+      value: getValue(item),
+    }))
+    .filter((item) => item.value >= 0)
+    .slice(0, 12);
+
+  const maxValue = Math.max(
+    ...normalized.map((item) => item.value),
+    1
+  );
+
   return (
-    <div style={styles.container}>
-      {/* Header */}
-      <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>💰 {t.dashboard}</h1>
-          <p style={styles.subtitle}>
-            {t.welcome}, {user?.fullName || user?.username || 'User'} 👋
-          </p>
-        </div>
-        <div style={styles.headerActions}>
-          <button style={styles.exportButton} onClick={exportToExcel}>
-            📥 {t.exportExcel}
-          </button>
-        </div>
-      </div>
+    <div className="bar-chart">
+      {normalized.map((item, index) => (
+        <div
+          className="bar-row"
+          key={`${item.label}-${index}`}
+        >
+          <div className="bar-label">
+            <span title={item.label}>
+              {item.label}
+            </span>
 
-      {/* Filters */}
-      <div style={styles.filtersBar}>
-        <div style={styles.filterGroup}>
-          <span style={styles.filterLabel}>{t.dateFrom}</span>
-          <input
-            type="date"
-            style={styles.filterInput}
-            value={filters.dateFrom}
-            onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
-          />
-        </div>
-        <div style={styles.filterGroup}>
-          <span style={styles.filterLabel}>{t.dateTo}</span>
-          <input
-            type="date"
-            style={styles.filterInput}
-            value={filters.dateTo}
-            onChange={(e) => handleFilterChange('dateTo', e.target.value)}
-          />
-        </div>
-        <div style={styles.filterGroup}>
-          <span style={styles.filterLabel}>{t.department}</span>
-          <select
-            style={styles.filterSelect}
-            value={filters.department}
-            onChange={(e) => handleFilterChange('department', e.target.value)}
-          >
-            <option value="">{t.allDepartments}</option>
-            {Object.keys(stats.byDepartment).map(dept => (
-              <option key={dept} value={dept}>{dept}</option>
-            ))}
-          </select>
-        </div>
-        <div style={styles.filterGroup}>
-          <span style={styles.filterLabel}>{t.category}</span>
-          <select
-            style={styles.filterSelect}
-            value={filters.category}
-            onChange={(e) => handleFilterChange('category', e.target.value)}
-          >
-            <option value="">{t.allCategories}</option>
-            {Object.keys(stats.byCategory).map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-        </div>
-        <div style={styles.filterGroup}>
-          <span style={styles.filterLabel}>{t.status}</span>
-          <select
-            style={styles.filterSelect}
-            value={filters.status}
-            onChange={(e) => handleFilterChange('status', e.target.value)}
-          >
-            <option value="">{t.allStatuses}</option>
-            <option value="Active">Active</option>
-            <option value="Under Maintenance">Under Maintenance</option>
-            <option value="Inactive">Inactive</option>
-            <option value="Disposed">Disposed</option>
-          </select>
-        </div>
-        <div style={styles.filterGroup}>
-          <span style={styles.filterLabel}>{t.financialYear}</span>
-          <select
-            style={styles.filterSelect}
-            value={filters.financialYear}
-            onChange={(e) => handleFilterChange('financialYear', e.target.value ? parseInt(e.target.value, 10) : '')}
-          >
-            <option value="">{t.allYears}</option>
-            {[2025, 2024, 2023, 2022, 2021, 2020].map(year => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
-        </div>
-        <button style={styles.clearFiltersButton} onClick={clearFilters}>
-          ✕ {t.clearFilters}
-        </button>
-      </div>
+            <strong>
+              {formatETB(item.value)}
+            </strong>
+          </div>
 
-      {/* Main Stats */}
-      <div style={styles.mainStatsGrid}>
-        <div style={styles.statCard} onClick={() => handleStatClick('totalCost')}>
-          <div style={styles.statIcon}>💰</div>
-          <div style={styles.statNumber}>{formatCurrency(stats.totalAssetCost)} ETB</div>
-          <div style={styles.statLabel}>{t.totalAssetCost}</div>
-        </div>
-        <div style={styles.statCard} onClick={() => handleStatClick('bookValue')}>
-          <div style={styles.statIcon}>📊</div>
-          <div style={{ ...styles.statNumber, color: chartColors.success }}>{formatCurrency(stats.currentBookValue)} ETB</div>
-          <div style={styles.statLabel}>{t.currentBookValue}</div>
-        </div>
-        <div style={styles.statCard} onClick={() => handleStatClick('depreciation')}>
-          <div style={styles.statIcon}>📉</div>
-          <div style={{ ...styles.statNumber, color: chartColors.danger }}>{formatCurrency(stats.accumulatedDepreciation)} ETB</div>
-          <div style={styles.statLabel}>{t.accumulatedDepreciation}</div>
-        </div>
-        <div style={styles.statCard} onClick={() => handleStatClick('assets')}>
-          <div style={styles.statIcon}>📦</div>
-          <div style={styles.statNumber}>{stats.totalAssets}</div>
-          <div style={styles.statLabel}>{t.totalAssets}</div>
-        </div>
-        <div style={styles.statCard} onClick={() => handleStatClick('active')}>
-          <div style={styles.statIcon}>✅</div>
-          <div style={{ ...styles.statNumber, color: chartColors.success }}>{stats.activeAssets}</div>
-          <div style={styles.statLabel}>{t.activeAssets}</div>
-        </div>
-        <div style={styles.statCard} onClick={() => handleStatClick('maintenance')}>
-          <div style={styles.statIcon}>🔧</div>
-          <div style={{ ...styles.statNumber, color: chartColors.warning }}>{stats.underMaintenance}</div>
-          <div style={styles.statLabel}>{t.underMaintenance}</div>
-        </div>
-        <div style={styles.statCard} onClick={() => handleStatClick('disposed')}>
-          <div style={styles.statIcon}>🗑️</div>
-          <div style={{ ...styles.statNumber, color: chartColors.danger }}>{stats.disposed}</div>
-          <div style={styles.statLabel}>{t.disposed}</div>
-        </div>
-        <div style={styles.statCard} onClick={() => handleStatClick('valuation')}>
-          <div style={styles.statIcon}>🔍</div>
-          <div style={{ ...styles.statNumber, color: chartColors.purple }}>{stats.requiringValuation}</div>
-          <div style={styles.statLabel}>{t.requiringValuation}</div>
-        </div>
-      </div>
-
-      {/* Charts Row 1 */}
-      <div style={styles.chartsRow}>
-        <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>{t.assetsByDepartment}</h3>
-          <div style={{ height: '260px' }}>
-            <Doughnut 
-              data={{
-                labels: Object.keys(stats.byDepartment),
-                datasets: [{
-                  data: Object.values(stats.byDepartment),
-                  backgroundColor: ['#2b6cb0', '#4299e1', '#48bb78', '#ed8936', '#805ad5', '#fc8181', '#81e6d9'],
-                  borderColor: isDark ? '#1e2d45' : '#ffffff',
-                  borderWidth: 2
-                }]
+          <div className="bar-track">
+            <div
+              className="bar-fill"
+              style={{
+                width: `${Math.max(
+                  2,
+                  (item.value / maxValue) *
+                    100
+                )}%`,
               }}
-              options={getChartOptions('')}
             />
           </div>
         </div>
-        <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>{t.assetsByCategory}</h3>
-          <div style={{ height: '260px' }}>
-            <Pie 
-              data={{
-                labels: Object.keys(stats.byCategory),
-                datasets: [{
-                  data: Object.values(stats.byCategory),
-                  backgroundColor: ['#fc8181', '#ed8936', '#4299e1', '#48bb78', '#805ad5', '#81e6d9', '#b794f4'],
-                  borderColor: isDark ? '#1e2d45' : '#ffffff',
-                  borderWidth: 2
-                }]
-              }}
-              options={getChartOptions('')}
-            />
-          </div>
+      ))}
+    </div>
+  );
+}
+
+function DonutChart({ data }) {
+  const rows = asArray(data);
+
+  if (!rows.length) {
+    return (
+      <EmptyChart message="No category data available." />
+    );
+  }
+
+  const normalized = rows
+    .map((item) => ({
+      label: getLabel(item),
+      value: getValue(item),
+    }))
+    .filter((item) => item.value >= 0)
+    .slice(0, 8);
+
+  const total = normalized.reduce(
+    (sum, item) => sum + item.value,
+    0
+  );
+
+  if (total <= 0) {
+    return (
+      <EmptyChart message="No category values available." />
+    );
+  }
+
+  let current = 0;
+
+  const segments = normalized.map(
+    (item, index) => {
+      const start = current;
+      const percentage =
+        (item.value / total) * 100;
+
+      current += percentage;
+
+      return {
+        ...item,
+        start,
+        end: current,
+        index,
+        percentage,
+      };
+    }
+  );
+
+  const gradient = segments
+    .map(
+      (item) =>
+        `var(--chart-${item.index % 6}) ${item.start}% ${item.end}%`
+    )
+    .join(", ");
+
+  return (
+    <div className="donut-layout">
+      <div
+        className="donut"
+        style={{
+          background: `conic-gradient(${gradient})`,
+        }}
+      >
+        <div className="donut-inner">
+          <strong>
+            {formatETB(total)}
+          </strong>
+
+          <span>Total Value</span>
         </div>
       </div>
 
-      {/* Charts Row 2 */}
-      <div style={styles.chartsRow}>
-        <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>{t.assetsByStatus}</h3>
-          <div style={{ height: '260px' }}>
-            <Bar 
-              data={{
-                labels: Object.keys(stats.byStatus),
-                datasets: [{
-                  label: t.assetsByStatus,
-                  data: Object.values(stats.byStatus),
-                  backgroundColor: ['#48bb78', '#ed8936', '#fc8181', '#4299e1'],
-                  borderColor: isDark ? '#1e2d45' : '#ffffff',
-                  borderWidth: 2
-                }]
-              }}
-              options={getChartOptions('')}
-            />
-          </div>
-        </div>
-        <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>{t.valueTrend}</h3>
-          <div style={{ height: '260px' }}>
-            <Line 
-              data={{
-                labels: stats.monthlyTrend.map(d => d.month),
-                datasets: [{
-                  label: t.valueTrend,
-                  data: stats.monthlyTrend.map(d => d.value),
-                  borderColor: chartColors.primary,
-                  backgroundColor: isDark ? 'rgba(99, 179, 237, 0.1)' : 'rgba(43, 108, 176, 0.1)',
-                  fill: true,
-                  tension: 0.4
-                }]
-              }}
-              options={getChartOptions('')}
-            />
-          </div>
-        </div>
-      </div>
+      <div className="legend">
+        {segments.map((item) => (
+          <div
+            className="legend-item"
+            key={`${item.label}-${item.index}`}
+          >
+            <div className="legend-name">
+              <span
+                className="legend-dot"
+                style={{
+                  background:
+                    `var(--chart-${item.index % 6})`,
+                }}
+              />
 
-      {/* Audit Alerts */}
-      {auditAlerts.length > 0 && (
-        <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>⚠️ {t.auditAlerts}</h3>
-          {auditAlerts.slice(0, 5).map(alert => (
-            <div key={alert.id} style={styles.alertCard}>
-              <div>
-                <div style={{ fontWeight: 500, color: isDark ? '#c8dcf5' : '#1a365d' }}>
-                  {alert.message}
-                </div>
-                <div style={{ fontSize: '0.8rem', color: isDark ? '#8896b0' : '#4a5568', marginTop: '4px' }}>
-                  {new Date(alert.timestamp).toLocaleString()}
-                </div>
-              </div>
-              <span style={{
-                ...styles.alertSeverity,
-                background: alert.severity === 'high' ? 'rgba(252, 129, 129, 0.2)' :
-                           alert.severity === 'medium' ? 'rgba(246, 173, 85, 0.2)' :
-                           'rgba(104, 211, 145, 0.2)',
-                color: alert.severity === 'high' ? '#fc8181' :
-                       alert.severity === 'medium' ? '#f6ad55' :
-                       '#68d391'
-              }}>
-                {alert.severity}
+              <span title={item.label}>
+                {item.label}
               </span>
             </div>
-          ))}
-        </div>
-      )}
 
-      {/* Recent Financial Activities */}
-      {financialActivities.length > 0 && (
-        <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>📋 {t.recentActivities}</h3>
-          <div style={styles.activitiesList}>
-            {financialActivities.slice(0, 10).map(activity => (
-              <div key={activity.id} style={styles.activityItem}>
-                <div>
-                  <span style={{ fontWeight: 500, color: isDark ? '#c8dcf5' : '#1a365d' }}>
-                    {activity.type}
-                  </span>
-                  <span style={{ fontSize: '0.85rem', color: isDark ? '#8896b0' : '#4a5568', marginLeft: '12px' }}>
-                    {activity.description}
-                  </span>
-                  <div style={{ fontSize: '0.75rem', color: isDark ? '#8896b0' : '#4a5568', marginTop: '2px' }}>
-                    {activity.asset_name} • {new Date(activity.date).toLocaleDateString()}
-                  </div>
-                </div>
-                <span style={{ 
-                  fontWeight: 600,
-                  color: activity.type === 'Purchase' || activity.type === 'Valuation' ? chartColors.success : 
-                         activity.type === 'Sale' || activity.type === 'Depreciation' ? chartColors.danger :
-                         chartColors.primary
-                }}>
-                  {activity.type === 'Purchase' || activity.type === 'Valuation' ? '+' : 
-                   activity.type === 'Sale' || activity.type === 'Depreciation' ? '-' : ''}
-                  {formatCurrency(activity.amount)} ETB
-                </span>
-              </div>
-            ))}
+            <strong>
+              {item.percentage.toFixed(1)}%
+            </strong>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StatusChart({ data }) {
+  const rows = asArray(data);
+
+  if (!rows.length) {
+    return (
+      <EmptyChart message="No status data available." />
+    );
+  }
+
+  const normalized = rows
+    .map((item) => ({
+      label: getLabel(item),
+      value: getValue(item),
+    }))
+    .filter((item) => item.value >= 0)
+    .slice(0, 8);
+
+  const maxValue = Math.max(
+    ...normalized.map((item) => item.value),
+    1
+  );
+
+  return (
+    <div className="status-chart">
+      {normalized.map((item, index) => (
+        <div
+          className="status-column"
+          key={`${item.label}-${index}`}
+        >
+          <div className="status-number">
+            {formatNumber(item.value)}
+          </div>
+
+          <div className="status-bar-area">
+            <div
+              className="status-bar"
+              style={{
+                height: `${Math.max(
+                  4,
+                  (item.value / maxValue) *
+                    100
+                )}%`,
+              }}
+            />
+          </div>
+
+          <div
+            className="status-label"
+            title={item.label}
+          >
+            {item.label}
           </div>
         </div>
-      )}
+      ))}
+    </div>
+  );
+}
 
-      {/* Detail Modal */}
-      {showDetailModal && (
-        <div style={styles.modal} onClick={() => setShowDetailModal(false)}>
-          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h2 style={styles.modalTitle}>
-                {detailType === 'totalCost' && '💰 Total Asset Cost Details'}
-                {detailType === 'bookValue' && '📊 Current Book Value Details'}
-                {detailType === 'depreciation' && '📉 Depreciation Details'}
-                {detailType === 'assets' && '📦 Total Assets Details'}
-                {detailType === 'active' && '✅ Active Assets Details'}
-                {detailType === 'maintenance' && '🔧 Assets Under Maintenance'}
-                {detailType === 'disposed' && '🗑️ Disposed Assets'}
-                {detailType === 'valuation' && '🔍 Assets Requiring Valuation'}
-              </h2>
-              <button style={styles.modalClose} onClick={() => setShowDetailModal(false)}>✕</button>
+function TrendChart({ data }) {
+  const rows = asArray(data);
+
+  if (!rows.length) {
+    return (
+      <EmptyChart message="No value trend data available." />
+    );
+  }
+
+  const normalized = rows
+    .map((item) => ({
+      label: getLabel(item),
+      value: getValue(item),
+    }))
+    .filter((item) => item.value >= 0)
+    .slice(-12);
+
+  if (!normalized.length) {
+    return (
+      <EmptyChart message="No value trend data available." />
+    );
+  }
+
+  const maxValue = Math.max(
+    ...normalized.map((item) => item.value),
+    1
+  );
+
+  const width = 700;
+  const height = 260;
+  const paddingX = 34;
+  const paddingY = 25;
+
+  const usableWidth =
+    width - paddingX * 2;
+
+  const usableHeight =
+    height - paddingY * 2;
+
+  const points = normalized.map(
+    (item, index) => {
+      const x =
+        normalized.length === 1
+          ? width / 2
+          : paddingX +
+            (index /
+              (normalized.length - 1)) *
+              usableWidth;
+
+      const y =
+        paddingY +
+        usableHeight -
+        (item.value / maxValue) *
+          usableHeight;
+
+      return {
+        ...item,
+        x,
+        y,
+      };
+    }
+  );
+
+  const path = points
+    .map(
+      (point, index) =>
+        `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`
+    )
+    .join(" ");
+
+  return (
+    <div className="trend-wrapper">
+      <svg
+        className="trend-svg"
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio="none"
+      >
+        <line
+          x1="34"
+          y1="235"
+          x2="666"
+          y2="235"
+          className="grid-line"
+        />
+
+        <line
+          x1="34"
+          y1="145"
+          x2="666"
+          y2="145"
+          className="grid-line"
+        />
+
+        <line
+          x1="34"
+          y1="55"
+          x2="666"
+          y2="55"
+          className="grid-line"
+        />
+
+        <path
+          d={path}
+          className="trend-line"
+          fill="none"
+        />
+
+        {points.map((point, index) => (
+          <circle
+            key={index}
+            cx={point.x}
+            cy={point.y}
+            r="4"
+            className="trend-point"
+          />
+        ))}
+      </svg>
+
+      <div className="trend-labels">
+        {normalized.map(
+          (item, index) => (
+            <div
+              key={`${item.label}-${index}`}
+              title={item.label}
+            >
+              {item.label}
             </div>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function FinanceDashboard() {
+  const [filters, setFilters] =
+    useState(INITIAL_FILTERS);
+
+  const [dashboard, setDashboard] =
+    useState({
+      summary: {},
+      byDepartment: [],
+      byCategory: [],
+      byStatus: [],
+      valueTrend: [],
+    });
+
+  const [departments, setDepartments] =
+    useState([]);
+
+  const [categories, setCategories] =
+    useState([]);
+
+  const [financialYears, setFinancialYears] =
+    useState([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [filterLoading, setFilterLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [success, setSuccess] =
+    useState("");
+
+  const [showFilters, setShowFilters] =
+    useState(true);
+
+  const loadFilterOptions =
+    useCallback(async () => {
+      try {
+        const response =
+          await api.get(
+            "/api/finance/dashboard/filters"
+          );
+
+        const payload =
+          getPayload(response);
+
+        setDepartments(
+          asArray(
+            firstValue(
+              payload?.departments,
+              payload?.departmentOptions,
+              payload?.department_options
+            )
+          )
+        );
+
+        setCategories(
+          asArray(
+            firstValue(
+              payload?.categories,
+              payload?.categoryOptions,
+              payload?.category_options
+            )
+          )
+        );
+
+        const years = asArray(
+          firstValue(
+            payload?.financialYears,
+            payload?.financial_years,
+            payload?.years
+          )
+        );
+
+        setFinancialYears(
+          years.length
+            ? years
+            : []
+        );
+      } catch (err) {
+        console.error(
+          "Finance filter endpoint unavailable:",
+          err
+        );
+        if ([401, 403].includes(err?.response?.status)) {
+          setError(
+            err.response.status === 401
+              ? "Your session has expired. Please sign in again."
+              : "You are not authorized to view Finance Dashboard filters."
+          );
+        }
+      }
+    }, []);
+
+  const loadDashboard =
+    useCallback(async () => {
+      try {
+        setError("");
+
+        if (!dashboard.summary) {
+          setLoading(true);
+        } else {
+          setFilterLoading(true);
+        }
+
+        const response =
+          await api.get(
+            "/api/finance/dashboard",
+            {
+              params: {
+                dateFrom:
+                  filters.dateFrom ||
+                  undefined,
+
+                dateTo:
+                  filters.dateTo ||
+                  undefined,
+
+                department:
+                  filters.department ||
+                  undefined,
+
+                category:
+                  filters.category ||
+                  undefined,
+
+                status:
+                  filters.status ||
+                  undefined,
+
+                financialYear:
+                  filters.financialYear ||
+                  undefined,
+              },
+            }
+          );
+
+        const payload =
+          getPayload(response);
+
+        const summary =
+          payload?.summary ||
+          payload?.statistics ||
+          payload?.stats ||
+          {};
+
+        setDashboard({
+          summary,
+
+          byDepartment: asArray(
+            firstValue(
+              payload?.byDepartment,
+              payload?.by_department,
+              payload?.assetsByDepartment,
+              payload?.assets_by_department
+            )
+          ),
+
+          byCategory: asArray(
+            firstValue(
+              payload?.byCategory,
+              payload?.by_category,
+              payload?.assetsByCategory,
+              payload?.assets_by_category
+            )
+          ),
+
+          byStatus: asArray(
+            firstValue(
+              payload?.byStatus,
+              payload?.by_status,
+              payload?.assetsByStatus,
+              payload?.assets_by_status
+            )
+          ),
+
+          valueTrend: asArray(
+            firstValue(
+              payload?.valueTrend,
+              payload?.value_trend,
+              payload?.assetValueTrend,
+              payload?.asset_value_trend
+            )
+          ),
+        });
+      } catch (err) {
+        console.error(
+          "Finance dashboard error:",
+          err
+        );
+
+        setError(
+          err?.response?.data?.message ||
+            "Unable to load Finance Dashboard data."
+        );
+      } finally {
+        setLoading(false);
+        setFilterLoading(false);
+      }
+    }, [filters]);
+
+  useEffect(() => {
+    loadFilterOptions();
+  }, [loadFilterOptions]);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    if (!success) return;
+
+    const timer = setTimeout(
+      () => setSuccess(""),
+      3500
+    );
+
+    return () =>
+      clearTimeout(timer);
+  }, [success]);
+
+  const summary = dashboard.summary || {};
+
+  const stats = useMemo(
+    () => ({
+      totalAssetCost: firstValue(
+        summary.totalAssetCost,
+        summary.total_asset_cost,
+        summary.totalCost,
+        summary.total_cost,
+        0
+      ),
+
+      currentBookValue: firstValue(
+        summary.currentBookValue,
+        summary.current_book_value,
+        summary.bookValue,
+        summary.book_value,
+        0
+      ),
+
+      accumulatedDepreciation:
+        firstValue(
+          summary.accumulatedDepreciation,
+          summary.accumulated_depreciation,
+          summary.depreciation,
+          0
+        ),
+
+      totalAssets: firstValue(
+        summary.totalAssets,
+        summary.total_assets,
+        0
+      ),
+
+      activeAssets: firstValue(
+        summary.activeAssets,
+        summary.active_assets,
+        0
+      ),
+
+      underMaintenance: firstValue(
+        summary.underMaintenance,
+        summary.under_maintenance,
+        summary.maintenanceAssets,
+        0
+      ),
+
+      disposed: firstValue(
+        summary.disposed,
+        summary.disposedAssets,
+        summary.disposed_assets,
+        0
+      ),
+
+      requiringValuation:
+        firstValue(
+          summary.requiringValuation,
+          summary.requiring_valuation,
+          summary.assetsRequiringValuation,
+          0
+        ),
+    }),
+    [summary]
+  );
+
+  const updateFilter = (
+    field,
+    value
+  ) => {
+    setFilters((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const clearFilters = () => {
+    setFilters(INITIAL_FILTERS);
+  };
+
+  const exportExcel = async () => {
+    try {
+      setError("");
+      const summaryRows = Object.entries(stats).map(([metric, value]) => ({
+        Metric: metric,
+        Value: numberValue(value),
+      }));
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryRows), "Summary");
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(dashboard.byDepartment), "Departments");
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(dashboard.byCategory), "Categories");
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(dashboard.byStatus), "Statuses");
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(dashboard.valueTrend), "Value Trend");
+      XLSX.writeFile(workbook, `finance-dashboard-${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+      setSuccess(
+        "Finance dashboard exported successfully."
+      );
+    } catch (err) {
+      console.error(
+        "Finance dashboard export error:",
+        err
+      );
+
+      setError(
+        err?.response?.data?.message ||
+          "Unable to export Finance Dashboard."
+      );
+    }
+  };
+
+  return (
+    <div className="finance-dashboard">
+      <style>{`
+        :root {
+          --finance-primary: #0ea5e9;
+          --finance-blue: #2563eb;
+          --finance-navy: #0f172a;
+          --finance-bg: #f8fafc;
+          --finance-border: #e2e8f0;
+          --finance-muted: #64748b;
+
+          --chart-0: #0ea5e9;
+          --chart-1: #2563eb;
+          --chart-2: #14b8a6;
+          --chart-3: #8b5cf6;
+          --chart-4: #f59e0b;
+          --chart-5: #ef4444;
+        }
+
+        * {
+          box-sizing: border-box;
+        }
+
+        .finance-dashboard {
+          min-height: 100vh;
+          background: var(--finance-bg);
+          color: var(--finance-navy);
+          font-family:
+            Inter,
+            ui-sans-serif,
+            system-ui,
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            sans-serif;
+          padding: 24px;
+        }
+
+        .finance-container {
+          max-width: 1500px;
+          margin: 0 auto;
+        }
+
+        .dashboard-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 20px;
+          margin-bottom: 22px;
+        }
+
+        .welcome-area {
+          display: flex;
+          gap: 14px;
+          align-items: flex-start;
+        }
+
+        .finance-logo {
+          width: 52px;
+          height: 52px;
+          border-radius: 15px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          background:
+            linear-gradient(
+              135deg,
+              var(--finance-primary),
+              var(--finance-blue)
+            );
+          box-shadow:
+            0 12px 28px
+            rgba(37, 99, 235, .18);
+        }
+
+        .welcome-area h1 {
+          margin: 0;
+          font-size: 27px;
+          font-weight: 850;
+          letter-spacing: -.03em;
+        }
+
+        .welcome-area p {
+          margin: 5px 0 0;
+          color: var(--finance-muted);
+          font-size: 13px;
+        }
+
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .btn {
+          min-height: 40px;
+          padding: 0 13px;
+          border-radius: 9px;
+          border: 1px solid transparent;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          font-size: 12px;
+          font-weight: 750;
+          cursor: pointer;
+          transition: .2s ease;
+          text-decoration: none;
+          white-space: nowrap;
+        }
+
+        .btn:hover {
+          transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+          opacity: .55;
+          cursor: not-allowed;
+          transform: none;
+        }
+
+        .btn-primary {
+          color: white;
+          background: var(--finance-primary);
+        }
+
+        .btn-primary:hover {
+          background: #0284c7;
+        }
+
+        .btn-secondary {
+          color: #334155;
+          background: white;
+          border-color: var(--finance-border);
+        }
+
+        .btn-secondary:hover {
+          background: #f8fafc;
+        }
+
+        .btn-green {
+          color: white;
+          background: #16a34a;
+        }
+
+        .alert {
+          margin-bottom: 15px;
+          padding: 12px 14px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 12px;
+          font-weight: 650;
+        }
+
+        .alert-error {
+          color: #991b1b;
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+        }
+
+        .alert-success {
+          color: #166534;
+          background: #f0fdf4;
+          border: 1px solid #bbf7d0;
+        }
+
+        .filters-card {
+          margin-bottom: 17px;
+          padding: 15px;
+          border: 1px solid var(--finance-border);
+          border-radius: 14px;
+          background: white;
+          box-shadow:
+            0 4px 18px
+            rgba(15, 23, 42, .035);
+        }
+
+        .filters-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 12px;
+        }
+
+        .filters-title {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          font-weight: 850;
+        }
+
+        .filters-grid {
+          display: grid;
+          grid-template-columns:
+            repeat(6, minmax(130px, 1fr));
+          gap: 9px;
+        }
+
+        .field {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+        }
+
+        .field label {
+          color: #64748b;
+          font-size: 9px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: .04em;
+        }
+
+        .input,
+        .select {
+          width: 100%;
+          height: 39px;
+          padding: 0 10px;
+          border: 1px solid var(--finance-border);
+          border-radius: 8px;
+          background: white;
+          color: #334155;
+          font-size: 11px;
+          outline: none;
+        }
+
+        .input:focus,
+        .select:focus {
+          border-color: var(--finance-primary);
+          box-shadow:
+            0 0 0 3px
+            rgba(14, 165, 233, .1);
+        }
+
+        .select-wrap {
+          position: relative;
+        }
+
+        .select-wrap .select {
+          appearance: none;
+          padding-right: 28px;
+        }
+
+        .select-arrow {
+          position: absolute;
+          right: 9px;
+          top: 50%;
+          transform: translateY(-50%);
+          pointer-events: none;
+          color: #94a3b8;
+        }
+
+        .filter-buttons {
+          display: flex;
+          align-items: flex-end;
+          gap: 7px;
+        }
+
+        .filter-buttons .btn {
+          width: 100%;
+        }
+
+        .stats-grid {
+          display: grid;
+          grid-template-columns:
+            repeat(4, minmax(0, 1fr));
+          gap: 13px;
+          margin-bottom: 13px;
+        }
+
+        .stats-grid.secondary {
+          margin-bottom: 18px;
+        }
+
+        .stat-card {
+          min-height: 116px;
+          padding: 17px;
+          border: 1px solid var(--finance-border);
+          border-radius: 14px;
+          background: white;
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 12px;
+          box-shadow:
+            0 4px 18px
+            rgba(15, 23, 42, .035);
+        }
+
+        .stat-title {
+          color: #64748b;
+          font-size: 10px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: .04em;
+        }
+
+        .stat-value {
+          margin-top: 8px;
+          font-size: 22px;
+          font-weight: 850;
+          letter-spacing: -.02em;
+          word-break: break-word;
+        }
+
+        .stat-subtitle {
+          margin-top: 5px;
+          color: #94a3b8;
+          font-size: 9px;
+        }
+
+        .stat-icon {
+          width: 41px;
+          height: 41px;
+          border-radius: 11px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .stat-icon.blue {
+          color: #2563eb;
+          background: #eff6ff;
+        }
+
+        .stat-icon.cyan {
+          color: #0891b2;
+          background: #ecfeff;
+        }
+
+        .stat-icon.green {
+          color: #16a34a;
+          background: #f0fdf4;
+        }
+
+        .stat-icon.orange {
+          color: #ea580c;
+          background: #fff7ed;
+        }
+
+        .stat-icon.red {
+          color: #dc2626;
+          background: #fef2f2;
+        }
+
+        .stat-icon.purple {
+          color: #7c3aed;
+          background: #f5f3ff;
+        }
+
+        .chart-grid {
+          display: grid;
+          grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+          gap: 15px;
+          margin-bottom: 15px;
+        }
+
+        .chart-card {
+          min-height: 350px;
+          padding: 17px;
+          border: 1px solid var(--finance-border);
+          border-radius: 14px;
+          background: white;
+          box-shadow:
+            0 4px 18px
+            rgba(15, 23, 42, .035);
+        }
+
+        .chart-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-bottom: 17px;
+        }
+
+        .chart-title {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          font-weight: 850;
+        }
+
+        .chart-subtitle {
+          margin-top: 3px;
+          color: #94a3b8;
+          font-size: 9px;
+        }
+
+        .chart-body {
+          min-height: 265px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .chart-empty {
+          min-height: 245px;
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 9px;
+          color: #94a3b8;
+          font-size: 11px;
+        }
+
+        .bar-chart {
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+
+        .bar-row {
+          width: 100%;
+        }
+
+        .bar-label {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 5px;
+          font-size: 10px;
+        }
+
+        .bar-label span {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          color: #475569;
+        }
+
+        .bar-label strong {
+          color: #0f172a;
+          white-space: nowrap;
+        }
+
+        .bar-track {
+          height: 9px;
+          overflow: hidden;
+          border-radius: 999px;
+          background: #f1f5f9;
+        }
+
+        .bar-fill {
+          height: 100%;
+          min-width: 2px;
+          border-radius: inherit;
+          background:
+            linear-gradient(
+              90deg,
+              var(--finance-primary),
+              var(--finance-blue)
+            );
+          transition: width .35s ease;
+        }
+
+        .donut-layout {
+          width: 100%;
+          display: grid;
+          grid-template-columns:
+            minmax(170px, .9fr)
+            minmax(180px, 1.1fr);
+          align-items: center;
+          gap: 20px;
+        }
+
+        .donut {
+          width: 190px;
+          height: 190px;
+          margin: 0 auto;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .donut-inner {
+          width: 116px;
+          height: 116px;
+          border-radius: 50%;
+          background: white;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          box-shadow:
+            inset 0 0 0 1px #f1f5f9;
+        }
+
+        .donut-inner strong {
+          font-size: 12px;
+          max-width: 100px;
+          word-break: break-word;
+        }
+
+        .donut-inner span {
+          margin-top: 4px;
+          color: #94a3b8;
+          font-size: 8px;
+        }
+
+        .legend {
+          display: flex;
+          flex-direction: column;
+          gap: 9px;
+        }
+
+        .legend-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          font-size: 10px;
+        }
+
+        .legend-name {
+          min-width: 0;
+          display: flex;
+          align-items: center;
+          gap: 7px;
+        }
+
+        .legend-name span:last-child {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .legend-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        .legend-item strong {
+          white-space: nowrap;
+        }
+
+        .status-chart {
+          width: 100%;
+          height: 250px;
+          padding: 10px 15px 0;
+          display: flex;
+          align-items: stretch;
+          justify-content: center;
+          gap: 18px;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        .status-column {
+          flex: 1;
+          min-width: 30px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: flex-end;
+        }
+
+        .status-number {
+          margin-bottom: 5px;
+          color: #475569;
+          font-size: 9px;
+          font-weight: 800;
+        }
+
+        .status-bar-area {
+          height: 185px;
+          width: 100%;
+          display: flex;
+          align-items: flex-end;
+          justify-content: center;
+        }
+
+        .status-bar {
+          width: min(42px, 75%);
+          min-height: 4px;
+          border-radius: 7px 7px 0 0;
+          background:
+            linear-gradient(
+              180deg,
+              var(--finance-primary),
+              var(--finance-blue)
+            );
+          transition: height .35s ease;
+        }
+
+        .status-label {
+          width: 100%;
+          margin-top: 8px;
+          color: #64748b;
+          font-size: 8px;
+          text-align: center;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .trend-wrapper {
+          width: 100%;
+        }
+
+        .trend-svg {
+          width: 100%;
+          height: 245px;
+          overflow: visible;
+        }
+
+        .grid-line {
+          stroke: #e2e8f0;
+          stroke-width: 1;
+          stroke-dasharray: 4 4;
+        }
+
+        .trend-line {
+          stroke: var(--finance-primary);
+          stroke-width: 4;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+        }
+
+        .trend-point {
+          fill: white;
+          stroke: var(--finance-blue);
+          stroke-width: 3;
+        }
+
+        .trend-labels {
+          display: flex;
+          justify-content: space-between;
+          gap: 6px;
+          color: #94a3b8;
+          font-size: 8px;
+        }
+
+        .trend-labels div {
+          min-width: 0;
+          max-width: 70px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          text-align: center;
+        }
+
+        .quick-links {
+          display: grid;
+          grid-template-columns:
+            repeat(4, minmax(0, 1fr));
+          gap: 11px;
+          margin-top: 15px;
+        }
+
+        .quick-link {
+          padding: 13px;
+          border: 1px solid var(--finance-border);
+          border-radius: 11px;
+          background: white;
+          color: #334155;
+          text-decoration: none;
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          font-size: 11px;
+          font-weight: 750;
+          transition: .2s ease;
+        }
+
+        .quick-link:hover {
+          border-color: #bae6fd;
+          background: #f0f9ff;
+          color: #0369a1;
+          transform: translateY(-1px);
+        }
+
+        .loading-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 2000;
+          background:
+            rgba(248, 250, 252, .72);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          backdrop-filter: blur(2px);
+        }
+
+        .loading-box {
+          padding: 18px 22px;
+          border: 1px solid var(--finance-border);
+          border-radius: 12px;
+          background: white;
+          box-shadow:
+            0 15px 45px
+            rgba(15, 23, 42, .12);
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          color: #334155;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .spin {
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        @media (max-width: 1200px) {
+          .filters-grid {
+            grid-template-columns:
+              repeat(3, minmax(150px, 1fr));
+          }
+
+          .stats-grid {
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+          }
+
+          .quick-links {
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+          }
+        }
+
+        @media (max-width: 850px) {
+          .finance-dashboard {
+            padding: 15px;
+          }
+
+          .dashboard-header {
+            flex-direction: column;
+          }
+
+          .filters-grid {
+            grid-template-columns:
+              repeat(2, minmax(140px, 1fr));
+          }
+
+          .chart-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 560px) {
+          .welcome-area h1 {
+            font-size: 22px;
+          }
+
+          .filters-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .stats-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .quick-links {
+            grid-template-columns: 1fr;
+          }
+
+          .donut-layout {
+            grid-template-columns: 1fr;
+          }
+
+          .donut {
+            width: 165px;
+            height: 165px;
+          }
+
+          .status-chart {
+            gap: 7px;
+            padding-left: 5px;
+            padding-right: 5px;
+          }
+        }
+      `}</style>
+
+      <div className="finance-container">
+        <div className="dashboard-header">
+          <div className="welcome-area">
+            <div className="finance-logo">
+              <CircleDollarSign
+                size={25}
+              />
+            </div>
+
             <div>
-              <table style={styles.detailTable}>
-                <thead>
-                  <tr>
-                    <th style={styles.detailTh}>Asset Name</th>
-                    <th style={styles.detailTh}>Department</th>
-                    <th style={styles.detailTh}>Category</th>
-                    <th style={styles.detailTh}>Status</th>
-                    <th style={styles.detailTh}>Current Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {assets.slice(0, 20).map(asset => (
-                    <tr key={asset.id}>
-                      <td style={styles.detailTd}>{asset.name}</td>
-                      <td style={styles.detailTd}>{asset.department_name || '-'}</td>
-                      <td style={styles.detailTd}>{asset.category_name || '-'}</td>
-                      <td style={styles.detailTd}>{asset.status}</td>
-                      <td style={styles.detailTd}>{formatCurrency(asset.current_value || 0)} ETB</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {assets.length > 20 && (
-                <div style={{ textAlign: 'center', padding: '12px', color: isDark ? '#8896b0' : '#4a5568' }}>
-                  Showing first 20 of {assets.length} assets
+              <h1>
+                Welcome, Finance Manager 👋
+              </h1>
+
+              <p>
+                Monitor university asset
+                financial performance,
+                valuation, depreciation,
+                and financial status.
+              </p>
+            </div>
+          </div>
+
+          <div className="header-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={loadDashboard}
+              disabled={
+                loading ||
+                filterLoading
+              }
+            >
+              <RefreshCw
+                size={14}
+                className={
+                  loading ||
+                  filterLoading
+                    ? "spin"
+                    : ""
+                }
+              />
+              Refresh
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-green"
+              onClick={exportExcel}
+            >
+              <FileSpreadsheet size={14} />
+
+              Export to Excel
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="alert alert-error">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{
+                marginLeft: "auto",
+                minHeight: 30,
+              }}
+              onClick={loadDashboard}
+            >
+              <RefreshCw size={13} />
+              Retry
+            </button>
+          </div>
+        )}
+
+        {success && (
+          <div className="alert alert-success">
+            <CheckCircle2 size={16} />
+            <span>{success}</span>
+          </div>
+        )}
+
+        <div className="filters-card">
+          <div className="filters-header">
+            <div className="filters-title">
+              <Search size={15} />
+              Dashboard Filters
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() =>
+                setShowFilters(
+                  (current) => !current
+                )
+              }
+            >
+              <ChevronDown
+                size={14}
+                style={{
+                  transform: showFilters
+                    ? "rotate(180deg)"
+                    : "none",
+                  transition: ".2s",
+                }}
+              />
+              {showFilters
+                ? "Hide"
+                : "Show"}
+            </button>
+          </div>
+
+          {showFilters && (
+            <div className="filters-grid">
+              <div className="field">
+                <label>
+                  Date From
+                </label>
+
+                <input
+                  type="date"
+                  className="input"
+                  value={
+                    filters.dateFrom
+                  }
+                  onChange={(event) =>
+                    updateFilter(
+                      "dateFrom",
+                      event.target.value
+                    )
+                  }
+                />
+              </div>
+
+              <div className="field">
+                <label>
+                  Date To
+                </label>
+
+                <input
+                  type="date"
+                  className="input"
+                  value={
+                    filters.dateTo
+                  }
+                  onChange={(event) =>
+                    updateFilter(
+                      "dateTo",
+                      event.target.value
+                    )
+                  }
+                />
+              </div>
+
+              <div className="field">
+                <label>
+                  Department
+                </label>
+
+                <div className="select-wrap">
+                  <select
+                    className="select"
+                    value={
+                      filters.department
+                    }
+                    onChange={(event) =>
+                      updateFilter(
+                        "department",
+                        event.target.value
+                      )
+                    }
+                  >
+                    <option value="">
+                      All Departments
+                    </option>
+
+                    {departments.map(
+                      (department, index) => {
+                        const value =
+                          typeof department ===
+                          "object"
+                            ? firstValue(
+                                department.id,
+                                department.name,
+                                department.label,
+                                department.value
+                              )
+                            : department;
+
+                        const label =
+                          typeof department ===
+                          "object"
+                            ? firstValue(
+                                department.name,
+                                department.label,
+                                department.value,
+                                department.id
+                              )
+                            : department;
+
+                        return (
+                          <option
+                            key={`${value}-${index}`}
+                            value={value}
+                          >
+                            {label}
+                          </option>
+                        );
+                      }
+                    )}
+                  </select>
+
+                  <ChevronDown
+                    className="select-arrow"
+                    size={14}
+                  />
+                </div>
+              </div>
+
+              <div className="field">
+                <label>
+                  Category
+                </label>
+
+                <div className="select-wrap">
+                  <select
+                    className="select"
+                    value={
+                      filters.category
+                    }
+                    onChange={(event) =>
+                      updateFilter(
+                        "category",
+                        event.target.value
+                      )
+                    }
+                  >
+                    <option value="">
+                      All Categories
+                    </option>
+
+                    {categories.map(
+                      (category, index) => {
+                        const value =
+                          typeof category ===
+                          "object"
+                            ? firstValue(
+                                category.id,
+                                category.name,
+                                category.label,
+                                category.value
+                              )
+                            : category;
+
+                        const label =
+                          typeof category ===
+                          "object"
+                            ? firstValue(
+                                category.name,
+                                category.label,
+                                category.value,
+                                category.id
+                              )
+                            : category;
+
+                        return (
+                          <option
+                            key={`${value}-${index}`}
+                            value={value}
+                          >
+                            {label}
+                          </option>
+                        );
+                      }
+                    )}
+                  </select>
+
+                  <ChevronDown
+                    className="select-arrow"
+                    size={14}
+                  />
+                </div>
+              </div>
+
+              <div className="field">
+                <label>
+                  Status
+                </label>
+
+                <div className="select-wrap">
+                  <select
+                    className="select"
+                    value={
+                      filters.status
+                    }
+                    onChange={(event) =>
+                      updateFilter(
+                        "status",
+                        event.target.value
+                      )
+                    }
+                  >
+                    <option value="">
+                      All Statuses
+                    </option>
+
+                    {STATUS_OPTIONS.map(
+                      (item) => (
+                        <option
+                          key={item}
+                          value={item}
+                        >
+                          {item}
+                        </option>
+                      )
+                    )}
+                  </select>
+
+                  <ChevronDown
+                    className="select-arrow"
+                    size={14}
+                  />
+                </div>
+              </div>
+
+              <div className="field">
+                <label>
+                  Financial Year
+                </label>
+
+                <div className="select-wrap">
+                  <select
+                    className="select"
+                    value={
+                      filters.financialYear
+                    }
+                    onChange={(event) =>
+                      updateFilter(
+                        "financialYear",
+                        event.target.value
+                      )
+                    }
+                  >
+                    <option value="">
+                      All Years
+                    </option>
+
+                    {financialYears.map(
+                      (year, index) => {
+                        const value =
+                          typeof year ===
+                          "object"
+                            ? firstValue(
+                                year.id,
+                                year.value,
+                                year.year,
+                                year.name
+                              )
+                            : year;
+
+                        const label =
+                          typeof year ===
+                          "object"
+                            ? firstValue(
+                                year.label,
+                                year.year,
+                                year.name,
+                                year.value
+                              )
+                            : year;
+
+                        return (
+                          <option
+                            key={`${value}-${index}`}
+                            value={value}
+                          >
+                            {label}
+                          </option>
+                        );
+                      }
+                    )}
+
+                  </select>
+
+                  <ChevronDown
+                    className="select-arrow"
+                    size={14}
+                  />
+                </div>
+              </div>
+
+              {(Object.values(
+                filters
+              ).some(Boolean)) && (
+                <div className="filter-buttons">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={clearFilters}
+                  >
+                    <X size={13} />
+                    Clear Filters
+                  </button>
                 </div>
               )}
             </div>
+          )}
+        </div>
+
+        <div className="stats-grid">
+          <StatCard
+            icon={CircleDollarSign}
+            title="Total Asset Cost"
+            value={formatETB(
+              stats.totalAssetCost
+            )}
+            subtitle="Original recorded cost"
+            tone="blue"
+          />
+
+          <StatCard
+            icon={TrendingUp}
+            title="Current Book Value"
+            value={formatETB(
+              stats.currentBookValue
+            )}
+            subtitle="Current financial value"
+            tone="green"
+          />
+
+          <StatCard
+            icon={TrendingDown}
+            title="Accumulated Depreciation"
+            value={formatETB(
+              stats.accumulatedDepreciation
+            )}
+            subtitle="Depreciation to date"
+            tone="orange"
+          />
+
+          <StatCard
+            icon={Package}
+            title="Total Assets"
+            value={formatNumber(
+              stats.totalAssets
+            )}
+            subtitle="Financially tracked assets"
+            tone="cyan"
+          />
+        </div>
+
+        <div className="stats-grid secondary">
+          <StatCard
+            icon={CheckCircle2}
+            title="Active Assets"
+            value={formatNumber(
+              stats.activeAssets
+            )}
+            subtitle="Currently active"
+            tone="green"
+          />
+
+          <StatCard
+            icon={Wrench}
+            title="Under Maintenance"
+            value={formatNumber(
+              stats.underMaintenance
+            )}
+            subtitle="Currently under maintenance"
+            tone="orange"
+          />
+
+          <StatCard
+            icon={Trash2}
+            title="Disposed"
+            value={formatNumber(
+              stats.disposed
+            )}
+            subtitle="Disposed assets"
+            tone="red"
+          />
+
+          <StatCard
+            icon={AlertCircle}
+            title="Requiring Valuation"
+            value={formatNumber(
+              stats.requiringValuation
+            )}
+            subtitle="Needs financial valuation"
+            tone="purple"
+          />
+        </div>
+
+        <div className="chart-grid">
+          <div className="chart-card">
+            <div className="chart-header">
+              <div>
+                <div className="chart-title">
+                  <Building2
+                    size={16}
+                    color="#2563eb"
+                  />
+                  Assets by Department
+                </div>
+
+                <div className="chart-subtitle">
+                  Asset financial value by department
+                </div>
+              </div>
+            </div>
+
+            <div className="chart-body">
+              <BarChart
+                data={
+                  dashboard.byDepartment
+                }
+              />
+            </div>
+          </div>
+
+          <div className="chart-card">
+            <div className="chart-header">
+              <div>
+                <div className="chart-title">
+                  <PieChartIcon
+                    size={16}
+                    color="#0ea5e9"
+                  />
+                  Assets by Category
+                </div>
+
+                <div className="chart-subtitle">
+                  Distribution of asset financial value
+                </div>
+              </div>
+            </div>
+
+            <div className="chart-body">
+              <DonutChart
+                data={
+                  dashboard.byCategory
+                }
+              />
+            </div>
+          </div>
+
+          <div className="chart-card">
+            <div className="chart-header">
+              <div>
+                <div className="chart-title">
+                  <Activity
+                    size={16}
+                    color="#16a34a"
+                  />
+                  Assets by Status
+                </div>
+
+                <div className="chart-subtitle">
+                  Current financial asset status
+                </div>
+              </div>
+            </div>
+
+            <div className="chart-body">
+              <StatusChart
+                data={
+                  dashboard.byStatus
+                }
+              />
+            </div>
+          </div>
+
+          <div className="chart-card">
+            <div className="chart-header">
+              <div>
+                <div className="chart-title">
+                  <TrendingUp
+                    size={16}
+                    color="#2563eb"
+                  />
+                  Asset Value Trend
+                </div>
+
+                <div className="chart-subtitle">
+                  Asset value over the selected period
+                </div>
+              </div>
+            </div>
+
+            <div className="chart-body">
+              <TrendChart
+                data={
+                  dashboard.valueTrend
+                }
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="quick-links">
+          <Link
+            to="/finance/purchase-requests"
+            className="quick-link"
+          >
+            <Package size={16} />
+            Purchase Requests
+          </Link>
+
+          <Link
+            to="/finance/invoices"
+            className="quick-link"
+          >
+            <FileSpreadsheet size={16} />
+            Invoices
+          </Link>
+
+          <Link
+            to="/finance/valuation"
+            className="quick-link"
+          >
+            <CircleDollarSign
+              size={16}
+            />
+            Asset Valuation
+          </Link>
+
+          <Link
+            to="/finance/depreciation"
+            className="quick-link"
+          >
+            <TrendingDown size={16} />
+            Depreciation
+          </Link>
+
+          <Link
+            to="/finance/budget-management"
+            className="quick-link"
+          >
+            <BarChart3 size={16} />
+            Budget Management
+          </Link>
+
+          <Link
+            to="/finance/transactions"
+            className="quick-link"
+          >
+            <Activity size={16} />
+            Transactions
+          </Link>
+
+          <Link
+            to="/finance/financial-reports"
+            className="quick-link"
+          >
+            <FileSpreadsheet
+              size={16}
+            />
+            Financial Reports
+          </Link>
+
+          <Link
+            to="/finance/audit"
+            className="quick-link"
+          >
+            <CalendarDays size={16} />
+            Audit Trail
+          </Link>
+        </div>
+      </div>
+
+      {(loading || filterLoading) && (
+        <div className="loading-overlay">
+          <div className="loading-box">
+            <RefreshCw
+              size={18}
+              className="spin"
+            />
+            Loading Finance Dashboard...
           </div>
         </div>
       )}
     </div>
   );
-};
-
-// Translations
-const englishTranslations = {
-  dashboard: 'Finance Dashboard',
-  welcome: 'Welcome',
-  totalAssetCost: 'Total Asset Cost',
-  currentBookValue: 'Current Book Value',
-  accumulatedDepreciation: 'Accumulated Depreciation',
-  totalAssets: 'Total Assets',
-  activeAssets: 'Active Assets',
-  underMaintenance: 'Under Maintenance',
-  disposed: 'Disposed',
-  requiringValuation: 'Requiring Valuation',
-  assetsByDepartment: 'Assets by Department',
-  assetsByCategory: 'Assets by Category',
-  assetsByStatus: 'Assets by Status',
-  valueTrend: 'Asset Value Trend',
-  auditAlerts: 'Audit Alerts',
-  recentActivities: 'Recent Financial Activities',
-  dateFrom: 'Date From',
-  dateTo: 'Date To',
-  department: 'Department',
-  category: 'Category',
-  status: 'Status',
-  financialYear: 'Financial Year',
-  allYears: 'All Years',
-  allDepartments: 'All Departments',
-  allCategories: 'All Categories',
-  allStatuses: 'All Statuses',
-  clearFilters: 'Clear Filters',
-  exportExcel: 'Export to Excel',
-  loading: 'Loading financial data...',
-  fetchError: 'Failed to load financial data',
-  exportSuccess: 'Data exported successfully'
-};
-
-const amharicTranslations = {
-  dashboard: 'የፋይናንስ ዳሽቦርድ',
-  welcome: 'እንኳን ደህና መጡ',
-  totalAssetCost: 'ጠቅላላ የንብረት ዋጋ',
-  currentBookValue: 'የአሁኑ የመጽሐፍ ዋጋ',
-  accumulatedDepreciation: 'የተጠራቀመ የእሴት መቀነስ',
-  totalAssets: 'ጠቅላላ ንብረቶች',
-  activeAssets: 'ንቁ ንብረቶች',
-  underMaintenance: 'በጥገና ላይ',
-  disposed: 'የተወገዱ',
-  requiringValuation: 'ምዘና የሚፈልጉ',
-  assetsByDepartment: 'ንብረቶች በክፍል',
-  assetsByCategory: 'ንብረቶች በምድብ',
-  assetsByStatus: 'ንብረቶች በሁኔታ',
-  valueTrend: 'የንብረት እሴት አዝማሚያ',
-  auditAlerts: 'የኦዲት ማንቂያዎች',
-  recentActivities: 'የቅርብ ጊዜ የፋይናንስ እንቅስቃሴዎች',
-  dateFrom: 'ከቀን',
-  dateTo: 'እስከ ቀን',
-  department: 'ክፍል',
-  category: 'ምድብ',
-  status: 'ሁኔታ',
-  financialYear: 'የፋይናንስ ዓመት',
-  allYears: 'ሁሉም ዓመታት',
-  allDepartments: 'ሁሉም ክፍሎች',
-  allCategories: 'ሁሉም ምድቦች',
-  allStatuses: 'ሁሉም ሁኔታዎች',
-  clearFilters: 'ማጣሪያ አጽዳ',
-  exportExcel: 'ወደ Excel ላክ',
-  loading: 'የፋይናንስ ውሂብ በመጫን ላይ...',
-  fetchError: 'የፋይናንስ ውሂብ ማግኘት አልተቻለም',
-  exportSuccess: 'ውሂብ በተሳካ ሁኔታ ተላከ'
-};
-
-export default FinanceDashboard;
+}

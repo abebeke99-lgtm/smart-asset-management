@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const College = require('../models/College');
 
 const DEMO_USERS = [
   {
@@ -84,6 +85,30 @@ const LEGACY_USERNAME_ALIASES = {
   infrastructure: ['infrastructure', 'infrastructure_directorate', 'infra', 'infrastructure directorate'],
 };
 
+async function ensureCollegeScopeForUser(userRecord) {
+  if (!userRecord || userRecord.role !== 'college') return;
+
+  const departmentName = String(userRecord.department || 'Engineering').trim() || 'Engineering';
+  let college = await College.findOne({ where: { managerId: userRecord.id, status: 'active' } });
+  if (!college) {
+    college = await College.findOne({ where: { collegeName: departmentName, status: 'active' } });
+  }
+  if (!college) {
+    const collegeCode = `CLG-${String(departmentName).slice(0, 6).toUpperCase().replace(/[^A-Z0-9]/g, '') || 'ENG'}`;
+    college = await College.create({
+      collegeCode,
+      collegeName: departmentName,
+      managerId: userRecord.id,
+      description: `Auto-created college scope for ${userRecord.fullName || userRecord.username}`,
+      status: 'active',
+    });
+  }
+
+  if (Number(userRecord.collegeId) !== Number(college.id)) {
+    await userRecord.update({ collegeId: college.id });
+  }
+}
+
 async function ensureDemoUser(userData) {
   const aliasNames = LEGACY_USERNAME_ALIASES[userData.role] || [userData.username];
   const candidates = [...new Set(aliasNames.map((value) => String(value).trim()).filter(Boolean))];
@@ -98,11 +123,14 @@ async function ensureDemoUser(userData) {
 
   if (!existingUser) {
     const hashedPassword = await bcrypt.hash(userData.password, 10);
-    await User.create({
+    const createdUser = await User.create({
       ...userData,
       username: userData.username,
       password: hashedPassword,
     });
+    if (userData.role === 'college') {
+      await ensureCollegeScopeForUser(createdUser);
+    }
     console.log(`✅ Created missing user: ${userData.username} (${userData.role})`);
     return;
   }
@@ -122,6 +150,10 @@ async function ensureDemoUser(userData) {
     active: userData.active,
   });
 
+  if (userData.role === 'college') {
+    await ensureCollegeScopeForUser(existingUser);
+  }
+
   for (const legacyUsername of aliasUpdates) {
     const existingAlias = await User.findOne({ where: { username: legacyUsername } });
     if (existingAlias && existingAlias.id !== existingUser.id) {
@@ -130,8 +162,10 @@ async function ensureDemoUser(userData) {
   }
 
   const storedPassword = String(existingUser.password || '');
-  const passwordLooksHashed = storedPassword.startsWith('$2');
-  if (!passwordLooksHashed) {
+  const passwordMatches = storedPassword.startsWith('$2')
+    ? await bcrypt.compare(userData.password, storedPassword)
+    : storedPassword === userData.password;
+  if (!passwordMatches) {
     const hashedPassword = await bcrypt.hash(userData.password, 10);
     await existingUser.update({ password: hashedPassword });
   }

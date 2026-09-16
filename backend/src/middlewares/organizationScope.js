@@ -5,26 +5,61 @@ const { requireAuth, requireRole } = require('./auth');
 const requireCollegeManager = [requireAuth, requireRole('college')];
 const requireDepartmentHead = [requireAuth, requireRole('department_head')];
 
+const ensureDefaultCollegeForUser = async (candidateUser) => {
+  if (!candidateUser || !candidateUser.id || candidateUser.role !== 'college') {
+    return null;
+  }
+
+  const baseName = String(candidateUser.department || candidateUser.department_name || 'Main College').trim() || 'Main College';
+  const sanitizedName = baseName.replace(/\s+/g, ' ').trim();
+  const collegeCode = `CLG-${String(sanitizedName).slice(0, 6).toUpperCase().replace(/[^A-Z0-9]/g, '') || 'MAIN'}`;
+
+  const existingCollege = await College.findOne({
+    where: {
+      [Op.or]: [
+        { id: candidateUser.collegeId ?? candidateUser.college_id ?? null },
+        { managerId: candidateUser.id },
+        { collegeName: sanitizedName },
+      ],
+    },
+    order: [['id', 'ASC']],
+  });
+
+  if (existingCollege) {
+    if (!candidateUser.collegeId && !candidateUser.college_id) {
+      await User.update({ collegeId: existingCollege.id }, { where: { id: candidateUser.id } });
+    }
+    return { collegeId: existingCollege.id, college: existingCollege };
+  }
+
+  const fallbackCollege = await College.create({
+    collegeCode,
+    collegeName: sanitizedName,
+    managerId: candidateUser.id,
+    description: `Auto-created college scope for ${candidateUser.fullName || candidateUser.username || 'college manager'}`,
+    status: 'active',
+  });
+
+  await User.update({ collegeId: fallbackCollege.id }, { where: { id: candidateUser.id } });
+
+  return { collegeId: fallbackCollege.id, college: fallbackCollege };
+};
+
 const findCollegeScopeForUser = async (user) => {
   const candidateUser = user || {};
-  const fallbackScope = { collegeId: 1, college: { id: 1, name: 'Default College', status: 'active' } };
 
   const explicitCollegeId = candidateUser.collegeId ?? candidateUser.college_id ?? candidateUser.organizationCollegeId ?? null;
   if (explicitCollegeId) {
     try {
       const college = await College.findOne({ where: { id: Number(explicitCollegeId), status: 'active' } });
       if (college) return { collegeId: college.id, college };
-    } catch (error) {
-      return fallbackScope;
-    }
+    } catch (error) { return null; }
   }
 
   try {
     const managerCollege = await College.findOne({ where: { managerId: candidateUser.id, status: 'active' } });
     if (managerCollege) return { collegeId: managerCollege.id, college: managerCollege };
-  } catch (error) {
-    return fallbackScope;
-  }
+  } catch (error) { return null; }
 
   if (candidateUser.id) {
     try {
@@ -33,9 +68,7 @@ const findCollegeScopeForUser = async (user) => {
         const college = await College.findOne({ where: { id: userRecord.collegeId, status: 'active' } });
         if (college) return { collegeId: college.id, college };
       }
-    } catch (error) {
-      return fallbackScope;
-    }
+    } catch (error) { return null; }
   }
 
   const departmentName = String(candidateUser.department || candidateUser.department_name || '').trim();
@@ -46,9 +79,7 @@ const findCollegeScopeForUser = async (user) => {
         const college = await College.findOne({ where: { id: department.collegeId, status: 'active' } });
         if (college) return { collegeId: college.id, college };
       }
-    } catch (error) {
-      return fallbackScope;
-    }
+    } catch (error) { return null; }
   }
 
   try {
@@ -61,11 +92,13 @@ const findCollegeScopeForUser = async (user) => {
     if (colleges.length === 1) {
       return { collegeId: colleges[0].id, college: colleges[0] };
     }
-  } catch (error) {
-    return fallbackScope;
+  } catch (error) { return null; }
+
+  if (candidateUser.role === 'college') {
+    return ensureDefaultCollegeForUser(candidateUser);
   }
 
-  return fallbackScope;
+  return null;
 };
 
 const findCollegeIdFromDepartmentName = async (departmentName) => {
@@ -86,7 +119,7 @@ const findDepartmentFromName = async (departmentName) => {
 
 const resolveCollegeScope = async (req, res, next) => {
   const scope = await findCollegeScopeForUser(req.user);
-  if (!scope.collegeId || !scope.college) {
+  if (!scope?.collegeId || !scope?.college) {
     return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
   }
 
