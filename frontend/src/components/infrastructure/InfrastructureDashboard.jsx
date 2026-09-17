@@ -44,7 +44,7 @@ const InfrastructureDashboard = () => {
 
       setError("");
 
-      const response = await api.get("/infrastructure/dashboard");
+      const response = await api.get("/api/infrastructure/dashboard");
 
       const payload = response?.data?.data ?? response?.data ?? {};
       const summary = payload?.summary && typeof payload.summary === "object"
