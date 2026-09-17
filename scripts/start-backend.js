@@ -1,4 +1,5 @@
 const { spawn, execSync } = require('child_process');
+const http = require('http');
 const net = require('net');
 const path = require('path');
 
@@ -12,7 +13,21 @@ function portInUse(port) {
     server.once('listening', () => {
       server.close(() => resolve(false));
     });
-    server.listen(port, '127.0.0.1');
+    server.listen(port, '0.0.0.0');
+  });
+}
+
+function backendIsHealthy(port) {
+  return new Promise((resolve) => {
+    const request = http.get(`http://127.0.0.1:${port}/api/health`, (response) => {
+      response.resume();
+      resolve(response.statusCode === 200);
+    });
+    request.setTimeout(1000, () => {
+      request.destroy();
+      resolve(false);
+    });
+    request.on('error', () => resolve(false));
   });
 }
 
@@ -31,6 +46,11 @@ async function main() {
   const inUse = await portInUse(PORT);
 
   if (inUse) {
+    if (await backendIsHealthy(PORT)) {
+      console.log(`Backend is already running and healthy on port ${PORT}.`);
+      return;
+    }
+
     console.log(`Port ${PORT} is already in use. Clearing stale listener...`);
     clearPort(PORT);
 

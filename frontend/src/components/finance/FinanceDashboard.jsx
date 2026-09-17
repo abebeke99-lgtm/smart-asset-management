@@ -32,13 +32,6 @@ const INITIAL_FILTERS = {
   financialYear: "",
 };
 
-const STATUS_OPTIONS = [
-  "Active",
-  "Under Maintenance",
-  "Inactive",
-  "Disposed",
-];
-
 function firstValue(...values) {
   return values.find(
     (value) =>
@@ -545,6 +538,9 @@ export default function FinanceDashboard() {
   const [financialYears, setFinancialYears] =
     useState([]);
 
+  const [statuses, setStatuses] =
+    useState([]);
+
   const [loading, setLoading] =
     useState(true);
 
@@ -587,6 +583,16 @@ export default function FinanceDashboard() {
               payload?.categories,
               payload?.categoryOptions,
               payload?.category_options
+            )
+          )
+        );
+
+        setStatuses(
+          asArray(
+            firstValue(
+              payload?.statuses,
+              payload?.statusOptions,
+              payload?.status_options
             )
           )
         );
@@ -1960,15 +1966,26 @@ export default function FinanceDashboard() {
                       All Statuses
                     </option>
 
-                    {STATUS_OPTIONS.map(
-                      (item) => (
+                    {statuses.map(
+                      (item, index) => {
+                        const value =
+                          typeof item === "object"
+                            ? firstValue(item.value, item.status, item.label)
+                            : item;
+                        const label =
+                          typeof item === "object"
+                            ? firstValue(item.label, item.status, item.value)
+                            : item;
+
+                        return (
                         <option
-                          key={item}
-                          value={item}
+                          key={`${value}-${index}`}
+                          value={value}
                         >
-                          {item}
+                          {label}
                         </option>
-                      )
+                        );
+                      }
                     )}
                   </select>
 
@@ -2254,14 +2271,6 @@ export default function FinanceDashboard() {
         </div>
 
         <div className="quick-links">
-          <Link
-            to="/finance/purchase-requests"
-            className="quick-link"
-          >
-            <Package size={16} />
-            Purchase Requests
-          </Link>
-
           <Link
             to="/finance/invoices"
             className="quick-link"

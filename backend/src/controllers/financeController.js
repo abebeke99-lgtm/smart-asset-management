@@ -37,9 +37,10 @@ const normalizeAsset = (asset) => {
 const getFinanceDashboardFilters = async (req, res, next) => {
   try {
     if (!ensureFinance(req, res)) return;
-    const [departments, categories, years] = await Promise.all([
+    const [departments, categories, statuses, years] = await Promise.all([
       Department.findAll({ attributes: ['id', 'name'], order: [['name', 'ASC']] }),
       Asset.findAll({ attributes: ['category'], group: ['category'], order: [['category', 'ASC']], raw: true }),
+      Asset.findAll({ attributes: ['status'], group: ['status'], order: [['status', 'ASC']], raw: true }),
       Asset.findAll({ attributes: ['purchaseDate'], order: [['purchaseDate', 'ASC']], raw: true }),
     ]);
 
@@ -54,6 +55,7 @@ const getFinanceDashboardFilters = async (req, res, next) => {
       data: {
         departments: departments.map((department) => ({ value: String(department.id), label: department.name })),
         categories: categories.filter((category) => category.category).map((category) => ({ value: String(category.category), label: category.category })),
+        statuses: statuses.filter((status) => status.status).map((status) => ({ value: String(status.status), label: status.status })),
         financialYears,
       },
     });
@@ -206,4 +208,318 @@ const updateValuation = async (req, res, next) => {
 const valuationHistory = async (req, res, next) => { try { if (!ensureFinance(req, res)) return; const records = await FinancialRecord.findAll({ where: { assetId: req.params.id }, include: [{ model: User, attributes: ['username', 'fullName'] }], order: [['createdAt', 'DESC']] }); res.json({ success: true, history: records }); } catch (e) { next(e); } };
 const listAudit = async (req, res, next) => { try { if (!ensureFinance(req, res)) return; const logs = await AuditLog.findAll({ include: [{ model: User, attributes: ['username', 'fullName', 'role'] }], order: [['createdAt', 'DESC']] }); res.json({ success: true, logs, total: logs.length }); } catch (e) { next(e); } };
 
-module.exports = { listValuation, updateValuation, valuationHistory, listAudit, getFinanceDashboard, getFinanceDashboardFilters };
+const listSuppliers = async (req, res, next) => {
+  try {
+    if (!ensureFinance(req, res)) return;
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 20));
+    const search = String(req.query.search || '').trim();
+    const where = { supplier: search ? { [Op.like]: `%${search}%` } : { [Op.ne]: '' } };
+    const [totalRow, suppliers] = await Promise.all([
+      Asset.count({ distinct: true, col: 'supplier', where }),
+      Asset.findAll({
+        attributes: [['supplier', 'supplierName'], [sequelize.fn('COUNT', sequelize.col('id')), 'assetCount'], [sequelize.fn('MIN', sequelize.col('createdAt')), 'firstRecordedAt'], [sequelize.fn('MAX', sequelize.col('purchaseDate')), 'lastPurchaseDate']],
+        where,
+        group: ['supplier'],
+        order: [[sequelize.literal('supplier'), 'ASC']],
+        limit,
+        offset: (page - 1) * limit,
+        raw: true,
+      }),
+    ]);
+    const total = Number(totalRow || 0);
+    res.json({ success: true, data: suppliers.map((supplier) => ({ supplierName: supplier.supplierName, assetCount: Number(supplier.assetCount || 0), firstRecordedAt: supplier.firstRecordedAt, lastPurchaseDate: supplier.lastPurchaseDate })), pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getFinanceReportFilters = async (req, res, next) => {
+  try {
+    if (!ensureFinance(req, res)) return;
+    const [departments, categories, years] = await Promise.all([
+      Department.findAll({ attributes: ['id', 'name'], order: [['name', 'ASC']] }),
+      Asset.findAll({ attributes: ['category'], group: ['category'], order: [['category', 'ASC']], raw: true }),
+      Asset.findAll({ attributes: ['purchaseDate'], order: [['purchaseDate', 'ASC']], raw: true }),
+    ]);
+
+    const financialYears = [...new Set(
+      years
+        .map((row) => (row.purchaseDate ? new Date(row.purchaseDate).getFullYear() : null))
+        .filter((value) => Number.isInteger(value))
+    )]
+      .sort((a, b) => b - a)
+      .map((year) => ({ value: String(year), label: String(year) }));
+
+    res.json({
+      success: true,
+      data: {
+        departments: departments.map((department) => ({ value: String(department.id), label: department.name })),
+        categories: categories.filter((category) => category.category).map((category) => ({ value: String(category.category), label: category.category })),
+        financialYears,
+      },
+    });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ success: false, message: error.message });
+    next(error);
+  }
+};
+
+const buildFinanceReportSummary = (rows) => ({
+  totalAssets: rows.length,
+  acquisitionCost: rows.reduce((sum, row) => sum + Number(row.acquisitionCost || row.acquisition_cost || 0), 0),
+  currentBookValue: rows.reduce((sum, row) => sum + Number(row.currentBookValue || row.current_book_value || 0), 0),
+  accumulatedDepreciation: rows.reduce((sum, row) => sum + Number(row.accumulatedDepreciation || row.accumulated_depreciation || 0), 0),
+  capitalAdditions: rows.reduce((sum, row) => sum + Number(row.capitalAdditions || row.capital_additions || 0), 0),
+  payments: rows.reduce((sum, row) => sum + Number(row.payments || 0), 0),
+  purchases: rows.reduce((sum, row) => sum + Number(row.purchases || 0), 0),
+  transactions: rows.reduce((sum, row) => sum + Number(row.transactions || 0), 0),
+});
+
+const listFinanceReports = async (req, res, next) => {
+  try {
+    if (!ensureFinance(req, res)) return;
+    const assets = await Asset.findAll({
+      include: [{ model: Department, as: 'DepartmentRecord', attributes: ['name'], required: false }],
+      order: [['purchaseDate', 'DESC'], ['id', 'DESC']],
+    });
+
+    const rows = assets.map((asset) => {
+      const department = asset.DepartmentRecord?.name || asset.department || 'Unassigned';
+      const category = asset.category || 'Uncategorized';
+      const purchaseCost = Number(asset.purchasePrice || 0);
+      const currentValue = Number(asset.currentValue || 0);
+      const depreciation = Math.max(0, purchaseCost - currentValue);
+      const year = asset.purchaseDate ? new Date(asset.purchaseDate).getFullYear() : new Date().getFullYear();
+      return {
+        id: asset.id,
+        report_number: `FR-${asset.id}`,
+        reportNumber: `FR-${asset.id}`,
+        report_type: 'financial',
+        reportType: 'financial',
+        report_date: asset.purchaseDate || asset.createdAt,
+        reportDate: asset.purchaseDate || asset.createdAt,
+        financial_year: String(year),
+        financialYear: String(year),
+        department_name: department,
+        departmentName: department,
+        department,
+        category_name: category,
+        categoryName: category,
+        category,
+        status: asset.status || 'Active',
+        total_assets: 1,
+        totalAssets: 1,
+        acquisition_cost: purchaseCost,
+        acquisitionCost: purchaseCost,
+        current_book_value: currentValue,
+        currentBookValue: currentValue,
+        accumulated_depreciation: depreciation,
+        accumulatedDepreciation: depreciation,
+        capital_additions: 0,
+        capitalAdditions: 0,
+        payments: 0,
+        purchases: 0,
+        transactions: 0,
+        notes: asset.notes || '',
+      };
+    });
+
+    const summary = buildFinanceReportSummary(rows);
+    res.json({ success: true, data: rows, summary, departments: rows.map((row) => row.department).filter(Boolean), categories: rows.map((row) => row.category).filter(Boolean), financialYears: [...new Set(rows.map((row) => row.financialYear))].filter(Boolean) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const generateFinanceReport = async (req, res, next) => {
+  try {
+    if (!ensureFinance(req, res)) return;
+    const result = await listFinanceReports(req, res, next);
+    if (result && res.headersSent) return;
+    return res.status(200).json({ success: true, message: 'Financial report generated successfully.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const listBudgetReports = async (req, res, next) => {
+  try {
+    if (!ensureFinance(req, res)) return;
+    const assets = await Asset.findAll({
+      include: [{ model: Department, as: 'DepartmentRecord', attributes: ['name'], required: false }],
+      order: [['purchaseDate', 'DESC'], ['id', 'DESC']],
+    });
+
+    const rows = assets.map((asset) => {
+      const department = asset.DepartmentRecord?.name || asset.department || 'Unassigned';
+      const category = asset.category || 'Uncategorized';
+      const purchaseCost = Number(asset.purchasePrice || 0);
+      const currentValue = Number(asset.currentValue || 0);
+      const year = asset.purchaseDate ? new Date(asset.purchaseDate).getFullYear() : new Date().getFullYear();
+      return {
+        id: asset.id,
+        report_number: `BUD-${asset.id}`,
+        reportNumber: `BUD-${asset.id}`,
+        budget_type: 'Capital Budget',
+        budgetType: 'Capital Budget',
+        department_name: department,
+        departmentName: department,
+        department,
+        category_name: category,
+        categoryName: category,
+        category,
+        financial_year: String(year),
+        financialYear: String(year),
+        budget_amount: purchaseCost,
+        budgetAmount: purchaseCost,
+        actual_amount: currentValue,
+        actualAmount: currentValue,
+        variance: purchaseCost - currentValue,
+        status: asset.status || 'Approved',
+        notes: asset.notes || '',
+      };
+    });
+
+    const summary = {
+      totalBudget: rows.reduce((sum, row) => sum + Number(row.budgetAmount || row.budget_amount || 0), 0),
+      actualAmount: rows.reduce((sum, row) => sum + Number(row.actualAmount || row.actual_amount || 0), 0),
+      variance: rows.reduce((sum, row) => sum + Number(row.variance || 0), 0),
+    };
+
+    res.json({ success: true, data: rows, summary, departments: rows.map((row) => row.department).filter(Boolean), categories: rows.map((row) => row.category).filter(Boolean), financialYears: [...new Set(rows.map((row) => row.financialYear))].filter(Boolean) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const listDepreciationReports = async (req, res, next) => {
+  try {
+    if (!ensureFinance(req, res)) return;
+    const assets = await Asset.findAll({
+      include: [{ model: Department, as: 'DepartmentRecord', attributes: ['name'], required: false }],
+      order: [['purchaseDate', 'DESC'], ['id', 'DESC']],
+    });
+
+    const rows = assets.map((asset) => {
+      const department = asset.DepartmentRecord?.name || asset.department || 'Unassigned';
+      const category = asset.category || 'Uncategorized';
+      const purchaseCost = Number(asset.purchasePrice || 0);
+      const currentValue = Number(asset.currentValue || 0);
+      const depreciation = Math.max(0, purchaseCost - currentValue);
+      const year = asset.purchaseDate ? new Date(asset.purchaseDate).getFullYear() : new Date().getFullYear();
+      return {
+        id: asset.id,
+        report_number: `DEP-${asset.id}`,
+        reportNumber: `DEP-${asset.id}`,
+       asset_id: asset.id,
+        assetId: asset.id,
+        asset_code: asset.assetCode || `AST-${asset.id}`,
+        assetCode: asset.assetCode || `AST-${asset.id}`,
+        asset_name: asset.name,
+        assetName: asset.name,
+        department_name: department,
+        departmentName: department,
+        department,
+        category_name: category,
+        categoryName: category,
+        category,
+        financial_year: String(year),
+        financialYear: String(year),
+        acquisition_cost: purchaseCost,
+        acquisitionCost: purchaseCost,
+        current_book_value: currentValue,
+        currentBookValue: currentValue,
+        accumulated_depreciation: depreciation,
+        accumulatedDepreciation: depreciation,
+        depreciation_method: 'straight-line',
+        depreciationMethod: 'straight-line',
+        annual_depreciation: depreciation > 0 ? depreciation / 5 : 0,
+        status: asset.status || 'Active',
+        notes: asset.notes || '',
+      };
+    });
+
+    const summary = {
+      totalAssets: rows.length,
+      acquisitionCost: rows.reduce((sum, row) => sum + Number(row.acquisitionCost || row.acquisition_cost || 0), 0),
+      currentBookValue: rows.reduce((sum, row) => sum + Number(row.currentBookValue || row.current_book_value || 0), 0),
+      accumulatedDepreciation: rows.reduce((sum, row) => sum + Number(row.accumulatedDepreciation || row.accumulated_depreciation || 0), 0),
+    };
+
+    res.json({ success: true, data: rows, summary, departments: rows.map((row) => row.department).filter(Boolean), categories: rows.map((row) => row.category).filter(Boolean), financialYears: [...new Set(rows.map((row) => row.financialYear))].filter(Boolean) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const listAssetValueReports = async (req, res, next) => {
+  try {
+    if (!ensureFinance(req, res)) return;
+    const assets = await Asset.findAll({
+      include: [{ model: Department, as: 'DepartmentRecord', attributes: ['name'], required: false }],
+      order: [['purchaseDate', 'DESC'], ['id', 'DESC']],
+    });
+
+    const rows = assets.map((asset) => {
+      const department = asset.DepartmentRecord?.name || asset.department || 'Unassigned';
+      const category = asset.category || 'Uncategorized';
+      const purchaseCost = Number(asset.purchasePrice || 0);
+      const currentValue = Number(asset.currentValue || 0);
+      const depreciation = Math.max(0, purchaseCost - currentValue);
+      const year = asset.purchaseDate ? new Date(asset.purchaseDate).getFullYear() : new Date().getFullYear();
+      return {
+        id: asset.id,
+        report_number: `AV-${asset.id}`,
+        reportNumber: `AV-${asset.id}`,
+        asset_id: asset.id,
+        assetId: asset.id,
+        asset_tag: asset.assetCode || `AST-${asset.id}`,
+        assetTag: asset.assetCode || `AST-${asset.id}`,
+        asset_code: asset.assetCode || `AST-${asset.id}`,
+        assetCode: asset.assetCode || `AST-${asset.id}`,
+        asset_name: asset.name,
+        assetName: asset.name,
+        category_name: category,
+        categoryName: category,
+        category,
+        department_name: department,
+        departmentName: department,
+        department,
+        financial_year: String(year),
+        financialYear: String(year),
+        valuation_date: asset.purchaseDate || asset.createdAt,
+        valuationDate: asset.purchaseDate || asset.createdAt,
+        acquisition_cost: purchaseCost,
+        acquisitionCost: purchaseCost,
+        accumulated_depreciation: depreciation,
+        accumulatedDepreciation: depreciation,
+        book_value: currentValue,
+        bookValue: currentValue,
+        fair_value: currentValue,
+        fairValue: currentValue,
+        replacement_value: Math.max(currentValue, purchaseCost),
+        replacementValue: Math.max(currentValue, purchaseCost),
+        residual_value: Math.max(0, currentValue * 0.1),
+        residualValue: Math.max(0, currentValue * 0.1),
+        status: asset.status || 'Active',
+        notes: asset.notes || '',
+      };
+    });
+
+    const summary = {
+      assets: rows.length,
+      acquisitionCost: rows.reduce((sum, row) => sum + Number(row.acquisitionCost || row.acquisition_cost || 0), 0),
+      accumulatedDepreciation: rows.reduce((sum, row) => sum + Number(row.accumulatedDepreciation || row.accumulated_depreciation || 0), 0),
+      bookValue: rows.reduce((sum, row) => sum + Number(row.bookValue || row.book_value || 0), 0),
+      fairValue: rows.reduce((sum, row) => sum + Number(row.fairValue || row.fair_value || 0), 0),
+      replacementValue: rows.reduce((sum, row) => sum + Number(row.replacementValue || row.replacement_value || 0), 0),
+    };
+
+    res.json({ success: true, data: rows, summary, departments: rows.map((row) => row.department).filter(Boolean), categories: rows.map((row) => row.category).filter(Boolean), financialYears: [...new Set(rows.map((row) => row.financialYear))].filter(Boolean) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { listValuation, updateValuation, valuationHistory, listAudit, listSuppliers, getFinanceDashboard, getFinanceDashboardFilters, getFinanceReportFilters, listFinanceReports, generateFinanceReport, listBudgetReports, listDepreciationReports, listAssetValueReports };

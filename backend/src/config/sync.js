@@ -70,6 +70,31 @@ async function syncDatabase() {
         allowNull: true,
       });
     }
+    if (!table.reset_otp_hash) {
+      await sequelize.getQueryInterface().addColumn('users', 'reset_otp_hash', {
+        type: require('sequelize').DataTypes.STRING(128),
+        allowNull: true,
+      });
+    }
+    if (!table.reset_otp_expires_at) {
+      await sequelize.getQueryInterface().addColumn('users', 'reset_otp_expires_at', {
+        type: require('sequelize').DataTypes.DATE,
+        allowNull: true,
+      });
+    }
+    if (!table.reset_otp_used_at) {
+      await sequelize.getQueryInterface().addColumn('users', 'reset_otp_used_at', {
+        type: require('sequelize').DataTypes.DATE,
+        allowNull: true,
+      });
+    }
+    if (!table.reset_otp_attempts) {
+      await sequelize.getQueryInterface().addColumn('users', 'reset_otp_attempts', {
+        type: require('sequelize').DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+      });
+    }
     const userColumns = await sequelize.getQueryInterface().describeTable('users');
     if (!userColumns.failed_login_attempts) {
       await sequelize.getQueryInterface().addColumn('users', 'failed_login_attempts', {

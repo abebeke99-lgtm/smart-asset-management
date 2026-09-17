@@ -150,7 +150,8 @@ app.use('/api', adminSupportRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({
+  const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
+  res.status(status).json({
     success: false,
     message: process.env.NODE_ENV === 'production' ? 'Internal server error' : (err.message || 'Internal server error'),
   });

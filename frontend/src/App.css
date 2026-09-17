@@ -779,6 +779,11 @@ body.dark .mobile-sidebar-toggle:hover {
     opacity: 1;
     pointer-events: auto;
   }
+
+  .sidebar-backdrop.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
   
   .sidebar-close {
     display: grid !important;
@@ -998,6 +1003,260 @@ body.dark .card {
 
 body.dark .card:hover {
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+}
+
+/* Shared responsive contract for authenticated pages and public sections. */
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+img,
+svg,
+canvas,
+iframe {
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+.authenticated-shell,
+.admin-main-content,
+.admin-main-content > *,
+.app-public-content,
+.app-public-content > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.admin-main-content > * {
+  box-sizing: border-box;
+}
+
+.app-header-brand,
+.app-header-actions,
+.app-header-actions nav,
+.app-header-user {
+  min-width: 0;
+}
+
+.app-header-brand h1,
+.app-header-brand p,
+.app-header-user div {
+  overflow-wrap: anywhere;
+}
+
+.admin-main-content table,
+.app-public-content table {
+  max-width: 100%;
+}
+
+@media (max-width: 1023px) {
+  .app-header {
+    padding-left: clamp(12px, 3vw, 24px) !important;
+    padding-right: clamp(12px, 3vw, 24px) !important;
+  }
+
+  .app-header-brand h1 {
+    font-size: clamp(1rem, 2.5vw, 1.25rem) !important;
+  }
+
+  .app-header-brand p {
+    font-size: clamp(.7rem, 1.8vw, .85rem) !important;
+  }
+
+  .app-header-actions {
+    gap: 10px !important;
+  }
+
+  .app-header-actions nav {
+    gap: 10px !important;
+  }
+
+  .admin-main-content {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .store-manager-main {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .admin-main-content > main,
+  .admin-main-content > section,
+  .admin-main-content > div {
+    width: 100%;
+  }
+
+  .admin-main-content [class*='header'],
+  .admin-main-content [class*='toolbar'],
+  .admin-main-content [class*='actions'] {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --header-height: 64px;
+  }
+
+  .app-header {
+    min-height: var(--header-height);
+    height: auto;
+    align-items: flex-start !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+
+  .app-header-brand {
+    flex: 1 1 220px;
+    gap: 9px !important;
+  }
+
+  .app-header-brand > div:first-child {
+    width: 42px !important;
+    height: 42px !important;
+  }
+
+  .app-header-brand h1 {
+    line-height: 1.1 !important;
+  }
+
+  .app-header-actions {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    gap: 8px !important;
+  }
+
+  .app-header:not(.public-site-header) .app-header-actions {
+    flex: 0 1 auto;
+  }
+
+  .app-header:not(.public-site-header) {
+    flex-wrap: nowrap !important;
+  }
+
+  .app-header:not(.public-site-header) .app-header-brand {
+    flex: 1 1 auto;
+    flex-wrap: nowrap !important;
+  }
+
+  .app-header:not(.public-site-header) .app-header-brand > div:nth-child(2) {
+    min-width: 0;
+  }
+
+  .app-header:not(.public-site-header) .app-header-brand h1,
+  .app-header:not(.public-site-header) .app-header-brand p {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app-header:not(.public-site-header) .app-header-actions {
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+  }
+
+  .app-header:not(.public-site-header) .app-header-actions nav {
+    display: none !important;
+  }
+
+  .app-header-actions nav {
+    flex: 1 1 100%;
+    justify-content: space-between;
+    order: 3;
+    padding-top: 3px;
+  }
+
+  .app-header-actions > div:not(.app-header-user) {
+    font-size: .72rem !important;
+  }
+
+  .app-header-user > div:last-child {
+    display: none !important;
+  }
+
+  .admin-main-content {
+    padding-top: var(--header-height);
+  }
+
+  .mobile-sidebar-toggle {
+    top: calc(var(--header-height) + 12px) !important;
+  }
+
+  .admin-main-content [class*='header'],
+  .admin-main-content [class*='toolbar'],
+  .admin-main-content [class*='actions'],
+  .admin-main-content [class*='form-actions'],
+  .admin-main-content [class*='pagination'] {
+    flex-wrap: wrap;
+  }
+
+  .admin-main-content [class*='actions'] > button,
+  .admin-main-content [class*='actions'] > a {
+    flex: 1 1 auto;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .admin-main-content [class*='grid'] {
+    min-width: 0;
+  }
+
+  .admin-main-content [class*='table-wrap'],
+  .admin-main-content [class*='table-container'],
+  .admin-main-content [class*='table-wrapper'] {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  [class*='modal-backdrop'],
+  [class*='overlay'] {
+    padding: 12px !important;
+  }
+
+  section[class*='modal'],
+  .public-navigation-modal-card,
+  [role='dialog'] {
+    width: min(100%, 95vw) !important;
+    max-width: 95vw !important;
+    max-height: 90vh !important;
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 479px) {
+  .app-header-actions nav a {
+    font-size: .78rem;
+  }
+
+  .app-header-actions > div:not(.app-header-user) {
+    display: none !important;
+  }
+
+  .mobile-sidebar-toggle {
+    left: 10px !important;
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  .admin-main-content [class*='actions'] > button,
+  .admin-main-content [class*='actions'] > a {
+    flex-basis: 100%;
+  }
 }
 
 .login-root input:focus,

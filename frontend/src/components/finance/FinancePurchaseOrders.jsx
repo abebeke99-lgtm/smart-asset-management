@@ -20,7 +20,6 @@ import {
   Ban,
   Building2,
   Package,
-  User,
 } from "lucide-react";
 import api from "../../services/api";
 
@@ -57,6 +56,8 @@ const extractRows = (response) => {
 
   if (Array.isArray(root)) return root;
   if (Array.isArray(root?.data)) return root.data;
+  if (Array.isArray(root?.data?.orders)) return root.data.orders;
+  if (Array.isArray(root?.orders)) return root.orders;
   if (Array.isArray(root?.items)) return root.items;
   if (Array.isArray(root?.records)) return root.records;
   if (Array.isArray(root?.results)) return root.results;
@@ -971,6 +972,11 @@ export default function FinancePurchaseOrders() {
       "pending approval",
     ].includes(value);
   };
+
+  const canEdit = (order) =>
+    ["draft", "pending", "pending approval"].includes(
+      String(order?.status || "").toLowerCase()
+    );
 
   const printOrder = (order) => {
     setSelectedOrder(order);
@@ -2094,6 +2100,16 @@ export default function FinancePurchaseOrders() {
                             >
                               <Eye size={15} />
                             </button>
+
+                            {canEdit(order) && (
+                              <button
+                                className="icon-btn"
+                                title="Edit"
+                                onClick={() => openEdit(order)}
+                              >
+                                <Edit3 size={15} />
+                              </button>
+                            )}
 
                             {canApprove(order) && (
                               <button

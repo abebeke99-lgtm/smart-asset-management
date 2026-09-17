@@ -104,6 +104,9 @@ const StoreHistory = lazy(() => import('./components/store/StoreHistory'));
 
 // Finance Components
 const FinanceDashboard = lazy(() => import('./components/finance/FinanceDashboard'));
+const FinancePurchaseRequests = lazy(() => import('./components/finance/FinancePurchaseRequests'));
+const FinancePurchaseOrders = lazy(() => import('./components/finance/FinancePurchaseOrders'));
+const FinanceSuppliers = lazy(() => import('./components/finance/FinanceSuppliers'));
 const FinanceValuation = lazy(() => import('./components/finance/FinanceValuation'));
 const FinanceReports = lazy(() => import('./components/finance/FinanceReports'));
 const FinanceDepreciation = lazy(() => import('./components/finance/FinanceDepreciation'));
@@ -2456,9 +2459,9 @@ function AppContent() {
               {/* FINANCE ROUTES - Fixed with RoleLayout */}
               <Route path="/finance" element={<ProtectedRoute allowedRoles={['admin', 'finance']}><RoleLayout /></ProtectedRoute>}>
                 <Route index element={<FinanceDashboard />} />
-                <Route path="purchase-requests" element={<FinanceReports />} />
-                <Route path="purchase-orders" element={<FinanceReports />} />
-                <Route path="suppliers" element={<FinanceReports />} />
+                <Route path="purchase-requests" element={<FinancePurchaseRequests />} />
+                <Route path="purchase-orders" element={<FinancePurchaseOrders />} />
+                <Route path="suppliers" element={<FinanceSuppliers />} />
                 <Route path="purchase-history" element={<FinanceReports />} />
                 <Route path="invoices" element={<FinanceReports />} />
                 <Route path="payments" element={<FinanceReports />} />

@@ -36,6 +36,8 @@ const VerificationItem = require('./VerificationItem');
 const AssetMovement = require('./AssetMovement');
 const AssetReturn = require('./AssetReturn');
 const DisposalRequest = require('./DisposalRequest');
+const PurchaseOrder = require('./PurchaseOrder');
+const PurchaseOrderItem = require('./PurchaseOrderItem');
 
 Asset.hasMany(Assignment, { foreignKey: 'assetId' });
 Assignment.belongsTo(Asset, { foreignKey: 'assetId' });
@@ -93,6 +95,13 @@ Asset.hasMany(FinancialRecord, { foreignKey: 'assetId' });
 FinancialRecord.belongsTo(Asset, { foreignKey: 'assetId' });
 User.hasMany(FinancialRecord, { foreignKey: 'recordedBy' });
 FinancialRecord.belongsTo(User, { foreignKey: 'recordedBy' });
+PurchaseOrder.hasMany(PurchaseOrderItem, { foreignKey: 'purchaseOrderId', as: 'items', onDelete: 'CASCADE' });
+PurchaseOrderItem.belongsTo(PurchaseOrder, { foreignKey: 'purchaseOrderId' });
+PurchaseOrder.belongsTo(Approval, { foreignKey: 'purchaseRequestId', as: 'PurchaseRequest' });
+Approval.hasMany(PurchaseOrder, { foreignKey: 'purchaseRequestId', as: 'PurchaseOrders' });
+PurchaseOrder.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
+PurchaseOrder.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
+PurchaseOrder.belongsTo(User, { foreignKey: 'approvedBy', as: 'Approver' });
 
 Asset.hasMany(DisposalRequest, { foreignKey: 'assetId' });
 DisposalRequest.belongsTo(Asset, { foreignKey: 'assetId' });
@@ -262,4 +271,6 @@ module.exports = {
   AssetMovement,
   AssetReturn,
   DisposalRequest,
+  PurchaseOrder,
+  PurchaseOrderItem,
 };

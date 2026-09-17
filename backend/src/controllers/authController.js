@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const { Op } = require('sequelize');
 const { User, AuditLog, Config } = require('../models');
+const { normalizePhoneNumber, sendSMS } = require('../services/smsService');
+const { validateEmailConfiguration } = require('../services/emailService');
 const { isValidEmail, isValidUsername } = require('../utils/validators');
 
 const LOGIN_ALIASES = {
@@ -253,8 +255,10 @@ const logout = async (req, res) => {
   res.json({ success: true });
 };
 
-const genericResetMessage = 'If an account exists for this email address, a password reset link has been sent.';
+const genericResetMessage = 'If an eligible account exists, password reset instructions will be sent.';
 const RESET_TOKEN_TTL_MINUTES = Math.min(30, Math.max(15, Number(process.env.PASSWORD_RESET_TTL_MINUTES) || 20));
+const RESET_OTP_TTL_MINUTES = Math.min(15, Math.max(5, Number(process.env.PASSWORD_RESET_OTP_TTL_MINUTES) || 10));
+const RESET_OTP_MAX_ATTEMPTS = Math.max(3, Number(process.env.PASSWORD_RESET_OTP_MAX_ATTEMPTS) || 5);
 
 const escapeHtml = (value = '') => String(value)
   .replace(/&/g, '&amp;')
@@ -264,16 +268,16 @@ const escapeHtml = (value = '') => String(value)
   .replace(/'/g, '&#039;');
 
 const getMailer = () => {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, MAIL_FROM, SMTP_FROM } = process.env;
-  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASSWORD || !(MAIL_FROM || SMTP_FROM)) return null;
+  const validation = validateEmailConfiguration();
+  if (!validation.valid) return null;
   return {
     transporter: nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: Number(SMTP_PORT),
-      secure: Number(SMTP_PORT) === 465,
-      auth: { user: SMTP_USER, pass: SMTP_PASSWORD },
+      host: validation.config.host,
+      port: Number(validation.config.port),
+      secure: Number(validation.config.port) === 465,
+      auth: { user: validation.config.user, pass: validation.config.password },
     }),
-    from: MAIL_FROM || SMTP_FROM,
+    from: validation.config.from,
   };
 };
 
@@ -288,16 +292,88 @@ const getResetFrontendUrl = () => {
   return configuredUrl || 'http://localhost:3000';
 };
 
+const ensureEligibleResetUser = async (user, accountType = 'email') => {
+  if (!user) {
+    return { allowed: false, reason: 'not_found' };
+  }
+
+  if (!user.active) {
+    return { allowed: false, reason: 'inactive' };
+  }
+
+  if (user.lockoutUntil && new Date(user.lockoutUntil) > new Date()) {
+    return { allowed: false, reason: 'locked' };
+  }
+
+  if (accountType === 'email' && !user.email) {
+    return { allowed: false, reason: 'email_missing' };
+  }
+
+  if (accountType === 'phone' && !user.phone) {
+    return { allowed: false, reason: 'phone_missing' };
+  }
+
+  return { allowed: true };
+};
+
 const forgotPassword = async (req, res) => {
   try {
+    const method = String(req.body.method || 'email').trim().toLowerCase();
     const email = String(req.body.email || '').trim().toLowerCase();
-    if (!isValidEmail(email)) return res.status(400).json({ success: false, message: 'Valid email is required' });
+    const rawPhone = String(req.body.phone || req.body.mobile || '').trim();
+
+    if (method === 'phone') {
+      const phone = normalizePhoneNumber(rawPhone);
+      if (!phone) {
+        return res.status(400).json({ success: false, message: 'Please enter a valid mobile phone number.' });
+      }
+
+      const user = await User.findOne({ where: { phone } });
+      const eligibility = await ensureEligibleResetUser(user, 'phone');
+      if (!user || !eligibility.allowed) {
+        if (!user) return res.json({ success: true, message: genericResetMessage });
+        if (eligibility.reason === 'inactive') return res.status(403).json({ success: false, message: 'Your account is inactive. Please contact the system administrator.' });
+        if (eligibility.reason === 'locked') return res.status(403).json({ success: false, message: 'Your account is locked. Please contact the system administrator.' });
+        return res.status(400).json({ success: false, message: 'This recovery method is unavailable for this account.' });
+      }
+
+      const otp = String(crypto.randomInt(100000, 1000000)).padStart(6, '0');
+      const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+      const otpExpiresAt = new Date(Date.now() + RESET_OTP_TTL_MINUTES * 60 * 1000);
+      await user.update({
+        resetOtpHash: otpHash,
+        resetOtpExpiresAt: otpExpiresAt,
+        resetOtpUsedAt: null,
+        resetOtpAttempts: 0,
+        resetTokenHash: null,
+        resetTokenExpiresAt: null,
+        resetTokenUsedAt: null,
+      });
+
+      const smsResult = await sendSMS(phone, `Mekdela Amba University: Your password reset code is ${otp}. It expires in ${RESET_OTP_TTL_MINUTES} minutes.`);
+      if (smsResult.status !== 'sent') {
+        await user.update({ resetOtpHash: null, resetOtpExpiresAt: null, resetOtpUsedAt: null, resetOtpAttempts: 0 });
+        return res.status(503).json({ success: false, message: smsResult.reason || 'Password reset SMS service is unavailable.' });
+      }
+
+      return res.json({ success: true, message: genericResetMessage });
+    }
+
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+    }
 
     const user = await User.findOne({ where: { email } });
-    if (!user || !user.active) return res.json({ success: true, message: genericResetMessage });
+    const eligibility = await ensureEligibleResetUser(user, 'email');
+    if (!user || !eligibility.allowed) {
+      if (!user) return res.json({ success: true, message: genericResetMessage });
+      if (eligibility.reason === 'inactive') return res.status(403).json({ success: false, message: 'Your account is inactive. Please contact the system administrator.' });
+      if (eligibility.reason === 'locked') return res.status(403).json({ success: false, message: 'Your account is locked. Please contact the system administrator.' });
+      return res.status(400).json({ success: false, message: 'This recovery method is unavailable for this account.' });
+    }
+
     const mailer = getMailer();
     if (!mailer) {
-      console.error('Password reset email service is not configured');
       return res.status(503).json({ success: false, message: 'Password reset email service is temporarily unavailable.' });
     }
 
@@ -307,13 +383,13 @@ const forgotPassword = async (req, res) => {
     const resetUrl = `${getResetFrontendUrl()}/reset-password?token=${encodeURIComponent(rawToken)}`;
     const greetingName = escapeHtml(user.fullName || user.username);
 
-    await user.update({ resetTokenHash: tokenHash, resetTokenExpiresAt: expiresAt, resetTokenUsedAt: null });
+    await user.update({ resetTokenHash: tokenHash, resetTokenExpiresAt: expiresAt, resetTokenUsedAt: null, resetOtpHash: null, resetOtpExpiresAt: null, resetOtpUsedAt: null, resetOtpAttempts: 0 });
     try {
       await mailer.transporter.sendMail({
         from: mailer.from,
         to: user.email,
         subject: 'Reset Your Smart Asset Management System Password',
-        text: `Mekdela Amba University Smart Asset Management System\n\nHello ${user.fullName || user.username},\n\nA password reset was requested for your account. Reset your password here:\n${resetUrl}\n\nThis link expires in ${RESET_TOKEN_TTL_MINUTES} minutes and can only be used once. If you did not request this, you can safely ignore this email.`,
+        text: `Mekdela Amba University Smart Asset Management System\n\nHello ${user.fullName || user.username},\n\nA password reset was requested for your account.\n\nReset your password here:\n${resetUrl}\n\nThis link expires in ${RESET_TOKEN_TTL_MINUTES} minutes and can only be used once. If you did not request this, you can safely ignore this email.`,
         html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#172033"><div style="background:#0EA5E9;padding:24px;color:#fff"><h1 style="margin:0;font-size:22px">Mekdela Amba University</h1><p style="margin:8px 0 0">Smart Asset Management System</p></div><div style="padding:28px;border:1px solid #dbe4ef"><h2>Reset Your Password</h2><p>Hello ${greetingName},</p><p>A password reset was requested for your account.</p><p><a href="${resetUrl}" style="display:inline-block;background:#0EA5E9;color:#fff;padding:12px 20px;text-decoration:none;border-radius:8px;font-weight:700">Reset Password</a></p><p>This link expires in ${RESET_TOKEN_TTL_MINUTES} minutes and can only be used once.</p><p>If you did not request this, you can safely ignore this email.</p></div></div>`,
       });
     } catch (mailError) {
@@ -323,8 +399,81 @@ const forgotPassword = async (req, res) => {
 
     return res.json({ success: true, message: genericResetMessage });
   } catch (error) {
-    console.error('Password reset request failed:', error.code || error.name || 'mail delivery error');
-    return res.status(503).json({ success: false, message: 'Password reset email could not be delivered.' });
+    console.error('Password reset request failed:', error.message);
+    return res.status(503).json({ success: false, message: 'Unable to process the password reset request.' });
+  }
+};
+
+const verifyResetOtp = async (req, res) => {
+  try {
+    const { email, phone, otp, method } = req.body;
+    const recoveryMethod = String(method || (email ? 'email' : 'phone')).trim().toLowerCase();
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const normalizedPhone = normalizePhoneNumber(phone || '');
+    const code = String(otp || '').trim();
+
+    if (!/^[0-9]{6}$/.test(code)) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid verification code.' });
+    }
+
+    let user = null;
+    if (recoveryMethod === 'phone') {
+      if (!normalizedPhone) {
+        return res.status(400).json({ success: false, message: 'Please enter a valid mobile phone number.' });
+      }
+      user = await User.findOne({ where: { phone: normalizedPhone } });
+    } else {
+      if (!isValidEmail(normalizedEmail)) {
+        return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+      }
+      user = await User.findOne({ where: { email: normalizedEmail } });
+    }
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired verification code.' });
+    }
+
+    const eligibility = await ensureEligibleResetUser(user, recoveryMethod === 'phone' ? 'phone' : 'email');
+    if (!eligibility.allowed) {
+      if (eligibility.reason === 'inactive') return res.status(403).json({ success: false, message: 'Your account is inactive. Please contact the system administrator.' });
+      if (eligibility.reason === 'locked') return res.status(403).json({ success: false, message: 'Your account is locked. Please contact the system administrator.' });
+      return res.status(400).json({ success: false, message: 'Invalid or expired verification code.' });
+    }
+
+    if (!user.resetOtpHash || !user.resetOtpExpiresAt || new Date(user.resetOtpExpiresAt) < new Date()) {
+      await user.update({ resetOtpHash: null, resetOtpExpiresAt: null, resetOtpUsedAt: null, resetOtpAttempts: 0 });
+      return res.status(400).json({ success: false, message: 'This verification code has expired.' });
+    }
+
+    const enteredHash = crypto.createHash('sha256').update(code).digest('hex');
+    if (enteredHash !== user.resetOtpHash) {
+      const attempts = Number(user.resetOtpAttempts || 0) + 1;
+      await user.update({ resetOtpAttempts: attempts });
+      if (attempts >= RESET_OTP_MAX_ATTEMPTS) {
+        await user.update({ resetOtpHash: null, resetOtpExpiresAt: null, resetOtpUsedAt: new Date(), resetOtpAttempts: 0 });
+        return res.status(429).json({ success: false, message: 'Too many verification attempts. Please request a new code.' });
+      }
+      return res.status(400).json({ success: false, message: 'Invalid verification code.' });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000);
+
+    await user.update({
+      resetTokenHash: tokenHash,
+      resetTokenExpiresAt: expiresAt,
+      resetTokenUsedAt: null,
+      resetOtpHash: null,
+      resetOtpExpiresAt: null,
+      resetOtpUsedAt: new Date(),
+      resetOtpAttempts: 0,
+    });
+
+    return res.json({ success: true, message: 'Verification successful. Please create a new password.', token: rawToken });
+  } catch (error) {
+    console.error('OTP verification failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to verify the recovery code.' });
   }
 };
 
@@ -374,5 +523,6 @@ module.exports = {
   changePassword,
   logout,
   forgotPassword,
+  verifyResetOtp,
   resetPassword,
 };

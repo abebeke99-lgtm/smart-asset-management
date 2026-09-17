@@ -94,6 +94,27 @@ const User = sequelize.define('User', {
     allowNull: true,
     field: 'reset_token_used_at',
   },
+  resetOtpHash: {
+    type: DataTypes.STRING(128),
+    allowNull: true,
+    field: 'reset_otp_hash',
+  },
+  resetOtpExpiresAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'reset_otp_expires_at',
+  },
+  resetOtpUsedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'reset_otp_used_at',
+  },
+  resetOtpAttempts: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'reset_otp_attempts',
+  },
 }, {
   tableName: 'users',
   timestamps: true,

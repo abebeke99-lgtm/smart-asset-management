@@ -46,9 +46,23 @@ const InfrastructureDashboard = () => {
 
       const response = await api.get("/infrastructure/dashboard");
 
-      const data = response?.data?.data ?? response?.data ?? {};
+      const payload = response?.data?.data ?? response?.data ?? {};
+      const summary = payload?.summary && typeof payload.summary === "object"
+        ? payload.summary
+        : {};
+      const operational = payload?.operational && typeof payload.operational === "object"
+        ? payload.operational
+        : {};
 
-      setDashboard(data);
+      setDashboard({
+        ...payload,
+        ...summary,
+        ...operational,
+        operationalAssets: payload?.operationalAssets ?? operational?.operationalAssets ?? operational?.assets ?? 0,
+        generators: payload?.generators ?? operational?.generators ?? 0,
+        transformers: payload?.transformers ?? operational?.transformers ?? 0,
+        criticalAlerts: payload?.criticalAlerts ?? summary?.criticalAlerts ?? 0,
+      });
     } catch (err) {
       console.error("Infrastructure dashboard error:", err);
 

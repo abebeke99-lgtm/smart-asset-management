@@ -5,6 +5,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const {
+  getInfrastructureDashboard,
   getAllInfrastructureAssets,
   getInfrastructureAsset,
   createInfrastructureAsset,
@@ -16,6 +17,9 @@ const {
 router.use(requireAuth);
 
 // Routes
+// Dashboard must be registered before the parameterized asset route.
+router.get('/dashboard', requireRole('admin', 'infrastructure'), getInfrastructureDashboard);
+
 // Get all infrastructure assets
 router.get('/', getAllInfrastructureAssets);
 

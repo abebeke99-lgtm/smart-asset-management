@@ -116,19 +116,18 @@ router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'
     });
 
     const assignments = rows.map(toAssignmentResponse);
-    const pagination = {
-      page,
-      limit,
-      total: count,
-      pages: Math.max(1, Math.ceil(count / limit)),
-    };
 
     res.json({
       success: true,
       assignments,
       data: assignments,
       total: count,
-      pagination,
+      pagination: {
+        page,
+        limit,
+        total: count,
+        pages: Math.max(1, Math.ceil(count / limit)),
+      },
       summary: {
         total: count,
         active: assignments.filter((item) => String(item.status).toLowerCase() === 'active').length,
