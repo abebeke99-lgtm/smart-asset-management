@@ -372,9 +372,16 @@ const forgotPassword = async (req, res) => {
       return res.status(400).json({ success: false, message: 'This recovery method is unavailable for this account.' });
     }
 
+    const emailConfiguration = validateEmailConfiguration();
+    if (!emailConfiguration.valid) {
+      console.error('Forgot password error:\nEmail service configuration missing');
+      return res.status(503).json({ success: false, message: 'Password reset email service is not configured.' });
+    }
+
     const mailer = getMailer();
     if (!mailer) {
-      return res.status(503).json({ success: false, message: 'Password reset email service is temporarily unavailable.' });
+      console.error('Forgot password error:\nEmail service configuration missing');
+      return res.status(503).json({ success: false, message: 'Password reset email service is not configured.' });
     }
 
     const rawToken = crypto.randomBytes(32).toString('hex');
@@ -399,7 +406,7 @@ const forgotPassword = async (req, res) => {
 
     return res.json({ success: true, message: genericResetMessage });
   } catch (error) {
-    console.error('Password reset request failed:', error.message);
+    console.error('Forgot password error:', error.message);
     return res.status(503).json({ success: false, message: 'Unable to process the password reset request.' });
   }
 };

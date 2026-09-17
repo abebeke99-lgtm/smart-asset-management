@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -17,6 +17,9 @@ const Login = () => {
   const [rfidData, setRfidData] = useState(null);
   const [rfidLoading, setRfidLoading] = useState(false);
   const [rfidError, setRfidError] = useState(null);
+  const rfidRequestLockRef = useRef(false);
+  const lastRfidTagRef = useRef({ value: '', timestamp: 0 });
+  const lastRfidRequestAtRef = useRef(0);
 
   const [backendStatus, setBackendStatus] = useState('checking');
   const [activeRole, setActiveRole] = useState(null);
@@ -64,7 +67,21 @@ const Login = () => {
     return () => { mounted = false; };
   }, []);
 
-  const fetchRfidData = async () => {
+  const fetchRfidData = async (scannedTag = '') => {
+    const normalizedTag = typeof scannedTag === 'string' ? scannedTag.trim().toLowerCase() : '';
+    const now = Date.now();
+    const debounceWindow = 750;
+
+    if (rfidRequestLockRef.current) return;
+    if (!normalizedTag && now - lastRfidRequestAtRef.current < debounceWindow) return;
+    if (
+      normalizedTag &&
+      normalizedTag === lastRfidTagRef.current.value &&
+      now - lastRfidTagRef.current.timestamp < debounceWindow
+    ) return;
+
+    rfidRequestLockRef.current = true;
+    lastRfidRequestAtRef.current = now;
     try {
       setRfidLoading(true);
       setRfidError(null);
@@ -79,14 +96,19 @@ const Login = () => {
       });
       if (response.data?.success) {
         const logs = Array.isArray(response.data.data) ? response.data.data : [];
+        const latestTag = normalizedTag || String(logs[0]?.tag || logs[0]?.rfid_tag || '').trim().toLowerCase();
+        if (latestTag) lastRfidTagRef.current = { value: latestTag, timestamp: Date.now() };
         setRfidData(logs[0] || null);
         if (!logs.length) setRfidError('No RFID event detected.');
       } else {
         throw new Error(response.data?.message || 'Failed to load RFID data.');
       }
     } catch (err) {
-      setRfidError('RFID Reader is idle or not connected.');
+      setRfidError(err.response?.status === 429
+        ? err.response.data?.message || 'Too many requests. Please try again later.'
+        : 'RFID Reader is idle or not connected.');
     } finally {
+      rfidRequestLockRef.current = false;
       setRfidLoading(false);
     }
   };
@@ -204,7 +226,7 @@ const Login = () => {
               <span className={`status-dot ${backendStatus === 'online' ? 'status-online' : backendStatus === 'offline' ? 'status-offline' : 'status-checking'}`} />
               <span>System {backendStatus}</span>
             </div>
-            <button type="button" className="rfid-button" onClick={fetchRfidData} disabled={rfidLoading}>
+            <button type="button" className="rfid-button" onClick={() => fetchRfidData()} disabled={rfidLoading}>
               <Radio size={14} aria-hidden="true" /> {rfidLoading ? 'Scanning...' : 'Scan RFID'}
             </button>
           </div>

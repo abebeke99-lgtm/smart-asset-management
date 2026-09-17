@@ -50,7 +50,13 @@ const ForgotPassword = () => {
         throw new Error(response.data?.message || t.errorMessage);
       }
     } catch (err) {
-      const message = err.response?.data?.message || t.errorMessage;
+      const status = err.response?.status || err.status;
+      const backendMessage = err.response?.data?.message || (status ? err.message : '');
+      const message = status === 429
+        ? t.rateLimitError
+        : status
+          ? backendMessage || t.errorMessage
+          : t.networkError;
       setError(message);
       toast.error(message);
     } finally {
@@ -202,6 +208,8 @@ const englishTranslations = {
   backToLogin: 'Back to Login',
   invalidEmail: 'Please enter a valid email address.',
   invalidPhone: 'Please enter a valid mobile phone number.',
+  networkError: 'Unable to connect to the server.',
+  rateLimitError: 'Too many requests. Please try again later.',
   errorMessage: 'Something went wrong. Please try again later.',
   successMessage: 'Reset link sent successfully.',
   otpSent: 'Verification code sent successfully.'
@@ -229,6 +237,8 @@ const amharicTranslations = {
   backToLogin: 'ወደ መግቢያ ተመለስ',
   invalidEmail: 'እባክዎ ትክክለኛ ኢሜይል ያስገቡ።',
   invalidPhone: 'እባክዎ ትክክለኛ የሞባይል ቁጥር ያስገቡ።',
+  networkError: 'ከአገልጋዩ ጋር መገናኘት አልተቻለም።',
+  rateLimitError: 'በጣም ብዙ ጥያቄዎች ተልከዋል። እባክዎ ቆይተው ይሞክሩ።',
   errorMessage: 'ችግር ተፈጥሯል። እባክዎ ቆይተው እንደገና ይሞክሩ።',
   successMessage: 'ሊንኩ በተሳካ ሁኔታ ተልኳል።',
   otpSent: 'የማረጋገጫ ኮድ በተሳካ ሁኔታ ተልኳል።'
