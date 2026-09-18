@@ -9,8 +9,8 @@ import './App.css';
 import './admin-design-system.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Archive, ArrowLeftRight, BarChart3, Bell, Building2, CalendarClock, Check, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, Github, LayoutDashboard, Linkedin, LogOut, MapPin, Menu, MoreHorizontal, Package, Radio, RefreshCw, Search, Settings, SlidersHorizontal, Trash2, UserCircle, Users, Wrench, X } from 'lucide-react';
-import { FaFacebookF, FaTelegramPlane } from 'react-icons/fa';
+import { Activity, Archive, ArrowLeftRight, BarChart3, Bell, Building2, CalendarClock, Check, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, Clock, DatabaseBackup, ExternalLink, FilePlus2, FileText, GitBranch, LayoutDashboard, LogOut, Mail, MapPin, Menu, MoreHorizontal, Package, Phone, Radio, RefreshCw, Search, Settings, ShieldCheck, SlidersHorizontal, Trash2, UserCircle, Users, Wrench, X } from 'lucide-react';
+import packageInfo from '../package.json';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
@@ -175,7 +175,7 @@ const Contact = lazy(() => import('./components/public/Contact'));
 // CONSTANTS
 // ==========================================
 
-const UNIVERSITY_LOGO = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTD7zNEgsJkgKAYvZNDkb5tckLn_KdLu_kHYaTLgqqwyhbv8cEsI8P5UYSk&s=10';
+const UNIVERSITY_LOGO = '/login-logo.svg';
 
 const normalizeRole = (role) => {
   if (!role) return 'user';
@@ -374,7 +374,7 @@ const translations = {
     valuation: "Asset Valuation",
     depreciation: "Depreciation",
     audit: "Audit Trail",
-    footer: "2026 Mekdela Amba University -  University Asset Management System | All Rights Reserved | Developed by: Bekele :0986481821",
+    footer: "© 2026 Mekdela Amba University | Smart University Asset Management System | All rights reserved.",
     light: "Light",
     dark: "Dark",
     language: "Language",
@@ -1336,6 +1336,7 @@ function AppContent() {
   const { language, setLanguage } = useLanguage();
   const { theme, setTheme } = useTheme();
   const [logoError, setLogoError] = useState(false);
+  const [systemHealth, setSystemHealth] = useState({ status: 'unknown', label: 'System Status', message: 'Public health check unavailable.' });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collegeManagementOpen, setCollegeManagementOpen] = useState(() => JSON.parse(localStorage.getItem('collegeManagementOpen') || 'true'));
   const [departmentManagementOpen, setDepartmentManagementOpen] = useState(() => JSON.parse(localStorage.getItem('departmentManagementOpen') || 'false'));
@@ -1391,6 +1392,38 @@ function AppContent() {
     return () => clearInterval(timer);
   }, [language]);
 
+  useEffect(() => {
+    let active = true;
+
+    const fetchHealth = async () => {
+      try {
+        const response = await axios.get('/api/health', { timeout: 4000 });
+        const status = String(response?.data?.status || 'degraded').toLowerCase();
+        const normalizedStatus = status === 'ok' ? 'operational' : status === 'degraded' ? 'degraded' : 'unavailable';
+
+        if (!active) return;
+
+        setSystemHealth({
+          status: normalizedStatus,
+          label: normalizedStatus === 'operational' ? 'System Operational' : normalizedStatus === 'degraded' ? 'System Degraded' : 'System Unavailable',
+          message: response?.data?.message || 'System status is currently unavailable.'
+        });
+      } catch (error) {
+        if (!active) return;
+        setSystemHealth({
+          status: 'unavailable',
+          label: 'System Status',
+          message: 'System status is currently unavailable.'
+        });
+      }
+    };
+
+    fetchHealth();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const handleLogout = async () => {
     logoutDestinationRef.current = '/home';
     allowPublicNavigationRef.current = true;
@@ -1399,6 +1432,7 @@ function AppContent() {
     navigate('/home', { replace: true });
   };
 
+  const APP_VERSION = packageInfo?.version || '1.0.0';
   const dashboardRoute = getDashboardRoute(user?.role);
   const publicPaths = ['/home', '/about', '/contact'];
   const requestPublicNavigation = (path, event) => {
@@ -1547,9 +1581,21 @@ function AppContent() {
           <HeaderLink to="/contact">{t.contact}</HeaderLink>
         </nav>
 
-        <div style={{ fontSize: '0.85rem', textAlign: 'right', color: currentTheme.headerText, fontFamily: 'monospace', fontWeight: 600 }}>
-          <div>{currentTime.toLocaleTimeString()}</div>
-          <div>🇪🇹 {ethiopianTime}</div>
+        <div style={{
+          minWidth: '140px',
+          textAlign: 'right',
+          color: currentTheme.headerText,
+          fontWeight: 700,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '2px',
+          lineHeight: 1.3,
+          fontSize: '0.78rem'
+        }} aria-live="polite">
+          <span style={{ opacity: 0.9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            {language === 'en' ? 'Ethiopia Time' : 'የኢትዮጵያ ሰዓት'}
+          </span>
+          <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.9rem' }}>{ethiopianTime}</span>
         </div>
 
         {user ? (
@@ -1620,88 +1666,197 @@ function AppContent() {
     </header>
   );
 
-  // ==========================================
-  // FOOTER COMPONENT
-  // ==========================================
+  const footerStatusColor = {
+    operational: '#22c55e',
+    degraded: '#f59e0b',
+    unavailable: '#ef4444',
+    unknown: '#94a3b8'
+  }[systemHealth.status] || '#94a3b8';
 
   const Footer = () => (
-    <footer className={`app-footer${!user ? ' public-site-footer bg-sky-900' : ''}`} style={{ 
-      backgroundColor: '#0F172A',
+    <footer className={`app-footer${!user ? ' public-site-footer bg-sky-900' : ''}`} style={{
+      background: '#0F172A',
       color: '#FFFFFF',
-      padding: '30px 20px 15px',
-      borderTop: '1px solid rgba(148, 163, 184, 0.16)',
+      padding: '2.5rem 1.25rem 1rem',
+      borderTop: '3px solid #2563EB',
       marginTop: 'auto'
     }}>
-      <div style={{
+      <div className="footer-grid" style={{
         maxWidth: '1200px',
         margin: '0 auto',
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '30px',
-        marginBottom: '20px'
+        gridTemplateColumns: 'minmax(0, 1.6fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(0, 1.3fr)',
+        gap: '2rem',
+        marginBottom: '2rem'
       }}>
         <div>
-          <h4 style={{ color: 'white', marginBottom: '12px', fontSize: '1rem' }}>{t.companyName}</h4>
-          <p style={{ opacity: 0.8, fontSize: '0.9rem', lineHeight: '1.6' }}>{t.systemName}</p>
-          <div style={{ marginTop: '10px' }}><span style={{ opacity: 0.6, fontSize: '0.8rem' }}>🔒 256-bit SSL Secured</span></div>
-          {!user && <div className="flex items-center gap-2" style={{ marginTop: '16px' }} aria-label="Social media links">
-            <a href="https://github.com" target="_blank" rel="noreferrer" aria-label="GitHub" style={{ color: currentTheme.footerText, opacity: 0.8 }}><Github size={18} /></a>
-            <a href="https://linkedin.com" target="_blank" rel="noreferrer" aria-label="LinkedIn" style={{ color: currentTheme.footerText, opacity: 0.8 }}><Linkedin size={18} /></a>
-            <a href="https://www.facebook.com" target="_blank" rel="noreferrer" aria-label="Facebook" style={{ color: currentTheme.footerText, opacity: 0.8 }}><FaFacebookF size={17} /></a>
-            <a href="https://t.me" target="_blank" rel="noreferrer" aria-label="Telegram" style={{ color: currentTheme.footerText, opacity: 0.8 }}><FaTelegramPlane size={18} /></a>
-          </div>}
-        </div>
-        <div>
-          <h4 style={{ color: currentTheme.footerText, marginBottom: '12px', fontSize: '1rem' }}>Quick Links</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <Link to="/home" onClick={(event) => requestPublicNavigation('/home', event)} style={{ color: currentTheme.footerText, textDecoration: 'none', opacity: 0.8, fontSize: '0.9rem' }}>{t.home}</Link>
-            <Link to="/about" onClick={(event) => requestPublicNavigation('/about', event)} style={{ color: currentTheme.footerText, textDecoration: 'none', opacity: 0.8, fontSize: '0.9rem' }}>{t.about}</Link>
-            <Link to="/contact" onClick={(event) => requestPublicNavigation('/contact', event)} style={{ color: currentTheme.footerText, textDecoration: 'none', opacity: 0.8, fontSize: '0.9rem' }}>{t.contact}</Link>
-            <Link to="/login" style={{ color: currentTheme.footerText, textDecoration: 'none', opacity: 0.8, fontSize: '0.9rem' }}>{t.login}</Link>
-          </div>
-        </div>
-        <div>
-          <h4 style={{ color: currentTheme.footerText, marginBottom: '12px', fontSize: '1rem' }}>Contact Info</h4>
-          <div style={{ opacity: 0.8, fontSize: '0.9rem', lineHeight: '1.8' }}>
-            <div>📧 {t.emailValue}</div>
-            <div>📞 {t.phoneValue}</div>
-            <div>📍 {t.addressValue}</div>
-            <div>🕐 {t.workingHoursValue}</div>
-          </div>
-        </div>
-        <div>
-          <h4 style={{ color: currentTheme.footerText, marginBottom: '12px', fontSize: '1rem' }}>System Status</h4>
-          <div style={{ opacity: 0.8, fontSize: '0.9rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-              <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#48bb78', display: 'inline-block', animation: 'pulse 2s infinite' }}></span>
-              All Systems Operational
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', marginBottom: '0.9rem' }}>
+            <div style={{
+              width: '52px',
+              height: '52px',
+              borderRadius: '12px',
+              background: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              border: '1px solid rgba(255,255,255,0.12)',
+              flexShrink: 0
+            }}>
+              <img
+                src={UNIVERSITY_LOGO}
+                alt="Mekdela Amba University logo"
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                onError={() => setLogoError(true)}
+              />
             </div>
-            <div>Version: v2.4.1</div>
-            <div>Last Updated: 2026-01-15</div>
+            <div>
+              <h4 style={{ color: '#FFFFFF', margin: 0, fontSize: '1.05rem', fontWeight: 800, lineHeight: 1.3 }}>{t.companyName}</h4>
+              <div style={{ color: '#BFDBFE', fontSize: '0.76rem', fontWeight: 600, letterSpacing: '0.02em', marginTop: '2px' }}>Smart University Asset Management System</div>
+            </div>
+          </div>
+
+          <p style={{ color: '#E2E8F0', fontSize: '0.92rem', lineHeight: 1.7, margin: '0 0 1rem', maxWidth: '28rem' }}>
+            Centralized digital management of university assets, maintenance, tracking, verification, and reporting.
+          </p>
+
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.65rem', color: '#E2E8F0', fontSize: '0.82rem', padding: '0.5rem 0.7rem', borderRadius: '999px', background: 'rgba(14, 165, 233, 0.12)', border: '1px solid rgba(14, 165, 233, 0.3)' }}>
+            <ShieldCheck size={15} color="#7dd3fc" />
+            Secure Role-Based Access
+          </div>
+        </div>
+
+        <div>
+          <h4 style={{ color: '#FFFFFF', margin: '0 0 0.9rem', fontSize: '1rem', fontWeight: 700 }}>Quick Links</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <Link to="/home" onClick={(event) => requestPublicNavigation('/home', event)} style={{ color: '#E2E8F0', textDecoration: 'none', fontSize: '0.92rem', transition: 'color 0.2s ease', lineHeight: 1.7 }} className="footer-link">{t.home}</Link>
+            <Link to="/about" onClick={(event) => requestPublicNavigation('/about', event)} style={{ color: '#E2E8F0', textDecoration: 'none', fontSize: '0.92rem', transition: 'color 0.2s ease', lineHeight: 1.7 }} className="footer-link">{t.about}</Link>
+            <Link to="/contact" onClick={(event) => requestPublicNavigation('/contact', event)} style={{ color: '#E2E8F0', textDecoration: 'none', fontSize: '0.92rem', transition: 'color 0.2s ease', lineHeight: 1.7 }} className="footer-link">{t.contact}</Link>
+            <Link to="/login" style={{ color: '#E2E8F0', textDecoration: 'none', fontSize: '0.92rem', transition: 'color 0.2s ease', lineHeight: 1.7 }} className="footer-link">{t.login}</Link>
+          </div>
+        </div>
+
+        <div>
+          <h4 style={{ color: '#FFFFFF', margin: '0 0 0.9rem', fontSize: '1rem', fontWeight: 700 }}>System</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', color: '#E2E8F0', fontSize: '0.92rem', lineHeight: 1.7 }}>
+            <span>Asset Management</span>
+            <span>Maintenance Management</span>
+            <span>RFID / QR Tracking</span>
+            <span>Reports &amp; Analytics</span>
+            <span>Security &amp; Compliance</span>
+          </div>
+        </div>
+
+        <div>
+          <h4 style={{ color: '#FFFFFF', margin: '0 0 0.9rem', fontSize: '1rem', fontWeight: 700 }}>Contact &amp; Support</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem', color: '#E2E8F0', fontSize: '0.92rem' }}>
+            <a href={`mailto:${t.emailValue}`} style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#E2E8F0', textDecoration: 'none', lineHeight: 1.6 }}>
+              <Mail size={15} color="#7dd3fc" />
+              <span>{t.emailValue}</span>
+            </a>
+            <a href={`tel:${t.phoneValue.replace(/\s+/g, '')}`} style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#E2E8F0', textDecoration: 'none', lineHeight: 1.6 }}>
+              <Phone size={15} color="#7dd3fc" />
+              <span>{t.phoneValue}</span>
+            </a>
+            <a href={`https://maps.google.com/?q=${encodeURIComponent(t.addressValue)}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#E2E8F0', textDecoration: 'none', lineHeight: 1.6 }}>
+              <MapPin size={15} color="#7dd3fc" />
+              <span>{t.addressValue}</span>
+              <ExternalLink size={13} style={{ opacity: 0.8 }} />
+            </a>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#E2E8F0', lineHeight: 1.6 }}>
+              <Clock size={15} color="#7dd3fc" />
+              <span>{t.workingHoursValue}</span>
+            </div>
+            <Link to="/contact" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#7dd3fc', textDecoration: 'none', fontWeight: 600, marginTop: '0.2rem' }}>
+              Contact the university through the official contact page
+            </Link>
           </div>
         </div>
       </div>
+
       <div style={{
-        borderTop: '1px solid rgba(255,255,255,0.1)',
-        backgroundColor: '#1E293B',
-        padding: '15px 20px 0',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '10px'
+        maxWidth: '1200px',
+        margin: '0 auto',
+        borderTop: '1px solid rgba(148, 163, 184, 0.18)',
+        paddingTop: '1rem'
       }}>
-        <span style={{ opacity: 0.7, fontSize: '0.8rem' }}>{t.footer}</span>
-        <div style={{ display: 'flex', gap: '15px', opacity: 0.7, fontSize: '0.8rem' }}>
-          <Link to="/home" style={{ color: currentTheme.footerText, textDecoration: 'none' }}>{t.privacyPolicy}</Link>
-          <Link to="/about" style={{ color: currentTheme.footerText, textDecoration: 'none' }}>{t.termsOfService}</Link>
-          <Link to="/contact" style={{ color: currentTheme.footerText, textDecoration: 'none' }}>{t.cookiePolicy}</Link>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.9rem', color: '#E2E8F0' }}>
+              <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: footerStatusColor, display: 'inline-block', boxShadow: `0 0 0 4px rgba(255,255,255,0.06)` }} />
+              {systemHealth.label}
+            </div>
+            <div style={{ color: '#CBD5E1', fontSize: '0.8rem' }}>{systemHealth.message}</div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '1.4rem', alignItems: 'center', color: '#E2E8F0', fontSize: '0.82rem', flexWrap: 'wrap' }}>
+            <span>Version: {APP_VERSION}</span>
+            <span>© {new Date().getFullYear()} Mekdela Amba University</span>
+          </div>
         </div>
       </div>
+
+      <div style={{
+        backgroundColor: '#111827',
+        borderTop: '1px solid rgba(148, 163, 184, 0.12)',
+        marginTop: '1.2rem',
+        padding: '0.9rem 0 0.2rem'
+      }}>
+        <div style={{
+          maxWidth: '1200px',
+          margin: '0 auto',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+          color: '#CBD5E1',
+          fontSize: '0.78rem',
+          lineHeight: 1.6
+        }}>
+          <div>© {new Date().getFullYear()} Mekdela Amba University. Smart University Asset Management System. All rights reserved.</div>
+          <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap' }}>
+            <Link to="/contact" style={{ color: '#BFDBFE', textDecoration: 'none' }}>Contact</Link>
+            <Link to="/about" style={{ color: '#BFDBFE', textDecoration: 'none' }}>About</Link>
+          </div>
+        </div>
+      </div>
+
       <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
+        .footer-link:hover,
+        .footer-link:focus-visible {
+          color: #7dd3fc !important;
+          text-decoration: underline;
+          outline: none;
+        }
+
+        .footer-link:focus-visible {
+          outline: 2px solid rgba(125, 211, 252, 0.9);
+          outline-offset: 3px;
+          border-radius: 4px;
+        }
+
+        @media (max-width: 980px) {
+          .app-footer .footer-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+
+        @media (max-width: 640px) {
+          .app-footer {
+            padding-left: 1rem;
+            padding-right: 1rem;
+          }
+
+          .app-footer .footer-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .footer-link {
+            transition: none !important;
+          }
         }
       `}</style>
     </footer>

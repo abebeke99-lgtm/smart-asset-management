@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
-import { ArrowRight, Package, Wrench, Radio, BarChart3, Users, Lock, Landmark } from 'lucide-react';
+import { ArrowRight, BarChart3, CheckCircle2, Landmark, Package, Radio, ShieldCheck, Users, Wrench, Workflow } from 'lucide-react';
 
 const OFFICIAL_UNIVERSITY_IMAGE = 'https://mkau.edu.et/wordpress_e/wp-content/uploads/2025/05/photo_2025-05-23_06-54-52.jpg';
-const UNIVERSITY_LOGO_FALLBACK = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTD7zNEgsJkgKAYvZNDkb5tckLn_KdLu_kHYaTLgqqwyhbv8cEsI8P5UYSk&s=10';
 
 const Home = () => {
   const { language } = useLanguage();
@@ -13,7 +12,6 @@ const Home = () => {
   const videoSectionRef = useRef(null);
   const [videoVisible, setVideoVisible] = useState(false);
   const [videoError, setVideoError] = useState(false);
-  const [heroImage, setHeroImage] = useState(OFFICIAL_UNIVERSITY_IMAGE);
 
   useEffect(() => {
     const section = videoSectionRef.current;
@@ -21,154 +19,184 @@ const Home = () => {
       setVideoVisible(true);
       return undefined;
     }
+
     const observer = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) {
         setVideoVisible(true);
         observer.disconnect();
       }
     }, { threshold: 0.15 });
+
     observer.observe(section);
     return () => observer.disconnect();
   }, []);
 
   const t = language === 'en' ? {
     heroTitle: 'Smart University Asset Management System',
-    heroSubtitle: 'Efficiently manage university assets with cutting-edge technology. Track, maintain, and optimize your resources in real-time.',
+    heroDescription: 'Manage university assets efficiently with secure, transparent and centralized asset management.',
     getStarted: 'Get Started',
     learnMore: 'Learn More',
+    heroKicker: 'MEKDELA AMBA UNIVERSITY',
+    overview: 'One Platform for University Asset Operations',
+    overviewText: 'Centralized asset records, controlled movement, maintenance visibility, secure access, and data-driven reporting.',
     videoTitle: 'See Smart Asset Management in Action',
     videoSubtitle: 'Discover how the Smart University Asset Management System helps universities track, maintain, and manage their assets efficiently.',
     featuresTitle: 'Key Features',
-    featuresSubtitle: 'Everything you need to manage your assets efficiently',
+    featuresSubtitle: 'Everything needed to manage university assets securely and efficiently.',
     assetManagement: 'Asset Management',
-    assetManagementDesc: 'Register, track, and manage all university assets in one centralized platform with complete audit trails',
+    assetManagementDesc: 'Register, track, assign, transfer, verify, and manage university assets from one centralized platform.',
     maintenance: 'Maintenance Management',
-    maintenanceDesc: 'Request, approve, and track maintenance tasks with real-time status updates and history',
+    maintenanceDesc: 'Manage maintenance requests, work orders, preventive maintenance, repairs, and service history.',
     rfid: 'RFID Tracking',
-    rfidDesc: 'Real-time asset location tracking using RFID technology with anomaly detection',
+    rfidDesc: 'Track physical assets using RFID and QR identification with secure verification and movement history.',
     reports: 'Reports & Analytics',
-    reportsDesc: 'Generate comprehensive reports and visualize data with interactive dashboards',
+    reportsDesc: 'Monitor asset inventory, financial information, maintenance activity, movements, and operational performance.',
     users: 'User Management',
-    usersDesc: 'Role-based access control with secure authentication and granular permissions',
+    usersDesc: 'Manage users, roles, permissions, authentication, and organization-based access securely.',
     security: 'Security & Compliance',
-    securityDesc: 'Enterprise-grade security with encryption, audit logs, and compliance features',
+    securityDesc: 'Protect university asset information with role-based access control, audit logs, secure authentication, and controlled workflows.',
     ctaTitle: 'Ready to Transform Your Asset Management?',
     ctaSubtitle: 'Modernize university asset operations with one centralized management platform.',
     ctaButton: 'Get Started'
   } : {
     heroTitle: 'ስማርት ዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት',
-    heroSubtitle: 'የቆርጠ ምግብር ቴክኖሎጂ በመጠቀም የዩኒቨርሲቲ ንብረቶችን በብቃት ያስተዳድሩ። ሃብቶችዎን በእውነት ጊዜ ይከታተሉ ፣ ይጠብቁ እና ያሻሽሉ።',
+    heroDescription: 'የዩኒቨርሲቲ ንብረቶችን በደህንነት፣ በግልጽነት እና በማዕከላዊ አስተዳደር በብቃት ያስተዳድሩ።',
     getStarted: 'ጀምር',
     learnMore: 'ተጨማሪ ይወቁ',
+    heroKicker: 'መቅደላ አምባ ዩኒቨርሲቲ',
+    overview: 'ለዩኒቨርሲቲ ንብረት ስራዎች አንድ መድረክ',
+    overviewText: 'የተማከለ ንብረት መዝገቦች፣ የቁጥጥር እንቅስቃሴ፣ የጥገና እይታ፣ የተጠባባቂ መዳረሻ እና የመረጃ ሪፖርት መስጫ።',
     videoTitle: 'ስማርት ንብረት አስተዳደርን በተግባር ይመልከቱ',
     videoSubtitle: 'የስማርት ዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት ንብረቶችን እንዴት እንደሚከታተል፣ እንደሚጠግን እና እንደሚያስተዳድር ይመልከቱ።',
     featuresTitle: 'ቁልፍ ባህሪያት',
-    featuresSubtitle: 'ንብረቶችዎን በብቃት ለማስተዳደር የሚያስፈልግዎት ሁሉም ነገር',
+    featuresSubtitle: 'የዩኒቨርሲቲ ንብረቶችን በደህንነት እና በብቃት ለማስተዳደር የሚያስፈልጉ ሁሉ።',
     assetManagement: 'ንብረት አስተዳደር',
-    assetManagementDesc: 'ሁሉንም የዩኒቨርሲቲ ንብረቶች በአንድ ማዕከላዊ መድረክ ይመዝገቡ፣ ይከታተሉ እና ያስተዳድሩ',
+    assetManagementDesc: 'ንብረቶችን ከአንድ ማዕከላዊ መድረክ በኩል ይመዝገቡ፣ ይከታተሉ፣ ያስተካክሉ እና ያስተዳድሩ።',
     maintenance: 'ጥገና አስተዳደር',
-    maintenanceDesc: 'የጥገና ጥያቄዎችን ያቅርቡ፣ ያፅድቁ እና በቅጽበት ሁኔታ ይከታተሉ',
+    maintenanceDesc: 'የጥገና ጥያቄዎችን፣ የስራ ትእዛዞችን፣ ቅድመ-ጥገናዎችን፣ ጥገናዎችን እና የአገልግሎት ታሪክን ያስተዳድሩ።',
     rfid: 'RFID ክትትል',
-    rfidDesc: 'RFID ቴክኖሎጂን በመጠቀም የንብረት ቦታ በቅጽበት ይከታተሉ',
+    rfidDesc: 'ንብረቶችን በRFID እና QR መለያ በመጠቀም ያከታትሉ እና የእንቅስቃሴ ታሪክን ያሳዩ።',
     reports: 'ሪፖርቶች እና ትንታኔዎች',
-    reportsDesc: 'አጠቃላይ ሪፖርቶችን ያዘጋጁ እና መረጃን በይነተገናኝ ዳሽቦርዶች ያሳዩ',
+    reportsDesc: 'የንብረት እቃ መጠን፣ የፋይናንስ መረጃ፣ የጥገና እንቅስቃሴ እና የስራ አፈጻጸም ትንታኔዎችን ይከታተሉ።',
     users: 'ተጠቃሚ አስተዳደር',
-    usersDesc: 'ደህንነቱ የተጠበቀ ማረጋገጫ እና ዝርዝር ፍቃዶች ያሉት በሚና ላይ የተመሰረተ መዳረሻ ቁጥጥር',
-    security: 'ደህንነት እና ተኳምር',
-    securityDesc: 'ኢንክሪፕሽን ፣ ኦዲት ሎጆች እና ተኳምር ባህሪያት ያሉት ድርጅት-ደረጃ ደህንነት',
-    ctaTitle: 'የንብረት አስተዳደርዎን የመቀየር ዝግጁ ነዎት?',
+    usersDesc: 'ተጠቃሚዎችን፣ ሚናዎችን፣ ፍቃዶችን፣ ማረጋገጫን እና የድርጅት መዳረሻን በደህንነት ያስተዳድሩ።',
+    security: 'ደህንነት እና ተኳሃንነት',
+    securityDesc: 'የዩኒቨርሲቲ ንብረት መረጃን በሚና ላይ የተመሰረተ መዳረሻ፣ ኦዲት ሎግስ፣ ደህንነት ያለው ማረጋገጫ እና ቁጥጥር ያለው ሂደት ያጠብቃል።',
+    ctaTitle: 'የንብረት አስተዳደርዎን ያሻሽሉ?',
     ctaSubtitle: 'የዩኒቨርሲቲ ንብረት ስራዎችን በአንድ ማዕከላዊ መድረክ ያዘምኑ።',
     ctaButton: 'ጀምር'
   };
 
-  const features = [
-    { 
-      icon: Package, 
-      title: t.assetManagement, 
-      desc: t.assetManagementDesc,
-      color: '#3b82f6'
-    },
-    { 
-      icon: Wrench, 
-      title: t.maintenance, 
-      desc: t.maintenanceDesc,
-      color: '#f59e0b'
-    },
-    { 
-      icon: Radio, 
-      title: t.rfid, 
-      desc: t.rfidDesc,
-      color: '#8b5cf6'
-    },
-    { 
-      icon: BarChart3, 
-      title: t.reports, 
-      desc: t.reportsDesc,
-      color: '#10b981'
-    },
-    { 
-      icon: Users, 
-      title: t.users, 
-      desc: t.usersDesc,
-      color: '#ec4899'
-    },
-    { 
-      icon: Lock, 
-      title: t.security, 
-      desc: t.securityDesc,
-      color: '#ef4444'
-    }
+  const featureItems = [
+    { icon: Package, title: t.assetManagement, desc: t.assetManagementDesc, color: '#2563eb' },
+    { icon: Wrench, title: t.maintenance, desc: t.maintenanceDesc, color: '#f59e0b' },
+    { icon: Radio, title: t.rfid, desc: t.rfidDesc, color: '#8b5cf6' },
+    { icon: BarChart3, title: t.reports, desc: t.reportsDesc, color: '#10b981' },
+    { icon: Users, title: t.users, desc: t.usersDesc, color: '#ec4899' },
+    { icon: ShieldCheck, title: t.security, desc: t.securityDesc, color: '#ef4444' }
   ];
 
+  const valuePoints = [
+    'Centralized asset records',
+    'Controlled asset movement',
+    'Maintenance visibility',
+    'Role-based access',
+    'Audit history',
+    'Data-driven reporting'
+  ];
+
+  const workflowSteps = ['Register', 'Assign', 'Track', 'Maintain', 'Verify', 'Report'];
+
   return (
-    <div className="bg-sky-50 text-slate-900" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <main style={{ flex: 1 }}>
-        {/* Hero Section */}
-        <section className="home-hero" aria-labelledby="home-hero-title">
-          <div className="home-hero-glow home-hero-glow-one" aria-hidden="true" />
-          <div className="home-hero-glow home-hero-glow-two" aria-hidden="true" />
-          <div className="home-hero-content">
-            <div className="home-hero-copy">
-              <p className="home-hero-kicker">Mekdela Amba University</p>
-              <h1 id="home-hero-title">Smart University Asset Management System</h1>
-              <p className="home-hero-description">Manage university assets efficiently with secure, transparent and centralized asset management.</p>
-              <div className="home-hero-actions">
-                <Link className="home-hero-primary" to="/login">{t.getStarted}<ArrowRight size={19} aria-hidden="true" /></Link>
-                <Link className="home-hero-secondary" to="/about">{t.learnMore}</Link>
+    <div className="mau-home-page">
+      <main className="mau-home-main">
+        <section className="mau-hero" aria-labelledby="home-hero-title">
+          <div className="mau-hero-content">
+            <div className="mau-hero-copy">
+              <span className="mau-hero-kicker">{t.heroKicker}</span>
+              <h1 id="home-hero-title">{t.heroTitle}</h1>
+              <p className="mau-hero-description">{t.heroDescription}</p>
+
+              <div className="mau-hero-actions">
+                <Link className="mau-hero-primary" to="/login">
+                  {t.getStarted}
+                  <ArrowRight size={18} aria-hidden="true" />
+                </Link>
+                <Link className="mau-hero-secondary" to="/about">
+                  {t.learnMore}
+                </Link>
               </div>
+
+              <ul className="mau-hero-highlights" aria-label="System highlights">
+                <li><CheckCircle2 size={18} aria-hidden="true" /> Centralized asset tracking</li>
+                <li><CheckCircle2 size={18} aria-hidden="true" /> Secure access and workflow control</li>
+                <li><CheckCircle2 size={18} aria-hidden="true" /> Maintenance and reporting visibility</li>
+              </ul>
             </div>
 
-            <div className="home-hero-visual" aria-label="Mekdela Amba University campus presentation">
-              <div className="home-hero-orbit home-hero-orbit-one" aria-hidden="true" />
-              <div className="home-hero-orbit home-hero-orbit-two" aria-hidden="true" />
-              <div className="home-hero-image-frame">
+            <div className="mau-hero-visual" aria-label="Mekdela Amba University campus presentation">
+              <div className="mau-hero-image-frame">
                 <img
-                  src={heroImage}
+                  src={OFFICIAL_UNIVERSITY_IMAGE}
                   alt="Mekdela Amba University campus"
                   loading="eager"
-                  onError={(event) => {
-                    if (event.currentTarget.src !== UNIVERSITY_LOGO_FALLBACK) {
-                      setHeroImage(UNIVERSITY_LOGO_FALLBACK);
-                    }
-                  }}
+                  className="mau-campus-image"
                 />
-                <div className="home-hero-image-overlay" aria-hidden="true" />
-                <div className="home-hero-image-caption"><Landmark size={17} aria-hidden="true" /><span>MAU campus</span></div>
+                <div className="mau-hero-image-overlay" aria-hidden="true" />
+                <div className="mau-hero-image-badge">
+                  <Landmark size={16} aria-hidden="true" />
+                  <span>MAU campus</span>
+                </div>
               </div>
-              <span className="home-hero-dot home-hero-dot-one" aria-hidden="true" />
-              <span className="home-hero-dot home-hero-dot-two" aria-hidden="true" />
             </div>
           </div>
         </section>
 
-        {/* Product demonstration */}
-        <section ref={videoSectionRef} className={`home-video-section${videoVisible ? ' is-visible' : ''}`} aria-labelledby="home-video-title">
-          <div className="home-section-heading">
+        <section className="mau-value-section" aria-labelledby="mau-value-title">
+          <div className="mau-section-heading">
+            <span className="mau-section-kicker">Why it matters</span>
+            <h2 id="mau-value-title">{t.overview}</h2>
+            <p>{t.overviewText}</p>
+          </div>
+
+          <div className="mau-value-grid">
+            {valuePoints.map((point) => (
+              <div key={point} className="mau-value-item">
+                <CheckCircle2 size={18} aria-hidden="true" />
+                <span>{point}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="mau-workflow-section" aria-labelledby="workflow-title">
+          <div className="mau-section-heading centered">
+            <span className="mau-section-kicker">System workflow</span>
+            <h2 id="workflow-title">From registration to reporting</h2>
+          </div>
+
+          <div className="mau-workflow-flow" aria-label="Asset workflow steps">
+            {workflowSteps.map((step, index) => (
+              <React.Fragment key={step}>
+                <div className="mau-workflow-step">
+                  <span className="mau-workflow-index">0{index + 1}</span>
+                  <span>{step}</span>
+                </div>
+                {index < workflowSteps.length - 1 && <Workflow size={18} aria-hidden="true" className="mau-workflow-arrow" />}
+              </React.Fragment>
+            ))}
+          </div>
+        </section>
+
+        <section ref={videoSectionRef} className={`mau-video-section${videoVisible ? ' is-visible' : ''}`} aria-labelledby="home-video-title">
+          <div className="mau-section-heading centered">
+            <span className="mau-section-kicker">Demo</span>
             <h2 id="home-video-title">{t.videoTitle}</h2>
             <p>{t.videoSubtitle}</p>
           </div>
+
           {!videoError ? (
-            <div className="home-video-frame">
+            <div className="mau-video-frame">
               <iframe
                 src="https://www.youtube.com/embed/QYgk-0KMnbg"
                 title="Smart Asset Management demonstration"
@@ -180,493 +208,553 @@ const Home = () => {
               />
             </div>
           ) : (
-            <div className="home-video-fallback" aria-live="polite">
-              <div className="home-video-fallback-icon">▶</div>
+            <div className="mau-video-fallback" aria-live="polite">
+              <div className="mau-video-fallback-icon">▶</div>
               <h3>Demo unavailable right now</h3>
               <p>The embedded video could not load in this environment. You can still open the demo in a browser.</p>
             </div>
           )}
-          <a className="home-video-link" href="https://www.youtube.com/watch?v=QYgk-0KMnbg" target="_blank" rel="noopener noreferrer">
-            ▶ Watch Demo
-          </a>
+
+          <div className="mau-video-actions">
+            <a className="mau-primary-link" href="https://www.youtube.com/watch?v=QYgk-0KMnbg" target="_blank" rel="noopener noreferrer">
+              Watch Demo
+            </a>
+          </div>
         </section>
 
-        {/* Features Section */}
-        <section style={{
-          maxWidth: '1200px',
-          margin: '80px auto',
-          padding: '0 20px'
-        }}>
-          <h2 style={{
-            fontSize: '2.2rem',
-            fontWeight: 800,
-            textAlign: 'center',
-            marginBottom: '16px',
-            color: isDark ? '#f1f5f9' : '#0f172a'
-          }}>
-            {t.featuresTitle}
-          </h2>
-          <p style={{
-            textAlign: 'center',
-            color: isDark ? '#94a3b8' : '#64748b',
-            marginBottom: '48px',
-            fontSize: '1.1rem'
-          }}>
-            {t.featuresSubtitle}
-          </p>
+        <section className="mau-features-section" aria-labelledby="features-title">
+          <div className="mau-section-heading centered">
+            <span className="mau-section-kicker">Capabilities</span>
+            <h2 id="features-title">{t.featuresTitle}</h2>
+            <p>{t.featuresSubtitle}</p>
+          </div>
 
-          <div className="home-feature-grid grid grid-cols-1 md:grid-cols-3" style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-            gap: '32px'
-          }}>
-            {features.map((feature, idx) => {
+          <div className="mau-feature-grid">
+            {featureItems.map((feature, index) => {
               const IconComponent = feature.icon;
               return (
-                <div className="home-feature-card"
-                  key={idx}
-                  style={{
-                    background: isDark ? '#1e293b' : '#ffffff',
-                    padding: '32px 24px',
-                    borderRadius: '16px',
-                    border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
-                    transition: 'all 0.3s ease',
-                    animation: `slideUp 0.6s ease ${idx * 0.1}s forwards`,
-                    animationFillMode: 'both'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-8px)';
-                    e.currentTarget.style.boxShadow = isDark
-                      ? '0 20px 40px rgba(0, 0, 0, 0.4)'
-                      : '0 20px 40px rgba(0, 0, 0, 0.08)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  <div style={{
-                    width: '60px',
-                    height: '60px',
-                    borderRadius: '12px',
-                    background: `${feature.color}15`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: '16px'
-                  }}>
-                    <IconComponent size={32} color={feature.color} />
+                <article key={feature.title} className="mau-feature-card" style={{ animationDelay: `${index * 80}ms` }}>
+                  <div className="mau-feature-icon" style={{ backgroundColor: `${feature.color}1A`, color: feature.color }}>
+                    <IconComponent size={26} aria-hidden="true" />
                   </div>
-                  
-                  <h3 style={{
-                    fontSize: '1.3rem',
-                    fontWeight: 700,
-                    marginBottom: '12px',
-                    color: isDark ? '#f1f5f9' : '#0f172a'
-                  }}>
-                    {feature.title}
-                  </h3>
-                  
-                  <p style={{
-                    color: isDark ? '#cbd5e1' : '#475569',
-                    lineHeight: 1.6,
-                    margin: 0
-                  }}>
-                    {feature.desc}
-                  </p>
-                </div>
+                  <h3>{feature.title}</h3>
+                  <p>{feature.desc}</p>
+                </article>
               );
             })}
           </div>
         </section>
 
-        {/* CTA Section */}
-        <section style={{
-          maxWidth: '900px',
-          margin: '80px auto',
-          padding: '60px 40px',
-          background: isDark
-            ? 'linear-gradient(135deg, #1e293b, #0f172a)'
-            : 'linear-gradient(135deg, #f0f9ff, #e0f2fe)',
-          borderRadius: '20px',
-          textAlign: 'center',
-          border: `1px solid ${isDark ? '#334155' : '#bae6fd'}`,
-          animation: 'slideUp 0.8s ease 0.4s forwards',
-          animationFillMode: 'both'
-        }}>
-          <h2 style={{
-            fontSize: '2rem',
-            fontWeight: 800,
-            marginBottom: '16px',
-            color: isDark ? '#f1f5f9' : '#0f172a'
-          }}>
-            {t.ctaTitle}
-          </h2>
-          
-          <p style={{
-            fontSize: '1.1rem',
-            color: isDark ? '#cbd5e1' : '#475569',
-            marginBottom: '32px',
-            maxWidth: '600px',
-            margin: '0 auto 32px'
-          }}>
-            {t.ctaSubtitle}
-          </p>
-
-          <Link
-            to="/login"
-            style={{
-              padding: '16px 48px',
-              background: 'linear-gradient(135deg, #2563eb, #1e40af)',
-              color: 'white',
-              textDecoration: 'none',
-              borderRadius: '12px',
-              fontWeight: 700,
-              fontSize: '1.1rem',
-              transition: 'all 0.3s ease',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'inline-block'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-4px)';
-              e.currentTarget.style.boxShadow = '0 20px 40px rgba(37, 99, 235, 0.3)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
-          >
-            {t.ctaButton}
-          </Link>
+        <section className="mau-cta-section" aria-labelledby="cta-title">
+          <div className="mau-cta-card">
+            <p className="mau-cta-kicker">Smart university operations</p>
+            <h2 id="cta-title">{t.ctaTitle}</h2>
+            <p>{t.ctaSubtitle}</p>
+            <Link className="mau-cta-button" to="/login">{t.ctaButton}</Link>
+          </div>
         </section>
       </main>
 
       <style>{`
-        .home-hero {
-          position: relative;
-          isolation: isolate;
-          overflow: hidden;
-          padding: clamp(52px, 8vw, 96px) 20px clamp(64px, 9vw, 112px);
-          color: #f8fafc;
-          background: linear-gradient(120deg, #0f172a 0%, #123b67 56%, #0ea5e9 150%);
+        .mau-home-page {
+          --mau-bg: ${isDark ? '#0f172a' : '#f8fafc'};
+          --mau-surface: ${isDark ? '#111827' : '#ffffff'};
+          --mau-border: ${isDark ? '#334155' : '#e2e8f0'};
+          --mau-text: ${isDark ? '#e2e8f0' : '#0f172a'};
+          --mau-muted: ${isDark ? '#94a3b8' : '#64748b'};
+          --mau-blue: #0ea5e9;
+          --mau-blue-strong: #2563eb;
+          --mau-navy: #0f172a;
+          --mau-card-shadow: ${isDark ? '0 20px 40px rgba(15, 23, 42, 0.45)' : '0 18px 38px rgba(15, 23, 42, 0.08)'};
+          background: var(--mau-bg);
+          color: var(--mau-text);
         }
-        .home-hero-content {
-          position: relative;
-          z-index: 1;
-          display: grid;
-          grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
-          align-items: center;
-          gap: clamp(40px, 7vw, 104px);
-          width: min(1240px, 100%);
+
+        .mau-home-main {
+          width: min(1200px, calc(100% - 32px));
           margin: 0 auto;
+          padding: 40px 0 80px;
         }
-        .home-hero-copy {
-          max-width: 600px;
-          animation: homeHeroCopyIn 0.75s ease both;
+
+        .mau-hero {
+          padding: 24px 0 16px;
         }
-        .home-hero-kicker {
+
+        .mau-hero-content {
+          display: grid;
+          grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
+          gap: clamp(32px, 4vw, 64px);
+          align-items: center;
+          padding: clamp(24px, 5vw, 52px) clamp(14px, 3vw, 28px);
+          border: 1px solid var(--mau-border);
+          border-radius: 28px;
+          background: linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(37, 99, 235, 0.08));
+          box-shadow: var(--mau-card-shadow);
+        }
+
+        .mau-hero-copy {
+          max-width: 620px;
+        }
+
+        .mau-hero-kicker,
+        .mau-section-kicker,
+        .mau-cta-kicker {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
           margin: 0 0 18px;
-          color: #7dd3fc;
-          font-size: 0.78rem;
+          font-size: 0.76rem;
           font-weight: 800;
-          letter-spacing: 0.14em;
+          letter-spacing: 0.12em;
           text-transform: uppercase;
+          color: var(--mau-blue-strong);
         }
-        .home-hero-copy h1 {
-          max-width: 680px;
+
+        .mau-hero-copy h1 {
           margin: 0;
-          font-size: clamp(2.25rem, 5vw, 4.7rem);
-          font-weight: 850;
-          line-height: 1.03;
-          letter-spacing: 0;
+          font-size: clamp(2.5rem, 5vw, 4.3rem);
+          line-height: 1.04;
+          letter-spacing: -0.04em;
+          color: var(--mau-text);
         }
-        .home-hero-description {
-          max-width: 540px;
-          margin: 26px 0 0;
-          color: #dbeafe;
-          font-size: clamp(1rem, 1.8vw, 1.2rem);
-          line-height: 1.7;
+
+        .mau-hero-description {
+          margin: 18px 0 0;
+          max-width: 560px;
+          font-size: 1.08rem;
+          line-height: 1.8;
+          color: var(--mau-muted);
         }
-        .home-hero-actions {
+
+        .mau-hero-actions {
           display: flex;
           flex-wrap: wrap;
           gap: 14px;
-          margin-top: 34px;
+          margin-top: 28px;
         }
-        .home-hero-primary,
-        .home-hero-secondary {
+
+        .mau-hero-primary,
+        .mau-hero-secondary,
+        .mau-primary-link,
+        .mau-cta-button {
           display: inline-flex;
-          min-height: 48px;
           align-items: center;
           justify-content: center;
-          gap: 9px;
-          padding: 12px 22px;
-          border-radius: 8px;
-          font-weight: 800;
+          gap: 8px;
+          min-height: 48px;
+          padding: 0 22px;
+          border-radius: 12px;
+          font-weight: 700;
           text-decoration: none;
-          transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+          transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
         }
-        .home-hero-primary {
-          color: #082f49;
-          background: #fbbf24;
-          box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
+
+        .mau-hero-primary,
+        .mau-primary-link,
+        .mau-cta-button {
+          color: #ffffff;
+          background: linear-gradient(135deg, var(--mau-blue-strong), var(--mau-blue));
+          box-shadow: 0 18px 30px rgba(37, 99, 235, 0.22);
         }
-        .home-hero-secondary {
-          color: #e0f2fe;
-          border: 1px solid rgba(186, 230, 253, 0.58);
-          background: rgba(15, 23, 42, 0.22);
+
+        .mau-hero-secondary {
+          color: var(--mau-text);
+          border: 1px solid var(--mau-border);
+          background: transparent;
         }
-        .home-hero-primary:hover,
-        .home-hero-secondary:hover {
-          transform: translateY(-3px);
+
+        .mau-hero-primary:hover,
+        .mau-hero-secondary:hover,
+        .mau-primary-link:hover,
+        .mau-cta-button:hover {
+          transform: translateY(-2px);
         }
-        .home-hero-primary:hover { box-shadow: 0 16px 30px rgba(251, 191, 36, 0.28); }
-        .home-hero-secondary:hover { background: rgba(255, 255, 255, 0.12); }
-        .home-hero-primary:focus-visible,
-        .home-hero-secondary:focus-visible {
-          outline: 3px solid #bae6fd;
+
+        .mau-hero-primary:focus-visible,
+        .mau-hero-secondary:focus-visible,
+        .mau-primary-link:focus-visible,
+        .mau-cta-button:focus-visible {
+          outline: 3px solid rgba(14, 165, 233, 0.4);
           outline-offset: 3px;
         }
-        .home-hero-visual {
-          position: relative;
-          min-width: 0;
-          padding: clamp(10px, 2vw, 30px);
-          animation: homeHeroVisualIn 0.9s 0.12s ease both;
+
+        .mau-hero-highlights {
+          display: grid;
+          gap: 12px;
+          margin: 28px 0 0;
+          padding: 0;
+          list-style: none;
+          color: var(--mau-text);
         }
-        .home-hero-image-frame {
+
+        .mau-hero-highlights li {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          color: var(--mau-muted);
+          font-weight: 600;
+        }
+
+        .mau-hero-highlights svg {
+          color: #16a34a;
+        }
+
+        .mau-hero-visual {
+          display: flex;
+          justify-content: center;
+        }
+
+        .mau-hero-image-frame {
           position: relative;
-          aspect-ratio: 4 / 3;
+          width: min(100%, 560px);
+          aspect-ratio: 4/3;
+          border-radius: 24px;
           overflow: hidden;
-          border: 1px solid rgba(255, 255, 255, 0.38);
-          border-radius: 28px;
-          background: #1e3a5f;
-          box-shadow: 0 30px 70px rgba(2, 8, 23, 0.42);
+          border: 1px solid rgba(255, 255, 255, 0.3);
+          box-shadow: 0 28px 60px rgba(15, 23, 42, 0.18);
+          background: #dbeafe;
         }
-        .home-hero-image-frame img {
+
+        .mau-campus-image {
           display: block;
           width: 100%;
           height: 100%;
           object-fit: cover;
-          animation: homeHeroKenBurns 14s ease-in-out infinite alternate;
         }
-        .home-hero-image-overlay {
+
+        .mau-hero-image-overlay {
           position: absolute;
           inset: 0;
-          background: linear-gradient(180deg, transparent 42%, rgba(2, 8, 23, 0.72) 100%);
+          background: linear-gradient(180deg, rgba(15, 23, 42, 0.02), rgba(15, 23, 42, 0.56));
         }
-        .home-hero-image-caption {
+
+        .mau-hero-image-badge {
           position: absolute;
-          right: 20px;
+          right: 18px;
           bottom: 18px;
           display: inline-flex;
           align-items: center;
           gap: 8px;
           padding: 8px 12px;
-          border: 1px solid rgba(255, 255, 255, 0.28);
-          border-radius: 7px;
+          border: 1px solid rgba(255,255,255,0.2);
+          border-radius: 10px;
+          background: rgba(15, 23, 42, 0.45);
           color: #f8fafc;
-          background: rgba(15, 23, 42, 0.5);
+          font-weight: 700;
           backdrop-filter: blur(8px);
-          font-size: 0.82rem;
+        }
+
+        .mau-value-section,
+        .mau-workflow-section,
+        .mau-video-section,
+        .mau-features-section,
+        .mau-cta-section {
+          padding-top: 80px;
+        }
+
+        .mau-section-heading {
+          max-width: 760px;
+          margin-bottom: 28px;
+        }
+
+        .mau-section-heading.centered {
+          text-align: center;
+          margin-inline: auto;
+        }
+
+        .mau-section-heading h2 {
+          margin: 0 0 12px;
+          font-size: clamp(2rem, 3vw, 2.8rem);
+          line-height: 1.12;
+          letter-spacing: -0.04em;
+        }
+
+        .mau-section-heading p {
+          margin: 0;
+          font-size: 1.04rem;
+          line-height: 1.7;
+          color: var(--mau-muted);
+        }
+
+        .mau-value-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 18px;
+        }
+
+        .mau-value-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-height: 84px;
+          padding: 18px 20px;
+          border: 1px solid var(--mau-border);
+          border-radius: 18px;
+          background: var(--mau-surface);
+          box-shadow: var(--mau-card-shadow);
+          color: var(--mau-text);
+          font-weight: 600;
+        }
+
+        .mau-value-item svg {
+          flex-shrink: 0;
+          color: #16a34a;
+        }
+
+        .mau-workflow-flow {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: center;
+          gap: 14px;
+          margin-top: 18px;
+          padding: 18px 12px 0;
+        }
+
+        .mau-workflow-step {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          min-width: 120px;
+          min-height: 66px;
+          padding: 12px 18px;
+          border: 1px solid var(--mau-border);
+          border-radius: 16px;
+          background: var(--mau-surface);
+          box-shadow: var(--mau-card-shadow);
           font-weight: 700;
         }
-        .home-hero-orbit {
-          position: absolute;
-          z-index: -1;
-          border: 1px solid rgba(125, 211, 252, 0.38);
+
+        .mau-workflow-index {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
           border-radius: 50%;
-          animation: homeHeroFloat 7s ease-in-out infinite;
+          background: rgba(14, 165, 233, 0.12);
+          color: var(--mau-blue-strong);
+          font-size: 0.8rem;
         }
-        .home-hero-orbit-one { inset: 0 4% 4% 0; transform: rotate(13deg); }
-        .home-hero-orbit-two { inset: 9% 0 0 5%; border-color: rgba(251, 191, 36, 0.32); transform: rotate(-17deg); animation-delay: -2.5s; }
-        .home-hero-dot { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: #fbbf24; box-shadow: 0 0 0 7px rgba(251, 191, 36, 0.14); animation: homeHeroFloat 5s ease-in-out infinite; }
-        .home-hero-dot-one { top: 5%; right: 5%; }
-        .home-hero-dot-two { bottom: 7%; left: 2%; width: 7px; height: 7px; background: #67e8f9; animation-delay: -1.8s; }
-        .home-hero-glow { position: absolute; z-index: -1; border-radius: 50%; pointer-events: none; filter: blur(20px); }
-        .home-hero-glow-one { top: -180px; left: -120px; width: 440px; height: 440px; background: rgba(14, 165, 233, 0.2); }
-        .home-hero-glow-two { right: -140px; bottom: -240px; width: 520px; height: 520px; background: rgba(37, 99, 235, 0.25); }
-        @keyframes homeHeroCopyIn { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes homeHeroVisualIn { from { opacity: 0; transform: translateX(28px) scale(0.98); } to { opacity: 1; transform: translateX(0) scale(1); } }
-        @keyframes homeHeroKenBurns { from { transform: scale(1); } to { transform: scale(1.08); } }
-        @keyframes homeHeroFloat { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-10px) rotate(2deg); } }
-        @media (max-width: 820px) {
-          .home-hero-content { grid-template-columns: 1fr; gap: 36px; }
-          .home-hero-copy { max-width: 720px; }
-          .home-hero-visual { order: -1; width: min(680px, 100%); margin: 0 auto; }
+
+        .mau-workflow-arrow {
+          color: var(--mau-blue-strong);
+          transform: rotate(-90deg);
         }
-        @media (max-width: 480px) {
-          .home-hero { padding-right: 16px; padding-left: 16px; }
-          .home-hero-copy h1 { font-size: clamp(2rem, 12vw, 3rem); }
-          .home-hero-actions > a { flex: 1 1 150px; }
-          .home-hero-image-frame { border-radius: 18px; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .home-hero-copy,
-          .home-hero-visual,
-          .home-hero-image-frame img,
-          .home-hero-orbit,
-          .home-hero-dot { animation: none; }
-          .home-hero-primary,
-          .home-hero-secondary { transition: none; }
-        }
-        .home-video-section {
-          max-width: 1100px;
-          margin: 24px auto 80px;
-          padding: 0 20px;
-          text-align: center;
+
+        .mau-video-section {
           opacity: 0;
           transform: translateY(24px);
           transition: opacity 0.6s ease, transform 0.6s ease;
         }
-        .home-video-section.is-visible {
+
+        .mau-video-section.is-visible {
           opacity: 1;
           transform: translateY(0);
         }
-        .home-section-heading h2 {
-          margin: 0 0 12px;
-          color: ${isDark ? '#f1f5f9' : '#0f172a'};
-          font-size: 2.2rem;
-          font-weight: 800;
-        }
-        .home-section-heading p {
-          max-width: 760px;
-          margin: 0 auto 28px;
-          color: ${isDark ? '#94a3b8' : '#64748b'};
-          font-size: 1.1rem;
-          line-height: 1.6;
-        }
-        .home-video-frame {
+
+        .mau-video-frame {
           aspect-ratio: 16 / 9;
-          width: 100%;
+          width: min(100%, 1020px);
+          margin: 0 auto;
           overflow: hidden;
-          border-radius: 16px;
-          background: #0f172a;
-          box-shadow: 0 18px 45px rgba(15, 23, 42, 0.22);
+          border: 1px solid var(--mau-border);
+          border-radius: 22px;
+          background: var(--mau-navy);
+          box-shadow: var(--mau-card-shadow);
         }
-        .home-video-frame iframe {
+
+        .mau-video-frame iframe {
           display: block;
           width: 100%;
           height: 100%;
           border: 0;
         }
-        .home-video-fallback {
+
+        .mau-video-fallback {
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
           gap: 12px;
+          width: min(100%, 1020px);
+          margin: 0 auto;
           aspect-ratio: 16 / 9;
-          width: 100%;
-          border-radius: 16px;
-          background: linear-gradient(135deg, #1e293b, #0f172a);
-          color: white;
-          box-shadow: 0 18px 45px rgba(15, 23, 42, 0.22);
           padding: 24px;
+          border: 1px solid var(--mau-border);
+          border-radius: 22px;
+          background: linear-gradient(135deg, #0f172a, #1e293b);
+          color: #ffffff;
           text-align: center;
+          box-shadow: var(--mau-card-shadow);
         }
-        .home-video-fallback-icon {
-          width: 70px;
-          height: 70px;
+
+        .mau-video-fallback-icon {
           display: inline-flex;
           align-items: center;
           justify-content: center;
+          width: 72px;
+          height: 72px;
           border-radius: 50%;
-          background: rgba(37, 99, 235, 0.2);
+          background: rgba(96, 165, 250, 0.2);
           font-size: 2rem;
-          color: #bfdbfe;
+          color: #dbeafe;
         }
-        .home-video-fallback h3 {
+
+        .mau-video-fallback h3 {
           margin: 0;
-          font-size: 1.8rem;
+          font-size: clamp(1.5rem, 3vw, 2.2rem);
         }
-        .home-video-fallback p {
+
+        .mau-video-fallback p {
           margin: 0;
-          max-width: 500px;
+          max-width: 540px;
           line-height: 1.6;
           color: #cbd5e1;
         }
-        .home-video-link {
+
+        .mau-video-actions {
+          display: flex;
+          justify-content: center;
+          margin-top: 18px;
+        }
+
+        .mau-feature-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 24px;
+        }
+
+        .mau-feature-card {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          min-height: 240px;
+          padding: 24px 22px;
+          border: 1px solid var(--mau-border);
+          border-radius: 20px;
+          background: var(--mau-surface);
+          box-shadow: var(--mau-card-shadow);
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          animation: mauFadeUp 0.55s ease both;
+        }
+
+        .mau-feature-card:hover {
+          transform: translateY(-6px);
+          box-shadow: 0 24px 40px rgba(15, 23, 42, 0.12);
+        }
+
+        .mau-feature-icon {
           display: inline-flex;
           align-items: center;
-          gap: 8px;
-          margin-top: 16px;
-          padding: 10px 18px;
-          border-radius: 8px;
-          background: #2563eb;
-          color: white;
-          font-weight: 700;
-          text-decoration: none;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          justify-content: center;
+          width: 58px;
+          height: 58px;
+          border-radius: 14px;
+          background: rgba(37, 99, 235, 0.08);
+          border: 1px solid rgba(15, 23, 42, 0.03);
         }
-        .home-video-link:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 18px rgba(37, 99, 235, 0.28);
+
+        .mau-feature-card h3 {
+          margin: 0;
+          font-size: 1.32rem;
+          line-height: 1.3;
         }
-        .home-video-link:focus-visible,
-        .home-feature-card:focus-within {
-          outline: 3px solid rgba(37, 99, 235, 0.35);
-          outline-offset: 3px;
+
+        .mau-feature-card p {
+          margin: 0;
+          color: var(--mau-muted);
+          line-height: 1.7;
         }
-        .home-feature-card {
-          transition: transform 0.25s ease, box-shadow 0.25s ease;
+
+        .mau-cta-card {
+          max-width: 980px;
+          margin: 0 auto;
+          padding: clamp(32px, 5vw, 54px) clamp(18px, 4vw, 36px);
+          border: 1px solid var(--mau-border);
+          border-radius: 28px;
+          background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(14, 165, 233, 0.12));
+          text-align: center;
+          box-shadow: var(--mau-card-shadow);
         }
-        .home-feature-card:hover {
-          transform: translateY(-8px);
-          box-shadow: ${isDark ? '0 20px 40px rgba(0, 0, 0, 0.4)' : '0 20px 40px rgba(0, 0, 0, 0.08)'};
+
+        .mau-cta-card h2 {
+          margin: 0 0 10px;
+          font-size: clamp(2rem, 3vw, 3rem);
+          line-height: 1.15;
+          letter-spacing: -0.04em;
         }
-        .home-feature-card:hover svg {
-          transform: scale(1.08) rotate(-4deg);
+
+        .mau-cta-card p {
+          max-width: 620px;
+          margin: 0 auto 24px;
+          color: var(--mau-muted);
+          line-height: 1.75;
+          font-size: 1.05rem;
         }
-        .home-feature-card svg {
-          transition: transform 0.25s ease;
-        }
-        @media (max-width: 900px) {
-          .home-feature-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-          }
-        }
-        @media (max-width: 600px) {
-          .home-video-section {
-            margin-bottom: 56px;
-            padding: 0 16px;
-          }
-          .home-section-heading h2 {
-            font-size: 1.7rem;
-          }
-          .home-section-heading p {
-            font-size: 1rem;
-          }
-          .home-feature-grid {
-            grid-template-columns: 1fr !important;
-          }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .home-video-section,
-          .home-video-link,
-          .home-feature-card,
-          .home-feature-card svg {
-            transition: none;
-          }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes slideUp {
+
+        @keyframes mauFadeUp {
           from {
             opacity: 0;
-            transform: translateY(30px);
+            transform: translateY(16px);
           }
           to {
             opacity: 1;
             transform: translateY(0);
           }
         }
+
+        @media (max-width: 900px) {
+          .mau-value-grid,
+          .mau-feature-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .mau-hero-content {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 620px) {
+          .mau-home-main {
+            width: min(100% - 20px, 1200px);
+            padding-bottom: 64px;
+          }
+
+          .mau-value-grid,
+          .mau-feature-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .mau-workflow-flow {
+            flex-direction: column;
+          }
+
+          .mau-workflow-arrow {
+            transform: rotate(90deg);
+          }
+
+          .mau-hero-actions {
+            flex-direction: column;
+          }
+
+          .mau-hero-primary,
+          .mau-hero-secondary,
+          .mau-primary-link,
+          .mau-cta-button {
+            width: 100%;
+          }
+        }
+
         @media (prefers-reduced-motion: reduce) {
-          * {
-            animation-duration: 0.01ms !important;
-            transition-duration: 0.01ms !important;
+          .mau-video-section,
+          .mau-feature-card,
+          .mau-hero-primary,
+          .mau-hero-secondary,
+          .mau-primary-link,
+          .mau-cta-button {
+            transition: none;
+            animation: none;
           }
         }
       `}</style>
