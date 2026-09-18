@@ -27,6 +27,11 @@ const {
   createTransformer,
   updateTransformer,
   deactivateTransformer,
+  getInfrastructureGenerators,
+  getInfrastructureGenerator,
+  createInfrastructureGenerator,
+  updateInfrastructureGenerator,
+  deleteInfrastructureGenerator,
   getInfrastructureRoads,
   getInfrastructureRoad,
   saveInfrastructureRoad,
@@ -159,6 +164,11 @@ router.post('/solar', requireRole('admin', 'infrastructure'), saveInfrastructure
 router.put('/solar/:id', requireRole('admin', 'infrastructure'), saveInfrastructureSolar);
 router.delete('/solar/:id', requireRole('admin', 'infrastructure'), deactivateInfrastructureSolar);
 router.get('/energy', requireRole('admin', 'infrastructure'), getInfrastructureEnergy);
+router.get('/generators', requireRole('admin', 'infrastructure'), getInfrastructureGenerators);
+router.get('/generators/:id', requireRole('admin', 'infrastructure'), getInfrastructureGenerator);
+router.post('/generators', requireRole('admin', 'infrastructure'), createInfrastructureGenerator);
+router.put('/generators/:id', requireRole('admin', 'infrastructure'), updateInfrastructureGenerator);
+router.delete('/generators/:id', requireRole('admin', 'infrastructure'), deleteInfrastructureGenerator);
 router.get('/reports/export', requireRole('admin', 'infrastructure'), infrastructureReports.exportInfrastructureReport);
 router.get('/reports', requireRole('admin', 'infrastructure'), infrastructureReports.getInfrastructureReport);
 router.get('/fuel', requireRole('admin', 'infrastructure'), getInfrastructureFuel);

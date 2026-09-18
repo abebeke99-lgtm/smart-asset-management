@@ -56,6 +56,300 @@ const updateTransformer = async (req, res) => {
 };
 const deactivateTransformer = async (req, res) => { const asset = await Infrastructure.findOne({ where: { id: req.params.id, ...transformerWhere() } }); if (!asset) return res.status(404).json({ success: false, message: 'Transformer not found' }); await asset.update({ status: 'Inactive' }); await AuditLog.create({ userId: req.user.id, action: 'DEACTIVATE_TRANSFORMER', entity: `infrastructure_asset:${asset.id}`, details: JSON.stringify({ assetId: asset.id }) }); return res.json({ success: true, data: transformerResponse(asset), message: 'Transformer deactivated successfully' }); };
 
+const generatorStatuses = ['Operational', 'Active', 'Under Maintenance', 'Maintenance', 'Fault', 'Failed', 'Inactive', 'Shutdown'];
+const generatorConditions = ['Excellent', 'Good', 'Fair', 'Poor', 'Critical', 'Damaged'];
+const generatorStatusMap = {
+  operational: 'Operational',
+  active: 'Operational',
+  maintenance: 'Under Maintenance',
+  'under maintenance': 'Under Maintenance',
+  fault: 'Fault',
+  failed: 'Failed',
+  inactive: 'Inactive',
+  shutdown: 'Shutdown',
+};
+const generatorConditionMap = {
+  excellent: 'Excellent',
+  good: 'Good',
+  fair: 'Fair',
+  poor: 'Poor',
+  critical: 'Critical',
+  damaged: 'Damaged',
+};
+const generatorWhere = (query = {}) => {
+  const where = {
+    [Op.or]: [
+      { category: { [Op.like]: '%Generator%' } },
+      { subcategory: { [Op.like]: '%Generator%' } },
+      { type: { [Op.like]: '%Generator%' } },
+      { name: { [Op.like]: '%Generator%' } },
+      { category: { [Op.like]: '%generator%' } },
+      { subcategory: { [Op.like]: '%generator%' } },
+      { type: { [Op.like]: '%generator%' } },
+      { name: { [Op.like]: '%generator%' } },
+    ],
+  };
+
+  const search = String(query.search || '').trim();
+  if (search) {
+    where[Op.and] = [{
+      [Op.or]: ['name', 'assetCode', 'serialNumber', 'manufacturer', 'model', 'building', 'location', 'subcategory', 'type', 'status', 'condition'].map((field) => ({
+        [field]: { [Op.like]: `%${search}%` },
+      })),
+    }];
+  }
+
+  const status = String(query.status || '').trim();
+  const condition = String(query.condition || '').trim();
+  const generatorType = String(query.type || '').trim();
+  const location = String(query.location || '').trim();
+
+  if (status && status !== 'all') {
+    const mappedStatus = generatorStatusMap[String(status).trim().toLowerCase()] || String(status).trim();
+    where.status = mappedStatus;
+  }
+
+  if (condition && condition !== 'all') {
+    const mappedCondition = generatorConditionMap[String(condition).trim().toLowerCase()] || String(condition).trim();
+    where.condition = mappedCondition;
+  }
+
+  if (generatorType && generatorType !== 'all') {
+    where[Op.and] = [
+      ...(where[Op.and] || []),
+      {
+        [Op.or]: [
+          { subcategory: { [Op.like]: `%${generatorType}%` } },
+          { type: { [Op.like]: `%${generatorType}%` } },
+          { category: { [Op.like]: `%${generatorType}%` } },
+        ],
+      },
+    ];
+  }
+
+  if (location && location !== 'all') {
+    where.location = location;
+  }
+
+  return where;
+};
+
+const generatorResponse = (asset) => {
+  const data = asset.toJSON ? asset.toJSON() : asset;
+  const specifications = data.specifications && typeof data.specifications === 'object' ? data.specifications : {};
+  const generatorType = data.subcategory || data.type || data.category || 'Generator';
+  return {
+    ...data,
+    id: data.id,
+    assetNumber: data.assetCode || data.serialNumber || data.id,
+    generatorName: data.name,
+    generatorType,
+    type: generatorType,
+    capacity: specifications.capacity || specifications.powerRating || data.capacity || data.powerRating || null,
+    fuelType: specifications.fuelType || specifications.fuel_type || data.fuelType || data.fuel_type || null,
+    location: data.location || data.building || data.room || null,
+    building: data.building || null,
+    room: data.room || null,
+    status: data.status || 'Operational',
+    condition: data.condition || 'Good',
+    installationDate: data.purchaseDate || null,
+    lastInspectionDate: data.lastInspectionDate || null,
+    lastMaintenanceDate: data.lastMaintenanceDate || null,
+    specifications,
+  };
+};
+
+const generatorPayload = (body = {}, existing = {}) => {
+  const specifications = { ...(existing.specifications || {}) };
+  const capacity = body.capacity ?? body.powerCapacity ?? body.power_capacity ?? body.kva ?? body.kvaRating;
+  const fuelType = body.fuelType ?? body.fuel_type ?? body.fuel;
+  if (capacity !== undefined) specifications.capacity = capacity === '' ? null : capacity;
+  if (fuelType !== undefined) specifications.fuelType = fuelType === '' ? null : fuelType;
+  const generatorType = String(body.generatorType || body.type || body.subcategory || existing.subcategory || 'Generator').trim();
+  return {
+    name: String(body.name || existing.name || '').trim(),
+    assetCode: String(body.code || body.assetCode || existing.assetCode || '').trim() || undefined,
+    serialNumber: String(body.serialNumber || existing.serialNumber || '').trim() || undefined,
+    category: String(body.category || 'Generator').trim() || 'Generator',
+    type: generatorType || 'Generator',
+    subcategory: generatorType || existing.subcategory || 'Generator',
+    manufacturer: String(body.manufacturer || existing.manufacturer || '').trim() || undefined,
+    model: String(body.model || existing.model || '').trim() || undefined,
+    location: String(body.location || existing.location || '').trim() || undefined,
+    building: String(body.building || existing.building || '').trim() || undefined,
+    room: String(body.room || existing.room || '').trim() || undefined,
+    status: String(body.status || existing.status || 'Operational').trim() || 'Operational',
+    condition: String(body.condition || existing.condition || 'Good').trim() || 'Good',
+    purchaseDate: body.installationDate || existing.purchaseDate || null,
+    lastInspectionDate: body.lastInspectionDate || existing.lastInspectionDate || null,
+    lastMaintenanceDate: body.lastMaintenanceDate || existing.lastMaintenanceDate || null,
+    description: body.description === undefined ? (existing.description || '') : String(body.description || '').trim(),
+    department: String(body.department || existing.department || '').trim() || undefined,
+    notes: body.notes ?? existing.notes ?? null,
+    specifications,
+  };
+};
+
+const validateGeneratorPayload = (payload) => {
+  if (!payload.name) return 'Generator name is required';
+  if (!payload.subcategory && !payload.type) return 'Generator type is required';
+  if (!payload.location) return 'Location is required';
+  if (!generatorStatuses.includes(String(payload.status || '').trim())) return 'Invalid generator status';
+  if (!generatorConditions.includes(String(payload.condition || '').trim())) return 'Invalid generator condition';
+  return null;
+};
+
+const getInfrastructureGenerators = async (req, res) => {
+  try {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
+    const where = generatorWhere(req.query);
+    const { count, rows } = await Infrastructure.findAndCountAll({
+      where,
+      order: [['createdAt', 'DESC']],
+      limit,
+      offset: (page - 1) * limit,
+      raw: true,
+    });
+
+    const summaryRows = await Infrastructure.findAll({
+      where,
+      attributes: ['status', 'condition', 'location'],
+      raw: true,
+    });
+
+    const summary = summaryRows.reduce((result, row) => {
+      const status = String(row.status || '').trim().toLowerCase();
+      const condition = String(row.condition || '').trim().toLowerCase();
+      result.total += 1;
+      if (['operational', 'active'].includes(status)) result.operational += 1;
+      if (['maintenance', 'under maintenance', 'in maintenance'].includes(status)) result.maintenance += 1;
+      if (['fault', 'failed'].includes(status)) result.fault += 1;
+      if (['critical', 'damaged'].includes(condition)) result.critical += 1;
+      return result;
+    }, { total: 0, operational: 0, maintenance: 0, fault: 0, critical: 0 });
+
+    const filters = await Promise.all([
+      Infrastructure.findAll({ where, attributes: ['subcategory', 'type', 'category'], group: ['subcategory', 'type', 'category'], order: [['subcategory', 'ASC'], ['type', 'ASC']], raw: true }),
+      Infrastructure.findAll({ where, attributes: ['status'], group: ['status'], order: [['status', 'ASC']], raw: true }),
+      Infrastructure.findAll({ where, attributes: ['condition'], group: ['condition'], order: [['condition', 'ASC']], raw: true }),
+      Infrastructure.findAll({ where, attributes: ['location'], group: ['location'], order: [['location', 'ASC']], raw: true }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: rows.map(generatorResponse),
+      summary,
+      filters: {
+        types: [...new Set(filters[0].flatMap((row) => [row.subcategory, row.type, row.category]).filter(Boolean))].sort(),
+        statuses: [...new Set(filters[1].map((row) => row.status).filter(Boolean))].sort(),
+        conditions: [...new Set(filters[2].map((row) => row.condition).filter(Boolean))].sort(),
+        locations: [...new Set(filters[3].map((row) => row.location).filter(Boolean))].sort(),
+      },
+      pagination: { page, limit, total: count, pages: Math.max(1, Math.ceil(count / limit)) },
+    });
+  } catch (error) {
+    console.error('Error fetching infrastructure generators:', error);
+    return res.status(500).json({ success: false, message: 'Unable to load generators.' });
+  }
+};
+
+const getInfrastructureGenerator = async (req, res) => {
+  try {
+    const asset = await Infrastructure.findOne({ where: { id: req.params.id, ...generatorWhere() } });
+    if (!asset) {
+      return res.status(404).json({ success: false, message: 'Generator not found' });
+    }
+    return res.json({ success: true, data: generatorResponse(asset) });
+  } catch (error) {
+    console.error('Error fetching infrastructure generator:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch generator' });
+  }
+};
+
+const createInfrastructureGenerator = async (req, res) => {
+  try {
+    const payload = generatorPayload(req.body || {});
+    const validationError = validateGeneratorPayload(payload);
+    if (validationError) {
+      return res.status(422).json({ success: false, message: validationError });
+    }
+
+    const duplicate = await Infrastructure.findOne({
+      where: {
+        [Op.or]: [
+          payload.assetCode ? { assetCode: payload.assetCode } : null,
+          payload.serialNumber ? { serialNumber: payload.serialNumber } : null,
+        ].filter(Boolean),
+      },
+    });
+
+    if (duplicate) {
+      return res.status(409).json({ success: false, message: 'A generator with this asset number or serial number already exists.' });
+    }
+
+    const asset = await Infrastructure.create({ ...payload, createdBy: req.user?.id || 0 });
+    await AuditLog.create({ userId: req.user?.id || 0, action: 'CREATE_INFRASTRUCTURE_GENERATOR', entity: `infrastructure_generator:${asset.id}`, details: JSON.stringify({ assetId: asset.id }) });
+    return res.status(201).json({ success: true, data: generatorResponse(asset), message: 'Generator created successfully.' });
+  } catch (error) {
+    console.error('Error creating infrastructure generator:', error);
+    if (error.name === 'SequelizeUniqueConstraintError') return res.status(409).json({ success: false, message: 'A generator with this asset code or serial number already exists.' });
+    return res.status(500).json({ success: false, message: 'Unable to create generator.' });
+  }
+};
+
+const updateInfrastructureGenerator = async (req, res) => {
+  try {
+    const asset = await Infrastructure.findOne({ where: { id: req.params.id, ...generatorWhere() } });
+    if (!asset) {
+      return res.status(404).json({ success: false, message: 'Generator not found' });
+    }
+
+    const payload = generatorPayload(req.body || {}, asset.toJSON());
+    const validationError = validateGeneratorPayload(payload);
+    if (validationError) {
+      return res.status(422).json({ success: false, message: validationError });
+    }
+
+    const duplicate = await Infrastructure.findOne({
+      where: {
+        id: { [Op.ne]: asset.id },
+        [Op.or]: [
+          payload.assetCode ? { assetCode: payload.assetCode } : null,
+          payload.serialNumber ? { serialNumber: payload.serialNumber } : null,
+        ].filter(Boolean),
+      },
+    });
+
+    if (duplicate) {
+      return res.status(409).json({ success: false, message: 'Another generator already uses this asset number or serial number.' });
+    }
+
+    await asset.update(payload);
+    await AuditLog.create({ userId: req.user?.id || 0, action: 'UPDATE_INFRASTRUCTURE_GENERATOR', entity: `infrastructure_generator:${asset.id}`, details: JSON.stringify({ assetId: asset.id }) });
+    return res.json({ success: true, data: generatorResponse(asset), message: 'Generator updated successfully.' });
+  } catch (error) {
+    console.error('Error updating infrastructure generator:', error);
+    return res.status(500).json({ success: false, message: 'Unable to update generator.' });
+  }
+};
+
+const deleteInfrastructureGenerator = async (req, res) => {
+  try {
+    const asset = await Infrastructure.findOne({ where: { id: req.params.id, ...generatorWhere() } });
+    if (!asset) {
+      return res.status(404).json({ success: false, message: 'Generator not found' });
+    }
+
+    await asset.update({ status: 'Inactive' });
+    await AuditLog.create({ userId: req.user?.id || 0, action: 'DEACTIVATE_INFRASTRUCTURE_GENERATOR', entity: `infrastructure_generator:${asset.id}`, details: JSON.stringify({ assetId: asset.id }) });
+    return res.json({ success: true, data: generatorResponse(asset), message: 'Generator deactivated successfully.' });
+  } catch (error) {
+    console.error('Error deleting infrastructure generator:', error);
+    return res.status(500).json({ success: false, message: 'Unable to delete generator.' });
+  }
+};
+
 const buildingCategoryWhere = { [Op.or]: [{ category: { [Op.like]: 'Building' } }, { category: { [Op.like]: 'Facility' } }, { category: { [Op.like]: 'building' } }, { category: { [Op.like]: 'facility' } }] };
 const buildingAttributes = ['id', 'name', 'type', 'category', 'description', 'assetCode', 'location', 'building', 'block', 'floor', 'room', 'status', 'condition', 'purchaseDate', 'createdAt', 'updatedAt', 'createdBy'];
 const normalizeBuilding = (building, relatedAssets = []) => { const data = building.toJSON ? building.toJSON() : building; const names = [String(data.name || '').trim().toLowerCase(), String(data.assetCode || '').trim().toLowerCase()].filter(Boolean); const assets = relatedAssets.filter((asset) => names.includes(String(asset.building || '').trim().toLowerCase())); return { ...data, code: data.assetCode || null, floors: new Set(assets.map((asset) => String(asset.floor || '').trim()).filter(Boolean)).size, rooms: new Set(assets.map((asset) => String(asset.room || '').trim()).filter(Boolean)).size, assetCount: assets.length, associatedAssets: assets.map((asset) => ({ id: asset.id, name: asset.name, assetCode: asset.assetCode, category: asset.category, status: asset.status, condition: asset.condition, location: asset.location, room: asset.room })) }; };
@@ -1638,6 +1932,11 @@ module.exports = {
   updateInfrastructureBuilding: saveInfrastructureBuilding,
   deactivateInfrastructureBuilding,
   getInfrastructureDashboard,
+  getInfrastructureGenerators,
+  getInfrastructureGenerator,
+  createInfrastructureGenerator,
+  updateInfrastructureGenerator,
+  deleteInfrastructureGenerator,
   getInfrastructureEnergy,
   getInfrastructureRoads,
   getInfrastructureRoad,
