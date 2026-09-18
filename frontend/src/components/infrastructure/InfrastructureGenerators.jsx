@@ -382,7 +382,7 @@ export default function InfrastructureGenerators() {
         setError("");
 
         const response = await api.get(
-          "/infrastructure/generators",
+          "/api/infrastructure/generators",
           {
             params: {
               page,
@@ -726,12 +726,12 @@ export default function InfrastructureGenerators() {
         }
 
         response = await api.put(
-          `/infrastructure/generators/${id}`,
+          `/api/infrastructure/generators/${id}`,
           payload
         );
       } else {
         response = await api.post(
-          "/infrastructure/generators",
+          "/api/infrastructure/generators",
           payload
         );
       }
@@ -788,7 +788,7 @@ export default function InfrastructureGenerators() {
       setError("");
 
       await api.delete(
-        `/infrastructure/generators/${id}`
+        `/api/infrastructure/generators/${id}`
       );
 
       setSelectedGenerator(null);

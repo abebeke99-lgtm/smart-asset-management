@@ -1,12 +1,17 @@
 import axios from 'axios';
 
 const configuredApiUrl = String(process.env.REACT_APP_API_URL || '').trim();
-const normalizedConfiguredUrl = configuredApiUrl.replace(/\/+$/, '').replace(/\/api$/, '');
 const defaultApiOrigin = typeof window !== 'undefined' && window.location?.hostname
   ? `${window.location.protocol || 'http:'}//${window.location.hostname}:5000`
   : 'http://localhost:5000';
 
-export const API_BASE_URL = normalizedConfiguredUrl || defaultApiOrigin;
+const normalizeApiBase = (value) => {
+  const trimmed = String(value || '').trim();
+  const base = trimmed || defaultApiOrigin;
+  return base.replace(/\/api$/, '').replace(/\/+$/, '');
+};
+
+export const API_BASE_URL = normalizeApiBase(configuredApiUrl);
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -24,6 +29,12 @@ apiClient.interceptors.request.use(
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    const requestUrl = typeof config.url === 'string' ? config.url : '';
+    if (requestUrl.startsWith('/')) {
+      config.url = requestUrl.startsWith('/api') ? requestUrl : `/api${requestUrl}`;
+    }
+
     return config;
   },
   (error) => Promise.reject(error)

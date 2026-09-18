@@ -420,7 +420,7 @@ export default function InfrastructureTransformers() {
         setError("");
 
         const response = await api.get(
-          "/infrastructure/transformers",
+          "/api/infrastructure/transformers",
           {
             params: {
               page,
@@ -702,7 +702,7 @@ export default function InfrastructureTransformers() {
         );
       } else {
         response = await api.post(
-          "/infrastructure/transformers",
+          "/api/infrastructure/transformers",
           payload
         );
       }
@@ -759,7 +759,7 @@ export default function InfrastructureTransformers() {
       setError("");
 
       await api.delete(
-        `/infrastructure/transformers/${id}`
+        `/api/infrastructure/transformers/${id}`
       );
 
       setSelectedTransformer(null);
