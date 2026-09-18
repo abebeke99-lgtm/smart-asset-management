@@ -55,7 +55,9 @@ const EMPTY_FORM = {
 const normalize = (value) =>
   String(value ?? "")
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
 
 const getValue = (obj, keys, fallback = "") => {
   if (!obj || typeof obj !== "object") return fallback;
@@ -286,18 +288,21 @@ const extractPagination = (response, currentPage) => {
 };
 
 const statusLabel = (status) => {
+  const normalized = normalize(status);
   const labels = {
     operational: "Operational",
     active: "Active",
     maintenance: "Maintenance",
+    "under maintenance": "Under Maintenance",
     fault: "Fault",
     failed: "Failed",
     inactive: "Inactive",
     offline: "Offline",
     shutdown: "Shutdown",
+    disposed: "Disposed",
   };
 
-  return labels[status] || status || "Operational";
+  return labels[normalized] || status || "Operational";
 };
 
 const conditionLabel = (condition) => {
@@ -314,18 +319,25 @@ const conditionLabel = (condition) => {
 };
 
 const statusClass = (status) => {
-  switch (status) {
+  const normalized = normalize(status);
+
+  switch (normalized) {
     case "operational":
     case "active":
       return "status operational";
 
     case "maintenance":
+    case "under maintenance":
       return "status maintenance";
 
     case "fault":
     case "failed":
+    case "offline":
       return "status danger";
 
+    case "disposed":
+    case "inactive":
+    case "shutdown":
     default:
       return "status inactive";
   }
@@ -480,10 +492,14 @@ export default function InfrastructureSolar() {
         );
       }).length,
 
-      maintenance: systems.filter(
-        (item) =>
-          getStatus(item) === "maintenance"
-      ).length,
+      maintenance: systems.filter((item) => {
+        const value = getStatus(item);
+
+        return (
+          value === "maintenance" ||
+          value === "under maintenance"
+        );
+      }).length,
 
       fault: systems.filter((item) => {
         const value = getStatus(item);
