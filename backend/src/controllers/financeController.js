@@ -28,10 +28,35 @@ const normalizeAsset = (asset) => {
   const purchaseCost = Number(data.purchasePrice || 0);
   const currentValue = Number(data.currentValue || 0);
   const record = asset.latestFinancialRecord;
-  const residualValue = Number(record?.residualValue || 0);
-  const usefulLife = Number(record?.usefulLife || 5);
-  const accumulatedDepreciation = Number(record?.depreciationAmount || 0);
-  return { ...data, asset_id: data.id, asset_tag: data.assetCode, purchase_cost: purchaseCost, current_value: currentValue, residual_value: residualValue, useful_life: usefulLife, depreciation_method: record?.depreciationMethod || 'straight-line', accumulated_depreciation: accumulatedDepreciation, financial: { totalCost: purchaseCost + Number(record?.additionalCosts || 0), bookValue: currentValue, residualValue, usefulLife, accumulatedDepreciation, annualDepreciation: Math.max(0, (purchaseCost - residualValue) / usefulLife) } };
+  const residualValue = record ? Number(record.residualValue || 0) : null;
+  const usefulLife = record ? Number(record.usefulLife || 0) : null;
+  const additionalCosts = record ? Number(record.additionalCosts || 0) : 0;
+  const accumulatedDepreciation = record ? Number(record.depreciationAmount || 0) : null;
+  const departmentName = asset.DepartmentRecord?.name || data.department || '';
+  return {
+    ...data,
+    asset_id: data.id,
+    asset_tag: data.assetCode,
+    department_name: departmentName,
+    category_name: data.category || '',
+    purchase_cost: purchaseCost,
+    current_value: currentValue,
+    residual_value: residualValue,
+    useful_life: usefulLife,
+    depreciation_method: record?.depreciationMethod || null,
+    accumulated_depreciation: accumulatedDepreciation,
+    valuation_status: record ? 'Current' : 'Not Valued',
+    valuation_date: record?.createdAt || null,
+    latestFinancialRecord: record ? record.toJSON() : null,
+    financial: {
+      totalCost: purchaseCost + additionalCosts,
+      bookValue: currentValue,
+      residualValue,
+      usefulLife,
+      accumulatedDepreciation,
+      annualDepreciation: record && usefulLife > 0 ? Math.max(0, (purchaseCost + additionalCosts - residualValue) / usefulLife) : null,
+    },
+  };
 };
 
 const getFinanceDashboardFilters = async (req, res, next) => {
@@ -175,7 +200,22 @@ const getFinanceDashboard = async (req, res, next) => {
   }
 };
 
-const listValuation = async (req, res, next) => { try { if (!ensureFinance(req, res)) return; const assets = await Asset.findAll({ order: [['id', 'ASC']] }); const records = await FinancialRecord.findAll({ order: [['createdAt', 'DESC']] }); const latestByAsset = new Map(); records.forEach(record => { if (!latestByAsset.has(record.assetId)) latestByAsset.set(record.assetId, record); }); assets.forEach(asset => { asset.latestFinancialRecord = latestByAsset.get(asset.id); }); res.json({ success: true, assets: assets.map(normalizeAsset) }); } catch (e) { next(e); } };
+const listValuation = async (req, res, next) => {
+  try {
+    if (!ensureFinance(req, res)) return;
+    const assets = await Asset.findAll({
+      include: [{ model: Department, as: 'DepartmentRecord', attributes: ['id', 'name'], required: false }],
+      order: [['id', 'ASC']],
+    });
+    const records = await FinancialRecord.findAll({ order: [['createdAt', 'DESC'], ['id', 'DESC']] });
+    const latestByAsset = new Map();
+    records.forEach((record) => {
+      if (!latestByAsset.has(record.assetId)) latestByAsset.set(record.assetId, record);
+    });
+    assets.forEach((asset) => { asset.latestFinancialRecord = latestByAsset.get(asset.id); });
+    res.json({ success: true, assets: assets.map(normalizeAsset) });
+  } catch (e) { next(e); }
+};
 const updateValuation = async (req, res, next) => {
   if (!ensureFinance(req, res)) return;
   const tx = await sequelize.transaction();

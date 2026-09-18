@@ -22,6 +22,8 @@ const getRows = (response) => {
 
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.data?.purchases)) return data.data.purchases;
+  if (Array.isArray(data?.purchases)) return data.purchases;
   if (Array.isArray(data?.items)) return data.items;
   if (Array.isArray(data?.records)) return data.records;
   if (Array.isArray(data?.results)) return data.results;
@@ -148,11 +150,6 @@ const normalizePurchase = (item) => ({
         item?.total
     ) || 0,
 
-  paymentStatus:
-    item?.paymentStatus ??
-    item?.payment_status ??
-    "",
-
   status: item?.status ?? "",
 
   purchaseDate:
@@ -171,25 +168,8 @@ const normalizePurchase = (item) => ({
     item?.expected_delivery ??
     "",
 
-  invoiceNumber:
-    item?.invoiceNumber ??
-    item?.invoice_number ??
-    "",
-
-  invoiceDate:
-    item?.invoiceDate ??
-    item?.invoice_date ??
-    "",
-
-  paymentDate:
-    item?.paymentDate ??
-    item?.payment_date ??
-    "",
-
-  paymentMethod:
-    item?.paymentMethod ??
-    item?.payment_method ??
-    "",
+  items: Array.isArray(item?.items) ? item.items : [],
+  createdBy: item?.createdByName ?? item?.createdBy ?? "",
 
   requestedBy:
     item?.requestedBy ??
@@ -264,9 +244,11 @@ export default function FinancePurchaseHistory() {
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
-  const [paymentStatus, setPaymentStatus] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [filters, setFilters] = useState({ statuses: [], suppliers: [], departments: [] });
+  const [supplier, setSupplier] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
 
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
@@ -291,7 +273,8 @@ export default function FinancePurchaseHistory() {
           limit: pageSize,
           search: search || undefined,
           status: status || undefined,
-          paymentStatus: paymentStatus || undefined,
+          supplier: supplier || undefined,
+          departmentId: departmentId || undefined,
           dateFrom: dateFrom || undefined,
           dateTo: dateTo || undefined,
         },
@@ -307,6 +290,7 @@ export default function FinancePurchaseHistory() {
           response?.data?.stats ||
           null
       );
+      setFilters(response?.data?.data?.filters || response?.data?.filters || { statuses: [], suppliers: [], departments: [] });
 
       setPagination(
         getPagination(response, rows.length, page, pageSize)
@@ -326,7 +310,8 @@ export default function FinancePurchaseHistory() {
     pageSize,
     search,
     status,
-    paymentStatus,
+    supplier,
+    departmentId,
     dateFrom,
     dateTo,
   ]);
@@ -336,55 +321,22 @@ export default function FinancePurchaseHistory() {
   }, [loadHistory]);
 
   const localStats = useMemo(() => {
-    const totalPurchases = pagination.total || purchases.length;
-
-    const totalAmount = purchases.reduce(
-      (sum, item) => sum + Number(item.totalAmount || 0),
-      0
-    );
-
-    const paidAmount = purchases
-      .filter((item) =>
-        String(item.paymentStatus).toLowerCase().includes("paid")
-      )
-      .reduce((sum, item) => sum + Number(item.totalAmount || 0), 0);
-
-    const pendingAmount = purchases
-      .filter((item) =>
-        String(item.paymentStatus).toLowerCase().includes("pending")
-      )
-      .reduce((sum, item) => sum + Number(item.totalAmount || 0), 0);
-
     return {
-      totalPurchases,
-      totalAmount,
-      paidAmount,
-      pendingAmount,
+      totalPurchases: pagination.total,
+      totalAmount: Number(summary?.totalValue) || 0,
     };
-  }, [purchases, pagination.total]);
+  }, [summary, pagination.total]);
 
   const stats = {
-    totalPurchases:
-      Number(summary?.total ?? summary?.totalPurchases) ||
-      localStats.totalPurchases,
-
-    totalAmount:
-      Number(summary?.totalAmount ?? summary?.total_amount) ||
-      localStats.totalAmount,
-
-    paidAmount:
-      Number(summary?.paidAmount ?? summary?.paid_amount) ||
-      localStats.paidAmount,
-
-    pendingAmount:
-      Number(summary?.pendingAmount ?? summary?.pending_amount) ||
-      localStats.pendingAmount,
+    totalPurchases: Number(summary?.total) || localStats.totalPurchases,
+    totalAmount: Number(summary?.totalValue) || localStats.totalAmount,
   };
 
   const clearFilters = () => {
     setSearch("");
     setStatus("");
-    setPaymentStatus("");
+    setSupplier("");
+    setDepartmentId("");
     setDateFrom("");
     setDateTo("");
     setPage(1);
@@ -917,8 +869,8 @@ export default function FinancePurchaseHistory() {
               <CheckCircle2 size={22} />
             </div>
             <div>
-              <h3>Paid Amount</h3>
-              <strong>{formatMoney(stats.paidAmount)}</strong>
+              <h3>Completed Purchases</h3>
+              <strong>{summary?.Completed || 0}</strong>
             </div>
           </div>
 
@@ -927,8 +879,8 @@ export default function FinancePurchaseHistory() {
               <CalendarDays size={22} />
             </div>
             <div>
-              <h3>Pending Payment</h3>
-              <strong>{formatMoney(stats.pendingAmount)}</strong>
+              <h3>Pending Approval</h3>
+              <strong>{summary?.["Pending Approval"] || 0}</strong>
             </div>
           </div>
         </div>
@@ -954,25 +906,35 @@ export default function FinancePurchaseHistory() {
             }}
           >
             <option value="">All Statuses</option>
-            <option value="Approved">Approved</option>
-            <option value="Completed">Completed</option>
-            <option value="Delivered">Delivered</option>
-            <option value="Cancelled">Cancelled</option>
-            <option value="Rejected">Rejected</option>
+            {filters.statuses.map((value) => (
+              <option key={value} value={value}>{value}</option>
+            ))}
           </select>
 
           <select
-            value={paymentStatus}
+            value={supplier}
             onChange={(e) => {
-              setPaymentStatus(e.target.value);
+              setSupplier(e.target.value);
               setPage(1);
             }}
           >
-            <option value="">All Payments</option>
-            <option value="Paid">Paid</option>
-            <option value="Pending">Pending</option>
-            <option value="Partial">Partial</option>
-            <option value="Unpaid">Unpaid</option>
+            <option value="">All Suppliers</option>
+            {filters.suppliers.map((value) => (
+              <option key={value} value={value}>{value}</option>
+            ))}
+          </select>
+
+          <select
+            value={departmentId}
+            onChange={(e) => {
+              setDepartmentId(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">All Departments</option>
+            {filters.departments.map((value) => (
+              <option key={value.id} value={value.id}>{value.name}</option>
+            ))}
           </select>
 
           <input
@@ -1055,7 +1017,7 @@ export default function FinancePurchaseHistory() {
 
                           {purchase.invoiceNumber && (
                             <div className="sub">
-                              Invoice: {purchase.invoiceNumber}
+                              PO: {purchase.poNumber}
                             </div>
                           )}
                         </td>
@@ -1088,16 +1050,6 @@ export default function FinancePurchaseHistory() {
                         <td>
                           <span className={statusClass(purchase.status)}>
                             {purchase.status || "—"}
-                          </span>
-                        </td>
-
-                        <td>
-                          <span
-                            className={statusClass(
-                              purchase.paymentStatus
-                            )}
-                          >
-                            {purchase.paymentStatus || "—"}
                           </span>
                         </td>
 
@@ -1180,6 +1132,7 @@ export default function FinancePurchaseHistory() {
             <div className="details-grid">
               {[
                 ["Purchase Number", selectedPurchase.purchaseNumber],
+                ["Purchase Order", selectedPurchase.poNumber],
                 ["Request Number", selectedPurchase.requestNumber],
                 ["Supplier", selectedPurchase.supplier],
                 ["Department", selectedPurchase.department],
@@ -1188,19 +1141,14 @@ export default function FinancePurchaseHistory() {
                 ["Quantity", selectedPurchase.quantity],
                 ["Unit Price", formatMoney(selectedPurchase.unitPrice)],
                 ["Subtotal", formatMoney(selectedPurchase.subtotal)],
-                ["Tax", formatMoney(selectedPurchase.tax)],
-                ["Discount", formatMoney(selectedPurchase.discount)],
+                ["Tax", formatMoney(selectedPurchase.taxAmount)],
+                ["Discount", formatMoney(selectedPurchase.discountAmount)],
                 ["Total Amount", formatMoney(selectedPurchase.totalAmount)],
                 ["Status", selectedPurchase.status],
-                ["Payment Status", selectedPurchase.paymentStatus],
-                ["Payment Method", selectedPurchase.paymentMethod],
                 ["Purchase Date", formatDate(selectedPurchase.purchaseDate)],
                 ["Delivery Date", formatDate(selectedPurchase.deliveryDate)],
-                ["Invoice Number", selectedPurchase.invoiceNumber],
-                ["Invoice Date", formatDate(selectedPurchase.invoiceDate)],
-                ["Payment Date", formatDate(selectedPurchase.paymentDate)],
-                ["Requested By", selectedPurchase.requestedBy],
-                ["Approved By", selectedPurchase.approvedBy],
+                ["Created By", selectedPurchase.createdBy],
+                ["Approved By", selectedPurchase.approvedByName],
                 ["Notes", selectedPurchase.notes],
               ].map(([label, value]) => (
                 <div
@@ -1230,6 +1178,12 @@ export default function FinancePurchaseHistory() {
           </div>
         </div>
       )}
+              <div className="detail-item full">
+                <div className="detail-label">Items</div>
+                <div className="detail-value">
+                  {(selectedPurchase.items || []).map((item) => `${item.itemName} | Qty ${item.quantity} | ${formatMoney(item.unitPrice)} each | ${formatMoney(item.lineTotal)}`).join("\n") || "—"}
+                </div>
+              </div>
     </div>
   );
 }

@@ -921,7 +921,7 @@ export default function FinancePayments() {
           <div>
             <h1>Mekdela Amba University</h1>
             <div class="muted">
-              Smart University Asset Management System
+              University Asset Management System
             </div>
           </div>
 

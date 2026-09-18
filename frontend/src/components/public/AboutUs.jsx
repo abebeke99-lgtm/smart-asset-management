@@ -10,7 +10,7 @@ const AboutUs = () => {
 
   const t = language === 'en' ? {
     pageTitle: 'About Us',
-    pageSubtitle: 'Learn about our mission, vision, and the team behind Mekdela Amba University\'s Smart Asset Management System',
+    pageSubtitle: 'Learn about our mission, vision, and the team behind Mekdela Amba University\'s University Asset Management System',
     missionTitle: '🎯 Our Mission',
     missionText: 'To provide a comprehensive, efficient, and transparent asset management system for Mekdela Amba University using modern technologies. We aim to streamline asset tracking, maintenance, and reporting to enhance operational efficiency and accountability.',
     visionTitle: '👁️ Our Vision',
@@ -304,7 +304,7 @@ const AboutUs = () => {
 
         {/* Why We Built This System */}
         <section className="about-section about-purpose">
-          <div className="about-section-heading"><span className="about-kicker">Purpose</span><h2>Why We Built This System</h2><p>The Smart University Asset Management System was designed to help university departments manage assets more efficiently, improve accountability, simplify maintenance workflows, and provide better visibility into institutional resources.</p></div>
+          <div className="about-section-heading"><span className="about-kicker">Purpose</span><h2>Why We Built This System</h2><p>The University Asset Management System was designed to help university departments manage assets more efficiently, improve accountability, simplify maintenance workflows, and provide better visibility into institutional resources.</p></div>
           <div className="about-grid about-grid-four">{purposeItems.map(({ icon: Icon, title, text }) => <article className="about-mini-card" key={title}><Icon size={28} aria-hidden="true" /><h3>{title}</h3><p>{text}</p></article>)}</div>
         </section>
 
@@ -436,7 +436,7 @@ const AboutUs = () => {
             color: isDark ? '#cbd5e1' : '#475569',
             marginBottom: '32px'
           }}>
-            Start using the Smart University Asset Management System to manage university resources more efficiently.
+            Start using the University Asset Management System to manage university resources more efficiently.
           </p>
 
           <Link

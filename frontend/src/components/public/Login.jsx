@@ -3,9 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 import { useAuth } from '../../contexts/AuthContext';
-import { useLanguage, useTheme } from '../../contexts/UiContext';
+import { useLanguage } from '../../contexts/UiContext';
 import { apiBase } from '../../utils/api';
-import { Building2, Eye, EyeOff, Landmark, Lock, LogIn, Mail, ShieldCheck, ShoppingCart, Wrench, Laptop } from 'lucide-react';
+import { Activity, ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -15,33 +15,12 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   const [backendStatus, setBackendStatus] = useState('checking');
-  const [activeRole, setActiveRole] = useState(null);
 
   const { login } = useAuth();
   const { language } = useLanguage();
-  const { theme } = useTheme();
   const navigate = useNavigate();
 
-  const isDark = theme === 'dark';
-
   const t = language === 'en' ? englishTranslations : amharicTranslations;
-
-  const roles = [
-    { id: 'admin', label: 'Admin', icon: ShieldCheck },
-    { id: 'store_manager', label: 'Store Mgr', icon: ShoppingCart },
-    { id: 'ict_officer', label: 'ICT Officer', icon: Laptop },
-    { id: 'college', label: 'College', icon: Building2 },
-    { id: 'finance', label: 'Finance', icon: Landmark },
-    { id: 'maintenance', label: 'Maintenance', icon: Wrench },
-    { id: 'infrastructure', label: 'Infrastructure', icon: Building2 },
-  ];
-
-  const handleQuickFillRole = (roleId) => {
-    setActiveRole(roleId);
-    setUsername(roleId);
-    setPassword('');
-    setError(null);
-  };
 
   useEffect(() => {
     let mounted = true;
@@ -75,6 +54,8 @@ const Login = () => {
         admin: '/admin',
         ict_officer: '/ict',
         college: '/college',
+        department_head: '/department',
+        department: '/department',
         finance: '/finance',
         store_manager: '/store',
         maintenance: '/maintenance',
@@ -92,153 +73,69 @@ const Login = () => {
   return (
     <>
       <style>{`
-        * { box-sizing: border-box; }
-        .login-root {
-          min-height: 100vh;
-          width: 100%;
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 30px 20px;
-          overflow-x: hidden;
-          font-family: Inter, system-ui, sans-serif;
-        }
-        .login-light { background: #f8fafc; }
-        .login-dark { background: #e2e8f0; }
-        .login-background { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
-        .login-orb { display: none; }
-        .login-card {
-          position: relative;
-          z-index: 2;
-          width: 100%;
-          max-width: 470px;
-          padding: 40px 32px 30px;
-          border-radius: 20px;
-          backdrop-filter: blur(16px);
-          animation: loginIn .55s ease-out;
-        }
-        .login-light .login-card { background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 20px 50px rgba(15,23,42,.12); }
-        .login-dark .login-card { background: #ffffff; border: 1px solid #cbd5e1; box-shadow: 0 30px 80px rgba(15,23,42,.18); }
-        @keyframes loginIn { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-        .login-heading { text-align: center; margin-bottom: 21px; }
-        .login-heading h1 { margin: 0; font-size: 25px; font-weight: 850; }
-        .login-light .login-heading h1 { color: #0f172a; }
-        .login-dark .login-heading h1 { color: #0f172a; }
-        .login-heading p { margin: 7px auto 0; font-size: 13px; color: #64748b; }
-        .login-status-card { min-height: 42px; display: flex; align-items: center; justify-content: space-between; padding: 7px 12px; margin-bottom: 13px; border-radius: 12px; }
-        .login-light .login-status-card { background: #f1f5f9; border: 1px solid #e2e8f0; }
-        .login-dark .login-status-card { background: #f1f5f9; border: 1px solid #e2e8f0; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
-        .status-online { background: #10b981; box-shadow: 0 0 9px rgba(16,185,129,.8); }
-        .status-offline { background: #ef4444; }
-        .status-checking { background: #f59e0b; animation: statusPulse 1s infinite; }
-        @keyframes statusPulse { 50% { opacity: .35; } }
-        .rfid-button { background: transparent; border: none; color: #2563eb; font-size: 11px; font-weight: 700; cursor: pointer; }
-        .role-selector { margin-bottom: 17px; padding: 12px; border-radius: 14px; }
-        .login-light .role-selector { background: #f8fafc; border: 1px solid #e2e8f0; }
-        .login-dark .role-selector { background: #f8fafc; border: 1px solid #e2e8f0; }
-        .role-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; }
-        .role-button { padding: 8px 5px; border-radius: 9px; border: 1px solid transparent; cursor: pointer; font-size: 10px; font-weight: 700; transition: transform .15s ease; }
-        .login-light .role-button { background: #fff; color: #1e293b; border-color: #e2e8f0; }
-        .login-dark .role-button { background: #ffffff; color: #1e293b; border-color: #e2e8f0; }
-        .role-button.role-active { border-color: var(--primary-blue); box-shadow: 0 0 0 1px var(--primary-blue); }
-        .login-error { padding: 10px 12px; border-left: 4px solid #ef4444; border-radius: 8px; font-size: 12px; color: #ef4444; background: rgba(239,68,68,0.1); margin-bottom: 15px; }
-        .login-input-wrapper input { width: 100%; height: 48px; padding: 0 15px 0 40px; border-radius: 10px; outline: none; border: 1px solid #cbd5e1; margin-bottom: 5px; transition: border-color .2s, box-shadow .2s; }
-        .login-input-wrapper input:focus { border-color: #0ea5e9; box-shadow: 0 0 0 4px rgba(14,165,233,.12); }
-        .login-dark .login-input-wrapper input { background: #ffffff; color: #0f172a; border-color: #cbd5e1; }
-        .forgot-link { display: block; text-align: right; margin-bottom: 15px; font-size: 11px; color: #2563eb; text-decoration: none; font-weight: 600; }
+        .login-page { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(420px, .92fr); background: #f8fafc; color: #0f172a; font-family: Georgia, 'Times New Roman', serif; }
+        .login-brand { position: relative; display: flex; align-items: center; overflow: hidden; padding: clamp(32px, 7vw, 96px); background: linear-gradient(145deg, #082f49 0%, #0f4c81 54%, #0ea5e9 100%); color: white; }
+        .login-brand:before, .login-brand:after { content: ''; position: absolute; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; pointer-events: none; }
+        .login-brand:before { width: 560px; height: 560px; right: -260px; top: -140px; }
+        .login-brand:after { width: 330px; height: 330px; left: -200px; bottom: -170px; }
+        .login-brand-content { position: relative; z-index: 1; max-width: 580px; animation: login-rise .6s ease-out both; }
+        .login-logo { display: block; width: 190px; height: 190px; margin-bottom: 24px; border-radius: 24px; object-fit: contain; background: rgba(255,255,255,.98); box-shadow: 0 15px 35px rgba(2, 24, 44, .25); }
+        .login-brand h1 { max-width: 550px; margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(2.15rem, 4vw, 4rem); line-height: 1.04; letter-spacing: 0; }
+        .login-brand p { max-width: 450px; margin: 24px 0 0; color: #dbeafe; font: 500 1.05rem/1.7 Arial, sans-serif; }
+        .login-brand-mark { display: inline-flex; align-items: center; gap: 10px; margin-top: 46px; color: #bae6fd; font: 700 .76rem/1 Arial, sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+        .login-panel { display: flex; align-items: center; justify-content: center; padding: 28px; background: #f8fafc; }
+        .login-card { width: min(100%, 450px); padding: clamp(28px, 4vw, 48px); border: 1px solid #e2e8f0; border-radius: 20px; background: #fff; box-shadow: 0 24px 70px rgba(15,23,42,.12); animation: login-rise .6s .08s ease-out both; }
+        .login-heading { margin-bottom: 30px; }
+        .login-heading h2 { margin: 0; font: 800 clamp(1.7rem, 3vw, 2.15rem)/1.1 Arial, sans-serif; letter-spacing: 0; }
+        .login-heading p { margin: 10px 0 0; color: #64748b; font: 400 .95rem/1.5 Arial, sans-serif; }
+        .login-status { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 25px; color: #475569; font: 700 .78rem/1 Arial, sans-serif; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; }
+        .status-online { background: #10b981; box-shadow: 0 0 0 4px #d1fae5; }
+        .status-offline { background: #ef4444; box-shadow: 0 0 0 4px #fee2e2; }
+        .login-field { margin-bottom: 18px; }
+        .login-field label { display: block; margin-bottom: 8px; color: #334155; font: 700 .8rem/1 Arial, sans-serif; }
+        .login-input { position: relative; }
+        .login-input svg { position: absolute; left: 15px; top: 15px; color: #64748b; }
+        .login-input input { width: 100%; height: 50px; padding: 0 44px; border: 1px solid #cbd5e1; border-radius: 11px; outline: none; color: #0f172a; background: #fff; font: 400 .95rem Arial, sans-serif; transition: border-color .2s, box-shadow .2s; }
+        .login-input input:focus { border-color: #0ea5e9; box-shadow: 0 0 0 4px rgba(14,165,233,.13); }
+        .password-toggle { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 7px; color: #64748b; background: transparent; cursor: pointer; }
+        .password-toggle:hover { background: #f1f5f9; color: #2563eb; }
+        .login-error { display: flex; gap: 9px; align-items: flex-start; margin-bottom: 18px; padding: 12px 13px; border: 1px solid #fecaca; border-radius: 10px; color: #b91c1c; background: #fef2f2; font: 500 .82rem/1.45 Arial, sans-serif; }
+        .forgot-link { display: block; margin: 4px 0 24px; color: #2563eb; text-align: right; text-decoration: none; font: 700 .82rem Arial, sans-serif; }
         .forgot-link:hover { text-decoration: underline; }
-        .login-submit { width: 100%; height: 48px; border-radius: 12px; border: none; background: linear-gradient(135deg, var(--primary-blue), #2563eb); color: white; font-weight: 600; cursor: pointer; transition: background .18s, transform .18s; }
-        .login-submit:hover { background: linear-gradient(135deg, #0284c7, #1d4ed8); }
-        .login-submit:hover { transform: translateY(-1px); }
-        .login-footer { margin-top: 20px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid rgba(100,116,139,0.2); padding-top: 15px; }
+        .login-submit { width: 100%; min-height: 50px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; border: 0; border-radius: 11px; color: white; background: linear-gradient(100deg, #0ea5e9, #2563eb); cursor: pointer; font: 700 .95rem Arial, sans-serif; transition: transform .2s, box-shadow .2s, opacity .2s; }
+        .login-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 22px rgba(37,99,235,.24); }
+        .login-submit:disabled { cursor: wait; opacity: .7; }
+        .login-signup { margin-top: 25px; color: #64748b; text-align: center; font: 400 .82rem Arial, sans-serif; }
+        .login-signup a { color: #2563eb; font-weight: 700; text-decoration: none; }
+        @keyframes login-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 800px) { .login-page { display: block; } .login-brand { min-height: 320px; padding: 38px 28px; align-items: flex-end; } .login-logo { width: 132px; height: 132px; margin-bottom: 18px; border-radius: 20px; } .login-brand h1 { font-size: 2rem; } .login-brand p { margin-top: 12px; font-size: .9rem; } .login-brand-mark { margin-top: 22px; } .login-panel { min-height: calc(100vh - 320px); padding: 22px 16px 36px; } }
       `}</style>
-
-      <div className={`login-root ${isDark ? 'login-dark' : 'login-light'}`}>
-        <div className="login-background">
-          <div className="login-orb login-orb-one" />
-          <div className="login-orb login-orb-two" />
-        </div>
-
-        <main className="login-card">
-          <div className="login-heading">
-            <h1>{t.title}</h1>
-            <p>{t.subtitle}</p>
+      <main className="login-page">
+        <section className="login-brand" aria-label="Mekdela Amba University">
+          <div className="login-brand-content">
+            <img className="login-logo" src="/assets/mekdela-amba-university-logo.png" alt="Mekdela Amba University logo" width="190" height="190" />
+            <h1>Mekdela Amba University</h1>
+            <p>University Asset Management System</p>
+            <p>Securely manage university assets, inventory, assignments and operations.</p>
+            <div className="login-brand-mark"><ShieldCheck size={16} aria-hidden="true" /> Trusted institutional access</div>
           </div>
-
-          <div className="login-status-card">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '11px', fontWeight: '600', color: '#64748b' }}>
-              <span className={`status-dot ${backendStatus === 'online' ? 'status-online' : backendStatus === 'offline' ? 'status-offline' : 'status-checking'}`} />
-              <span>System {backendStatus}</span>
-            </div>
-          </div>
-
-          <section className="role-selector">
-            <div className="role-grid">
-              {roles.map((role) => (
-                <button
-                  key={role.id}
-                  type="button"
-                  className={`role-button ${activeRole === role.id ? 'role-active' : ''}`}
-                  onClick={() => handleQuickFillRole(role.id)}
-                >
-                  <role.icon size={15} aria-hidden="true" />
-                  <span className="role-label">{role.label}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {error && <div className="login-error">{error}</div>}
-
-          <form onSubmit={handleLogin}>
-            <div className="login-input-wrapper" style={{ position: 'relative' }}>
-              <Mail size={17} style={{ position: 'absolute', left: '13px', top: '15px', opacity: 0.5 }} aria-hidden="true" />
-              <input
-                type="text"
-                aria-label={t.usernamePlaceholder}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder={t.usernamePlaceholder}
-                disabled={loading}
-              />
-            </div>
-
-            <div className="login-input-wrapper" style={{ position: 'relative' }}>
-              <Lock size={17} style={{ position: 'absolute', left: '13px', top: '15px', opacity: 0.5 }} aria-hidden="true" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                aria-label={t.passwordPlaceholder}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={t.passwordPlaceholder}
-                disabled={loading}
-              />
-              <button
-                type="button"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                style={{ position: 'absolute', right: '10px', top: '12px', background: 'none', border: 'none', cursor: 'pointer' }}
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
-              </button>
-            </div>
-
-            <Link to="/forgot-password" size="sm" className="forgot-link">
-              {t.forgotPassword}
-            </Link>
-
-            <button type="submit" className="login-submit" disabled={loading}>
-              {loading ? 'Logging in...' : <><LogIn size={17} aria-hidden="true" /> {t.signIn}</>}
-            </button>
-          </form>
-
-          <div className="login-footer">
-            <span>{t.noAccount}</span> <Link to="/register" style={{ color: '#2563eb', fontWeight: 'bold' }}>{t.signUp}</Link>
-          </div>
-        </main>
-      </div>
+        </section>
+        <section className="login-panel">
+          <main className="login-card">
+            <div className="login-heading"><h2>{t.title}</h2><p>Sign in to access the system</p></div>
+            <div className="login-status"><span className={`status-dot ${backendStatus === 'online' ? 'status-online' : backendStatus === 'offline' ? 'status-offline' : ''}`} /><Activity size={15} aria-hidden="true" /> System {backendStatus}</div>
+            {error && <div className="login-error" role="alert"><ShieldCheck size={17} aria-hidden="true" /> <span>{error}</span></div>}
+            <form onSubmit={handleLogin}>
+              <div className="login-field"><label htmlFor="login-username">Username or Email</label><div className="login-input"><Mail size={18} aria-hidden="true" /><input id="login-username" type="text" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={t.usernamePlaceholder} disabled={loading} /></div></div>
+              <div className="login-field"><label htmlFor="login-password">Password</label><div className="login-input"><LockKeyhole size={18} aria-hidden="true" /><input id="login-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t.passwordPlaceholder} disabled={loading} /><button className="password-toggle" type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}</button></div></div>
+              <Link to="/forgot-password" className="forgot-link">{t.forgotPassword}</Link>
+              <button type="submit" className="login-submit" disabled={loading}>{loading ? 'Signing in...' : <><span>{t.signIn}</span><ArrowRight size={17} aria-hidden="true" /></>}</button>
+            </form>
+            <div className="login-signup"><span>{t.noAccount}</span> <Link to="/register">{t.signUp}</Link></div>
+          </main>
+        </section>
+      </main>
     </>
   );
 };

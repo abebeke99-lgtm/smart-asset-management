@@ -1484,6 +1484,15 @@ const SummaryCard = ({
   </div>
 );
 
+const inputStyle = {
+  width: "100%",
+  padding: "10px 12px",
+  border: "1px solid #dbe3ef",
+  borderRadius: "8px",
+  boxSizing: "border-box",
+  background: "#fff",
+};
+
 const Select = ({
   label,
   value,

@@ -435,6 +435,7 @@ export default function FinanceFinancialReports() {
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
 
   const [loading, setLoading] = useState(true);
   const [loadingFilters, setLoadingFilters] = useState(true);
@@ -507,7 +508,12 @@ export default function FinanceFinancialReports() {
     setError("");
 
     try {
-      const query = buildQuery(appliedFilters);
+      const query = buildQuery({
+        ...appliedFilters,
+        page,
+        limit: PAGE_SIZE,
+        ...(search.trim() ? { search: search.trim() } : {}),
+      });
 
       const payload = await request(
         `/finance/financial-reports${query ? `?${query}` : ""}`
@@ -517,6 +523,7 @@ export default function FinanceFinancialReports() {
       const rows = extractArray(payload).map(normalizeReport);
 
       setReports(rows);
+      setTotalRecords(Number(root.pagination?.total || rows.length));
 
       const serverSummary = getReportResponseSummary(payload);
 
@@ -558,7 +565,7 @@ export default function FinanceFinancialReports() {
         setTimeout(() => setSuccess(""), 3000);
       }
 
-      setPage(1);
+      if (page !== 1 && rows.length === 0) setPage(1);
     } catch (err) {
       setReports([]);
       setSummary({
@@ -578,7 +585,7 @@ export default function FinanceFinancialReports() {
     } finally {
       setLoading(false);
     }
-  }, [appliedFilters]);
+  }, [appliedFilters, page, search]);
 
   useEffect(() => {
     loadFilters();
@@ -588,36 +595,10 @@ export default function FinanceFinancialReports() {
     loadReports();
   }, [loadReports]);
 
-  const filteredReports = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  const filteredReports = reports;
 
-    if (!query) return reports;
-
-    return reports.filter((report) =>
-      [
-        report.reportNumber,
-        report.reportType,
-        report.financialYear,
-        report.department,
-        report.category,
-        report.status,
-        report.notes,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [reports, search]);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredReports.length / PAGE_SIZE)
-  );
-
-  const paginatedReports = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filteredReports.slice(start, start + PAGE_SIZE);
-  }, [filteredReports, page]);
+  const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
+  const paginatedReports = filteredReports;
 
   useEffect(() => {
     if (page > totalPages) {
@@ -682,76 +663,21 @@ export default function FinanceFinancialReports() {
     }
   };
 
-  const exportCsv = () => {
-    if (!filteredReports.length) {
-      setError("There is no report data to export.");
-      return;
+  const exportCsv = async () => {
+    try {
+      const query = buildQuery({ ...appliedFilters, search: search.trim(), export: "csv" });
+      const response = await fetch(`${API_URL}/finance/financial-reports?${query}`, { headers: authHeaders() });
+      if (!response.ok) throw new Error("Unable to export financial report");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `financial-reports-${new Date().toISOString().slice(0, 10)}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || "Unable to export financial report.");
     }
-
-    const headers = [
-      "Report Number",
-      "Report Type",
-      "Report Date",
-      "Period From",
-      "Period To",
-      "Financial Year",
-      "Department",
-      "Category",
-      "Total Assets",
-      "Acquisition Cost",
-      "Current Book Value",
-      "Accumulated Depreciation",
-      "Capital Additions",
-      "Purchases",
-      "Payments",
-      "Transactions",
-      "Currency",
-      "Status",
-    ];
-
-    const rows = filteredReports.map((report) => [
-      report.reportNumber,
-      report.reportType,
-      formatDate(report.reportDate),
-      formatDate(report.dateFrom),
-      formatDate(report.dateTo),
-      report.financialYear,
-      report.department,
-      report.category,
-      report.totalAssets,
-      report.acquisitionCost,
-      report.currentBookValue,
-      report.accumulatedDepreciation,
-      report.capitalAdditions,
-      report.purchases,
-      report.payments,
-      report.transactions,
-      report.currency,
-      report.status,
-    ]);
-
-    const csv = [
-      headers.map(escapeCsv).join(","),
-      ...rows.map((row) => row.map(escapeCsv).join(",")),
-    ].join("\n");
-
-    const blob = new Blob([csv], {
-      type: "text/csv;charset=utf-8;",
-    });
-
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-
-    anchor.href = url;
-    anchor.download = `financial-reports-${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
-
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-
-    URL.revokeObjectURL(url);
   };
 
   const printReport = () => {

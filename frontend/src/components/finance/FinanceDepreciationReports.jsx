@@ -542,6 +542,7 @@ export default function FinanceDepreciationReports() {
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, limit: PAGE_SIZE, total: 0, pages: 1 });
 
   const [loading, setLoading] = useState(true);
   const [loadingFilters, setLoadingFilters] =
@@ -649,7 +650,12 @@ export default function FinanceDepreciationReports() {
     setError("");
 
     try {
-      const query = buildQuery(appliedFilters);
+      const query = buildQuery({
+        ...appliedFilters,
+        search: search.trim(),
+        page,
+        limit: PAGE_SIZE,
+      });
 
       const payload = await request(
         `/finance/depreciation-reports${
@@ -663,7 +669,7 @@ export default function FinanceDepreciationReports() {
 
       setReports(rows);
       setSummary(normalizeSummary(payload, rows));
-      setPage(1);
+      setPagination(payload.pagination || { page, limit: PAGE_SIZE, total: rows.length, pages: 1 });
     } catch (err) {
       setReports([]);
 
@@ -682,7 +688,7 @@ export default function FinanceDepreciationReports() {
     } finally {
       setLoading(false);
     }
-  }, [appliedFilters]);
+  }, [appliedFilters, page, search]);
 
   useEffect(() => {
     loadFilters();
@@ -692,48 +698,9 @@ export default function FinanceDepreciationReports() {
     loadReports();
   }, [loadReports]);
 
-  const filteredReports = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    if (!query) return reports;
-
-    return reports.filter((report) =>
-      [
-        report.reportNumber,
-        report.assetCode,
-        report.assetName,
-        report.category,
-        report.department,
-        report.financialYear,
-        report.depreciationMethod,
-        report.status,
-        report.notes,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [reports, search]);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredReports.length / PAGE_SIZE)
-  );
-
-  const paginatedReports = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-
-    return filteredReports.slice(
-      start,
-      start + PAGE_SIZE
-    );
-  }, [filteredReports, page]);
-
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
-  }, [page, totalPages]);
+  const filteredReports = reports;
+  const totalPages = Math.max(1, pagination.pages || 1);
+  const paginatedReports = reports;
 
   const depreciationPercentage =
     summary.acquisitionCost > 0
@@ -753,6 +720,7 @@ export default function FinanceDepreciationReports() {
 
   const applyFilters = (event) => {
     event.preventDefault();
+    setPage(1);
     setAppliedFilters(filters);
   };
 
@@ -760,84 +728,30 @@ export default function FinanceDepreciationReports() {
     setFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
     setSearch("");
+    setPage(1);
   };
 
-  const exportCsv = () => {
-    if (!filteredReports.length) {
-      setError(
-        "There is no depreciation report data to export."
-      );
+  const exportCsv = async () => {
+    if (!pagination.total) {
+      setError("There is no depreciation report data to export.");
       return;
     }
 
-    const headers = [
-      "Report Number",
-      "Asset Code",
-      "Asset Name",
-      "Category",
-      "Department",
-      "Financial Year",
-      "Period From",
-      "Period To",
-      "Depreciation Method",
-      "Acquisition Cost",
-      "Residual Value",
-      "Useful Life",
-      "Remaining Life",
-      "Depreciation Rate",
-      "Current Depreciation",
-      "Accumulated Depreciation",
-      "Book Value",
-      "Status",
-      "Currency",
-    ];
-
-    const rows = filteredReports.map((report) => [
-      report.reportNumber,
-      report.assetCode,
-      report.assetName,
-      report.category,
-      report.department,
-      report.financialYear,
-      formatDate(report.periodFrom),
-      formatDate(report.periodTo),
-      report.depreciationMethod,
-      report.acquisitionCost,
-      report.residualValue,
-      report.usefulLife,
-      report.remainingLife,
-      report.depreciationRate,
-      report.currentDepreciation,
-      report.accumulatedDepreciation,
-      report.bookValue,
-      report.status,
-      report.currency,
-    ]);
-
-    const csv = [
-      headers.map(escapeCsv).join(","),
-      ...rows.map((row) =>
-        row.map(escapeCsv).join(",")
-      ),
-    ].join("\n");
-
-    const blob = new Blob([csv], {
-      type: "text/csv;charset=utf-8;",
-    });
-
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-
-    anchor.href = url;
-    anchor.download = `depreciation-reports-${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
-
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-
-    URL.revokeObjectURL(url);
+    try {
+      const query = buildQuery({ ...appliedFilters, search: search.trim(), export: "csv" });
+      const csv = await request(`/finance/depreciation-reports?${query}`);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `depreciation-reports-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || "Unable to export depreciation reports.");
+    }
   };
 
   const printReport = () => {
@@ -2171,13 +2085,8 @@ export default function FinanceDepreciationReports() {
 
               <div className="pagination">
                 <span>
-                  Showing{" "}
-                  {(page - 1) * PAGE_SIZE + 1} to{" "}
-                  {Math.min(
-                    page * PAGE_SIZE,
-                    filteredReports.length
-                  )}{" "}
-                  of {filteredReports.length} reports
+                    Showing {pagination.total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1} to{" "}
+                    {Math.min(page * PAGE_SIZE, pagination.total)} of {pagination.total} reports
                 </span>
 
                 <div className="pagination-buttons">

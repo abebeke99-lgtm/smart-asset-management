@@ -31,6 +31,7 @@ const EMPTY_FILTERS = {
   department: "",
   category: "",
   status: "",
+  location: "",
 };
 
 const STATUSES = [
@@ -161,6 +162,10 @@ function textValue(...values) {
 }
 
 function formatMoney(value, currency = "ETB") {
+  if (value === null || value === undefined || value === "") {
+    return "Unavailable";
+  }
+
   return `${currency} ${(
     Number(value) || 0
   ).toLocaleString(undefined, {
@@ -240,40 +245,26 @@ function normalizeReport(item) {
     asset.purchasePrice
   );
 
-  const accumulatedDepreciation = numberValue(
+  const accumulatedDepreciation = firstValue(
     item.accumulated_depreciation,
-    item.accumulatedDepreciation,
-    item.total_depreciation,
-    item.totalDepreciation,
-    item.depreciation_to_date,
-    item.depreciationToDate
+    item.accumulatedDepreciation
   );
 
-  const bookValue = numberValue(
-    item.book_value,
-    item.bookValue,
+  const capitalizedValue = firstValue(
+    item.capitalized_value,
+    item.capitalizedValue
+  );
+
+  const netBookValue = firstValue(
     item.net_book_value,
     item.netBookValue,
-    acquisitionCost - accumulatedDepreciation
+    item.book_value,
+    item.bookValue
   );
 
-  const fairValue = numberValue(
-    item.fair_value,
-    item.fairValue,
-    item.market_value,
-    item.marketValue
-  );
-
-  const replacementValue = numberValue(
-    item.replacement_value,
-    item.replacementValue
-  );
-
-  const residualValue = numberValue(
-    item.residual_value,
-    item.residualValue,
-    item.salvage_value,
-    item.salvageValue
+  const currentValuation = firstValue(
+    item.current_valuation,
+    item.currentValuation
   );
 
   return {
@@ -339,15 +330,17 @@ function normalizeReport(item) {
 
     acquisitionCost,
 
-    accumulatedDepreciation,
+    capitalizedValue: capitalizedValue === undefined ? null : numberValue(capitalizedValue),
 
-    bookValue,
+    accumulatedDepreciation: accumulatedDepreciation === undefined ? null : numberValue(accumulatedDepreciation),
 
-    fairValue,
+    bookValue: netBookValue === undefined ? null : numberValue(netBookValue),
 
-    replacementValue,
+    fairValue: currentValuation === undefined ? null : numberValue(currentValuation),
 
-    residualValue,
+    replacementValue: null,
+
+    residualValue: null,
 
     currency: textValue(
       item.currency,
@@ -382,14 +375,14 @@ function normalizeSummary(payload, rows) {
         row.acquisitionCost,
       accumulatedDepreciation:
         acc.accumulatedDepreciation +
-        row.accumulatedDepreciation,
+        (row.accumulatedDepreciation || 0),
       bookValue:
-        acc.bookValue + row.bookValue,
+        acc.bookValue + (row.bookValue || 0),
       fairValue:
-        acc.fairValue + row.fairValue,
+        acc.fairValue + (row.fairValue || 0),
       replacementValue:
         acc.replacementValue +
-        row.replacementValue,
+        (row.replacementValue || 0),
     }),
     {
       assets: 0,
@@ -419,6 +412,11 @@ function normalizeSummary(payload, rows) {
       calculated.acquisitionCost
     ),
 
+    capitalizedValue: numberValue(
+      summary.capitalized_value,
+      summary.capitalizedValue
+    ),
+
     accumulatedDepreciation: numberValue(
       summary.accumulated_depreciation,
       summary.accumulatedDepreciation,
@@ -427,9 +425,11 @@ function normalizeSummary(payload, rows) {
       calculated.accumulatedDepreciation
     ),
 
-    bookValue: numberValue(
+    netBookValue: numberValue(
+      summary.net_book_value,
+      summary.netBookValue,
       summary.book_value,
-      summary.bookValue,
+      summary.netBookValue,
       summary.current_book_value,
       summary.currentBookValue,
       summary.net_book_value,
@@ -437,21 +437,16 @@ function normalizeSummary(payload, rows) {
       calculated.bookValue
     ),
 
-    fairValue: numberValue(
+    currentValuation: numberValue(
+      summary.current_valuation,
+      summary.currentValuation,
       summary.fair_value,
-      summary.fairValue,
+      summary.currentValuation,
       summary.total_fair_value,
       summary.totalFairValue,
       calculated.fairValue
     ),
 
-    replacementValue: numberValue(
-      summary.replacement_value,
-      summary.replacementValue,
-      summary.total_replacement_value,
-      summary.totalReplacementValue,
-      calculated.replacementValue
-    ),
   };
 }
 
@@ -510,16 +505,17 @@ export default function FinanceAssetValueReports() {
   const [summary, setSummary] = useState({
     assets: 0,
     acquisitionCost: 0,
+    capitalizedValue: 0,
     accumulatedDepreciation: 0,
-    bookValue: 0,
-    fairValue: 0,
-    replacementValue: 0,
+    netBookValue: 0,
+    currentValuation: 0,
   });
 
   const [departments, setDepartments] = useState([]);
   const [categories, setCategories] = useState([]);
   const [financialYears, setFinancialYears] =
     useState([]);
+  const [statuses, setStatuses] = useState([]);
 
   const [filters, setFilters] =
     useState(EMPTY_FILTERS);
@@ -529,6 +525,7 @@ export default function FinanceAssetValueReports() {
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, pages: 1 });
 
   const [loading, setLoading] = useState(true);
   const [loadingFilters, setLoadingFilters] =
@@ -636,9 +633,12 @@ export default function FinanceAssetValueReports() {
     setError("");
 
     try {
-      const query = buildQuery(
-        appliedFilters
-      );
+      const query = buildQuery({
+        ...appliedFilters,
+        search,
+        page,
+        limit: PAGE_SIZE,
+      });
 
       const payload = await request(
         `/finance/asset-value-reports${
@@ -654,17 +654,21 @@ export default function FinanceAssetValueReports() {
       setSummary(
         normalizeSummary(payload, rows)
       );
-      setPage(1);
+      setPagination(payload.pagination || { total: rows.length, pages: 1 });
+      const filterData = payload.filters || extractObject(payload).filters || {};
+      setStatuses(filterData.statuses || []);
+      setCategories((filterData.categories || []).map((item) => typeof item === "string" ? { name: item } : item));
+      setFinancialYears(filterData.financialYears || []);
     } catch (err) {
       setReports([]);
 
       setSummary({
         assets: 0,
         acquisitionCost: 0,
+        capitalizedValue: 0,
         accumulatedDepreciation: 0,
-        bookValue: 0,
-        fairValue: 0,
-        replacementValue: 0,
+        netBookValue: 0,
+        currentValuation: 0,
       });
 
       setError(
@@ -674,7 +678,7 @@ export default function FinanceAssetValueReports() {
     } finally {
       setLoading(false);
     }
-  }, [appliedFilters]);
+  }, [appliedFilters, page, search]);
 
   useEffect(() => {
     loadFilters();
@@ -684,56 +688,11 @@ export default function FinanceAssetValueReports() {
     loadReports();
   }, [loadReports]);
 
-  const filteredReports = useMemo(() => {
-    const query = search
-      .trim()
-      .toLowerCase();
-
-    if (!query) return reports;
-
-    return reports.filter((report) =>
-      [
-        report.reportNumber,
-        report.assetCode,
-        report.assetName,
-        report.category,
-        report.department,
-        report.financialYear,
-        report.status,
-        report.notes,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query)
-    );
-  }, [reports, search]);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(
-      filteredReports.length / PAGE_SIZE
-    )
-  );
-
-  const paginatedReports = useMemo(() => {
-    const start =
-      (page - 1) * PAGE_SIZE;
-
-    return filteredReports.slice(
-      start,
-      start + PAGE_SIZE
-    );
-  }, [filteredReports, page]);
-
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
-  }, [page, totalPages]);
+  const totalPages = Math.max(1, Number(pagination.pages || 1));
 
   const bookValuePercentage =
     summary.acquisitionCost > 0
-      ? (summary.bookValue /
+        ? (summary.netBookValue /
           summary.acquisitionCost) *
         100
       : 0;
@@ -752,6 +711,7 @@ export default function FinanceAssetValueReports() {
     event.preventDefault();
 
     setAppliedFilters(filters);
+    setPage(1);
   };
 
   const clearFilters = () => {
@@ -761,79 +721,27 @@ export default function FinanceAssetValueReports() {
   };
 
   const exportCsv = () => {
-    if (!filteredReports.length) {
+    if (!pagination.total) {
       setError(
         "There is no asset value report data to export."
       );
       return;
     }
 
-    const headers = [
-      "Report Number",
-      "Asset Code",
-      "Asset Name",
-      "Category",
-      "Department",
-      "Financial Year",
-      "Valuation Date",
-      "Acquisition Cost",
-      "Accumulated Depreciation",
-      "Book Value",
-      "Fair Value",
-      "Replacement Value",
-      "Residual Value",
-      "Status",
-      "Currency",
-    ];
-
-    const rows =
-      filteredReports.map((report) => [
-        report.reportNumber,
-        report.assetCode,
-        report.assetName,
-        report.category,
-        report.department,
-        report.financialYear,
-        formatDate(
-          report.valuationDate
-        ),
-        report.acquisitionCost,
-        report.accumulatedDepreciation,
-        report.bookValue,
-        report.fairValue,
-        report.replacementValue,
-        report.residualValue,
-        report.status,
-        report.currency,
-      ]);
-
-    const csv = [
-      headers.map(escapeCsv).join(","),
-      ...rows.map((row) =>
-        row.map(escapeCsv).join(",")
-      ),
-    ].join("\n");
-
-    const blob = new Blob([csv], {
-      type: "text/csv;charset=utf-8;",
-    });
-
-    const url =
-      URL.createObjectURL(blob);
-
-    const anchor =
-      document.createElement("a");
-
-    anchor.href = url;
-    anchor.download = `asset-value-reports-${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
-
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-
-    URL.revokeObjectURL(url);
+    const query = buildQuery({ ...appliedFilters, search, export: "csv" });
+    fetch(`${API_URL}/finance/asset-value-reports?${query}`, { headers: authHeaders() })
+      .then((response) => response.blob())
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `asset-value-reports-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      })
+      .catch((err) => setError(err.message || "Unable to export asset value reports."));
   };
 
   const printReport = () => {
@@ -1594,7 +1502,7 @@ export default function FinanceAssetValueReports() {
               className="btn btn-primary"
               onClick={exportCsv}
               disabled={
-                !filteredReports.length
+                !pagination.total
               }
             >
               <Download size={16} />
@@ -1700,7 +1608,7 @@ export default function FinanceAssetValueReports() {
 
             <div className="summary-value">
               {formatMoney(
-                summary.bookValue
+                summary.netBookValue
               )}
             </div>
 
@@ -1752,7 +1660,7 @@ export default function FinanceAssetValueReports() {
 
             <div className="summary-value">
               {formatMoney(
-                summary.fairValue
+                summary.currentValuation
               )}
             </div>
 
@@ -1926,7 +1834,7 @@ export default function FinanceAssetValueReports() {
                     All Statuses
                   </option>
 
-                  {STATUSES.map(
+                  {(statuses.length ? statuses : STATUSES).map(
                     (status) => (
                       <option
                         key={status}
@@ -1983,7 +1891,7 @@ export default function FinanceAssetValueReports() {
               className="btn"
               onClick={exportCsv}
               disabled={
-                !filteredReports.length
+                !pagination.total
               }
             >
               <Download size={15} />
@@ -2025,7 +1933,7 @@ export default function FinanceAssetValueReports() {
                 from the Finance backend.
               </span>
             </div>
-          ) : filteredReports.length ===
+          ) : reports.length ===
             0 ? (
             <div className="empty-state">
               <div className="state-icon">
@@ -2053,14 +1961,10 @@ export default function FinanceAssetValueReports() {
                       <th>Department</th>
                       <th>Financial Year</th>
                       <th>Acquisition Cost</th>
-                      <th>
-                        Accumulated Dep.
-                      </th>
-                      <th>Book Value</th>
-                      <th>Fair Value</th>
-                      <th>
-                        Replacement Value
-                      </th>
+                      <th>Capitalized Value</th>
+                      <th>Accumulated Dep.</th>
+                      <th>Net Book Value</th>
+                      <th>Current Valuation</th>
                       <th>Status</th>
                       <th className="action-column">
                         Action
@@ -2069,7 +1973,7 @@ export default function FinanceAssetValueReports() {
                   </thead>
 
                   <tbody>
-                    {paginatedReports.map(
+                    {reports.map(
                       (report, index) => (
                         <tr
                           key={
@@ -2119,6 +2023,13 @@ export default function FinanceAssetValueReports() {
 
                           <td className="amount">
                             {formatMoney(
+                              report.capitalizedValue,
+                              report.currency
+                            )}
+                          </td>
+
+                          <td className="amount">
+                            {formatMoney(
                               report.acquisitionCost,
                               report.currency
                             )}
@@ -2141,13 +2052,6 @@ export default function FinanceAssetValueReports() {
                           <td className="amount">
                             {formatMoney(
                               report.fairValue,
-                              report.currency
-                            )}
-                          </td>
-
-                          <td className="amount">
-                            {formatMoney(
-                              report.replacementValue,
                               report.currency
                             )}
                           </td>
@@ -2195,10 +2099,10 @@ export default function FinanceAssetValueReports() {
                   to{" "}
                   {Math.min(
                     page * PAGE_SIZE,
-                    filteredReports.length
+                    pagination.total
                   )}{" "}
                   of{" "}
-                  {filteredReports.length}{" "}
+                  {pagination.total}{" "}
                   reports
                 </span>
 

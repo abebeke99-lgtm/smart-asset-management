@@ -32,15 +32,15 @@ const Home = () => {
   }, []);
 
   const t = language === 'en' ? {
-    heroTitle: 'Smart University Asset Management System',
+    heroTitle: 'University Asset Management System',
     heroDescription: 'Manage university assets efficiently with secure, transparent and centralized asset management.',
     getStarted: 'Get Started',
     learnMore: 'Learn More',
     heroKicker: 'MEKDELA AMBA UNIVERSITY',
     overview: 'One Platform for University Asset Operations',
     overviewText: 'Centralized asset records, controlled movement, maintenance visibility, secure access, and data-driven reporting.',
-    videoTitle: 'See Smart Asset Management in Action',
-    videoSubtitle: 'Discover how the Smart University Asset Management System helps universities track, maintain, and manage their assets efficiently.',
+    videoTitle: 'See University Asset Management in Action',
+    videoSubtitle: 'Discover how the University Asset Management System helps universities track, maintain, and manage their assets efficiently.',
     featuresTitle: 'Key Features',
     featuresSubtitle: 'Everything needed to manage university assets securely and efficiently.',
     assetManagement: 'Asset Management',
@@ -199,7 +199,7 @@ const Home = () => {
             <div className="mau-video-frame">
               <iframe
                 src="https://www.youtube.com/embed/QYgk-0KMnbg"
-                title="Smart Asset Management demonstration"
+                title="University Asset Management demonstration"
                 loading="lazy"
                 onError={() => setVideoError(true)}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

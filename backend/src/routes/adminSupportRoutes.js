@@ -1447,7 +1447,7 @@ router.get('/mfa/status', ...requireAdmin, async (req, res, next) => {
 
 router.post('/mfa/setup', ...requireAdmin, async (req, res, next) => {
   try {
-    const secret = speakeasy.generateSecret({ length: 20, name: `Smart Asset Management:${req.user.username}`, issuer: 'Smart Asset Management' });
+    const secret = speakeasy.generateSecret({ length: 20, name: `University Asset Management System:${req.user.username}`, issuer: 'University Asset Management System' });
     const backupCodes = generateBackupCodes();
     const hashes = await hashBackupCodes(backupCodes);
     const [setting, created] = await MfaSetting.findOrCreate({ where: { userId: req.user.id }, defaults: { userId: req.user.id, enabled: false, secretEncrypted: encryptMfaSecret(secret.base32), backupCodesHash: JSON.stringify(hashes) } });

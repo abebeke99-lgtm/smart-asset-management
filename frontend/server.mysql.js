@@ -275,7 +275,7 @@ async function seedInitialData() {
   const configRows = await query('SELECT COUNT(*) as count FROM config');
   const configCount = configRows[0].count;
   if (configCount === 0) {
-    await query('INSERT INTO config (`key`, `value`) VALUES (?, ?)', ['default', JSON.stringify({ welcomeMessage: 'Welcome to MAU Smart University Asset Management System', theme: 'blue' })]);
+    await query('INSERT INTO config (`key`, `value`) VALUES (?, ?)', ['default', JSON.stringify({ welcomeMessage: 'Welcome to MAU University Asset Management System', theme: 'blue' })]);
     console.log('Seeded initial config into MySQL');
   }
 
@@ -1106,7 +1106,7 @@ app.get('/api/settings', async (req, res) => {
     return res.json({
       success: true,
       settings: {
-        system_name: 'Smart University Asset Management System',
+        system_name: 'University Asset Management System',
         maintenance_mode: false,
         auto_backup: true,
         backup_frequency: 'daily',

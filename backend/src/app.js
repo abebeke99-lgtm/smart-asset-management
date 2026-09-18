@@ -108,7 +108,7 @@ const healthHandler = async (req, res) => {
     success: connected,
     status,
     database: connected ? 'connected' : 'unavailable',
-    message: connected ? 'Smart Asset Management API is ready.' : 'Database unavailable.'
+    message: connected ? 'University Asset Management API is ready.' : 'Database unavailable.'
   });
 };
 

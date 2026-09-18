@@ -1129,7 +1129,7 @@ export default function FinanceTransactions() {
           <div>
             <h1>Mekdela Amba University</h1>
             <div class="muted">
-              Smart University Asset Management System
+              University Asset Management System
             </div>
           </div>
 
@@ -2060,13 +2060,6 @@ export default function FinanceTransactions() {
               Refresh
             </button>
 
-            <button
-              className="btn btn-primary"
-              onClick={openCreate}
-            >
-              <Plus size={17} />
-              New Transaction
-            </button>
           </div>
         </div>
 
@@ -2445,13 +2438,6 @@ export default function FinanceTransactions() {
                 the current filters.
               </p>
 
-              <button
-                className="btn btn-primary"
-                onClick={openCreate}
-              >
-                <Plus size={16} />
-                Create Transaction
-              </button>
 
             </div>
           ) : (
@@ -2674,73 +2660,6 @@ export default function FinanceTransactions() {
 
                               <button
                                 className="icon-btn"
-                                title="Edit"
-                                onClick={() =>
-                                  openEdit(
-                                    transaction
-                                  )
-                                }
-                              >
-                                <Pencil
-                                  size={15}
-                                />
-                              </button>
-
-                              {[
-                                "Draft",
-                                "Pending",
-                              ].includes(
-                                transaction.status
-                              ) && (
-                                <button
-                                  className="icon-btn"
-                                  title="Post Transaction"
-                                  disabled={
-                                    processingId ===
-                                    transaction.id
-                                  }
-                                  onClick={() =>
-                                    updateStatus(
-                                      transaction,
-                                      "Posted"
-                                    )
-                                  }
-                                >
-                                  <CheckCircle
-                                    size={15}
-                                  />
-                                </button>
-                              )}
-
-                              {![
-                                "Cancelled",
-                                "Completed",
-                                "Void",
-                              ].includes(
-                                transaction.status
-                              ) && (
-                                <button
-                                  className="icon-btn"
-                                  title="Cancel"
-                                  disabled={
-                                    processingId ===
-                                    transaction.id
-                                  }
-                                  onClick={() =>
-                                    updateStatus(
-                                      transaction,
-                                      "Cancelled"
-                                    )
-                                  }
-                                >
-                                  <XCircle
-                                    size={15}
-                                  />
-                                </button>
-                              )}
-
-                              <button
-                                className="icon-btn"
                                 title="Print"
                                 onClick={() =>
                                   printTransaction(
@@ -2749,20 +2668,6 @@ export default function FinanceTransactions() {
                                 }
                               >
                                 <Printer
-                                  size={15}
-                                />
-                              </button>
-
-                              <button
-                                className="icon-btn danger"
-                                title="Delete"
-                                onClick={() =>
-                                  openDelete(
-                                    transaction
-                                  )
-                                }
-                              >
-                                <Trash2
                                   size={15}
                                 />
                               </button>

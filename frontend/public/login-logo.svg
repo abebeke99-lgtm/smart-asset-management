@@ -1,19 +1,107 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" role="img" aria-label="Mekdela Amba University logo">
   <defs>
-    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1c64f2" />
-      <stop offset="100%" stop-color="#0ea5e9" />
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#0b7ec6"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f9d55c"/>
+      <stop offset="100%" stop-color="#d89d1b"/>
+    </linearGradient>
+    <linearGradient id="book" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f6d29a"/>
+      <stop offset="100%" stop-color="#b7791f"/>
     </linearGradient>
   </defs>
-  <rect width="240" height="240" rx="48" fill="#f8fafc" />
-  <rect x="48" y="72" width="144" height="96" rx="22" fill="url(#grad)" />
-  <path d="M72 108h96v44H72z" fill="#fff" opacity="0.85" />
-  <path d="M96 108v44M120 108v44M144 108v44" stroke="#0f172a" stroke-width="6" stroke-linecap="round" opacity="0.5" />
-  <path d="M120 72v-28" stroke="#f59e0b" stroke-width="8" stroke-linecap="round" />
-  <path d="M108 56c0-8 6.5-14 14.5-14S137 48 137 56c0 8-6.5 14-14.5 14S108 64 108 56Z" fill="#fde68a" />
-  <path d="M120 42c-12 0-24 10-24 24 0 22 24 40 24 40s24-18 24-40c0-14-12-24-24-24Z" fill="#fb923c" opacity="0.9" />
-  <path d="M64 92l112-20 8 44-112 20z" fill="#fff" opacity="0.6" />
-  <path d="M64 92c0 18 16 32 36 32h40c20 0 36-14 36-32" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.8" />
-  <circle cx="120" cy="104" r="8" fill="#0f172a" />
-  <path d="M90 126c-8 8-9 22-2 32m44-32c8 8 9 22 2 32" stroke="#0f172a" stroke-width="8" stroke-linecap="round" />
+
+  <path d="M250 45L375 120L375 267L250 455L125 267L125 120Z" fill="url(#bg)" stroke="#0a4f85" stroke-width="8"/>
+
+  <g opacity="0.94">
+    <path d="M250 70L340 125L340 254L250 330L160 254L160 125Z" fill="#0b6ea8" opacity="0.32"/>
+    <path d="M250 120L320 155L320 250L250 297L180 250L180 155Z" fill="none" stroke="#d9f7ff" stroke-width="4" opacity="0.8"/>
+  </g>
+
+  <g transform="translate(0 6)">
+    <circle cx="250" cy="123" r="16" fill="#d6dbf3" opacity="0.9"/>
+    <path d="M220 130c20-32 60-32 80 0" fill="none" stroke="#d6dbf3" stroke-width="8" stroke-linecap="round" opacity="0.8"/>
+    <path d="M214 154c30-12 60-12 88 0" fill="none" stroke="#d1d9f8" stroke-width="8" stroke-linecap="round" opacity="0.75"/>
+    <circle cx="250" cy="169" r="12" fill="#d6dbf3" opacity="0.9"/>
+  </g>
+
+  <g transform="translate(0,12)">
+    <path d="M250 120L285 150L250 188L215 150Z" fill="#0a3d6c" opacity="0.8"/>
+    <path d="M250 118v118" stroke="#0a3d6c" stroke-width="8" stroke-linecap="round"/>
+    <path d="M250 118L320 154L305 220L250 232Z" fill="#f5d76f" opacity="0.9"/>
+    <path d="M250 118L180 154L195 220L250 232Z" fill="#f0c84b" opacity="0.9"/>
+    <path d="M250 118L250 232" stroke="#f7e5a7" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <g>
+    <path d="M208 279c26-46 58-70 92-70 35 0 66 24 92 70" fill="none" stroke="#d9f2ff" stroke-width="8" stroke-linecap="round" opacity="0.9"/>
+    <path d="M218 282c26-38 49-58 81-58 32 0 56 20 82 58" fill="none" stroke="#0a3d6c" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
+  </g>
+
+  <g transform="translate(0,6)">
+    <path d="M168 250c33-24 58-60 69-102l13-54 38 0 13 54c11 42 36 78 69 102" fill="none" stroke="#dfeffe" stroke-width="6" opacity="0.9"/>
+    <path d="M192 245c27-14 41-38 47-65l9-40 13 0 9 40c6 27 20 51 47 65" fill="none" stroke="#0a3d6c" stroke-width="5" opacity="0.7"/>
+  </g>
+
+  <g transform="translate(0,8)">
+    <path d="M180 298C202 280 223 273 250 273c27 0 48 7 70 25l-70 67-70-67Z" fill="#f0c84b" opacity="0.95"/>
+    <path d="M180 298c12 10 27 16 70 16 43 0 58-6 70-16" fill="none" stroke="#f8e9b8" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <g transform="translate(0,8)">
+    <path d="M250 220L314 265L250 330L186 265Z" fill="#0b6ea8" opacity="0.7"/>
+    <path d="M250 222v110" stroke="#d7f4ff" stroke-width="4" opacity="0.8"/>
+  </g>
+
+  <g transform="translate(0,20)">
+    <path d="M135 295c26-17 43-36 52-57l22-51c5-12 10-24 19-31 9-7 16-10 30-10 14 0 21 3 30 10 9 7 14 19 19 31l22 51c9 21 26 40 52 57l-13 27c-17-11-32-18-39-20l-30 49c-14 7-27 10-40 10-13 0-26-3-40-10l-30-49c-7 2-22 9-39 20L135 295Z" fill="url(#gold)" opacity="0.9"/>
+    <path d="M157 282c9-10 20-18 38-25l30-12 25 0 30 12c18 7 29 15 38 25" fill="none" stroke="#fff3bf" stroke-width="4" stroke-linecap="round" opacity="0.8"/>
+  </g>
+
+  <g transform="translate(0,-6)">
+    <path d="M175 275l-28 52c-7 13-9 28-5 41 5 15 18 26 35 30l65 18 65-18c17-4 30-15 35-30 4-13 2-28-5-41l-28-52" fill="#0a4f85" opacity="0.18"/>
+  </g>
+
+  <g transform="translate(0,10)">
+    <path d="M150 330c12 0 22 10 22 22 0 12-10 22-22 22H125v-44h25Zm-25 0v44h-15v-44h15Zm-15 0v44H80v-44h30Z" fill="#e7d9b8" opacity="0.9"/>
+    <path d="M350 330c-12 0-22 10-22 22 0 12 10 22 22 22h25v-44h-25Zm25 0v44h15v-44h-15Zm15 0v44h30v-44h-30Z" fill="#e7d9b8" opacity="0.9"/>
+  </g>
+
+  <g transform="translate(0,-5)">
+    <path d="M128 360c26-9 55-14 83-14 28 0 57 5 83 14v48c-26-9-55-14-83-14-28 0-57 5-83 14v-48Z" fill="#e9d6aa"/>
+    <path d="M125 360l125 52 125-52" fill="none" stroke="#c49539" stroke-width="10" stroke-linecap="round"/><path d="M125 360l125 52 125-52" fill="none" stroke="#fff1c2" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+    <path d="M220 364h60v48h-60z" fill="#f9eec6" stroke="#c49539" stroke-width="3"/>
+    <path d="M145 380h35v20h-35zm275 0h35v20h-35z" fill="#d1aa4e" opacity="0.9"/>
+  </g>
+
+  <g transform="translate(0,7)">
+    <path d="M80 310h120v70c0 24-19 44-44 44H120c-25 0-44-20-44-44v-70Z" fill="#ffc94d" opacity="0.4"/>
+    <path d="M420 310H300v70c0 24 19 44 44 44h16c25 0 44-20 44-44v-70Z" fill="#ffc94d" opacity="0.4"/>
+  </g>
+
+  <g transform="translate(0,18)">
+    <path d="M125 319c0-33 27-60 60-60h34c33 0 60 27 60 60v20H125v-20Z" fill="none" stroke="#d35b2f" stroke-width="12" opacity="0.8"/>
+    <path d="M185 302h40v34h-40z" fill="#d35b2f" opacity="0.8"/>
+  </g>
+
+  <g transform="translate(0,22)">
+    <path d="M262 204c0-5 4-9 9-9h17c5 0 9 4 9 9v10c0 5-4 9-9 9h-17c-5 0-9-4-9-9v-10Z" fill="#0a3d6c" opacity="0.8"/>
+    <path d="M250 224c15-11 31-17 50-17 19 0 35 6 50 17" fill="none" stroke="#0a3d6c" stroke-width="8" stroke-linecap="round"/>
+  </g>
+
+  <g transform="translate(0,30)">
+    <path d="M225 197c-2 28-9 52-21 71M277 197c2 28 9 52 21 71" fill="none" stroke="#0a3d6c" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
+  </g>
+
+  <g>
+    <path d="M142 118c0-30 24-54 54-54h22l-12 27h-12c-14 0-25 11-25 25v17h-27v-15Z" fill="#e5f1ff" opacity="0.78"/>
+    <path d="M358 118c0-30-24-54-54-54h-22l12 27h12c14 0 25 11 25 25v17h27v-15Z" fill="#e5f1ff" opacity="0.78"/>
+  </g>
+
+  <g transform="translate(0,45)">
+    <text x="250" y="298" text-anchor="middle" font-size="38" font-weight="800" font-family="Georgia, 'Times New Roman', serif" letter-spacing="2" fill="#f8f8f8">MAU</text>
+  </g>
 </svg>

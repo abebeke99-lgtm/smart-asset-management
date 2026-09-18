@@ -2159,7 +2159,7 @@ const IntegrationsForm = ({
 
       <p className="section-description">
         Enable external services connected to the
-        Smart University Asset Management System.
+        University Asset Management System.
       </p>
 
       {services.map(([key, label]) => (

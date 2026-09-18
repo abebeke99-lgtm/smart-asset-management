@@ -39,6 +39,7 @@ const AssetReturn = require('./AssetReturn');
 const DisposalRequest = require('./DisposalRequest');
 const PurchaseOrder = require('./PurchaseOrder');
 const PurchaseOrderItem = require('./PurchaseOrderItem');
+const Supplier = require('./Supplier');
 
 Asset.hasMany(Assignment, { foreignKey: 'assetId' });
 Assignment.belongsTo(Asset, { foreignKey: 'assetId' });
@@ -278,4 +279,5 @@ module.exports = {
   DisposalRequest,
   PurchaseOrder,
   PurchaseOrderItem,
+  Supplier,
 };

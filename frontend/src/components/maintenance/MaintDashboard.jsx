@@ -137,7 +137,7 @@ const MaintDashboard = () => {
         <div className="header-content">
           <h1 className="dashboard-title">🏢 Maintenance Management Dashboard</h1>
           <p className="dashboard-subtitle">
-            Smart University Asset Management System - Real-time Maintenance Operations
+            University Asset Management System - Real-time Maintenance Operations
           </p>
         </div>
 

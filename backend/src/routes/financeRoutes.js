@@ -4,7 +4,6 @@ const {
   updateValuation,
   valuationHistory,
   listAudit,
-  listSuppliers,
   getFinanceDashboard,
   getFinanceDashboardFilters,
   getFinanceReportFilters,
@@ -14,8 +13,11 @@ const {
   listDepreciationReports,
   listAssetValueReports,
 } = require('../controllers/financeController');
+const { listSuppliers, getSupplier, createSupplier, updateSupplier, deactivateSupplier } = require('../controllers/financeSupplierController');
 const { listFinancePurchaseRequests, getFinancePurchaseRequest } = require('../controllers/financePurchaseRequestController');
 const { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, approvePurchaseOrder, cancelPurchaseOrder, deletePurchaseOrder } = require('../controllers/financePurchaseOrderController');
+const { listPurchaseHistory, getPurchaseHistory } = require('../controllers/financePurchaseHistoryController');
+const { listFinanceTransactions } = require('../controllers/financeTransactionController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 
 const router = express.Router();
@@ -35,12 +37,19 @@ router.get('/purchase-requests', ...financeAccess, listFinancePurchaseRequests);
 router.get('/purchase-requests/:id', ...financeAccess, getFinancePurchaseRequest);
 router.get('/purchase-orders', ...financeAccess, listPurchaseOrders);
 router.get('/purchase-orders/:id', ...financeAccess, getPurchaseOrder);
+router.get('/purchase-history', ...financeAccess, listPurchaseHistory);
+router.get('/purchase-history/:id', ...financeAccess, getPurchaseHistory);
+router.get('/transactions', ...financeAccess, listFinanceTransactions);
 router.post('/purchase-orders', ...financeAccess, createPurchaseOrder);
 router.put('/purchase-orders/:id', ...financeAccess, updatePurchaseOrder);
 router.patch('/purchase-orders/:id/approve', ...financeAccess, approvePurchaseOrder);
 router.patch('/purchase-orders/:id/cancel', ...financeAccess, cancelPurchaseOrder);
 router.delete('/purchase-orders/:id', ...financeAccess, deletePurchaseOrder);
 router.get('/suppliers', ...financeAccess, listSuppliers);
+router.get('/suppliers/:id', ...financeAccess, getSupplier);
+router.post('/suppliers', ...financeAccess, createSupplier);
+router.put('/suppliers/:id', ...financeAccess, updateSupplier);
+router.delete('/suppliers/:id', ...financeAccess, deactivateSupplier);
 router.get('/valuation', ...financeAccess, listValuation);
 router.put('/valuation/:id', ...financeAccess, updateValuation);
 router.put('/depreciation/:id', ...financeAccess, updateValuation);

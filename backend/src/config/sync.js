@@ -3,6 +3,16 @@ const { sequelize } = require('./database');
 async function syncDatabase() {
   try {
     await sequelize.sync();
+    const { Supplier, Asset, PurchaseOrder } = require('../models');
+    const { Op } = require('sequelize');
+    const legacyRows = await Promise.all([
+      Asset.findAll({ attributes: ['supplier'], where: { supplier: { [Op.ne]: '' } }, group: ['supplier'], raw: true }),
+      PurchaseOrder.findAll({ attributes: ['supplierName'], where: { supplierName: { [Op.ne]: '' } }, group: ['supplierName'], raw: true }),
+    ]);
+    const legacyNames = [...new Set([...legacyRows[0].map((row) => row.supplier), ...legacyRows[1].map((row) => row.supplierName)].map((name) => String(name || '').trim()).filter(Boolean))];
+    for (const [index, supplierName] of legacyNames.entries()) {
+      await Supplier.findOrCreate({ where: { supplierName }, defaults: { supplierCode: `LEGACY-${String(index + 1).padStart(4, '0')}`, supplierName, status: 'active' } });
+    }
     const ensureColumn = async (tableName, columnName, definition) => {
       const table = await sequelize.getQueryInterface().describeTable(tableName);
       if (!table[columnName]) await sequelize.getQueryInterface().addColumn(tableName, columnName, definition);

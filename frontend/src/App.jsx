@@ -106,6 +106,8 @@ const StoreHistory = lazy(() => import('./components/store/StoreHistory'));
 const FinanceDashboard = lazy(() => import('./components/finance/FinanceDashboard'));
 const FinancePurchaseRequests = lazy(() => import('./components/finance/FinancePurchaseRequests'));
 const FinancePurchaseOrders = lazy(() => import('./components/finance/FinancePurchaseOrders'));
+const FinancePurchaseHistory = lazy(() => import('./components/finance/FinancePurchaseHistory'));
+const FinanceTransactions = lazy(() => import('./components/finance/FinanceTransactions'));
 const FinanceSuppliers = lazy(() => import('./components/finance/FinanceSuppliers'));
 const FinanceValuation = lazy(() => import('./components/finance/FinanceValuation'));
 const FinanceReports = lazy(() => import('./components/finance/FinanceReports'));
@@ -175,7 +177,7 @@ const Contact = lazy(() => import('./components/public/Contact'));
 // CONSTANTS
 // ==========================================
 
-const UNIVERSITY_LOGO = '/login-logo.svg';
+const UNIVERSITY_LOGO = '/assets/mekdela-amba-university-logo.png';
 
 const normalizeRole = (role) => {
   if (!role) return 'user';
@@ -374,7 +376,7 @@ const translations = {
     valuation: "Asset Valuation",
     depreciation: "Depreciation",
     audit: "Audit Trail",
-    footer: "© 2026 Mekdela Amba University | Smart University Asset Management System | All rights reserved.",
+    footer: "© 2026 Mekdela Amba University | University Asset Management System | All rights reserved.",
     light: "Light",
     dark: "Dark",
     language: "Language",
@@ -1712,7 +1714,7 @@ function AppContent() {
             </div>
             <div>
               <h4 style={{ color: '#FFFFFF', margin: 0, fontSize: '1.05rem', fontWeight: 800, lineHeight: 1.3 }}>{t.companyName}</h4>
-              <div style={{ color: '#BFDBFE', fontSize: '0.76rem', fontWeight: 600, letterSpacing: '0.02em', marginTop: '2px' }}>Smart University Asset Management System</div>
+              <div style={{ color: '#BFDBFE', fontSize: '0.76rem', fontWeight: 600, letterSpacing: '0.02em', marginTop: '2px' }}>University Asset Management System</div>
             </div>
           </div>
 
@@ -1814,7 +1816,7 @@ function AppContent() {
           fontSize: '0.78rem',
           lineHeight: 1.6
         }}>
-          <div>© {new Date().getFullYear()} Mekdela Amba University. Smart University Asset Management System. All rights reserved.</div>
+          <div>© {new Date().getFullYear()} Mekdela Amba University. University Asset Management System. All rights reserved.</div>
           <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap' }}>
             <Link to="/contact" style={{ color: '#BFDBFE', textDecoration: 'none' }}>Contact</Link>
             <Link to="/about" style={{ color: '#BFDBFE', textDecoration: 'none' }}>About</Link>
@@ -1887,10 +1889,11 @@ function AppContent() {
   // ==========================================
 
   if (!user) {
+    const isLoginRoute = location.pathname === '/login';
     return (
       <>
         <Header />
-        <div className="app-public-content" style={{ minHeight: 'calc(100vh - 200px)', backgroundColor: currentTheme.mainBg, padding: '20px' }}>
+        <div className="app-public-content" style={{ minHeight: isLoginRoute ? 'calc(100vh - 80px)' : 'calc(100vh - 200px)', backgroundColor: currentTheme.mainBg, padding: 0 }}>
           <Suspense fallback={<LoadingFallback />}>
             <Routes>
               <Route path="/" element={<Navigate to="/login" />} />
@@ -2620,10 +2623,10 @@ function AppContent() {
                 <Route path="purchase-requests" element={<FinancePurchaseRequests />} />
                 <Route path="purchase-orders" element={<FinancePurchaseOrders />} />
                 <Route path="suppliers" element={<FinanceSuppliers />} />
-                <Route path="purchase-history" element={<FinanceReports />} />
+                <Route path="purchase-history" element={<FinancePurchaseHistory />} />
                 <Route path="invoices" element={<FinanceReports />} />
                 <Route path="payments" element={<FinanceReports />} />
-                <Route path="transactions" element={<FinanceAudit />} />
+                <Route path="transactions" element={<FinanceTransactions />} />
                 <Route path="budget" element={<FinanceReports />} />
                 <Route path="budget-management" element={<FinanceReports />} />
                 <Route path="valuation" element={<FinanceValuation />} />

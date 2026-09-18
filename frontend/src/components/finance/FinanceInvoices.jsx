@@ -805,7 +805,7 @@ export default function FinanceInvoices() {
         <div class="header">
           <div>
             <h1>Mekdela Amba University</h1>
-            <div class="muted">Smart University Asset Management System</div>
+            <div class="muted">University Asset Management System</div>
           </div>
           <div>
             <strong>INVOICE</strong><br/>
