@@ -63,6 +63,7 @@ const { getInfrastructureMaintenance, getInfrastructureMaintenanceAssets, create
 const preventiveController = require('../controllers/infrastructurePreventiveController');
 const infrastructureRequests = require('../controllers/infrastructureRequestController');
 const infrastructureReports = require('../controllers/infrastructureReportController');
+const infrastructureNotifications = require('../controllers/infrastructureNotificationController');
 
 // Middleware
 router.use(requireAuth);
@@ -171,6 +172,11 @@ router.put('/generators/:id', requireRole('admin', 'infrastructure'), updateInfr
 router.delete('/generators/:id', requireRole('admin', 'infrastructure'), deleteInfrastructureGenerator);
 router.get('/reports/export', requireRole('admin', 'infrastructure'), infrastructureReports.exportInfrastructureReport);
 router.get('/reports', requireRole('admin', 'infrastructure'), infrastructureReports.getInfrastructureReport);
+router.get('/notifications', requireRole('admin', 'infrastructure'), infrastructureNotifications.listInfrastructureNotifications);
+router.patch('/notifications/:id/read', requireRole('admin', 'infrastructure'), infrastructureNotifications.markInfrastructureNotificationRead);
+router.patch('/notifications/:id/unread', requireRole('admin', 'infrastructure'), infrastructureNotifications.markInfrastructureNotificationUnread);
+router.patch('/notifications/read-all', requireRole('admin', 'infrastructure'), infrastructureNotifications.markAllInfrastructureNotificationsRead);
+router.delete('/notifications/:id', requireRole('admin', 'infrastructure'), infrastructureNotifications.deleteInfrastructureNotification);
 router.get('/fuel', requireRole('admin', 'infrastructure'), getInfrastructureFuel);
 router.get('/fuel/summary', requireRole('admin', 'infrastructure'), getInfrastructureFuelSummary);
 router.get('/fuel/:id', requireRole('admin', 'infrastructure'), getInfrastructureFuelById);
