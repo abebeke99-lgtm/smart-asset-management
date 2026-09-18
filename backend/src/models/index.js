@@ -3,6 +3,7 @@ const User = require('./User');
 const College = require('./College');
 const Asset = require('./Asset');
 const Infrastructure = require('./Infrastructure')(sequelize);
+const InfrastructureInspection = require('./InfrastructureInspection');
 const Assignment = require('./Assignment');
 const Transfer = require('./Transfer');
 const AuditLog = require('./AuditLog');
@@ -119,6 +120,9 @@ College.hasMany(DisposalRequest, { foreignKey: 'collegeId' });
 DisposalRequest.belongsTo(College, { foreignKey: 'collegeId', as: 'CollegeRecord' });
 
 // Maintenance Relationships
+Infrastructure.hasMany(InfrastructureInspection, { foreignKey: 'assetId', constraints: false });
+InfrastructureInspection.belongsTo(Infrastructure, { foreignKey: 'assetId', constraints: false });
+
 Asset.hasMany(Maintenance, { foreignKey: 'assetId' });
 Maintenance.belongsTo(Asset, { foreignKey: 'assetId' });
 User.hasMany(Maintenance, { foreignKey: 'requestedBy', as: 'MaintenanceRequests' });
@@ -246,6 +250,7 @@ module.exports = {
   Department,
   Maintenance,
   MaintenanceInspection,
+  InfrastructureInspection,
   MaintenanceWorkOrder,
   MaintenanceRepair,
   PreventiveMaintenance,

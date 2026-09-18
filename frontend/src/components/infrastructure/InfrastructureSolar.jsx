@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../services/api";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   AlertCircle,
   ArrowLeft,
-  BatteryCharging,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -13,7 +13,6 @@ import {
   Eye,
   Filter,
   MapPin,
-  PanelsTopLeft,
   Plus,
   RefreshCw,
   Search,
@@ -21,7 +20,6 @@ import {
   Sun,
   Trash2,
   X,
-  Zap,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -44,13 +42,13 @@ const EMPTY_FORM = {
   batteryCount: "",
   voltage: "",
   phase: "Single Phase",
-  estimatedDailyEnergy: "",
-  estimatedAnnualEnergy: "",
-  status: "operational",
-  condition: "good",
+  building: "",
+  room: "",
+  lastMaintenanceDate: "",
+  nextMaintenanceDate: "",
+  status: "Operational",
+  condition: "Good",
   installationDate: "",
-  lastInspectionDate: "",
-  nextInspectionDate: "",
   description: "",
 };
 
@@ -193,36 +191,12 @@ const getPhase = (row) =>
     "—"
   );
 
-const getDailyEnergy = (row) =>
-  getValue(
-    row,
-    [
-      "estimated_daily_energy",
-      "estimatedDailyEnergy",
-      "daily_energy",
-      "dailyEnergy",
-    ],
-    "—"
-  );
-
-const getAnnualEnergy = (row) =>
-  getValue(
-    row,
-    [
-      "estimated_annual_energy",
-      "estimatedAnnualEnergy",
-      "annual_energy",
-      "annualEnergy",
-    ],
-    "—"
-  );
-
 const getStatus = (row) =>
   normalize(
     getValue(
       row,
       ["status", "system_status", "systemStatus"],
-      "operational"
+      "Operational"
     )
   );
 
@@ -231,7 +205,7 @@ const getCondition = (row) =>
     getValue(
       row,
       ["condition", "condition_status", "conditionStatus"],
-      "good"
+      "Good"
     )
   );
 
@@ -239,20 +213,6 @@ const getInstallationDate = (row) =>
   getValue(
     row,
     ["installation_date", "installationDate"],
-    ""
-  );
-
-const getLastInspectionDate = (row) =>
-  getValue(
-    row,
-    ["last_inspection_date", "lastInspectionDate"],
-    ""
-  );
-
-const getNextInspectionDate = (row) =>
-  getValue(
-    row,
-    ["next_inspection_date", "nextInspectionDate"],
     ""
   );
 
@@ -393,6 +353,8 @@ const conditionClass = (condition) => {
 };
 
 export default function InfrastructureSolar() {
+  const { user } = useAuth();
+  const canManage = ["admin", "infrastructure"].includes(normalize(user?.role));
   const [systems, setSystems] = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -404,6 +366,7 @@ export default function InfrastructureSolar() {
   const [condition, setCondition] = useState("all");
   const [type, setType] = useState("all");
   const [location, setLocation] = useState("all");
+  const [filterOptions, setFilterOptions] = useState({ types: [], statuses: [], conditions: [], locations: [], buildings: [], manufacturers: [] });
 
   const [page, setPage] = useState(1);
 
@@ -438,7 +401,7 @@ export default function InfrastructureSolar() {
         setError("");
 
         const response = await api.get(
-          "/infrastructure/solar",
+          "/api/infrastructure/solar",
           {
             params: {
               page,
@@ -457,6 +420,7 @@ export default function InfrastructureSolar() {
         const rows = extractRows(response);
 
         setSystems(rows);
+        setFilterOptions(response?.data?.filters || {});
         setPagination(
           extractPagination(response, page)
         );
@@ -502,40 +466,6 @@ export default function InfrastructureSolar() {
     type,
     location,
   ]);
-
-  const types = useMemo(
-    () =>
-      [
-        ...new Set(
-          systems
-            .map((item) => getSystemType(item))
-            .filter(
-              (item) =>
-                item && item !== "—"
-            )
-        ),
-      ].sort((a, b) =>
-        String(a).localeCompare(String(b))
-      ),
-    [systems]
-  );
-
-  const locations = useMemo(
-    () =>
-      [
-        ...new Set(
-          systems
-            .map((item) => getLocation(item))
-            .filter(
-              (item) =>
-                item && item !== "—"
-            )
-        ),
-      ].sort((a, b) =>
-        String(a).localeCompare(String(b))
-      ),
-    [systems]
-  );
 
   const summary = useMemo(() => {
     return {
@@ -678,40 +608,17 @@ export default function InfrastructureSolar() {
           ? "Single Phase"
           : getPhase(item),
 
-      estimatedDailyEnergy:
-        getDailyEnergy(item) === "—"
-          ? ""
-          : getDailyEnergy(item),
-
-      estimatedAnnualEnergy:
-        getAnnualEnergy(item) === "—"
-          ? ""
-          : getAnnualEnergy(item),
-
-      status:
-        getStatus(item) || "operational",
-
-      condition:
-        getCondition(item) || "good",
+      building: getValue(item, ["building"], ""),
+      room: getValue(item, ["room"], ""),
+      lastMaintenanceDate: getValue(item, ["lastMaintenanceDate", "last_maintenance_date"], "") ? String(getValue(item, ["lastMaintenanceDate", "last_maintenance_date"], "")).slice(0, 10) : "",
+      nextMaintenanceDate: getValue(item, ["nextMaintenanceDate", "next_maintenance_date"], "") ? String(getValue(item, ["nextMaintenanceDate", "next_maintenance_date"], "")).slice(0, 10) : "",
+      status: getValue(item, ["status"], "Operational"),
+      condition: getValue(item, ["condition"], "Good"),
 
       installationDate:
         getInstallationDate(item)
           ? String(
               getInstallationDate(item)
-            ).slice(0, 10)
-          : "",
-
-      lastInspectionDate:
-        getLastInspectionDate(item)
-          ? String(
-              getLastInspectionDate(item)
-            ).slice(0, 10)
-          : "",
-
-      nextInspectionDate:
-        getNextInspectionDate(item)
-          ? String(
-              getNextInspectionDate(item)
             ).slice(0, 10)
           : "",
 
@@ -797,18 +704,14 @@ export default function InfrastructureSolar() {
           form.batteryCount.trim(),
         voltage: form.voltage.trim(),
         phase: form.phase,
-        estimatedDailyEnergy:
-          form.estimatedDailyEnergy.trim(),
-        estimatedAnnualEnergy:
-          form.estimatedAnnualEnergy.trim(),
+        building: form.building.trim(),
+        room: form.room.trim(),
+        lastMaintenanceDate: form.lastMaintenanceDate || null,
+        nextMaintenanceDate: form.nextMaintenanceDate || null,
         status: form.status,
         condition: form.condition,
         installationDate:
           form.installationDate || null,
-        lastInspectionDate:
-          form.lastInspectionDate || null,
-        nextInspectionDate:
-          form.nextInspectionDate || null,
         description:
           form.description.trim(),
       };
@@ -825,12 +728,12 @@ export default function InfrastructureSolar() {
         }
 
         response = await api.put(
-          `/infrastructure/solar/${id}`,
+          `/api/infrastructure/solar/${id}`,
           payload
         );
       } else {
         response = await api.post(
-          "/infrastructure/solar",
+          "/api/infrastructure/solar",
           payload
         );
       }
@@ -887,7 +790,7 @@ export default function InfrastructureSolar() {
       setError("");
 
       await api.delete(
-        `/infrastructure/solar/${id}`
+        `/api/infrastructure/solar/${id}`
       );
 
       setSelectedSystem(null);
@@ -1809,14 +1712,16 @@ export default function InfrastructureSolar() {
               Refresh
             </button>
 
-            <button
-              type="button"
-              className="btn primary"
-              onClick={openCreate}
-            >
-              <Plus size={17} />
-              Add Solar System
-            </button>
+            {canManage && (
+              <button
+                type="button"
+                className="btn primary"
+                onClick={openCreate}
+              >
+                <Plus size={17} />
+                Add Solar System
+              </button>
+            )}
           </div>
         </div>
 
@@ -1954,30 +1859,9 @@ export default function InfrastructureSolar() {
             <option value="all">
               All statuses
             </option>
-            <option value="operational">
-              Operational
-            </option>
-            <option value="active">
-              Active
-            </option>
-            <option value="maintenance">
-              Maintenance
-            </option>
-            <option value="fault">
-              Fault
-            </option>
-            <option value="failed">
-              Failed
-            </option>
-            <option value="offline">
-              Offline
-            </option>
-            <option value="inactive">
-              Inactive
-            </option>
-            <option value="shutdown">
-              Shutdown
-            </option>
+            {(filterOptions.statuses || []).map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
           </select>
 
           <select
@@ -1990,24 +1874,9 @@ export default function InfrastructureSolar() {
             <option value="all">
               All conditions
             </option>
-            <option value="excellent">
-              Excellent
-            </option>
-            <option value="good">
-              Good
-            </option>
-            <option value="fair">
-              Fair
-            </option>
-            <option value="poor">
-              Poor
-            </option>
-            <option value="critical">
-              Critical
-            </option>
-            <option value="damaged">
-              Damaged
-            </option>
+            {(filterOptions.conditions || []).map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
           </select>
 
           <select
@@ -2021,7 +1890,7 @@ export default function InfrastructureSolar() {
               All system types
             </option>
 
-            {types.map((item) => (
+            {(filterOptions.types || []).map((item) => (
               <option key={item} value={item}>
                 {item}
               </option>
@@ -2039,7 +1908,7 @@ export default function InfrastructureSolar() {
               All locations
             </option>
 
-            {locations.map((item) => (
+            {(filterOptions.locations || []).map((item) => (
               <option key={item} value={item}>
                 {item}
               </option>
@@ -2114,8 +1983,7 @@ export default function InfrastructureSolar() {
               </h3>
 
               <p>
-                No records match the current search
-                and filters.
+                No solar energy systems found.
               </p>
             </div>
           ) : (
@@ -2131,10 +1999,9 @@ export default function InfrastructureSolar() {
                       <th>Capacity</th>
                       <th>Inverter</th>
                       <th>Battery</th>
-                      <th>Energy</th>
                       <th>Status</th>
                       <th>Condition</th>
-                      <th>Next Inspection</th>
+                      <th>Next Maintenance</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -2225,17 +2092,6 @@ export default function InfrastructureSolar() {
                           </td>
 
                           <td>
-                            <div className="energy-value">
-                              {getDailyEnergy(item)}
-
-                              <small>
-                                Annual:{" "}
-                                {getAnnualEnergy(item)}
-                              </small>
-                            </div>
-                          </td>
-
-                          <td>
                             <span
                               className={statusClass(
                                 getStatus(item)
@@ -2260,9 +2116,7 @@ export default function InfrastructureSolar() {
                           </td>
 
                           <td>
-                            {formatDate(
-                              getNextInspectionDate(item)
-                            )}
+                            {formatDate(getValue(item, ["nextMaintenanceDate", "next_maintenance_date"], ""))}
                           </td>
 
                           <td>
@@ -2278,28 +2132,27 @@ export default function InfrastructureSolar() {
                                 <Eye size={16} />
                               </button>
 
-                              <button
-                                type="button"
-                                className="icon-btn"
-                                title="Edit system"
-                                onClick={() =>
-                                  openEdit(item)
-                                }
-                              >
-                                <Edit3 size={16} />
-                              </button>
-
-                              <button
-                                type="button"
-                                className="icon-btn danger"
-                                title="Delete system"
-                                disabled={deleting}
-                                onClick={() =>
-                                  deleteSystem(item)
-                                }
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              {canManage && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="icon-btn"
+                                    title="Edit system"
+                                    onClick={() => openEdit(item)}
+                                  >
+                                    <Edit3 size={16} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="icon-btn danger"
+                                    title="Deactivate system"
+                                    disabled={deleting}
+                                    onClick={() => deleteSystem(item)}
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -2471,6 +2324,20 @@ export default function InfrastructureSolar() {
                 </div>
 
                 <div className="detail-card">
+                  <div className="detail-label">Building</div>
+                  <div className="detail-value">
+                    {getValue(selectedSystem, ["building"], "—")}
+                  </div>
+                </div>
+
+                <div className="detail-card">
+                  <div className="detail-label">Room</div>
+                  <div className="detail-value">
+                    {getValue(selectedSystem, ["room"], "—")}
+                  </div>
+                </div>
+
+                <div className="detail-card">
                   <div className="detail-label">
                     Panel Count
                   </div>
@@ -2572,26 +2439,6 @@ export default function InfrastructureSolar() {
 
                 <div className="detail-card">
                   <div className="detail-label">
-                    Estimated Daily Energy
-                  </div>
-
-                  <div className="detail-value">
-                    {getDailyEnergy(selectedSystem)}
-                  </div>
-                </div>
-
-                <div className="detail-card">
-                  <div className="detail-label">
-                    Estimated Annual Energy
-                  </div>
-
-                  <div className="detail-value">
-                    {getAnnualEnergy(selectedSystem)}
-                  </div>
-                </div>
-
-                <div className="detail-card">
-                  <div className="detail-label">
                     Status
                   </div>
 
@@ -2640,24 +2487,24 @@ export default function InfrastructureSolar() {
 
                 <div className="detail-card">
                   <div className="detail-label">
-                    Last Inspection
+                    Last Maintenance
                   </div>
 
                   <div className="detail-value">
                     {formatDate(
-                      getLastInspectionDate(selectedSystem)
+                      getValue(selectedSystem, ["lastMaintenanceDate", "last_maintenance_date"], "")
                     )}
                   </div>
                 </div>
 
                 <div className="detail-card">
                   <div className="detail-label">
-                    Next Inspection
+                    Next Maintenance
                   </div>
 
                   <div className="detail-value">
                     {formatDate(
-                      getNextInspectionDate(selectedSystem)
+                      getValue(selectedSystem, ["nextMaintenanceDate", "next_maintenance_date"], "")
                     )}
                   </div>
                 </div>
@@ -2676,16 +2523,16 @@ export default function InfrastructureSolar() {
             </div>
 
             <div className="modal-footer">
-              <button
-                type="button"
-                className="btn"
-                onClick={() =>
-                  openEdit(selectedSystem)
-                }
-              >
-                <Edit3 size={16} />
-                Edit
-              </button>
+              {canManage && (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => openEdit(selectedSystem)}
+                >
+                  <Edit3 size={16} />
+                  Edit
+                </button>
+              )}
 
               <button
                 type="button"
@@ -2855,6 +2702,30 @@ export default function InfrastructureSolar() {
                       value={form.manufacturer}
                       onChange={handleChange}
                       placeholder="Manufacturer"
+                      disabled={saving}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Building</label>
+                    <input
+                      className="form-control"
+                      name="building"
+                      value={form.building}
+                      onChange={handleChange}
+                      placeholder="Existing building name"
+                      disabled={saving}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Room</label>
+                    <input
+                      className="form-control"
+                      name="room"
+                      value={form.room}
+                      onChange={handleChange}
+                      placeholder="Room or installation area"
                       disabled={saving}
                     />
                   </div>
@@ -3048,36 +2919,6 @@ export default function InfrastructureSolar() {
 
                   <div className="form-group">
                     <label className="form-label">
-                      Estimated Daily Energy
-                    </label>
-
-                    <input
-                      className="form-control"
-                      name="estimatedDailyEnergy"
-                      value={form.estimatedDailyEnergy}
-                      onChange={handleChange}
-                      placeholder="e.g. 120 kWh/day"
-                      disabled={saving}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">
-                      Estimated Annual Energy
-                    </label>
-
-                    <input
-                      className="form-control"
-                      name="estimatedAnnualEnergy"
-                      value={form.estimatedAnnualEnergy}
-                      onChange={handleChange}
-                      placeholder="e.g. 43,800 kWh/year"
-                      disabled={saving}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">
                       Status
                     </label>
 
@@ -3088,37 +2929,9 @@ export default function InfrastructureSolar() {
                       onChange={handleChange}
                       disabled={saving}
                     >
-                      <option value="operational">
-                        Operational
-                      </option>
-
-                      <option value="active">
-                        Active
-                      </option>
-
-                      <option value="maintenance">
-                        Maintenance
-                      </option>
-
-                      <option value="fault">
-                        Fault
-                      </option>
-
-                      <option value="failed">
-                        Failed
-                      </option>
-
-                      <option value="offline">
-                        Offline
-                      </option>
-
-                      <option value="inactive">
-                        Inactive
-                      </option>
-
-                      <option value="shutdown">
-                        Shutdown
-                      </option>
+                      {(filterOptions.statuses || []).map((item) => (
+                        <option key={item} value={item}>{item}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -3134,29 +2947,9 @@ export default function InfrastructureSolar() {
                       onChange={handleChange}
                       disabled={saving}
                     >
-                      <option value="excellent">
-                        Excellent
-                      </option>
-
-                      <option value="good">
-                        Good
-                      </option>
-
-                      <option value="fair">
-                        Fair
-                      </option>
-
-                      <option value="poor">
-                        Poor
-                      </option>
-
-                      <option value="critical">
-                        Critical
-                      </option>
-
-                      <option value="damaged">
-                        Damaged
-                      </option>
+                      {(filterOptions.conditions || []).map((item) => (
+                        <option key={item} value={item}>{item}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -3177,14 +2970,14 @@ export default function InfrastructureSolar() {
 
                   <div className="form-group">
                     <label className="form-label">
-                      Last Inspection Date
+                      Last Maintenance Date
                     </label>
 
                     <input
                       className="form-control"
                       type="date"
-                      name="lastInspectionDate"
-                      value={form.lastInspectionDate}
+                      name="lastMaintenanceDate"
+                      value={form.lastMaintenanceDate}
                       onChange={handleChange}
                       disabled={saving}
                     />
@@ -3192,14 +2985,14 @@ export default function InfrastructureSolar() {
 
                   <div className="form-group">
                     <label className="form-label">
-                      Next Inspection Date
+                      Next Maintenance Date
                     </label>
 
                     <input
                       className="form-control"
                       type="date"
-                      name="nextInspectionDate"
-                      value={form.nextInspectionDate}
+                      name="nextMaintenanceDate"
+                      value={form.nextMaintenanceDate}
                       onChange={handleChange}
                       disabled={saving}
                     />

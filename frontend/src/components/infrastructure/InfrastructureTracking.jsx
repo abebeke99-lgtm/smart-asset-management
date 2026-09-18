@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../services/api";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   Activity,
   AlertCircle,
@@ -297,6 +298,7 @@ function getConditionClass(condition) {
 }
 
 export default function InfrastructureTracking() {
+  const { user, loading: authLoading } = useAuth();
   const [records, setRecords] = useState([]);
   const [summaryFromApi, setSummaryFromApi] = useState(null);
 
@@ -330,8 +332,54 @@ export default function InfrastructureTracking() {
   const [selectedRecord, setSelectedRecord] = useState(null);
 
   const [form, setForm] = useState(INITIAL_FORM);
+  const [scanValue, setScanValue] = useState("");
+  const [scanType, setScanType] = useState("rfid");
+  const [scanResult, setScanResult] = useState(null);
+  const [scanError, setScanError] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const lastScanRef = React.useRef({ value: "", timestamp: 0 });
+
+  const handleScan = async (event) => {
+    event?.preventDefault();
+    const identifier = scanValue.trim();
+    if (authLoading || !user || scanning || !identifier) return;
+
+    const now = Date.now();
+    if (lastScanRef.current.value === identifier && now - lastScanRef.current.timestamp < 1000) return;
+
+    lastScanRef.current = { value: identifier, timestamp: now };
+    setScanning(true);
+    setScanError("");
+    setScanResult(null);
+    try {
+      const response = await api.post("/infrastructure/tracking/scan", {
+        identifier,
+        scanType,
+      });
+      setScanResult(response.data?.data || null);
+    } catch (err) {
+      const status = err?.response?.status;
+      setScanError(
+        status === 401
+          ? "Your session has expired. Please log in again."
+          : status === 403
+            ? "You do not have permission to scan infrastructure assets."
+            : status === 404
+              ? "This tag is not registered."
+              : status === 429
+                ? "Too many scans. Please wait a moment and try again."
+                : err?.response
+                  ? "The tracking service could not process this scan."
+                  : "Unable to connect to the server. Please check that the backend is running."
+      );
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const fetchTracking = useCallback(async () => {
+    if (authLoading || !user) return;
+
     try {
       setLoading(true);
       setError("");
@@ -403,7 +451,7 @@ export default function InfrastructureTracking() {
 
   useEffect(() => {
     fetchTracking();
-  }, [fetchTracking]);
+  }, [fetchTracking, authLoading, user]);
 
   useEffect(() => {
     if (!success) return;
@@ -1677,6 +1725,55 @@ export default function InfrastructureTracking() {
             <span>{success}</span>
           </div>
         )}
+
+        <form className="toolbar" onSubmit={handleScan}>
+          <div className="toolbar-row">
+            <select
+              className="filter-select"
+              value={scanType}
+              onChange={(event) => setScanType(event.target.value)}
+              disabled={authLoading || scanning}
+              aria-label="Scan type"
+            >
+              <option value="rfid">RFID</option>
+              <option value="qr">QR</option>
+            </select>
+
+            <input
+              className="search-box"
+              value={scanValue}
+              onChange={(event) => setScanValue(event.target.value)}
+              placeholder={authLoading ? "Restoring session..." : "Enter or scan tag identifier"}
+              disabled={authLoading || !user || scanning}
+              aria-label="RFID or QR identifier"
+            />
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={authLoading || !user || scanning || !scanValue.trim()}
+            >
+              {scanning ? <Loader2 size={16} className="loading-icon" /> : <Radio size={16} />}
+              {authLoading ? "Checking session..." : scanning ? "Scanning..." : "Scan tag"}
+            </button>
+          </div>
+
+          {scanError && (
+            <div className="alert alert-error" style={{ marginTop: 12 }}>
+              <AlertCircle size={17} />
+              <span>{scanError}</span>
+            </div>
+          )}
+
+          {scanResult && (
+            <div className="alert alert-success" style={{ marginTop: 12 }}>
+              <CheckCircle2 size={17} />
+              <span>
+                {scanResult.name} ({scanResult.assetNumber}) | {scanResult.location || "Location not recorded"}
+              </span>
+            </div>
+          )}
+        </form>
 
         <div className="summary-grid">
           <div className="summary-card">

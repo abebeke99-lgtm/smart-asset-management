@@ -133,6 +133,8 @@ const MaintNotifications = lazy(() => import('./components/maintenance/MaintNoti
 const InfrastructureLayout = lazy(() => import('./components/infrastructure/InfrastructureLayout'));
 const InfrastructureDashboard = lazy(() => import('./components/infrastructure/InfrastructureDashboard'));
 const InfrastructureAssets = lazy(() => import('./components/infrastructure/InfrastructureAssets'));
+const InfrastructureAssignment = lazy(() => import('./components/infrastructure/InfrastructureAssignment'));
+const InfrastructureInventory = lazy(() => import('./components/infrastructure/InfrastructureInventory'));
 const RegisterInfrastructureAsset = lazy(() => import('./components/infrastructure/RegisterInfrastructureAsset'));
 const InfrastructureBuildings = lazy(() => import('./components/infrastructure/InfrastructureBuildings'));
 const InfrastructureElectrical = lazy(() => import('./components/infrastructure/InfrastructureElectrical'));
@@ -149,6 +151,7 @@ const InfrastructureSpareParts = lazy(() => import('./components/infrastructure/
 const InfrastructureEnergy = lazy(() => import('./components/infrastructure/InfrastructureEnergy'));
 const InfrastructureFuel = lazy(() => import('./components/infrastructure/InfrastructureFuel'));
 const InfrastructureInspection = lazy(() => import('./components/infrastructure/InfrastructureInspection'));
+const InfrastructureVerification = lazy(() => import('./components/infrastructure/InfrastructureVerification'));
 const InfrastructureTracking = lazy(() => import('./components/infrastructure/InfrastructureTracking'));
 const InfrastructureRequests = lazy(() => import('./components/infrastructure/InfrastructureRequests'));
 const InfrastructureReports = lazy(() => import('./components/infrastructure/InfrastructureReports'));
@@ -2545,8 +2548,8 @@ function AppContent() {
                 {/* Asset Management */}
                 <Route path="assets" element={<InfrastructureAssets />} />
                 <Route path="assets/register" element={<RegisterInfrastructureAsset />} />
-                <Route path="inventory" element={<InfrastructureAssets />} />
-                <Route path="assignment" element={<InfrastructureAssets />} />
+                <Route path="inventory" element={<InfrastructureInventory />} />
+                <Route path="assignment" element={<InfrastructureAssignment />} />
                 <Route path="transfer" element={<InfrastructureAssets />} />
                 <Route path="verification" element={<InfrastructureInspection />} />
                 

@@ -405,8 +405,9 @@ const priorityClass = (priority) => {
 
 export default function InfrastructureInspection() {
   const [rows, setRows] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [assetsLoading, setAssetsLoading] = useState(false);
 
-  const [categories, setCategories] = useState([]);
   const [locations, setLocations] = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -438,13 +439,35 @@ export default function InfrastructureInspection() {
 
   const [form, setForm] = useState(EMPTY_FORM);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadAssets = async () => {
+      setAssetsLoading(true);
+      try {
+        const response = await api.get("/api/infrastructure/inspection/assets");
+        const availableAssets = extractRows(response.data).filter((asset) => asset?.id);
+        if (active) setAssets(availableAssets);
+      } catch (err) {
+        if (active) setError(err?.response?.data?.message || "Unable to load infrastructure assets.");
+      } finally {
+        if (active) setAssetsLoading(false);
+      }
+    };
+
+    loadAssets();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const loadInspections = useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
       const response = await api.get(
-        "/infrastructure/inspection",
+        "/api/infrastructure/inspection",
         {
           params: {
             page,
@@ -472,16 +495,6 @@ export default function InfrastructureInspection() {
           extracted.length
         )
       );
-
-      setCategories([
-        ...new Set(
-          extracted
-            .map(categoryOf)
-            .filter(
-              (item) => item && item !== "—"
-            )
-        ),
-      ]);
 
       setLocations([
         ...new Set(
@@ -717,6 +730,18 @@ export default function InfrastructureInspection() {
     }));
   };
 
+  const handleAssetChange = (event) => {
+    const asset = assets.find((item) => String(item.id) === event.target.value);
+    setForm((current) => ({
+      ...current,
+      assetId: event.target.value,
+      assetName: asset?.name || "",
+      assetTag: asset?.assetCode || "",
+      category: asset?.category || "",
+      location: asset?.location || asset?.building || "",
+    }));
+  };
+
   const saveInspection = async (event) => {
     event.preventDefault();
 
@@ -725,13 +750,8 @@ export default function InfrastructureInspection() {
       return;
     }
 
-    if (
-      !form.assetId.trim() &&
-      !form.assetName.trim()
-    ) {
-      setError(
-        "Provide the infrastructure asset ID or asset name."
-      );
+    if (!form.assetId.trim() && !editing) {
+      setError("Select an infrastructure asset from the asset list.");
       return;
     }
 
@@ -833,7 +853,7 @@ export default function InfrastructureInspection() {
         }
 
         await api.put(
-          `/infrastructure/inspection/${id}`,
+          `/api/infrastructure/inspection/${id}`,
           payload
         );
 
@@ -842,7 +862,7 @@ export default function InfrastructureInspection() {
         );
       } else {
         await api.post(
-          "/infrastructure/inspection",
+          "/api/infrastructure/inspection",
           payload
         );
 
@@ -882,7 +902,7 @@ export default function InfrastructureInspection() {
 
     try {
       await api.delete(
-        `/infrastructure/inspection/${id}`
+        `/api/infrastructure/inspection/${id}`
       );
 
       setSuccess(
@@ -2870,16 +2890,27 @@ export default function InfrastructureInspection() {
 
                 <div className="field">
                   <label>
-                    Asset ID
+                    Infrastructure Asset{" "}
+                    <span className="required">*</span>
                   </label>
 
-                  <input
-                    className="input"
+                  <select
+                    className="select"
                     name="assetId"
                     value={form.assetId}
-                    onChange={handleChange}
-                    placeholder="Infrastructure asset ID"
-                  />
+                    onChange={handleAssetChange}
+                    disabled={assetsLoading}
+                    required={!editing}
+                  >
+                    <option value="">
+                      {assetsLoading ? "Loading assets..." : "Select an infrastructure asset"}
+                    </option>
+                    {assets.map((asset) => (
+                      <option key={asset.id} value={asset.id}>
+                        {asset.assetCode ? `${asset.assetCode} - ` : ""}{asset.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="field">
@@ -2891,8 +2922,7 @@ export default function InfrastructureInspection() {
                     className="input"
                     name="assetName"
                     value={form.assetName}
-                    onChange={handleChange}
-                    placeholder="Generator / transformer / pump"
+                    readOnly
                   />
                 </div>
 
@@ -2905,8 +2935,7 @@ export default function InfrastructureInspection() {
                     className="input"
                     name="assetTag"
                     value={form.assetTag}
-                    onChange={handleChange}
-                    placeholder="Asset tag / code"
+                    readOnly
                   />
                 </div>
 
@@ -2919,8 +2948,7 @@ export default function InfrastructureInspection() {
                     className="input"
                     name="category"
                     value={form.category}
-                    onChange={handleChange}
-                    placeholder="Electrical / Building / Water"
+                    readOnly
                   />
                 </div>
 
@@ -2936,8 +2964,7 @@ export default function InfrastructureInspection() {
                     className="input"
                     name="location"
                     value={form.location}
-                    onChange={handleChange}
-                    placeholder="Building / facility / site"
+                    readOnly
                     required
                   />
                 </div>

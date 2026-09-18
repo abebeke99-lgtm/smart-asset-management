@@ -60,7 +60,7 @@ const InfrastructureAssets = () => {
 
         setError("");
 
-        const response = await api.get("/infrastructure/", {
+        const response = await api.get("/api/infrastructure/", {
           params: {
             search: search.trim() || undefined,
             status: status !== "all" ? status : undefined,

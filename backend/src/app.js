@@ -56,7 +56,8 @@ const localOrigins = [
   'http://127.0.0.1:3000',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:3001',
-  'http://127.0.0.1:5000'
+  'http://127.0.0.1:5000',
+  'http://172.16.39.87:3000'
 ];
 const allowedOrigins = process.env.NODE_ENV === 'production'
   ? configuredOrigins

@@ -1,8 +1,23 @@
 const { Op } = require('sequelize');
 const { sequelize, Maintenance, Asset, User, Assignment, AuditLog } = require('../models');
 
-const managerRoles = ['admin', 'maintenance', 'ict_officer', 'store_manager'];
+const managerRoles = ['admin', 'maintenance', 'ict_officer', 'store_manager', 'infrastructure'];
 const canManage = (req) => managerRoles.includes(req.user.role);
+const infrastructureRoles = ['admin', 'infrastructure'];
+const infrastructureAssetWhere = {
+  [Op.or]: [
+    { category: { [Op.like]: '%infrastructure%' } },
+    { category: { [Op.like]: '%building%' } },
+    { category: { [Op.like]: '%facility%' } },
+    { category: { [Op.like]: '%electrical%' } },
+    { category: { [Op.like]: '%generator%' } },
+    { category: { [Op.like]: '%transformer%' } },
+    { category: { [Op.like]: '%water%' } },
+    { category: { [Op.like]: '%solar%' } },
+    { category: { [Op.like]: '%ups%' } },
+    { category: { [Op.like]: '%road%' } },
+  ],
+};
 const include = [
   { model: Asset, attributes: ['id', 'name', 'assetCode', 'category', 'department', 'location', 'status', 'condition', 'warrantyExpiry'] },
   { model: User, as: 'Requester', attributes: ['id', 'username', 'fullName', 'department'] },
@@ -28,7 +43,10 @@ const allowedTransitions = {
 
 const getAllMaintenance = async (req, res, next) => {
   try { 
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
     const where = {}; 
+    const assetWhere = req.infrastructureScope ? infrastructureAssetWhere : undefined;
     if (req.query.status) where.status = normalizeStatus(req.query.status); 
     if (req.query.priority) where.priority = String(req.query.priority).trim().toLowerCase();
     if (req.query.search) {
@@ -46,11 +64,32 @@ const getAllMaintenance = async (req, res, next) => {
     if (req.query.assigned_to) where.assignedTo = req.query.assigned_to; 
     if (req.query.scope === 'assigned' && req.user.role === 'maintenance') where.assignedTo = req.user.id;
     if (req.query.asset_id) where.assetId = req.query.asset_id;
-      const scopedInclude = req.user.role === 'college' ? [{ model: Asset, attributes: ['id', 'name', 'assetCode', 'category', 'department', 'location', 'status', 'condition', 'warrantyExpiry'], where: { department: req.user.department }, required: true }, include[1], include[2]] : include;
-      const items = await Maintenance.findAll({ where, include: scopedInclude, order: [['id', 'DESC']] }); 
+      const scopedInclude = req.user.role === 'college'
+        ? [{ model: Asset, attributes: ['id', 'name', 'assetCode', 'category', 'department', 'location', 'status', 'condition', 'warrantyExpiry'], where: { department: req.user.department }, required: true }, include[1], include[2]]
+        : [{ ...include[0], ...(assetWhere ? { where: assetWhere, required: true } : {}) }, include[1], include[2]];
+      const { count, rows: items } = await Maintenance.findAndCountAll({ where, include: scopedInclude, order: [['id', 'DESC']], limit, offset: (page - 1) * limit, distinct: true });
     const requests = items.map(normalize); 
-    res.json({ success: true, data: requests, requests, total: requests.length }); 
+    const summaryItems = await Maintenance.findAll({ where, include: scopedInclude, attributes: ['status', 'priority'], distinct: true });
+    const summary = summaryItems.reduce((result, item) => {
+      const itemStatus = normalizeStatus(item.status);
+      result.total += 1;
+      result[itemStatus] = (result[itemStatus] || 0) + 1;
+      return result;
+    }, { total: 0 });
+    res.json({ success: true, data: requests, requests, total: count, summary, pagination: { page, limit, total: count, pages: Math.max(1, Math.ceil(count / limit)) } });
   } catch (error) { next(error); }
+};
+
+const getInfrastructureMaintenance = (req, res, next) => {
+  req.infrastructureScope = true;
+  return getAllMaintenance(req, res, next);
+};
+
+const getInfrastructureMaintenanceAssets = async (req, res, next) => {
+  try {
+    const assets = await Asset.findAll({ where: { ...infrastructureAssetWhere, status: { [Op.notIn]: ['disposed', 'Disposed'] } }, attributes: ['id', 'name', 'assetCode', 'category', 'location', 'department'], order: [['name', 'ASC']] });
+    return res.json({ success: true, data: assets });
+  } catch (error) { return next(error); }
 };
 
 const createMaintenance = async (req, res, next) => {
@@ -60,6 +99,8 @@ const createMaintenance = async (req, res, next) => {
     if (!asset_id || !requestTitle) return res.status(400).json({ success: false, message: 'Asset and problem are required' }); 
     const asset = await Asset.findByPk(asset_id);
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
+    if (req.infrastructureScope && !infrastructureRoles.includes(req.user.role)) return res.status(403).json({ success: false, message: 'Infrastructure authorization required' });
+    if (req.infrastructureScope && !(await Asset.findOne({ where: { id: asset_id, ...infrastructureAssetWhere } }))) return res.status(403).json({ success: false, message: 'Asset is outside the infrastructure scope' });
     if (req.user.role === 'college' && asset.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department authorization required' });
     const normalizedPriority = String(priority).toLowerCase();
     if (!['low', 'medium', 'high', 'critical'].includes(normalizedPriority)) return res.status(400).json({ success: false, message: 'Invalid maintenance priority' });
@@ -80,6 +121,7 @@ const updateMaintenance = async (req, res, next) => {
     if (!canManage(req)) return res.status(403).json({ success: false, message: 'Maintenance authorization required' });
     const item = await Maintenance.findByPk(req.params.id);
     if (!item) return res.status(404).json({ success: false, message: 'Maintenance request not found' });
+    if (req.infrastructureScope && !(await Asset.findOne({ where: { id: item.assetId, ...infrastructureAssetWhere } }))) return res.status(403).json({ success: false, message: 'Maintenance record is outside the infrastructure scope' });
     const previousStatus = item.status;
     const updates = {
       title: req.body.title ?? item.title,
@@ -148,7 +190,7 @@ const reject = (req, res, next) => { req.body.status = 'rejected'; return setSta
 const start = (req, res, next) => { req.body.status = 'in-progress'; return setStatus(req, res, next); };
 const complete = (req, res, next) => { req.body.status = 'completed'; return setStatus(req, res, next); };
 const assign = (req, res, next) => { req.body.assigned_to = req.body.technician_id || req.body.assigned_to; req.body.status = 'assigned'; return updateMaintenance(req, res, next); };
-const removeMaintenance = async (req, res, next) => { try { if (!canManage(req)) return res.status(403).json({ success: false, message: 'Maintenance authorization required' }); const deleted = await Maintenance.destroy({ where: { id: req.params.id } }); if (!deleted) return res.status(404).json({ success: false, message: 'Maintenance request not found' }); res.json({ success: true }); } catch (error) { next(error); } };
+const removeMaintenance = async (req, res, next) => { try { if (!canManage(req)) return res.status(403).json({ success: false, message: 'Maintenance authorization required' }); const item = await Maintenance.findByPk(req.params.id); if (!item) return res.status(404).json({ success: false, message: 'Maintenance request not found' }); if (req.infrastructureScope && !(await Asset.findOne({ where: { id: item.assetId, ...infrastructureAssetWhere } }))) return res.status(403).json({ success: false, message: 'Maintenance record is outside the infrastructure scope' }); await item.destroy(); res.json({ success: true }); } catch (error) { next(error); } };
 const dashboard = async (req, res, next) => { try { const items = await Maintenance.findAll(); const byStatus = items.reduce((acc, item) => { acc[item.status] = (acc[item.status] || 0) + 1; return acc; }, {}); res.json({ success: true, data: { total: items.length, pending: byStatus.pending || 0, active: (byStatus.assigned || 0) + (byStatus['in-progress'] || 0), completed: byStatus.completed || 0, byStatus } }); } catch (error) { next(error); } };
 
-module.exports = { getAllMaintenance, createMaintenance, updateMaintenance, setStatus, approve, reject, start, complete, assign, removeMaintenance, dashboard };
+module.exports = { getAllMaintenance, getInfrastructureMaintenance, getInfrastructureMaintenanceAssets, createMaintenance, updateMaintenance, setStatus, approve, reject, start, complete, assign, removeMaintenance, dashboard };

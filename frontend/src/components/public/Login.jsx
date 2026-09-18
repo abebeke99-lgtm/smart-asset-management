@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
 import { apiBase } from '../../utils/api';
-import { Building2, Eye, EyeOff, Landmark, Lock, LogIn, Mail, Radio, ShieldCheck, ShoppingCart, Wrench, Laptop } from 'lucide-react';
+import { Building2, Eye, EyeOff, Landmark, Lock, LogIn, Mail, ShieldCheck, ShoppingCart, Wrench, Laptop } from 'lucide-react';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -13,13 +13,6 @@ const Login = () => {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
-  const [rfidData, setRfidData] = useState(null);
-  const [rfidLoading, setRfidLoading] = useState(false);
-  const [rfidError, setRfidError] = useState(null);
-  const rfidRequestLockRef = useRef(false);
-  const lastRfidTagRef = useRef({ value: '', timestamp: 0 });
-  const lastRfidRequestAtRef = useRef(0);
 
   const [backendStatus, setBackendStatus] = useState('checking');
   const [activeRole, setActiveRole] = useState(null);
@@ -48,7 +41,6 @@ const Login = () => {
     setUsername(roleId);
     setPassword('');
     setError(null);
-    setRfidError(null);
   };
 
   useEffect(() => {
@@ -66,52 +58,6 @@ const Login = () => {
     checkBackend();
     return () => { mounted = false; };
   }, []);
-
-  const fetchRfidData = async (scannedTag = '') => {
-    const normalizedTag = typeof scannedTag === 'string' ? scannedTag.trim().toLowerCase() : '';
-    const now = Date.now();
-    const debounceWindow = 750;
-
-    if (rfidRequestLockRef.current) return;
-    if (!normalizedTag && now - lastRfidRequestAtRef.current < debounceWindow) return;
-    if (
-      normalizedTag &&
-      normalizedTag === lastRfidTagRef.current.value &&
-      now - lastRfidTagRef.current.timestamp < debounceWindow
-    ) return;
-
-    rfidRequestLockRef.current = true;
-    lastRfidRequestAtRef.current = now;
-    try {
-      setRfidLoading(true);
-      setRfidError(null);
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setRfidError('Please login first before scanning RFID.');
-        return;
-      }
-      const response = await axios.get(`${apiBase()}/rfid`, {
-        headers: { Authorization: `Bearer ${token}` },
-        timeout: 8000,
-      });
-      if (response.data?.success) {
-        const logs = Array.isArray(response.data.data) ? response.data.data : [];
-        const latestTag = normalizedTag || String(logs[0]?.tag || logs[0]?.rfid_tag || '').trim().toLowerCase();
-        if (latestTag) lastRfidTagRef.current = { value: latestTag, timestamp: Date.now() };
-        setRfidData(logs[0] || null);
-        if (!logs.length) setRfidError('No RFID event detected.');
-      } else {
-        throw new Error(response.data?.message || 'Failed to load RFID data.');
-      }
-    } catch (err) {
-      setRfidError(err.response?.status === 429
-        ? err.response.data?.message || 'Too many requests. Please try again later.'
-        : 'RFID Reader is idle or not connected.');
-    } finally {
-      rfidRequestLockRef.current = false;
-      setRfidLoading(false);
-    }
-  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -226,16 +172,7 @@ const Login = () => {
               <span className={`status-dot ${backendStatus === 'online' ? 'status-online' : backendStatus === 'offline' ? 'status-offline' : 'status-checking'}`} />
               <span>System {backendStatus}</span>
             </div>
-            <button type="button" className="rfid-button" onClick={() => fetchRfidData()} disabled={rfidLoading}>
-              <Radio size={14} aria-hidden="true" /> {rfidLoading ? 'Scanning...' : 'Scan RFID'}
-            </button>
           </div>
-
-          {rfidData && (
-            <div style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', padding: '10px', borderRadius: '10px', marginBottom: '15px', fontSize: '11px', textAlign: 'center' }}>
-              ✓ RFID detected: {rfidData.tag || rfidData.tag_id}
-            </div>
-          )}
 
           <section className="role-selector">
             <div className="role-grid">
@@ -253,7 +190,7 @@ const Login = () => {
             </div>
           </section>
 
-          {(error || rfidError) && <div className="login-error">{error || rfidError}</div>}
+          {error && <div className="login-error">{error}</div>}
 
           <form onSubmit={handleLogin}>
             <div className="login-input-wrapper" style={{ position: 'relative' }}>

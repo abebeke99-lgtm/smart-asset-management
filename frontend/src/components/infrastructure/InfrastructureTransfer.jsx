@@ -1288,7 +1288,7 @@ const InfrastructureTransfer = () => {
         }
 
         const response = await api.get(
-          "/infrastructure/transfer",
+          "/api/infrastructure/transfer",
           { params }
         );
 
@@ -1326,8 +1326,8 @@ const InfrastructureTransfer = () => {
     try {
       const [assetsResponse, locationsResponse] =
         await Promise.all([
-          api.get("/infrastructure/transfer/assets"),
-          api.get("/infrastructure/transfer/locations"),
+          api.get("/api/infrastructure/transfer/assets"),
+          api.get("/api/infrastructure/transfer/locations"),
         ]);
 
       setAssets(
@@ -1441,14 +1441,32 @@ const InfrastructureTransfer = () => {
   };
 
   const statusOptions = useMemo(() => {
+    const backendStatuses = summary
+      ? Object.keys(summary).filter((key) => key !== "total")
+      : [];
+    const pageStatuses = transfers
+      .map((item) => String(getStatus(item)))
+      .filter(Boolean);
+
+    return [...new Set([...backendStatuses, ...pageStatuses])].sort();
+  }, [summary, transfers]);
+
+  const summaryCards = useMemo(() => {
+    const counts = summary || {};
+    const statuses = Object.keys(counts).filter(
+      (key) => key !== "total"
+    );
+
     return [
-      ...new Set(
-        transfers
-          .map((item) => String(getStatus(item)))
-          .filter(Boolean)
-      ),
-    ].sort();
-  }, [transfers]);
+      { key: "total", label: "Total Transfers", value: transferSummary.total, icon: <ArrowRightLeft size={19} /> },
+      ...statuses.map((status) => ({
+        key: status,
+        label: status,
+        value: counts[status],
+        icon: getStatusIcon(status),
+      })),
+    ];
+  }, [summary, transferSummary.total]);
 
   const clearFilters = () => {
     setSearch("");
@@ -1519,7 +1537,7 @@ const InfrastructureTransfer = () => {
       setSubmitting(true);
       setModalError("");
 
-      await api.post("/infrastructure/transfer", {
+      await api.post("/api/infrastructure/transfer", {
         assetId: form.assetId,
         fromLocationId: form.fromLocationId,
         toLocationId: form.toLocationId,
@@ -1563,7 +1581,7 @@ const InfrastructureTransfer = () => {
 
     try {
       await api.patch(
-        `/infrastructure/transfer/${transferId}/cancel`
+        `/api/infrastructure/transfer/${transferId}/cancel`
       );
 
       await loadTransfers({ silent: true });
@@ -1598,7 +1616,7 @@ const InfrastructureTransfer = () => {
 
     try {
       await api.patch(
-        `/infrastructure/transfer/${transferId}/approve`
+        `/api/infrastructure/transfer/${transferId}/approve`
       );
 
       await loadTransfers({ silent: true });
@@ -1634,7 +1652,7 @@ const InfrastructureTransfer = () => {
 
     try {
       await api.patch(
-        `/infrastructure/transfer/${transferId}/complete`
+        `/api/infrastructure/transfer/${transferId}/complete`
       );
 
       await loadTransfers({ silent: true });
@@ -1779,85 +1797,13 @@ const InfrastructureTransfer = () => {
         )}
 
         <section className="summary-grid">
-          <div className="summary-card">
-            <div className="summary-icon">
-              <ArrowRightLeft size={19} />
+          {summaryCards.map((card) => (
+            <div className="summary-card" key={card.key}>
+              <div className="summary-icon">{card.icon}</div>
+              <div className="summary-value">{formatNumber(card.value)}</div>
+              <div className="summary-label">{card.label}</div>
             </div>
-
-            <div className="summary-value">
-              {formatNumber(
-                transferSummary.total
-              )}
-            </div>
-
-            <div className="summary-label">
-              Total Transfers
-            </div>
-          </div>
-
-          <div className="summary-card warning">
-            <div className="summary-icon">
-              <AlertCircle size={19} />
-            </div>
-
-            <div className="summary-value">
-              {formatNumber(
-                transferSummary.pending
-              )}
-            </div>
-
-            <div className="summary-label">
-              Pending Transfers
-            </div>
-          </div>
-
-          <div className="summary-card">
-            <div className="summary-icon">
-              <CheckCircle2 size={19} />
-            </div>
-
-            <div className="summary-value">
-              {formatNumber(
-                transferSummary.approved
-              )}
-            </div>
-
-            <div className="summary-label">
-              Approved
-            </div>
-          </div>
-
-          <div className="summary-card success">
-            <div className="summary-icon">
-              <Package size={19} />
-            </div>
-
-            <div className="summary-value">
-              {formatNumber(
-                transferSummary.completed
-              )}
-            </div>
-
-            <div className="summary-label">
-              Completed
-            </div>
-          </div>
-
-          <div className="summary-card danger">
-            <div className="summary-icon">
-              <XCircle size={19} />
-            </div>
-
-            <div className="summary-value">
-              {formatNumber(
-                transferSummary.rejected
-              )}
-            </div>
-
-            <div className="summary-label">
-              Rejected / Cancelled
-            </div>
-          </div>
+          ))}
         </section>
 
         <section className="filter-card">

@@ -19,7 +19,6 @@ import {
   ShieldCheck,
   Trash2,
   X,
-  Zap,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -305,6 +304,9 @@ const conditionLabel = (condition) => {
   return labels[condition] || condition || "Good";
 };
 
+const canonicalStatus = (value) => ({ operational: "Operational", maintenance: "Under Maintenance", inactive: "Inactive", disposed: "Disposed" }[normalize(value)] || value);
+const canonicalCondition = (value) => ({ excellent: "Excellent", good: "Good", fair: "Fair", poor: "Poor", critical: "Critical" }[normalize(value)] || value);
+
 const statusClass = (status) => {
   switch (status) {
     case "operational":
@@ -346,6 +348,8 @@ const conditionClass = (condition) => {
 
 export default function InfrastructureUPS() {
   const [equipment, setEquipment] = useState([]);
+  const [summary, setSummary] = useState({ total: 0, operational: 0, maintenance: 0, inactive: 0, disposed: 0, critical: 0 });
+  const [availableFilters, setAvailableFilters] = useState({ types: [], locations: [] });
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -392,7 +396,7 @@ export default function InfrastructureUPS() {
         setError("");
 
         const response = await api.get(
-          "/infrastructure/ups",
+          "/api/infrastructure/ups",
           {
             params: {
               page,
@@ -415,8 +419,11 @@ export default function InfrastructureUPS() {
         );
 
         const rows = extractRows(response);
+        const responseData = response?.data || {};
 
         setEquipment(rows);
+        setSummary(responseData.summary || { total: 0, operational: 0, maintenance: 0, inactive: 0, disposed: 0, critical: 0 });
+        setAvailableFilters({ types: responseData.filters?.types || [], locations: responseData.filters?.locations || [] });
         setPagination(
           extractPagination(response, page)
         );
@@ -463,84 +470,8 @@ export default function InfrastructureUPS() {
     location,
   ]);
 
-  const types = useMemo(
-    () =>
-      [
-        ...new Set(
-          equipment
-            .map((item) => getEquipmentType(item))
-            .filter(
-              (item) =>
-                item && item !== "—"
-            )
-        ),
-      ].sort((a, b) =>
-        String(a).localeCompare(String(b))
-      ),
-    [equipment]
-  );
-
-  const locations = useMemo(
-    () =>
-      [
-        ...new Set(
-          equipment
-            .map((item) => getLocation(item))
-            .filter(
-              (item) =>
-                item && item !== "—"
-            )
-        ),
-      ].sort((a, b) =>
-        String(a).localeCompare(String(b))
-      ),
-    [equipment]
-  );
-
-  const summary = useMemo(() => {
-    return {
-      total: equipment.length,
-
-      operational: equipment.filter((item) => {
-        const value = getStatus(item);
-
-        return (
-          value === "operational" ||
-          value === "active"
-        );
-      }).length,
-
-      maintenance: equipment.filter(
-        (item) =>
-          getStatus(item) === "maintenance"
-      ).length,
-
-      fault: equipment.filter((item) => {
-        const value = getStatus(item);
-
-        return (
-          value === "fault" ||
-          value === "failed" ||
-          value === "offline"
-        );
-      }).length,
-
-      critical: equipment.filter((item) => {
-        const value = getCondition(item);
-
-        return (
-          value === "critical" ||
-          value === "damaged"
-        );
-      }).length,
-
-      locations: new Set(
-        equipment
-          .map((item) => getLocation(item))
-          .filter((item) => item !== "—")
-      ).size,
-    };
-  }, [equipment]);
+  const types = availableFilters.types;
+  const locations = availableFilters.locations;
 
   const openCreate = () => {
     setEditingEquipment(null);
@@ -742,8 +673,8 @@ export default function InfrastructureUPS() {
           form.batteryCount.trim(),
         backupTime:
           form.backupTime.trim(),
-        status: form.status,
-        condition: form.condition,
+        status: canonicalStatus(form.status),
+        condition: canonicalCondition(form.condition),
         installationDate:
           form.installationDate || null,
         lastInspectionDate:
@@ -766,12 +697,12 @@ export default function InfrastructureUPS() {
         }
 
         response = await api.put(
-          `/infrastructure/ups/${id}`,
+          `/api/infrastructure/ups/${id}`,
           payload
         );
       } else {
         response = await api.post(
-          "/infrastructure/ups",
+          "/api/infrastructure/ups",
           payload
         );
       }
@@ -828,7 +759,7 @@ export default function InfrastructureUPS() {
       setError("");
 
       await api.delete(
-        `/infrastructure/ups/${id}`
+        `/api/infrastructure/ups/${id}`
       );
 
       setSelectedEquipment(null);
@@ -1801,7 +1732,7 @@ export default function InfrastructureUPS() {
           <div className="summary-card">
             <div className="summary-top">
               <span className="summary-label">
-                Fault / Offline
+                Inactive
               </span>
 
               <span className="summary-icon red">
@@ -1810,7 +1741,7 @@ export default function InfrastructureUPS() {
             </div>
 
             <div className="summary-number">
-              {summary.fault}
+              {summary.inactive}
             </div>
           </div>
 
@@ -1842,7 +1773,7 @@ export default function InfrastructureUPS() {
             </div>
 
             <div className="summary-number">
-              {summary.locations}
+              {availableFilters.locations.length}
             </div>
           </div>
         </div>
@@ -1886,26 +1817,14 @@ export default function InfrastructureUPS() {
             <option value="operational">
               Operational
             </option>
-            <option value="active">
-              Active
-            </option>
             <option value="maintenance">
-              Maintenance
-            </option>
-            <option value="fault">
-              Fault
-            </option>
-            <option value="failed">
-              Failed
-            </option>
-            <option value="offline">
-              Offline
+              Under Maintenance
             </option>
             <option value="inactive">
               Inactive
             </option>
-            <option value="shutdown">
-              Shutdown
+            <option value="disposed">
+              Disposed
             </option>
           </select>
 
@@ -1933,9 +1852,6 @@ export default function InfrastructureUPS() {
             </option>
             <option value="critical">
               Critical
-            </option>
-            <option value="damaged">
-              Damaged
             </option>
           </select>
 
@@ -2039,12 +1955,11 @@ export default function InfrastructureUPS() {
               </div>
 
               <h3>
-                No UPS / inverter records found
+                No UPS / inverter systems found.
               </h3>
 
               <p>
-                No records match the current search
-                and filters.
+                No records match the current search and filters.
               </p>
             </div>
           ) : (
@@ -2959,32 +2874,16 @@ export default function InfrastructureUPS() {
                         Operational
                       </option>
 
-                      <option value="active">
-                        Active
-                      </option>
-
                       <option value="maintenance">
-                        Maintenance
-                      </option>
-
-                      <option value="fault">
-                        Fault
-                      </option>
-
-                      <option value="failed">
-                        Failed
-                      </option>
-
-                      <option value="offline">
-                        Offline
+                        Under Maintenance
                       </option>
 
                       <option value="inactive">
                         Inactive
                       </option>
 
-                      <option value="shutdown">
-                        Shutdown
+                      <option value="disposed">
+                        Disposed
                       </option>
                     </select>
                   </div>
@@ -3021,9 +2920,6 @@ export default function InfrastructureUPS() {
                         Critical
                       </option>
 
-                      <option value="damaged">
-                        Damaged
-                      </option>
                     </select>
                   </div>
 

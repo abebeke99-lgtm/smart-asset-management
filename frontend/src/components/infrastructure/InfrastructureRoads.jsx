@@ -10,7 +10,6 @@ import {
   Edit3,
   Eye,
   Filter,
-  MapPin,
   Plus,
   RefreshCw,
   Route,
@@ -34,8 +33,8 @@ const EMPTY_FORM = {
   area: "",
   drainageType: "",
   drainageLength: "",
-  condition: "good",
-  status: "operational",
+  condition: "Good",
+  status: "Operational",
   constructionDate: "",
   lastInspectionDate: "",
   nextInspectionDate: "",
@@ -330,6 +329,7 @@ export default function InfrastructureRoads() {
     total: 0,
     pages: 1,
   });
+  const [backendSummary, setBackendSummary] = useState(null);
 
   const [selected, setSelected] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -362,6 +362,7 @@ export default function InfrastructureRoads() {
       const extracted = extractRows(data);
 
       setRows(extracted);
+      setBackendSummary(data?.summary || data?.data?.summary || null);
 
       setPagination(
         extractPagination(
@@ -371,29 +372,8 @@ export default function InfrastructureRoads() {
         )
       );
 
-      setTypes([
-        ...new Set(
-          extracted
-            .map((item) =>
-              getInfrastructureType(item)
-            )
-            .filter(
-              (item) => item && item !== "—"
-            )
-        ),
-      ]);
-
-      setLocations([
-        ...new Set(
-          extracted
-            .map((item) =>
-              getLocation(item)
-            )
-            .filter(
-              (item) => item && item !== "—"
-            )
-        ),
-      ]);
+      setTypes(data?.filters?.types || data?.data?.filters?.types || []);
+      setLocations(data?.filters?.locations || data?.data?.filters?.locations || []);
     } catch (err) {
       setRows([]);
 
@@ -434,6 +414,8 @@ export default function InfrastructureRoads() {
   }, [success]);
 
   const summary = useMemo(() => {
+    if (backendSummary) return backendSummary;
+
     const total = pagination.total || rows.length;
 
     const operational = rows.filter((item) =>
@@ -465,7 +447,7 @@ export default function InfrastructureRoads() {
       critical,
       damaged,
     };
-  }, [rows, pagination.total]);
+  }, [backendSummary, rows, pagination.total]);
 
   const openCreate = () => {
     setEditing(null);
@@ -1629,10 +1611,10 @@ export default function InfrastructureRoads() {
             <div className="summary-top">
               <div>
                 <div className="summary-label">
-                  Damaged / Failed
+                  Inactive
                 </div>
                 <div className="summary-value">
-                  {summary.damaged}
+                  {summary.inactive}
                 </div>
               </div>
 
@@ -1677,12 +1659,6 @@ export default function InfrastructureRoads() {
               <option value="inactive">
                 Inactive
               </option>
-              <option value="damaged">
-                Damaged
-              </option>
-              <option value="failed">
-                Failed
-              </option>
             </select>
 
             <select
@@ -1702,9 +1678,6 @@ export default function InfrastructureRoads() {
               <option value="poor">Poor</option>
               <option value="critical">
                 Critical
-              </option>
-              <option value="damaged">
-                Damaged
               </option>
             </select>
 
@@ -2524,9 +2497,6 @@ export default function InfrastructureRoads() {
                     </option>
                     <option value="damaged">
                       Damaged
-                    </option>
-                    <option value="failed">
-                      Failed
                     </option>
                   </select>
                 </div>

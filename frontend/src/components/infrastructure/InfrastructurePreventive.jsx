@@ -37,7 +37,7 @@ const EMPTY_FORM = {
   assignedTo: "",
   contractor: "",
   priority: "medium",
-  status: "active",
+  status: "pending",
   lastMaintenanceDate: "",
   nextMaintenanceDate: "",
   startDate: "",
@@ -132,10 +132,10 @@ const contractorOf = (row) =>
   valueOf(row, ["contractor", "contractor_name"], "—");
 
 const priorityOf = (row) =>
-  String(valueOf(row, ["priority"], "medium")).toLowerCase();
+  String(valueOf(row, ["priority"], "")).toLowerCase();
 
 const statusOf = (row) =>
-  String(valueOf(row, ["status", "plan_status"], "active")).toLowerCase();
+  String(valueOf(row, ["status", "plan_status"], "pending")).toLowerCase();
 
 const lastDateOf = (row) =>
   valueOf(
@@ -297,7 +297,7 @@ const priorityText = (priority) => {
     urgent: "Urgent",
   };
 
-  return labels[priority] || priority || "Unknown";
+  return labels[priority] || priority || "—";
 };
 
 const priorityClass = (priority) => {
@@ -327,6 +327,8 @@ export default function InfrastructurePreventive() {
   const [types, setTypes] = useState([]);
   const [categories, setCategories] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [technicians, setTechnicians] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -410,6 +412,9 @@ export default function InfrastructurePreventive() {
             .filter((item) => item && item !== "—")
         ),
       ]);
+
+      setAssets(data?.filters?.assets || []);
+      setTechnicians(data?.filters?.technicians || []);
     } catch (err) {
       setRows([]);
 
@@ -623,20 +628,13 @@ export default function InfrastructurePreventive() {
   const savePlan = async (event) => {
     event.preventDefault();
 
-    if (!form.title.trim()) {
-      setError("Maintenance plan title is required.");
+    if (!form.maintenanceType.trim()) {
+      setError("Maintenance type is required.");
       return;
     }
 
-    if (!form.assetName.trim() && !form.assetId.trim()) {
-      setError(
-        "Provide the infrastructure asset ID or asset name."
-      );
-      return;
-    }
-
-    if (!form.location.trim()) {
-      setError("Location is required.");
+    if (!form.assetId.trim()) {
+      setError("Select an infrastructure asset.");
       return;
     }
 
@@ -651,47 +649,20 @@ export default function InfrastructurePreventive() {
     setError("");
 
     const payload = {
-      planNumber: form.planNumber.trim() || null,
-      title: form.title.trim(),
-
       maintenanceType:
         form.maintenanceType.trim() ||
         "Preventive",
 
-      category:
-        form.category.trim() || null,
+      assetId: Number(form.assetId),
 
-      assetId:
-        form.assetId.trim() || null,
+      technicianId: form.assignedTo ? Number(form.assignedTo) : null,
 
-      assetName:
-        form.assetName.trim() || null,
-
-      location:
-        form.location.trim(),
+      scheduleDate: form.nextMaintenanceDate || null,
 
       frequency:
         form.frequency,
 
-      intervalValue:
-        form.intervalValue
-          ? Number(form.intervalValue)
-          : 1,
-
-      intervalUnit:
-        form.intervalUnit,
-
-      assignedTo:
-        form.assignedTo.trim() || null,
-
-      contractor:
-        form.contractor.trim() || null,
-
-      priority:
-        form.priority,
-
-      status:
-        form.status,
+      status: form.status,
 
       lastMaintenanceDate:
         form.lastMaintenanceDate || null,
@@ -707,9 +678,6 @@ export default function InfrastructurePreventive() {
 
       estimatedCost:
         form.estimatedCost || null,
-
-      actualCost:
-        form.actualCost || null,
 
       description:
         form.description.trim() || null,
@@ -1779,12 +1747,11 @@ export default function InfrastructurePreventive() {
               }}
             >
               <option value="">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="paused">Paused</option>
-              <option value="scheduled">Scheduled</option>
-              <option value="completed">Completed</option>
+              <option value="pending">Pending</option>
+              <option value="due">Due</option>
               <option value="overdue">Overdue</option>
-              <option value="inactive">Inactive</option>
+              <option value="completed">Completed</option>
+              <option value="skipped">Skipped</option>
               <option value="cancelled">Cancelled</option>
             </select>
 
@@ -2572,16 +2539,23 @@ export default function InfrastructurePreventive() {
 
                 <div className="field">
                   <label>
-                    Asset ID
+                    Asset <span className="required">*</span>
                   </label>
 
-                  <input
-                    className="input"
+                  <select
+                    className="select"
                     name="assetId"
                     value={form.assetId}
                     onChange={handleChange}
-                    placeholder="Infrastructure asset ID"
-                  />
+                    required
+                  >
+                    <option value="">Select an infrastructure asset</option>
+                    {assets.map((asset) => (
+                      <option key={asset.id} value={asset.id}>
+                        {asset.assetCode ? `${asset.assetCode} - ` : ""}{asset.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="field">
@@ -2641,8 +2615,8 @@ export default function InfrastructurePreventive() {
                       Quarterly
                     </option>
 
-                    <option value="yearly">
-                      Yearly
+                    <option value="annual">
+                      Annual
                     </option>
                   </select>
                 </div>
@@ -2697,16 +2671,22 @@ export default function InfrastructurePreventive() {
 
                 <div className="field">
                   <label>
-                    Assigned To
+                    Assigned Technician
                   </label>
 
-                  <input
-                    className="input"
+                  <select
+                    className="select"
                     name="assignedTo"
                     value={form.assignedTo}
                     onChange={handleChange}
-                    placeholder="Technician / team"
-                  />
+                  >
+                    <option value="">Unassigned</option>
+                    {technicians.map((technician) => (
+                      <option key={technician.id} value={technician.id}>
+                        {technician.fullName || technician.username}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="field">
@@ -2767,24 +2747,24 @@ export default function InfrastructurePreventive() {
                     value={form.status}
                     onChange={handleChange}
                   >
-                    <option value="active">
-                      Active
+                    <option value="pending">
+                      Pending
                     </option>
 
-                    <option value="scheduled">
-                      Scheduled
+                    <option value="due">
+                      Due
                     </option>
 
-                    <option value="paused">
-                      Paused
+                    <option value="overdue">
+                      Overdue
                     </option>
 
                     <option value="completed">
                       Completed
                     </option>
 
-                    <option value="inactive">
-                      Inactive
+                    <option value="skipped">
+                      Skipped
                     </option>
 
                     <option value="cancelled">

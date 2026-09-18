@@ -425,6 +425,7 @@ const priorityClass = (priority) => {
 
 export default function InfrastructureMaintenance() {
   const [rows, setRows] = useState([]);
+  const [assets, setAssets] = useState([]);
 
   const [types, setTypes] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -551,6 +552,20 @@ export default function InfrastructureMaintenance() {
   useEffect(() => {
     loadMaintenance();
   }, [loadMaintenance]);
+
+  useEffect(() => {
+    let active = true;
+    api.get("/infrastructure/maintenance/assets")
+      .then((response) => {
+        if (active) setAssets(response.data?.data || []);
+      })
+      .catch(() => {
+        if (active) setAssets([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!success) return;
@@ -725,6 +740,11 @@ export default function InfrastructureMaintenance() {
   const saveMaintenance = async (event) => {
     event.preventDefault();
 
+    if (!form.assetId) {
+      setError("An infrastructure asset is required.");
+      return;
+    }
+
     if (!form.title.trim()) {
       setError("Maintenance title is required.");
       return;
@@ -748,62 +768,14 @@ export default function InfrastructureMaintenance() {
     const payload = {
       title: form.title.trim(),
 
-      workOrderNumber:
-        form.workOrderNumber.trim() || null,
-
-      maintenanceType:
-        form.maintenanceType.trim(),
-
-      category:
-        form.category.trim() || null,
-
-      assetId:
-        form.assetId.trim() || null,
-
-      assetName:
-        form.assetName.trim() || null,
-
-      location:
-        form.location.trim(),
-
-      requestedBy:
-        form.requestedBy.trim() || null,
-
-      assignedTo:
-        form.assignedTo.trim() || null,
-
+      asset_id: Number(form.assetId),
+      problem: form.title.trim(),
+      description: form.description.trim(),
       priority: form.priority,
-      status: form.status,
-
-      condition:
-        form.condition.trim() || null,
-
-      requestDate:
-        form.requestDate || null,
-
-      scheduledDate:
-        form.scheduledDate || null,
-
-      startDate:
-        form.startDate || null,
-
-      completionDate:
-        form.completionDate || null,
-
-      estimatedCost:
-        form.estimatedCost || null,
-
-      actualCost:
-        form.actualCost || null,
-
-      contractor:
-        form.contractor.trim() || null,
-
-      description:
-        form.description.trim() || null,
-
-      remarks:
-        form.remarks.trim() || null,
+      requested_date: form.requestDate || null,
+      preferred_repair_date: form.scheduledDate || null,
+      estimated_cost: form.estimatedCost || undefined,
+      assigned_to: form.assignedTo || undefined,
     };
 
     try {
@@ -1670,13 +1642,6 @@ export default function InfrastructureMaintenance() {
               className="btn btn-secondary"
             >
               Dashboard
-            </Link>
-
-            <Link
-              to="/infrastructure/work-orders"
-              className="btn btn-secondary"
-            >
-              Work Orders
             </Link>
 
             <button
@@ -2559,15 +2524,24 @@ export default function InfrastructureMaintenance() {
                 </div>
 
                 <div className="field">
-                  <label>Asset ID</label>
+                  <label>
+                    Infrastructure Asset <span className="required">*</span>
+                  </label>
 
-                  <input
-                    className="input"
+                  <select
+                    className="select"
                     name="assetId"
                     value={form.assetId}
                     onChange={handleChange}
-                    placeholder="Related asset ID"
-                  />
+                    required
+                  >
+                    <option value="">Select an asset</option>
+                    {assets.map((asset) => (
+                      <option key={asset.id} value={asset.id}>
+                        {asset.assetCode ? `${asset.assetCode} - ` : ""}{asset.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="field">

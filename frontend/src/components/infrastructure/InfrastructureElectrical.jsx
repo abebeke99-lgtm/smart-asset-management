@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../services/api";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   Activity,
   AlertCircle,
@@ -29,12 +30,12 @@ const PAGE_SIZE = 10;
 const EMPTY_FORM = {
   name: "",
   code: "",
-  systemType: "Electrical System",
+  systemType: "Electrical Equipment",
   location: "",
   voltage: "",
   capacity: "",
-  status: "operational",
-  condition: "good",
+  status: "",
+  condition: "",
   installationDate: "",
   lastInspectionDate: "",
   nextInspectionDate: "",
@@ -229,7 +230,7 @@ const statusLabel = (status) => {
     shutdown: "Shutdown",
   };
 
-  return labels[status] || status || "Operational";
+  return labels[status] || status || "—";
 };
 
 const conditionLabel = (condition) => {
@@ -242,7 +243,7 @@ const conditionLabel = (condition) => {
     damaged: "Damaged",
   };
 
-  return labels[condition] || condition || "Good";
+  return labels[condition] || condition || "—";
 };
 
 const statusClass = (status) => {
@@ -289,7 +290,18 @@ const conditionClass = (condition) => {
 };
 
 export default function InfrastructureElectrical() {
+  const { user } = useAuth();
+  const canManage = ["admin", "infrastructure"].includes(
+    String(user?.role || "").toLowerCase()
+  );
   const [systems, setSystems] = useState([]);
+  const [filterOptions, setFilterOptions] = useState({
+    types: [],
+    buildings: [],
+    locations: [],
+    statuses: [],
+    conditions: [],
+  });
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -336,7 +348,7 @@ export default function InfrastructureElectrical() {
         setError("");
 
         const response = await api.get(
-          "/infrastructure/electrical",
+          "/api/infrastructure/electrical",
           {
             params: {
               page,
@@ -361,6 +373,13 @@ export default function InfrastructureElectrical() {
         const rows = extractRows(response);
 
         setSystems(rows);
+        setFilterOptions(response?.data?.filters || {
+          types: [],
+          buildings: [],
+          locations: [],
+          statuses: [],
+          conditions: [],
+        });
         setPagination(
           extractPagination(response, page)
         );
@@ -407,45 +426,12 @@ export default function InfrastructureElectrical() {
     location,
   ]);
 
-  const types = useMemo(
-    () =>
-      [
-        ...new Set(
-          systems
-            .map((item) => getType(item))
-            .filter(
-              (item) =>
-                item &&
-                item !== "—"
-            )
-        ),
-      ].sort((a, b) =>
-        String(a).localeCompare(String(b))
-      ),
-    [systems]
-  );
-
-  const locations = useMemo(
-    () =>
-      [
-        ...new Set(
-          systems
-            .map((item) => getLocation(item))
-            .filter(
-              (item) =>
-                item &&
-                item !== "—"
-            )
-        ),
-      ].sort((a, b) =>
-        String(a).localeCompare(String(b))
-      ),
-    [systems]
-  );
+  const types = filterOptions.types || [];
+  const locations = filterOptions.locations || [];
 
   const summary = useMemo(() => {
     return {
-      total: systems.length,
+      total: pagination.total,
 
       operational: systems.filter((item) => {
         const current = getStatus(item);
@@ -615,9 +601,9 @@ export default function InfrastructureElectrical() {
 
       const payload = {
         name: form.name.trim(),
-        code: form.code.trim(),
-        systemType:
-          form.systemType.trim(),
+        assetCode: form.code.trim(),
+        type: form.systemType.trim(),
+        category: "Electrical Equipment",
         location:
           form.location.trim(),
         voltage:
@@ -648,12 +634,12 @@ export default function InfrastructureElectrical() {
         }
 
         response = await api.put(
-          `/infrastructure/electrical/${id}`,
+          `/api/infrastructure/electrical/${id}`,
           payload
         );
       } else {
         response = await api.post(
-          "/infrastructure/electrical",
+          "/api/infrastructure/electrical",
           payload
         );
       }
@@ -710,7 +696,7 @@ export default function InfrastructureElectrical() {
       setError("");
 
       await api.delete(
-        `/infrastructure/electrical/${id}`
+        `/api/infrastructure/electrical/${id}`
       );
 
       setSelectedSystem(null);
@@ -1604,14 +1590,16 @@ export default function InfrastructureElectrical() {
               Refresh
             </button>
 
-            <button
-              type="button"
-              className="btn primary"
-              onClick={openCreate}
-            >
-              <Plus size={17} />
-              Add Electrical System
-            </button>
+            {canManage && (
+              <button
+                type="button"
+                className="btn primary"
+                onClick={openCreate}
+              >
+                <Plus size={17} />
+                Add Electrical System
+              </button>
+            )}
           </div>
         </div>
 
@@ -1628,9 +1616,7 @@ export default function InfrastructureElectrical() {
               </span>
             </div>
 
-            <div className="summary-number">
-              {summary.total}
-            </div>
+            <div className="summary-number">{summary.total}</div>
           </div>
 
           <div className="summary-card">
@@ -1752,33 +1738,9 @@ export default function InfrastructureElectrical() {
               All statuses
             </option>
 
-            <option value="operational">
-              Operational
-            </option>
-
-            <option value="active">
-              Active
-            </option>
-
-            <option value="maintenance">
-              Maintenance
-            </option>
-
-            <option value="fault">
-              Fault
-            </option>
-
-            <option value="failed">
-              Failed
-            </option>
-
-            <option value="inactive">
-              Inactive
-            </option>
-
-            <option value="shutdown">
-              Shutdown
-            </option>
+            {(filterOptions.statuses || []).map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
           </select>
 
           <select
@@ -1792,29 +1754,9 @@ export default function InfrastructureElectrical() {
               All conditions
             </option>
 
-            <option value="excellent">
-              Excellent
-            </option>
-
-            <option value="good">
-              Good
-            </option>
-
-            <option value="fair">
-              Fair
-            </option>
-
-            <option value="poor">
-              Poor
-            </option>
-
-            <option value="critical">
-              Critical
-            </option>
-
-            <option value="damaged">
-              Damaged
-            </option>
+            {(filterOptions.conditions || []).map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
           </select>
 
           <select
@@ -2468,37 +2410,12 @@ export default function InfrastructureElectrical() {
                       onChange={handleChange}
                       disabled={saving}
                     >
-                      <option value="Electrical System">
-                        Electrical System
-                      </option>
-
-                      <option value="Distribution Panel">
-                        Distribution Panel
-                      </option>
-
-                      <option value="Main Switchboard">
-                        Main Switchboard
-                      </option>
-
-                      <option value="Substation">
-                        Substation
-                      </option>
-
-                      <option value="Circuit">
-                        Circuit
-                      </option>
-
-                      <option value="Lighting System">
-                        Lighting System
-                      </option>
-
-                      <option value="Control Panel">
-                        Control Panel
-                      </option>
-
-                      <option value="Other">
-                        Other
-                      </option>
+                      {types.map((item) => (
+                        <option key={item} value={item}>{item}</option>
+                      ))}
+                      {!types.includes(form.systemType) && form.systemType && (
+                        <option value={form.systemType}>{form.systemType}</option>
+                      )}
                     </select>
                   </div>
 
@@ -2562,33 +2479,9 @@ export default function InfrastructureElectrical() {
                       onChange={handleChange}
                       disabled={saving}
                     >
-                      <option value="operational">
-                        Operational
-                      </option>
-
-                      <option value="active">
-                        Active
-                      </option>
-
-                      <option value="maintenance">
-                        Maintenance
-                      </option>
-
-                      <option value="fault">
-                        Fault
-                      </option>
-
-                      <option value="failed">
-                        Failed
-                      </option>
-
-                      <option value="inactive">
-                        Inactive
-                      </option>
-
-                      <option value="shutdown">
-                        Shutdown
-                      </option>
+                      {(filterOptions.statuses || []).map((item) => (
+                        <option key={item} value={item}>{item}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -2604,29 +2497,9 @@ export default function InfrastructureElectrical() {
                       onChange={handleChange}
                       disabled={saving}
                     >
-                      <option value="excellent">
-                        Excellent
-                      </option>
-
-                      <option value="good">
-                        Good
-                      </option>
-
-                      <option value="fair">
-                        Fair
-                      </option>
-
-                      <option value="poor">
-                        Poor
-                      </option>
-
-                      <option value="critical">
-                        Critical
-                      </option>
-
-                      <option value="damaged">
-                        Damaged
-                      </option>
+                      {(filterOptions.conditions || []).map((item) => (
+                        <option key={item} value={item}>{item}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -2707,22 +2580,7 @@ export default function InfrastructureElectrical() {
                   className="btn primary"
                   disabled={saving}
                 >
-                  {saving ? (
-                    <>
-                      <RefreshCw
-                        size={16}
-                        className="spinner"
-                      />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <ShieldCheck size={16} />
-                      {editingSystem
-                        ? "Update System"
-                        : "Save System"}
-                    </>
-                  )}
+                  {saving ? "Saving..." : editingSystem ? "Update System" : "Save System"}
                 </button>
               </div>
             </form>

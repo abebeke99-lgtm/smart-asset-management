@@ -146,6 +146,10 @@ function getValue(item) {
 }
 
 function normalizeSummary(payload) {
+  if (!payload || Object.keys(payload).length === 0) {
+    return {};
+  }
+
   const summary =
     payload?.summary ||
     payload?.overview ||
@@ -2329,6 +2333,41 @@ export default function InfrastructureReports() {
                 </div>
               </div>
             )}
+
+                {payload?.dataAvailability && (
+                  <div className="panel table-panel">
+                    <div className="panel-header">
+                      <div>
+                        <div className="panel-title">
+                          Measurement Availability
+                        </div>
+                        <div className="panel-subtitle">
+                          Values shown here reflect records available in the database.
+                        </div>
+                      </div>
+                      <AlertCircle size={18} color="#64748b" />
+                    </div>
+                    <div className="panel-body">
+                      <div className="status-list">
+                        <div className="status-box">
+                          <div className="status-box-label">ENERGY MEASUREMENTS</div>
+                          <div className="status-box-value">
+                            {payload.dataAvailability.energyMeasurements ? "Available" : "Unavailable"}
+                          </div>
+                        </div>
+                        <div className="status-box">
+                          <div className="status-box-label">FUEL MEASUREMENTS</div>
+                          <div className="status-box-value">
+                            {payload.dataAvailability.fuelMeasurements ? "Available" : "Unavailable"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="panel-subtitle" style={{ marginTop: 12 }}>
+                        {payload.dataAvailability.message}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
             {categoryData.length === 0 &&
               statusData.length === 0 &&

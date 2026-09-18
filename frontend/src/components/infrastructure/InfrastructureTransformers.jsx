@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../services/api";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   AlertCircle,
   ArrowLeft,
@@ -39,11 +40,9 @@ const EMPTY_FORM = {
   coolingType: "",
   oilCapacity: "",
   serialNumber: "",
-  status: "operational",
-  condition: "good",
-  installationDate: "",
+  status: "Operational",
+  condition: "Good",
   lastInspectionDate: "",
-  nextInspectionDate: "",
   description: "",
 };
 
@@ -81,7 +80,7 @@ const getName = (row) =>
 const getCode = (row) =>
   getValue(
     row,
-    ["code", "transformer_code", "transformerCode"],
+    ["assetCode", "asset_code", "code", "transformer_code", "transformerCode"],
     "—"
   );
 
@@ -357,7 +356,24 @@ const conditionClass = (condition) => {
 };
 
 export default function InfrastructureTransformers() {
+  const { user } = useAuth();
+  const canManage = ["admin", "infrastructure"].includes(
+    String(user?.role || "").toLowerCase()
+  );
   const [transformers, setTransformers] = useState([]);
+  const [filterOptions, setFilterOptions] = useState({
+    types: [],
+    statuses: [],
+    conditions: [],
+    locations: [],
+  });
+  const [summaryData, setSummaryData] = useState({
+    total: 0,
+    operational: 0,
+    maintenance: 0,
+    inactive: 0,
+    critical: 0,
+  });
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -427,8 +443,11 @@ export default function InfrastructureTransformers() {
         );
 
         const rows = extractRows(response);
+        const responseData = response?.data || {};
 
         setTransformers(rows);
+        setSummaryData(responseData.summary || {});
+        setFilterOptions(responseData.filters || {});
         setPagination(
           extractPagination(response, page)
         );
@@ -475,74 +494,9 @@ export default function InfrastructureTransformers() {
     location,
   ]);
 
-  const types = useMemo(
-    () =>
-      [
-        ...new Set(
-          transformers
-            .map((item) => getType(item))
-            .filter((item) => item && item !== "—")
-        ),
-      ].sort((a, b) =>
-        String(a).localeCompare(String(b))
-      ),
-    [transformers]
-  );
-
-  const locations = useMemo(
-    () =>
-      [
-        ...new Set(
-          transformers
-            .map((item) => getLocation(item))
-            .filter((item) => item && item !== "—")
-        ),
-      ].sort((a, b) =>
-        String(a).localeCompare(String(b))
-      ),
-    [transformers]
-  );
-
   const summary = useMemo(() => {
-    return {
-      total: transformers.length,
-
-      operational: transformers.filter((item) => {
-        const value = getStatus(item);
-        return (
-          value === "operational" ||
-          value === "active"
-        );
-      }).length,
-
-      maintenance: transformers.filter(
-        (item) =>
-          getStatus(item) === "maintenance"
-      ).length,
-
-      fault: transformers.filter((item) => {
-        const value = getStatus(item);
-        return (
-          value === "fault" ||
-          value === "failed"
-        );
-      }).length,
-
-      critical: transformers.filter((item) => {
-        const value = getCondition(item);
-        return (
-          value === "critical" ||
-          value === "damaged"
-        );
-      }).length,
-
-      locations: new Set(
-        transformers
-          .map((item) => getLocation(item))
-          .filter((item) => item !== "—")
-      ).size,
-    };
-  }, [transformers]);
+    return summaryData;
+  }, [summaryData]);
 
   const openCreate = () => {
     setEditingTransformer(null);
@@ -632,24 +586,10 @@ export default function InfrastructureTransformers() {
         getCondition(transformer) ||
         "good",
 
-      installationDate:
-        getInstallationDate(transformer)
-          ? String(
-              getInstallationDate(transformer)
-            ).slice(0, 10)
-          : "",
-
       lastInspectionDate:
         getLastInspectionDate(transformer)
           ? String(
               getLastInspectionDate(transformer)
-            ).slice(0, 10)
-          : "",
-
-      nextInspectionDate:
-        getNextInspectionDate(transformer)
-          ? String(
-              getNextInspectionDate(transformer)
             ).slice(0, 10)
           : "",
 
@@ -739,12 +679,8 @@ export default function InfrastructureTransformers() {
           form.serialNumber.trim(),
         status: form.status,
         condition: form.condition,
-        installationDate:
-          form.installationDate || null,
         lastInspectionDate:
           form.lastInspectionDate || null,
-        nextInspectionDate:
-          form.nextInspectionDate || null,
         description:
           form.description.trim(),
       };
@@ -1720,14 +1656,12 @@ export default function InfrastructureTransformers() {
               Refresh
             </button>
 
-            <button
-              type="button"
-              className="btn primary"
-              onClick={openCreate}
-            >
-              <Plus size={17} />
-              Add Transformer
-            </button>
+            {canManage && (
+              <button type="button" className="btn primary" onClick={openCreate}>
+                <Plus size={17} />
+                Register Transformer
+              </button>
+            )}
           </div>
         </div>
 
@@ -1783,7 +1717,7 @@ export default function InfrastructureTransformers() {
           <div className="summary-card">
             <div className="summary-top">
               <span className="summary-label">
-                Fault / Failed
+                Inactive
               </span>
 
               <span className="summary-icon red">
@@ -1792,7 +1726,7 @@ export default function InfrastructureTransformers() {
             </div>
 
             <div className="summary-number">
-              {summary.fault}
+              {summary.inactive || 0}
             </div>
           </div>
 
@@ -1824,7 +1758,7 @@ export default function InfrastructureTransformers() {
             </div>
 
             <div className="summary-number">
-              {summary.locations}
+              {filterOptions.locations?.length || 0}
             </div>
           </div>
         </div>
@@ -1865,27 +1799,9 @@ export default function InfrastructureTransformers() {
             <option value="all">
               All statuses
             </option>
-            <option value="operational">
-              Operational
-            </option>
-            <option value="active">
-              Active
-            </option>
-            <option value="maintenance">
-              Maintenance
-            </option>
-            <option value="fault">
-              Fault
-            </option>
-            <option value="failed">
-              Failed
-            </option>
-            <option value="inactive">
-              Inactive
-            </option>
-            <option value="shutdown">
-              Shutdown
-            </option>
+            {filterOptions.statuses.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
           </select>
 
           <select
@@ -1898,24 +1814,9 @@ export default function InfrastructureTransformers() {
             <option value="all">
               All conditions
             </option>
-            <option value="excellent">
-              Excellent
-            </option>
-            <option value="good">
-              Good
-            </option>
-            <option value="fair">
-              Fair
-            </option>
-            <option value="poor">
-              Poor
-            </option>
-            <option value="critical">
-              Critical
-            </option>
-            <option value="damaged">
-              Damaged
-            </option>
+            {filterOptions.conditions.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
           </select>
 
           <select
@@ -1929,7 +1830,7 @@ export default function InfrastructureTransformers() {
               All transformer types
             </option>
 
-            {types.map((item) => (
+            {filterOptions.types.map((item) => (
               <option key={item} value={item}>
                 {item}
               </option>
@@ -1947,7 +1848,7 @@ export default function InfrastructureTransformers() {
               All locations
             </option>
 
-            {locations.map((item) => (
+            {filterOptions.locations.map((item) => (
               <option key={item} value={item}>
                 {item}
               </option>
@@ -2193,7 +2094,7 @@ export default function InfrastructureTransformers() {
 
                             <td>
                               <div className="action-buttons">
-                                <button
+                                {canManage && <button
                                   type="button"
                                   className="icon-btn"
                                   title="View details"
@@ -2204,9 +2105,9 @@ export default function InfrastructureTransformers() {
                                   }
                                 >
                                   <Eye size={16} />
-                                </button>
+                                </button>}
 
-                                <button
+                                {canManage && <button
                                   type="button"
                                   className="icon-btn"
                                   title="Edit transformer"
@@ -2217,7 +2118,7 @@ export default function InfrastructureTransformers() {
                                   }
                                 >
                                   <Edit3 size={16} />
-                                </button>
+                                </button>}
 
                                 <button
                                   type="button"
@@ -2550,20 +2451,6 @@ export default function InfrastructureTransformers() {
 
                 <div className="detail-card">
                   <div className="detail-label">
-                    Installation Date
-                  </div>
-
-                  <div className="detail-value">
-                    {formatDate(
-                      getInstallationDate(
-                        selectedTransformer
-                      )
-                    )}
-                  </div>
-                </div>
-
-                <div className="detail-card">
-                  <div className="detail-label">
                     Last Inspection
                   </div>
 
@@ -2576,19 +2463,6 @@ export default function InfrastructureTransformers() {
                   </div>
                 </div>
 
-                <div className="detail-card">
-                  <div className="detail-label">
-                    Next Inspection
-                  </div>
-
-                  <div className="detail-value">
-                    {formatDate(
-                      getNextInspectionDate(
-                        selectedTransformer
-                      )
-                    )}
-                  </div>
-                </div>
               </div>
 
               <div className="description-box">
@@ -2949,33 +2823,10 @@ export default function InfrastructureTransformers() {
                       onChange={handleChange}
                       disabled={saving}
                     >
-                      <option value="operational">
-                        Operational
-                      </option>
-
-                      <option value="active">
-                        Active
-                      </option>
-
-                      <option value="maintenance">
-                        Maintenance
-                      </option>
-
-                      <option value="fault">
-                        Fault
-                      </option>
-
-                      <option value="failed">
-                        Failed
-                      </option>
-
-                      <option value="inactive">
-                        Inactive
-                      </option>
-
-                      <option value="shutdown">
-                        Shutdown
-                      </option>
+                      <option value="Operational">Operational</option>
+                      <option value="Under Maintenance">Under Maintenance</option>
+                      <option value="Inactive">Inactive</option>
+                      <option value="Disposed">Disposed</option>
                     </select>
                   </div>
 
@@ -2991,45 +2842,12 @@ export default function InfrastructureTransformers() {
                       onChange={handleChange}
                       disabled={saving}
                     >
-                      <option value="excellent">
-                        Excellent
-                      </option>
-
-                      <option value="good">
-                        Good
-                      </option>
-
-                      <option value="fair">
-                        Fair
-                      </option>
-
-                      <option value="poor">
-                        Poor
-                      </option>
-
-                      <option value="critical">
-                        Critical
-                      </option>
-
-                      <option value="damaged">
-                        Damaged
-                      </option>
+                      <option value="Excellent">Excellent</option>
+                      <option value="Good">Good</option>
+                      <option value="Fair">Fair</option>
+                      <option value="Poor">Poor</option>
+                      <option value="Critical">Critical</option>
                     </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">
-                      Installation Date
-                    </label>
-
-                    <input
-                      className="form-control"
-                      type="date"
-                      name="installationDate"
-                      value={form.installationDate}
-                      onChange={handleChange}
-                      disabled={saving}
-                    />
                   </div>
 
                   <div className="form-group">
@@ -3042,21 +2860,6 @@ export default function InfrastructureTransformers() {
                       type="date"
                       name="lastInspectionDate"
                       value={form.lastInspectionDate}
-                      onChange={handleChange}
-                      disabled={saving}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">
-                      Next Inspection Date
-                    </label>
-
-                    <input
-                      className="form-control"
-                      type="date"
-                      name="nextInspectionDate"
-                      value={form.nextInspectionDate}
                       onChange={handleChange}
                       disabled={saving}
                     />

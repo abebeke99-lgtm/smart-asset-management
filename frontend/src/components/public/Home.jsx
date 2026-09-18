@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
-import { ArrowRight, Package, Wrench, Radio, BarChart3, Users, Lock } from 'lucide-react';
+import { ArrowRight, Package, Wrench, Radio, BarChart3, Users, Lock, Landmark } from 'lucide-react';
+
+const OFFICIAL_UNIVERSITY_IMAGE = 'https://mkau.edu.et/wordpress_e/wp-content/uploads/2025/05/photo_2025-05-23_06-54-52.jpg';
+const UNIVERSITY_LOGO_FALLBACK = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTD7zNEgsJkgKAYvZNDkb5tckLn_KdLu_kHYaTLgqqwyhbv8cEsI8P5UYSk&s=10';
 
 const Home = () => {
   const { language } = useLanguage();
@@ -10,6 +13,7 @@ const Home = () => {
   const videoSectionRef = useRef(null);
   const [videoVisible, setVideoVisible] = useState(false);
   const [videoError, setVideoError] = useState(false);
+  const [heroImage, setHeroImage] = useState(OFFICIAL_UNIVERSITY_IMAGE);
 
   useEffect(() => {
     const section = videoSectionRef.current;
@@ -120,126 +124,39 @@ const Home = () => {
     <div className="bg-sky-50 text-slate-900" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <main style={{ flex: 1 }}>
         {/* Hero Section */}
-        <section className="bg-sky-400 rounded-3xl shadow-lg" style={{
-          background: '#0EA5E9',
-          color: 'white',
-          padding: '100px 20px 80px',
-          textAlign: 'center',
-          position: 'relative',
-          overflow: 'hidden',
-          animation: 'fadeIn 0.8s ease forwards'
-        }}>
-          {/* Background Elements */}
-          <div style={{
-            position: 'absolute',
-            width: '400px',
-            height: '400px',
-            borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.1)',
-            filter: 'blur(80px)',
-            top: '-100px',
-            left: '-100px',
-            pointerEvents: 'none'
-          }} />
-          <div style={{
-            position: 'absolute',
-            width: '300px',
-            height: '300px',
-            borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.05)',
-            filter: 'blur(60px)',
-            bottom: '-50px',
-            right: '-50px',
-            pointerEvents: 'none'
-          }} />
+        <section className="home-hero" aria-labelledby="home-hero-title">
+          <div className="home-hero-glow home-hero-glow-one" aria-hidden="true" />
+          <div className="home-hero-glow home-hero-glow-two" aria-hidden="true" />
+          <div className="home-hero-content">
+            <div className="home-hero-copy">
+              <p className="home-hero-kicker">Mekdela Amba University</p>
+              <h1 id="home-hero-title">Smart University Asset Management System</h1>
+              <p className="home-hero-description">Manage university assets efficiently with secure, transparent and centralized asset management.</p>
+              <div className="home-hero-actions">
+                <Link className="home-hero-primary" to="/login">{t.getStarted}<ArrowRight size={19} aria-hidden="true" /></Link>
+                <Link className="home-hero-secondary" to="/about">{t.learnMore}</Link>
+              </div>
+            </div>
 
-          <div style={{ position: 'relative', zIndex: 1, maxWidth: '900px', margin: '0 auto' }}>
-            <h1 style={{
-              fontSize: 'clamp(2rem, 8vw, 3.5rem)',
-              fontWeight: 900,
-              marginBottom: '24px',
-              lineHeight: 1.2,
-              letterSpacing: '-1px',
-              animation: 'slideUp 0.8s ease forwards'
-            }}>
-              {t.heroTitle}
-            </h1>
-            
-            <p style={{
-              fontSize: 'clamp(1rem, 3vw, 1.3rem)',
-              opacity: 0.95,
-              maxWidth: '700px',
-              margin: '0 auto 32px',
-              lineHeight: 1.6,
-              animation: 'slideUp 0.8s ease 0.1s forwards',
-              animationFillMode: 'both'
-            }}>
-              {t.heroSubtitle}
-            </p>
-
-            <div style={{
-              display: 'flex',
-              gap: '16px',
-              justifyContent: 'center',
-              flexWrap: 'wrap',
-              animation: 'slideUp 0.8s ease 0.2s forwards',
-              animationFillMode: 'both'
-            }}>
-              <Link
-                to="/login"
-                style={{
-                  padding: '14px 36px',
-                  background: '#fbbf24',
-                  color: '#1e3a8a',
-                  textDecoration: 'none',
-                  borderRadius: '10px',
-                  fontWeight: 700,
-                  fontSize: '1.05rem',
-                  transition: 'all 0.3s ease',
-                  border: 'none',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-4px)';
-                  e.currentTarget.style.boxShadow = '0 20px 40px rgba(251, 191, 36, 0.3)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                {t.getStarted} <ArrowRight size={20} />
-              </Link>
-              
-              <Link
-                to="/about"
-                style={{
-                  padding: '14px 36px',
-                  background: 'rgba(255, 255, 255, 0.2)',
-                  color: 'white',
-                  textDecoration: 'none',
-                  borderRadius: '10px',
-                  fontWeight: 700,
-                  fontSize: '1.05rem',
-                  transition: 'all 0.3s ease',
-                  border: '2px solid rgba(255, 255, 255, 0.4)',
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(8px)'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
-                  e.currentTarget.style.transform = 'translateY(-4px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
-              >
-                {t.learnMore}
-              </Link>
+            <div className="home-hero-visual" aria-label="Mekdela Amba University campus presentation">
+              <div className="home-hero-orbit home-hero-orbit-one" aria-hidden="true" />
+              <div className="home-hero-orbit home-hero-orbit-two" aria-hidden="true" />
+              <div className="home-hero-image-frame">
+                <img
+                  src={heroImage}
+                  alt="Mekdela Amba University campus"
+                  loading="eager"
+                  onError={(event) => {
+                    if (event.currentTarget.src !== UNIVERSITY_LOGO_FALLBACK) {
+                      setHeroImage(UNIVERSITY_LOGO_FALLBACK);
+                    }
+                  }}
+                />
+                <div className="home-hero-image-overlay" aria-hidden="true" />
+                <div className="home-hero-image-caption"><Landmark size={17} aria-hidden="true" /><span>MAU campus</span></div>
+              </div>
+              <span className="home-hero-dot home-hero-dot-one" aria-hidden="true" />
+              <span className="home-hero-dot home-hero-dot-two" aria-hidden="true" />
             </div>
           </div>
         </section>
@@ -426,6 +343,173 @@ const Home = () => {
       </main>
 
       <style>{`
+        .home-hero {
+          position: relative;
+          isolation: isolate;
+          overflow: hidden;
+          padding: clamp(52px, 8vw, 96px) 20px clamp(64px, 9vw, 112px);
+          color: #f8fafc;
+          background: linear-gradient(120deg, #0f172a 0%, #123b67 56%, #0ea5e9 150%);
+        }
+        .home-hero-content {
+          position: relative;
+          z-index: 1;
+          display: grid;
+          grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
+          align-items: center;
+          gap: clamp(40px, 7vw, 104px);
+          width: min(1240px, 100%);
+          margin: 0 auto;
+        }
+        .home-hero-copy {
+          max-width: 600px;
+          animation: homeHeroCopyIn 0.75s ease both;
+        }
+        .home-hero-kicker {
+          margin: 0 0 18px;
+          color: #7dd3fc;
+          font-size: 0.78rem;
+          font-weight: 800;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+        }
+        .home-hero-copy h1 {
+          max-width: 680px;
+          margin: 0;
+          font-size: clamp(2.25rem, 5vw, 4.7rem);
+          font-weight: 850;
+          line-height: 1.03;
+          letter-spacing: 0;
+        }
+        .home-hero-description {
+          max-width: 540px;
+          margin: 26px 0 0;
+          color: #dbeafe;
+          font-size: clamp(1rem, 1.8vw, 1.2rem);
+          line-height: 1.7;
+        }
+        .home-hero-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 14px;
+          margin-top: 34px;
+        }
+        .home-hero-primary,
+        .home-hero-secondary {
+          display: inline-flex;
+          min-height: 48px;
+          align-items: center;
+          justify-content: center;
+          gap: 9px;
+          padding: 12px 22px;
+          border-radius: 8px;
+          font-weight: 800;
+          text-decoration: none;
+          transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+        }
+        .home-hero-primary {
+          color: #082f49;
+          background: #fbbf24;
+          box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
+        }
+        .home-hero-secondary {
+          color: #e0f2fe;
+          border: 1px solid rgba(186, 230, 253, 0.58);
+          background: rgba(15, 23, 42, 0.22);
+        }
+        .home-hero-primary:hover,
+        .home-hero-secondary:hover {
+          transform: translateY(-3px);
+        }
+        .home-hero-primary:hover { box-shadow: 0 16px 30px rgba(251, 191, 36, 0.28); }
+        .home-hero-secondary:hover { background: rgba(255, 255, 255, 0.12); }
+        .home-hero-primary:focus-visible,
+        .home-hero-secondary:focus-visible {
+          outline: 3px solid #bae6fd;
+          outline-offset: 3px;
+        }
+        .home-hero-visual {
+          position: relative;
+          min-width: 0;
+          padding: clamp(10px, 2vw, 30px);
+          animation: homeHeroVisualIn 0.9s 0.12s ease both;
+        }
+        .home-hero-image-frame {
+          position: relative;
+          aspect-ratio: 4 / 3;
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.38);
+          border-radius: 28px;
+          background: #1e3a5f;
+          box-shadow: 0 30px 70px rgba(2, 8, 23, 0.42);
+        }
+        .home-hero-image-frame img {
+          display: block;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          animation: homeHeroKenBurns 14s ease-in-out infinite alternate;
+        }
+        .home-hero-image-overlay {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(180deg, transparent 42%, rgba(2, 8, 23, 0.72) 100%);
+        }
+        .home-hero-image-caption {
+          position: absolute;
+          right: 20px;
+          bottom: 18px;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
+          border: 1px solid rgba(255, 255, 255, 0.28);
+          border-radius: 7px;
+          color: #f8fafc;
+          background: rgba(15, 23, 42, 0.5);
+          backdrop-filter: blur(8px);
+          font-size: 0.82rem;
+          font-weight: 700;
+        }
+        .home-hero-orbit {
+          position: absolute;
+          z-index: -1;
+          border: 1px solid rgba(125, 211, 252, 0.38);
+          border-radius: 50%;
+          animation: homeHeroFloat 7s ease-in-out infinite;
+        }
+        .home-hero-orbit-one { inset: 0 4% 4% 0; transform: rotate(13deg); }
+        .home-hero-orbit-two { inset: 9% 0 0 5%; border-color: rgba(251, 191, 36, 0.32); transform: rotate(-17deg); animation-delay: -2.5s; }
+        .home-hero-dot { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: #fbbf24; box-shadow: 0 0 0 7px rgba(251, 191, 36, 0.14); animation: homeHeroFloat 5s ease-in-out infinite; }
+        .home-hero-dot-one { top: 5%; right: 5%; }
+        .home-hero-dot-two { bottom: 7%; left: 2%; width: 7px; height: 7px; background: #67e8f9; animation-delay: -1.8s; }
+        .home-hero-glow { position: absolute; z-index: -1; border-radius: 50%; pointer-events: none; filter: blur(20px); }
+        .home-hero-glow-one { top: -180px; left: -120px; width: 440px; height: 440px; background: rgba(14, 165, 233, 0.2); }
+        .home-hero-glow-two { right: -140px; bottom: -240px; width: 520px; height: 520px; background: rgba(37, 99, 235, 0.25); }
+        @keyframes homeHeroCopyIn { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes homeHeroVisualIn { from { opacity: 0; transform: translateX(28px) scale(0.98); } to { opacity: 1; transform: translateX(0) scale(1); } }
+        @keyframes homeHeroKenBurns { from { transform: scale(1); } to { transform: scale(1.08); } }
+        @keyframes homeHeroFloat { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-10px) rotate(2deg); } }
+        @media (max-width: 820px) {
+          .home-hero-content { grid-template-columns: 1fr; gap: 36px; }
+          .home-hero-copy { max-width: 720px; }
+          .home-hero-visual { order: -1; width: min(680px, 100%); margin: 0 auto; }
+        }
+        @media (max-width: 480px) {
+          .home-hero { padding-right: 16px; padding-left: 16px; }
+          .home-hero-copy h1 { font-size: clamp(2rem, 12vw, 3rem); }
+          .home-hero-actions > a { flex: 1 1 150px; }
+          .home-hero-image-frame { border-radius: 18px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .home-hero-copy,
+          .home-hero-visual,
+          .home-hero-image-frame img,
+          .home-hero-orbit,
+          .home-hero-dot { animation: none; }
+          .home-hero-primary,
+          .home-hero-secondary { transition: none; }
+        }
         .home-video-section {
           max-width: 1100px;
           margin: 24px auto 80px;

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../services/api";
 import {
@@ -11,7 +11,6 @@ import {
   Edit3,
   Eye,
   Filter,
-  MapPin,
   Plus,
   RefreshCw,
   Search,
@@ -246,7 +245,15 @@ const conditionClass = (condition) => {
 export default function InfrastructureWater() {
   const [rows, setRows] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [buildings, setBuildings] = useState([]);
   const [types, setTypes] = useState([]);
+  const [summary, setSummary] = useState({
+    total: 0,
+    operational: 0,
+    maintenance: 0,
+    failed: 0,
+    critical: 0,
+  });
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -260,6 +267,7 @@ export default function InfrastructureWater() {
   const [condition, setCondition] = useState("");
   const [type, setType] = useState("");
   const [location, setLocation] = useState("");
+  const [building, setBuilding] = useState("");
 
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({
@@ -289,6 +297,7 @@ export default function InfrastructureWater() {
           condition: condition || undefined,
           type: type || undefined,
           location: location || undefined,
+          building: building || undefined,
         },
       });
 
@@ -296,35 +305,36 @@ export default function InfrastructureWater() {
       const extracted = extractRows(data);
 
       setRows(extracted);
+      setSummary(
+        data?.summary || {
+          total: 0,
+          operational: 0,
+          maintenance: 0,
+          failed: 0,
+          critical: 0,
+        }
+      );
 
       setPagination(
         extractPagination(data, page, extracted.length)
       );
 
-      const uniqueTypes = [
-        ...new Set(
-          extracted
-            .map((item) => getType(item))
-            .filter((item) => item && item !== "—")
-        ),
-      ];
-
-      const uniqueLocations = [
-        ...new Set(
-          extracted
-            .map((item) => getLocation(item))
-            .filter((item) => item && item !== "—")
-        ),
-      ];
-
-      setTypes(uniqueTypes);
-      setLocations(uniqueLocations);
+      setTypes(data?.filters?.types || []);
+      setLocations(data?.filters?.locations || []);
+      setBuildings(data?.filters?.buildings || []);
     } catch (err) {
       setRows([]);
       setPagination({
         page: 1,
         total: 0,
         pages: 1,
+      });
+      setSummary({
+        total: 0,
+        operational: 0,
+        maintenance: 0,
+        failed: 0,
+        critical: 0,
       });
 
       setError(
@@ -334,7 +344,7 @@ export default function InfrastructureWater() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, status, condition, type, location]);
+  }, [page, search, status, condition, type, location, building]);
 
   useEffect(() => {
     loadWaterSystems();
@@ -349,34 +359,6 @@ export default function InfrastructureWater() {
 
     return () => clearTimeout(timer);
   }, [success]);
-
-  const summary = useMemo(() => {
-    const total = pagination.total || rows.length;
-
-    const operational = rows.filter((item) =>
-      ["operational", "active"].includes(getStatus(item))
-    ).length;
-
-    const maintenance = rows.filter(
-      (item) => getStatus(item) === "maintenance"
-    ).length;
-
-    const failed = rows.filter((item) =>
-      ["failed", "fault"].includes(getStatus(item))
-    ).length;
-
-    const critical = rows.filter((item) =>
-      ["critical", "damaged"].includes(getCondition(item))
-    ).length;
-
-    return {
-      total,
-      operational,
-      maintenance,
-      failed,
-      critical,
-    };
-  }, [rows, pagination.total]);
 
   const openCreate = () => {
     setEditing(null);
@@ -552,11 +534,12 @@ export default function InfrastructureWater() {
     setCondition("");
     setType("");
     setLocation("");
+    setBuilding("");
     setPage(1);
   };
 
   const hasFilters =
-    search || status || condition || type || location;
+    search || status || condition || type || location || building;
 
   return (
     <div className="water-page">
@@ -1490,6 +1473,23 @@ export default function InfrastructureWater() {
               ))}
             </select>
 
+            <select
+              className="select"
+              value={building}
+              onChange={(event) => {
+                setBuilding(event.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All Buildings</option>
+
+              {buildings.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+
             <button
               type="button"
               className="btn btn-secondary"
@@ -2289,7 +2289,7 @@ export default function InfrastructureWater() {
           <div className="modal small">
             <div className="modal-header">
               <h2 className="modal-title">
-                Delete Water System
+                Deactivate Water System
               </h2>
 
               <button
@@ -2329,10 +2329,10 @@ export default function InfrastructureWater() {
                   fontSize: 13,
                 }}
               >
-                You are about to delete{" "}
+                You are about to deactivate{" "}
                 <strong>{getName(showDelete)}</strong>. This
-                action will be sent to the backend and may be
-                irreversible.
+                keeps the infrastructure history while marking it
+                inactive.
               </p>
             </div>
 
@@ -2355,12 +2355,12 @@ export default function InfrastructureWater() {
                 {deleting ? (
                   <>
                     <RefreshCw size={16} className="spinner" />
-                    Deleting...
+                    Deactivating...
                   </>
                 ) : (
                   <>
                     <Trash2 size={16} />
-                    Delete
+                    Deactivate
                   </>
                 )}
               </button>

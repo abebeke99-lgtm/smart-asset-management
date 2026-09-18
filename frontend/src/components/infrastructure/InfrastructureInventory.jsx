@@ -10,22 +10,18 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleAlert,
-  ClipboardCheck,
   Eye,
-  FileText,
   Filter,
   Layers3,
   MapPin,
   PackageSearch,
   RefreshCw,
   Search,
-  Settings,
   ShieldCheck,
   TriangleAlert,
   UserRound,
   Wrench,
   X,
-  Zap,
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
@@ -1139,6 +1135,7 @@ const extractInventoryData = (responseData) => {
 const InfrastructureInventory = () => {
   const [inventory, setInventory] = useState([]);
   const [serverSummary, setServerSummary] = useState(null);
+  const [filterOptions, setFilterOptions] = useState({ categories: [], locations: [], conditions: [], statuses: [] });
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1187,24 +1184,38 @@ const InfrastructureInventory = () => {
           params.location = locationFilter;
         }
 
-        const response = await api.get("/infrastructure/inventory", {
+        const response = await api.get("/api/infrastructure/inventory", {
           params,
         });
 
-        const parsed = extractInventoryData(response.data);
+        const responseData = response.data?.data || {};
+        const parsed = extractInventoryData({
+          ...responseData,
+          pagination: response.data?.pagination
+        });
 
         setInventory(parsed.items);
         setServerSummary(parsed.summary);
+        setFilterOptions(responseData.filters || { categories: [], locations: [], conditions: [], statuses: [] });
         setServerTotal(parsed.total);
         setServerTotalPages(parsed.totalPages);
       } catch (err) {
         console.error("Infrastructure inventory loading error:", err);
 
-        const message =
-          err?.response?.data?.message ||
-          err?.response?.data?.error ||
-          err?.message ||
-          "Unable to load infrastructure inventory.";
+        const status = err?.response?.status;
+        const message = status === 401
+          ? "Authentication required. Please sign in again."
+          : status === 403
+            ? "Access denied for infrastructure inventory."
+            : status === 404
+              ? "Infrastructure inventory endpoint was not found."
+              : status === 429
+                ? "Too many requests. Please wait and try again."
+                : err?.code === "ERR_NETWORK" || err?.code === "NETWORK_ERROR"
+                  ? "Unable to connect to server."
+                  : status >= 500
+                    ? "Server error while loading infrastructure inventory."
+                    : err?.response?.data?.message || "Unable to load infrastructure inventory.";
 
         setError(message);
         setInventory([]);
@@ -1219,207 +1230,33 @@ const InfrastructureInventory = () => {
   );
 
   useEffect(() => {
-    loadInventory();
+    const timer = setTimeout(() => loadInventory(), 300);
+    return () => clearTimeout(timer);
   }, [loadInventory]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [search, statusFilter, categoryFilter, locationFilter]);
-
-  const localSummary = useMemo(() => {
-    const all = inventory;
-
-    let available = 0;
-    let assigned = 0;
-    let maintenance = 0;
-    let damaged = 0;
-    let missing = 0;
-    let operational = 0;
-
-    all.forEach((asset) => {
-      const status = normalize(getStatus(asset));
-
-      if (
-        status.includes("available") ||
-        status.includes("operational") ||
-        status.includes("active") ||
-        status.includes("working") ||
-        status.includes("functional") ||
-        status.includes("good")
-      ) {
-        available += 1;
-        operational += 1;
-      }
-
-      if (
-        status.includes("assigned") ||
-        status.includes("in use") ||
-        status.includes("in-use") ||
-        status.includes("issued")
-      ) {
-        assigned += 1;
-      }
-
-      if (
-        status.includes("maintenance") ||
-        status.includes("repair") ||
-        status.includes("pending")
-      ) {
-        maintenance += 1;
-      }
-
-      if (
-        status.includes("damaged") ||
-        status.includes("critical")
-      ) {
-        damaged += 1;
-      }
-
-      if (
-        status.includes("missing") ||
-        status.includes("lost")
-      ) {
-        missing += 1;
-      }
-    });
-
-    return {
-      total: serverTotal || all.length,
-      available,
-      assigned,
-      maintenance,
-      damaged,
-      missing,
-      operational,
-    };
-  }, [inventory, serverTotal]);
-
-  const summary = useMemo(() => {
-    if (!serverSummary) {
-      return localSummary;
-    }
-
-    return {
-      total:
-        serverSummary.total ??
-        serverSummary.totalInventory ??
-        serverSummary.totalAssets ??
-        localSummary.total,
-
-      available:
-        serverSummary.available ??
-        serverSummary.availableAssets ??
-        localSummary.available,
-
-      assigned:
-        serverSummary.assigned ??
-        serverSummary.assignedAssets ??
-        localSummary.assigned,
-
-      maintenance:
-        serverSummary.maintenance ??
-        serverSummary.underMaintenance ??
-        serverSummary.maintenanceAssets ??
-        localSummary.maintenance,
-
-      damaged:
-        serverSummary.damaged ??
-        serverSummary.damagedAssets ??
-        localSummary.damaged,
-
-      missing:
-        serverSummary.missing ??
-        serverSummary.missingAssets ??
-        localSummary.missing,
-
-      operational:
-        serverSummary.operational ??
-        serverSummary.operationalAssets ??
-        localSummary.operational,
-    };
-  }, [serverSummary, localSummary]);
+  const summary = serverSummary || {
+    total: 0,
+    available: 0,
+    assigned: 0,
+    maintenance: 0,
+    damaged: 0,
+    missing: 0,
+    disposed: 0,
+  };
 
   const categories = useMemo(() => {
-    const values = inventory
-      .map((item) => String(getCategory(item)))
-      .filter(Boolean);
-
-    return [...new Set(values)].sort((a, b) => a.localeCompare(b));
-  }, [inventory]);
+    return filterOptions.categories || [];
+  }, [filterOptions.categories]);
 
   const locations = useMemo(() => {
-    const values = inventory
-      .map((item) => String(getLocation(item)))
-      .filter((value) => value && value !== "Unassigned");
-
-    return [...new Set(values)].sort((a, b) => a.localeCompare(b));
-  }, [inventory]);
+    return filterOptions.locations || [];
+  }, [filterOptions.locations]);
 
   const statuses = useMemo(() => {
-    const values = inventory
-      .map((item) => String(getStatus(item)))
-      .filter(Boolean);
+    return filterOptions.statuses || [];
+  }, [filterOptions.statuses]);
 
-    return [...new Set(values)].sort((a, b) => a.localeCompare(b));
-  }, [inventory]);
-
-  const visibleInventory = useMemo(() => {
-    /*
-     * Backend filtering is preferred.
-     * This local filtering is only a defensive layer for APIs that return
-     * a complete inventory response.
-     */
-    return inventory.filter((asset) => {
-      const query = normalize(search);
-
-      if (query) {
-        const searchable = [
-          getAssetName(asset),
-          getAssetTag(asset),
-          getSerial(asset),
-          getCategory(asset),
-          getStatus(asset),
-          getLocation(asset),
-          getAssignedTo(asset),
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        if (!searchable.includes(query)) {
-          return false;
-        }
-      }
-
-      if (
-        statusFilter &&
-        normalize(getStatus(asset)) !== normalize(statusFilter)
-      ) {
-        return false;
-      }
-
-      if (
-        categoryFilter &&
-        normalize(getCategory(asset)) !== normalize(categoryFilter)
-      ) {
-        return false;
-      }
-
-      if (
-        locationFilter &&
-        normalize(getLocation(asset)) !== normalize(locationFilter)
-      ) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [
-    inventory,
-    search,
-    statusFilter,
-    categoryFilter,
-    locationFilter,
-  ]);
+  const visibleInventory = inventory;
 
   const effectiveTotalPages = Math.max(
     1,
@@ -1630,14 +1467,20 @@ const InfrastructureInventory = () => {
                 className="filter-input"
                 placeholder="Search asset, tag, serial, category, location..."
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
               />
             </div>
 
             <select
               className="filter-select"
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
+              onChange={(event) => {
+                setStatusFilter(event.target.value);
+                setPage(1);
+              }}
             >
               <option value="">All Statuses</option>
               {statuses.map((status) => (
@@ -1650,7 +1493,10 @@ const InfrastructureInventory = () => {
             <select
               className="filter-select"
               value={categoryFilter}
-              onChange={(event) => setCategoryFilter(event.target.value)}
+              onChange={(event) => {
+                setCategoryFilter(event.target.value);
+                setPage(1);
+              }}
             >
               <option value="">All Categories</option>
               {categories.map((category) => (
@@ -1663,7 +1509,10 @@ const InfrastructureInventory = () => {
             <select
               className="filter-select"
               value={locationFilter}
-              onChange={(event) => setLocationFilter(event.target.value)}
+              onChange={(event) => {
+                setLocationFilter(event.target.value);
+                setPage(1);
+              }}
             >
               <option value="">All Locations</option>
               {locations.map((location) => (
@@ -1836,15 +1685,6 @@ const InfrastructureInventory = () => {
                                 <Eye size={16} />
                               </button>
 
-                              {id && (
-                                <Link
-                                  to={`/infrastructure/assets/${id}`}
-                                  className="icon-button"
-                                  title="Open asset"
-                                >
-                                  <Settings size={16} />
-                                </Link>
-                              )}
                             </div>
                           </td>
                         </tr>
@@ -2100,61 +1940,6 @@ const InfrastructureInventory = () => {
                 </div>
               </div>
 
-              <div className="quick-links">
-                <Link
-                  to="/infrastructure/verification"
-                  className="quick-link"
-                  onClick={() => setSelectedAsset(null)}
-                >
-                  <ClipboardCheck size={16} />
-                  Verify Asset
-                </Link>
-
-                <Link
-                  to="/infrastructure/assignment"
-                  className="quick-link"
-                  onClick={() => setSelectedAsset(null)}
-                >
-                  <UserRound size={16} />
-                  Assignment
-                </Link>
-
-                <Link
-                  to="/infrastructure/transfer"
-                  className="quick-link"
-                  onClick={() => setSelectedAsset(null)}
-                >
-                  <ArrowLeftRight size={16} />
-                  Transfer
-                </Link>
-
-                <Link
-                  to="/infrastructure/maintenance"
-                  className="quick-link"
-                  onClick={() => setSelectedAsset(null)}
-                >
-                  <Wrench size={16} />
-                  Maintenance
-                </Link>
-
-                <Link
-                  to="/infrastructure/tracking"
-                  className="quick-link"
-                  onClick={() => setSelectedAsset(null)}
-                >
-                  <Zap size={16} />
-                  RFID / QR Tracking
-                </Link>
-
-                <Link
-                  to="/infrastructure/reports"
-                  className="quick-link"
-                  onClick={() => setSelectedAsset(null)}
-                >
-                  <FileText size={16} />
-                  Reports
-                </Link>
-              </div>
             </div>
 
             <div className="modal-footer">
