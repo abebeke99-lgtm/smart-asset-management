@@ -1,12 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../../contexts/UiContext';
+import { getMaintenance } from '../../services/maintenanceApi';
 
 const MaintHistory = () => {
-  const [history, setHistory] = useState([
-    { id: 1, date: '2026-09-02', user: 'Jane Smith', action: 'Update', module: 'Work Orders', reference: 'WO-002', oldValue: 'Pending', newValue: 'In Progress', description: 'Started work on compressor replacement' },
-    { id: 2, date: '2026-09-01', user: 'John Doe', action: 'Create', module: 'Repairs', reference: 'REP-001', oldValue: '-', newValue: 'REP-001', description: 'Created repair record for printer sensor' },
-    { id: 3, date: '2026-08-31', user: 'Bob Wilson', action: 'Delete', module: 'Maintenance', reference: 'MNT-005', oldValue: 'MNT-005', newValue: '-', description: 'Canceled obsolete maintenance schedule' }
-  ]);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [moduleFilter, setModuleFilter] = useState('all');
 
@@ -14,6 +13,23 @@ const MaintHistory = () => {
   const isDark = theme === 'dark';
   const cardBg = isDark ? '#1e293b' : '#ffffff';
   const cardBorder = isDark ? '#334155' : '#d9e2f2';
+
+  useEffect(() => {
+    getMaintenance({ limit: 200 })
+      .then((list) => setHistory(list.map((r) => ({
+        id: r.id,
+        date: (r.updated || r.created || '').slice(0, 10),
+        user: r.requester,
+        action: r.statusRaw === 'pending' ? 'Create' : 'Update',
+        module: 'Maintenance',
+        reference: r.mntId,
+        oldValue: '-',
+        newValue: `${r.status} · ${r.priority}`,
+        description: r.problem,
+      }))))
+      .catch((err) => setError(err && err.message ? err.message : 'Failed to load history'))
+      .finally(() => setLoading(false));
+  }, []);
 
   const filteredHistory = useMemo(() => {
     return history.filter(h => {
@@ -24,7 +40,6 @@ const MaintHistory = () => {
   }, [history, search, moduleFilter]);
 
   const modules = [...new Set(history.map(h => h.module))];
-  const actions = [...new Set(history.map(h => h.action))];
 
   const getActionColor = (action) => {
     const colors = { 'Create': '#dcfce7', 'Update': '#dbeafe', 'Delete': '#fee2e2' };
@@ -36,9 +51,13 @@ const MaintHistory = () => {
     return colors[action] || '#374151';
   };
 
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#4a5568' }}>Loading history…</div>;
+
   return (
     <div>
       <h1 style={{ margin: '0 0 24px', fontSize: '2rem', fontWeight: 'bold' }}>📝 Audit History</h1>
+
+      {error && <div style={{ padding: '12px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem' }}>Error: {error}</div>}
 
       <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
@@ -78,7 +97,7 @@ const MaintHistory = () => {
                 <td style={{ padding: '12px', fontWeight: '600' }}>{item.reference}</td>
                 <td style={{ padding: '12px', fontSize: '0.85rem', color: isDark ? '#94a3b8' : '#4a5568' }}>{item.oldValue}</td>
                 <td style={{ padding: '12px', fontSize: '0.85rem', fontWeight: '600' }}>{item.newValue}</td>
-                <td style={{ padding: '12px', fontSize: '0.85rem' }}>{item.description.substring(0, 30)}...</td>
+                <td style={{ padding: '12px', fontSize: '0.85rem' }}>{(item.description || '').substring(0, 30)}...</td>
               </tr>
             ))}
           </tbody>

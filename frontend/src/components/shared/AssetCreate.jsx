@@ -12,8 +12,10 @@ const AssetCreate = () => {
   const [departments, setDepartments] = useState([]);
   const [categories, setCategories] = useState([]);
   const [generatedQR, setGeneratedQR] = useState(null);
+  const [createdDigitalId, setCreatedDigitalId] = useState('');
 
   const [formData, setFormData] = useState({
+    asset_id: '',
     name: '',
     description: '',
     category_id: '',
@@ -54,16 +56,36 @@ const AssetCreate = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const assetId = String(formData.asset_id || '').trim();
+    if (!assetId) {
+      toast.error(t.assetIdRequired);
+      return;
+    }
     setLoading(true);
     try {
-      const response = await axios.post('/api/assets', formData);
-      toast.success('Asset created successfully!');
-      setGeneratedQR(response.data.asset_tag);
-      setTimeout(() => navigate('/assets'), 2000);
+      const payload = {
+        ...formData,
+        asset_id: assetId,
+        status: 'Available',
+        purchase_cost: Number(formData.purchase_cost || 0)
+      };
+      const response = await axios.post('/api/assets', payload);
+      const savedAsset = response.data?.data || response.data?.asset || response.data;
+      const savedCode = savedAsset?.assetCode || savedAsset?.asset_tag || savedAsset?.asset_id || '';
+      const savedDigitalId = savedAsset?.digitalId || savedAsset?.digital_id || '';
+      if (!savedCode) {
+        toast.error(t.assetCreatedNoCode);
+        return;
+      }
+      toast.success(t.assetCreated);
+      setGeneratedQR(savedCode);
+      setCreatedDigitalId(savedDigitalId);
+      setTimeout(() => navigate('/admin/assets'), 2000);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to create asset');
+      toast.error(error.response?.data?.message || t.createError);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const styles = {
@@ -88,6 +110,7 @@ const AssetCreate = () => {
         <p style={styles.subtitle}>{t.createAssetDesc}</p>
         <form onSubmit={handleSubmit}>
           <div style={styles.grid}>
+            <div><label style={styles.label}>{t.assetId} *</label><input type="text" name="asset_id" style={styles.input} value={formData.asset_id} onChange={handleChange} required placeholder="AST-000123" /></div>
             <div><label style={styles.label}>{t.name} *</label><input type="text" name="name" style={styles.input} value={formData.name} onChange={handleChange} required /></div>
             <div><label style={styles.label}>{t.serialNumber}</label><input type="text" name="serial_number" style={styles.input} value={formData.serial_number} onChange={handleChange} /></div>
             <div><label style={styles.label}>{t.category} *</label><select name="category_id" style={styles.select} value={formData.category_id} onChange={handleChange} required><option value="">{t.selectCategory}</option>{categories.map(cat => (<option key={cat.id} value={cat.id}>{cat.name}</option>))}</select></div>
@@ -109,6 +132,9 @@ const AssetCreate = () => {
             <div style={{ textAlign: 'center' }}>
               <QRCodeCanvas value={generatedQR} size={150} />
               <p style={{ marginTop: '8px', color: isDark ? '#c8dcf5' : '#1a365d' }}>{t.qrGenerated} {generatedQR}</p>
+              {createdDigitalId && (
+                <p style={{ marginTop: '4px', fontSize: '0.85rem', color: isDark ? '#8896b0' : '#4a5568' }}>{t.digitalIdLabel}: {createdDigitalId}</p>
+              )}
             </div>
           </div>
         )}
@@ -120,6 +146,12 @@ const AssetCreate = () => {
 const englishTranslations = {
   createAsset: 'Create Asset',
   createAssetDesc: 'Register a new asset in the system',
+  assetId: 'Asset Code / ID',
+  assetIdRequired: 'Asset Code / ID is required',
+  assetCreated: 'Asset created successfully!',
+  assetCreatedNoCode: 'Asset was created but no asset code was returned',
+  digitalIdLabel: 'Digital ID',
+  createError: 'Failed to create asset',
   name: 'Asset Name',
   serialNumber: 'Serial Number',
   category: 'Category',
@@ -146,6 +178,12 @@ const englishTranslations = {
 const amharicTranslations = {
   createAsset: 'አዲስ ንብረት ፍጠር',
   createAssetDesc: 'አዲስ ንብረት በስርዓቱ ውስጥ ይመዝገቡ',
+  assetId: 'የንብረት ኮድ / መለያ',
+  assetIdRequired: 'የንብረት ኮድ / መለያ ያስፈልጋል',
+  assetCreated: 'ንብረት በተሳካ ሁኔታ ተፈጥሯል!',
+  assetCreatedNoCode: 'ንብረት ተፈጥሯል ግን የንብረት ኮድ አልተመለሰም',
+  digitalIdLabel: 'የዲጂታል መለያ',
+  createError: 'ንብረት መፍጠር አልተሳካም',
   name: 'የንብረት ስም',
   serialNumber: 'ተከታታይ ቁጥር',
   category: 'ምድብ',

@@ -1,24 +1,60 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../../contexts/UiContext';
+import { getMaintenance, getAssets } from '../../services/maintenanceApi';
 
 const MaintAssetsUnderMaintenance = () => {
-  const [assets, setAssets] = useState([
-    { id: 1, asset: 'Server Room AC', problem: 'Compressor malfunction', technician: 'Jane Smith', workOrder: 'WO-002', startDate: '2026-08-28', expectedCompletion: '2026-09-02', downtime: 5, status: 'In Progress' },
-    { id: 2, asset: 'Printer A', problem: 'Paper feed sensor failure', technician: 'John Doe', workOrder: 'WO-001', startDate: '2026-09-01', expectedCompletion: '2026-09-01', downtime: 0.5, status: 'Completed' }
-  ]);
+  const [assets, setAssets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const cardBg = isDark ? '#1e293b' : '#ffffff';
   const cardBorder = isDark ? '#334155' : '#d9e2f2';
 
-  const totalDowntime = assets.reduce((sum, a) => sum + a.downtime, 0);
-  const avgDowntime = totalDowntime / assets.length;
-  const criticalCount = assets.filter(a => a.downtime > 7).length;
+  useEffect(() => {
+    (async () => {
+      try {
+        const [under, testing, maint] = await Promise.all([
+          getAssets({ status: 'under-maintenance', limit: 1000 }),
+          getAssets({ status: 'testing', limit: 1000 }),
+          getMaintenance({ limit: 100 }),
+        ]);
+        const all = [...under, ...testing].filter((a, idx, arr) => arr.findIndex((x) => x.id === a.id) === idx);
+        setAssets(all.map((a) => {
+          const rec = maint.find(m => String(m.assetId) === String(a.id));
+          const status = String(a.status || '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+          return {
+            id: a.id,
+            asset: a.name,
+            tag: a.asset_tag || a.assetCode || '',
+            problem: rec ? rec.problem : 'No active maintenance record',
+            technician: rec ? rec.technician : 'Not assigned',
+            workOrder: rec ? rec.woId : 'No work order',
+            startDate: rec && rec.created ? String(rec.created).slice(0, 10) : (a.updated_at || a.updatedAt || '').slice(0, 10) || 'Not started',
+            expectedCompletion: 'Not tracked',
+            downtime: 0,
+            status,
+          };
+        }));
+      } catch (err) {
+        setError(err && err.message ? err.message : 'Failed to load assets under maintenance');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const totalDowntime = useMemo(() => assets.reduce((sum, a) => sum + a.downtime, 0), [assets]);
+  const avgDowntime = assets.length ? totalDowntime / assets.length : 0;
+
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#4a5568' }}>Loading assets…</div>;
 
   return (
     <div>
       <h1 style={{ margin: '0 0 24px', fontSize: '2rem', fontWeight: 'bold' }}>⚠️ Assets Under Maintenance</h1>
+
+      {error && <div style={{ padding: '12px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem' }}>Error: {error}</div>}
 
       {/* Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '24px' }}>
@@ -47,13 +83,12 @@ const MaintAssetsUnderMaintenance = () => {
               <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '0.9rem' }}>Start Date</th>
               <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '0.9rem' }}>Downtime (h)</th>
               <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '0.9rem' }}>Status</th>
-              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '0.9rem' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {assets.map((asset) => (
               <tr key={asset.id} style={{ borderBottom: `1px solid ${cardBorder}` }}>
-                <td style={{ padding: '12px', fontWeight: '600' }}>{asset.asset}</td>
+                <td style={{ padding: '12px', fontWeight: '600' }}>{asset.asset}{asset.tag ? ` (${asset.tag})` : ''}</td>
                 <td style={{ padding: '12px', fontSize: '0.9rem' }}>{asset.problem}</td>
                 <td style={{ padding: '12px' }}>{asset.technician}</td>
                 <td style={{ padding: '12px', fontWeight: '600', color: '#2864E8' }}>{asset.workOrder}</td>
@@ -63,9 +98,6 @@ const MaintAssetsUnderMaintenance = () => {
                   <span style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: asset.status === 'Completed' ? '#dcfce7' : '#fef3c7', color: asset.status === 'Completed' ? '#166534' : '#92400e', fontSize: '0.85rem', fontWeight: '600' }}>
                     {asset.status}
                   </span>
-                </td>
-                <td style={{ padding: '12px', display: 'flex', gap: '6px' }}>
-                  <button style={{ padding: '6px 10px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>View</button>
                 </td>
               </tr>
             ))}

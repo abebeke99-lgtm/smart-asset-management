@@ -22,7 +22,7 @@ test('resolves legacy login aliases while preserving the college role', () => {
   assert.deepEqual(resolveLoginAliases('ICT Officer'), ['ict officer', 'ict_officer', 'ict-officer', 'ict']);
 });
 
-test('uses a local SQLite database in development when no MySQL config is provided', async () => {
+test('always uses a MySQL database in development even when no MySQL config is provided', async () => {
   const previousNodeEnv = process.env.NODE_ENV;
   const previousDbHost = process.env.DB_HOST;
   const previousDbName = process.env.DB_NAME;
@@ -40,11 +40,14 @@ test('uses a local SQLite database in development when no MySQL config is provid
   delete require.cache[require.resolve('../src/config/database')];
 
   try {
-    const { getDatabaseConfig, isSqliteEnabled } = require('../src/config/database');
+    const { sequelize, getDatabaseConfig } = require('../src/config/database');
     const config = getDatabaseConfig();
-    assert.equal(isSqliteEnabled, true);
-    assert.equal(config.dialect, 'sqlite');
-    assert.match(config.storage, /smart_asset_dev\.sqlite$/);
+    assert.equal(config.dialect, undefined);
+    assert.equal(config.database, 'smart_asset_db');
+    assert.equal(config.host, 'localhost');
+    assert.equal(config.port, 3306);
+    assert.equal(config.username, 'root');
+    assert.equal(sequelize.getDialect(), 'mysql');
   } finally {
     if (previousNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousNodeEnv;
     if (previousDbHost === undefined) delete process.env.DB_HOST; else process.env.DB_HOST = previousDbHost;
@@ -190,5 +193,5 @@ test('college verification routes enforce college-scoped pagination, filters, an
   assert.match(collegeController, /listCollegeVerification/);
   assert.match(collegeController, /req\.organizationScope\?\.collegeId|req\.organizationScope\.collegeId/);
   assert.match(collegeController, /page.*limit.*totalPages|totalPages/);
-  assert.match(collegeController, /departmentId.*assetStatus.*location/);
+  assert.match(collegeController, /departmentId[\s\S]*assetStatus[\s\S]*location/);
 });

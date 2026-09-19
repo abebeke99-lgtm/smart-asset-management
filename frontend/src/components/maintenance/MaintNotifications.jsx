@@ -1,20 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/UiContext';
+import { getNotifications, markNotificationRead, deleteNotification, markAllNotificationsRead } from '../../services/maintenanceApi';
 
 const MaintNotifications = () => {
-  const [notifications, setNotifications] = useState([
-    { id: 1, type: 'New Request', message: 'New maintenance request for Server Room AC from IT Department', date: '2026-09-02 14:30', read: false, icon: '📋' },
-    { id: 2, type: 'Assignment', message: 'Work Order WO-002 assigned to Jane Smith', date: '2026-09-02 13:45', read: false, icon: '👤' },
-    { id: 3, type: 'Overdue', message: 'Work Order WO-003 is 2 days overdue', date: '2026-09-01 10:15', read: true, icon: '⚠️' },
-    { id: 4, type: 'Preventive Due', message: 'Generator maintenance scheduled for today', date: '2026-09-01 09:00', read: true, icon: '🔄' },
-    { id: 5, type: 'Low Stock', message: 'AC Compressor quantity below minimum threshold', date: '2026-08-31 16:20', read: true, icon: '📦' }
-  ]);
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filterType, setFilterType] = useState('all');
 
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const cardBg = isDark ? '#1e293b' : '#ffffff';
   const cardBorder = isDark ? '#334155' : '#d9e2f2';
+
+  const load = async () => {
+    try {
+      const rows = await getNotifications();
+      setNotifications(rows.map((n) => ({
+        id: n.id,
+        type: n.type || 'Notification',
+        message: n.message || n.title || '',
+        date: (n.created_at || n.createdAt || '').replace('T', ' ').slice(0, 16),
+        read: Boolean(n.is_read !== undefined ? n.is_read : n.read),
+        icon: '🔔',
+      })));
+      setError('');
+    } catch (err) {
+      setError(err && err.message ? err.message : 'Failed to load notifications');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
 
   const typeColors = {
     'New Request': { bg: '#dbeafe', text: '#075985' },
@@ -29,15 +47,36 @@ const MaintNotifications = () => {
   const unreadCount = notifications.filter(n => !n.read).length;
   const typeCount = (type) => notifications.filter(n => n.type === type).length;
 
-  const handleMarkAsRead = (id) => {
-    setNotifications(notifications.map(n => n.id === id ? { ...n, read: true } : n));
+  const handleMarkAsRead = async (id) => {
+    try {
+      await markNotificationRead(id);
+      await load();
+    } catch (err) {
+      setError(err && err.message ? err.message : 'Failed to mark notification as read');
+    }
   };
 
-  const handleDelete = (id) => {
-    setNotifications(notifications.filter(n => n.id !== id));
+  const handleDelete = async (id) => {
+    try {
+      await deleteNotification(id);
+      await load();
+    } catch (err) {
+      setError(err && err.message ? err.message : 'Failed to delete notification');
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllNotificationsRead();
+      await load();
+    } catch (err) {
+      setError(err && err.message ? err.message : 'Failed to mark all as read');
+    }
   };
 
   const types = [...new Set(notifications.map(n => n.type))];
+
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#4a5568' }}>Loading notifications…</div>;
 
   return (
     <div>
@@ -45,9 +84,11 @@ const MaintNotifications = () => {
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold' }}>🔔 Notifications</h1>
         <div style={{ display: 'flex', gap: '12px' }}>
           <span style={{ padding: '8px 12px', backgroundColor: '#fee2e2', borderRadius: '6px', fontWeight: '600', color: '#991b1b' }}>Unread: {unreadCount}</span>
-          <button style={{ padding: '8px 16px', backgroundColor: '#06b6d4', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Mark All Read</button>
+          <button onClick={handleMarkAllRead} style={{ padding: '8px 16px', backgroundColor: '#06b6d4', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}>Mark All Read</button>
         </div>
       </div>
+
+      {error && <div style={{ padding: '12px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem' }}>Error: {error}</div>}
 
       {/* Type Filters with Counters */}
       <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
@@ -87,6 +128,11 @@ const MaintNotifications = () => {
             </div>
           );
         })}
+        {filteredNotifications.length === 0 && (
+          <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '32px', textAlign: 'center', color: isDark ? '#94a3b8' : '#4a5568' }}>
+            No notifications
+          </div>
+        )}
       </div>
     </div>
   );

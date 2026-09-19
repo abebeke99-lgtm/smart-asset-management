@@ -2,7 +2,27 @@ const { sequelize } = require('./database');
 
 async function syncDatabase() {
   try {
+    const ensureColumn = async (tableName, columnName, definition) => {
+      const table = await sequelize.getQueryInterface().describeTable(tableName);
+      if (!table[columnName]) await sequelize.getQueryInterface().addColumn(tableName, columnName, definition);
+    };
+    for (const [column, definition] of Object.entries({
+      digital_id: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
+      campus_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      building_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      room_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      quantity: { type: require('sequelize').DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
+      specifications: { type: require('sequelize').DataTypes.JSON, allowNull: true },
+      funding_source: { type: require('sequelize').DataTypes.STRING(255), allowNull: true, defaultValue: '' },
+      deleted_by: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      deleted_at: { type: require('sequelize').DataTypes.DATE, allowNull: true },
+    })) await ensureColumn('assets', column, definition);
     await sequelize.sync();
+    const assetIndexes = await sequelize.getQueryInterface().showIndex('assets');
+    const hasUniqueDigitalId = assetIndexes.some((index) => index.unique && index.fields.some((field) => (field.attribute || field) === 'digital_id'));
+    if (!hasUniqueDigitalId) {
+      await sequelize.getQueryInterface().sequelize.query('ALTER TABLE `assets` ADD UNIQUE INDEX `assets_digital_id_unique` (`digital_id`)');
+    }
     const { Supplier, Asset, PurchaseOrder } = require('../models');
     const { Op } = require('sequelize');
     const legacyRows = await Promise.all([
@@ -13,10 +33,6 @@ async function syncDatabase() {
     for (const [index, supplierName] of legacyNames.entries()) {
       await Supplier.findOrCreate({ where: { supplierName }, defaults: { supplierCode: `LEGACY-${String(index + 1).padStart(4, '0')}`, supplierName, status: 'active' } });
     }
-    const ensureColumn = async (tableName, columnName, definition) => {
-      const table = await sequelize.getQueryInterface().describeTable(tableName);
-      if (!table[columnName]) await sequelize.getQueryInterface().addColumn(tableName, columnName, definition);
-    };
     await ensureColumn('users', 'college_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
     await ensureColumn('users', 'department_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
     await ensureColumn('assets', 'college_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });

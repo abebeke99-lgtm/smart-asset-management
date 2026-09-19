@@ -118,34 +118,4 @@ router.put('/settings/:section', ...requireAdmin, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get('/settings/profile', ...requireAdmin, async (req, res, next) => {
-  try { const user = await User.findByPk(req.user.id, { attributes: { exclude: ['password'] } }); return res.json({ success: true, data: user }); } catch (error) { next(error); }
-});
-
-router.put('/settings/profile', ...requireAdmin, async (req, res, next) => {
-  try {
-    const user = await User.findByPk(req.user.id);
-    if (!user) return res.status(404).json({ success: false, message: 'Administrator profile not found' });
-    const updates = {};
-    for (const field of ['fullName', 'email', 'phone']) if (req.body[field] !== undefined) updates[field] = String(req.body[field]).trim();
-    if (updates.email && !/^\S+@\S+\.\S+$/.test(updates.email)) return res.status(400).json({ success: false, message: 'Invalid email address' });
-    await user.update(updates);
-    await AuditLog.create({ userId: req.user.id, action: 'ADMIN_PROFILE_UPDATED', entity: `user:${user.id}`, details: JSON.stringify({ changed: Object.keys(updates) }) });
-    const safe = await User.findByPk(user.id, { attributes: { exclude: ['password'] } });
-    return res.json({ success: true, data: safe });
-  } catch (error) { next(error); }
-});
-
-router.post('/settings/profile/change-password', ...requireAdmin, async (req, res, next) => {
-  try {
-    const { currentPassword, newPassword } = req.body;
-    const user = await User.findByPk(req.user.id);
-    if (!user || !currentPassword || !newPassword || !(await bcrypt.compare(currentPassword, user.password))) return res.status(400).json({ success: false, message: 'Current password is incorrect' });
-    if (String(newPassword).length < 8) return res.status(400).json({ success: false, message: 'New password must be at least 8 characters' });
-    await user.update({ password: await bcrypt.hash(newPassword, 10), sessionVersion: (user.sessionVersion || 0) + 1, forcePasswordChange: false });
-    await AuditLog.create({ userId: req.user.id, action: 'ADMIN_PASSWORD_CHANGED', entity: `user:${user.id}`, details: JSON.stringify({ sessionInvalidated: true }) });
-    return res.json({ success: true, message: 'Password changed successfully' });
-  } catch (error) { next(error); }
-});
-
 module.exports = router;

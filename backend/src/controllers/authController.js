@@ -7,6 +7,7 @@ const { User, AuditLog, Config } = require('../models');
 const { normalizePhoneNumber, sendSMS } = require('../services/smsService');
 const { validateEmailConfiguration } = require('../services/emailService');
 const { isValidEmail, isValidUsername } = require('../utils/validators');
+const { getJwtSecret } = require('../config/jwt');
 
 const LOGIN_ALIASES = {
   admin: ['admin'],
@@ -95,7 +96,7 @@ const generateToken = async (user) => {
     collegeId: user.collegeId ?? null,
     departmentId: user.departmentId ?? null,
   },
-  process.env.JWT_SECRET || 'smart_asset_secret_key_2026',
+  getJwtSecret(),
   { expiresIn }
   );
 };

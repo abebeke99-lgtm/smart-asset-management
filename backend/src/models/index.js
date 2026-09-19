@@ -40,6 +40,23 @@ const DisposalRequest = require('./DisposalRequest');
 const PurchaseOrder = require('./PurchaseOrder');
 const PurchaseOrderItem = require('./PurchaseOrderItem');
 const Supplier = require('./Supplier');
+const Campus = require('./Campus');
+const Building = require('./Building');
+const Room = require('./Room');
+const Chemical = require('./Chemical');
+const ChemicalTransaction = require('./ChemicalTransaction');
+const ChemicalTransfer = require('./ChemicalTransfer');
+const ChemicalDocument = require('./ChemicalDocument');
+const HazardousWaste = require('./HazardousWaste');
+const StockOrder = require('./StockOrder');
+const ServiceRequest = require('./ServiceRequest');
+const RequestAttachment = require('./RequestAttachment');
+const RequestStatusHistory = require('./RequestStatusHistory');
+const Feedback = require('./Feedback');
+const CleaningSchedule = require('./CleaningSchedule');
+const AssetDocument = require('./AssetDocument');
+const AssetGrant = require('./AssetGrant');
+const AssetCustody = require('./AssetCustody');
 
 Asset.hasMany(Assignment, { foreignKey: 'assetId' });
 Assignment.belongsTo(Asset, { foreignKey: 'assetId' });
@@ -237,6 +254,73 @@ VerificationItem.belongsTo(VerificationSession, { foreignKey: 'sessionId' });
 Asset.hasMany(VerificationItem, { foreignKey: 'assetId' });
 VerificationItem.belongsTo(Asset, { foreignKey: 'assetId' });
 
+// Location Hierarchy Relationships
+Campus.hasMany(Building, { foreignKey: 'campusId' });
+Building.belongsTo(Campus, { foreignKey: 'campusId' });
+Campus.hasMany(Room, { foreignKey: 'campusId' });
+Room.belongsTo(Campus, { foreignKey: 'campusId' });
+Building.hasMany(Room, { foreignKey: 'buildingId' });
+Room.belongsTo(Building, { foreignKey: 'buildingId' });
+Asset.belongsTo(Campus, { foreignKey: 'campusId', as: 'CampusRecord' });
+Asset.belongsTo(Building, { foreignKey: 'buildingId', as: 'BuildingRecord' });
+Asset.belongsTo(Room, { foreignKey: 'roomId', as: 'RoomRecord' });
+
+// Chemical Relationships
+Chemical.hasMany(ChemicalTransaction, { foreignKey: 'chemicalId' });
+ChemicalTransaction.belongsTo(Chemical, { foreignKey: 'chemicalId' });
+Chemical.hasMany(ChemicalTransfer, { foreignKey: 'chemicalId', as: 'Transfers' });
+ChemicalTransfer.belongsTo(Chemical, { foreignKey: 'chemicalId' });
+User.hasMany(ChemicalTransfer, { foreignKey: 'requestedBy', as: 'RequestedChemicalTransfers' });
+ChemicalTransfer.belongsTo(User, { foreignKey: 'requestedBy', as: 'Requester' });
+User.hasMany(ChemicalTransfer, { foreignKey: 'approvedBy', as: 'ApprovedChemicalTransfers' });
+ChemicalTransfer.belongsTo(User, { foreignKey: 'approvedBy', as: 'Approver' });
+User.hasMany(ChemicalTransfer, { foreignKey: 'acceptedBy', as: 'AcceptedChemicalTransfers' });
+ChemicalTransfer.belongsTo(User, { foreignKey: 'acceptedBy', as: 'Accepter' });
+Chemical.hasMany(ChemicalDocument, { foreignKey: 'chemicalId' });
+ChemicalDocument.belongsTo(Chemical, { foreignKey: 'chemicalId' });
+Chemical.hasMany(HazardousWaste, { foreignKey: 'chemicalId' });
+HazardousWaste.belongsTo(Chemical, { foreignKey: 'chemicalId' });
+Chemical.hasMany(StockOrder, { foreignKey: 'chemicalId' });
+StockOrder.belongsTo(Chemical, { foreignKey: 'chemicalId' });
+User.hasMany(StockOrder, { foreignKey: 'assignedTo', as: 'AssignedStockOrders' });
+StockOrder.belongsTo(User, { foreignKey: 'assignedTo', as: 'Assignee' });
+Chemical.belongsTo(Room, { foreignKey: 'roomId', as: 'RoomRecord' });
+Chemical.belongsTo(Building, { foreignKey: 'buildingId', as: 'BuildingRecord' });
+Chemical.belongsTo(Campus, { foreignKey: 'campusId', as: 'CampusRecord' });
+
+// Service Request Relationships
+ServiceRequest.hasMany(RequestAttachment, { foreignKey: 'requestId', onDelete: 'CASCADE' });
+RequestAttachment.belongsTo(ServiceRequest, { foreignKey: 'requestId' });
+ServiceRequest.hasMany(RequestStatusHistory, { foreignKey: 'requestId', onDelete: 'CASCADE' });
+RequestStatusHistory.belongsTo(ServiceRequest, { foreignKey: 'requestId' });
+ServiceRequest.hasMany(Feedback, { foreignKey: 'requestId' });
+Feedback.belongsTo(ServiceRequest, { foreignKey: 'requestId' });
+User.hasMany(ServiceRequest, { foreignKey: 'reportedBy', as: 'ReportedServiceRequests' });
+ServiceRequest.belongsTo(User, { foreignKey: 'reportedBy', as: 'Reporter' });
+User.hasMany(ServiceRequest, { foreignKey: 'assignedTo', as: 'AssignedServiceRequests' });
+ServiceRequest.belongsTo(User, { foreignKey: 'assignedTo', as: 'Assignee' });
+Asset.hasMany(ServiceRequest, { foreignKey: 'assetId' });
+ServiceRequest.belongsTo(Asset, { foreignKey: 'assetId' });
+ServiceRequest.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
+ServiceRequest.belongsTo(College, { foreignKey: 'collegeId', as: 'CollegeRecord' });
+ServiceRequest.hasOne(Feedback, { foreignKey: 'requestId', as: 'RequestFeedback' });
+User.hasMany(Feedback, { foreignKey: 'submittedBy', as: 'SubmittedFeedback' });
+Feedback.belongsTo(User, { foreignKey: 'submittedBy', as: 'Submitter' });
+
+// Cleaning Schedule Relationships
+CleaningSchedule.belongsTo(Room, { foreignKey: 'roomId' });
+CleaningSchedule.belongsTo(User, { foreignKey: 'assignedStaff', as: 'Staff' });
+
+// Asset Document / Grant / Custody Relationships
+Asset.hasMany(AssetDocument, { foreignKey: 'assetId' });
+AssetDocument.belongsTo(Asset, { foreignKey: 'assetId' });
+Asset.hasMany(AssetGrant, { foreignKey: 'assetId' });
+AssetGrant.belongsTo(Asset, { foreignKey: 'assetId' });
+Asset.hasMany(AssetCustody, { foreignKey: 'assetId' });
+AssetCustody.belongsTo(Asset, { foreignKey: 'assetId' });
+User.hasMany(AssetCustody, { foreignKey: 'custodianId', as: 'CustodianRecords' });
+AssetCustody.belongsTo(User, { foreignKey: 'custodianId', as: 'Custodian' });
+
 module.exports = {
   sequelize,
   User,
@@ -280,4 +364,21 @@ module.exports = {
   PurchaseOrder,
   PurchaseOrderItem,
   Supplier,
+  Campus,
+  Building,
+  Room,
+  Chemical,
+  ChemicalTransaction,
+  ChemicalTransfer,
+  ChemicalDocument,
+  HazardousWaste,
+  StockOrder,
+  ServiceRequest,
+  RequestAttachment,
+  RequestStatusHistory,
+  Feedback,
+  CleaningSchedule,
+  AssetDocument,
+  AssetGrant,
+  AssetCustody,
 };

@@ -3,10 +3,11 @@ const ExtractJwt = require('passport-jwt').ExtractJwt;
 const passport = require('passport');
 
 const { User } = require('../models');
+const { getJwtSecret } = require('./jwt');
 
 const opts = {
   jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-  secretOrKey: process.env.JWT_SECRET || 'smart_asset_secret_key_2026',
+  secretOrKey: getJwtSecret(),
 };
 
 passport.use(

@@ -71,43 +71,6 @@ const FinanceReports = () => {
     setLoading(false);
   }, [t]);
 
-  const generateFallbackAssets = () => {
-    const departments = ['IT', 'Facilities', 'HR', 'Finance', 'Operations', 'Marketing', 'Production'];
-    const categories = ['Hardware', 'Software', 'Vehicles', 'Furniture', 'Machinery', 'Electronics', 'Building'];
-    const statuses = ['Active', 'Under Maintenance', 'Inactive', 'Disposed'];
-    const locations = ['Head Office', 'Branch A', 'Branch B', 'Warehouse', 'Data Center'];
-    
-    return Array.from({ length: 150 }, (_, i) => {
-      const purchaseCost = 50000 + Math.random() * 2000000;
-      const currentValue = purchaseCost * (0.3 + Math.random() * 0.6);
-      const purchaseDate = new Date(2016 + Math.floor(Math.random() * 8), Math.floor(Math.random() * 12), Math.floor(Math.random() * 28));
-      const status = statuses[i % statuses.length];
-      
-      return {
-        id: `asset_${i + 1}`,
-        asset_tag: `ICT-${String(i + 1).padStart(4, '0')}`,
-        name: `${categories[i % categories.length]} ${i + 1}`,
-        description: `Description for asset ${i + 1}`,
-        department_name: departments[i % departments.length],
-        category_name: categories[i % categories.length],
-        status: status,
-        location: locations[i % locations.length],
-        purchase_cost: purchaseCost,
-        current_value: currentValue,
-        residual_value: purchaseCost * 0.1,
-        useful_life: 3 + Math.floor(Math.random() * 7),
-        purchase_date: purchaseDate.toISOString(),
-        disposal_date: status === 'Disposed' ? new Date(2024, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28)).toISOString() : null,
-        disposal_value: status === 'Disposed' ? currentValue * 0.3 : 0,
-        is_damaged: i % 7 === 0,
-        is_lost: i % 11 === 0,
-        depreciation_method: ['straight-line', 'reducing-balance'][i % 2],
-        maintenance_count: Math.floor(Math.random() * 10),
-        last_maintenance_date: new Date(2024, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28)).toISOString()
-      };
-    });
-  };
-
   const generateReports = useCallback(() => {
     const filteredAssets = assets.filter(asset => {
       const purchaseDate = asset.purchase_date ? new Date(asset.purchase_date) : null;

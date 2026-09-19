@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const passport = require('./config/passport');
-const { sequelize, testConnection, isSqliteEnabled } = require('./config/database');
+const { sequelize, testConnection } = require('./config/database');
 const { syncDatabase } = require('./config/sync');
 const { seedDatabase } = require('./config/seed');
 
@@ -34,6 +34,10 @@ const adminNotificationRoutes = require('./routes/adminNotificationRoutes');
 const adminSettingsRoutes = require('./routes/adminSettingsRoutes');
 const adminRoleRoutes = require('./routes/adminRoleRoutes');
 const systemMonitoringRoutes = require('./routes/systemMonitoringRoutes');
+const chemicalRoutes = require('./routes/chemicalRoutes');
+const serviceRequestRoutes = require('./routes/serviceRequestRoutes');
+const locationRoutes = require('./routes/locationRoutes');
+const cleaningRoutes = require('./routes/cleaningRoutes');
 const { requestMetricsMiddleware } = require('./middleware/requestMetrics');
 
 const app = express();
@@ -148,6 +152,10 @@ app.use('/api', notificationRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api', adminSupportRoutes);
+app.use('/api/chemicals', chemicalRoutes);
+app.use('/api/service-requests', serviceRequestRoutes);
+app.use('/api/locations', locationRoutes);
+app.use('/api/cleaning', cleaningRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -162,7 +170,7 @@ async function startServer() {
   const retryDelays = [5000, 10000, 20000, 30000, 60000];
   for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
     if (await testConnection() && await syncDatabase()) {
-      if (process.env.NODE_ENV !== 'production' && (process.env.SEED_DEMO_DATA === 'true' || isSqliteEnabled)) await seedDatabase();
+      if (process.env.NODE_ENV !== 'production' && process.env.SEED_DEMO_DATA === 'true') await seedDatabase();
       databaseReady = true;
       console.log('Database initialization completed.');
       break;

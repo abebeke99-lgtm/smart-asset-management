@@ -17,9 +17,10 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import { apiBase } from "../../utils/api";
 
 const API_URL = (
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api"
+  `${apiBase()}/api`
 ).replace(/\/$/, "");
 
 const PAGE_SIZE = 10;

@@ -1,5 +1,6 @@
 const { sequelize, Asset, Inventory, Assignment, Transfer, Maintenance, RFIDLog, AuditLog, User, Department } = require('../models');
 const { Op } = require('sequelize');
+const { nextDigitalId } = require('./assetExtendedController');
 
 const serializeAsset = (asset, assignment = null) => {
   const data = asset.toJSON ? asset.toJSON() : asset;
@@ -107,15 +108,28 @@ const createAsset = async (req, res) => {
     });
     if (duplicate) return res.status(409).json({ success: false, message: 'Asset code, serial number, or RFID tag already exists' });
 
+    const digitalId = body.digitalId || body.digital_id || await nextDigitalId(transaction);
+    const quantity = Number(body.quantity ?? 1);
+    if (!Number.isInteger(quantity) || quantity < 1) return res.status(400).json({ success: false, message: 'Quantity must be a positive integer' });
+
     const asset = await Asset.create({
       name,
       assetCode,
+      digitalId,
       category: body.category || body.category_id || '',
       description: body.description || '',
       serialNumber,
       rfidTag,
       department: body.department || body.department_id || '',
+      collegeId: body.collegeId || body.college_id || null,
+      departmentId: body.departmentId || body.department_id || null,
+      campusId: body.campusId || body.campus_id || null,
+      buildingId: body.buildingId || body.building_id || null,
+      roomId: body.roomId || body.room_id || null,
       location: body.location || '',
+      quantity,
+      specifications: body.specifications || null,
+      fundingSource: body.fundingSource || body.funding_source || '',
       condition: body.condition || body.condition_status || 'Good',
       status: body.status || 'available',
       purchaseDate,
@@ -164,15 +178,22 @@ const updateAsset = async (req, res) => {
   }
 };
 
-const deleteAsset = async (req, res) => {
+const deleteAsset = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
   try {
-    const asset = await Asset.findByPk(req.params.id);
-    if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
+    const asset = await Asset.findByPk(req.params.id, { transaction });
+    if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
     const previousValue = asset.toJSON();
-    await asset.update({ status: 'disposed' });
-    await AuditLog.create({ userId: req.user.id, action: 'RETIRE_ASSET', entity: `asset:${asset.id}`, details: JSON.stringify({ assetId: asset.id, previousValue, newValue: asset.toJSON() }) });
-    res.json({ success: true, message: 'Asset retired', data: serializeAsset(asset) });
+    const updates = { deletedBy: req.user.id };
+    if (asset.status !== 'disposed') updates.status = 'disposed';
+    await asset.update(updates, { transaction });
+    await asset.destroy({ transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'DELETE_ASSET', entity: `asset:${asset.id}`, details: JSON.stringify({ assetId: asset.id, deletedAt: new Date(), previousValue, newValue: asset.toJSON() }) }, { transaction });
+    await transaction.commit();
+    res.json({ success: true, message: 'Asset soft-deleted. It can be restored within 30 days.', data: serializeAsset(asset) });
   } catch (error) {
+    await transaction.rollback();
+    if (next) return next(error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

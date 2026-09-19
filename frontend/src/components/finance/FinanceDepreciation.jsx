@@ -195,45 +195,6 @@ const FinanceDepreciation = () => {
     setSchedule(scheduleData);
   };
 
-  const generateFallbackAssets = () => {
-    const departments = ['IT', 'Facilities', 'HR', 'Finance', 'Operations'];
-    const categories = ['Hardware', 'Software', 'Vehicles', 'Furniture', 'Machinery'];
-    
-    return Array.from({ length: 45 }, (_, i) => {
-      const purchaseCost = 50000 + Math.random() * 1500000;
-      const residualValue = purchaseCost * (0.05 + Math.random() * 0.15);
-      const usefulLife = 3 + Math.floor(Math.random() * 7);
-      const purchaseDate = new Date(2018 + Math.floor(Math.random() * 5), Math.floor(Math.random() * 12), Math.floor(Math.random() * 28));
-      const yearsSincePurchase = Math.max(0, (Date.now() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24 * 365));
-      const annualDep = (purchaseCost - residualValue) / usefulLife;
-      const accumulated = Math.min(annualDep * yearsSincePurchase, purchaseCost - residualValue);
-      const bookValue = Math.max(purchaseCost - accumulated, residualValue);
-
-      return {
-        id: `asset_${i + 1}`,
-        asset_tag: `ICT-${String(i + 1).padStart(4, '0')}`,
-        name: `${categories[i % categories.length]} ${i + 1}`,
-        department_name: departments[i % departments.length],
-        category_name: categories[i % categories.length],
-        status: i % 5 === 0 ? 'Inactive' : 'Active',
-        purchase_cost: purchaseCost,
-        residual_value: residualValue,
-        useful_life: usefulLife,
-        purchase_date: purchaseDate.toISOString(),
-        depreciation_method: ['straight-line', 'reducing-balance', 'declining-balance'][i % 3],
-        depreciation: {
-          annualDepreciation: Math.round(annualDep),
-          accumulatedDepreciation: Math.round(accumulated),
-          bookValue: Math.round(bookValue),
-          depreciationPercentage: ((accumulated / purchaseCost) * 100).toFixed(1),
-          isFullyDepreciated: bookValue <= residualValue || yearsSincePurchase >= usefulLife,
-          yearsRemaining: Math.max(0, usefulLife - yearsSincePurchase).toFixed(1),
-          yearsSincePurchase: yearsSincePurchase.toFixed(1)
-        }
-      };
-    });
-  };
-
   const handleRecalculate = async (asset) => {
     const newDep = calculateDepreciation(asset);
     try {

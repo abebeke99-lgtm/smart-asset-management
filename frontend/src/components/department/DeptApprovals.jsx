@@ -68,47 +68,6 @@ const DeptApprovals = () => {
     setLoading(false);
   };
 
-  const generateFallbackRequests = () => {
-    const types = ['Asset Request', 'Asset Assignment', 'Asset Transfer', 'Maintenance Request', 'Asset Return', 'New Equipment Request', 'Disposal Request'];
-    const priorities = ['Critical', 'High', 'Medium', 'Low'];
-    const statuses = ['Pending', 'Approved', 'Rejected', 'Cancelled'];
-    const employees = ['Abebe Kebede', 'Almaz Taddesse', 'Dawit Solomon', 'Eden Eshetu', 'Fikru Hailu', 'Genet Assefa'];
-    const items = ['Laptop', 'Printer', 'Monitor', 'Desk', 'Chair', 'Server', 'Software License', 'Vehicle'];
-    const departments = ['Finance', 'IT', 'HR', 'Operations', 'Marketing'];
-    
-    return Array.from({ length: 25 }, (_, i) => {
-      const status = statuses[i % statuses.length];
-      const type = types[i % types.length];
-      const priority = priorities[i % priorities.length];
-      const createdDate = new Date(Date.now() - (i + 1) * 2 * 24 * 3600000);
-      
-      return {
-        id: `req_${i + 1}`,
-        request_id: `REQ-${String(i + 1).padStart(4, '0')}`,
-        type: type,
-        priority: priority,
-        status: status,
-        requested_by: employees[i % employees.length],
-        requested_by_id: `user_${(i % 6) + 1}`,
-        department: departments[i % departments.length],
-        item: items[i % items.length],
-        quantity: Math.floor(Math.random() * 5) + 1,
-        reason: `${type} request for ${items[i % items.length]} - ${['New employee', 'Replacement', 'Upgrade', 'Maintenance', 'Transfer'][i % 5]}`,
-        description: `Detailed description for request ${i + 1}. ${type} required for ${['business operations', 'new hire', 'equipment failure', 'upgrade', 'compliance'][i % 5]}.`,
-        priority_reason: priority === 'Critical' ? 'Urgent operational need' : priority === 'High' ? 'Important for operations' : 'Standard request',
-        created_at: createdDate.toISOString(),
-        updated_at: new Date(createdDate.getTime() + Math.random() * 5 * 24 * 3600000).toISOString(),
-        approved_at: status === 'Approved' ? new Date(createdDate.getTime() + Math.random() * 3 * 24 * 3600000).toISOString() : null,
-        rejected_at: status === 'Rejected' ? new Date(createdDate.getTime() + Math.random() * 2 * 24 * 3600000).toISOString() : null,
-        approved_by: status === 'Approved' ? 'Department Head' : null,
-        rejected_by: status === 'Rejected' ? 'Department Head' : null,
-        approval_comment: status === 'Approved' ? 'Approved for business use' : status === 'Rejected' ? 'Not approved at this time' : null,
-        approval_reason: status === 'Approved' ? 'Meets department requirements' : status === 'Rejected' ? 'Budget constraints' : null,
-        is_urgent: priority === 'Critical' || priority === 'High'
-      };
-    });
-  };
-
   const calculateStats = (data) => {
     const pending = data.filter(r => r.status === 'Pending').length;
     const approved = data.filter(r => r.status === 'Approved').length;

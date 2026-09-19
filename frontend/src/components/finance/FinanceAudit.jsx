@@ -5,6 +5,7 @@ import axios from "axios";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
+import { apiBase } from "../../utils/api";
 
 const FinanceAudit = () => {
   const { language, theme } = useLanguage();
@@ -41,8 +42,7 @@ const FinanceAudit = () => {
   const [serverTotalPages, setServerTotalPages] = useState(1);
 
   const API_URL = (
-    process.env.REACT_APP_API_URL ||
-    "http://localhost:5000/api"
+    `${apiBase()}/api`
   ).replace(/\/$/, "");
 
   const getToken = () =>

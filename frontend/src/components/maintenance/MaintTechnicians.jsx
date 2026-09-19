@@ -1,17 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/UiContext';
+import { getMaintenance, getTechnicians, pad } from '../../services/maintenanceApi';
 
 const MaintTechnicians = () => {
-  const [technicians, setTechnicians] = useState([
-    { id: 1, empId: 'EMP-001', name: 'John Doe', skills: ['AC Repair', 'Electrical'], availability: 'Available', openTasks: 3, inProgress: 2, completed: 45, completionRate: 94, avgTime: '2.5 days' },
-    { id: 2, empId: 'EMP-002', name: 'Jane Smith', skills: ['Generator', 'Fuel Systems'], availability: 'Busy', openTasks: 5, inProgress: 3, completed: 52, completionRate: 97, avgTime: '2.1 days' },
-    { id: 3, empId: 'EMP-003', name: 'Bob Wilson', skills: ['Printers', 'Networking'], availability: 'On Leave', openTasks: 0, inProgress: 0, completed: 38, completionRate: 89, avgTime: '2.8 days' }
-  ]);
+  const [technicians, setTechnicians] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const cardBg = isDark ? '#1e293b' : '#ffffff';
   const cardBorder = isDark ? '#334155' : '#d9e2f2';
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [users, maint] = await Promise.all([getTechnicians(), getMaintenance({ limit: 100 })]);
+        const rows = users.map((u) => {
+          const mine = maint.filter((m) => m.assigned_to_name === (u.fullName || u.username) || String(m.assigned_to) === String(u.id));
+          const openTasks = mine.filter((m) => ['pending', 'approved', 'assigned', 'waiting-for-parts'].includes(m.statusRaw)).length;
+          const inProgress = mine.filter((m) => ['in-progress', 'testing'].includes(m.statusRaw)).length;
+          const completed = mine.filter((m) => m.statusRaw === 'completed').length;
+          const total = mine.length;
+          const completionRate = total ? Math.round((completed / total) * 100) : 0;
+          return {
+            id: u.id,
+            empId: `EMP-${pad(u.id)}`,
+            name: u.fullName || u.username,
+            skills: [u.department || 'Maintenance'],
+            availability: u.active === false ? 'Unavailable' : 'Available',
+            openTasks,
+            inProgress,
+            completed,
+            completionRate,
+            avgTime: '—',
+          };
+        }).sort((a, b) => a.name.localeCompare(b.name));
+        setTechnicians(rows);
+      } catch (err) {
+        setError(err && err.message ? err.message : 'Failed to load technicians');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   const getAvailabilityColor = (availability) => {
     const colors = { 'Available': '#dcfce7', 'Busy': '#fef3c7', 'Unavailable': '#fee2e2', 'On Leave': '#dbeafe' };
@@ -23,9 +55,13 @@ const MaintTechnicians = () => {
     return colors[availability] || '#374151';
   };
 
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#4a5568' }}>Loading technicians…</div>;
+
   return (
     <div>
       <h1 style={{ margin: '0 0 24px', fontSize: '2rem', fontWeight: 'bold' }}>👨‍🔧 Technicians</h1>
+
+      {error && <div style={{ padding: '12px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem' }}>Error: {error}</div>}
 
       {/* Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '24px' }}>
@@ -54,7 +90,6 @@ const MaintTechnicians = () => {
               <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '0.9rem' }}>Open</th>
               <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '0.9rem' }}>In Progress</th>
               <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '0.9rem' }}>Completion %</th>
-              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', fontSize: '0.9rem' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -83,9 +118,6 @@ const MaintTechnicians = () => {
                     </div>
                     {tech.completionRate}%
                   </div>
-                </td>
-                <td style={{ padding: '12px', display: 'flex', gap: '6px' }}>
-                  <button style={{ padding: '6px 10px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>View</button>
                 </td>
               </tr>
             ))}

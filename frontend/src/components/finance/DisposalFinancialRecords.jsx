@@ -16,9 +16,10 @@ import {
   Trash2,
   FileText,
 } from "lucide-react";
+import { apiBase } from "../../utils/api";
 
 const API_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+  `${apiBase()}/api`;
 
 export default function DisposalFinancialRecords() {
   const [records, setRecords] = useState([]);

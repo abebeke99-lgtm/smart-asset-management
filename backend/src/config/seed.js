@@ -1,12 +1,20 @@
+require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const College = require('../models/College');
+
+function resolveDemoPassword() {
+  const configured = String(process.env.SEED_DEMO_PASSWORD || process.env.DEMO_USER_PASSWORD || '').trim();
+  if (configured) return configured;
+  throw new Error(
+    'Seeding demo accounts requires SEED_DEMO_PASSWORD (or DEMO_USER_PASSWORD) to be configured. Set it in the backend environment file.'
+  );
+}
 
 const DEMO_USERS = [
   {
     username: 'admin',
     email: 'admin@bekelei.com',
-    password: 'bekelei123',
     fullName: 'System Administrator',
     role: 'admin',
     department: 'Administration',
@@ -16,7 +24,6 @@ const DEMO_USERS = [
   {
     username: 'ict_officer',
     email: 'ict@bekelei.com',
-    password: 'bekelei123',
     fullName: 'ICT Officer',
     role: 'ict_officer',
     department: 'ICT',
@@ -26,7 +33,6 @@ const DEMO_USERS = [
   {
     username: 'college',
     email: 'college@bekelei.com',
-    password: 'bekelei123',
     fullName: 'College Manager',
     role: 'college',
     department: 'Engineering',
@@ -36,7 +42,6 @@ const DEMO_USERS = [
   {
     username: 'finance',
     email: 'finance@bekelei.com',
-    password: 'bekelei123',
     fullName: 'Finance Manager',
     role: 'finance',
     department: 'Finance',
@@ -46,7 +51,6 @@ const DEMO_USERS = [
   {
     username: 'store_manager',
     email: 'store@bekelei.com',
-    password: 'bekelei123',
     fullName: 'Store Manager',
     role: 'store_manager',
     department: 'Store',
@@ -56,7 +60,6 @@ const DEMO_USERS = [
   {
     username: 'maintenance',
     email: 'maintenance@bekelei.com',
-    password: 'bekelei123',
     fullName: 'Maintenance Coordinator',
     role: 'maintenance',
     department: 'Maintenance',
@@ -66,7 +69,6 @@ const DEMO_USERS = [
   {
     username: 'infrastructure',
     email: 'infrastructure@bekelei.com',
-    password: 'bekelei123',
     fullName: 'Infrastructure Directorate',
     role: 'infrastructure',
     department: 'Infrastructure',
@@ -84,6 +86,11 @@ const LEGACY_USERNAME_ALIASES = {
   maintenance: ['maintenance'],
   infrastructure: ['infrastructure', 'infrastructure_directorate', 'infra', 'infrastructure directorate'],
 };
+
+function resolveDemoUsers() {
+  const password = resolveDemoPassword();
+  return DEMO_USERS.map((userData) => ({ ...userData, password }));
+}
 
 async function ensureCollegeScopeForUser(userRecord) {
   if (!userRecord || userRecord.role !== 'college') return;
@@ -177,10 +184,11 @@ async function ensureDemoUser(userData) {
 
 async function seedDatabase() {
   try {
+    const demoUsers = resolveDemoUsers();
     const totalUsers = await User.count();
 
     if (totalUsers === 0) {
-      for (const userData of DEMO_USERS) {
+      for (const userData of demoUsers) {
         const hashedPassword = await bcrypt.hash(userData.password, 10);
         await User.create({
           ...userData,
@@ -188,11 +196,10 @@ async function seedDatabase() {
         });
       }
       console.log('✅ Seeded all demo accounts with roles: admin, ict_officer, college, finance, store_manager, maintenance, infrastructure');
-      console.log('📝 All users use password: bekelei123');
       return;
     }
 
-    for (const userData of DEMO_USERS) {
+    for (const userData of demoUsers) {
       await ensureDemoUser(userData);
     }
 

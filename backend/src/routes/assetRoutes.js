@@ -1,17 +1,53 @@
 const express = require('express');
 const { getAllAssets, getAssetById, createAsset, updateAsset, deleteAsset, getNextAssetId, checkAssetField, getAssetHistory } = require('../controllers/assetController');
+const {
+  generateDigitalId,
+  lookupByQr,
+  listDeletedAssets,
+  restoreAsset,
+  permanentDeleteAsset,
+  bulkImportAssets,
+  assetImportTemplate,
+  listAssetDocuments,
+  uploadAssetDocument,
+  deleteAssetDocument,
+  downloadAssetDocument,
+  listAssetGrants,
+  createAssetGrant,
+  listCustody,
+  createAssetCustody,
+  endCustody,
+} = require('../controllers/assetExtendedController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const { Assignment, Maintenance, Transfer, RFIDLog, AuditLog, User, Department } = require('../models');
 const { Op } = require('sequelize');
 
 const router = express.Router();
 
+const assetManagerRoles = ['admin', 'ict_officer', 'store_manager'];
+
 router.get('/', requireAuth, getAllAssets);
 router.get('/next-id', requireAuth, getNextAssetId);
+router.get('/next-digital-id', requireAuth, generateDigitalId);
+router.get('/scan/:identifier', requireAuth, lookupByQr);
+router.get('/deleted', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), listDeletedAssets);
+router.get('/import/template', requireAuth, assetImportTemplate);
+router.post('/import', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), bulkImportAssets);
 router.get('/check-id/:value', requireAuth, checkAssetField('assetCode'));
 router.get('/check-serial/:value', requireAuth, checkAssetField('serialNumber'));
 router.get('/check-rfid/:value', requireAuth, checkAssetField('rfidTag'));
 router.get('/:id/history', requireAuth, requireRole('admin', 'ict_officer', 'college', 'store_manager'), getAssetHistory);
+router.post('/:id/restore', requireAuth, requireRole('admin', 'store_manager'), restoreAsset);
+router.delete('/:id/permanent', requireAuth, requireRole('admin'), permanentDeleteAsset);
+router.get('/:id/documents', requireAuth, listAssetDocuments);
+router.post('/:id/documents', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), uploadAssetDocument);
+router.delete('/:id/documents/:documentId', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), deleteAssetDocument);
+router.get('/:id/documents/:documentId/file', requireAuth, downloadAssetDocument);
+router.get('/:id/grants', requireAuth, listAssetGrants);
+router.post('/:id/grants', requireAuth, requireRole('admin', 'ict_officer'), createAssetGrant);
+router.get('/:id/custody', requireAuth, listCustody);
+router.post('/:id/custody', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), createAssetCustody);
+router.post('/:id/custody/:custodyId/end', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), endCustody);
 router.post('/:id/assign', requireAuth, requireRole('admin', 'ict_officer'), async (req, res, next) => {
 	const transaction = await require('../models').sequelize.transaction();
 	try {
@@ -86,7 +122,7 @@ router.get('/:id/maintenance', requireAuth, async (req, res, next) => {
 		res.json({ success: true, history });
 	} catch (error) { next(error); }
 });
-router.post('/', requireAuth, requireRole('admin', 'ict_officer'), createAsset);
+router.post('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), createAsset);
 router.put('/:id', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), updateAsset);
 router.delete('/:id', requireAuth, requireRole('admin'), deleteAsset);
 

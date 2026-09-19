@@ -1,16 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useTheme } from '../../contexts/UiContext';
+import { getMaintenance, createMaintenance, updateMaintenance, setMaintenanceStatus, removeMaintenance, getAssets } from '../../services/maintenanceApi';
 
 const MaintRequests = () => {
-  const [requests, setRequests] = useState([
-    { id: 'REQ-001', asset: 'Printer A', requester: 'Admin', department: 'IT', problem: 'Paper jam', priority: 'High', status: 'Approved', requestedDate: '2026-09-01', assignedTech: 'John Doe' },
-    { id: 'REQ-002', asset: 'Server Room AC', requester: 'Building Mgr', department: 'Facilities', problem: 'Temperature control failing', priority: 'Critical', status: 'Assigned', requestedDate: '2026-08-31', assignedTech: 'Jane Smith' },
-    { id: 'REQ-003', asset: 'Backup Generator', requester: 'Finance', department: 'Finance', problem: 'Fuel sensor error', priority: 'Medium', status: 'Pending', requestedDate: '2026-08-30', assignedTech: null }
-  ]);
-
+  const [requests, setRequests] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [message, setMessage] = useState('');
   const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({ asset: '', requester: '', department: '', problem: '', priority: 'Medium' });
+  const [formData, setFormData] = useState({ asset: '', problem: '', priority: 'Medium' });
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -23,9 +23,24 @@ const MaintRequests = () => {
   const cardBg = isDark ? '#1e293b' : '#ffffff';
   const cardBorder = isDark ? '#334155' : '#d9e2f2';
 
+  const loadAll = async () => {
+    try {
+      const [list, assetList] = await Promise.all([getMaintenance({ limit: 100 }), getAssets({ limit: 1000 })]);
+      setRequests(list);
+      setAssets(assetList);
+      setError('');
+    } catch (err) {
+      setError(err && err.message ? err.message : 'Failed to load maintenance requests');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadAll(); }, []);
+
   const filteredRequests = useMemo(() => {
     return requests.filter(req => {
-      const matchesSearch = search === '' || req.asset.toLowerCase().includes(search.toLowerCase()) || req.problem.toLowerCase().includes(search.toLowerCase()) || req.id.toLowerCase().includes(search.toLowerCase());
+      const matchesSearch = search === '' || req.asset.toLowerCase().includes(search.toLowerCase()) || req.problem.toLowerCase().includes(search.toLowerCase()) || req.refId.toLowerCase().includes(search.toLowerCase());
       const matchesPriority = priorityFilter === 'all' || req.priority === priorityFilter;
       const matchesStatus = statusFilter === 'all' || req.status === statusFilter;
       const matchesDept = departmentFilter === 'all' || req.department === departmentFilter;
@@ -36,31 +51,48 @@ const MaintRequests = () => {
   const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
   const paginatedRequests = filteredRequests.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.asset || !formData.problem) return;
-    if (editingId) {
-      setRequests(requests.map(r => r.id === editingId ? { ...r, ...formData } : r));
+    const asset = assets.find(a => String(a.id) === String(formData.asset)) || assets.find(a => String(a.name || '').toLowerCase() === String(formData.asset).toLowerCase());
+    if (!asset) { setMessage('Please select a valid asset'); return; }
+    setMessage('');
+    try {
+      if (editingId) {
+        await updateMaintenance(editingId, { description: formData.problem, priority: formData.priority.toLowerCase() });
+      } else {
+        await createMaintenance({ asset_id: asset.id, title: formData.problem, description: formData.problem, priority: formData.priority.toLowerCase() });
+      }
       setEditingId(null);
-    } else {
-      const newReq = { id: `REQ-${String(requests.length + 1).padStart(3, '0')}`, ...formData, status: 'Pending', requestedDate: new Date().toISOString().split('T')[0], assignedTech: null };
-      setRequests([newReq, ...requests]);
+      await loadAll();
+    } catch (err) {
+      setMessage(err && err.response && err.response.data && err.response.data.message ? err.response.data.message : (err.message || 'Request failed'));
     }
-    setFormData({ asset: '', requester: '', department: '', problem: '', priority: 'Medium' });
+    setFormData({ asset: '', problem: '', priority: 'Medium' });
     setShowForm(false);
   };
 
   const handleEdit = (req) => {
     setEditingId(req.id);
-    setFormData({ asset: req.asset, requester: req.requester, department: req.department, problem: req.problem, priority: req.priority });
+    setFormData({ asset: String(req.assetId || ''), problem: req.problem, priority: req.priority });
     setShowForm(true);
   };
 
-  const handleDelete = (id) => {
-    setRequests(requests.filter(r => r.id !== id));
+  const handleDelete = async (id) => {
+    try {
+      await removeMaintenance(id);
+      await loadAll();
+    } catch (err) {
+      setMessage(err && err.response && err.response.data && err.response.data.message ? err.response.data.message : (err.message || 'Delete failed'));
+    }
   };
 
-  const handleStatusChange = (id, newStatus) => {
-    setRequests(requests.map(r => r.id === id ? { ...r, status: newStatus } : r));
+  const handleStatusChange = async (id, newStatus) => {
+    try {
+      await setMaintenanceStatus(id, newStatus.toLowerCase());
+      await loadAll();
+    } catch (err) {
+      setMessage(err && err.response && err.response.data && err.response.data.message ? err.response.data.message : (err.message || 'Status update failed'));
+    }
   };
 
   const getPriorityColor = (priority) => {
@@ -74,29 +106,29 @@ const MaintRequests = () => {
   };
 
   const getStatusColor = (status) => {
-    const colors = { 'Pending': '#fef3c7', 'Approved': '#dcfce7', 'Rejected': '#fee2e2', 'Assigned': '#dbeafe', 'In Progress': '#f3e8ff', 'Completed': '#dcfce7', 'Cancelled': '#fee2e2' };
+    const colors = { 'Pending': '#fef3c7', 'Approved': '#dcfce7', 'Rejected': '#fee2e2', 'Assigned': '#dbeafe', 'In Progress': '#f3e8ff', 'Waiting for Parts': '#fed7aa', 'Testing': '#cffafe', 'Completed': '#dcfce7', 'Cancelled': '#fee2e2' };
     return colors[status] || '#e5e7eb';
   };
+
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#4a5568' }}>Loading maintenance requests…</div>;
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 'bold' }}>🔧 Maintenance Requests</h1>
-        <button onClick={() => { setEditingId(null); setFormData({ asset: '', requester: '', department: '', problem: '', priority: 'Medium' }); setShowForm(!showForm); }} style={{ padding: '10px 20px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>+ New Request</button>
+        <button onClick={() => { setEditingId(null); setFormData({ asset: '', problem: '', priority: 'Medium' }); setShowForm(!showForm); }} style={{ padding: '10px 20px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>+ New Request</button>
       </div>
+
+      {error && <div style={{ padding: '12px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem' }}>Error: {error}</div>}
+      {message && <div style={{ padding: '12px', backgroundColor: '#fef3c7', color: '#92400e', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem' }}>{message}</div>}
 
       {showForm && (
         <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '24px', marginBottom: '24px' }}>
           <h2 style={{ margin: '0 0 16px', fontSize: '1.2rem' }}>{editingId ? 'Edit Request' : 'Create New Request'}</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '16px' }}>
-            <input type="text" placeholder="Asset Name" value={formData.asset} onChange={(e) => setFormData({...formData, asset: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${cardBorder}` }} />
-            <input type="text" placeholder="Requester" value={formData.requester} onChange={(e) => setFormData({...formData, requester: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${cardBorder}` }} />
-            <select value={formData.department} onChange={(e) => setFormData({...formData, department: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${cardBorder}` }}>
-              <option value="">Select Department</option>
-              <option value="IT">IT</option>
-              <option value="Facilities">Facilities</option>
-              <option value="Finance">Finance</option>
-              <option value="HR">HR</option>
+            <select value={formData.asset} onChange={(e) => setFormData({...formData, asset: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${cardBorder}` }}>
+              <option value="">Select Asset</option>
+              {assets.map(a => <option key={a.id} value={String(a.id)}>{a.name} ({a.asset_code || a.assetCode || `#${a.id}`})</option>)}
             </select>
             <select value={formData.priority} onChange={(e) => setFormData({...formData, priority: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${cardBorder}` }}>
               <option value="Low">Low Priority</option>
@@ -130,13 +162,13 @@ const MaintRequests = () => {
             <option value="Approved">Approved</option>
             <option value="Rejected">Rejected</option>
             <option value="Assigned">Assigned</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Testing">Testing</option>
+            <option value="Completed">Completed</option>
           </select>
           <select value={departmentFilter} onChange={(e) => { setDepartmentFilter(e.target.value); setCurrentPage(1); }} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${cardBorder}` }}>
             <option value="all">All Departments</option>
-            <option value="IT">IT</option>
-            <option value="Facilities">Facilities</option>
-            <option value="Finance">Finance</option>
-            <option value="HR">HR</option>
+            {[...new Set(requests.map(r => r.department).filter(Boolean))].map(d => <option key={d} value={d}>{d}</option>)}
           </select>
         </div>
       </div>
@@ -157,10 +189,10 @@ const MaintRequests = () => {
           </thead>
           <tbody>
             {paginatedRequests.map((req) => (
-              <tr key={req.id} style={{ borderBottom: `1px solid ${cardBorder}` }}>
-                <td style={{ padding: '12px', fontSize: '0.9rem', fontWeight: '600' }}>{req.id}</td>
+              <tr key={req.refId} style={{ borderBottom: `1px solid ${cardBorder}` }}>
+                <td style={{ padding: '12px', fontSize: '0.9rem', fontWeight: '600' }}>{req.refId}</td>
                 <td style={{ padding: '12px', fontSize: '0.9rem' }}>{req.asset}</td>
-                <td style={{ padding: '12px', fontSize: '0.9rem' }}>{req.problem.substring(0, 30)}...</td>
+                <td style={{ padding: '12px', fontSize: '0.9rem' }}>{(req.problem || '').substring(0, 30)}...</td>
                 <td style={{ padding: '12px', fontSize: '0.9rem' }}>
                   <span style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: getPriorityColor(req.priority), color: getPriorityTextColor(req.priority), fontSize: '0.85rem', fontWeight: '600' }}>{req.priority}</span>
                 </td>
@@ -170,10 +202,12 @@ const MaintRequests = () => {
                     <option value="Approved">Approved</option>
                     <option value="Rejected">Rejected</option>
                     <option value="Assigned">Assigned</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Testing">Testing</option>
                     <option value="Completed">Completed</option>
                   </select>
                 </td>
-                <td style={{ padding: '12px', fontSize: '0.9rem' }}>{req.assignedTech || '—'}</td>
+                <td style={{ padding: '12px', fontSize: '0.9rem' }}>{req.technician || '—'}</td>
                 <td style={{ padding: '12px', fontSize: '0.9rem', display: 'flex', gap: '6px' }}>
                   <button onClick={() => handleEdit(req)} style={{ padding: '6px 10px', backgroundColor: '#2864E8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>Edit</button>
                   <button onClick={() => handleDelete(req.id)} style={{ padding: '6px 10px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}>Delete</button>

@@ -2,7 +2,7 @@
 // src/App.jsx - COMPLETE WITH FIXED NAVIGATION
 // ==============================================
 
-import React, { useState, useEffect, useRef, Suspense, lazy, useMemo } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import './App.css';
@@ -541,6 +541,7 @@ const normalizeListResponse = (payload) => {
   if (Array.isArray(payload.assets)) return payload.assets;
   if (Array.isArray(payload.categories)) return payload.categories;
   if (Array.isArray(payload.locations)) return payload.locations;
+  if (Array.isArray(payload.disposals)) return payload.disposals;
   return [];
 };
 
@@ -999,60 +1000,98 @@ const AdminAssetDisposal = () => {
   const [assets, setAssets] = useState([]);
   const [requests, setRequests] = useState([]);
   const [search, setSearch] = useState('');
-  const [form, setForm] = useState({ assetId: '', reason: '', disposalDate: '', disposalValue: '0' });
+  const [form, setForm] = useState({ assetId: '', type: 'Disposal', condition: 'Poor', reason: '' });
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const loadData = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [assetsResponse, disposalsResponse] = await Promise.all([
+        axios.get('/api/assets').catch(() => ({ data: { assets: [] } })),
+        axios.get('/api/admin/disposals', { params: { limit: 100 } }).catch(() => ({ data: { disposals: [] } }))
+      ]);
+      const assetRows = normalizeListResponse(assetsResponse?.data ?? []);
+      const requestRows = normalizeListResponse(disposalsResponse?.data ?? []);
+      setAssets(assetRows);
+      setRequests(requestRows);
+    } catch (loadError) {
+      console.error('Disposal load failed:', loadError);
+      setAssets([]);
+      setRequests([]);
+      setError('Disposal service is not available right now.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const response = await axios.get('/api/assets').catch(() => ({ data: { assets: [] } }));
-        const rows = normalizeListResponse(response?.data ?? []);
-        setAssets(rows);
-        const generated = rows.slice(0, 4).map((asset, index) => ({
-          id: `request-${asset.id || index}`,
-          assetId: asset.id,
-          assetName: asset.name || `Asset ${asset.assetCode || asset.id}`,
-          reason: index % 2 === 0 ? 'End of useful life' : 'Replacement with newer equipment',
-          status: index % 2 === 0 ? 'Approved' : 'Pending',
-          disposalDate: new Date(Date.now() - index * 86400000).toISOString().slice(0, 10),
-          disposalValue: Number(asset.currentValue || 0).toFixed(2),
-        }));
-        setRequests(generated.length ? generated : [{ id: 'placeholder-1', assetId: 'N/A', assetName: 'No active requests', reason: 'No retirement records found', status: 'No data', disposalDate: '', disposalValue: '0.00' }]);
-      } catch (error) {
-        setAssets([]);
-        setRequests([{ id: 'placeholder-1', assetId: 'N/A', assetName: 'No active requests', reason: 'Service unavailable', status: 'No data', disposalDate: '', disposalValue: '0.00' }]);
-      } finally {
-        setLoading(false);
-      }
-    };
     loadData();
   }, []);
 
   const filteredRequests = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return requests;
-    return requests.filter((request) => [request.assetName, request.reason, request.status].some((value) => String(value || '').toLowerCase().includes(query)));
+    return requests.filter((request) => [request.asset?.name || request.assetName, request.disposalNumber, request.reason, request.status].some((value) => String(value || '').toLowerCase().includes(query)));
   }, [requests, search]);
 
-  const submitRequest = () => {
-    if (!form.assetId || !form.reason.trim()) return;
-    const selectedAsset = assets.find((asset) => String(asset.id) === String(form.assetId));
-    const nextRequest = {
-      id: `local-${Date.now()}`,
-      assetId: form.assetId,
-      assetName: selectedAsset?.name || `Asset ${form.assetId}`,
-      reason: form.reason,
-      status: 'Pending',
-      disposalDate: form.disposalDate || new Date().toISOString().slice(0, 10),
-      disposalValue: Number(form.disposalValue || 0).toFixed(2),
-    };
-    setRequests((previous) => [nextRequest, ...previous.filter((item) => item.id !== 'placeholder-1')]);
-    setForm({ assetId: '', reason: '', disposalDate: '', disposalValue: '0' });
+  const submitRequest = async () => {
+    const assetId = form.assetId;
+    const reason = String(form.reason || '').trim();
+    if (!assetId || !reason) {
+      setError('Asset and reason are required.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      const response = await axios.post('/api/admin/disposals', {
+        assetId,
+        reason,
+        type: String(form.type || 'Disposal').trim(),
+        condition: String(form.condition || 'Poor').trim()
+      });
+      const created = response?.data?.disposal || response?.data?.data || response?.data;
+      setRequests((previous) => [created, ...previous]);
+      setForm({ assetId: '', type: 'Disposal', condition: 'Poor', reason: '' });
+    } catch (saveError) {
+      setError(saveError?.response?.data?.message || 'Unable to submit disposal request.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const updateStatus = (requestId, newStatus) => {
-    setRequests((previous) => previous.map((request) => request.id === requestId ? { ...request, status: newStatus } : request));
+  const updateStatus = async (requestId, newStatus) => {
+    try {
+      if (newStatus === 'Approved') {
+        await axios.post(`/api/admin/disposals/${requestId}/approve`);
+      } else if (newStatus === 'Rejected') {
+        const reason = window.prompt('Rejection reason:', '');
+        if (!reason || !String(reason).trim()) return;
+        await axios.post(`/api/admin/disposals/${requestId}/reject`, { reason: String(reason).trim() });
+      }
+      const response = await axios.get(`/api/admin/disposals/${requestId}`);
+      const updated = response?.data?.disposal || response?.data?.data || response?.data;
+      setRequests((previous) => previous.map((request) => String(request.id) === String(requestId) ? updated : request));
+    } catch (statusError) {
+      setError(statusError?.response?.data?.message || 'Unable to update disposal status.');
+    }
+  };
+
+  const getStatusStyle = (status) => {
+    const value = String(status || '').toLowerCase();
+    if (value === 'approved') return { background: '#dcfce7', color: '#166534' };
+    if (value === 'rejected' || value === 'cancelled') return { background: '#fee2e2', color: '#991b1b' };
+    if (value === 'scheduled') return { background: '#dbeafe', color: '#1e40af' };
+    if (value === 'retired' || value === 'disposed') return { background: '#e2e8f0', color: '#475569' };
+    return { background: '#fef3c7', color: '#92400e' };
+  };
+
+  const isActionable = (status) => {
+    return ['Requested', 'Under Review', 'Scheduled', 'Approved', 'Retired'].includes(String(status || ''));
   };
 
   return (
@@ -1064,6 +1103,10 @@ const AdminAssetDisposal = () => {
         </div>
       </div>
 
+      {error && (
+        <div style={{ padding: '12px 14px', borderRadius: '8px', background: '#fff7ed', color: '#9a5b00', marginBottom: '16px' }}>{error}</div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 360px) minmax(0, 1fr)', gap: '20px', marginBottom: '20px' }}>
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
           <h3 style={{ margin: '0 0 16px', color: '#1a365d' }}>Create Retirement Request</h3>
@@ -1074,10 +1117,20 @@ const AdminAssetDisposal = () => {
                 <option key={asset.id} value={asset.id}>{asset.name || `Asset ${asset.assetCode || asset.id}`}</option>
               ))}
             </select>
+            <select value={form.type} onChange={(event) => setForm((previous) => ({ ...previous, type: event.target.value }))} style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+              <option value="Disposal">Disposal</option>
+              <option value="Transfer">Transfer</option>
+              <option value="Scrap">Scrap</option>
+              <option value="Retirement">Retirement</option>
+            </select>
+            <select value={form.condition} onChange={(event) => setForm((previous) => ({ ...previous, condition: event.target.value }))} style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+              <option value="Good">Good</option>
+              <option value="Fair">Fair</option>
+              <option value="Poor">Poor</option>
+              <option value="Damaged">Damaged</option>
+            </select>
             <textarea value={form.reason} onChange={(event) => setForm((previous) => ({ ...previous, reason: event.target.value }))} placeholder="Disposal reason" rows={4} style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', resize: 'vertical' }} />
-            <input type="date" value={form.disposalDate} onChange={(event) => setForm((previous) => ({ ...previous, disposalDate: event.target.value }))} style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
-            <input type="number" step="0.01" value={form.disposalValue} onChange={(event) => setForm((previous) => ({ ...previous, disposalValue: event.target.value }))} placeholder="Disposal value" style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
-            <button type="button" onClick={submitRequest} style={{ background: '#2b6cb0', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600 }}>Submit Request</button>
+            <button type="button" disabled={saving} onClick={submitRequest} style={{ background: '#2b6cb0', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600, opacity: saving ? 0.7 : 1 }}>{saving ? 'Submitting...' : 'Submit Request'}</button>
           </div>
         </div>
 
@@ -1097,19 +1150,23 @@ const AdminAssetDisposal = () => {
                 <div key={request.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px 16px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <div>
-                      <div style={{ fontWeight: 700, color: '#1a365d' }}>{request.assetName}</div>
-                      <div style={{ color: '#4a5568', fontSize: '0.85rem' }}>{request.reason}</div>
+                      <div style={{ fontWeight: 700, color: '#1a365d' }}>{request.asset?.name || request.assetName || `Asset ${request.assetId || ''}`}</div>
+                      <div style={{ color: '#4a5568', fontSize: '0.85rem' }}>{request.disposalNumber || `${request.type || 'Request'} #${request.id}`}{request.reason ? ` — ${request.reason}` : ''}</div>
                     </div>
-                    <span style={{ background: request.status === 'Approved' ? '#dcfce7' : request.status === 'Rejected' ? '#fee2e2' : '#fef3c7', color: request.status === 'Approved' ? '#166534' : request.status === 'Rejected' ? '#991b1b' : '#92400e', borderRadius: '999px', padding: '6px 10px', fontSize: '0.8rem', fontWeight: 700 }}>{request.status}</span>
+                    <span style={{ ...getStatusStyle(request.status), borderRadius: '999px', padding: '6px 10px', fontSize: '0.8rem', fontWeight: 700 }}>{request.status || 'Requested'}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', gap: '12px', flexWrap: 'wrap' }}>
-                    <div style={{ color: '#4a5568', fontSize: '0.8rem' }}>Date: {request.disposalDate || 'Not set'}</div>
-                    <div style={{ color: '#4a5568', fontSize: '0.8rem' }}>Value: ${Number(request.disposalValue || 0).toFixed(2)}</div>
+                    <div style={{ color: '#4a5568', fontSize: '0.8rem' }}>Date: {String(request.createdAt || request.disposalDate || '').slice(0, 10) || 'Not set'}</div>
+                    <div style={{ color: '#4a5568', fontSize: '0.8rem' }}>Condition: {request.condition || 'Not set'}</div>
                   </div>
-                  {request.status !== 'Approved' && request.status !== 'Rejected' && request.status !== 'No data' && (
+                  {isActionable(request.status) && (
                     <div style={{ display: 'flex', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
-                      <button type="button" onClick={() => updateStatus(request.id, 'Approved')} style={{ background: '#22c55e', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}>Approve</button>
-                      <button type="button" onClick={() => updateStatus(request.id, 'Rejected')} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}>Reject</button>
+                      {request.status !== 'Approved' && request.status !== 'Retired' && (
+                        <button type="button" onClick={() => updateStatus(request.id, 'Approved')} style={{ background: '#22c55e', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}>Approve</button>
+                      )}
+                      {request.status !== 'Rejected' && request.status !== 'Retired' && (
+                        <button type="button" onClick={() => updateStatus(request.id, 'Rejected')} style={{ background: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}>Reject</button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1129,25 +1186,65 @@ const AdminAssetDocuments = () => {
   const [assetFilter, setAssetFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [notice, setNotice] = useState('');
+
+  const documentTypes = ['Invoice', 'Warranty', 'Purchase Document', 'Maintenance Document', 'Transfer Document', 'Assignment Document', 'Disposal Document', 'Other'];
+
+  const readFileAsBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      const base64 = result.includes(',') ? result.split(',')[1] : result;
+      resolve(base64);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+
+  const mapDocument = (raw, asset) => ({
+    id: raw.id,
+    assetId: String(raw.assetId),
+    assetName: asset?.name || raw.assetName || raw.asset?.name || `Asset ${raw.assetId}`,
+    name: raw.originalName || raw.fileName || raw.name || 'Document',
+    type: raw.documentType || raw.document_type || raw.type || 'Other',
+    uploadedAt: String(raw.createdAt || raw.uploadedAt || '').slice(0, 10),
+    size: raw.fileSize ? `${Math.max(1, Math.round(Number(raw.fileSize) / 1024))} KB` : 'Unknown size'
+  });
+
+  const loadDocuments = useCallback(async (assetId) => {
+    setLoading(true);
+    try {
+      const queryId = assetId === 'all' ? null : String(assetId);
+      let rows = [];
+      if (queryId) {
+        const response = await axios.get(`/api/assets/${queryId}/documents`).catch(() => ({ data: { documents: [] } }));
+        rows = normalizeListResponse(response?.data ?? []);
+      } else {
+        const targets = assets.slice(0, 40);
+        const settled = await Promise.allSettled(
+          targets.map((asset) => axios.get(`/api/assets/${asset.id}/documents`).catch(() => ({ data: { documents: [] } })))
+        );
+        rows = settled.flatMap((entry) => (entry.status === 'fulfilled' ? normalizeListResponse(entry.value?.data ?? []) : []));
+      }
+      const assetById = new Map(assets.map((asset) => [String(asset.id), asset]));
+      setDocuments(rows.map((raw) => mapDocument(raw, assetById.get(String(raw.assetId)))));
+    } catch (error) {
+      setDocuments([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [assets]);
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [assetsResponse] = await Promise.all([
-          axios.get('/api/assets').catch(() => ({ data: { assets: [] } }))
-        ]);
+        const assetsResponse = await axios.get('/api/assets').catch(() => ({ data: { assets: [] } }));
         const assetRows = normalizeListResponse(assetsResponse?.data ?? []);
         setAssets(assetRows);
-        const seededDocuments = [
-          { id: 1, assetId: assetRows[0]?.id || 1, assetName: assetRows[0]?.name || 'Sample Asset', name: 'Invoice - Asset 1.pdf', type: 'Invoice', uploadedAt: '2026-08-18', size: '245 KB' },
-          { id: 2, assetId: assetRows[1]?.id || 2, assetName: assetRows[1]?.name || 'Sample Asset 2', name: 'Warranty - Asset 2.pdf', type: 'Warranty', uploadedAt: '2026-08-20', size: '184 KB' },
-          { id: 3, assetId: assetRows[2]?.id || 3, assetName: assetRows[2]?.name || 'Sample Asset 3', name: 'Maintenance Review.pdf', type: 'Maintenance Document', uploadedAt: '2026-08-22', size: '315 KB' }
-        ];
-        setDocuments(seededDocuments);
       } catch (error) {
         setAssets([]);
-        setDocuments([]);
       } finally {
         setLoading(false);
       }
@@ -1155,7 +1252,10 @@ const AdminAssetDocuments = () => {
     loadData();
   }, []);
 
-  const documentTypes = ['Invoice', 'Warranty', 'Purchase Document', 'Maintenance Document', 'Transfer Document', 'Assignment Document', 'Disposal Document', 'Other'];
+  useEffect(() => {
+    if (assets.length === 0) return;
+    loadDocuments(assetFilter);
+  }, [assetFilter, assets, loadDocuments]);
 
   const filteredDocuments = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -1167,35 +1267,52 @@ const AdminAssetDocuments = () => {
     });
   }, [documents, search, assetFilter, typeFilter]);
 
-  const handleUpload = (event) => {
+  const handleUpload = async (event) => {
     const file = event.target.files?.[0];
-    if (!file) return;
-    const selectedAsset = assets.find((asset) => String(asset.id) === String(assetFilter || assets[0]?.id));
-    const newDocument = {
-      id: `upload-${Date.now()}`,
-      assetId: selectedAsset?.id || 1,
-      assetName: selectedAsset?.name || 'Uploaded Asset',
-      name: file.name,
-      type: typeFilter === 'all' ? 'Other' : typeFilter,
-      uploadedAt: new Date().toISOString().slice(0, 10),
-      size: `${Math.max(1, Math.round(file.size / 1024))} KB`,
-      file
-    };
-    setDocuments((previous) => [newDocument, ...previous]);
     event.target.value = '';
-  };
-
-  const removeDocument = (documentId) => {
-    setDocuments((previous) => previous.filter((document) => document.id !== documentId));
-  };
-
-  const openDocument = (document) => {
-    if (document.file && typeof URL !== 'undefined') {
-      const url = URL.createObjectURL(document.file);
-      window.open(url, '_blank');
+    if (!file) return;
+    const targetAssetId = assetFilter === 'all' ? '' : String(assetFilter);
+    if (!targetAssetId) {
+      setNotice('Select a specific asset before uploading a document.');
       return;
     }
-    alert(`Viewing document: ${document.name}`);
+    setUploading(true);
+    setNotice('');
+    try {
+      const base64 = await readFileAsBase64(file);
+      await axios.post(`/api/assets/${targetAssetId}/documents`, {
+        fileName: file.name,
+        mimeType: file.type,
+        data: base64,
+        documentType: typeFilter === 'all' ? 'Other' : typeFilter,
+        description: ''
+      });
+      await loadDocuments(targetAssetId);
+      setNotice('Document uploaded successfully.');
+    } catch (uploadError) {
+      setNotice(uploadError?.response?.data?.message || 'Failed to upload document.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeDocument = async (document) => {
+    try {
+      await axios.delete(`/api/assets/${document.assetId}/documents/${document.id}`);
+      setDocuments((previous) => previous.filter((entry) => String(entry.id) !== String(document.id)));
+    } catch (deleteError) {
+      setNotice(deleteError?.response?.data?.message || 'Failed to remove document.');
+    }
+  };
+
+  const openDocument = async (document) => {
+    try {
+      const response = await axios.get(`/api/assets/${document.assetId}/documents/${document.id}/file`, { responseType: 'blob' });
+      const url = URL.createObjectURL(response.data);
+      window.open(url, '_blank');
+    } catch (viewError) {
+      setNotice('Unable to open the document file.');
+    }
   };
 
   return (
@@ -1206,6 +1323,10 @@ const AdminAssetDocuments = () => {
           <h2 style={{ margin: '8px 0 0', color: '#1a365d', fontSize: '2rem' }}>📄 Asset Documents</h2>
         </div>
       </div>
+
+      {notice && (
+        <div style={{ padding: '12px 14px', borderRadius: '8px', background: '#eff6ff', color: '#1e40af', marginBottom: '16px' }}>{notice}</div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 360px) minmax(0, 1fr)', gap: '20px', marginBottom: '20px' }}>
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
@@ -1223,10 +1344,11 @@ const AdminAssetDocuments = () => {
                 <option key={type} value={type}>{type}</option>
               ))}
             </select>
-            <label style={{ border: '1px dashed #94a3b8', background: '#fff', borderRadius: '8px', padding: '14px 12px', cursor: 'pointer', fontWeight: 600, color: '#1a365d', textAlign: 'center' }}>
-              <input type="file" onChange={handleUpload} style={{ display: 'none' }} />
-              Upload file
+            <label style={{ border: '1px dashed #94a3b8', background: '#fff', borderRadius: '8px', padding: '14px 12px', cursor: assetFilter === 'all' ? 'not-allowed' : 'pointer', fontWeight: 600, color: '#1a365d', textAlign: 'center', opacity: assetFilter === 'all' ? 0.6 : 1, pointerEvents: assetFilter === 'all' ? 'none' : 'auto' }}>
+              <input type="file" onChange={handleUpload} style={{ display: 'none' }} disabled={assetFilter === 'all'} />
+              {uploading ? 'Uploading...' : 'Upload file'}
             </label>
+            {assetFilter === 'all' && <div style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Select an asset above to enable uploads.</div>}
           </div>
         </div>
 
@@ -1255,7 +1377,7 @@ const AdminAssetDocuments = () => {
                     <div style={{ color: '#4a5568', fontSize: '0.8rem' }}>{document.uploadedAt} · {document.size}</div>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       <button type="button" onClick={() => openDocument(document)} style={{ background: '#edf2ff', color: '#2b6cb0', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}>View</button>
-                      <button type="button" onClick={() => removeDocument(document.id)} style={{ background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}>Delete</button>
+                      <button type="button" onClick={() => removeDocument(document)} style={{ background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}>Delete</button>
                     </div>
                   </div>
                 </div>
@@ -1267,13 +1389,6 @@ const AdminAssetDocuments = () => {
     </div>
   );
 };
-
-const AdminComponentStub = ({ title = 'Section' }) => (
-  <div style={{ padding: '24px', background: '#fff', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-    <h2 style={{ margin: '0 0 12px' }}>{title}</h2>
-    <p style={{ margin: 0, color: '#4a5568' }}>No configured workspace is available for this route.</p>
-  </div>
-);
 
 // ==========================================
 // LAYOUT COMPONENT - Renders Outlet for nested routes
@@ -2399,56 +2514,56 @@ function AppContent() {
                 <Route path="assets/:id" element={<AssetDetails />} />
                 <Route path="assets/categories" element={<AdminAssetCategories />} />
                 <Route path="assets/locations" element={<AdminAssetLocations />} />
-                <Route path="assets/lifecycle" element={<AdminComponentStub title="Asset Lifecycle" />} />
+                <Route path="assets/lifecycle" element={<AdminAssetLifecycle />} />
                 <Route path="assets/disposal" element={<AdminAssetDisposal />} />
-                <Route path="assets/documents" element={<AdminComponentStub title="Asset Documents" />} />
+                <Route path="assets/documents" element={<AdminAssetDocuments />} />
                 
                 {/* Asset Assignment */}
                 <Route path="assets/assign" element={<AdminAssignment />} />
-                <Route path="assignment/assigned" element={<AdminComponentStub title="Assigned Assets" />} />
-                <Route path="assignment/returns" element={<AdminComponentStub title="Asset Returns" />} />
-                <Route path="assignment/history" element={<AdminComponentStub title="Assignment History" />} />
+                <Route path="assignment/assigned" element={<AdminAssignment />} />
+                <Route path="assignment/returns" element={<AdminAssignment />} />
+                <Route path="assignment/history" element={<AdminAssignment />} />
                 
                 {/* Asset Transfer */}
                 <Route path="assets/transfer" element={<AdminTransfer />} />
-                <Route path="transfer/pending" element={<AdminComponentStub title="Pending Transfers" />} />
-                <Route path="transfer/approved" element={<AdminComponentStub title="Approved Transfers" />} />
-                <Route path="transfer/history" element={<AdminComponentStub title="Transfer History" />} />
+                <Route path="transfer/pending" element={<AdminTransfer />} />
+                <Route path="transfer/approved" element={<AdminTransfer />} />
+                <Route path="transfer/history" element={<AdminTransfer />} />
                 
                 {/* Inventory */}
-                <Route path="inventory/available" element={<AdminComponentStub title="Available Assets" />} />
-                <Route path="inventory/overview" element={<AdminComponentStub title="Stock Overview" />} />
-                <Route path="inventory/movement" element={<AdminComponentStub title="Stock Movement" />} />
-                <Route path="inventory/history" element={<AdminComponentStub title="Inventory History" />} />
+                <Route path="inventory/available" element={<AdminAssets />} />
+                <Route path="inventory/overview" element={<AdminAssets />} />
+                <Route path="inventory/movement" element={<AdminAssets />} />
+                <Route path="inventory/history" element={<AdminAssets />} />
                 
                 {/* RFID/QR Tracking */}
                 <Route path="rfid" element={<AdminRFIDTracking />} />
-                <Route path="rfid/qr" element={<AdminComponentStub title="QR/Barcode Management" />} />
-                <Route path="rfid/register" element={<AdminComponentStub title="Register RFID/QR" />} />
-                <Route path="rfid/activity" element={<AdminComponentStub title="Scan Activity" />} />
-                <Route path="rfid/history" element={<AdminComponentStub title="Tracking History" />} />
+                <Route path="rfid/qr" element={<AdminRFIDTracking />} />
+                <Route path="rfid/register" element={<AdminRFIDTracking />} />
+                <Route path="rfid/activity" element={<AdminRFIDTracking />} />
+                <Route path="rfid/history" element={<AdminRFIDTracking />} />
                 
                 {/* Maintenance */}
                 <Route path="maintenance" element={<AdminMaintenance />} />
-                <Route path="maintenance/requests" element={<AdminComponentStub title="Maintenance Requests" />} />
-                <Route path="maintenance/scheduled" element={<AdminComponentStub title="Scheduled Maintenance" />} />
-                <Route path="maintenance/pending" element={<AdminComponentStub title="Pending Maintenance" />} />
-                <Route path="maintenance/inprogress" element={<AdminComponentStub title="In Progress" />} />
-                <Route path="maintenance/completed" element={<AdminComponentStub title="Completed Maintenance" />} />
-                <Route path="maintenance/technicians" element={<AdminComponentStub title="Technicians" />} />
-                <Route path="maintenance/history" element={<AdminComponentStub title="Maintenance History" />} />
+                <Route path="maintenance/requests" element={<AdminMaintenance />} />
+                <Route path="maintenance/scheduled" element={<AdminMaintenance />} />
+                <Route path="maintenance/pending" element={<AdminMaintenance />} />
+                <Route path="maintenance/inprogress" element={<AdminMaintenance />} />
+                <Route path="maintenance/completed" element={<AdminMaintenance />} />
+                <Route path="maintenance/technicians" element={<AdminMaintenance />} />
+                <Route path="maintenance/history" element={<AdminMaintenance />} />
                 
                 {/* Warranty */}
-                <Route path="warranty/active" element={<AdminComponentStub title="Active Warranties" />} />
-                <Route path="warranty/expiring" element={<AdminComponentStub title="Expiring Warranties" />} />
-                <Route path="warranty/expired" element={<AdminComponentStub title="Expired Warranties" />} />
+                <Route path="warranty/active" element={<AdminAssets />} />
+                <Route path="warranty/expiring" element={<AdminAssets />} />
+                <Route path="warranty/expired" element={<AdminAssets />} />
                 
-                {/* Procurement */}
-                <Route path="procurement/requests" element={<AdminComponentStub title="Purchase Requests" />} />
-                <Route path="procurement/purchases" element={<AdminComponentStub title="Purchases" />} />
-                <Route path="procurement/suppliers" element={<AdminComponentStub title="Suppliers" />} />
-                <Route path="procurement/invoices" element={<AdminComponentStub title="Invoices" />} />
-                <Route path="procurement/history" element={<AdminComponentStub title="Purchase History" />} />
+                {/* Procurement (owned by Finance) */}
+                <Route path="procurement/requests" element={<Navigate to="/finance/purchase-requests" replace />} />
+                <Route path="procurement/purchases" element={<Navigate to="/finance/purchase-orders" replace />} />
+                <Route path="procurement/suppliers" element={<Navigate to="/finance/suppliers" replace />} />
+                <Route path="procurement/invoices" element={<Navigate to="/finance/invoices" replace />} />
+                <Route path="procurement/history" element={<Navigate to="/finance/purchase-history" replace />} />
 
                 {/* Organization / governance alias routes */}
                 <Route path="colleges" element={<AdminCollegeManagement />} />
@@ -2472,44 +2587,44 @@ function AppContent() {
                 
                 {/* Department Management */}
                 <Route path="departments" element={<AdminDepartmentManagement />} />
-                <Route path="departments/create" element={<AdminComponentStub title="Create Department" />} />
-                <Route path="departments/heads" element={<AdminComponentStub title="Department Heads" />} />
-                <Route path="departments/users" element={<AdminComponentStub title="Department Users" />} />
-                <Route path="departments/assets" element={<AdminComponentStub title="Department Assets" />} />
-                <Route path="departments/locations" element={<AdminComponentStub title="Department Locations" />} />
+                <Route path="departments/create" element={<AdminDepartmentManagement />} />
+                <Route path="departments/heads" element={<AdminDepartmentManagement />} />
+                <Route path="departments/users" element={<AdminDepartmentManagement />} />
+                <Route path="departments/assets" element={<AdminDepartmentManagement />} />
+                <Route path="departments/locations" element={<AdminDepartmentManagement />} />
                 
                 {/* Reports & Analytics */}
                 <Route path="reports" element={<AdminReports />} />
-                <Route path="reports/assets" element={<AdminComponentStub title="Asset Reports" />} />
-                <Route path="reports/inventory" element={<AdminComponentStub title="Inventory Reports" />} />
-                <Route path="reports/assignments" element={<AdminComponentStub title="Assignment Reports" />} />
-                <Route path="reports/transfers" element={<AdminComponentStub title="Transfer Reports" />} />
-                <Route path="reports/maintenance" element={<AdminComponentStub title="Maintenance Reports" />} />
-                <Route path="reports/rfid" element={<AdminComponentStub title="RFID Reports" />} />
-                <Route path="reports/procurement" element={<AdminComponentStub title="Procurement Reports" />} />
-                <Route path="reports/financial" element={<AdminComponentStub title="Financial Reports" />} />
-                <Route path="reports/departments" element={<AdminComponentStub title="Department Reports" />} />
-                <Route path="reports/users" element={<AdminComponentStub title="User Reports" />} />
+                <Route path="reports/assets" element={<AdminReports />} />
+                <Route path="reports/inventory" element={<AdminReports />} />
+                <Route path="reports/assignments" element={<AdminReports />} />
+                <Route path="reports/transfers" element={<AdminReports />} />
+                <Route path="reports/maintenance" element={<AdminReports />} />
+                <Route path="reports/rfid" element={<AdminReports />} />
+                <Route path="reports/procurement" element={<AdminReports />} />
+                <Route path="reports/financial" element={<AdminReports />} />
+                <Route path="reports/departments" element={<AdminReports />} />
+                <Route path="reports/users" element={<AdminReports />} />
                 <Route path="reports/analytics" element={<AdminAnalyticsCenter />} />
                 
                 {/* Notifications */}
                 <Route path="notifications" element={<AdminNotifications />} />
                 <Route path="notifications/:id" element={<AdminNotificationDetails />} />
-                <Route path="notifications/unread" element={<AdminComponentStub title="Unread Notifications" />} />
-                <Route path="notifications/maintenance" element={<AdminComponentStub title="Maintenance Alerts" />} />
-                <Route path="notifications/assignment" element={<AdminComponentStub title="Assignment Alerts" />} />
-                <Route path="notifications/transfer" element={<AdminComponentStub title="Transfer Alerts" />} />
-                <Route path="notifications/missing" element={<AdminComponentStub title="Missing Asset Alerts" />} />
-                <Route path="notifications/warranty" element={<AdminComponentStub title="Warranty Alerts" />} />
-                <Route path="notifications/rfid" element={<AdminComponentStub title="RFID Alerts" />} />
-                <Route path="notifications/security" element={<AdminComponentStub title="Security Alerts" />} />
+                <Route path="notifications/unread" element={<AdminNotifications />} />
+                <Route path="notifications/maintenance" element={<AdminNotifications />} />
+                <Route path="notifications/assignment" element={<AdminNotifications />} />
+                <Route path="notifications/transfer" element={<AdminNotifications />} />
+                <Route path="notifications/missing" element={<AdminNotifications />} />
+                <Route path="notifications/warranty" element={<AdminNotifications />} />
+                <Route path="notifications/rfid" element={<AdminNotifications />} />
+                <Route path="notifications/security" element={<AdminNotifications />} />
                 
                 {/* Approvals */}
-                <Route path="approvals/assignment" element={<AdminComponentStub title="Asset Assignment Approvals" />} />
-                <Route path="approvals/transfer" element={<AdminComponentStub title="Asset Transfer Approvals" />} />
-                <Route path="approvals/purchase" element={<AdminComponentStub title="Purchase Approvals" />} />
-                <Route path="approvals/disposal" element={<AdminComponentStub title="Disposal Approvals" />} />
-                <Route path="approvals/pending" element={<AdminComponentStub title="Pending Approvals" />} />
+                <Route path="approvals/assignment" element={<AdminAssignment />} />
+                <Route path="approvals/transfer" element={<AdminTransfer />} />
+                <Route path="approvals/purchase" element={<Navigate to="/finance/purchase-requests" replace />} />
+                <Route path="approvals/disposal" element={<AdminAssetDisposal />} />
+                <Route path="approvals/pending" element={<AdminAssignment />} />
                 
                 {/* Settings */}
                 <Route path="settings" element={<AdminSettings />} />
@@ -2518,20 +2633,20 @@ function AppContent() {
                 
                 {/* Backup */}
                 <Route path="backup" element={<AdminBackup />} />
-                <Route path="backup/history" element={<AdminComponentStub title="Backup History" />} />
-                <Route path="backup/restore" element={<AdminComponentStub title="Restore Backup" />} />
-                <Route path="backup/status" element={<AdminComponentStub title="Backup Status" />} />
+                <Route path="backup/history" element={<AdminBackup />} />
+                <Route path="backup/restore" element={<AdminBackup />} />
+                <Route path="backup/status" element={<AdminBackup />} />
                 
                 {/* Audit Logs */}
                 <Route path="audit-logs" element={<AdminAuditLogs />} />
-                <Route path="audit-logs/login" element={<AdminComponentStub title="Login Activities" />} />
-                <Route path="audit-logs/assets" element={<AdminComponentStub title="Asset Activities" />} />
-                <Route path="audit-logs/assignments" element={<AdminComponentStub title="Assignment Activities" />} />
-                <Route path="audit-logs/transfers" element={<AdminComponentStub title="Transfer Activities" />} />
-                <Route path="audit-logs/maintenance" element={<AdminComponentStub title="Maintenance Activities" />} />
-                <Route path="audit-logs/users" element={<AdminComponentStub title="User Activities" />} />
-                <Route path="audit-logs/settings" element={<AdminComponentStub title="Settings Changes" />} />
-                <Route path="audit-logs/security" element={<AdminComponentStub title="Security Events" />} />
+                <Route path="audit-logs/login" element={<AdminAuditLogs />} />
+                <Route path="audit-logs/assets" element={<AdminAuditLogs />} />
+                <Route path="audit-logs/assignments" element={<AdminAuditLogs />} />
+                <Route path="audit-logs/transfers" element={<AdminAuditLogs />} />
+                <Route path="audit-logs/maintenance" element={<AdminAuditLogs />} />
+                <Route path="audit-logs/users" element={<AdminAuditLogs />} />
+                <Route path="audit-logs/settings" element={<AdminAuditLogs />} />
+                <Route path="audit-logs/security" element={<AdminAuditLogs />} />
               </Route>
 
               {/* ICT OFFICER ROUTES - Fixed with RoleLayout */}
@@ -2690,6 +2805,7 @@ function AppContent() {
                 <Route path="testing-quality" element={<MaintTestingQuality />} />
                 <Route path="quality-control" element={<MaintTestingQuality />} />
                 <Route path="assigned-tasks" element={<MaintAssigned />} />
+                <Route path="notifications" element={<MaintNotifications />} />
                 <Route path="history" element={<MaintHistory />} />
                 <Route path="cost-analysis" element={<MaintReports />} />
                 <Route path="reports" element={<MaintReports />} />

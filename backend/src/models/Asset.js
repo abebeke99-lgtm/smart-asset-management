@@ -8,13 +8,20 @@ const Asset = sequelize.define('Asset', {
   description: { type: DataTypes.TEXT, defaultValue: '' },
   serialNumber: { type: DataTypes.STRING(255), defaultValue: '' },
   assetCode: { type: DataTypes.STRING(255), defaultValue: '' },
+  digitalId: { type: DataTypes.STRING(100), allowNull: true, unique: true, field: 'digital_id' },
   rfidTag: { type: DataTypes.STRING(255), defaultValue: '' },
   status: { type: DataTypes.STRING(100), defaultValue: 'available' },
   condition: { type: DataTypes.STRING(100), defaultValue: 'Good' },
   department: { type: DataTypes.STRING(255), defaultValue: '' },
   collegeId: { type: DataTypes.INTEGER, allowNull: true, field: 'college_id' },
   departmentId: { type: DataTypes.INTEGER, allowNull: true, field: 'department_id' },
+  campusId: { type: DataTypes.INTEGER, allowNull: true, field: 'campus_id' },
+  buildingId: { type: DataTypes.INTEGER, allowNull: true, field: 'building_id' },
+  roomId: { type: DataTypes.INTEGER, allowNull: true, field: 'room_id' },
   location: { type: DataTypes.STRING(255), defaultValue: '' },
+  quantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
+  specifications: { type: DataTypes.JSON, allowNull: true },
+  fundingSource: { type: DataTypes.STRING(255), defaultValue: '' },
   purchaseDate: { type: DataTypes.DATE, allowNull: true },
   purchasePrice: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
   supplier: { type: DataTypes.STRING(255), defaultValue: '' },
@@ -25,9 +32,12 @@ const Asset = sequelize.define('Asset', {
   currentValue: { type: DataTypes.DECIMAL(12, 2), defaultValue: 0 },
   healthScore: { type: DataTypes.INTEGER, defaultValue: 100 },
   createdBy: { type: DataTypes.INTEGER, defaultValue: 0 },
+  deletedBy: { type: DataTypes.INTEGER, allowNull: true, field: 'deleted_by' },
 }, {
   tableName: 'assets',
   timestamps: true,
+  indexes: [{ fields: ['digital_id'] }, { fields: ['status'] }, { fields: ['serial_number'] }, { fields: ['campus_id'] }, { fields: ['building_id'] }, { fields: ['room_id'] }],
+  paranoid: true,
 });
 
 module.exports = Asset;
