@@ -11,7 +11,11 @@ const safeUser = (user) => {
 
 const validateUserInput = async (input, { requirePassword = false } = {}) => {
   if (!input.username || !String(input.username).trim()) return 'Username is required';
-  if (requirePassword && (!input.password || String(input.password).length < 6)) return 'Password must be at least 6 characters';
+  if (requirePassword) {
+    const pwd = String(input.password);
+    if (!pwd || pwd.length < 8) return 'Password must be at least 8 characters';
+    if (pwd.length > 16) return 'Password must be at most 16 characters';
+  }
   if (input.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(input.email))) return 'Invalid email address';
   if (input.role && !roles.includes(input.role)) return 'Invalid user role';
   if (input.department) {
@@ -95,7 +99,8 @@ const updateUser = async (req, res) => {
       ...(input.active !== undefined || is_active !== undefined ? { active: input.active ?? is_active } : {})
     };
     if (input.password) {
-      if (String(input.password).length < 6) return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+      if (String(input.password).length < 8) return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
+   if (String(input.password).length > 16) return res.status(400).json({ success: false, message: 'Password must be at most 16 characters' });
       updates.password = await bcrypt.hash(input.password, 10);
     }
     if (updates.username !== user.username || updates.email !== user.email) {
@@ -156,6 +161,7 @@ const resetUserPassword = async (req, res) => {
   if (!user) return res.status(404).json({ success: false, message: 'User not found' });
   const temporaryPassword = String(req.body.password || '').trim();
   if (temporaryPassword && temporaryPassword.length < 8) return res.status(400).json({ success: false, message: 'Temporary password must be at least 8 characters' });
+    if (temporaryPassword && temporaryPassword.length > 16) return res.status(400).json({ success: false, message: 'Temporary password must be at most 16 characters' });
   await user.update({ password: await bcrypt.hash(temporaryPassword || require('crypto').randomBytes(18).toString('base64url'), 10), forcePasswordChange: true, sessionVersion: (user.sessionVersion || 0) + 1 });
   await AuditLog.create({ userId: req.user.id, action: 'RESET_USER_PASSWORD', entity: `user:${user.id}`, details: JSON.stringify({ userId: user.id, forcePasswordChange: true }) });
   return res.json({ success: true, message: 'Password reset successfully; the user must change it at next login' });
