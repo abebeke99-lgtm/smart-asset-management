@@ -1,11 +1,142 @@
 const { sequelize } = require('./database');
 
+/*
+ * Repair duplicate, auto-suffixed (`name_2`, `name_3`, ...) indexes.
+ *
+ * Root cause: the model graph contains cyclic foreign-key references, so
+ * Sequelize's `sync()` falls back to `_syncModelsWithCyclicReferences()`,
+ * which performs a second pass with `alter: true` on every model. Each boot
+ * that pass re-runs `ALTER TABLE ... CHANGE col col ... UNIQUE`, which forces
+ * MySQL to materialise a brand-new unique index with an incremented suffix
+ * (`username`, `username_2`, ...). Over many boots tables reached MySQL's
+ * 64-index-per-table limit and the app could no longer start.
+ *
+ * This routine drops duplicate indexes that share the same fingerprint
+ * (unique + ordered column list), keeping the canonical name when one exists.
+ * Foreign-key-owned indexes are preserved (they have no suffixed twins).
+ */
+async function repairDuplicateIndexes() {
+  const [rows] = await sequelize.query(
+    `SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR '|') AS cols
+     FROM information_schema.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE()
+     GROUP BY TABLE_NAME, INDEX_NAME
+     ORDER BY TABLE_NAME, INDEX_NAME`
+  );
+
+  const byTable = {};
+  for (const row of rows) {
+    const table = row.TABLE_NAME;
+    if (!byTable[table]) byTable[table] = [];
+    byTable[table].push({ name: row.INDEX_NAME, unique: String(row.NON_UNIQUE) === '0', cols: String(row.cols) });
+  }
+
+  const dropPlan = [];
+  for (const [table, indexes] of Object.entries(byTable)) {
+    const groups = {};
+    for (const index of indexes) {
+      if (index.name === 'PRIMARY') continue;
+      const fingerprint = `${index.unique ? 'U' : 'N'}:${index.cols}`;
+      if (!groups[fingerprint]) groups[fingerprint] = [];
+      groups[fingerprint].push(index.name);
+    }
+    for (const names of Object.values(groups)) {
+      if (names.length < 2) continue;
+      names.sort((left, right) => {
+        const leftMatch = left.match(/^(.+)_(\d+)$/);
+        const rightMatch = right.match(/^(.+)_(\d+)$/);
+        return (leftMatch ? Number(leftMatch[2]) : -1) - (rightMatch ? Number(rightMatch[2]) : -1);
+      });
+      for (const name of names.slice(1)) {
+        dropPlan.push({ table, name });
+      }
+    }
+  }
+
+  const queryInterface = sequelize.getQueryInterface();
+  let dropped = 0;
+  for (const { table, name } of dropPlan) {
+    try {
+      await queryInterface.removeIndex(table, name);
+      dropped += 1;
+    } catch (error) {
+      // Index may be required by a foreign-key constraint; leaving it in place is safe.
+      console.warn(`Skipped removing index ${table}.${name}: ${error.message}`);
+    }
+  }
+  if (dropped > 0) console.log(`Removed ${dropped} duplicate database indexes.`);
+  return dropped;
+}
+
+/*
+ * Create only the tables that do not exist yet. Existing tables are never
+ * altered, which prevents the schema-drift pollution described above.
+ *
+ * Tables are created with their foreign-key constraints first; any tables that
+ * remain un-creatable after several rounds (cyclic reference graphs) are
+ * created without constraints rather than blocking startup.
+ */
+async function createMissingTables() {
+  const queryInterface = sequelize.getQueryInterface();
+  const seen = new Set();
+  const models = sequelize.modelManager.models.filter((model) => {
+    if (model.sequelize !== sequelize) return false;
+    if (seen.has(model.name)) return false;
+    seen.add(model.name);
+    return true;
+  });
+
+  const missing = [];
+  for (const model of models) {
+    const exists = await queryInterface.tableExists(model.getTableName());
+    if (!exists) missing.push(model);
+  }
+  if (missing.length === 0) return 0;
+
+  let pending = missing;
+  const maxRounds = 5;
+  for (let round = 0; round < maxRounds && pending.length > 0; round += 1) {
+    const nextPending = [];
+    for (const model of pending) {
+      try {
+        await model.sync({ force: false });
+      } catch (error) {
+        nextPending.push(model);
+      }
+    }
+    if (nextPending.length === pending.length) {
+      pending = nextPending;
+      break;
+    }
+    pending = nextPending;
+  }
+
+  for (const model of pending) {
+    try {
+      await model.sync({ force: false, withoutForeignKeyConstraints: true });
+      console.log(`Created table ${model.getTableName()} (without foreign-key constraints).`);
+    } catch (error) {
+      console.warn(`Could not create table ${model.getTableName()}: ${error.message}`);
+    }
+  }
+
+  console.log(`Database schema synchronized. ${missing.length} table(s) created.`);
+  return missing.length;
+}
+
 async function syncDatabase() {
   try {
     const ensureColumn = async (tableName, columnName, definition) => {
       const table = await sequelize.getQueryInterface().describeTable(tableName);
       if (!table[columnName]) await sequelize.getQueryInterface().addColumn(tableName, columnName, definition);
     };
+
+    // Repair pollution from past sync passes before anything else runs.
+    await repairDuplicateIndexes();
+
+    // Create only missing tables; existing tables are left untouched by sync.
+    await createMissingTables();
+
     for (const [column, definition] of Object.entries({
       digital_id: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
       campus_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
@@ -17,13 +148,14 @@ async function syncDatabase() {
       deleted_by: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
       deleted_at: { type: require('sequelize').DataTypes.DATE, allowNull: true },
     })) await ensureColumn('assets', column, definition);
-    await sequelize.sync();
+
     const assetIndexes = await sequelize.getQueryInterface().showIndex('assets');
     const hasUniqueDigitalId = assetIndexes.some((index) => index.unique && index.fields.some((field) => (field.attribute || field) === 'digital_id'));
     if (!hasUniqueDigitalId) {
       await sequelize.getQueryInterface().sequelize.query('ALTER TABLE `assets` ADD UNIQUE INDEX `assets_digital_id_unique` (`digital_id`)');
     }
-    const { Supplier, Asset, PurchaseOrder } = require('../models');
+
+    const { Supplier, Asset, PurchaseOrder, Location } = require('../models');
     const { Op } = require('sequelize');
     const legacyRows = await Promise.all([
       Asset.findAll({ attributes: ['supplier'], where: { supplier: { [Op.ne]: '' } }, group: ['supplier'], raw: true }),
@@ -33,6 +165,12 @@ async function syncDatabase() {
     for (const [index, supplierName] of legacyNames.entries()) {
       await Supplier.findOrCreate({ where: { supplierName }, defaults: { supplierCode: `LEGACY-${String(index + 1).padStart(4, '0')}`, supplierName, status: 'active' } });
     }
+    const distinctLocations = await Asset.findAll({ attributes: ['location'], where: { location: { [Op.ne]: '' } }, group: ['location'], raw: true });
+    for (const row of distinctLocations) {
+      const name = String(row.location || '').trim();
+      if (name) await Location.findOrCreate({ where: { name }, defaults: { name, code: '', description: `${name} asset location` } });
+    }
+
     await ensureColumn('users', 'college_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
     await ensureColumn('users', 'department_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
     await ensureColumn('assets', 'college_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
@@ -163,4 +301,4 @@ async function syncDatabase() {
   }
 }
 
-module.exports = { syncDatabase };
+module.exports = { syncDatabase, repairDuplicateIndexes, createMissingTables };

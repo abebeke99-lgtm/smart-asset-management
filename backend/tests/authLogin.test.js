@@ -137,7 +137,7 @@ test('admin role governance persists permission matrices and protects core admin
 
 test('system monitoring exposes admin-only health, performance, resources, history, and alert workflows', () => {
   const routeSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/systemMonitoringRoutes.js'), 'utf8');
-  const middlewareSource = fs.readFileSync(path.resolve(__dirname, '../src/middleware/requestMetrics.js'), 'utf8');
+  const middlewareSource = fs.readFileSync(path.resolve(__dirname, '../src/middlewares/requestMetrics.js'), 'utf8');
   assert.match(routeSource, /requireRole\('admin'\)/);
   assert.match(routeSource, /router\.get\('\/overview'/);
   assert.match(routeSource, /router\.get\('\/performance'/);

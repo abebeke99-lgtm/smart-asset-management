@@ -10,7 +10,6 @@ export const DataProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [assets, setAssets] = useState([]);
   const [maintenanceRequests, setMaintenanceRequests] = useState([]);
-  const [rfidLogs, setRfidLogs] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -150,26 +149,6 @@ export const DataProvider = ({ children }) => {
   }, [apiCall, getMaintenanceRequests]);
 
   // ==========================================
-  // RFID FUNCTIONS
-  // ==========================================
-
-  const getRFIDLogs = useCallback(async (params = {}) => {
-    const result = await apiCall('get', '/api/rfid', null, { params });
-    if (result.success) {
-      setRfidLogs(result.data.logs || []);
-    }
-    return result;
-  }, [apiCall]);
-
-  const registerRFIDTag = useCallback(async (data) => {
-    return await apiCall('post', '/api/rfid/register', data);
-  }, [apiCall]);
-
-  const logRFIDScan = useCallback(async (data) => {
-    return await apiCall('post', '/api/rfid/scan', data);
-  }, [apiCall]);
-
-  // ==========================================
   // NOTIFICATION FUNCTIONS
   // ==========================================
 
@@ -279,7 +258,6 @@ export const DataProvider = ({ children }) => {
     loading,
     assets,
     maintenanceRequests,
-    rfidLogs,
     notifications,
     departments,
     categories,
@@ -299,11 +277,6 @@ export const DataProvider = ({ children }) => {
     createMaintenanceRequest,
     approveMaintenance,
     completeMaintenance,
-
-    // RFID functions
-    getRFIDLogs,
-    registerRFIDTag,
-    logRFIDScan,
 
     // Notification functions
     getNotifications,

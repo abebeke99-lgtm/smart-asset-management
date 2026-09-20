@@ -9,6 +9,8 @@ const Transfer = require('./Transfer');
 const AuditLog = require('./AuditLog');
 const AuditLogArchive = require('./AuditLogArchive');
 const Category = require('./Category');
+const Location = require('./Location');
+const RfidDevice = require('./RfidDevice');
 const Department = require('./Department');
 const Maintenance = require('./Maintenance');
 const MaintenanceInspection = require('./MaintenanceInspection');
@@ -40,6 +42,8 @@ const DisposalRequest = require('./DisposalRequest');
 const PurchaseOrder = require('./PurchaseOrder');
 const PurchaseOrderItem = require('./PurchaseOrderItem');
 const Supplier = require('./Supplier');
+const Invoice = require('./Invoice');
+const InvoiceItem = require('./InvoiceItem');
 const Campus = require('./Campus');
 const Building = require('./Building');
 const Room = require('./Room');
@@ -121,6 +125,11 @@ Approval.hasMany(PurchaseOrder, { foreignKey: 'purchaseRequestId', as: 'Purchase
 PurchaseOrder.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
 PurchaseOrder.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
 PurchaseOrder.belongsTo(User, { foreignKey: 'approvedBy', as: 'Approver' });
+Invoice.hasMany(InvoiceItem, { foreignKey: 'invoiceId', as: 'items', onDelete: 'CASCADE' });
+InvoiceItem.belongsTo(Invoice, { foreignKey: 'invoiceId' });
+Invoice.belongsTo(PurchaseOrder, { foreignKey: 'purchaseOrderId', as: 'PurchaseOrder' });
+Invoice.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
+Invoice.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
 
 Asset.hasMany(DisposalRequest, { foreignKey: 'assetId' });
 DisposalRequest.belongsTo(Asset, { foreignKey: 'assetId' });
@@ -332,6 +341,8 @@ module.exports = {
   AuditLog,
   AuditLogArchive,
   Category,
+  Location,
+  RfidDevice,
   Department,
   Maintenance,
   MaintenanceInspection,
@@ -364,6 +375,8 @@ module.exports = {
   PurchaseOrder,
   PurchaseOrderItem,
   Supplier,
+  Invoice,
+  InvoiceItem,
   Campus,
   Building,
   Room,

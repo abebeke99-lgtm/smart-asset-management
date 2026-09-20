@@ -20,13 +20,14 @@ test('admin support assets route contract carries college and location scope que
   assert.match(routeSource, /locationId\s*\|\||location_id\s*\|\||locationId\s*\?\?|location_id\s*\?\?/i, 'expected location scope alias normalization in the admin asset query route');
 });
 
-test('admin support router exposes protected RFID scan, assets and device route aliases through the admin surface', () => {
+test('admin support router exposes protected RFID scan, asset and tag routes; devices are served by the RFID router', () => {
   const routeSource = fs.readFileSync(path.join(__dirname, '../routes/adminSupportRoutes.js'), 'utf8');
+  const rfidRouterSource = fs.readFileSync(path.join(__dirname, '../routes/rfidRoutes.js'), 'utf8');
 
   assert.match(routeSource, /router\.get\('\/rfid\/scans'/, 'expected RFID scans route in the admin support router');
-  assert.match(routeSource, /router\.get\('\/rfid\/assets'/, 'expected RFID assets route in the admin support router');
-  assert.match(routeSource, /router\.get\('\/rfid\/devices'/, 'expected RFID devices route in the admin support router');
+  assert.match(routeSource, /router\.get\('\/rfid\/assets'/, 'expected RFID registered-assets route in the admin support router');
   assert.match(routeSource, /router\.post\('\/rfid\/tags'/, 'expected RFID tag registration route in the admin support router');
+  assert.match(rfidRouterSource, /router\.get\('\/devices'/, 'expected RFID device list route in the RFID router');
 });
 
 test('admin support router exposes canonical maintenance cost route aliases through the admin surface', () => {
@@ -37,10 +38,10 @@ test('admin support router exposes canonical maintenance cost route aliases thro
   assert.match(routeSource, /router\.put\('\/maintenance\/costs\/:id'/, 'expected maintenance cost update route in the admin support router');
 });
 
-test('admin support router provides the locations endpoint with an Express next callback in scope', () => {
-  const routeSource = fs.readFileSync(path.join(__dirname, '../routes/adminSupportRoutes.js'), 'utf8');
+test('location router provides the locations endpoint with an Express next callback in scope', () => {
+  const routeSource = fs.readFileSync(path.join(__dirname, '../routes/locationRoutes.js'), 'utf8');
 
-  assert.match(routeSource, /router\.get\('\/locations', requireAuth, async \(req, res, next\)/, 'expected /locations route to accept next for safe error flow');
+  assert.match(routeSource, /router\.get\('\/', requireAuth, async \(req, res, next\)/, 'expected /locations route to accept next for safe error flow');
 });
 
 const collegeRoutes = require('../routes/collegeRoutes');

@@ -18,6 +18,7 @@ const { listFinancePurchaseRequests, getFinancePurchaseRequest } = require('../c
 const { listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder, approvePurchaseOrder, cancelPurchaseOrder, deletePurchaseOrder } = require('../controllers/financePurchaseOrderController');
 const { listPurchaseHistory, getPurchaseHistory } = require('../controllers/financePurchaseHistoryController');
 const { listFinanceTransactions } = require('../controllers/financeTransactionController');
+const { listInvoices, getInvoice, createInvoice, updateInvoice, deleteInvoice } = require('../controllers/financeInvoiceController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 
 const router = express.Router();
@@ -56,5 +57,10 @@ router.put('/depreciation/:id', ...financeAccess, updateValuation);
 router.get('/assets/:id/valuation-history', ...financeAccess, valuationHistory);
 router.get('/audit', ...financeAccess, listAudit);
 router.get('/audit/finance', ...financeAccess, listAudit);
+router.get('/invoices', ...financeAccess, listInvoices);
+router.get('/invoices/:id', ...financeAccess, getInvoice);
+router.post('/invoices', ...financeAccess, createInvoice);
+router.put('/invoices/:id', ...financeAccess, updateInvoice);
+router.delete('/invoices/:id', ...financeAccess, deleteInvoice);
 
 module.exports = router;

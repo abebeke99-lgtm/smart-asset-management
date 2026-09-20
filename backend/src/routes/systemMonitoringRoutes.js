@@ -1,6 +1,7 @@
 const express = require('express');
 const { Op } = require('sequelize');
 const { SystemAlert, AuditLog } = require('../models');
+const { requestMetrics } = require('../middlewares/requestMetrics');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const monitoring = require('../services/systemMonitoringService');
 
@@ -11,8 +12,8 @@ router.get('/overview', ...requireAdmin, async (req, res, next) => { try { retur
 router.get('/health', ...requireAdmin, async (req, res, next) => { try { const data = await monitoring.getOverview(req.query); return res.json({ success: true, data: data.health }); } catch (error) { next(error); } });
 router.get('/resources', ...requireAdmin, async (req, res, next) => { try { return res.json({ success: true, data: monitoring.getResources() }); } catch (error) { next(error); } });
 router.get('/services', ...requireAdmin, async (req, res, next) => { try { return res.json({ success: true, data: await monitoring.getServices() }); } catch (error) { next(error); } });
-router.get('/performance', ...requireAdmin, async (req, res, next) => { try { return res.json({ success: true, data: monitoring.getRequestMetrics ? monitoring.getRequestMetrics(req.query) : require('../middleware/requestMetrics').getRequestMetrics(req.query) }); } catch (error) { next(error); } });
-router.get('/errors', ...requireAdmin, async (req, res, next) => { try { const data = require('../middleware/requestMetrics').getRequestMetrics(req.query); return res.json({ success: true, data: { total: data.failedRequests, critical: data.requests.filter((item) => item.status >= 500).length, high: data.requests.filter((item) => item.status >= 400 && item.status < 500).length, medium: 0, recent: data.requests.filter((item) => item.status >= 400).slice(-50).map((item) => ({ method: item.method, path: item.path, status: item.status, responseTime: item.duration, timestamp: item.timestamp })) } }); } catch (error) { next(error); } });
+router.get('/performance', ...requireAdmin, async (req, res, next) => { try { return res.json({ success: true, data: monitoring.getRequestMetrics ? monitoring.getRequestMetrics(req.query) : requestMetrics.getRequestMetrics(req.query) }); } catch (error) { next(error); } });
+router.get('/errors', ...requireAdmin, async (req, res, next) => { try { const data = requestMetrics.getRequestMetrics(req.query); return res.json({ success: true, data: { total: data.failedRequests, critical: data.requests.filter((item) => item.status >= 500).length, high: data.requests.filter((item) => item.status >= 400 && item.status < 500).length, medium: 0, recent: data.requests.filter((item) => item.status >= 400).slice(-50).map((item) => ({ method: item.method, path: item.path, status: item.status, responseTime: item.duration, timestamp: item.timestamp })) } }); } catch (error) { next(error); } });
 router.get('/security', ...requireAdmin, async (req, res, next) => { try { return res.json({ success: true, data: await monitoring.getSecurity() }); } catch (error) { next(error); } });
 router.get('/activity', ...requireAdmin, async (req, res, next) => { try { return res.json({ success: true, data: await monitoring.getActivity() }); } catch (error) { next(error); } });
 router.get('/history', ...requireAdmin, async (req, res, next) => { try { return res.json({ success: true, data: monitoring.getHistory(req.query) }); } catch (error) { next(error); } });

@@ -339,14 +339,59 @@ router.post('/:id/return', ...canManageAssignments, async (req, res, next) => {
 
 router.post('/:id/transfer', ...canManageAssignments, async (req, res, next) => {
   try {
+    const newUserId = Number(req.body.new_user_id || req.body.newUserId);
+    if (!Number.isInteger(newUserId) || newUserId <= 0) return res.status(400).json({ success: false, message: 'A valid assignee ID is required' });
     const assignment = await Assignment.findByPk(req.params.id) || await Assignment.findOne({
       where: { assetId: req.params.id, status: 'active' },
       order: [['createdAt', 'DESC']],
     });
     if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
-    await assignment.update({ assignedTo: req.body.new_user_id, assignedBy: req.user.id, status: 'active' });
+    const assignee = await User.findByPk(newUserId);
+    if (!assignee) return res.status(404).json({ success: false, message: 'User not found' });
+    if (!assignee.active) return res.status(409).json({ success: false, message: 'Cannot transfer an assignment to an inactive user' });
+    await assignment.update({ assignedTo: newUserId, assignedBy: req.user.id, status: 'active' });
     res.json({ success: true, assignment: toAssignmentResponse(assignment) });
   } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/:id', ...canManageAssignments, async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const assignment = await Assignment.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!assignment) {
+      await transaction.rollback();
+      return res.status(404).json({ success: false, message: 'Assignment not found' });
+    }
+    if (String(assignment.status).toLowerCase() === 'active') {
+      const inventory = await Inventory.findOne({ where: { assetId: assignment.assetId }, transaction, lock: transaction.LOCK.UPDATE });
+      const asset = await Asset.findByPk(assignment.assetId, { transaction, lock: transaction.LOCK.UPDATE });
+      if (asset) await asset.update({ status: 'available' }, { transaction });
+      if (inventory) await inventory.update({ availableQuantity: inventory.availableQuantity + 1 }, { transaction });
+      if (asset && inventory) {
+        await InventoryTransaction.create({
+          inventoryId: inventory.id,
+          assetId: assignment.assetId,
+          userId: req.user.id,
+          type: 'return',
+          quantity: 1,
+          reason: 'Assignment removed',
+          notes: req.body.notes || '',
+        }, { transaction });
+      }
+    }
+    await assignment.destroy({ transaction });
+    await AuditLog.create({
+      userId: req.user.id,
+      action: 'DELETE_ASSIGNMENT',
+      entity: `assignment:${assignment.id}`,
+      details: JSON.stringify({ assignmentId: assignment.id, assetId: assignment.assetId, statusBeforeDelete: assignment.status }),
+    }, { transaction });
+    await transaction.commit();
+    res.json({ success: true, message: 'Assignment removed successfully', data: { id: Number(req.params.id) } });
+  } catch (error) {
+    await transaction.rollback();
     next(error);
   }
 });

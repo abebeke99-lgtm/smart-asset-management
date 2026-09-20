@@ -3,6 +3,13 @@ const { Op } = require('sequelize');
 
 const uniqueCode = (prefix) => `${prefix}-${String(Date.now()).slice(-8)}${String(Math.floor(Math.random() * 100)).padStart(2, '0')}`;
 
+const normalizeStatus = (value) => String(value || 'active').toLowerCase();
+const isValidStatus = (value) => ['active', 'inactive'].includes(value);
+const nonNegativeInt = (value, fallback) => {
+  const num = Number(value);
+  return Number.isInteger(num) && num >= 0 ? num : fallback;
+};
+
 const serializeCampus = (campus, buildingCount = 0) => ({ ...campus.toJSON(), buildingCount });
 const serializeBuilding = (building, roomCount = 0) => ({ ...building.toJSON(), roomCount });
 const serializeRoom = (room) => ({ ...room.toJSON() });
@@ -42,7 +49,9 @@ const createCampus = async (req, res, next) => {
     const campusCode = String(req.body.campusCode || req.body.code || '').trim().toUpperCase() || uniqueCode('CMP');
     const duplicate = await Campus.findOne({ where: { [Op.or]: [{ campusCode }, { campusName }] } });
     if (duplicate) return res.status(409).json({ success: false, message: 'Campus code or name already exists' });
-    const campus = await Campus.create({ campusCode, campusName, address: req.body.address || '', city: req.body.city || '', phone: req.body.phone || '', email: req.body.email || '', description: req.body.description || '', status: req.body.status || 'active' });
+    const campusStatus = normalizeStatus(req.body.status);
+    if (!isValidStatus(campusStatus)) return res.status(422).json({ success: false, message: 'Invalid campus status' });
+    const campus = await Campus.create({ campusCode, campusName, address: req.body.address || '', city: req.body.city || '', phone: req.body.phone || '', email: req.body.email || '', description: req.body.description || '', status: campusStatus });
     await AuditLog.create({ userId: req.user.id, action: 'CREATE_CAMPUS', entity: `campus:${campus.id}`, details: JSON.stringify({ campusCode, campusName }) });
     res.status(201).json({ success: true, data: serializeCampus(campus) });
   } catch (error) { next(error); }
@@ -61,7 +70,11 @@ const updateCampus = async (req, res, next) => {
     if (req.body.phone !== undefined) updates.phone = req.body.phone;
     if (req.body.email !== undefined) updates.email = req.body.email;
     if (req.body.description !== undefined) updates.description = req.body.description;
-    if (req.body.status !== undefined) updates.status = req.body.status;
+    if (req.body.status !== undefined) {
+      const nextStatus = normalizeStatus(req.body.status);
+      if (!isValidStatus(nextStatus)) return res.status(422).json({ success: false, message: 'Invalid campus status' });
+      updates.status = nextStatus;
+    }
     await campus.update(updates);
     await AuditLog.create({ userId: req.user.id, action: 'UPDATE_CAMPUS', entity: `campus:${campus.id}`, details: JSON.stringify({ previousValue, newValue: campus.toJSON() }) });
     res.json({ success: true, data: serializeCampus(campus) });
@@ -120,7 +133,11 @@ const createBuilding = async (req, res, next) => {
     const buildingCode = String(req.body.buildingCode || req.body.code || '').trim().toUpperCase() || uniqueCode('BLD');
     const duplicate = await Building.findOne({ where: { [Op.or]: [{ buildingCode }, { buildingName }] } });
     if (duplicate) return res.status(409).json({ success: false, message: 'Building code or name already exists' });
-    const building = await Building.create({ campusId, buildingCode, buildingName, floorCount: Number(req.body.floorCount || req.body.floors || 1), description: req.body.description || '', status: req.body.status || 'active' });
+    const buildingStatus = normalizeStatus(req.body.status);
+    if (!isValidStatus(buildingStatus)) return res.status(422).json({ success: false, message: 'Invalid building status' });
+    const floorCount = nonNegativeInt(req.body.floorCount || req.body.floors, 1);
+    if (!Number.isInteger(floorCount) || floorCount < 1) return res.status(422).json({ success: false, message: 'Floor count must be a positive integer' });
+    const building = await Building.create({ campusId, buildingCode, buildingName, floorCount, description: req.body.description || '', status: buildingStatus });
     await AuditLog.create({ userId: req.user.id, action: 'CREATE_BUILDING', entity: `building:${building.id}`, details: JSON.stringify({ campusId, buildingCode, buildingName }) });
     res.status(201).json({ success: true, data: serializeBuilding(building) });
   } catch (error) { next(error); }
@@ -139,9 +156,17 @@ const updateBuilding = async (req, res, next) => {
     }
     if (req.body.buildingName || req.body.name) updates.buildingName = String(req.body.buildingName || req.body.name).trim();
     if (req.body.buildingCode || req.body.code) updates.buildingCode = String(req.body.buildingCode || req.body.code).trim().toUpperCase();
-    if (req.body.floorCount !== undefined) updates.floorCount = Number(req.body.floorCount);
+    if (req.body.floorCount !== undefined) {
+      const nextFloors = nonNegativeInt(req.body.floorCount, -1);
+      if (!Number.isInteger(nextFloors) || nextFloors < 1) return res.status(422).json({ success: false, message: 'Floor count must be a positive integer' });
+      updates.floorCount = nextFloors;
+    }
     if (req.body.description !== undefined) updates.description = req.body.description;
-    if (req.body.status !== undefined) updates.status = req.body.status;
+    if (req.body.status !== undefined) {
+      const nextStatus = normalizeStatus(req.body.status);
+      if (!isValidStatus(nextStatus)) return res.status(422).json({ success: false, message: 'Invalid building status' });
+      updates.status = nextStatus;
+    }
     await building.update(updates);
     await AuditLog.create({ userId: req.user.id, action: 'UPDATE_BUILDING', entity: `building:${building.id}`, details: JSON.stringify({ previousValue, newValue: building.toJSON() }) });
     res.json({ success: true, data: serializeBuilding(building) });
@@ -199,16 +224,20 @@ const createRoom = async (req, res, next) => {
     const roomCode = String(req.body.roomCode || req.body.code || '').trim().toUpperCase() || uniqueCode('RM');
     const duplicate = await Room.findOne({ where: { [Op.or]: [{ roomCode }, { roomName }] } });
     if (duplicate) return res.status(409).json({ success: false, message: 'Room code or name already exists' });
+    const roomStatus = normalizeStatus(req.body.status);
+    if (!isValidStatus(roomStatus)) return res.status(422).json({ success: false, message: 'Invalid room status' });
+    const floor = nonNegativeInt(req.body.floor, null);
+    const capacity = nonNegativeInt(req.body.capacity, null);
     const room = await Room.create({
       buildingId,
       campusId: building.campusId,
       roomCode,
       roomName,
       roomType: req.body.roomType || req.body.room_type || 'laboratory',
-      floor: Number(req.body.floor) || null,
-      capacity: Number(req.body.capacity) || null,
+      floor,
+      capacity,
       description: req.body.description || '',
-      status: req.body.status || 'active',
+      status: roomStatus,
     });
     await AuditLog.create({ userId: req.user.id, action: 'CREATE_ROOM', entity: `room:${room.id}`, details: JSON.stringify({ buildingId, roomCode, roomName }) });
     res.status(201).json({ success: true, data: serializeRoom(room) });
@@ -230,10 +259,22 @@ const updateRoom = async (req, res, next) => {
     if (req.body.roomName || req.body.name) updates.roomName = String(req.body.roomName || req.body.name).trim();
     if (req.body.roomCode || req.body.code) updates.roomCode = String(req.body.roomCode || req.body.code).trim().toUpperCase();
     if (req.body.roomType !== undefined) updates.roomType = req.body.roomType;
-    if (req.body.floor !== undefined) updates.floor = Number(req.body.floor) || null;
-    if (req.body.capacity !== undefined) updates.capacity = Number(req.body.capacity) || null;
+    if (req.body.floor !== undefined) {
+      const nextFloor = nonNegativeInt(req.body.floor, null);
+      if (nextFloor === null && req.body.floor !== null) return res.status(422).json({ success: false, message: 'Floor must be a non-negative integer' });
+      updates.floor = nextFloor;
+    }
+    if (req.body.capacity !== undefined) {
+      const nextCap = nonNegativeInt(req.body.capacity, null);
+      if (nextCap === null && req.body.capacity !== null) return res.status(422).json({ success: false, message: 'Capacity must be a non-negative integer' });
+      updates.capacity = nextCap;
+    }
     if (req.body.description !== undefined) updates.description = req.body.description;
-    if (req.body.status !== undefined) updates.status = req.body.status;
+    if (req.body.status !== undefined) {
+      const nextStatus = normalizeStatus(req.body.status);
+      if (!isValidStatus(nextStatus)) return res.status(422).json({ success: false, message: 'Invalid room status' });
+      updates.status = nextStatus;
+    }
     await room.update(updates);
     await AuditLog.create({ userId: req.user.id, action: 'UPDATE_ROOM', entity: `room:${room.id}`, details: JSON.stringify({ previousValue, newValue: room.toJSON() }) });
     res.json({ success: true, data: serializeRoom(room) });

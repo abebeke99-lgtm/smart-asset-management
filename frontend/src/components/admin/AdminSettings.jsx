@@ -296,31 +296,47 @@ const AdminSettings = () => {
     try {
       const response = await apiClient.get('/api/admin/system/health');
 
-      const data =
+      const result =
+        response?.data?.data ||
         response?.data?.status ||
         response?.data ||
         {};
 
+      const formatUptime = (seconds) => {
+        const value = Number(seconds);
+
+        if (!Number.isFinite(value)) {
+          return 'Not measured';
+        }
+
+        if (value < 60) return `${value}s`;
+
+        if (value < 3600) {
+          return `${Math.floor(value / 60)}m`;
+        }
+
+        return `${Math.floor(value / 3600)}h ${Math.floor((value % 3600) / 60)}m`;
+      };
+
       setSysStatus({
-        api:
-          data.api ||
-          data.apiStatus ||
-          'Not available',
+        api: result.api?.status
+          ? `Operational (${result.api?.responseTimeMs ?? 0}ms)`
+          : result.api || 'Not available',
 
         db:
-          data.db ||
-          data.database ||
-          data.databaseStatus ||
-          'Not available',
+          result.database?.status === 'connected'
+            ? 'Connected'
+            : result.database?.status ||
+              result.db ||
+              'Not available',
 
         storage:
-          data.storage ||
-          data.storageStatus ||
-          'Not measured',
+          result.storage?.status === 'measured'
+            ? `${result.storage.freeSpace} GB free`
+            : result.storage?.status ||
+              'Not measured',
 
-        uptime:
-          data.uptime ||
-          'Not measured'
+        uptime: formatUptime(result.uptime?.seconds)
       });
     } catch (error) {
       console.error('System health error:', error);

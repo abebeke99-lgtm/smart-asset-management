@@ -157,19 +157,36 @@ const createAsset = async (req, res) => {
   }
 };
 
+const updatableAssetFields = ['assetCode', 'digitalId', 'name', 'category', 'description', 'serialNumber', 'rfidTag', 'status', 'condition', 'department', 'collegeId', 'departmentId', 'campusId', 'buildingId', 'roomId', 'location', 'quantity', 'specifications', 'fundingSource', 'purchaseDate', 'purchasePrice', 'supplier', 'manufacturer', 'model', 'warrantyExpiry', 'notes', 'currentValue', 'healthScore'];
+
 const updateAsset = async (req, res) => {
   try {
     const asset = await Asset.findByPk(req.params.id);
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
     const previousValue = asset.toJSON();
-    const updates = { ...req.body };
-    if (updates.asset_id !== undefined) updates.assetCode = updates.asset_id;
-    if (updates.serial_number !== undefined) updates.serialNumber = updates.serial_number;
-    if (updates.rfid_tag !== undefined) updates.rfidTag = updates.rfid_tag;
-    if (updates.condition_status !== undefined) updates.condition = updates.condition_status;
-    if (updates.purchase_cost !== undefined) updates.purchasePrice = updates.purchase_cost;
-    if (updates.warranty_expiry !== undefined) updates.warrantyExpiry = updates.warranty_expiry;
-    delete updates.asset_id; delete updates.serial_number; delete updates.rfid_tag; delete updates.condition_status; delete updates.purchase_cost; delete updates.warranty_expiry;
+    const updates = {};
+    const aliases = {
+      asset_id: 'assetCode', serial_number: 'serialNumber', rfid_tag: 'rfidTag',
+      condition_status: 'condition', purchase_cost: 'purchasePrice', warranty_expiry: 'warrantyExpiry',
+    };
+    for (const [alias, field] of Object.entries(aliases)) {
+      if (req.body[alias] !== undefined) updates[field] = req.body[alias];
+    }
+    for (const field of updatableAssetFields) {
+      if (req.body[field] !== undefined) updates[field] = req.body[field];
+    }
+    for (const field of ['purchasePrice', 'currentValue', 'quantity', 'healthScore']) {
+      if (updates[field] !== undefined && updates[field] !== null && updates[field] !== '') {
+        const value = Number(updates[field]);
+        if (!Number.isFinite(value) || value < 0) return res.status(422).json({ success: false, message: `${field} must be a non-negative number` });
+        updates[field] = value;
+      }
+    }
+    for (const field of ['purchaseDate', 'warrantyExpiry']) {
+      if (updates[field] !== undefined && updates[field] !== null && updates[field] !== '' && Number.isNaN(Date.parse(updates[field]))) {
+        return res.status(422).json({ success: false, message: `${field} must be a valid date` });
+      }
+    }
     await asset.update(updates);
     await AuditLog.create({ userId: req.user.id, action: 'UPDATE_ASSET', entity: `asset:${asset.id}`, details: JSON.stringify({ assetId: asset.id, previousValue, newValue: asset.toJSON() }) });
     res.json({ success: true, data: serializeAsset(asset) });

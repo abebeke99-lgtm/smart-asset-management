@@ -137,7 +137,7 @@ const AdminRFIDTracking = () => {
     setDevicesLoading(true);
 
     try {
-      const response = await axios.get('/api/admin/rfid/devices');
+      const response = await axios.get('/api/rfid/devices');
 
       const data = Array.isArray(response.data?.devices)
         ? response.data.devices

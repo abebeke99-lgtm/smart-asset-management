@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { Op, fn, col } = require('sequelize');
 const { sequelize, User, AuditLog, Notification, RFIDLog, SystemAlert } = require('../models');
-const { getRequestMetrics } = require('../middleware/requestMetrics');
+const { getRequestMetrics } = require('../middlewares/requestMetrics');
 
 const backupDirectory = path.join(__dirname, '../../backups');
 const safeDate = (value) => value ? new Date(value) : null;

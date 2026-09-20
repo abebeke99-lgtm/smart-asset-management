@@ -41,7 +41,7 @@ router.get('/:id/activity', requireAuth, requireRole('admin'), async (req, res, 
 		next(error);
 	}
 });
-router.get('/:id', requireAuth, getUserById);
+router.get('/:id', requireAuth, requireRole('admin', 'college', 'store_manager', 'ict_officer', 'maintenance'), getUserById);
 router.post('/', requireAuth, requireRole('admin'), createUser);
 router.put('/:id', requireAuth, requireRole('admin'), updateUser);
 router.delete('/:id', requireAuth, requireRole('admin'), deleteUser);

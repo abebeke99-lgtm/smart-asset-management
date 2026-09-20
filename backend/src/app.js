@@ -38,7 +38,7 @@ const chemicalRoutes = require('./routes/chemicalRoutes');
 const serviceRequestRoutes = require('./routes/serviceRequestRoutes');
 const locationRoutes = require('./routes/locationRoutes');
 const cleaningRoutes = require('./routes/cleaningRoutes');
-const { requestMetricsMiddleware } = require('./middleware/requestMetrics');
+const { requestMetricsMiddleware } = require('./middlewares/requestMetrics');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -156,6 +156,10 @@ app.use('/api/chemicals', chemicalRoutes);
 app.use('/api/service-requests', serviceRequestRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/cleaning', cleaningRoutes);
+
+app.use('/api', (req, res) => {
+  res.status(404).json({ success: false, message: 'API endpoint not found' });
+});
 
 app.use((err, req, res, next) => {
   console.error(err.stack);

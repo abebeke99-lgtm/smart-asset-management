@@ -78,7 +78,20 @@ router.get('/system/health', ...requireAdmin, async (req, res, next) => {
     const startedAt = Date.now();
     let database = 'unavailable';
     try { await require('../models').sequelize.authenticate(); database = 'connected'; } catch (error) { database = 'unavailable'; }
-    return res.json({ success: true, data: { api: { status: 'request_succeeded', checkedAt: new Date().toISOString(), responseTimeMs: Date.now() - startedAt }, database: { status: database, checkedAt: new Date().toISOString() }, storage: { status: 'not_measured', reason: 'Storage telemetry is not configured' }, uptime: { status: 'not_measured', reason: 'Historical uptime telemetry is not configured' } } });
+    let storage = { status: 'not_measured', reason: 'Storage telemetry is not configured' };
+    try {
+      const stat = await require('fs').promises.statfs(require('path').join(__dirname, '..'));
+      storage = {
+        status: 'measured',
+        freeBytes: stat.bavail * stat.bsize,
+        totalBytes: stat.blocks * stat.bsize,
+        freeSpace: Math.round(((stat.bavail * stat.bsize) / (1024 * 1024 * 1024)) * 10) / 10,
+        totalSpace: Math.round(((stat.blocks * stat.bsize) / (1024 * 1024 * 1024)) * 10) / 10,
+      };
+    } catch (error) {
+      storage = { status: 'not_measured', reason: 'Disk telemetry unavailable' };
+    }
+    return res.json({ success: true, data: { api: { status: 'request_succeeded', checkedAt: new Date().toISOString(), responseTimeMs: Date.now() - startedAt }, database: { status: database, checkedAt: new Date().toISOString() }, storage, uptime: { status: 'online', seconds: Math.floor(process.uptime()), checkedAt: new Date().toISOString() } } });
   } catch (error) { next(error); }
 });
 

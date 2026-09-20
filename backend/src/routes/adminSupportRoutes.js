@@ -191,7 +191,7 @@ router.get('/users', requireAuth, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get('/users/:id', requireAuth, async (req, res, next) => {
+router.get('/users/:id', requireAuth, requireRole('admin', 'college', 'store_manager', 'ict_officer', 'maintenance'), async (req, res, next) => {
   try {
     const user = await User.findByPk(req.params.id, { attributes: { exclude: ['password'] } });
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
@@ -201,14 +201,18 @@ router.get('/users/:id', requireAuth, async (req, res, next) => {
 
 router.post('/users', ...requireAdmin, async (req, res, next) => {
   try {
+    const { isValidEmail } = require('../utils/validators');
     const username = String(req.body.username || '').trim();
     const email = String(req.body.email || '').trim();
     const fullName = String(req.body.fullName || req.body.full_name || '').trim();
     const phone = String(req.body.phone || '').trim();
-    const role = String(req.body.role || 'staff').trim();
+    const role = String(req.body.role || 'staff').trim().toLowerCase();
+    const allowedRoles = ['admin', 'ict_officer', 'store_manager', 'college', 'finance', 'maintenance', 'department_head', 'student', 'staff'];
     const exists = await User.findOne({ where: { username } });
     if (exists) return res.status(409).json({ success: false, message: 'Username already exists' });
     if (!username || !fullName) return res.status(400).json({ success: false, message: 'Username and full name are required' });
+    if (!allowedRoles.includes(role)) return res.status(422).json({ success: false, message: 'Invalid user role' });
+    if (email && !isValidEmail(email)) return res.status(422).json({ success: false, message: 'Valid email is required' });
     const password = String(req.body.password || 'Password123!').trim();
     const user = await User.create({ username, email, fullName, phone, role, department: String(req.body.department || ''), collegeId: req.body.collegeId || null, departmentId: req.body.departmentId || null, active: req.body.active !== false, password: await bcrypt.hash(password, 10), forcePasswordChange: Boolean(req.body.forcePasswordChange || req.body.force_password_change || false) });
     await AuditLog.create({ userId: req.user.id, action: 'USER_CREATED', entity: `user:${user.id}`, details: JSON.stringify({ username, role, collegeId: user.collegeId, departmentId: user.departmentId }) });
@@ -218,13 +222,19 @@ router.post('/users', ...requireAdmin, async (req, res, next) => {
 
 router.put('/users/:id', ...requireAdmin, async (req, res, next) => {
   try {
+    const { isValidEmail } = require('../utils/validators');
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    user.fullName = String(req.body.fullName || req.body.full_name || user.fullName || '');
-    user.email = String(req.body.email || user.email || '');
-    user.phone = String(req.body.phone || user.phone || '');
-    user.role = String(req.body.role || user.role || 'staff');
-    user.department = String(req.body.department || user.department || '');
+    const allowedRoles = ['admin', 'ict_officer', 'store_manager', 'college', 'finance', 'maintenance', 'department_head', 'student', 'staff'];
+    const nextRole = String(req.body.role || user.role || 'staff').trim().toLowerCase();
+    if (!allowedRoles.includes(nextRole)) return res.status(422).json({ success: false, message: 'Invalid user role' });
+    const nextEmail = String(req.body.email || user.email || '').trim();
+    if (nextEmail && !isValidEmail(nextEmail)) return res.status(422).json({ success: false, message: 'Valid email is required' });
+    user.fullName = String(req.body.fullName || req.body.full_name || user.fullName || '').trim().slice(0, 120);
+    user.email = nextEmail;
+    user.phone = String(req.body.phone || user.phone || '').trim().slice(0, 30);
+    user.role = nextRole;
+    user.department = String(req.body.department || user.department || '').trim().slice(0, 120);
     user.collegeId = req.body.collegeId ?? user.collegeId ?? null;
     user.departmentId = req.body.departmentId ?? user.departmentId ?? null;
     user.active = req.body.active ?? user.active;
@@ -280,7 +290,7 @@ router.post('/users/:id/reset-password', ...requireAdmin, async (req, res, next)
   } catch (error) { next(error); }
 });
 
-router.get('/users/:id/activity', requireAuth, async (req, res, next) => {
+router.get('/users/:id/activity', requireAuth, requireRole('admin'), async (req, res, next) => {
   try {
     const logs = await AuditLog.findAll({ where: { userId: req.params.id }, order: [['createdAt', 'DESC']], limit: 80 });
     return res.json({ success: true, data: logs, logs, total: logs.length });
@@ -460,13 +470,6 @@ router.patch('/colleges/:id/status', ...requireAdmin, async (req, res, next) => 
   } catch (error) { next(error); }
 });
 
-router.get('/locations', requireAuth, async (req, res, next) => {
-  try {
-    const rows = await Department.findAll({ where: { locationId: { [Op.ne]: null } }, attributes: ['id', 'name', 'code', 'locationId', 'collegeId'], order: [['name', 'ASC']] });
-    return res.json({ success: true, data: rows.map((row) => ({ id: row.id, name: row.name, code: row.code, locationId: row.locationId, departmentId: row.departmentId, collegeId: row.collegeId })), locations: rows.map((row) => ({ id: row.id, name: row.name, code: row.code, locationId: row.locationId, departmentId: row.departmentId, collegeId: row.collegeId })), total: rows.length });
-  } catch (error) { return next(error); }
-});
-
 const adminMaintenanceReadAccess = [requireAuth, requireRole('admin', 'ict_officer', 'maintenance', 'college')];
 const adminMaintenanceWriteAccess = [requireAuth, requireRole('admin', 'ict_officer', 'maintenance')];
 
@@ -531,7 +534,17 @@ router.post('/maintenance/costs', ...adminMaintenanceWriteAccess, async (req, re
     const approvedBy = req.user.id;
     if (!assetId) return res.status(400).json({ success: false, message: 'Asset is required' });
     if (!Number.isFinite(amount) || amount < 0) return res.status(400).json({ success: false, message: 'Amount must be a non-negative number' });
-    const item = await MaintenanceCost.create({ maintenanceId: maintenanceId || null, repairId: req.body.repair_id || req.body.repairId || null, workOrderId: req.body.work_order_id || req.body.workOrderId || null, assetId, costCategory, description, amount, quantity, unitCost, costDate: req.body.cost_date || req.body.costDate || new Date(), approvedBy, status: String(req.body.status || 'pending'), notes: String(req.body.notes || '') });
+    if (!Number.isFinite(quantity) || quantity < 0) return res.status(400).json({ success: false, message: 'Quantity must be a non-negative number' });
+    if (!Number.isFinite(unitCost) || unitCost < 0) return res.status(400).json({ success: false, message: 'Unit cost must be a non-negative number' });
+    const costDateRaw = req.body.cost_date || req.body.costDate;
+    if (costDateRaw && Number.isNaN(Date.parse(costDateRaw))) return res.status(400).json({ success: false, message: 'Invalid cost date' });
+    const assetRow = await Asset.findByPk(assetId);
+    if (!assetRow) return res.status(404).json({ success: false, message: 'Asset not found' });
+    if (maintenanceId) {
+      const maintenanceRow = await Maintenance.findByPk(maintenanceId);
+      if (!maintenanceRow) return res.status(404).json({ success: false, message: 'Maintenance record not found' });
+    }
+    const item = await MaintenanceCost.create({ maintenanceId: maintenanceId || null, repairId: req.body.repair_id || req.body.repairId || null, workOrderId: req.body.work_order_id || req.body.workOrderId || null, assetId, costCategory, description, amount, quantity, unitCost, costDate: costDateRaw ? new Date(costDateRaw) : new Date(), approvedBy, status: String(req.body.status || 'pending'), notes: String(req.body.notes || '') });
     await AuditLog.create({ userId: req.user.id, action: 'MAINTENANCE_COST_CREATED', entity: `maintenance_cost:${item.id}`, details: JSON.stringify({ assetId, amount, costCategory }) });
     return res.status(201).json({ success: true, data: normalizeMaintenanceCost(item), cost: normalizeMaintenanceCost(item) });
   } catch (error) { next(error); }
@@ -541,16 +554,29 @@ router.put('/maintenance/costs/:id', ...adminMaintenanceWriteAccess, async (req,
   try {
     const item = await MaintenanceCost.findByPk(req.params.id);
     if (!item) return res.status(404).json({ success: false, message: 'Maintenance cost record not found' });
+    const nextAssetId = Number(req.body.asset_id || req.body.assetId || item.assetId);
+    const nextQuantity = Number(req.body.quantity || item.quantity || 1);
+    const nextUnitCost = Number(req.body.unit_cost || req.body.unitCost || item.unitCost || 0);
+    const nextAmount = Number(req.body.amount || req.body.total_cost || req.body.totalCost || item.amount || 0);
+    const costDateRaw = req.body.cost_date || req.body.costDate;
+    if (!Number.isFinite(nextAmount) || nextAmount < 0) return res.status(400).json({ success: false, message: 'Amount must be a non-negative number' });
+    if (!Number.isFinite(nextQuantity) || nextQuantity < 0) return res.status(400).json({ success: false, message: 'Quantity must be a non-negative number' });
+    if (!Number.isFinite(nextUnitCost) || nextUnitCost < 0) return res.status(400).json({ success: false, message: 'Unit cost must be a non-negative number' });
+    if (costDateRaw && Number.isNaN(Date.parse(costDateRaw))) return res.status(400).json({ success: false, message: 'Invalid cost date' });
+    if (nextAssetId) {
+      const assetRow = await Asset.findByPk(nextAssetId);
+      if (!assetRow) return res.status(404).json({ success: false, message: 'Asset not found' });
+    }
     item.maintenanceId = Number(req.body.maintenance_id || req.body.maintenanceId || item.maintenanceId || 0) || null;
     item.repairId = Number(req.body.repair_id || req.body.repairId || item.repairId || 0) || null;
     item.workOrderId = Number(req.body.work_order_id || req.body.workOrderId || item.workOrderId || 0) || null;
-    item.assetId = Number(req.body.asset_id || req.body.assetId || item.assetId);
+    item.assetId = nextAssetId;
     item.costCategory = String(req.body.cost_category || req.body.costCategory || item.costCategory || 'other');
     item.description = String(req.body.description || item.description || '');
-    item.amount = Number(req.body.amount || req.body.total_cost || req.body.totalCost || item.amount || 0);
-    item.quantity = Number(req.body.quantity || item.quantity || 1);
-    item.unitCost = Number(req.body.unit_cost || req.body.unitCost || item.unitCost || 0);
-    item.costDate = req.body.cost_date || req.body.costDate || item.costDate || new Date();
+    item.amount = nextAmount;
+    item.quantity = nextQuantity;
+    item.unitCost = nextUnitCost;
+    item.costDate = costDateRaw ? new Date(costDateRaw) : item.costDate || new Date();
     item.status = String(req.body.status || item.status || 'pending');
     item.notes = String(req.body.notes || item.notes || '');
     await item.save();
@@ -675,14 +701,7 @@ router.get('/rfid/assets', requireAuth, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get('/rfid/devices', requireAuth, async (req, res, next) => {
-  try {
-    const devices = [];
-    return res.json({ success: true, data: devices, devices, total: 0, pagination: { page: 1, limit: 20, total: 0, pages: 1 } });
-  } catch (error) { next(error); }
-});
-
-router.post('/rfid/tags', requireAuth, async (req, res, next) => {
+router.post('/rfid/tags', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), async (req, res, next) => {
   try {
     const assetId = Number(req.body.asset_id || req.body.assetId);
     const tag = String(req.body.rfid_tag || req.body.tag || '').trim();
@@ -700,7 +719,96 @@ router.post('/rfid/tags', requireAuth, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get('/disposals', requireAuth, async (req, res, next) => {
+router.get('/procurement', ...requireAdmin, async (req, res, next) => {
+  try {
+    const { PurchaseOrder, PurchaseOrderItem, Department, User } = require('../models');
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(1000, Math.max(1, Number(req.query.limit) || 500));
+    const where = {};
+    const search = String(req.query.search || '').trim();
+    if (search) where[Op.or] = [{ poNumber: { [Op.like]: `%${search}%` } }, { supplierName: { [Op.like]: `%${search}%` } }];
+    const status = String(req.query.status || '').trim();
+    if (status) where.status = status;
+    const departmentId = Number(req.query.department_id || req.query.departmentId);
+    if (departmentId) where.departmentId = departmentId;
+    const { count, rows } = await PurchaseOrder.findAndCountAll({
+      where,
+      order: [['orderDate', 'DESC'], ['id', 'DESC']],
+      limit,
+      offset: (page - 1) * limit,
+      include: [
+        { model: PurchaseOrderItem, as: 'items', attributes: ['id', 'itemName', 'quantity', 'unitPrice', 'lineTotal'] },
+        { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name'] },
+        { model: User, as: 'Creator', attributes: ['id', 'username', 'fullName'] },
+      ],
+    });
+    const data = rows.map((order) => ({
+      id: order.id,
+      po_number: order.poNumber,
+      order_no: order.poNumber,
+      supplier: order.supplierName,
+      supplier_name: order.supplierName,
+      department: order.DepartmentRecord?.name || '',
+      department_name: order.DepartmentRecord?.name || '',
+      status: order.status,
+      order_date: order.orderDate,
+      expected_delivery: order.expectedDeliveryDate,
+      currency: order.currency,
+      subtotal: Number(order.subtotal),
+      tax: Number(order.taxAmount),
+      discount: Number(order.discountAmount),
+      total_cost: Number(order.totalAmount),
+      totalCost: Number(order.totalAmount),
+      amount: Number(order.totalAmount),
+      items: (order.items || []).length,
+      items_count: (order.items || []).length,
+      created_by: order.Creator?.fullName || order.Creator?.username || '',
+      created_at: order.createdAt,
+    }));
+    return res.json({ success: true, data, procurement: data, total: count, pagination: { page, limit, total: count, pages: Math.max(1, Math.ceil(count / limit)) } });
+  } catch (error) { next(error); }
+});
+
+router.get('/analytics', ...requireAdmin, async (req, res, next) => {
+  try {
+    const { getAssetAnalytics } = require('../services/analyticsService');
+    const { Assignment, Transfer, Maintenance } = require('../models');
+    const reportCategory = String(req.query.report || req.query.reportCategory || 'overview');
+    const analytics = await getAssetAnalytics(req.query);
+    const [assignmentCount, transferCount, maintenanceCount] = await Promise.all([
+      Assignment.count(),
+      Transfer.count(),
+      Maintenance.count(),
+    ]);
+    const kpiRows = Object.entries(analytics.kpis || {}).map(([metric, value]) => ({ metric, value, label: metric.replace(/([A-Z])/g, ' $1') }));
+    let rows;
+    if (reportCategory === 'asset_trend') {
+      rows = (analytics.categories || []).map((row) => ({ category: row.category || 'Uncategorised', assets: row.count, value: row.value }));
+    } else if (reportCategory === 'assignment_trend') {
+      rows = [...(analytics.trends?.assignments || []).map((row) => ({ period: row.period, assignments: row.count })), { period: 'Total', assignments: assignmentCount }];
+    } else if (reportCategory === 'maintenance_trend') {
+      rows = [...(analytics.trends?.maintenance || []).map((row) => ({ period: row.period, maintenance: row.count })), { period: 'Total', maintenance: maintenanceCount }];
+    } else if (reportCategory === 'transfer_trend') {
+      rows = [...(analytics.trends?.transfers || []).map((row) => ({ period: row.period, transfers: row.count })), { period: 'Total', transfers: transferCount }];
+    } else if (reportCategory === 'procurement_trend') {
+      const { PurchaseOrder } = require('../models');
+      const statuses = await PurchaseOrder.findAll({ attributes: ['status', [require('sequelize').fn('COUNT', require('sequelize').col('id')), 'count']], group: ['status'], order: [['status', 'ASC']], raw: true });
+      rows = [...statuses.map((row) => ({ status: row.status || 'Unknown', count: Number(row.count) })), { status: 'Total', count: statuses.reduce((sum, row) => sum + Number(row.count), 0) }];
+    } else if (reportCategory === 'financial_trend') {
+      rows = Object.entries(analytics.kpis || {}).filter(([metric]) => /value/i.test(metric)).map(([metric, value]) => ({ metric, value }));
+    } else if (reportCategory === 'department_performance') {
+      rows = (analytics.organizations?.departmentPerformance || []).map((row) => ({ department: row.name || 'Unassigned', assets: row.count, value: row.value }));
+    } else {
+      rows = kpiRows;
+    }
+    const list = Array.isArray(rows) ? rows : [];
+    return res.json({ success: true, data: list, analytics: list, total: list.length });
+  } catch (error) { next(error); }
+});
+
+const disposalAccess = [requireAuth, requireRole('admin', 'store_manager', 'ict_officer', 'finance')];
+
+router.get('/disposals', ...disposalAccess, async (req, res, next) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
@@ -745,7 +853,7 @@ router.get('/disposals', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/disposals/:id', requireAuth, async (req, res, next) => {
+router.get('/disposals/:id', ...disposalAccess, async (req, res, next) => {
   try {
     const row = await DisposalRequest.findByPk(req.params.id, {
       include: [
@@ -763,7 +871,7 @@ router.get('/disposals/:id', requireAuth, async (req, res, next) => {
   }
 });
 
-router.post('/disposals', requireAuth, async (req, res, next) => {
+router.post('/disposals', ...disposalAccess, async (req, res, next) => {
   try {
     const { assetId, type = 'Disposal', condition = 'Poor', reason } = req.body;
     if (!assetId || !String(reason || '').trim()) return res.status(400).json({ success: false, message: 'Asset and reason are required' });
@@ -801,7 +909,7 @@ router.post('/disposals', requireAuth, async (req, res, next) => {
   }
 });
 
-router.post('/disposals/:id/review', requireAuth, async (req, res, next) => {
+router.post('/disposals/:id/review', ...disposalAccess, async (req, res, next) => {
   try {
     const request = await DisposalRequest.findByPk(req.params.id);
     if (!request) return res.status(404).json({ success: false, message: 'Disposal request not found' });
@@ -815,7 +923,7 @@ router.post('/disposals/:id/review', requireAuth, async (req, res, next) => {
   }
 });
 
-router.post('/disposals/:id/approve', requireAuth, async (req, res, next) => {
+router.post('/disposals/:id/approve', ...disposalAccess, async (req, res, next) => {
   try {
     const request = await DisposalRequest.findByPk(req.params.id);
     if (!request) return res.status(404).json({ success: false, message: 'Disposal request not found' });
@@ -830,7 +938,7 @@ router.post('/disposals/:id/approve', requireAuth, async (req, res, next) => {
   }
 });
 
-router.post('/disposals/:id/reject', requireAuth, async (req, res, next) => {
+router.post('/disposals/:id/reject', ...disposalAccess, async (req, res, next) => {
   try {
     const reason = String(req.body.reason || '').trim();
     if (!reason) return res.status(400).json({ success: false, message: 'Rejection reason is required' });
@@ -846,7 +954,7 @@ router.post('/disposals/:id/reject', requireAuth, async (req, res, next) => {
   }
 });
 
-router.post('/disposals/:id/schedule', requireAuth, async (req, res, next) => {
+router.post('/disposals/:id/schedule', ...disposalAccess, async (req, res, next) => {
   try {
     const request = await DisposalRequest.findByPk(req.params.id);
     if (!request) return res.status(404).json({ success: false, message: 'Disposal request not found' });
@@ -861,7 +969,7 @@ router.post('/disposals/:id/schedule', requireAuth, async (req, res, next) => {
   }
 });
 
-router.post('/disposals/:id/retire', requireAuth, async (req, res, next) => {
+router.post('/disposals/:id/retire', ...disposalAccess, async (req, res, next) => {
   try {
     const request = await DisposalRequest.findByPk(req.params.id);
     if (!request) return res.status(404).json({ success: false, message: 'Disposal request not found' });
@@ -878,7 +986,7 @@ router.post('/disposals/:id/retire', requireAuth, async (req, res, next) => {
   }
 });
 
-router.post('/disposals/:id/execute', requireAuth, async (req, res, next) => {
+router.post('/disposals/:id/execute', ...disposalAccess, async (req, res, next) => {
   try {
     const request = await DisposalRequest.findByPk(req.params.id);
     if (!request) return res.status(404).json({ success: false, message: 'Disposal request not found' });
@@ -897,7 +1005,7 @@ router.post('/disposals/:id/execute', requireAuth, async (req, res, next) => {
   }
 });
 
-router.post('/disposals/:id/cancel', requireAuth, async (req, res, next) => {
+router.post('/disposals/:id/cancel', ...disposalAccess, async (req, res, next) => {
   try {
     const reason = String(req.body.reason || '').trim();
     if (!reason) return res.status(400).json({ success: false, message: 'Cancellation reason is required' });
@@ -913,7 +1021,7 @@ router.post('/disposals/:id/cancel', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/disposals/:id/history', requireAuth, async (req, res, next) => {
+router.get('/disposals/:id/history', ...disposalAccess, async (req, res, next) => {
   try {
     const request = await DisposalRequest.findByPk(req.params.id);
     if (!request) return res.status(404).json({ success: false, message: 'Disposal request not found' });
@@ -1150,10 +1258,6 @@ router.delete(['/categories/:id', '/asset-categories/:id'], ...requireAdmin, asy
   }
 });
 
-router.get('/locations', requireAuth, async (req, res) => {
-  res.json({ success: true, data: [] });
-});
-
 router.get('/notifications', requireAuth, async (req, res) => {
   const notifications = await Notification.findAll({
     where: { [require('sequelize').Op.or]: [{ userId: null }, { userId: req.user.id }] },
@@ -1181,14 +1285,14 @@ router.put('/notifications/read-all', requireAuth, async (req, res) => {
   res.json({ success: true });
 });
 
-router.delete('/notifications/:id', requireAuth, async (req, res) => {
-  const deleted = await Notification.destroy({ where: { id: req.params.id, userId: req.user.id } });
-  if (!deleted) return res.status(404).json({ success: false, message: 'Notification not found' });
+router.delete('/notifications/all', requireAuth, requireRole('admin'), async (req, res) => {
+  await Notification.destroy({ where: {} });
   res.json({ success: true });
 });
 
-router.delete('/notifications/all', requireAuth, requireRole('admin'), async (req, res) => {
-  await Notification.destroy({ where: {} });
+router.delete('/notifications/:id', requireAuth, async (req, res) => {
+  const deleted = await Notification.destroy({ where: { id: req.params.id, userId: req.user.id } });
+  if (!deleted) return res.status(404).json({ success: false, message: 'Notification not found' });
   res.json({ success: true });
 });
 
@@ -1605,6 +1709,60 @@ router.get('/backups/download/:filename', ...requireAdmin, async (req, res, next
     await fs.promises.access(filePath, fs.constants.R_OK);
     await AuditLog.create({ userId: req.user.id, action: 'BACKUP_DOWNLOADED', entity: `backup:${req.params.filename}`, details: JSON.stringify({ filename: req.params.filename }) });
     res.download(filePath, req.params.filename);
+  } catch (error) { if (error.code === 'ENOENT') return res.status(404).json({ success: false, message: 'Backup file not found' }); next(error); }
+});
+
+router.post('/backups/restore/:filename', ...requireAdmin, async (req, res, next) => {
+  try {
+    const filePath = resolveBackupPath(req.params.filename);
+    if (!filePath) return res.status(400).json({ success: false, message: 'Invalid backup filename' });
+    const content = await fs.promises.readFile(filePath, 'utf8');
+    const backup = JSON.parse(content);
+    if (!(content.length > 0 && backup.format === 'smart-asset-management-backup' && backup.version === 1 && backup.data && backup.counts)) {
+      return res.status(400).json({ success: false, message: 'Backup metadata is invalid or unsupported' });
+    }
+    const totals = { restored: 0, updated: 0, skipped: 0 };
+    const perEntity = {};
+    for (const [key, Model] of Object.entries(backupModels)) {
+      const records = backup.data[key] || [];
+      if (!Array.isArray(records) || !records.length) {
+        perEntity[key] = { restored: 0, updated: 0, skipped: 0 };
+        continue;
+      }
+      const stats = { restored: 0, updated: 0, skipped: 0 };
+      for (const record of records) {
+        const payload = { ...record };
+        delete payload.id;
+        delete payload.createdAt;
+        delete payload.updatedAt;
+        if (key === 'users' && !payload.password && !payload.passwordHash) {
+          const existingUser = await User.findByPk(record.id);
+          if (existingUser && existingUser.password) payload.password = existingUser.password;
+          else {
+            stats.skipped += 1;
+            continue;
+          }
+        }
+        try {
+          const existing = record.id ? await Model.findByPk(record.id) : null;
+          if (existing) {
+            await existing.update(payload);
+            stats.updated += 1;
+          } else {
+            await Model.create(payload);
+            stats.restored += 1;
+          }
+        } catch (error) {
+          stats.skipped += 1;
+        }
+      }
+      totals.restored += stats.restored;
+      totals.updated += stats.updated;
+      totals.skipped += stats.skipped;
+      perEntity[key] = stats;
+    }
+    await AuditLog.create({ userId: req.user.id, action: 'BACKUP_RESTORED', entity: `backup:${req.params.filename}`, details: JSON.stringify({ filename: req.params.filename, perEntity }) });
+    res.json({ success: true, message: 'Backup restored successfully', data: perEntity, counts: { restored: totals.restored, updated: totals.updated, skipped: totals.skipped } });
   } catch (error) { if (error.code === 'ENOENT') return res.status(404).json({ success: false, message: 'Backup file not found' }); next(error); }
 });
 

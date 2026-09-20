@@ -74,6 +74,16 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Department name is required' });
     }
+    if (name.trim().length > 255 || String(code || '').trim().length > 100) {
+      return res.status(422).json({ success: false, message: 'Department name or code exceeds the allowed length' });
+    }
+    if (code && !/^[A-Za-z0-9._-]{1,100}$/.test(String(code).trim())) {
+      return res.status(422).json({ success: false, message: 'Department code contains unsupported characters' });
+    }
+    if (headId) {
+      const head = await User.findByPk(headId);
+      if (!head) return res.status(404).json({ success: false, message: 'Department head not found' });
+    }
     
     const existing = await Department.findOne({ where: { name: name.trim() } });
     if (existing) {
@@ -108,6 +118,20 @@ router.put('/:id', ...requireAdmin, async (req, res, next) => {
     
     const { name, code, description, headId } = req.body;
     const previousValue = dept.toJSON();
+    
+    if (name !== undefined && name && name.trim().length > 255) {
+      return res.status(422).json({ success: false, message: 'Department name exceeds the allowed length' });
+    }
+    if (code !== undefined && String(code || '').trim().length > 100) {
+      return res.status(422).json({ success: false, message: 'Department code exceeds the allowed length' });
+    }
+    if (code !== undefined && code && !/^[A-Za-z0-9._-]{1,100}$/.test(String(code).trim())) {
+      return res.status(422).json({ success: false, message: 'Department code contains unsupported characters' });
+    }
+    if (headId !== undefined && headId) {
+      const head = await User.findByPk(headId);
+      if (!head) return res.status(404).json({ success: false, message: 'Department head not found' });
+    }
     
     if (name && name.trim() && name !== dept.name) {
       const existing = await Department.findOne({ where: { name: name.trim() } });

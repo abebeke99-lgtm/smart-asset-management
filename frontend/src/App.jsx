@@ -810,27 +810,46 @@ const AdminAssetLocations = () => {
     return locations.filter((location) => [location.name, location.description].some((value) => String(value || '').toLowerCase().includes(query)));
   }, [locations, search]);
 
-  const saveLocation = () => {
+  const saveLocation = async () => {
     const name = form.name.trim();
     if (!name) return;
 
-    if (editingId) {
-      setLocations((previous) => previous.map((location) => location.id === editingId ? { ...location, name, description: form.description.trim() || location.description } : location));
-    } else {
-      setLocations((previous) => [{
-        id: `local-${Date.now()}`,
-        name,
-        description: form.description.trim() || `${name} location`,
-        assetCount: 0
-      }, ...previous]);
-    }
+    try {
+      if (editingId) {
+        await axios.put(`/api/locations/${editingId}`, {
+          name,
+          description: form.description.trim()
+        });
+      } else {
+        await axios.post('/api/locations', {
+          name,
+          description: form.description.trim()
+        });
+      }
 
-    setForm({ name: '', description: '' });
-    setEditingId(null);
+      setForm({ name: '', description: '' });
+      setEditingId(null);
+      await loadData();
+    } catch (saveError) {
+      alert(
+        saveError.response?.data?.message ||
+        'Could not save the location. Please try again.'
+      );
+    }
   };
 
-  const removeLocation = (locationId) => {
-    setLocations((previous) => previous.filter((location) => location.id !== locationId));
+  const removeLocation = async (locationId) => {
+    if (!window.confirm('Delete this location?')) return;
+
+    try {
+      await axios.delete(`/api/locations/${locationId}`);
+      await loadData();
+    } catch (removeError) {
+      alert(
+        removeError.response?.data?.message ||
+        'Could not delete the location. Please try again.'
+      );
+    }
   };
 
   const startEdit = (location) => {

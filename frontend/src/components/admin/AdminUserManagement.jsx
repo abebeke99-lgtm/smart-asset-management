@@ -77,13 +77,13 @@ const PERMISSION_GROUPS = [
     label: "Assets",
     icon: "📦",
     permissions: [
-      "view_assets",
-      "create_asset",
-      "edit_asset",
-      "delete_asset",
-      "assign_asset",
-      "transfer_asset",
-      "return_asset",
+      "assets.view",
+      "assets.create",
+      "assets.update",
+      "assets.delete",
+      "assets.assign",
+      "assets.transfer",
+      "assets.return",
     ],
   },
   {
@@ -91,10 +91,10 @@ const PERMISSION_GROUPS = [
     label: "Inventory",
     icon: "📋",
     permissions: [
-      "view_inventory",
-      "stock_in",
-      "stock_out",
-      "stock_movement",
+      "inventory.view",
+      "inventory.stock_in",
+      "inventory.stock_out",
+      "inventory.stock_movement",
     ],
   },
   {
@@ -102,11 +102,11 @@ const PERMISSION_GROUPS = [
     label: "Maintenance",
     icon: "🔧",
     permissions: [
-      "view_requests",
-      "create_request",
-      "assign_technician",
-      "update_maintenance",
-      "complete_maintenance",
+      "maintenance.view",
+      "maintenance.request.create",
+      "maintenance.technician.assign",
+      "maintenance.update",
+      "maintenance.complete",
     ],
   },
   {
@@ -114,13 +114,13 @@ const PERMISSION_GROUPS = [
     label: "Users",
     icon: "👥",
     permissions: [
-      "view_users",
-      "create_user",
-      "edit_user",
-      "delete_user",
-      "activate_deactivate",
-      "manage_roles",
-      "manage_permissions",
+      "users.view",
+      "users.create",
+      "users.update",
+      "users.delete",
+      "users.activate",
+      "roles.manage",
+      "permissions.manage",
     ],
   },
   {
@@ -128,10 +128,10 @@ const PERMISSION_GROUPS = [
     label: "Reports",
     icon: "📊",
     permissions: [
-      "view_reports",
-      "generate_reports",
-      "export_reports",
-      "print_reports",
+      "reports.view",
+      "reports.generate",
+      "reports.export",
+      "reports.print",
     ],
   },
   {
@@ -139,46 +139,46 @@ const PERMISSION_GROUPS = [
     label: "System",
     icon: "⚙️",
     permissions: [
-      "settings",
-      "backup",
-      "restore",
-      "audit_logs",
+      "settings.manage",
+      "backup.manage",
+      "backup.restore",
+      "audit.view",
     ],
   },
 ];
 
 const ACTION_LABELS = {
-  view_assets: "View Assets",
-  create_asset: "Create Asset",
-  edit_asset: "Edit Asset",
-  delete_asset: "Delete Asset",
-  assign_asset: "Assign Asset",
-  transfer_asset: "Transfer Asset",
-  return_asset: "Return Asset",
-  view_inventory: "View Inventory",
-  stock_in: "Stock In",
-  stock_out: "Stock Out",
-  stock_movement: "Stock Movement",
-  view_requests: "View Requests",
-  create_request: "Create Request",
-  assign_technician: "Assign Technician",
-  update_maintenance: "Update Maintenance",
-  complete_maintenance: "Complete Maintenance",
-  view_users: "View Users",
-  create_user: "Create User",
-  edit_user: "Edit User",
-  delete_user: "Delete User",
-  activate_deactivate: "Activate / Deactivate",
-  manage_roles: "Manage Roles",
-  manage_permissions: "Manage Permissions",
-  view_reports: "View Reports",
-  generate_reports: "Generate Reports",
-  export_reports: "Export Reports",
-  print_reports: "Print Reports",
-  settings: "Settings",
-  backup: "Backup",
-  restore: "Restore",
-  audit_logs: "Audit Logs",
+  "assets.view": "View Assets",
+  "assets.create": "Create Asset",
+  "assets.update": "Edit Asset",
+  "assets.delete": "Delete Asset",
+  "assets.assign": "Assign Asset",
+  "assets.transfer": "Transfer Asset",
+  "assets.return": "Return Asset",
+  "inventory.view": "View Inventory",
+  "inventory.stock_in": "Stock In",
+  "inventory.stock_out": "Stock Out",
+  "inventory.stock_movement": "Stock Movement",
+  "maintenance.view": "View Requests",
+  "maintenance.request.create": "Create Request",
+  "maintenance.technician.assign": "Assign Technician",
+  "maintenance.update": "Update Maintenance",
+  "maintenance.complete": "Complete Maintenance",
+  "users.view": "View Users",
+  "users.create": "Create User",
+  "users.update": "Edit User",
+  "users.delete": "Delete User",
+  "users.activate": "Activate / Deactivate",
+  "roles.manage": "Manage Roles",
+  "permissions.manage": "Manage Permissions",
+  "reports.view": "View Reports",
+  "reports.generate": "Generate Reports",
+  "reports.export": "Export Reports",
+  "reports.print": "Print Reports",
+  "settings.manage": "Settings",
+  "backup.manage": "Backup",
+  "backup.restore": "Restore",
+  "audit.view": "Audit Logs",
 };
 
 const ACTIVITY_TYPES = [
@@ -387,6 +387,36 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
       fetchActivities();
     }
   }, [activeSection, fetchActivities]);
+
+  const fetchRolePermissions = useCallback(async () => {
+    try {
+      const response = await apiClient.get('/api/admin/roles');
+
+      const roles = Array.isArray(response?.data?.roles)
+        ? response.data.roles
+        : Array.isArray(response?.data?.data)
+          ? response.data.data
+          : [];
+
+      setRolePermissions((previous) => {
+        const loaded = {};
+
+        roles.forEach((role) => {
+          if (role?.name && Array.isArray(role?.permissions)) {
+            loaded[role.name] = role.permissions;
+          }
+        });
+
+        return { ...previous, ...loaded };
+      });
+    } catch (error) {
+      console.warn('Failed to load role permissions:', error.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRolePermissions();
+  }, [fetchRolePermissions]);
 
   const validateForm = (editing = false) => {
     const errors = {};
@@ -731,61 +761,68 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
 
     const defaults = {
       ict_officer: [
-        "view_assets",
-        "edit_asset",
-        "assign_asset",
-        "transfer_asset",
-        "return_asset",
-        "view_inventory",
-        "view_requests",
-        "update_maintenance",
-        "view_reports",
-        "generate_reports",
+        "assets.view",
+        "assets.update",
+        "assets.assign",
+        "assets.transfer",
+        "assets.return",
+        "inventory.view",
+        "maintenance.view",
+        "maintenance.update",
+        "reports.view",
+        "reports.generate",
+      ],
+      college: [
+        "assets.view",
+        "assets.assign",
+        "departments.view",
+        "users.view",
+        "reports.view",
       ],
       department_head: [
-        "view_assets",
-        "assign_asset",
-        "transfer_asset",
-        "return_asset",
-        "view_inventory",
-        "view_requests",
-        "create_request",
-        "view_reports",
+        "assets.view",
+        "assets.assign",
+        "assets.transfer",
+        "assets.return",
+        "inventory.view",
+        "maintenance.view",
+        "maintenance.request.create",
+        "reports.view",
       ],
       finance: [
-        "view_assets",
-        "view_inventory",
-        "view_reports",
-        "generate_reports",
-        "export_reports",
-        "print_reports",
+        "assets.view",
+        "inventory.view",
+        "reports.view",
+        "reports.generate",
+        "reports.export",
+        "reports.print",
       ],
       store_manager: [
-        "view_assets",
-        "create_asset",
-        "edit_asset",
-        "assign_asset",
-        "transfer_asset",
-        "return_asset",
-        "view_inventory",
-        "stock_in",
-        "stock_out",
-        "stock_movement",
-        "view_reports",
+        "assets.view",
+        "assets.create",
+        "assets.update",
+        "assets.assign",
+        "assets.transfer",
+        "assets.return",
+        "inventory.view",
+        "inventory.stock_in",
+        "inventory.stock_out",
+        "inventory.stock_movement",
+        "reports.view",
       ],
       maintenance: [
-        "view_assets",
-        "view_requests",
-        "create_request",
-        "assign_technician",
-        "update_maintenance",
-        "complete_maintenance",
+        "assets.view",
+        "maintenance.view",
+        "maintenance.request.create",
+        "maintenance.technician.assign",
+        "maintenance.update",
+        "maintenance.complete",
       ],
       staff: [
-        "view_assets",
-        "return_asset",
-        "view_requests",
-        "create_request",
+        "assets.view",
+        "assets.return",
+        "maintenance.view",
+        "maintenance.request.create",
       ],
     };
 

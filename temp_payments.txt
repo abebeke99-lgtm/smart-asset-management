@@ -1,0 +1,351 @@
+﻿import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  CreditCard,
+  Plus,
+  Search,
+  Filter,
+  RefreshCw,
+  Eye,
+  Pencil,
+  Trash2,
+  X,
+  Save,
+  CheckCircle,
+  XCircle,
+  Clock,
+  DollarSign,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  Receipt,
+  Building2,
+  CalendarDays,
+  Printer,
+  ArrowLeft,
+  Banknote,
+} from "lucide-react";
+import api from "../../services/api";
+
+const emptyForm = {
+  paymentNumber: "",
+  invoiceId: "",
+  invoiceNumber: "",
+  supplierId: "",
+  supplierName: "",
+  purchaseOrderId: "",
+  purchaseOrderNumber: "",
+  departmentId: "",
+  departmentName: "",
+  paymentDate: "",
+  amount: "",
+  currency: "ETB",
+  paymentMethod: "Bank Transfer",
+  referenceNumber: "",
+  bankName: "",
+  bankAccount: "",
+  status: "Pending",
+  notes: "",
+};
+
+const firstValue = (...values) =>
+  values.find(
+    (value) => value !== undefined && value !== null && value !== ""
+  );
+
+const extractRows = (response) => {
+  const payload = response?.data ?? response;
+
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.records)) return payload.records;
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload?.rows)) return payload.rows;
+
+  return [];
+};
+
+const extractPagination = (
+  response,
+  fallbackTotal = 0,
+  page = 1,
+  pageSize = 10
+) => {
+  const payload = response?.data ?? response;
+
+  const pagination =
+    payload?.pagination ||
+    payload?.meta?.pagination ||
+    payload?.meta ||
+    payload?.pageInfo ||
+    {};
+
+  const total = Number(
+    firstValue(
+      pagination.total,
+      pagination.totalItems,
+      pagination.totalRecords,
+      payload?.total,
+      payload?.totalItems,
+      fallbackTotal
+    )
+  );
+
+  const currentPage = Number(
+    firstValue(
+      pagination.page,
+      pagination.currentPage,
+      payload?.page,
+      page
+    )
+  );
+
+  const limit = Number(
+    firstValue(
+      pagination.pageSize,
+      pagination.limit,
+      pagination.perPage,
+      payload?.pageSize,
+      pageSize
+    )
+  );
+
+  const totalPages = Number(
+    firstValue(
+      pagination.totalPages,
+      pagination.pages,
+      payload?.totalPages,
+      Math.max(1, Math.ceil(total / Math.max(limit, 1)))
+    )
+  );
+
+  return {
+    total: Number.isFinite(total) ? total : fallbackTotal,
+    page: Number.isFinite(currentPage) ? currentPage : page,
+    pageSize: Number.isFinite(limit) ? limit : pageSize,
+    totalPages:
+      Number.isFinite(totalPages) && totalPages > 0
+        ? totalPages
+        : 1,
+  };
+};
+
+const normalizePayment = (item) => ({
+  ...item,
+
+  id: firstValue(
+    item.id,
+    item.payment_id,
+    item.paymentId
+  ),
+
+  paymentNumber: firstValue(
+    item.paymentNumber,
+    item.payment_number,
+    item.number,
+    item.paymentNo,
+    item.payment_no,
+    ""
+  ),
+
+  invoiceId: firstValue(
+    item.invoiceId,
+    item.invoice_id,
+    ""
+  ),
+
+  invoiceNumber: firstValue(
+    item.invoiceNumber,
+    item.invoice_number,
+    item.invoice?.invoiceNumber,
+    item.invoice?.invoice_number,
+    ""
+  ),
+
+  supplierId: firstValue(
+    item.supplierId,
+    item.supplier_id,
+    ""
+  ),
+
+  supplierName: firstValue(
+    item.supplierName,
+    item.supplier_name,
+    item.supplier?.name,
+    item.vendorName,
+    item.vendor_name,
+    ""
+  ),
+
+  purchaseOrderId: firstValue(
+    item.purchaseOrderId,
+    item.purchase_order_id,
+    ""
+  ),
+
+  purchaseOrderNumber: firstValue(
+    item.purchaseOrderNumber,
+    item.purchase_order_number,
+    item.poNumber,
+    item.po_number,
+    ""
+  ),
+
+  departmentId: firstValue(
+    item.departmentId,
+    item.department_id,
+    ""
+  ),
+
+  departmentName: firstValue(
+    item.departmentName,
+    item.department_name,
+    item.department?.name,
+    ""
+  ),
+
+  paymentDate: firstValue(
+    item.paymentDate,
+    item.payment_date,
+    item.date,
+    ""
+  ),
+
+  amount: Number(
+    firstValue(
+      item.amount,
+      item.paymentAmount,
+      item.payment_amount,
+      item.totalAmount,
+      item.total_amount,
+      0
+    )
+  ),
+
+  currency: firstValue(item.currency, "ETB"),
+
+  paymentMethod: firstValue(
+    item.paymentMethod,
+    item.payment_method,
+    item.method,
+    ""
+  ),
+
+  referenceNumber: firstValue(
+    item.referenceNumber,
+    item.reference_number,
+    item.reference,
+    ""
+  ),
+
+  bankName: firstValue(
+    item.bankName,
+    item.bank_name,
+    ""
+  ),
+
+  bankAccount: firstValue(
+    item.bankAccount,
+    item.bank_account,
+    ""
+  ),
+
+  status: firstValue(
+    item.status,
+    "Pending"
+  ),
+
+  notes: firstValue(
+    item.notes,
+    ""
+  ),
+
+  createdAt: firstValue(
+    item.createdAt,
+    item.created_at,
+    ""
+  ),
+
+  updatedAt: firstValue(
+    item.updatedAt,
+    item.updated_at,
+    ""
+  ),
+});
+
+const formatMoney = (value, currency = "ETB") => {
+  const amount = Number(value || 0);
+
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${amount.toLocaleString()} ${currency}`;
+  }
+};
+
+const formatDate = (value) => {
+  if (!value) return "â€”";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const statusClass = (status) => {
+  const value = String(status || "").toLowerCase();
+
+  if (
+    value.includes("paid") ||
+    value.includes("completed") ||
+    value.includes("approved")
+  ) {
+    return "status success";
+  }
+
+  if (
+    value.includes("cancel") ||
+    value.includes("rejected") ||
+    value.includes("failed") ||
+    value.includes("void")
+  ) {
+    return "status danger";
+  }
+
+  if (
+    value.includes("pending") ||
+    value.includes("draft") ||
+    value.includes("processing")
+  ) {
+    return "status warning";
+  }
+
+  return "status info";
+};
+
+export default function FinancePayments() {
+  const [payments, setPayments] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [processingId, setProcessingId] = useState(null);
+
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("");
+

@@ -193,6 +193,11 @@ const register = async (req, res) => {
   try {
     const { username, email, password, fullName, role = 'student', department = '' } = req.body;
 
+    const publicRoles = ['student', 'staff'];
+    if (!publicRoles.includes(String(role || 'student').toLowerCase())) {
+      return res.status(400).json({ success: false, message: 'Role must be provided by an administrator' });
+    }
+
     if (!isValidUsername(username)) {
       return res.status(400).json({ success: false, message: 'Username must be at least 3 characters' });
     }
