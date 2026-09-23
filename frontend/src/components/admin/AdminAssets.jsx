@@ -1,5 +1,30 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle,
+  Archive,
+  ArrowRightLeft,
+  Boxes,
+  CheckCircle2,
+  Eye,
+  FileText,
+  History,
+  MapPin,
+  MoreHorizontal,
+  Package,
+  Pencil,
+  Plus,
+  Radio,
+  RotateCcw,
+  Search,
+  SlidersHorizontal,
+  Tags,
+  Trash2,
+  UserCheck,
+  Wrench,
+  Workflow,
+  XCircle
+} from 'lucide-react';
 import { useLanguage } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
 import { apiClient as axios } from '../../utils/api';
@@ -10,6 +35,62 @@ const AdminAssets = () => {
 
   const isDark = theme === 'dark';
   const t = language === 'en' ? englishTranslations : amharicTranslations;
+
+  const formatCurrency = (value, currency = 'ETB') => {
+    const amount = Number(value ?? 0);
+
+    if (!Number.isFinite(amount)) {
+      return `${currency} 0.00`;
+    }
+
+    return `${currency} ${amount.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`;
+  };
+
+  const getDisplayStatus = rawStatus => {
+    const normalized = String(rawStatus || '')
+      .trim()
+      .replace(/[_-]+/g, ' ')
+      .toLowerCase();
+
+    const labelMap = {
+      available: 'Available',
+      active: 'Active',
+      'in use': 'In Use',
+      'in-use': 'In Use',
+      assigned: 'Assigned',
+      'under maintenance': 'Under Maintenance',
+      maintenance: 'Under Maintenance',
+      'in maintenance': 'Under Maintenance',
+      lost: 'Lost',
+      missing: 'Lost',
+      disposed: 'Disposed',
+      retired: 'Retired',
+      reserved: 'Reserved',
+      damaged: 'Damaged',
+      pending: 'Pending'
+    };
+
+    return labelMap[normalized] || rawStatus || 'Available';
+  };
+
+  const getConditionLabel = rawCondition => {
+    const normalized = String(rawCondition || '')
+      .trim()
+      .toLowerCase();
+
+    const labelMap = {
+      excellent: 'Excellent',
+      good: 'Good',
+      fair: 'Fair',
+      poor: 'Poor',
+      damaged: 'Damaged'
+    };
+
+    return labelMap[normalized] || rawCondition || 'Good';
+  };
 
   // ============================================================
   // STATE
@@ -38,6 +119,8 @@ const AdminAssets = () => {
   const [totalItems, setTotalItems] = useState(0);
 
   const [selectedAssets, setSelectedAssets] = useState([]);
+  const [actionMenuId, setActionMenuId] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -698,31 +781,44 @@ const AdminAssets = () => {
   // ============================================================
 
   const handleDelete = async id => {
-    if (!window.confirm(t.confirmDelete)) {
-      return;
-    }
+    const asset = assets.find(item => item.id === id);
+    const assetLabel =
+      asset?.asset_tag ||
+      asset?.asset_code ||
+      asset?.name ||
+      `Asset #${id}`;
 
-    setActionLoading(true);
+    setConfirmDialog({
+      title: 'Delete Asset',
+      subtitle: 'This action cannot be undone.',
+      assetLabel,
+      confirmText: 'Delete Asset',
+      danger: true,
+      onConfirm: async () => {
+        setActionLoading(true);
 
-    try {
-      await axios.delete(`/api/assets/${id}`);
+        try {
+          await axios.delete(`/api/assets/${id}`);
 
-      toast.success(t.assetDeleted);
+          toast.success(t.assetDeleted);
 
-      setSelectedAssets(prev =>
-        prev.filter(assetId => assetId !== id)
-      );
+          setSelectedAssets(prev =>
+            prev.filter(assetId => assetId !== id)
+          );
 
-      await fetchAssets();
-    } catch (error) {
-      console.error('Delete asset failed:', error);
-      toast.error(
-        error.response?.data?.message ||
-          t.deleteFailed
-      );
-    } finally {
-      setActionLoading(false);
-    }
+          setConfirmDialog(null);
+          await fetchAssets();
+        } catch (error) {
+          console.error('Delete asset failed:', error);
+          toast.error(
+            error.response?.data?.message ||
+              t.deleteFailed
+          );
+        } finally {
+          setActionLoading(false);
+        }
+      }
+    });
   };
 
   const handleBulkDelete = async () => {
@@ -730,49 +826,47 @@ const AdminAssets = () => {
       return;
     }
 
-    const confirmed = window.confirm(
-      t.confirmBulkDelete.replace(
-        '{count}',
-        selectedAssets.length
-      )
-    );
+    setConfirmDialog({
+      title: 'Delete selected assets',
+      subtitle: `This will permanently remove ${selectedAssets.length} asset(s).`,
+      assetLabel: `${selectedAssets.length} selected assets`,
+      confirmText: 'Delete Selected',
+      danger: true,
+      onConfirm: async () => {
+        setActionLoading(true);
 
-    if (!confirmed) {
-      return;
-    }
+        try {
+          await Promise.all(
+            selectedAssets.map(id =>
+              axios.delete(`/api/assets/${id}`)
+            )
+          );
 
-    setActionLoading(true);
+          toast.success(
+            t.bulkDeleteSuccess.replace(
+              '{count}',
+              selectedAssets.length
+            )
+          );
 
-    try {
-      await Promise.all(
-        selectedAssets.map(id =>
-          axios.delete(`/api/assets/${id}`)
-        )
-      );
+          setSelectedAssets([]);
+          setConfirmDialog(null);
+          await fetchAssets();
+        } catch (error) {
+          console.error(
+            'Bulk delete failed:',
+            error
+          );
 
-      toast.success(
-        t.bulkDeleteSuccess.replace(
-          '{count}',
-          selectedAssets.length
-        )
-      );
-
-      setSelectedAssets([]);
-
-      await fetchAssets();
-    } catch (error) {
-      console.error(
-        'Bulk delete failed:',
-        error
-      );
-
-      toast.error(
-        error.response?.data?.message ||
-          t.deleteFailed
-      );
-    } finally {
-      setActionLoading(false);
-    }
+          toast.error(
+            error.response?.data?.message ||
+              t.deleteFailed
+          );
+        } finally {
+          setActionLoading(false);
+        }
+      }
+    });
   };
 
   // ============================================================
@@ -989,34 +1083,40 @@ const AdminAssets = () => {
 
   const managementLinks = [
     {
-      label: t.createAsset,
-      icon: '➕',
-      path: '/admin/assets/create'
-    },
-    {
       label: t.categories,
-      icon: '🗂️',
+      description: 'Manage asset types',
+      icon: Tags,
       path: '/admin/assets/categories'
     },
     {
       label: t.locations,
-      icon: '📍',
+      description: 'Track facilities',
+      icon: MapPin,
       path: '/admin/assets/locations'
     },
     {
       label: t.lifecycle,
-      icon: '🔄',
+      description: 'Lifecycle history',
+      icon: Workflow,
       path: '/admin/assets/lifecycle'
     },
     {
       label: t.disposalRetirement,
-      icon: '🗑️',
+      description: 'Retire assets',
+      icon: Trash2,
       path: '/admin/assets/disposal'
     },
     {
       label: t.documents,
-      icon: '📄',
+      description: 'Support files',
+      icon: FileText,
       path: '/admin/assets/documents'
+    },
+    {
+      label: t.createAsset,
+      description: 'Register new asset',
+      icon: Plus,
+      path: '/admin/assets/create'
     }
   ];
 
@@ -1027,22 +1127,56 @@ const AdminAssets = () => {
   if (loading && assets.length === 0) {
     return (
       <div style={styles.container}>
-        <div style={styles.emptyState}>
-          <div style={{ fontSize: '2.5rem' }}>
-            ⏳
-          </div>
-
-          <h2
+        <div
+          style={{
+            display: 'grid',
+            gap: '16px'
+          }}
+        >
+          <div
             style={{
-              color: isDark
-                ? '#c8dcf5'
-                : '#1a365d'
+              ...styles.header,
+              padding: '28px 24px',
+              background: isDark ? '#1b2a3b' : '#fff',
+              border: `1px solid ${isDark ? '#314866' : '#e5edf9'}`,
+              borderRadius: '18px',
+              boxShadow: isDark ? '0 8px 18px rgba(0,0,0,0.2)' : '0 8px 18px rgba(15, 23, 42, 0.06)'
             }}
           >
-            {t.loading}
-          </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ width: '52px', height: '52px', borderRadius: '12px', background: 'linear-gradient(135deg, #2563eb, #60a5fa)', opacity: 0.9 }} />
+              <div style={{ display: 'grid', gap: '8px' }}>
+                <div style={{ width: '140px', height: '10px', borderRadius: '999px', background: isDark ? '#2b3d59' : '#e2e8f0' }} />
+                <div style={{ width: '220px', height: '12px', borderRadius: '999px', background: isDark ? '#2b3d59' : '#e2e8f0' }} />
+              </div>
+            </div>
+            <div style={{ width: '160px', height: '42px', borderRadius: '10px', background: isDark ? '#2b3d59' : '#e2e8f0' }} />
+          </div>
 
-          <p>{t.loadingAssets}</p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '12px'
+            }}
+          >
+            {Array.from({ length: 7 }).map((_, index) => (
+              <div
+                key={index}
+                style={{
+                  height: '110px',
+                  borderRadius: '14px',
+                  background: isDark ? '#1b2a3b' : '#fff',
+                  border: `1px solid ${isDark ? '#314866' : '#e5edf9'}`,
+                  padding: '16px'
+                }}
+              >
+                <div style={{ width: '24px', height: '24px', borderRadius: '8px', background: isDark ? '#2b3d59' : '#e2e8f0', marginBottom: '12px' }} />
+                <div style={{ width: '70%', height: '12px', borderRadius: '999px', background: isDark ? '#2b3d59' : '#e2e8f0', marginBottom: '10px' }} />
+                <div style={{ width: '55%', height: '20px', borderRadius: '999px', background: isDark ? '#2b3d59' : '#e2e8f0' }} />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -1052,8 +1186,8 @@ const AdminAssets = () => {
     return (
       <div style={styles.container}>
         <div style={styles.emptyState}>
-          <div style={{ fontSize: '3rem' }}>
-            ⚠️
+          <div style={{ fontSize: '3rem', marginBottom: '12px' }}>
+            <Package size={48} />
           </div>
 
           <h2
@@ -1070,10 +1204,10 @@ const AdminAssets = () => {
 
           <button
             type="button"
-            style={styles.button('#2b6cb0')}
+            style={{ ...styles.button('#2b6cb0'), display: 'inline-flex', alignItems: 'center', gap: '8px' }}
             onClick={fetchAssets}
           >
-            🔄 {t.retry}
+            <RotateCcw size={16} /> {t.retry}
           </button>
         </div>
       </div>
@@ -1086,318 +1220,193 @@ const AdminAssets = () => {
 
   return (
     <div style={styles.container}>
-      {/* ======================================================
-          HEADER
-      ======================================================= */}
-
       <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>
-            📦 {t.assets}
-          </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '16px',
+              background: 'linear-gradient(135deg, #2563eb, #60a5fa)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              boxShadow: '0 10px 20px rgba(37, 99, 235, 0.20)'
+            }}
+          >
+            <Package size={24} />
+          </div>
 
-          <p style={styles.subtitle}>
-            {t.totalAssetsCount.replace(
-              '{count}',
-              totalItems
-            )}
-          </p>
+          <div>
+            <div
+              style={{
+                color: '#2563eb',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                marginBottom: '4px'
+              }}
+            >
+              Assets
+            </div>
+
+            <h1 style={styles.title}>Assets</h1>
+            <p style={styles.subtitle}>Manage and monitor all university assets</p>
+            <p
+              style={{
+                margin: '8px 0 0',
+                color: isDark ? '#9fb0c5' : '#64748b',
+                fontSize: '0.85rem',
+                fontWeight: 600
+              }}
+            >
+              {totalItems} total assets
+            </p>
+          </div>
         </div>
 
         <div style={styles.headerActions}>
           {selectedAssets.length > 0 && (
             <button
               type="button"
-              style={styles.button('#e53e3e')}
+              style={{ ...styles.button('#e53e3e'), display: 'inline-flex', alignItems: 'center', gap: '8px' }}
               onClick={handleBulkDelete}
               disabled={actionLoading}
             >
-              🗑️ {t.deleteSelected} (
-              {selectedAssets.length})
+              <Trash2 size={16} />
+              {t.deleteSelected} ({selectedAssets.length})
             </button>
           )}
 
           <button
             type="button"
-            style={styles.button('#805ad5')}
-            onClick={resetFilters}
+            style={{ ...styles.button('linear-gradient(135deg, #1e293b, #334155)'), display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+            onClick={() => navigate('/admin/assets/create')}
           >
-            🔄 {t.resetFilters}
-          </button>
-
-          <button
-            type="button"
-            style={styles.button(
-              'linear-gradient(135deg,#2b6cb0,#4299e1)'
-            )}
-            onClick={() =>
-              navigate('/admin/assets/create')
-            }
-          >
-            ➕ {t.createAsset}
+            <Plus size={16} /> {t.createAsset}
           </button>
         </div>
       </div>
 
-      {/* ======================================================
-          ASSET MANAGEMENT NAVIGATION
-      ======================================================= */}
-
       <div style={styles.managementGrid}>
-        {managementLinks.map(item => (
-          <Link
-            key={item.path}
-            to={item.path}
-            style={styles.managementCard}
-          >
-            <span style={{ fontSize: '1.15rem' }}>
-              {item.icon}
-            </span>
+        {managementLinks.map(item => {
+          const Icon = item.icon;
 
-            <span>{item.label}</span>
-          </Link>
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              style={styles.managementCard}
+            >
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '12px',
+                  background: 'rgba(37,99,235,0.08)',
+                  color: '#2563eb',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}
+              >
+                <Icon size={18} />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontWeight: 700 }}>{item.label}</span>
+                <span style={{ fontSize: '0.72rem', color: isDark ? '#9fb0c5' : '#64748b' }}>{item.description}</span>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      <div style={styles.summaryGrid} aria-label={t.assetSummary}>
+        {[
+          [t.totalAssets, summary.total, Boxes, '#2563eb', ''],
+          [t.available, summary.available, CheckCircle2, '#16a34a', 'available'],
+          [t.assigned, summary.assigned, UserCheck, '#7c3aed', 'assigned'],
+          [t.underMaintenance, summary.maintenance, Wrench, '#f59e0b', 'under-maintenance'],
+          [t.damaged, summary.damaged, AlertTriangle, '#dc2626', 'damaged'],
+          [t.lost, summary.missing, XCircle, '#b91c1c', 'lost'],
+          [t.retired, summary.retired, Archive, '#64748b', 'retired']
+        ].map(([label, value, Icon, color, status]) => (
+          <button
+            type="button"
+            key={label}
+            style={styles.summaryCard(color, filterStatus === status)}
+            onClick={() => applyStatusFilter(status)}
+          >
+            <div
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '10px',
+                background: `${color}18`,
+                color,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '10px'
+              }}
+            >
+              <Icon size={17} />
+            </div>
+
+            <div style={styles.summaryValue}>{value}</div>
+            <div style={styles.summaryLabel}>{label}</div>
+          </button>
         ))}
       </div>
 
-      {/* ======================================================
-          SUMMARY CARDS
-      ======================================================= */}
+      <form style={styles.controls} onSubmit={handleSearch}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '1 1 260px', minWidth: '200px', padding: '0 12px', borderRadius: '10px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#fff' }}>
+          <Search size={16} style={{ color: isDark ? '#8aa4c4' : '#64748b' }} />
+          <input
+            type="text"
+            style={{ ...styles.input, minWidth: '0', flex: 1, border: 'none', background: 'transparent', boxShadow: 'none', paddingLeft: 0, paddingRight: 0 }}
+            placeholder={t.searchPlaceholder}
+            value={search}
+            onChange={event => setSearch(event.target.value)}
+          />
+        </div>
 
-      <div
-        style={styles.summaryGrid}
-        aria-label={t.assetSummary}
-      >
-        {[
-          [
-            t.totalAssets,
-            summary.total,
-            '📦',
-            '#2b6cb0',
-            ''
-          ],
-          [
-            t.available,
-            summary.available,
-            '✅',
-            '#38a169',
-            'available'
-          ],
-          [
-            t.assigned,
-            summary.assigned,
-            '📋',
-            '#805ad5',
-            'assigned'
-          ],
-          [
-            t.underMaintenance,
-            summary.maintenance,
-            '🔧',
-            '#dd6b20',
-            'under-maintenance'
-          ],
-          [
-            t.damaged,
-            summary.damaged,
-            '⚠️',
-            '#c53030',
-            'damaged'
-          ],
-          [
-            t.lost,
-            summary.missing,
-            '❌',
-            '#9b2c2c',
-            'lost'
-          ],
-          [
-            t.retired,
-            summary.retired,
-            '🗄️',
-            '#718096',
-            'retired'
-          ]
-        ].map(
-          ([
-            label,
-            value,
-            icon,
-            color,
-            status
-          ]) => (
-            <button
-              type="button"
-              key={label}
-              style={styles.summaryCard(
-                color,
-                filterStatus === status
-              )}
-              onClick={() =>
-                applyStatusFilter(status)
-              }
-            >
-              <span style={styles.summaryIcon}>
-                {icon}
-              </span>
-
-              <div style={styles.summaryValue}>
-                {value}
-              </div>
-
-              <div style={styles.summaryLabel}>
-                {label}
-              </div>
-            </button>
-          )
-        )}
-      </div>
-
-      {/* ======================================================
-          SEARCH / FILTER / SORT
-      ======================================================= */}
-
-      <form
-        style={styles.controls}
-        onSubmit={handleSearch}
-      >
-        <input
-          type="text"
-          style={styles.input}
-          placeholder={t.searchPlaceholder}
-          value={search}
-          onChange={event =>
-            setSearch(event.target.value)
-          }
-        />
-
-        <select
-          style={styles.select}
-          value={filterStatus}
-          onChange={event => {
-            setFilterStatus(event.target.value);
-            setCurrentPage(1);
-          }}
-        >
-          <option value="">
-            {t.allStatus}
-          </option>
-
-          <option value="Active">
-            {t.active}
-          </option>
-
-          <option value="In-Use">
-            {t.inUse}
-          </option>
-
-          <option value="Available">
-            {t.available}
-          </option>
-
-          <option value="Under-Maintenance">
-            {t.underMaintenance}
-          </option>
-
-          <option value="Disposed">
-            {t.disposed}
-          </option>
-
-          <option value="Lost">
-            {t.lost}
-          </option>
-
-          <option value="Reserved">
-            {t.reserved}
-          </option>
+        <select style={styles.select} value={filterStatus} onChange={event => { setFilterStatus(event.target.value); setCurrentPage(1); }}>
+          <option value="">{t.allStatus}</option>
+          <option value="Active">{t.active}</option>
+          <option value="In-Use">{t.inUse}</option>
+          <option value="Available">{t.available}</option>
+          <option value="Under-Maintenance">{t.underMaintenance}</option>
+          <option value="Disposed">{t.disposed}</option>
+          <option value="Lost">{t.lost}</option>
+          <option value="Reserved">{t.reserved}</option>
         </select>
 
-        <select
-          style={styles.select}
-          value={filterDepartment}
-          onChange={event => {
-            setFilterDepartment(
-              event.target.value
-            );
-            setCurrentPage(1);
-          }}
-        >
-          <option value="">
-            {t.allDepartments}
-          </option>
-
+        <select style={styles.select} value={filterDepartment} onChange={event => { setFilterDepartment(event.target.value); setCurrentPage(1); }}>
+          <option value="">{t.allDepartments}</option>
           {departments.map(department => (
-            <option
-              key={department.id}
-              value={
-                department.id ||
-                department.name
-              }
-            >
-              {department.name}
-            </option>
+            <option key={department.id} value={department.id || department.name}>{department.name}</option>
           ))}
         </select>
 
-        <select
-          style={styles.select}
-          value={filterCategory}
-          onChange={event => {
-            setFilterCategory(
-              event.target.value
-            );
-            setCurrentPage(1);
-          }}
-        >
-          <option value="">
-            {t.allCategories}
-          </option>
-
+        <select style={styles.select} value={filterCategory} onChange={event => { setFilterCategory(event.target.value); setCurrentPage(1); }}>
+          <option value="">{t.allCategories}</option>
           {categories.map(category => (
-            <option
-              key={category.id}
-              value={
-                category.name ||
-                category.id
-              }
-            >
-              {category.name}
-            </option>
+            <option key={category.id} value={category.name || category.id}>{category.name}</option>
           ))}
         </select>
 
-        <select
-          style={styles.select}
-          value={filterCondition}
-          onChange={event => {
-            setFilterCondition(
-              event.target.value
-            );
-            setCurrentPage(1);
-          }}
-        >
-          <option value="">
-            {t.allConditions}
-          </option>
-
-          <option value="Excellent">
-            {t.excellent}
-          </option>
-
-          <option value="Good">
-            {t.good}
-          </option>
-
-          <option value="Fair">
-            {t.fair}
-          </option>
-
-          <option value="Poor">
-            {t.poor}
-          </option>
-
-          <option value="Damaged">
-            {t.damaged}
-          </option>
+        <select style={styles.select} value={filterCondition} onChange={event => { setFilterCondition(event.target.value); setCurrentPage(1); }}>
+          <option value="">{t.allConditions}</option>
+          <option value="Excellent">{t.excellent}</option>
+          <option value="Good">{t.good}</option>
+          <option value="Fair">{t.fair}</option>
+          <option value="Poor">{t.poor}</option>
+          <option value="Damaged">{t.damaged}</option>
         </select>
 
         <input
@@ -1405,92 +1414,47 @@ const AdminAssets = () => {
           style={styles.input}
           placeholder={t.locationFilter}
           value={filterLocation}
-          onChange={event => {
-            setFilterLocation(
-              event.target.value
-            );
-            setCurrentPage(1);
-          }}
+          onChange={event => { setFilterLocation(event.target.value); setCurrentPage(1); }}
         />
 
-        <select
-          style={styles.select}
-          value={sortBy}
-          onChange={event => {
-            setSortBy(event.target.value);
-            setCurrentPage(1);
-          }}
-        >
-          <option value="name">
-            {t.sortByName}
-          </option>
-
-          <option value="created_at">
-            {t.sortByDate}
-          </option>
-
-          <option value="current_value">
-            {t.sortByValue}
-          </option>
-
-          <option value="status">
-            {t.sortByStatus}
-          </option>
+        <select style={styles.select} value={sortBy} onChange={event => { setSortBy(event.target.value); setCurrentPage(1); }}>
+          <option value="name">{t.sortByName}</option>
+          <option value="created_at">{t.sortByDate}</option>
+          <option value="current_value">{t.sortByValue}</option>
+          <option value="status">{t.sortByStatus}</option>
         </select>
 
-        <select
-          style={styles.select}
-          value={sortOrder}
-          onChange={event => {
-            setSortOrder(event.target.value);
-            setCurrentPage(1);
-          }}
-        >
-          <option value="asc">
-            {t.ascending}
-          </option>
-
-          <option value="desc">
-            {t.descending}
-          </option>
+        <select style={styles.select} value={sortOrder} onChange={event => { setSortOrder(event.target.value); setCurrentPage(1); }}>
+          <option value="asc">{t.ascending}</option>
+          <option value="desc">{t.descending}</option>
         </select>
 
-        <button
-          type="submit"
-          style={styles.button(
-            'linear-gradient(135deg,#2b6cb0,#4299e1)'
-          )}
-        >
-          🔍 {t.search}
+        <button type="button" style={{ ...styles.button('transparent'), color: isDark ? '#c8dcf5' : '#334155', background: isDark ? '#0f172a' : '#fff', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, display: 'inline-flex', alignItems: 'center', gap: '8px' }} onClick={resetFilters}>
+          <RotateCcw size={15} /> {t.resetFilters}
+        </button>
+
+        <button type="submit" style={{ ...styles.button('linear-gradient(135deg,#2b6cb0,#4299e1)'), display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <Search size={15} /> {t.search}
         </button>
       </form>
 
-      {/* ======================================================
-          TABLE
-      ======================================================= */}
-
       {assets.length === 0 ? (
         <div style={styles.emptyState}>
-          <div
-            style={{
-              fontSize: '3rem',
-              marginBottom: '12px'
-            }}
-          >
-            📭
+          <div style={{ fontSize: '3rem', marginBottom: '12px' }}>
+            <Boxes size={48} />
           </div>
 
-          <h2
-            style={{
-              color: isDark
-                ? '#c8dcf5'
-                : '#1a365d'
-            }}
-          >
-            {t.noAssets}
-          </h2>
+          <h2 style={{ color: isDark ? '#c8dcf5' : '#1a365d' }}>{t.noAssets}</h2>
+          <p>There are no assets matching your current filters.</p>
 
-          <p>{t.tryFilters}</p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '18px' }}>
+            <button type="button" style={{ ...styles.button('transparent'), color: isDark ? '#c8dcf5' : '#334155', background: isDark ? '#0f172a' : '#fff', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}` }} onClick={resetFilters}>
+              <RotateCcw size={15} /> Reset Filters
+            </button>
+            <button type="button" style={{ ...styles.button('linear-gradient(135deg,#2b6cb0,#4299e1)'), display: 'inline-flex', alignItems: 'center', gap: '8px' }} onClick={() => navigate('/admin/assets/create')}>
+              <Plus size={15} /> Add Asset
+            </button>
+          </div>
         </div>
       ) : (
         <>
@@ -1499,420 +1463,170 @@ const AdminAssets = () => {
               <thead>
                 <tr>
                   <th style={styles.th}>
-                    <input
-                      type="checkbox"
-                      style={styles.checkbox}
-                      checked={
-                        allCurrentPageSelected
-                      }
-                      onChange={event =>
-                        toggleSelectAll(
-                          event.target.checked
-                        )
-                      }
-                      aria-label={
-                        t.selectAll
-                      }
-                    />
+                    <input type="checkbox" style={styles.checkbox} checked={allCurrentPageSelected} onChange={event => toggleSelectAll(event.target.checked)} aria-label={t.selectAll} />
                   </th>
-
-                  <th style={styles.th}>
-                    {t.assetTag}
-                  </th>
-
-                  <th style={styles.th}>
-                    {t.name}
-                  </th>
-
-                  <th style={styles.th}>
-                    {t.category}
-                  </th>
-
-                  <th style={styles.th}>
-                    {t.department}
-                  </th>
-
-                  <th style={styles.th}>
-                    {t.status}
-                  </th>
-
-                  <th style={styles.th}>
-                    {t.condition}
-                  </th>
-
-                  <th style={styles.th}>
-                    {t.location}
-                  </th>
-
-                  <th style={styles.th}>
-                    {t.value}
-                  </th>
-
-                  <th style={styles.th}>
-                    {t.assignedTo}
-                  </th>
-
-                  <th style={styles.th}>
-                    {t.rfidTag}
-                  </th>
-
-                  <th style={styles.th}>
-                    {t.actions}
-                  </th>
+                  <th style={styles.th}>{t.assetTag}</th>
+                  <th style={styles.th}>{t.name}</th>
+                  <th style={styles.th}>{t.category}</th>
+                  <th style={styles.th}>{t.department}</th>
+                  <th style={styles.th}>{t.status}</th>
+                  <th style={styles.th}>{t.condition}</th>
+                  <th style={styles.th}>{t.location}</th>
+                  <th style={styles.th}>{t.value}</th>
+                  <th style={styles.th}>{t.assignedTo}</th>
+                  <th style={styles.th}>{t.rfidTag}</th>
+                  <th style={styles.th}>{t.actions}</th>
                 </tr>
               </thead>
 
               <tbody>
-                {assets.map(asset => (
-                  <tr key={asset.id}>
-                    <td style={styles.td}>
-                      <input
-                        type="checkbox"
-                        style={styles.checkbox}
-                        checked={selectedAssets.includes(
-                          asset.id
-                        )}
-                        onChange={event =>
-                          toggleAssetSelection(
-                            asset.id,
-                            event.target.checked
-                          )
-                        }
-                      />
-                    </td>
+                {assets.map(asset => {
+                  const assetCategory = typeof asset.category === 'object' ? asset.category?.name || asset.category?.title || 'Uncategorized' : asset.category || 'Uncategorized';
+                  const departmentName = asset.department_name || asset.department || asset.departmentName || asset.department?.name || 'Not assigned';
+                  const conditionText = getConditionLabel(asset.condition);
+                  const statusText = getDisplayStatus(asset.status);
+                  const assetLocation = asset.location || 'Not assigned';
+                  const assignedUser = asset.assigned_to_name || asset.assigned_to || asset.assignedTo || 'Not assigned';
+                  const rfidValue = asset.rfid_tag || asset.rfidTag || asset.rfid || 'Not registered';
+                  const valueText = formatCurrency(asset.current_value ?? asset.currentValue ?? asset.purchase_price ?? asset.purchasePrice ?? asset.purchase_cost ?? asset.purchaseCost ?? 0);
+                  const assetName = asset.name || 'Unnamed Asset';
+                  const assetCode = asset.asset_tag || asset.asset_code || `ASSET-${asset.id}`;
 
-                    <td style={styles.td}>
-                      <Link
-                        to={`/assets/${asset.id}`}
-                        style={{
-                          color: '#2b6cb0',
-                          textDecoration: 'none',
-                          fontWeight: 700
-                        }}
-                      >
-                        {asset.asset_tag ||
-                          asset.asset_code ||
-                          asset.id}
-                      </Link>
-                    </td>
+                  return (
+                    <tr key={asset.id}>
+                      <td style={styles.td}>
+                        <input type="checkbox" style={styles.checkbox} checked={selectedAssets.includes(asset.id)} onChange={event => toggleAssetSelection(asset.id, event.target.checked)} />
+                      </td>
 
-                    <td style={styles.td}>
-                      <div
-                        style={{
-                          fontWeight: 600
-                        }}
-                      >
-                        {asset.name || '-'}
-                      </div>
-
-                      <div
-                        style={{
-                          fontSize: '0.7rem',
-                          color: isDark
-                            ? '#8896b0'
-                            : '#4a5568',
-                          marginTop: '3px'
-                        }}
-                      >
-                        {asset.brand
-                          ? `${asset.brand} `
-                          : ''}
-                        {asset.model ||
-                          asset.serial_number ||
-                          ''}
-                      </div>
-                    </td>
-
-                    <td style={styles.td}>
-                      {asset.category || '-'}
-                    </td>
-
-                    <td style={styles.td}>
-                      {asset.department_name ||
-                        asset.department ||
-                        '-'}
-                    </td>
-
-                    <td style={styles.td}>
-                      <span
-                        style={styles.statusBadge(
-                          asset.status
-                        )}
-                      >
-                        {asset.status || '-'}
-                      </span>
-                    </td>
-
-                    <td style={styles.td}>
-                      <span
-                        style={styles.conditionBadge(
-                          asset.condition
-                        )}
-                      >
-                        {asset.condition || '-'}
-                      </span>
-                    </td>
-
-                    <td style={styles.td}>
-                      {asset.location || '-'}
-                    </td>
-
-                    <td style={styles.td}>
-                      $
-                      {Number(
-                        asset.current_value ??
-                          asset.purchase_price ??
-                          0
-                      ).toLocaleString()}
-                    </td>
-
-                    <td style={styles.td}>
-                      {asset.assigned_to_name ||
-                        asset.assigned_to ||
-                        '-'}
-                    </td>
-
-                    <td style={styles.td}>
-                      {asset.rfid_tag || '-'}
-                    </td>
-
-                    <td style={styles.td}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: '4px'
-                        }}
-                      >
-                        {/* VIEW */}
-                        <Link
-                          to={`/assets/${asset.id}`}
-                        >
-                          <button
-                            type="button"
-                            style={styles.actionButton(
-                              '#4299e1'
-                            )}
-                            title={t.view}
-                          >
-                            👁️
-                          </button>
+                      <td style={styles.td}>
+                        <Link to={`/assets/${asset.id}`} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 700 }}>
+                          {assetCode}
                         </Link>
+                      </td>
 
-                        {/* EDIT */}
-                        <Link
-                          to={`/assets/${asset.id}/edit`}
-                        >
-                          <button
-                            type="button"
-                            style={styles.actionButton(
-                              '#ed8936'
+                      <td style={styles.td}>
+                        <div style={{ fontWeight: 700 }}>{assetName}</div>
+                        <div style={{ color: isDark ? '#8ea7c5' : '#64748b', fontSize: '0.72rem', marginTop: '3px' }}>
+                          {asset.serial_number || asset.model || asset.brand || 'No serial model'}
+                        </div>
+                      </td>
+
+                      <td style={styles.td}>{assetCategory}</td>
+                      <td style={styles.td}>{departmentName}</td>
+                      <td style={styles.td}><span style={styles.statusBadge(statusText)}>{statusText}</span></td>
+                      <td style={styles.td}><span style={styles.conditionBadge(conditionText)}>{conditionText}</span></td>
+                      <td style={styles.td}>{assetLocation}</td>
+                      <td style={styles.td}>{valueText}</td>
+                      <td style={styles.td}>{assignedUser}</td>
+                      <td style={styles.td}>{rfidValue}</td>
+
+                      <td style={styles.td}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative', flexWrap: 'wrap' }}>
+                          <Link to={`/assets/${asset.id}`} style={{ ...styles.button('linear-gradient(135deg, #3b82f6, #60a5fa)'), textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <Eye size={14} /> {t.view}
+                          </Link>
+
+                          <Link to={`/assets/${asset.id}/edit`} style={{ ...styles.button('linear-gradient(135deg, #f59e0b, #fbbf24)'), textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <Pencil size={14} /> {t.edit}
+                          </Link>
+
+                          <div style={{ position: 'relative' }}>
+                            <button type="button" style={{ ...styles.button('linear-gradient(135deg, #1f2937, #374151)'), display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={() => setActionMenuId(actionMenuId === asset.id ? null : asset.id)}>
+                              <MoreHorizontal size={14} />
+                            </button>
+
+                            {actionMenuId === asset.id && (
+                              <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 30, minWidth: '190px', background: isDark ? '#0f172a' : '#fff', border: `1px solid ${isDark ? '#32465f' : '#e5edf9'}`, borderRadius: '12px', boxShadow: isDark ? '0 12px 28px rgba(0,0,0,0.35)' : '0 16px 30px rgba(15,23,42,0.12)', padding: '8px' }}>
+                                <button type="button" style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: '8px', background: 'transparent', border: 'none', color: isDark ? '#c8dcf5' : '#1a365d', cursor: 'pointer', fontWeight: 600 }} onClick={() => { setActionMenuId(null); openAssignModal(asset); }}>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><UserCheck size={14} /> Assign</span>
+                                </button>
+                                <button type="button" style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: '8px', background: 'transparent', border: 'none', color: isDark ? '#c8dcf5' : '#1a365d', cursor: 'pointer', fontWeight: 600 }} onClick={() => { setActionMenuId(null); openTransferModal(asset); }}>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><ArrowRightLeft size={14} /> Transfer</span>
+                                </button>
+                                <button type="button" style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: '8px', background: 'transparent', border: 'none', color: isDark ? '#c8dcf5' : '#1a365d', cursor: 'pointer', fontWeight: 600 }} onClick={() => { setActionMenuId(null); handleGenerateQR(asset.id); }}>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Radio size={14} /> RFID / QR</span>
+                                </button>
+                                <button type="button" style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: '8px', background: 'transparent', border: 'none', color: isDark ? '#c8dcf5' : '#1a365d', cursor: 'pointer', fontWeight: 600 }} onClick={() => { setActionMenuId(null); fetchAssetHistory(asset); }}>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><History size={14} /> History</span>
+                                </button>
+                                <button type="button" style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: '8px', background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 700 }} onClick={() => { setActionMenuId(null); handleDelete(asset.id); }}>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Trash2 size={14} /> Delete</span>
+                                </button>
+                              </div>
                             )}
-                            title={t.edit}
-                          >
-                            ✏️
-                          </button>
-                        </Link>
-
-                        {/* ASSIGN */}
-                        <button
-                          type="button"
-                          style={styles.actionButton(
-                            '#48bb78'
-                          )}
-                          title={t.assign}
-                          onClick={() =>
-                            openAssignModal(asset)
-                          }
-                        >
-                          📋
-                        </button>
-
-                        {/* TRANSFER */}
-                        <button
-                          type="button"
-                          style={styles.actionButton(
-                            '#805ad5'
-                          )}
-                          title={t.transfer}
-                          onClick={() =>
-                            openTransferModal(
-                              asset
-                            )
-                          }
-                        >
-                          🔄
-                        </button>
-
-                        {/* RFID / QR */}
-                        <button
-                          type="button"
-                          style={styles.actionButton(
-                            '#9f7aea'
-                          )}
-                          title={t.qrCode}
-                          onClick={() =>
-                            handleGenerateQR(
-                              asset.id
-                            )
-                          }
-                        >
-                          📱
-                        </button>
-
-                        {/* HISTORY */}
-                        <button
-                          type="button"
-                          style={styles.actionButton(
-                            '#3182ce'
-                          )}
-                          title={t.history}
-                          onClick={() =>
-                            fetchAssetHistory(
-                              asset
-                            )
-                          }
-                        >
-                          📜
-                        </button>
-
-                        {/* DELETE */}
-                        <button
-                          type="button"
-                          style={styles.actionButton(
-                            '#e53e3e'
-                          )}
-                          title={t.delete}
-                          onClick={() =>
-                            handleDelete(
-                              asset.id
-                            )
-                          }
-                          disabled={actionLoading}
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
-          {/* ==================================================
-              PAGINATION
-          =================================================== */}
-
           {totalPages > 1 && (
             <div style={styles.pagination}>
-              <span
-                style={{
-                  color: isDark
-                    ? '#8896b0'
-                    : '#4a5568',
-                  fontSize: '0.82rem'
-                }}
-              >
-                {t.showing} {assets.length}{' '}
-                {t.of} {totalItems}
+              <span style={{ color: isDark ? '#8896b0' : '#4a5568', fontSize: '0.82rem' }}>
+                {t.showing} {assets.length} {t.of} {totalItems}
               </span>
 
-              <button
-                type="button"
-                style={styles.pageButton(false)}
-                disabled={currentPage === 1}
-                onClick={() =>
-                  setCurrentPage(page =>
-                    Math.max(1, page - 1)
-                  )
-                }
-              >
+              <button type="button" style={styles.pageButton(false)} disabled={currentPage === 1} onClick={() => setCurrentPage(page => Math.max(1, page - 1))}>
                 {t.previous}
               </button>
 
-              {Array.from(
-                {
-                  length: Math.min(
-                    totalPages,
-                    7
-                  )
-                },
-                (_, index) => {
-                  let page;
+              {Array.from({ length: Math.min(totalPages, 7) }, (_, index) => {
+                let page;
 
-                  if (totalPages <= 7) {
-                    page = index + 1;
-                  } else if (
-                    currentPage <= 4
-                  ) {
-                    page = index + 1;
-                  } else if (
-                    currentPage >=
-                    totalPages - 3
-                  ) {
-                    page =
-                      totalPages -
-                      6 +
-                      index;
-                  } else {
-                    page =
-                      currentPage -
-                      3 +
-                      index;
-                  }
+                if (totalPages <= 7) {
+                  page = index + 1;
+                } else if (currentPage <= 4) {
+                  page = index + 1;
+                } else if (currentPage >= totalPages - 3) {
+                  page = totalPages - 6 + index;
+                } else {
+                  page = currentPage - 3 + index;
+                }
 
-                  return (
-                    <button
-                      type="button"
-                      key={page}
-                      style={styles.pageButton(
-                        page === currentPage
-                      )}
-                      onClick={() =>
-                        setCurrentPage(page)
-                      }
-                    >
-                      {page}
-                    </button>
-                  );
-                }
-              )}
+                return (
+                  <button key={page} type="button" style={styles.pageButton(page === currentPage)} onClick={() => setCurrentPage(page)}>
+                    {page}
+                  </button>
+                );
+              })}
 
-              <button
-                type="button"
-                style={styles.pageButton(false)}
-                disabled={
-                  currentPage === totalPages
-                }
-                onClick={() =>
-                  setCurrentPage(page =>
-                    Math.min(
-                      totalPages,
-                      page + 1
-                    )
-                  )
-                }
-              >
+              <button type="button" style={styles.pageButton(false)} disabled={currentPage === totalPages} onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}>
                 {t.next}
               </button>
             </div>
           )}
 
           {loading && (
-            <div
-              style={{
-                textAlign: 'center',
-                padding: '12px',
-                color: isDark
-                  ? '#8896b0'
-                  : '#4a5568'
-              }}
-            >
-              ⏳ {t.loading}
+            <div style={{ textAlign: 'center', padding: '12px', color: isDark ? '#8896b0' : '#4a5568' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}><Search size={14} /> {t.loading}</div>
             </div>
           )}
         </>
+      )}
+
+      {confirmDialog && (
+        <div style={styles.modalOverlay} onClick={() => setConfirmDialog(null)}>
+          <div style={{ ...styles.modal, maxWidth: '480px' }} onClick={event => event.stopPropagation()}>
+            <h2 style={{ ...styles.modalTitle, marginBottom: '8px' }}>{confirmDialog.title}</h2>
+            <p style={{ margin: '0 0 18px', color: isDark ? '#a7bbd4' : '#52617a', lineHeight: 1.6 }}>{confirmDialog.subtitle}</p>
+
+            <div style={{ padding: '12px 14px', borderRadius: '10px', background: isDark ? '#0d1b2a' : '#f8fafc', border: `1px solid ${isDark ? '#314866' : '#dce7f5'}`, marginBottom: '16px' }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b', marginBottom: '6px' }}>Asset</div>
+              <div style={{ color: isDark ? '#e2ebf7' : '#0f172a', fontWeight: 600 }}>{confirmDialog.assetLabel}</div>
+            </div>
+
+            <div style={styles.modalActions}>
+              <button type="button" style={styles.button('#718096')} onClick={() => setConfirmDialog(null)} disabled={actionLoading}>{t.cancel}</button>
+              <button type="button" style={styles.button(confirmDialog.danger ? '#dc2626' : '#2b6cb0')} onClick={confirmDialog.onConfirm} disabled={actionLoading}>
+                {confirmDialog.confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ======================================================

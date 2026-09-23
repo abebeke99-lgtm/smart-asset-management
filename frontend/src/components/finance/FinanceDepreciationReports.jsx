@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Download,
   FileBarChart2,
   FileText,
   Filter,
@@ -36,23 +35,6 @@ const EMPTY_FILTERS = {
   status: "",
   depreciationMethod: "",
 };
-
-const METHODS = [
-  "Straight Line",
-  "Declining Balance",
-  "Double Declining Balance",
-  "Units of Production",
-  "Sum of Years Digits",
-];
-
-const STATUSES = [
-  "Draft",
-  "Pending",
-  "Approved",
-  "Active",
-  "Completed",
-  "Rejected",
-];
 
 function authHeaders() {
   const token =
@@ -469,6 +451,7 @@ function normalizeSummary(payload, rows) {
     ),
 
     bookValue: numberValue(
+      summary.currentBookValue,
       summary.book_value,
       summary.bookValue,
       summary.net_book_value,
@@ -730,29 +713,6 @@ export default function FinanceDepreciationReports() {
     setAppliedFilters(EMPTY_FILTERS);
     setSearch("");
     setPage(1);
-  };
-
-  const exportCsv = async () => {
-    if (!pagination.total) {
-      setError("There is no depreciation report data to export.");
-      return;
-    }
-
-    try {
-      const query = buildQuery({ ...appliedFilters, search: search.trim(), export: "csv" });
-      const csv = await request(`/finance/depreciation-reports?${query}`);
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `depreciation-reports-${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(err.message || "Unable to export depreciation reports.");
-    }
   };
 
   const printReport = () => {
@@ -1504,15 +1464,6 @@ export default function FinanceDepreciationReports() {
               Print
             </button>
 
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={exportCsv}
-              disabled={!filteredReports.length}
-            >
-              <Download size={16} />
-              Export CSV
-            </button>
           </div>
         </header>
 
@@ -1814,13 +1765,8 @@ export default function FinanceDepreciationReports() {
                     All Methods
                   </option>
 
-                  {METHODS.map((method) => (
-                    <option
-                      key={method}
-                      value={method}
-                    >
-                      {method}
-                    </option>
+                  {[...new Set(reports.map((report) => report.depreciationMethod).filter(Boolean))].map((method) => (
+                    <option key={method} value={method}>{method}</option>
                   ))}
                 </select>
               </div>
@@ -1840,13 +1786,8 @@ export default function FinanceDepreciationReports() {
                     All Statuses
                   </option>
 
-                  {STATUSES.map((status) => (
-                    <option
-                      key={status}
-                      value={status}
-                    >
-                      {status}
-                    </option>
+                  {[...new Set(reports.map((report) => report.status).filter(Boolean))].map((status) => (
+                    <option key={status} value={status}>{status}</option>
                   ))}
                 </select>
               </div>
@@ -1888,16 +1829,6 @@ export default function FinanceDepreciationReports() {
           </div>
 
           <div className="toolbar-actions">
-            <button
-              type="button"
-              className="btn"
-              onClick={exportCsv}
-              disabled={!filteredReports.length}
-            >
-              <Download size={15} />
-              Export CSV
-            </button>
-
             <Link
               to="/finance/depreciation"
               className="btn"

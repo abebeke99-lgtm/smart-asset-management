@@ -41,7 +41,6 @@ export const ROUTES = {
   ADMIN_BACKUP: '/admin/backup',
   ADMIN_DEPARTMENTS: '/admin/departments',
   ADMIN_LOCATIONS: '/admin/locations',
-  ADMIN_AUDIT_LOGS: '/admin/audit-logs',
   ADMIN_MONITORING: '/admin/monitoring',
 
   // ICT Officer Routes
@@ -115,7 +114,6 @@ export const ROUTES = {
   FINANCE_BUDGET_REPORTS: '/finance/budget-reports',
   FINANCE_DEPRECIATION_REPORTS: '/finance/depreciation-reports',
   FINANCE_ASSET_VALUE_REPORTS: '/finance/asset-value-reports',
-  FINANCE_AUDIT: '/finance/audit',
   FINANCE_NOTIFICATIONS: '/finance/notifications',
 
   // Maintenance Routes

@@ -1,11 +1,22 @@
 const { Op } = require('sequelize');
-const { sequelize, Notification, NotificationDelivery, User, AuditLog } = require('../models');
-const { sendNotificationEmail } = require('./emailService');
+const { sequelize, Notification, NotificationDelivery, User, AuditLog, Config } = require('../models');
+const { sendNotificationEmail, validateEmailConfiguration } = require('./emailService');
 const { sendSMS } = require('./smsService');
 
 const allowedTypes = new Set(['system', 'maintenance', 'assignment', 'transfer', 'missing_asset', 'warranty', 'rfid', 'security', 'alert', 'report', 'reminder', 'approval', 'inventory', 'procurement', 'financial', 'verification', 'disposal', 'custom']);
 const allowedPriorities = new Set(['low', 'medium', 'high', 'urgent']);
 const allowedChannels = new Set(['in_app', 'email', 'sms']);
+const defaultEventRules = {
+  assignment_created: { enabled: true, inApp: true, email: false, recipientRule: 'Assigned User', priority: 'normal' },
+  assignment_returned: { enabled: true, inApp: true, email: false, recipientRule: 'Assigned User', priority: 'normal' },
+  maintenance_created: { enabled: true, inApp: true, email: false, recipientRule: 'Maintenance Staff', priority: 'normal' },
+  maintenance_status_changed: { enabled: true, inApp: true, email: false, recipientRule: 'Requestor and Maintenance Staff', priority: 'normal' },
+  finance_purchase_request_submitted: { enabled: true, inApp: true, email: false, recipientRule: 'Finance', priority: 'normal' },
+  finance_invoice_registered: { enabled: true, inApp: true, email: false, recipientRule: 'Finance', priority: 'normal' },
+  finance_payment_submitted: { enabled: true, inApp: true, email: false, recipientRule: 'Finance', priority: 'high' },
+  finance_transaction_failed: { enabled: true, inApp: true, email: false, recipientRule: 'Finance', priority: 'urgent' },
+  finance_invoice_overdue: { enabled: true, inApp: true, email: false, recipientRule: 'Finance', priority: 'high' },
+};
 
 const normalizeChannels = (channels) => {
   const values = Array.isArray(channels) ? channels : [channels || 'in_app'];
@@ -44,10 +55,50 @@ const buildNotification = (payload, senderId, recipient, status) => ({
   recipientId: recipient.id,
   collegeId: recipient.collegeId || null,
   departmentId: recipient.departmentId || null,
+  assetId: payload.assetId || payload.asset_id || null,
+  eventKey: payload.eventKey || payload.event_key || null,
   scheduledAt: payload.scheduledAt || payload.scheduled_at || null,
   expiresAt: payload.expiresAt || payload.expires_at || null,
   sentAt: status === 'sent' ? new Date() : null,
 });
+
+const getNotificationSettings = async () => {
+  const record = await Config.findByPk('settings:notifications');
+  let configured = {};
+  try { configured = record ? JSON.parse(record.value || '{}') : {}; } catch { configured = {}; }
+  return {
+    enabled: configured.enabled !== false,
+    inAppEnabled: configured.inAppEnabled !== false,
+    emailEnabled: configured.emailEnabled === true,
+    events: { ...defaultEventRules, ...(configured.events || {}) },
+  };
+};
+
+const createEventNotification = async (payload = {}) => {
+  const settings = await getNotificationSettings();
+  const rule = settings.events[payload.event] || defaultEventRules[payload.event];
+  if (!settings.enabled || !rule?.enabled) return { skipped: true, reason: 'disabled' };
+  const channels = [];
+  if (rule.inApp && settings.inAppEnabled) channels.push('in_app');
+  if (rule.email && settings.emailEnabled && validateEmailConfiguration().valid) channels.push('email');
+  if (!channels.length) return { skipped: true, reason: 'no_enabled_channel' };
+  const recipients = [...new Set((payload.userIds || []).map(Number).filter(Number.isInteger))];
+  if (!recipients.length) return { skipped: true, reason: 'no_recipients' };
+  const notifications = [];
+  for (const userId of recipients) {
+    const eventKey = payload.eventKey || `${payload.event}:${payload.entityId || ''}:${userId}`;
+    const duplicate = await Notification.findOne({ where: { userId, eventKey } });
+    if (duplicate) continue;
+    const result = await createBulkNotification({ ...payload, userIds: [userId], recipientType: 'users', channels, priority: rule.priority === 'normal' ? 'medium' : rule.priority, eventKey }, payload.senderId || null);
+    notifications.push(...result.notifications);
+  }
+  return { skipped: false, notifications };
+};
+
+const createFinanceNotification = async (payload = {}) => {
+  const recipients = await resolveRecipients({ recipientType: 'role', roles: ['finance', 'admin'] });
+  return createEventNotification({ ...payload, userIds: recipients.map((recipient) => recipient.id) });
+};
 
 const deliver = async (notification, recipient, channels, transaction) => {
   const results = [];
@@ -93,4 +144,4 @@ const createBulkNotification = async (payload, senderId) => {
   }
 };
 
-module.exports = { allowedTypes, allowedPriorities, allowedChannels, normalizeChannels, resolveRecipients, createBulkNotification, deliver };
+module.exports = { allowedTypes, allowedPriorities, allowedChannels, normalizeChannels, resolveRecipients, createBulkNotification, createEventNotification, createFinanceNotification, deliver, getNotificationSettings, defaultEventRules };

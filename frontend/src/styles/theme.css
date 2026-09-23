@@ -1,50 +1,90 @@
 :root {
-  --primary: #0EA5E9;
-  --primary-dark: #2563EB;
-  --primary-hover: #0284C7;
-  --navy: #0F172A;
-  --navy-soft: #111827;
-  --background: #F8FAFC;
-  --surface: #FFFFFF;
+  /* Dashboard */
+  --dashboard-header: #B1BAC4;
+  --dashboard-sidebar: #8F9BA7;
+  --dashboard-sidebar-hover: #C5CED6;
+  --dashboard-sidebar-active: #D9E0E6;
+
+  /* Content */
+  --page-background: #F5F7F9;
+  --card-background: #FFFFFF;
+  --border: #D7DEE5;
+
+  /* Text */
+  --text-primary: #17212B;
+  --text-secondary: #334155;
+  --text-muted: #718096;
+
+  /* Public Footer */
+  --footer-background: #687784;
+  --footer-text: #FFFFFF;
+  --footer-muted: #E7ECF0;
+
+  /* Login */
+  --login-background: #EEF2F5;
+  --login-card: #FFFFFF;
+  --login-primary: #536575;
+  --login-primary-hover: #435463;
+
+  --color-shell-primary: var(--dashboard-header);
+  --color-shell-sidebar: var(--dashboard-sidebar);
+  --color-shell-footer: var(--footer-background);
+  --color-page-bg: var(--page-background);
+  --color-card: var(--card-background);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border);
+  --color-sidebar-active: var(--dashboard-sidebar-active);
+  --color-sidebar-hover: var(--dashboard-sidebar-hover);
+
+  --primary: var(--dashboard-header);
+  --primary-dark: #6B7786;
+  --primary-hover: var(--dashboard-sidebar);
+  --navy: var(--text-primary);
+  --navy-soft: var(--text-secondary);
+  --background: var(--page-background);
+  --surface: var(--card-background);
   --surface-alt: #F1F5F9;
-  --text: #0F172A;
-  --text-muted: #64748B;
-  --border: #E2E8F0;
+  --text: var(--text-primary);
+  --text-muted: var(--text-muted);
+  --border: var(--border);
   --success: #10B981;
   --success-soft: #D1FAE5;
   --warning: #F59E0B;
   --warning-soft: #FEF3C7;
   --danger: #EF4444;
   --danger-soft: #FEE2E2;
-  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 6px 18px rgba(15, 23, 42, 0.08);
-  --shadow-lg: 0 12px 30px rgba(15, 23, 42, 0.10);
+  --shadow-sm: 0 1px 2px rgba(23, 33, 43, 0.08);
+  --shadow-md: 0 8px 20px rgba(23, 33, 43, 0.08);
+  --shadow-lg: 0 12px 30px rgba(23, 33, 43, 0.10);
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
-  --header-background: #0EA5E9;
-  --sidebar-background: #0F172A;
-  --sidebar-hover: rgba(14, 165, 233, 0.12);
-  --sidebar-active: rgba(14, 165, 233, 0.18);
-  --focus-ring: rgba(14, 165, 233, 0.35);
-  --primary-blue: var(--primary);
-  --primary-blue-hover: var(--primary-hover);
-  --color-primary: var(--primary);
-  --color-primary-hover: var(--primary-hover);
-  --color-secondary: var(--primary-dark);
-  --color-secondary-hover: #1D4ED8;
+  --header-background: var(--dashboard-header);
+  --sidebar-background: var(--dashboard-sidebar);
+  --sidebar-hover: var(--dashboard-sidebar-hover);
+  --sidebar-active: var(--dashboard-sidebar-active);
+  --focus-ring: rgba(23, 33, 43, 0.25);
+  --primary-blue: var(--dashboard-header);
+  --primary-blue-hover: var(--dashboard-sidebar);
+  --color-primary: var(--dashboard-header);
+  --color-primary-hover: var(--dashboard-sidebar);
+  --color-secondary: var(--text-secondary);
+  --color-secondary-hover: #52606D;
   --color-success: var(--success);
   --color-success-light: var(--success-soft);
   --color-warning: var(--warning);
   --color-warning-light: var(--warning-soft);
   --color-danger: var(--danger);
   --color-danger-light: var(--danger-soft);
-  --color-background: var(--background);
-  --color-surface: var(--surface);
-  --color-text-primary: var(--text);
-  --color-text-secondary: var(--text-muted);
+  --color-background: var(--page-background);
+  --color-surface: var(--card-background);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
   --color-border: var(--border);
-  --header-gradient-start: var(--header-background);
-  --header-gradient-end: var(--header-background);
-  --transition: all 0.2s ease-in-out;
+  --header-gradient-start: var(--dashboard-header);
+  --header-gradient-end: var(--dashboard-header);
+  --transition: none;
 }
+

@@ -142,24 +142,20 @@ const AboutUs = () => {
           background: '#0EA5E9',
           color: 'white',
           padding: '80px 20px',
-          textAlign: 'center',
-          animation: 'fadeIn 0.8s ease forwards'
+          textAlign: 'center'
         }}>
           <div style={{ maxWidth: '900px', margin: '0 auto' }}>
             <div className="about-hero-icon" aria-hidden="true"><Database size={32} /></div>
             <h1 style={{
               fontSize: '2.8rem',
               fontWeight: 900,
-              marginBottom: '16px',
-              animation: 'slideUp 0.8s ease forwards'
+              marginBottom: '16px'
             }}>
               {t.pageTitle}
             </h1>
             <p style={{
               fontSize: '1.2rem',
-              opacity: 0.95,
-              animation: 'slideUp 0.8s ease 0.1s forwards',
-              animationFillMode: 'both'
+              opacity: 0.95
             }}>
               {t.pageSubtitle}
             </p>
@@ -179,8 +175,7 @@ const AboutUs = () => {
             background: isDark ? '#1e293b' : '#ffffff',
             padding: '40px 32px',
             borderRadius: '16px',
-            border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
-            animation: 'slideUp 0.6s ease forwards'
+            border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`
           }}>
             <h2 style={{
               fontSize: '1.8rem',
@@ -203,9 +198,7 @@ const AboutUs = () => {
             background: isDark ? '#1e293b' : '#ffffff',
             padding: '40px 32px',
             borderRadius: '16px',
-            border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
-            animation: 'slideUp 0.6s ease 0.1s forwards',
-            animationFillMode: 'both'
+            border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`
           }}>
             <h2 style={{
               fontSize: '1.8rem',
@@ -256,16 +249,7 @@ const AboutUs = () => {
                     padding: '32px 24px',
                     borderRadius: '16px',
                     textAlign: 'center',
-                    border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
-                    animation: `slideUp 0.6s ease ${idx * 0.1}s forwards`,
-                    animationFillMode: 'both',
-                    transition: 'all 0.3s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-8px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
+                    border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`
                   }}
                 >
                   <div style={{

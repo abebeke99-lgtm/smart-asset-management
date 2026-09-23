@@ -5,6 +5,19 @@
 @tailwind components;
 @tailwind utilities;
 
+*, *::before, *::after {
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+  scroll-behavior: auto !important;
+}
+
+*:hover,
+*:focus,
+*:active {
+  transform: none !important;
+}
+
 body {
   margin: 0;
   font-family: 'Inter', Arial, sans-serif;
@@ -22,35 +35,35 @@ code {
    ========================================== */
 
 :root {
-  --primary: var(--color-primary);
-  --primary-dark: var(--color-secondary);
-  --primary-hover: var(--color-secondary-hover);
-  --sidebar: var(--sidebar-background);
-  --sidebar-hover: var(--primary-blue-hover);
-  --sidebar-active: var(--primary-blue-hover);
-  --body-bg: var(--color-background);
-  --surface: var(--color-surface);
-  --surface-muted: #f1f5f9;
-  --surface-hover: #eff6ff;
+  --primary: var(--color-shell-primary);
+  --primary-dark: var(--color-shell-footer);
+  --primary-hover: var(--color-shell-sidebar);
+  --sidebar: var(--color-shell-sidebar);
+  --sidebar-hover: var(--color-sidebar-hover);
+  --sidebar-active: var(--color-sidebar-active);
+  --body-bg: var(--color-page-bg);
+  --surface: var(--color-card);
+  --surface-muted: #f3f6f8;
+  --surface-hover: #e9eef4;
   --text-primary: var(--color-text-primary);
   --text-secondary: var(--color-text-secondary);
-  --text-muted: #94a3b8;
-  --text-on-dark: #cbd5e1;
+  --text-muted: var(--color-text-muted);
+  --text-on-dark: #f8fafc;
   --success: #16a34a;
   --success-light: #dcfce7;
   --warning: #f59e0b;
   --warning-light: #fef3c7;
   --danger: #dc2626;
   --danger-light: #fee2e2;
-  --info: #0ea5e9;
-  --info-light: #e0f2fe;
+  --info: var(--color-shell-primary);
+  --info-light: #edf2f7;
   --purple: #7c3aed;
   --purple-light: #ede9fe;
   --border: var(--color-border);
-  --border-light: #f1f5f9;
-  --focus: var(--color-primary);
-  --mau-blue: var(--primary-dark);
-  --mau-sky: var(--primary);
+  --border-light: #f5f7f9;
+  --focus: var(--color-shell-primary);
+  --mau-blue: var(--color-shell-footer);
+  --mau-sky: var(--color-shell-primary);
   --mau-light: var(--info-light);
   --mau-text: var(--text-primary);
   --mau-text-light: var(--text-secondary);

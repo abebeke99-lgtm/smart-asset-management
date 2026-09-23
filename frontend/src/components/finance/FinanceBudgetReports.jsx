@@ -25,11 +25,13 @@ import api from "../../services/api";
 const PAGE_SIZE = 10;
 
 const EMPTY_FILTERS = {
-  dateFrom: "",
-  dateTo: "",
-  financialYear: "",
-  department: "",
-  budgetType: "",
+  startDate: "",
+  endDate: "",
+  fiscalYearId: "",
+  collegeId: "",
+  departmentId: "",
+  budgetCode: "",
+  fundSourceId: "",
   status: "",
 };
 
@@ -284,10 +286,7 @@ function normalizeBudgetReport(item) {
     utilization: numberValue(
       item.utilization,
       item.utilization_rate,
-      item.utilizationRate,
-      budgetAmount
-        ? ((actualAmount + committedAmount) / budgetAmount) * 100
-        : 0
+      item.utilizationRate
     ),
 
     currency: textValue(
@@ -349,6 +348,7 @@ function normalizeSummary(payload, rows) {
     ),
 
     budgetAmount: numberValue(
+      summary.totalAllocated,
       summary.budget_amount,
       summary.budgetAmount,
       summary.total_budget,
@@ -359,6 +359,7 @@ function normalizeSummary(payload, rows) {
     ),
 
     committedAmount: numberValue(
+      summary.totalCommitted,
       summary.committed_amount,
       summary.committedAmount,
       summary.commitments,
@@ -366,6 +367,7 @@ function normalizeSummary(payload, rows) {
     ),
 
     actualAmount: numberValue(
+      summary.totalSpent,
       summary.actual_amount,
       summary.actualAmount,
       summary.spent_amount,
@@ -375,6 +377,7 @@ function normalizeSummary(payload, rows) {
     ),
 
     remainingAmount: numberValue(
+      summary.totalAvailable,
       summary.remaining_amount,
       summary.remainingAmount,
       summary.available_amount,
@@ -383,6 +386,8 @@ function normalizeSummary(payload, rows) {
         ? undefined
         : calculated.remainingAmount
     ),
+
+      utilization: numberValue(summary.utilization),
   };
 }
 
@@ -447,11 +452,13 @@ export default function FinanceBudgetReports() {
     committedAmount: 0,
     actualAmount: 0,
     remainingAmount: 0,
+    utilization: 0,
   });
 
   const [departments, setDepartments] = useState([]);
   const [financialYears, setFinancialYears] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [fundSources, setFundSources] = useState([]);
+  const [colleges, setColleges] = useState([]);
   const [statuses, setStatuses] = useState([]);
 
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -479,22 +486,13 @@ export default function FinanceBudgetReports() {
     setLoadingFilters(true);
 
     try {
-      const payload = await request(
-        "/finance/budget-reports/filters"
-      );
+      const payload = await request("/finance/budget-reports", { params: { limit: 1 } });
 
       const root = extractObject(payload);
 
-      const departmentRows = extractArray(
-        root.departments || payload.departments
-      );
-
-      const yearRows = extractArray(
-        root.financialYears ||
-          root.financial_years ||
-          payload.financialYears ||
-          payload.financial_years
-      );
+      const lookupFilters = root.filters || payload.filters || {};
+      const departmentRows = extractArray(lookupFilters.departments);
+      const yearRows = extractArray(lookupFilters.fiscalYears);
 
       setDepartments(
         departmentRows
@@ -524,23 +522,18 @@ export default function FinanceBudgetReports() {
               return String(item);
             }
 
-            return textValue(
-              item.year,
-              item.financial_year,
-              item.financialYear,
-              item.fiscal_year,
-              item.fiscalYear,
-              item.name
-            );
+            return item;
           })
           .filter(Boolean)
       );
-          setCategories(root.categories || payload.categories || []);
-          setStatuses(root.statuses || payload.statuses || []);
+          setFundSources(extractArray(lookupFilters.fundSources));
+          setColleges(extractArray(lookupFilters.colleges));
+          setStatuses(lookupFilters.statuses || STATUSES);
     } catch {
       setDepartments([]);
       setFinancialYears([]);
-      setCategories([]);
+      setFundSources([]);
+      setColleges([]);
       setStatuses([]);
     } finally {
       setLoadingFilters(false);
@@ -576,6 +569,7 @@ export default function FinanceBudgetReports() {
         committedAmount: 0,
         actualAmount: 0,
         remainingAmount: 0,
+        utilization: 0,
       });
 
       setError(
@@ -598,21 +592,7 @@ export default function FinanceBudgetReports() {
   const filteredReports = reports;
   const paginatedReports = reports;
   const totalPages = Math.max(1, Number(pagination.pages || pagination.totalPages || 1));
-
-  const utilization =
-    summary.budgetAmount > 0
-      ? ((summary.actualAmount +
-          summary.committedAmount) /
-          summary.budgetAmount) *
-        100
-      : 0;
-
-  const actualUtilization =
-    summary.budgetAmount > 0
-      ? (summary.actualAmount /
-          summary.budgetAmount) *
-        100
-      : 0;
+  const utilization = summary.utilization;
 
   const handleFilterChange = (event) => {
     const { name, value } = event.target;
@@ -1618,42 +1598,42 @@ export default function FinanceBudgetReports() {
           <form onSubmit={applyFilters}>
             <div className="filter-grid">
               <div className="field">
-                <label htmlFor="dateFrom">
-                  Date From
+                <label htmlFor="startDate">
+                  Start Date
                 </label>
 
                 <input
-                  id="dateFrom"
-                  name="dateFrom"
+                  id="startDate"
+                  name="startDate"
                   type="date"
-                  value={filters.dateFrom}
+                  value={filters.startDate}
                   onChange={handleFilterChange}
                 />
               </div>
 
               <div className="field">
-                <label htmlFor="dateTo">
-                  Date To
+                <label htmlFor="endDate">
+                  End Date
                 </label>
 
                 <input
-                  id="dateTo"
-                  name="dateTo"
+                  id="endDate"
+                  name="endDate"
                   type="date"
-                  value={filters.dateTo}
+                  value={filters.endDate}
                   onChange={handleFilterChange}
                 />
               </div>
 
               <div className="field">
-                <label htmlFor="financialYear">
-                  Financial Year
+                <label htmlFor="fiscalYearId">
+                  Fiscal Year
                 </label>
 
                 <select
-                  id="financialYear"
-                  name="financialYear"
-                  value={filters.financialYear}
+                  id="fiscalYearId"
+                  name="fiscalYearId"
+                  value={filters.fiscalYearId}
                   onChange={handleFilterChange}
                   disabled={loadingFilters}
                 >
@@ -1662,22 +1642,39 @@ export default function FinanceBudgetReports() {
                   </option>
 
                   {financialYears.map((year) => (
-                    <option key={year} value={year}>
-                      {year}
+                    <option key={year.id} value={year.id}>
+                      {year.code || year.name}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div className="field">
-                <label htmlFor="department">
+                <label htmlFor="collegeId">
+                  College
+                </label>
+                <select
+                  id="collegeId"
+                  name="collegeId"
+                  value={filters.collegeId}
+                  onChange={handleFilterChange}
+                >
+                  <option value="">All Colleges</option>
+                  {colleges.map((college) => (
+                    <option key={college.id} value={college.id}>{college.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field">
+                <label htmlFor="departmentId">
                   Department
                 </label>
 
                 <select
-                  id="department"
-                  name="department"
-                  value={filters.department}
+                  id="departmentId"
+                  name="departmentId"
+                  value={filters.departmentId}
                   onChange={handleFilterChange}
                 >
                   <option value="">
@@ -1687,12 +1684,10 @@ export default function FinanceBudgetReports() {
                   {departments.map((department) => (
                     <option
                       key={
-                        department.id ||
-                        department.name
+                        department.id
                       }
                       value={
-                        department.id ||
-                        department.name
+                        department.id
                       }
                     >
                       {department.name}
@@ -1702,25 +1697,23 @@ export default function FinanceBudgetReports() {
               </div>
 
               <div className="field">
-                <label htmlFor="budgetType">
-                  Budget Type
+                <label htmlFor="budgetCode">
+                  Budget Code
                 </label>
-
-                <select
+                <input
                   id="budgetType"
-                  name="budgetType"
-                  value={filters.budgetType}
+                  name="budgetCode"
+                  value={filters.budgetCode}
                   onChange={handleFilterChange}
-                >
-                  <option value="">
-                    All Budget Types
-                  </option>
+                  placeholder="Search budget code"
+                />
+              </div>
 
-                  {categories.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
+              <div className="field">
+                <label htmlFor="fundSourceId">Funding Source</label>
+                <select id="fundSourceId" name="fundSourceId" value={filters.fundSourceId} onChange={handleFilterChange}>
+                  <option value="">All Funding Sources</option>
+                  {fundSources.map((source) => <option key={source.id} value={source.id}>{source.name || source.code}</option>)}
                 </select>
               </div>
 
@@ -2344,18 +2337,17 @@ export default function FinanceBudgetReports() {
 
               <div className="modal-grid">
                 <div className="field">
-                  <label htmlFor="generateFinancialYear">
-                    Financial Year
+                  <label htmlFor="generateFiscalYearId">
+                    Fiscal Year
                   </label>
 
                   <select
-                    id="generateFinancialYear"
-                    value={filters.financialYear}
+                    id="generateFiscalYearId"
+                    value={filters.fiscalYearId}
                     onChange={(event) =>
                       setFilters((current) => ({
                         ...current,
-                        financialYear:
-                          event.target.value,
+                        fiscalYearId: event.target.value,
                       }))
                     }
                   >
@@ -2365,59 +2357,46 @@ export default function FinanceBudgetReports() {
 
                     {financialYears.map((year) => (
                       <option
-                        key={year}
-                        value={year}
+                        key={year.id}
+                        value={year.id}
                       >
-                        {year}
+                        {year.code || year.name}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="field">
-                  <label htmlFor="generateBudgetType">
-                    Budget Type
+                  <label htmlFor="generateBudgetCode">
+                    Budget Code
                   </label>
 
                   <select
-                    id="generateBudgetType"
-                    value={filters.budgetType}
+                    id="generateBudgetCode"
+                    value={filters.budgetCode}
                     onChange={(event) =>
                       setFilters((current) => ({
                         ...current,
-                        budgetType:
-                          event.target.value,
+                        budgetCode: event.target.value,
                       }))
                     }
                   >
-                    <option value="">
-                      All Budget Types
-                    </option>
-
-                    {BUDGET_TYPES.map((type) => (
-                      <option
-                        key={type}
-                        value={type}
-                      >
-                        {type}
-                      </option>
-                    ))}
+                    <option value="">All Budget Codes</option>
                   </select>
                 </div>
 
                 <div className="field">
-                  <label htmlFor="generateDepartment">
+                  <label htmlFor="generateDepartmentId">
                     Department
                   </label>
 
                   <select
-                    id="generateDepartment"
-                    value={filters.department}
+                    id="generateDepartmentId"
+                    value={filters.departmentId}
                     onChange={(event) =>
                       setFilters((current) => ({
                         ...current,
-                        department:
-                          event.target.value,
+                        departmentId: event.target.value,
                       }))
                     }
                   >
@@ -2429,12 +2408,10 @@ export default function FinanceBudgetReports() {
                       (department) => (
                         <option
                           key={
-                            department.id ||
-                            department.name
+                            department.id
                           }
                           value={
-                            department.id ||
-                            department.name
+                            department.id
                           }
                         >
                           {department.name}
@@ -2483,12 +2460,11 @@ export default function FinanceBudgetReports() {
                   <input
                     id="generateDateFrom"
                     type="date"
-                    value={filters.dateFrom}
+                    value={filters.startDate}
                     onChange={(event) =>
                       setFilters((current) => ({
                         ...current,
-                        dateFrom:
-                          event.target.value,
+                        startDate: event.target.value,
                       }))
                     }
                   />
@@ -2502,12 +2478,11 @@ export default function FinanceBudgetReports() {
                   <input
                     id="generateDateTo"
                     type="date"
-                    value={filters.dateTo}
+                    value={filters.endDate}
                     onChange={(event) =>
                       setFilters((current) => ({
                         ...current,
-                        dateTo:
-                          event.target.value,
+                        endDate: event.target.value,
                       }))
                     }
                   />

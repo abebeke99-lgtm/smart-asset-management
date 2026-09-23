@@ -171,6 +171,10 @@ const AdminCollegeManagement = ({ initialCreate = false }) => {
   };
 
   const toggleStatus = async (college) => {
+    const action = college.status === 'active' ? 'Deactivate' : 'Activate';
+    const confirmed = window.confirm(`${action} College? This will keep the college record and its historical organizational relationships intact.`);
+    if (!confirmed) return;
+
     try {
       const newStatus = college.status === 'active' ? 'inactive' : 'active';
       await apiClient.patch(`/api/admin/colleges/${college.id}/status`, { status: newStatus });
@@ -181,26 +185,29 @@ const AdminCollegeManagement = ({ initialCreate = false }) => {
     }
   };
 
+  const clearFilters = () => {
+    setSearch('');
+    setStatusFilter('');
+    setPage(1);
+  };
+
   const downloadColleges = async () => {
     try {
-      const response = await apiClient.get('/api/admin/colleges', { params: { page: 1, limit: 100, search, status: statusFilter, sortBy: 'name', sortOrder: 'ASC' } });
-      const rows = normalizeArray(response);
-      const headers = ['College', 'Code', 'Manager', 'Departments', 'Staff', 'Assets', 'Status', 'Created'];
-      const csv = [headers, ...rows.map((college) => [
-        college.collegeName || college.name,
-        college.collegeCode || college.code,
-        college.manager?.name || 'Unassigned',
-        college.departmentCount ?? 0,
-        college.staffCount ?? 0,
-        college.assetCount ?? 0,
-        college.status || '',
-        college.createdAt || '',
-      ])].map((row) => row.map((value) => JSON.stringify(value ?? '')).join(',')).join('\n');
-      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      const response = await apiClient.get('/api/admin/colleges/export', {
+        params: { search, status: statusFilter },
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const headers = response.headers || {};
+      const disposition = headers['content-disposition'] || headers['Content-Disposition'] || '';
+      const fileMatch = disposition.match(/filename="?([^";]+)"?/i);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'colleges.csv';
+      link.download = fileMatch && fileMatch[1] ? fileMatch[1] : `colleges-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
       link.click();
+      link.remove();
       URL.revokeObjectURL(url);
       toast.success('College list downloaded');
     } catch (error) {
@@ -240,8 +247,11 @@ const AdminCollegeManagement = ({ initialCreate = false }) => {
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
         </select>
-        <button className="admin-secondary-button inline-flex items-center gap-2" onClick={fetchColleges} disabled={loading}><RefreshCw size={16} /> Refresh</button>
-        <button className="admin-secondary-button inline-flex items-center gap-2" onClick={downloadColleges} disabled={loading}><Download size={16} /> Download CSV</button>
+        <button type="button" className="admin-secondary-button inline-flex items-center gap-2" onClick={() => { setPage(1); fetchColleges(); }} disabled={loading}><RefreshCw size={16} /> Refresh</button>
+        {(search || statusFilter) && (
+          <button type="button" className="admin-secondary-button inline-flex items-center gap-2" onClick={clearFilters}>Clear filters</button>
+        )}
+        <button type="button" className="admin-secondary-button inline-flex items-center gap-2" onClick={downloadColleges} disabled={loading}><Download size={16} /> Download CSV</button>
       </div>
 
       {errors.load && <div className="admin-error-state" role="alert"><span>{errors.load}</span><button className="admin-secondary-button" onClick={fetchColleges}>Retry</button></div>}

@@ -528,38 +528,7 @@ export default function FinanceFinancialReports() {
 
       const serverSummary = getReportResponseSummary(payload);
 
-      const hasServerSummary =
-        Object.values(serverSummary).some((value) => Number(value) !== 0);
-
-      if (hasServerSummary) {
-        setSummary(serverSummary);
-      } else {
-        const calculated = rows.reduce(
-          (acc, row) => ({
-            totalAssets: acc.totalAssets + row.totalAssets,
-            acquisitionCost: acc.acquisitionCost + row.acquisitionCost,
-            currentBookValue: acc.currentBookValue + row.currentBookValue,
-            accumulatedDepreciation:
-              acc.accumulatedDepreciation + row.accumulatedDepreciation,
-            capitalAdditions: acc.capitalAdditions + row.capitalAdditions,
-            payments: acc.payments + row.payments,
-            purchases: acc.purchases + row.purchases,
-            transactions: acc.transactions + row.transactions,
-          }),
-          {
-            totalAssets: 0,
-            acquisitionCost: 0,
-            currentBookValue: 0,
-            accumulatedDepreciation: 0,
-            capitalAdditions: 0,
-            payments: 0,
-            purchases: 0,
-            transactions: 0,
-          }
-        );
-
-        setSummary(calculated);
-      }
+      setSummary(serverSummary);
 
       if (root.message && rows.length === 0) {
         setSuccess(root.message);

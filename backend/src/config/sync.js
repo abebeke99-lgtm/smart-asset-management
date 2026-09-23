@@ -148,6 +148,16 @@ async function syncDatabase() {
       deleted_by: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
       deleted_at: { type: require('sequelize').DataTypes.DATE, allowNull: true },
     })) await ensureColumn('assets', column, definition);
+    await ensureColumn('rfid_logs', 'reader_id', { type: require('sequelize').DataTypes.STRING(80), allowNull: true });
+    await ensureColumn('purchase_orders', 'budget_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
+    for (const [column, definition] of Object.entries({
+      verification_status: { type: require('sequelize').DataTypes.ENUM('Pending', 'Verified', 'Rejected'), allowNull: false, defaultValue: 'Pending' },
+      approval_status: { type: require('sequelize').DataTypes.ENUM('Pending', 'Approved', 'Rejected'), allowNull: false, defaultValue: 'Pending' },
+      verified_by: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      verified_at: { type: require('sequelize').DataTypes.DATE, allowNull: true },
+      approved_by: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      approved_at: { type: require('sequelize').DataTypes.DATE, allowNull: true },
+    })) await ensureColumn('invoices', column, definition);
 
     const assetIndexes = await sequelize.getQueryInterface().showIndex('assets');
     const hasUniqueDigitalId = assetIndexes.some((index) => index.unique && index.fields.some((field) => (field.attribute || field) === 'digital_id'));
@@ -165,10 +175,13 @@ async function syncDatabase() {
     for (const [index, supplierName] of legacyNames.entries()) {
       await Supplier.findOrCreate({ where: { supplierName }, defaults: { supplierCode: `LEGACY-${String(index + 1).padStart(4, '0')}`, supplierName, status: 'active' } });
     }
+    await sequelize.query("UPDATE locations SET code = NULL WHERE code IS NULL OR TRIM(code) = ''");
+    await sequelize.query("UPDATE categories SET code = NULL WHERE code IS NULL OR TRIM(code) = ''");
+
     const distinctLocations = await Asset.findAll({ attributes: ['location'], where: { location: { [Op.ne]: '' } }, group: ['location'], raw: true });
     for (const row of distinctLocations) {
       const name = String(row.location || '').trim();
-      if (name) await Location.findOrCreate({ where: { name }, defaults: { name, code: '', description: `${name} asset location` } });
+      if (name) await Location.findOrCreate({ where: { name }, defaults: { name, code: null, description: `${name} asset location` } });
     }
 
     await ensureColumn('users', 'college_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
@@ -188,6 +201,7 @@ async function syncDatabase() {
       college_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
       department_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
       asset_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      event_key: { type: require('sequelize').DataTypes.STRING(160), allowNull: true },
       priority: { type: require('sequelize').DataTypes.STRING(30), allowNull: false, defaultValue: 'medium' },
       channel: { type: require('sequelize').DataTypes.STRING(100), allowNull: false, defaultValue: 'in_app' },
       status: { type: require('sequelize').DataTypes.STRING(30), allowNull: false, defaultValue: 'sent' },

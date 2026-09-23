@@ -1,5 +1,5 @@
 const { sequelize, Asset, Department, Inventory, InventoryTransaction, User, Maintenance, AssetMovement, AuditLog } = require('../models');
-const { Op } = require('sequelize');
+const { Op, Sequelize } = require('sequelize');
 
 const roles = ['admin', 'store_manager', 'ict_officer'];
 const canManage = (user) => user && roles.includes(user.role);
@@ -13,6 +13,9 @@ const normalizeInventory = (item) => {
     asset_tag: item.Asset?.assetCode,
     name: item.Asset?.name,
     category: item.Asset?.category,
+    description: item.Asset?.description || data.description || '',
+    supplier: item.Asset?.supplier || data.supplier || '',
+    location: data.location || item.Asset?.location || '',
     department: item.Department?.name || data.department || '',
     serial_number: item.Asset?.serialNumber,
     current_value: item.Asset?.currentValue,
@@ -32,20 +35,51 @@ const include = [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'catego
 
 const getInventory = async (req, res, next) => {
   try {
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number.parseInt(req.query.pageSize || req.query.limit, 10) || 20));
     const where = {};
-    if (req.query.status) where.status = req.query.status;
-    if (req.query.location) where.location = req.query.location;
-    const items = await Inventory.findAll({ where, include, order: [['id', 'ASC']] });
-    const normalized = items.map(normalizeInventory);
+    const assetWhere = {};
+    const search = String(req.query.search || '').trim();
+    const stockLevel = String(req.query.stockLevel || '').toLowerCase();
+    if (req.query.location) where.location = String(req.query.location);
+    if (req.query.status) assetWhere.status = String(req.query.status).toLowerCase();
+    if (req.query.category) assetWhere.category = String(req.query.category);
+    if (search) assetWhere[Op.or] = ['assetCode', 'name', 'category', 'serialNumber', 'rfidTag', 'supplier'].map((field) => ({ [field]: { [Op.like]: `%${search}%` } }));
+    if (stockLevel === 'available') {
+      where[Op.and] = [
+        Sequelize.where(Sequelize.col('available_quantity'), Op.gt, Sequelize.col('minimum_quantity')),
+      ];
+    }
+    if (stockLevel === 'low') {
+      where[Op.and] = [
+        Sequelize.where(Sequelize.col('available_quantity'), Op.gt, 0),
+        Sequelize.where(Sequelize.col('available_quantity'), Op.lte, Sequelize.col('minimum_quantity')),
+      ];
+    }
+    if (stockLevel === 'out') {
+      where.availableQuantity = { [Op.lte]: 0 };
+    }
+    const allowedSorts = { name: [Asset, 'name'], quantity: ['quantity'], category: [Asset, 'category'], location: ['location'], updatedAt: ['updatedAt'] };
+    const sort = allowedSorts[req.query.sortBy] || ['updatedAt'];
+    const order = [[...sort, String(req.query.sortOrder).toLowerCase() === 'asc' ? 'ASC' : 'DESC']];
+    const result = await Inventory.findAndCountAll({ where, include: [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'category', 'serialNumber', 'rfidTag', 'currentValue', 'purchasePrice', 'description', 'supplier', 'status', 'location'], where: assetWhere, required: true }, { model: Department, attributes: ['id', 'name'] }], order, limit: pageSize, offset: (page - 1) * pageSize, distinct: true });
+    const normalized = result.rows.map(normalizeInventory);
+    const allItems = await Inventory.findAll({ where, include: [{ model: Asset, attributes: ['status'], where: assetWhere, required: true }] });
+    const summary = allItems.reduce((stats, item) => {
+      const available = Number(item.availableQuantity || 0);
+      const minimum = Number(item.minimumQuantity || 0);
+      stats.totalItems += 1;
+      stats.totalQuantity += Number(item.quantity || 0);
+      stats.availableQuantity += available;
+      stats.lowStock += available > 0 && available <= minimum ? 1 : 0;
+      stats.outOfStock += available <= 0 ? 1 : 0;
+      return stats;
+    }, { totalItems: 0, totalQuantity: 0, availableQuantity: 0, lowStock: 0, outOfStock: 0 });
     return res.json({
       success: true,
       data: normalized,
-      pagination: {
-        page: 1,
-        limit: normalized.length,
-        total: normalized.length,
-        totalPages: 1,
-      }
+      summary,
+      pagination: { page, limit: pageSize, pageSize, total: result.count, totalPages: Math.ceil(result.count / pageSize) },
     });
   } catch (error) { next(error); }
 };

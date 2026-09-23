@@ -1,0 +1,46 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="flowBg" x1="170" y1="70" x2="1020" y2="740" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#EFF6FF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#flowBg)"/>
+  <g opacity="0.9">
+    <path d="M180 228H1020" stroke="#BFDBFE" stroke-width="8" stroke-linecap="round"/>
+    <path d="M180 436H1020" stroke="#BFDBFE" stroke-width="8" stroke-linecap="round"/>
+    <path d="M180 644H1020" stroke="#BFDBFE" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <g>
+    <rect x="210" y="160" width="160" height="130" rx="24" fill="#FFFFFF" stroke="#DBEAFE"/>
+    <rect x="522" y="160" width="160" height="130" rx="24" fill="#FFFFFF" stroke="#DBEAFE"/>
+    <rect x="834" y="160" width="160" height="130" rx="24" fill="#FFFFFF" stroke="#DBEAFE"/>
+    <rect x="366" y="370" width="160" height="130" rx="24" fill="#FFFFFF" stroke="#DBEAFE"/>
+    <rect x="678" y="370" width="160" height="130" rx="24" fill="#FFFFFF" stroke="#DBEAFE"/>
+    <rect x="522" y="580" width="160" height="130" rx="24" fill="#FFFFFF" stroke="#DBEAFE"/>
+    <path d="M370 225H522" stroke="#60A5FA" stroke-width="8" stroke-linecap="round"/>
+    <path d="M682 225H834" stroke="#60A5FA" stroke-width="8" stroke-linecap="round"/>
+    <path d="M602 290V370" stroke="#60A5FA" stroke-width="8" stroke-linecap="round"/>
+    <path d="M438 500V580" stroke="#60A5FA" stroke-width="8" stroke-linecap="round"/>
+    <path d="M758 500V580" stroke="#60A5FA" stroke-width="8" stroke-linecap="round"/>
+    <path d="M602 710V580" stroke="#60A5FA" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="290" cy="225" r="24" fill="#DBEAFE"/>
+    <circle cx="602" cy="225" r="24" fill="#DBEAFE"/>
+    <circle cx="914" cy="225" r="24" fill="#DBEAFE"/>
+    <circle cx="446" cy="435" r="24" fill="#DBEAFE"/>
+    <circle cx="758" cy="435" r="24" fill="#DBEAFE"/>
+    <circle cx="602" cy="645" r="24" fill="#DBEAFE"/>
+    <path d="M280 225H300" stroke="#2563EB" stroke-width="8" stroke-linecap="round"/>
+    <path d="M592 225H612" stroke="#2563EB" stroke-width="8" stroke-linecap="round"/>
+    <path d="M904 225H924" stroke="#2563EB" stroke-width="8" stroke-linecap="round"/>
+    <path d="M436 435H456" stroke="#2563EB" stroke-width="8" stroke-linecap="round"/>
+    <path d="M748 435H768" stroke="#2563EB" stroke-width="8" stroke-linecap="round"/>
+    <path d="M592 645H612" stroke="#2563EB" stroke-width="8" stroke-linecap="round"/>
+    <text x="290" y="232" text-anchor="middle" font-size="26" fill="#2563EB" font-family="Arial, sans-serif" font-weight="700">1</text>
+    <text x="602" y="232" text-anchor="middle" font-size="26" fill="#2563EB" font-family="Arial, sans-serif" font-weight="700">2</text>
+    <text x="914" y="232" text-anchor="middle" font-size="26" fill="#2563EB" font-family="Arial, sans-serif" font-weight="700">3</text>
+    <text x="446" y="442" text-anchor="middle" font-size="26" fill="#2563EB" font-family="Arial, sans-serif" font-weight="700">4</text>
+    <text x="758" y="442" text-anchor="middle" font-size="26" fill="#2563EB" font-family="Arial, sans-serif" font-weight="700">5</text>
+    <text x="602" y="652" text-anchor="middle" font-size="26" fill="#2563EB" font-family="Arial, sans-serif" font-weight="700">6</text>
+  </g>
+</svg>

@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 
 const { resolveLoginAliases, normalizeLoginIdentity, generateToken } = require('../src/controllers/authController');
 const { findCollegeScopeForUser } = require('../src/middlewares/organizationScope');
+const { normalizeOrganizationSettings, resolveOrganizationSettings } = require('../src/routes/adminSettingsRoutes');
 
 test('normalizes canonical college role and legacy department assignments', () => {
   assert.deepEqual(normalizeLoginIdentity('college'), 'college');
@@ -126,6 +127,50 @@ test('admin settings exposes section persistence, profile security, health, and 
   assert.match(routeSource, /SETTINGS_SECTION_UPDATED/);
 });
 
+test('organization settings normalize legacy admin form keys to the canonical system config fields', () => {
+  const normalized = normalizeOrganizationSettings({
+    orgName: 'Mekdela Amba University',
+    instName: 'Mekdela Amba University',
+    orgCode: 'MAU',
+    logo: 'https://example.edu.et/logo.png',
+    website: 'https://example.edu.et',
+    email: 'info@example.edu.et',
+    phone: '+251911000000',
+    address: 'Tulu Awliya, Ethiopia'
+  });
+
+  assert.deepEqual(normalized, {
+    university_name: 'Mekdela Amba University',
+    institution_name: 'Mekdela Amba University',
+    organization_code: 'MAU',
+    logo_url: 'https://example.edu.et/logo.png',
+    website: 'https://example.edu.et',
+    contact_email: 'info@example.edu.et',
+    contact_phone: '+251911000000',
+    address: 'Tulu Awliya, Ethiopia'
+  });
+
+  assert.deepEqual(resolveOrganizationSettings({
+    university_name: 'Mekdela Amba University',
+    institution_name: 'Mekdela Amba University',
+    organization_code: 'MAU',
+    logo_url: 'https://example.edu.et/logo.png',
+    website: 'https://example.edu.et',
+    contact_email: 'info@example.edu.et',
+    contact_phone: '+251911000000',
+    address: 'Tulu Awliya, Ethiopia'
+  }), {
+    orgName: 'Mekdela Amba University',
+    instName: 'Mekdela Amba University',
+    orgCode: 'MAU',
+    logo: 'https://example.edu.et/logo.png',
+    website: 'https://example.edu.et',
+    email: 'info@example.edu.et',
+    phone: '+251911000000',
+    address: 'Tulu Awliya, Ethiopia'
+  });
+});
+
 test('admin role governance persists permission matrices and protects core administrator access', () => {
   const routeSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/adminRoleRoutes.js'), 'utf8');
   assert.match(routeSource, /router\.get\('\/roles'/);
@@ -144,6 +189,19 @@ test('system monitoring exposes admin-only health, performance, resources, histo
   assert.match(routeSource, /router\.post\('\/alerts\/:id\/acknowledge'/);
   assert.match(routeSource, /router\.post\('\/alerts\/:id\/resolve'/);
   assert.match(middlewareSource, /process\.hrtime\.bigint/);
+});
+
+test('system health overview includes real application, database, API, server and storage statuses', async () => {
+  const { getOverview } = require('../src/services/systemMonitoringService');
+  const overview = await getOverview();
+  assert.ok(overview);
+  assert.ok(overview.application && typeof overview.application.status === 'string');
+  assert.ok(overview.database && typeof overview.database.status === 'string');
+  assert.ok(overview.api && typeof overview.api.status === 'string');
+  assert.ok(overview.server && typeof overview.server.status === 'string');
+  assert.ok(overview.storage && typeof overview.storage.status === 'string');
+  assert.ok(['healthy', 'warning', 'degraded', 'critical', 'unknown'].includes(overview.overall.status));
+  assert.ok(overview.application.startedAt || overview.application.uptimeSeconds !== undefined);
 });
 
 test('generateToken carries organization scope fields needed by the protected college flow', async () => {

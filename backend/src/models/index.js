@@ -30,6 +30,9 @@ const Inventory = require('./Inventory');
 const InventoryTransaction = require('./InventoryTransaction');
 const Approval = require('./Approval');
 const FinancialRecord = require('./FinancialRecord');
+const DepreciationRecord = require('./DepreciationRecord');
+const CapitalizationRecord = require('./CapitalizationRecord');
+const DisposalFinancialRecord = require('./DisposalFinancialRecord');
 const Config = require('./Config');
 const SettingsVersion = require('./SettingsVersion');
 const SystemAlert = require('./SystemAlert');
@@ -44,6 +47,10 @@ const PurchaseOrderItem = require('./PurchaseOrderItem');
 const Supplier = require('./Supplier');
 const Invoice = require('./Invoice');
 const InvoiceItem = require('./InvoiceItem');
+const Payment = require('./Payment');
+const FiscalYear = require('./FiscalYear');
+const FundSource = require('./FundSource');
+const Budget = require('./Budget');
 const Campus = require('./Campus');
 const Building = require('./Building');
 const Room = require('./Room');
@@ -58,6 +65,7 @@ const RequestAttachment = require('./RequestAttachment');
 const RequestStatusHistory = require('./RequestStatusHistory');
 const Feedback = require('./Feedback');
 const CleaningSchedule = require('./CleaningSchedule');
+const UploadRecord = require('./UploadRecord');
 const AssetDocument = require('./AssetDocument');
 const AssetGrant = require('./AssetGrant');
 const AssetCustody = require('./AssetCustody');
@@ -66,6 +74,7 @@ Asset.hasMany(Assignment, { foreignKey: 'assetId' });
 Assignment.belongsTo(Asset, { foreignKey: 'assetId' });
 College.hasMany(Department, { foreignKey: 'collegeId' });
 Department.belongsTo(College, { foreignKey: 'collegeId' });
+Department.belongsTo(Location, { foreignKey: 'locationId', as: 'LocationRecord' });
 Department.belongsTo(User, { foreignKey: 'headId', as: 'Head' });
 College.hasMany(User, { foreignKey: 'collegeId' });
 User.belongsTo(College, { foreignKey: 'collegeId' });
@@ -116,20 +125,53 @@ User.hasMany(Approval, { foreignKey: 'reviewedBy', as: 'ReviewedApprovals' });
 Approval.belongsTo(User, { foreignKey: 'reviewedBy', as: 'Reviewer' });
 Asset.hasMany(FinancialRecord, { foreignKey: 'assetId' });
 FinancialRecord.belongsTo(Asset, { foreignKey: 'assetId' });
+Asset.hasMany(DisposalFinancialRecord, { foreignKey: 'assetId' });
+DisposalFinancialRecord.belongsTo(Asset, { foreignKey: 'assetId' });
+DisposalRequest.hasOne(DisposalFinancialRecord, { foreignKey: 'disposalRequestId' });
+DisposalFinancialRecord.belongsTo(DisposalRequest, { foreignKey: 'disposalRequestId' });
+Department.hasMany(DisposalFinancialRecord, { foreignKey: 'departmentId' });
+DisposalFinancialRecord.belongsTo(Department, { foreignKey: 'departmentId' });
+Asset.hasMany(DepreciationRecord, { foreignKey: 'assetId' });
+DepreciationRecord.belongsTo(Asset, { foreignKey: 'assetId' });
+Asset.hasOne(CapitalizationRecord, { foreignKey: 'assetId' });
+CapitalizationRecord.belongsTo(Asset, { foreignKey: 'assetId' });
 User.hasMany(FinancialRecord, { foreignKey: 'recordedBy' });
 FinancialRecord.belongsTo(User, { foreignKey: 'recordedBy' });
+User.hasMany(DepreciationRecord, { foreignKey: 'recordedBy' });
+DepreciationRecord.belongsTo(User, { foreignKey: 'recordedBy' });
+User.hasMany(CapitalizationRecord, { foreignKey: 'createdBy' });
+CapitalizationRecord.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
 PurchaseOrder.hasMany(PurchaseOrderItem, { foreignKey: 'purchaseOrderId', as: 'items', onDelete: 'CASCADE' });
 PurchaseOrderItem.belongsTo(PurchaseOrder, { foreignKey: 'purchaseOrderId' });
+PurchaseOrder.hasOne(CapitalizationRecord, { foreignKey: 'purchaseOrderId' });
+CapitalizationRecord.belongsTo(PurchaseOrder, { foreignKey: 'purchaseOrderId' });
 PurchaseOrder.belongsTo(Approval, { foreignKey: 'purchaseRequestId', as: 'PurchaseRequest' });
 Approval.hasMany(PurchaseOrder, { foreignKey: 'purchaseRequestId', as: 'PurchaseOrders' });
 PurchaseOrder.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
+PurchaseOrder.belongsTo(Budget, { foreignKey: 'budgetId', as: 'BudgetRecord' });
+Budget.hasMany(PurchaseOrder, { foreignKey: 'budgetId', as: 'PurchaseOrders' });
+Budget.belongsTo(FiscalYear, { foreignKey: 'fiscalYearId', as: 'FiscalYear' });
+Budget.belongsTo(FundSource, { foreignKey: 'fundSourceId', as: 'FundSource' });
+Budget.belongsTo(College, { foreignKey: 'collegeId', as: 'CollegeRecord' });
+Budget.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
+FiscalYear.hasMany(Budget, { foreignKey: 'fiscalYearId' });
+FundSource.hasMany(Budget, { foreignKey: 'fundSourceId' });
+College.hasMany(Budget, { foreignKey: 'collegeId', as: 'Budgets' });
+Department.hasMany(Budget, { foreignKey: 'departmentId', as: 'Budgets' });
 PurchaseOrder.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
 PurchaseOrder.belongsTo(User, { foreignKey: 'approvedBy', as: 'Approver' });
 Invoice.hasMany(InvoiceItem, { foreignKey: 'invoiceId', as: 'items', onDelete: 'CASCADE' });
 InvoiceItem.belongsTo(Invoice, { foreignKey: 'invoiceId' });
+Invoice.hasOne(CapitalizationRecord, { foreignKey: 'invoiceId' });
+CapitalizationRecord.belongsTo(Invoice, { foreignKey: 'invoiceId' });
 Invoice.belongsTo(PurchaseOrder, { foreignKey: 'purchaseOrderId', as: 'PurchaseOrder' });
 Invoice.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
 Invoice.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
+Invoice.hasMany(Payment, { foreignKey: 'invoiceId', as: 'payments' });
+Payment.belongsTo(Invoice, { foreignKey: 'invoiceId', as: 'InvoiceRecord' });
+Payment.belongsTo(User, { foreignKey: 'requestedBy', as: 'Requester' });
+Payment.belongsTo(User, { foreignKey: 'approvedBy', as: 'Approver' });
+Payment.belongsTo(User, { foreignKey: 'processedBy', as: 'Processor' });
 
 Asset.hasMany(DisposalRequest, { foreignKey: 'assetId' });
 DisposalRequest.belongsTo(Asset, { foreignKey: 'assetId' });
@@ -335,6 +377,8 @@ module.exports = {
   User,
   College,
   Asset,
+  CapitalizationRecord,
+  DepreciationRecord,
   Infrastructure,
   Assignment,
   Transfer,
@@ -363,6 +407,7 @@ module.exports = {
   InventoryTransaction,
   Approval,
   FinancialRecord,
+  DisposalFinancialRecord,
   Config,
   SettingsVersion,
   SystemAlert,
@@ -377,6 +422,9 @@ module.exports = {
   Supplier,
   Invoice,
   InvoiceItem,
+  FiscalYear,
+  FundSource,
+  Budget,
   Campus,
   Building,
   Room,
@@ -391,6 +439,7 @@ module.exports = {
   RequestStatusHistory,
   Feedback,
   CleaningSchedule,
+  UploadRecord,
   AssetDocument,
   AssetGrant,
   AssetCustody,

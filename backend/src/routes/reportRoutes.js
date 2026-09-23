@@ -1,10 +1,12 @@
 const express = require('express');
-const { getDashboardStats } = require('../controllers/reportController');
-const { requireAuth } = require('../middlewares/auth');
+const { getDashboardStats, generateReport, exportReport } = require('../controllers/reportController');
+const { requireAuth, requireRole } = require('../middlewares/auth');
 
 const router = express.Router();
+const requireAdminReports = [requireAuth, requireRole('admin')];
 
-router.get('/', requireAuth, getDashboardStats);
-router.get('/dashboard', requireAuth, getDashboardStats);
+router.get('/', ...requireAdminReports, generateReport);
+router.get('/dashboard', ...requireAdminReports, getDashboardStats);
+router.get('/export', ...requireAdminReports, exportReport);
 
 module.exports = router;

@@ -113,23 +113,19 @@ const Contact = () => {
           background: '#0EA5E9',
           color: 'white',
           padding: '80px 20px',
-          textAlign: 'center',
-          animation: 'fadeIn 0.8s ease forwards'
+          textAlign: 'center'
         }}>
           <div style={{ maxWidth: '900px', margin: '0 auto' }}>
             <h1 style={{
               fontSize: '2.8rem',
               fontWeight: 900,
-              marginBottom: '16px',
-              animation: 'slideUp 0.8s ease forwards'
+              marginBottom: '16px'
             }}>
               {t.pageTitle}
             </h1>
             <p style={{
               fontSize: '1.2rem',
-              opacity: 0.95,
-              animation: 'slideUp 0.8s ease 0.1s forwards',
-              animationFillMode: 'both'
+              opacity: 0.95
             }}>
               {t.pageSubtitle}
             </p>
@@ -172,16 +168,7 @@ const Contact = () => {
                         padding: '16px',
                         borderRadius: '12px',
                         background: isDark ? '#1e293b' : '#f8fafc',
-                        border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
-                        transition: 'all 0.3s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateX(8px)';
-                        e.currentTarget.style.background = isDark ? '#334155' : '#f0f4ff';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateX(0)';
-                        e.currentTarget.style.background = isDark ? '#1e293b' : '#f8fafc';
+                        border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`
                       }}
                     >
                       <div style={{

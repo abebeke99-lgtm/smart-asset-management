@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
-import axios from 'axios';
+import apiClient from '../../services/apiClient';
 import * as XLSX from 'xlsx';
 import LoadingSpinner from '../common/ui/LoadingSpinner';
 
@@ -148,7 +148,7 @@ const ICTTechnicalSupport = () => {
   const fetchTickets = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/support', { params: { limit: 200 } });
+      const response = await apiClient.get('/api/support', { params: { limit: 200 } });
       const data = Array.isArray(response.data?.tickets)
         ? response.data.tickets
         : Array.isArray(response.data?.data)
@@ -160,13 +160,20 @@ const ICTTechnicalSupport = () => {
       applyFilters(data);
     } catch (error) {
       console.error('Failed to load support tickets:', error);
-      toast.error(t.fetchError || 'Failed to load tickets');
+      const status = error.response?.status;
+      const message = status === 401
+        ? 'Your session has expired. Please sign in again.'
+        : status === 403
+          ? "You don't have permission to view support tickets."
+          : error.response?.data?.message || t.fetchError || 'Failed to load tickets';
+      toast.error(message);
       setTickets([]);
       setBackendLimit(false);
       calculateStats([]);
       applyFilters([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [t]);
 
   // Calculate stats
@@ -258,7 +265,7 @@ const ICTTechnicalSupport = () => {
 
     try {
       // Attempt to update via backend
-      await axios.patch(`/api/support/${selectedTicket.id}`, {
+      await apiClient.patch(`/api/support/${selectedTicket.id}`, {
         status: statusUpdate,
         comment: responseComment
       });

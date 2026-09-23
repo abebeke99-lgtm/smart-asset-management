@@ -21,6 +21,20 @@ ChartJS.register(
   Filler
 );
 
+const numericValue = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const normalizeAsset = (asset) => ({
+  ...asset,
+  purchase_cost: numericValue(asset.purchase_cost),
+  current_value: numericValue(asset.current_value),
+  residual_value: numericValue(asset.residual_value),
+  useful_life: numericValue(asset.useful_life),
+  maintenance_count: numericValue(asset.maintenance_count)
+});
+
 const FinanceReports = () => {
   const { language, theme } = useLanguage();
   const [loading, setLoading] = useState(true);
@@ -61,7 +75,8 @@ const FinanceReports = () => {
         axios.get('/api/assets', { params: { limit: 500, status: 'Disposed' } })
       ]);
 
-      setAssets(assetsRes.data?.assets || assetsRes.data?.data || []);
+      const assetRows = assetsRes.data?.assets || assetsRes.data?.data || [];
+      setAssets(Array.isArray(assetRows) ? assetRows.map(normalizeAsset) : []);
       setMaintenanceRequests(maintRes.data?.requests || []);
       setDisposedAssets(disposedRes.data?.assets || []);
     } catch (error) {

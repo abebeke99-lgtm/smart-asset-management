@@ -107,15 +107,15 @@ const DEFAULT_SETTINGS = {
   },
 
   notifications: {
-    email: true,
-    system: true,
-    maintenance: true,
-    asset: true,
-    rfid: true,
-    security: true,
-    lowstock: true,
-    overdue: true,
-    approval: true
+    enabled: true,
+    inAppEnabled: true,
+    emailEnabled: false,
+    events: {
+      assignment_created: { enabled: true, inApp: true, email: false, recipientRule: 'Assigned User', priority: 'normal' },
+      assignment_returned: { enabled: true, inApp: true, email: false, recipientRule: 'Assigned User', priority: 'normal' },
+      maintenance_created: { enabled: true, inApp: true, email: false, recipientRule: 'Maintenance Staff', priority: 'normal' },
+      maintenance_status_changed: { enabled: true, inApp: true, email: false, recipientRule: 'Requestor and Maintenance Staff', priority: 'normal' }
+    }
   },
 
   localization: {
@@ -126,8 +126,14 @@ const DEFAULT_SETTINGS = {
   },
 
   assets: {
-    prefix: 'AST',
-    numFmt: '0000',
+    enabled: true,
+    prefix: 'MAU',
+    categoryCode: 'GEN',
+    year: new Date().getFullYear(),
+    sequenceLength: 6,
+    startNumber: 1,
+    separator: '-',
+    format: '{PREFIX}-{CATEGORY}-{YEAR}-{SEQUENCE}',
     defStatus: 'Available',
     autoNumber: true,
     requireSerial: false,
@@ -434,6 +440,7 @@ const AdminSettings = () => {
             onSave={(value) =>
               handleUpdate('organization', value)
             }
+            onReset={fetchSettings}
             saving={saving}
           />
         );
@@ -876,6 +883,35 @@ const AdminSettings = () => {
           accent-color: #2563eb;
         }
 
+        .subsection-title {
+          margin: 8px 0 -8px;
+          font-size: 15px;
+          color: #1e3a8a;
+        }
+
+        .dark-mode .subsection-title { color: #93c5fd; }
+
+        .channel-row {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .channel-row .toggle-group { flex: 1; }
+        .channel-row.unsupported { justify-content: space-between; padding: 13px 15px; border: 1px dashed #cbd5e1; border-radius: 9px; color: #64748b; }
+        .channel-status { font-size: 12px; font-weight: 700; color: #b45309; white-space: nowrap; }
+        .channel-status.enabled { color: #15803d; }
+
+        .notification-event-table { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 9px; }
+        .notification-event-head, .notification-event-row { min-width: 760px; display: grid; grid-template-columns: minmax(190px, 1.5fr) 70px 70px 70px minmax(190px, 1.5fr) 110px; align-items: center; gap: 12px; padding: 12px 14px; }
+        .notification-event-head { background: #eff6ff; color: #1e3a8a; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+        .notification-event-row { border-top: 1px solid #e2e8f0; font-size: 13px; }
+        .notification-event-row input { width: 18px; height: 18px; accent-color: #2563eb; }
+        .notification-event-row select { padding: 7px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; }
+        .dark-mode .notification-event-table, .dark-mode .notification-event-row { border-color: #334155; }
+        .dark-mode .notification-event-head { background: #172554; color: #bfdbfe; }
+        .dark-mode .notification-event-row select { background: #0f172a; border-color: #475569; color: #f8fafc; }
+
         .status-grid {
           display: grid;
           grid-template-columns:
@@ -1073,8 +1109,8 @@ const AdminSettings = () => {
           </div>
         </div>
 
-        <div className="admin-status">
-          ● Admin Verified
+        <div className="admin-status" style={{ color: '#64748b' }}>
+          ● System access protected by admin RBAC
         </div>
       </div>
 
@@ -1122,6 +1158,7 @@ const AdminSettings = () => {
 const OrganizationForm = ({
   data,
   onSave,
+  onReset,
   saving
 }) => {
   const [form, setForm] = useFormState(
@@ -1234,10 +1271,23 @@ const OrganizationForm = ({
         />
       </div>
 
-      <SaveButton
-        saving={saving}
-        onClick={() => onSave(form)}
-      />
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        <SaveButton
+          saving={saving}
+          onClick={() => onSave(form)}
+        />
+        {onReset && (
+          <button
+            type="button"
+            className="btn-save"
+            style={{ background: '#e2e8f0', color: '#0f172a' }}
+            onClick={onReset}
+            disabled={saving}
+          >
+            Reset
+          </button>
+        )}
+      </div>
     </div>
   );
 };
@@ -1429,46 +1479,55 @@ const NotificationsForm = ({
     data
   );
 
-  const items = [
-    ['email', 'Email Notifications'],
-    ['system', 'System Notifications'],
-    ['maintenance', 'Maintenance Alerts'],
-    ['asset', 'Asset Notifications'],
-    ['rfid', 'RFID Notifications'],
-    ['security', 'Security Alerts'],
-    ['lowstock', 'Low Stock Alerts'],
-    ['overdue', 'Overdue Return Alerts'],
-    ['approval', 'Approval Notifications']
-  ];
+  const eventLabels = {
+    assignment_created: 'Asset Assigned',
+    assignment_returned: 'Asset Returned',
+    maintenance_created: 'Maintenance Request Created',
+    maintenance_status_changed: 'Maintenance Status Changed'
+  };
+  const updateEvent = (event, key, value) => setForm({ ...form, events: { ...form.events, [event]: { ...form.events[event], [key]: value } } });
+  const emailConfigured = data.emailStatus?.valid === true;
 
   return (
     <div className="form-section">
-      <h2 className="section-title">
-        🔔 Notifications & Alerts
-      </h2>
+      <h2 className="section-title">Notifications & Alerts</h2>
 
       <p className="section-description">
-        Control system notifications and alert rules.
+        Configure notification rules, delivery channels, and recipients for supported system events.
       </p>
 
-      {items.map(([key, label]) => (
-        <Toggle
-          key={key}
-          label={label}
-          checked={Boolean(form[key])}
-          onChange={(value) =>
-            setForm({
-              ...form,
-              [key]: value
-            })
-          }
-        />
-      ))}
+      <h3 className="subsection-title">General Settings</h3>
+      <Toggle label="Notifications Enabled" checked={form.enabled} onChange={(value) => setForm({ ...form, enabled: value })} />
+
+      <h3 className="subsection-title">Notification Channels</h3>
+      <Toggle label="Enable In-App Notifications" checked={form.inAppEnabled} onChange={(value) => setForm({ ...form, inAppEnabled: value })} />
+      <div className="channel-row">
+        <Toggle label="Enable Email Notifications" checked={form.emailEnabled && emailConfigured} onChange={(value) => setForm({ ...form, emailEnabled: value })} />
+        <span className={emailConfigured ? 'channel-status enabled' : 'channel-status'}>{emailConfigured ? 'Configured' : 'Not configured'}</span>
+      </div>
+      <div className="channel-row unsupported"><span>Browser Push Notifications</span><span className="channel-status">Not available</span></div>
+      <div className="channel-row unsupported"><span>SMS Notifications</span><span className="channel-status">Not available</span></div>
+
+      <h3 className="subsection-title">Event Notifications</h3>
+      <div className="notification-event-table">
+        <div className="notification-event-head"><span>Event</span><span>Enabled</span><span>In-App</span><span>Email</span><span>Recipients</span><span>Priority</span></div>
+        {Object.entries(form.events || {}).map(([event, rule]) => (
+          <div className="notification-event-row" key={event}>
+            <strong>{eventLabels[event] || event}</strong>
+            <input type="checkbox" checked={Boolean(rule.enabled)} onChange={(e) => updateEvent(event, 'enabled', e.target.checked)} />
+            <input type="checkbox" checked={Boolean(rule.inApp)} onChange={(e) => updateEvent(event, 'inApp', e.target.checked)} disabled={!form.inAppEnabled} />
+            <input type="checkbox" checked={Boolean(rule.email && emailConfigured)} onChange={(e) => updateEvent(event, 'email', e.target.checked)} disabled={!form.emailEnabled || !emailConfigured} />
+            <span>{rule.recipientRule}</span>
+            <select value={rule.priority === 'normal' ? 'normal' : rule.priority} onChange={(e) => updateEvent(event, 'priority', e.target.value)}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select>
+          </div>
+        ))}
+      </div>
+      <p className="section-description">Recipients are resolved from assigned users, requesters, and active maintenance staff. Delivery history is available in Notification History.</p>
 
       <SaveButton
         saving={saving}
-        text="Update Notifications"
-        onClick={() => onSave(form)}
+        text="Save Notification Settings"
+        onClick={() => { const { emailStatus, ...persisted } = form; onSave(persisted); }}
       />
     </div>
   );
@@ -1610,15 +1669,73 @@ const AssetConfigForm = ({
         />
 
         <Field
-          label="Number Format"
-          placeholder="0000"
-          value={form.numFmt}
+          label="Category Code"
+          value={form.categoryCode}
           onChange={(value) =>
             setForm({
               ...form,
-              numFmt: value
+              categoryCode: value
             })
           }
+        />
+
+        <Field
+          label="Year"
+          type="number"
+          value={form.year}
+          onChange={(value) =>
+            setForm({
+              ...form,
+              year: value
+            })
+          }
+        />
+
+        <Field
+          label="Sequence Length"
+          type="number"
+          value={form.sequenceLength}
+          onChange={(value) =>
+            setForm({
+              ...form,
+              sequenceLength: value
+            })
+          }
+        />
+
+        <Field
+          label="Starting Number"
+          type="number"
+          value={form.startNumber}
+          onChange={(value) =>
+            setForm({
+              ...form,
+              startNumber: value
+            })
+          }
+        />
+
+        <Field
+          label="Separator"
+          value={form.separator}
+          onChange={(value) =>
+            setForm({
+              ...form,
+              separator: value
+            })
+          }
+        />
+
+        <Field
+          label="Pattern"
+          value={form.format}
+          onChange={(value) =>
+            setForm({
+              ...form,
+              format: value
+            })
+          }
+          placeholder="{PREFIX}-{CATEGORY}-{YEAR}-{SEQUENCE}"
         />
 
         <Field
@@ -1641,6 +1758,17 @@ const AssetConfigForm = ({
           }
         />
       </div>
+
+      <Toggle
+        label="Enable Asset Number Generation"
+        checked={Boolean(form.enabled)}
+        onChange={(value) =>
+          setForm({
+            ...form,
+            enabled: value
+          })
+        }
+      />
 
       <Toggle
         label="Automatically Generate Asset Numbers"

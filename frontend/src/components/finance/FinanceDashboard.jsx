@@ -2323,13 +2323,6 @@ export default function FinanceDashboard() {
             Financial Reports
           </Link>
 
-          <Link
-            to="/finance/audit"
-            className="quick-link"
-          >
-            <CalendarDays size={16} />
-            Audit Trail
-          </Link>
         </div>
       </div>
 

@@ -4,6 +4,7 @@ const normalizeRoleValue = (role) => {
   if (!role) return '';
   const value = String(role).trim().toLowerCase();
   if (['department head', 'dept_head', 'department-head', 'department'].includes(value)) return 'department_head';
+  if (['infrastructure director', 'infrastructure directorate', 'infrastructure_directorate', 'infrastructure-directorate', 'infra'].includes(value)) return 'infrastructure';
   return value;
 };
 

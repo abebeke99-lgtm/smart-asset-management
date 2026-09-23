@@ -2256,13 +2256,6 @@ export default function InfrastructureTracking() {
             Asset Verification
           </Link>
 
-          <Link
-            to="/infrastructure/audit"
-            className="quick-link"
-          >
-            <History size={15} />
-            Audit & History
-          </Link>
         </div>
       </div>
 

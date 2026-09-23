@@ -8,6 +8,7 @@ const { requireAuth, requireRole } = require('../middlewares/auth');
 const { Op } = require('sequelize');
 const speakeasy = require('speakeasy');
 const maintenanceController = require('../controllers/maintenanceController');
+const backupService = require('../services/backupService');
 
 const router = express.Router();
 const requireAdmin = [requireAuth, requireRole('admin')];
@@ -131,38 +132,6 @@ const serializeRfidScan = (row) => {
   };
 };
 
-router.get('/roles', requireAuth, async (req, res, next) => {
-  try {
-    const roles = ['admin', 'ict_officer', 'college', 'department_head', 'finance', 'store_manager', 'maintenance', 'infrastructure', 'staff', 'student'];
-    const names = {
-      admin: 'System Administrator',
-      ict_officer: 'ICT Officer',
-      college: 'College Manager',
-      department_head: 'Department Head',
-      finance: 'Finance Manager',
-      store_manager: 'Store Manager',
-      maintenance: 'Maintenance Coordinator',
-      infrastructure: 'Infrastructure Officer',
-      staff: 'Staff',
-      student: 'Student',
-    };
-    return res.json({ success: true, data: roles.map((role) => ({ id: role, name: role, displayName: names[role] || role, permissions: [], status: 'active', users: 0 })), roles: roles.map((role) => ({ id: role, name: role, displayName: names[role] || role, status: 'active' })), total: roles.length });
-  } catch (error) { next(error); }
-});
-
-router.get('/permissions', requireAuth, async (req, res, next) => {
-  try {
-    const permissions = [
-      'users.view', 'users.create', 'users.update', 'users.activate', 'users.deactivate', 'users.lock', 'users.unlock', 'users.reset_password', 'users.sessions.terminate',
-      'roles.view', 'roles.manage', 'permissions.view', 'permissions.manage',
-      'colleges.view', 'colleges.create', 'colleges.update', 'colleges.activate', 'colleges.deactivate',
-      'departments.view', 'departments.create', 'departments.update', 'departments.activate', 'departments.deactivate',
-      'locations.view', 'locations.create', 'locations.update', 'locations.activate', 'locations.deactivate'
-    ];
-    return res.json({ success: true, data: permissions.map((permission) => ({ name: permission, label: permission, status: 'active' })), permissions, total: permissions.length });
-  } catch (error) { next(error); }
-});
-
 router.get('/users', requireAuth, async (req, res, next) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
@@ -188,6 +157,34 @@ router.get('/users', requireAuth, async (req, res, next) => {
     const { count, rows } = await User.findAndCountAll({ where, attributes: { exclude: ['password'] }, limit, offset, order: [['id', 'DESC']] });
     const users = rows.map(normalizeUser);
     return res.json({ success: true, data: users, users, total: count, pagination: { page, limit, total: count, pages: Math.max(1, Math.ceil(count / limit)) } });
+  } catch (error) { next(error); }
+});
+
+router.get('/users/stats', requireAuth, async (req, res, next) => {
+  try {
+    const [totalUsers, activeUsers, inactiveUsers, adminUsers, roles] = await Promise.all([
+      User.count(),
+      User.count({ where: { active: true } }),
+      User.count({ where: { active: false } }),
+      User.count({ where: { role: 'admin' } }),
+      User.findAll({ attributes: ['role', [sequelize.fn('COUNT', sequelize.col('id')), 'count']], group: ['role'], raw: true }),
+    ]);
+
+    const roleCounts = Object.fromEntries(roles.map((row) => [row.role, Number(row.count || 0)]));
+    return res.json({
+      success: true,
+      data: {
+        total: totalUsers,
+        totalUsers,
+        active: activeUsers,
+        activeUsers,
+        inactive: inactiveUsers,
+        inactiveUsers,
+        admins: adminUsers,
+        adminCount: adminUsers,
+        roleCounts,
+      },
+    });
   } catch (error) { next(error); }
 });
 
@@ -383,6 +380,53 @@ router.get('/colleges', ...requireAdmin, async (req, res, next) => {
       Department.count(),
     ]);
     return res.json({ success: true, data, colleges: data, total: count, summary: { totalColleges: count, activeColleges: activeCount, inactiveColleges: inactiveCount, totalDepartments }, pagination: { page, limit, total: count, totalPages: Math.max(1, Math.ceil(count / limit)), pages: Math.max(1, Math.ceil(count / limit)) } });
+  } catch (error) { next(error); }
+});
+
+router.get('/colleges/export', ...requireAdmin, async (req, res, next) => {
+  try {
+    const search = String(req.query.search || req.query.q || '').trim();
+    const status = String(req.query.status || '').trim().toLowerCase();
+    const where = {};
+    if (search) where[Op.or] = [{ collegeName: { [Op.like]: `%${search}%` } }, { collegeCode: { [Op.like]: `%${search}%` } }, { email: { [Op.like]: `%${search}%` } }, { location: { [Op.like]: `%${search}%` } }];
+    if (['active', 'inactive'].includes(status)) where.status = status;
+    const rows = await College.findAll({ where, order: [['collegeName', 'ASC']] });
+    const records = await Promise.all(rows.map(async (college) => {
+      const manager = college.managerId ? await User.findByPk(college.managerId, { attributes: ['fullName', 'username', 'email'] }) : null;
+      const [departmentCount, staffCount, assetCount] = await Promise.all([
+        Department.count({ where: { collegeId: college.id } }),
+        User.count({ where: { collegeId: college.id } }),
+        Asset.count({ where: { collegeId: college.id } }),
+      ]);
+      return {
+        collegeName: college.collegeName,
+        collegeCode: college.collegeCode,
+        manager: manager ? (manager.fullName || manager.username || manager.email || 'Unassigned') : 'Unassigned',
+        departmentCount,
+        staffCount,
+        assetCount,
+        status: college.status,
+        createdAt: college.createdAt ? new Date(college.createdAt).toISOString() : '',
+      };
+    }));
+    const csvHeaders = ['College Name', 'College Code', 'Manager', 'Department Count', 'Staff Count', 'Asset Count', 'Status', 'Created Date'];
+    const lines = [csvHeaders.map((header) => `"${String(header || '').replace(/"/g, '""')}"`).join(',')];
+    records.forEach((record) => {
+      lines.push([
+        record.collegeName,
+        record.collegeCode,
+        record.manager,
+        record.departmentCount,
+        record.staffCount,
+        record.assetCount,
+        record.status,
+        record.createdAt,
+      ].map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(','));
+    });
+    const filename = `colleges-${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(lines.join('\n'));
   } catch (error) { next(error); }
 });
 
@@ -708,6 +752,9 @@ router.post('/rfid/tags', requireAuth, requireRole('admin', 'ict_officer', 'stor
     if (!assetId || !tag) return res.status(400).json({ success: false, message: 'Asset and RFID tag are required' });
     const asset = await Asset.findByPk(assetId);
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
+    if (asset.rfidTag === tag) return res.status(409).json({ success: false, message: 'This RFID tag is already registered.' });
+    const duplicate = await Asset.findOne({ where: { rfidTag: tag, id: { [Op.ne]: asset.id } } });
+    if (duplicate) return res.status(409).json({ success: false, message: 'This RFID tag is already registered.' });
     if (!asset.rfidTag || asset.rfidTag === '') {
       await asset.update({ rfidTag: tag });
     } else if (asset.rfidTag !== tag) {
@@ -1186,7 +1233,7 @@ router.get(['/categories/:id', '/asset-categories/:id'], requireAuth, async (req
 router.post(['/categories', '/asset-categories'], ...requireAdmin, async (req, res, next) => {
   try {
     const name = String(req.body.name || '').trim();
-    const code = String(req.body.code || '').trim().toUpperCase();
+    const code = String(req.body.code || '').trim().toUpperCase() || null;
     const description = String(req.body.description || '').trim();
     const icon = String(req.body.icon || req.body.iconName || 'layers').trim();
     const status = String(req.body.status || 'active').trim().toLowerCase();
@@ -1212,7 +1259,7 @@ router.put(['/categories/:id', '/asset-categories/:id'], ...requireAdmin, async 
     if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
 
     const name = String(req.body.name || category.name).trim();
-    const code = String(req.body.code ?? category.code ?? '').trim().toUpperCase();
+    const code = String(req.body.code ?? category.code ?? '').trim().toUpperCase() || null;
     const description = String(req.body.description ?? category.description ?? '').trim();
     const icon = String(req.body.icon ?? req.body.iconName ?? category.icon ?? 'layers').trim();
     const status = String(req.body.status ?? category.status ?? 'active').trim().toLowerCase();
@@ -1630,76 +1677,65 @@ router.post('/settings/versions/:id/restore', ...requireAdmin, async (req, res, 
 
 router.get('/backups', ...requireAdmin, async (req, res, next) => {
   try {
-    await fs.promises.mkdir(backupDirectory, { recursive: true });
-    const { search = '', status = '', type = '', page = '1', limit = '25' } = req.query;
-    const normalizedSearch = String(search).trim().toLowerCase();
-    const normalizedStatus = String(status).trim().toLowerCase();
-    const normalizedType = String(type).trim().toLowerCase();
-    const currentPage = Math.max(1, Number.parseInt(page, 10) || 1);
-    const pageSize = Math.min(100, Math.max(1, Number.parseInt(limit, 10) || 25));
-    const entries = await fs.promises.readdir(backupDirectory, { withFileTypes: true });
-    const backups = (await Promise.all(entries.filter((entry) => entry.isFile() && backupFilePattern.test(entry.name)).map(async (entry) => {
-      const filename = entry.name;
-      const filePath = resolveBackupPath(filename);
-      const stats = await fs.promises.stat(filePath);
-      let metadata = {};
-      if (stats.size > 0) {
-        try {
-          metadata = JSON.parse(await fs.promises.readFile(filePath, 'utf8'));
-        } catch (error) {
-          metadata = {};
-        }
-      }
-      const backupType = metadata.type || 'JSON';
-      const createdBy = metadata.createdBy || '';
-      const backupStatus = stats.size > 0 && metadata.format === 'smart-asset-management-backup' && metadata.version === 1
-        ? 'Completed'
-        : 'Invalid';
-      return { filename, size: stats.size, createdAt: metadata.createdAt || stats.birthtime.toISOString(), status: backupStatus, type: backupType, createdBy };
-    }))).sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
-    const filtered = backups.filter((backup) => {
-      const matchesSearch = !normalizedSearch || [backup.filename, backup.createdBy, backup.type].some((value) => String(value).toLowerCase().includes(normalizedSearch));
-      const matchesStatus = !normalizedStatus || backup.status.toLowerCase() === normalizedStatus;
-      const matchesType = !normalizedType || backup.type.toLowerCase() === normalizedType;
-      return matchesSearch && matchesStatus && matchesType;
+    const result = await backupService.listBackupHistory({
+      search: req.query.search || '',
+      status: req.query.status || '',
+      type: req.query.type || '',
+      page: req.query.page || 1,
+      limit: req.query.limit || 25,
     });
-    const total = filtered.length;
-    const start = (currentPage - 1) * pageSize;
-    const paged = filtered.slice(start, start + pageSize);
-    const pagination = { page: currentPage, limit: pageSize, total, pages: Math.max(1, Math.ceil(total / pageSize)) };
-    res.json({ success: true, data: paged, backups: paged, pagination });
-  } catch (error) { next(error); }
+
+    res.json({
+      success: true,
+      data: result.items,
+      backups: result.items,
+      pagination: result.pagination,
+      stats: await backupService.getBackupStats(),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/backups/stats', ...requireAdmin, async (req, res, next) => {
+  try {
+    const stats = await backupService.getBackupStats();
+    res.json({ success: true, data: stats, stats });
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.post('/backups', ...requireAdmin, async (req, res, next) => {
   try {
-    await fs.promises.mkdir(backupDirectory, { recursive: true });
-    const data = {};
-    for (const [key, Model] of Object.entries(backupModels)) data[key] = (await Model.findAll()).map(safeJson);
-    const payload = { format: 'smart-asset-management-backup', version: 1, type: 'JSON', createdAt: new Date().toISOString(), createdBy: req.user.username, counts: Object.fromEntries(Object.entries(data).map(([key, records]) => [key, records.length])), data };
-    const timestamp = payload.createdAt.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, '').replace('T', 'T');
-    const filename = `backup_${timestamp}_${crypto.randomBytes(4).toString('hex')}.json`;
-    const filePath = resolveBackupPath(filename);
-    await fs.promises.writeFile(filePath, JSON.stringify(payload, null, 2), { encoding: 'utf8', flag: 'wx' });
-    const stats = await fs.promises.stat(filePath);
-    if (stats.size <= 0) throw new Error('Backup artifact is empty');
-    const checksum = crypto.createHash('sha256').update(await fs.promises.readFile(filePath)).digest('hex');
-    await AuditLog.create({ userId: req.user.id, action: 'BACKUP_CREATED', entity: `backup:${filename}`, details: JSON.stringify({ filename, size: stats.size, checksum, counts: payload.counts }) });
-    res.status(201).json({ success: true, data: { filename, size: stats.size, checksum, createdAt: payload.createdAt, createdBy: payload.createdBy, type: payload.type, status: 'Completed' } });
-  } catch (error) { next(error); }
+    const createdBy = req.user?.username || req.user?.fullName || 'System';
+    const backup = await backupService.createManualBackup({ createdBy, type: 'Manual', source: 'database' });
+    await AuditLog.create({
+      userId: req.user.id,
+      action: 'BACKUP_CREATED',
+      entity: `backup:${backup.filename}`,
+      details: JSON.stringify({ filename: backup.filename, size: backup.size, checksum: backup.checksum, status: backup.status, type: backup.type }),
+    });
+    res.status(201).json({ success: true, data: backup, message: 'Database backup created successfully.' });
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.get('/backups/verify/:filename', ...requireAdmin, async (req, res, next) => {
   try {
-    const filePath = resolveBackupPath(req.params.filename);
-    if (!filePath) return res.status(400).json({ success: false, message: 'Invalid backup filename' });
-    const content = await fs.promises.readFile(filePath, 'utf8');
-    const backup = JSON.parse(content);
-    const valid = Boolean(content.length > 0 && backup.format === 'smart-asset-management-backup' && backup.version === 1 && backup.data && backup.counts);
-    const checksum = crypto.createHash('sha256').update(content).digest('hex');
-    await AuditLog.create({ userId: req.user.id, action: 'BACKUP_VERIFIED', entity: `backup:${req.params.filename}`, details: JSON.stringify({ filename: req.params.filename, valid, checksum }) });
-    res.json({ success: true, valid, checksum, size: Buffer.byteLength(content), message: valid ? 'Backup is valid' : 'Backup metadata is invalid' });
-  } catch (error) { if (error.code === 'ENOENT') return res.status(404).json({ success: false, message: 'Backup file not found' }); next(error); }
+    const result = await backupService.verifyBackupFile(req.params.filename, { skipPersist: false });
+    await AuditLog.create({
+      userId: req.user.id,
+      action: 'BACKUP_VERIFIED',
+      entity: `backup:${req.params.filename}`,
+      details: JSON.stringify({ filename: req.params.filename, valid: result.valid, checksum: result.checksum, verification: result }),
+    });
+    res.json({ success: true, valid: result.valid, checksum: result.checksum, size: result.size || 0, message: result.message, verification: result });
+  } catch (error) {
+    if (error.code === 'ENOENT') return res.status(404).json({ success: false, message: 'Backup file not found' });
+    next(error);
+  }
 });
 
 router.get('/backups/download/:filename', ...requireAdmin, async (req, res, next) => {
@@ -1709,71 +1745,43 @@ router.get('/backups/download/:filename', ...requireAdmin, async (req, res, next
     await fs.promises.access(filePath, fs.constants.R_OK);
     await AuditLog.create({ userId: req.user.id, action: 'BACKUP_DOWNLOADED', entity: `backup:${req.params.filename}`, details: JSON.stringify({ filename: req.params.filename }) });
     res.download(filePath, req.params.filename);
-  } catch (error) { if (error.code === 'ENOENT') return res.status(404).json({ success: false, message: 'Backup file not found' }); next(error); }
+  } catch (error) {
+    if (error.code === 'ENOENT') return res.status(404).json({ success: false, message: 'Backup file not found' });
+    next(error);
+  }
 });
 
 router.post('/backups/restore/:filename', ...requireAdmin, async (req, res, next) => {
   try {
-    const filePath = resolveBackupPath(req.params.filename);
-    if (!filePath) return res.status(400).json({ success: false, message: 'Invalid backup filename' });
-    const content = await fs.promises.readFile(filePath, 'utf8');
-    const backup = JSON.parse(content);
-    if (!(content.length > 0 && backup.format === 'smart-asset-management-backup' && backup.version === 1 && backup.data && backup.counts)) {
-      return res.status(400).json({ success: false, message: 'Backup metadata is invalid or unsupported' });
-    }
-    const totals = { restored: 0, updated: 0, skipped: 0 };
-    const perEntity = {};
-    for (const [key, Model] of Object.entries(backupModels)) {
-      const records = backup.data[key] || [];
-      if (!Array.isArray(records) || !records.length) {
-        perEntity[key] = { restored: 0, updated: 0, skipped: 0 };
-        continue;
-      }
-      const stats = { restored: 0, updated: 0, skipped: 0 };
-      for (const record of records) {
-        const payload = { ...record };
-        delete payload.id;
-        delete payload.createdAt;
-        delete payload.updatedAt;
-        if (key === 'users' && !payload.password && !payload.passwordHash) {
-          const existingUser = await User.findByPk(record.id);
-          if (existingUser && existingUser.password) payload.password = existingUser.password;
-          else {
-            stats.skipped += 1;
-            continue;
-          }
-        }
-        try {
-          const existing = record.id ? await Model.findByPk(record.id) : null;
-          if (existing) {
-            await existing.update(payload);
-            stats.updated += 1;
-          } else {
-            await Model.create(payload);
-            stats.restored += 1;
-          }
-        } catch (error) {
-          stats.skipped += 1;
-        }
-      }
-      totals.restored += stats.restored;
-      totals.updated += stats.updated;
-      totals.skipped += stats.skipped;
-      perEntity[key] = stats;
-    }
-    await AuditLog.create({ userId: req.user.id, action: 'BACKUP_RESTORED', entity: `backup:${req.params.filename}`, details: JSON.stringify({ filename: req.params.filename, perEntity }) });
-    res.json({ success: true, message: 'Backup restored successfully', data: perEntity, counts: { restored: totals.restored, updated: totals.updated, skipped: totals.skipped } });
-  } catch (error) { if (error.code === 'ENOENT') return res.status(404).json({ success: false, message: 'Backup file not found' }); next(error); }
+    const result = await backupService.restoreBackup(req.params.filename, { requestedBy: req.user?.username || req.user?.fullName || 'System' });
+    await AuditLog.create({
+      userId: req.user.id,
+      action: 'RESTORE_COMPLETED',
+      entity: `backup:${req.params.filename}`,
+      details: JSON.stringify({ filename: req.params.filename, result }),
+    });
+    res.json({ success: true, message: 'Backup restored successfully.', data: result });
+  } catch (error) {
+    if (error.code === 'ENOENT') return res.status(404).json({ success: false, message: 'Backup file not found' });
+    await AuditLog.create({
+      userId: req.user.id,
+      action: 'RESTORE_FAILED',
+      entity: `backup:${req.params.filename}`,
+      details: JSON.stringify({ filename: req.params.filename, error: error.message }),
+    }).catch(() => {});
+    res.status(400).json({ success: false, message: error.message || 'Backup restore failed.' });
+  }
 });
 
 router.delete('/backups/:filename', ...requireAdmin, async (req, res, next) => {
   try {
-    const filePath = resolveBackupPath(req.params.filename);
-    if (!filePath) return res.status(400).json({ success: false, message: 'Invalid backup filename' });
-    await fs.promises.unlink(filePath);
-    await AuditLog.create({ userId: req.user.id, action: 'BACKUP_DELETED', entity: `backup:${req.params.filename}`, details: JSON.stringify({ filename: req.params.filename }) });
-    res.json({ success: true });
-  } catch (error) { if (error.code === 'ENOENT') return res.status(404).json({ success: false, message: 'Backup file not found' }); next(error); }
+    const result = await backupService.deleteBackup(req.params.filename);
+    await AuditLog.create({ userId: req.user.id, action: 'BACKUP_DELETED', entity: `backup:${req.params.filename}`, details: JSON.stringify({ filename: req.params.filename, result }) });
+    res.json({ success: true, message: 'Backup deleted successfully.', data: result });
+  } catch (error) {
+    if (error.code === 'ENOENT') return res.status(404).json({ success: false, message: 'Backup file not found' });
+    next(error);
+  }
 });
 
 router.get('/assets', ...requireAdmin, async (req, res, next) => {
@@ -1907,7 +1915,7 @@ router.get('/assets', ...requireAdmin, async (req, res, next) => {
 
 router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
   try {
-    const [assets, users, assignments, maintenance, rfidLogs, departments, auditLogs, transfers, inventory] = await Promise.all([
+    const [assets, users, assignments, maintenance, rfidLogs, departments, auditLogs, transfers, inventory, colleges, disposalRequests] = await Promise.all([
       Asset.findAll({ order: [['updatedAt', 'DESC']] }),
       User.findAll({ attributes: ['id', 'username', 'fullName', 'role', 'active', 'createdAt', 'updatedAt'] }),
       Assignment.findAll({ order: [['createdAt', 'DESC']] }),
@@ -1915,8 +1923,10 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
       RFIDLog.findAll({ order: [['createdAt', 'DESC']], limit: 20 }),
       Department.findAll({ attributes: ['id', 'name', 'createdAt', 'updatedAt'], order: [['name', 'ASC']] }),
       AuditLog.findAll({ order: [['createdAt', 'DESC']], limit: 20 }),
-      Transfer.findAll({ order: [['createdAt', 'DESC']], limit: 20 }),
+      Transfer.findAll({ order: [['transferDate', 'DESC'], ['createdAt', 'DESC']] }),
       Inventory.findAll({ attributes: ['assetId', 'quantity', 'availableQuantity', 'minimumQuantity', 'status'], raw: true }),
+      College.findAll({ attributes: ['id', 'collegeName', 'collegeCode'], order: [['collegeName', 'ASC']], raw: true }),
+      DisposalRequest.findAll({ order: [['completedDate', 'DESC'], ['createdAt', 'DESC']] }),
     ]);
 
     const normalizeStatus = (status) => String(status || '').trim().toLowerCase();
@@ -1951,6 +1961,26 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
     const categoryCounts = assets.reduce((counts, asset) => {
       const category = asset.category || 'Uncategorized';
       counts[category] = (counts[category] || 0) + 1;
+      return counts;
+    }, {});
+    const collegeCounts = assets.reduce((counts, asset) => {
+      const collegeName = asset.collegeId ? (colleges.find((college) => Number(college.id) === Number(asset.collegeId))?.collegeName || colleges.find((college) => Number(college.id) === Number(asset.collegeId))?.collegeCode || 'Unassigned College') : 'Unassigned College';
+      counts[collegeName] = (counts[collegeName] || 0) + 1;
+      return counts;
+    }, {});
+    const locationCounts = assets.reduce((counts, asset) => {
+      const location = String(asset.location || '').trim() || 'Unassigned Location';
+      counts[location] = (counts[location] || 0) + 1;
+      return counts;
+    }, {});
+    const conditionCounts = assets.reduce((counts, asset) => {
+      const condition = String(asset.condition || 'Unknown').trim() || 'Unknown';
+      counts[condition] = (counts[condition] || 0) + 1;
+      return counts;
+    }, {});
+    const assetValueByCategory = assets.reduce((counts, asset) => {
+      const category = asset.category || 'Uncategorized';
+      counts[category] = (counts[category] || 0) + Number(asset.currentValue || asset.purchasePrice || 0);
       return counts;
     }, {});
     departments.forEach((department) => {
@@ -2041,6 +2071,14 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
     const availableAssets = assets.filter((asset) => normalizeStatus(asset.status) === 'available').length;
     const assignedAssets = assets.filter((asset) => displayStatus(asset.status) === 'Assigned').length;
     const maintenanceAssets = assets.filter((asset) => ['under-maintenance', 'under maintenance'].includes(normalizeStatus(asset.status))).length;
+    const isTrueRfidAnomaly = (log) => {
+      const action = String(log.action || '').trim().toLowerCase();
+      if (['qr-lookup', 'qr lookup', 'qr_lookup', 'qr-scan', 'verification'].includes(action)) {
+        return false;
+      }
+      return !assets.some((asset) => Number(asset.id) === Number(log.assetId));
+    };
+    const unknownRfidLogs = rfidLogs.filter(isTrueRfidAnomaly);
 
     const data = {
       totalAssets: assets.length,
@@ -2063,6 +2101,15 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
       assetByStatus: Object.entries(statusCounts).map(([label, value]) => ({ label, value })),
       assetByDepartment: Object.entries(departmentCounts).map(([label, value]) => ({ label, value })),
       assetByCategory: Object.entries(categoryCounts).map(([label, value]) => ({ label, value })),
+      assetByCollege: Object.entries(collegeCounts).map(([label, value]) => ({ label, value })).sort((left, right) => right.value - left.value),
+      assetByLocation: Object.entries(locationCounts).map(([label, value]) => ({ label, value })).sort((left, right) => right.value - left.value),
+      assetCondition: Object.entries(conditionCounts).map(([label, value]) => ({ label, value })),
+      assetValueByCategory: Object.entries(assetValueByCategory).map(([label, value]) => ({ label, value: Number(value) || 0 })).sort((left, right) => right.value - left.value),
+      assetValueByCollege: Object.entries(assets.reduce((counts, asset) => {
+        const collegeName = asset.collegeId ? (colleges.find((college) => Number(college.id) === Number(asset.collegeId))?.collegeName || colleges.find((college) => Number(college.id) === Number(asset.collegeId))?.collegeCode || 'Unassigned College') : 'Unassigned College';
+        counts[collegeName] = (counts[collegeName] || 0) + Number(asset.currentValue || asset.purchasePrice || 0);
+        return counts;
+      }, {})).map(([label, value]) => ({ label, value: Number(value) || 0 })).sort((left, right) => right.value - left.value),
       assetsPurchasedOverTime: Object.entries(assets.reduce((counts, asset) => {
         if (asset.purchaseDate) {
           const year = new Date(asset.purchaseDate).getFullYear();
@@ -2070,6 +2117,36 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
         }
         return counts;
       }, {})).sort(([left], [right]) => Number(left) - Number(right)).map(([label, value]) => ({ label, value })),
+      monthlyAcquisitions: Object.entries(assets.reduce((counts, asset) => {
+        const dateValue = asset.purchaseDate || asset.createdAt;
+        if (!dateValue) return counts;
+        const date = new Date(dateValue);
+        if (Number.isNaN(date.getTime())) return counts;
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const label = date.toLocaleString('en', { month: 'short', year: 'numeric' });
+        counts[monthKey] = { label, value: (counts[monthKey]?.value || 0) + 1 };
+        return counts;
+      }, {})).map(([key, item]) => ({ label: item.label, value: item.value })).sort((left, right) => left.label.localeCompare(right.label)),
+      transferTrend: Object.entries(transfers.reduce((counts, transfer) => {
+        const dateValue = transfer.transferDate || transfer.createdAt;
+        if (!dateValue) return counts;
+        const date = new Date(dateValue);
+        if (Number.isNaN(date.getTime())) return counts;
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const label = date.toLocaleString('en', { month: 'short', year: 'numeric' });
+        counts[monthKey] = { label, value: (counts[monthKey]?.value || 0) + 1 };
+        return counts;
+      }, {})).map(([key, item]) => ({ label: item.label, value: item.value })).sort((left, right) => left.label.localeCompare(right.label)),
+      disposalTrend: Object.entries(disposalRequests.reduce((counts, request) => {
+        const dateValue = request.completedDate || request.createdAt || request.scheduledDate;
+        if (!dateValue) return counts;
+        const date = new Date(dateValue);
+        if (Number.isNaN(date.getTime())) return counts;
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const label = date.toLocaleString('en', { month: 'short', year: 'numeric' });
+        counts[monthKey] = { label, value: (counts[monthKey]?.value || 0) + 1 };
+        return counts;
+      }, {})).map(([key, item]) => ({ label: item.label, value: item.value })).sort((left, right) => left.label.localeCompare(right.label)),
       maintenanceTrend: (() => {
         const periods = [];
         for (let offset = 5; offset >= 0; offset -= 1) {
@@ -2102,7 +2179,7 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
         totalDevices: new Set(rfidLogs.map((log) => log.location).filter(Boolean)).size,
         onlineDevices: rfidLogs.length ? 1 : 0,
         offlineDevices: rfidLogs.length ? 0 : 0,
-        unknownAlerts: rfidLogs.filter((log) => !assets.some((asset) => asset.id === log.assetId)).length,
+        unknownAlerts: unknownRfidLogs.length,
       },
       maintenanceSummary: {
         open: maintenance.filter((item) => ['pending', 'approved'].includes(normalizeStatus(item.status))).length,
@@ -2125,7 +2202,7 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
         ...(lowStockAssets.length ? [{ type: 'warning', category: 'inventory', count: lowStockAssets.length, message: `${lowStockAssets.length} inventory item(s) are low on stock.` }] : []),
         ...(assets.filter((asset) => ['missing', 'lost'].includes(normalizeStatus(asset.status))).length ? [{ type: 'danger', category: 'asset', count: assets.filter((asset) => ['missing', 'lost'].includes(normalizeStatus(asset.status))).length, message: 'Assets are marked missing or lost.' }] : []),
         ...(assets.filter((asset) => normalizeStatus(asset.condition) === 'damaged').length ? [{ type: 'warning', category: 'asset', count: assets.filter((asset) => normalizeStatus(asset.condition) === 'damaged').length, message: 'Assets require damage review.' }] : []),
-        ...(rfidLogs.filter((log) => !assets.some((asset) => asset.id === log.assetId)).length ? [{ type: 'danger', category: 'rfid', count: rfidLogs.filter((log) => !assets.some((asset) => asset.id === log.assetId)).length, message: 'Unknown RFID activity detected.' }] : []),
+        ...(unknownRfidLogs.length ? [{ type: 'danger', category: 'rfid', count: unknownRfidLogs.length, message: 'Unknown RFID activity detected.' }] : []),
       ],
       weeklySummary,
       recentActivities,

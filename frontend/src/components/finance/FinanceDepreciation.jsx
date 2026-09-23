@@ -64,20 +64,43 @@ const FinanceDepreciation = () => {
   const fetchAssets = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/assets', { 
-        params: { 
-          limit: 1000,
-          include_financial: true 
-        } 
+      let assetData = [];
+      try {
+        const response = await axios.get('/api/finance/depreciation');
+        assetData = response.data.rows || response.data.data || response.data.assets || [];
+      } catch (financeError) {
+        const fallback = await axios.get('/api/assets', {
+          params: { limit: 1000, include_financial: true },
+        });
+        assetData = fallback.data.assets || fallback.data.data || [];
+      }
+
+      const normalized = assetData.map((asset) => {
+        const normalizedAsset = {
+          ...asset,
+          id: asset.id ?? asset.assetId ?? asset.asset_id,
+          asset_tag: asset.asset_tag ?? asset.assetTag ?? asset.assetCode ?? asset.asset_code,
+          name: asset.name ?? asset.asset_name ?? asset.assetName,
+          purchase_cost: Number(asset.purchase_cost ?? asset.purchaseCost ?? asset.purchase_price ?? asset.acquisition_value ?? asset.acquisitionValue ?? 0),
+          purchase_date: asset.purchase_date ?? asset.purchaseDate,
+          residual_value: Number(asset.residual_value ?? asset.residualValue ?? 0),
+          useful_life: Number(asset.useful_life ?? asset.usefulLife ?? 0),
+          depreciation_method: asset.depreciation_method ?? asset.depreciationMethod ?? 'straight-line',
+          department_name: asset.department_name ?? asset.departmentName ?? asset.department ?? '',
+          category_name: asset.category_name ?? asset.categoryName ?? asset.category ?? '',
+          status: asset.status || 'Available',
+        };
+
+        const yearlyDep = calculateDepreciation(normalizedAsset);
+        return {
+          ...normalizedAsset,
+          depreciation: yearlyDep,
+        };
       });
-      const assetData = response.data.assets || response.data.data || [];
-      const enrichedAssets = assetData.map(asset => ({
-        ...asset,
-        depreciation: calculateDepreciation(asset)
-      }));
-      setAssets(enrichedAssets);
+
+      setAssets(normalized);
     } catch (error) {
-      toast.error(t.fetchError || 'Failed to load assets');
+      toast.error(error.response?.data?.message || t.fetchError || 'Failed to load assets');
       setAssets([]);
     }
     setLoading(false);

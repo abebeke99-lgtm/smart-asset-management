@@ -26,56 +26,20 @@ import {
   X,
 } from "lucide-react";
 
-const SYSTEM_ROLES = [
-  {
-    value: "admin",
-    label: "Admin",
-    icon: "👑",
-    description: "Full system administration access",
-  },
-  {
-    value: "ict_officer",
-    label: "ICT Officer",
-    icon: "💻",
-    description: "ICT, technology and asset technical management",
-  },
-  {
-    value: "college",
-    label: "College",
-    icon: "🏫",
-    description: "College-level asset and department management",
-  },
-  {
-    value: "finance",
-    label: "Finance",
-    icon: "💰",
-    description: "Financial and asset valuation management",
-  },
-  {
-    value: "store_manager",
-    label: "Store Manager",
-    icon: "📦",
-    description: "Store and inventory management",
-  },
-  {
-    value: "maintenance",
-    label: "Maintenance",
-    icon: "🔧",
-    description: "Maintenance request and technician management",
-  },
-  {
-    value: "staff",
-    label: "Staff",
-    icon: "👤",
-    description: "Standard staff access",
-  },
+const FALLBACK_ROLES = [
+  { value: "admin", label: "Admin", description: "Full system administration access" },
+  { value: "ict_officer", label: "ICT Officer", description: "ICT, technology and asset technical management" },
+  { value: "college", label: "College", description: "College-level asset and department management" },
+  { value: "finance", label: "Finance", description: "Financial and asset valuation management" },
+  { value: "store_manager", label: "Store Manager", description: "Store and inventory management" },
+  { value: "maintenance", label: "Maintenance", description: "Maintenance request and technician management" },
+  { value: "staff", label: "Staff", description: "Standard staff access" },
 ];
 
 const PERMISSION_GROUPS = [
   {
     key: "assets",
     label: "Assets",
-    icon: "📦",
     permissions: [
       "assets.view",
       "assets.create",
@@ -89,7 +53,6 @@ const PERMISSION_GROUPS = [
   {
     key: "inventory",
     label: "Inventory",
-    icon: "📋",
     permissions: [
       "inventory.view",
       "inventory.stock_in",
@@ -100,7 +63,6 @@ const PERMISSION_GROUPS = [
   {
     key: "maintenance",
     label: "Maintenance",
-    icon: "🔧",
     permissions: [
       "maintenance.view",
       "maintenance.request.create",
@@ -112,7 +74,6 @@ const PERMISSION_GROUPS = [
   {
     key: "users",
     label: "Users",
-    icon: "👥",
     permissions: [
       "users.view",
       "users.create",
@@ -126,7 +87,6 @@ const PERMISSION_GROUPS = [
   {
     key: "reports",
     label: "Reports",
-    icon: "📊",
     permissions: [
       "reports.view",
       "reports.generate",
@@ -137,7 +97,6 @@ const PERMISSION_GROUPS = [
   {
     key: "system",
     label: "System",
-    icon: "⚙️",
     permissions: [
       "settings.manage",
       "backup.manage",
@@ -221,6 +180,8 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
   const [users, setUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [activities, setActivities] = useState([]);
+  const [roleOptions, setRoleOptions] = useState(FALLBACK_ROLES);
+  const [permissionOptions, setPermissionOptions] = useState(PERMISSION_GROUPS);
 
   const [loading, setLoading] = useState(true);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -246,6 +207,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
   const [selectedRole, setSelectedRole] = useState("admin");
 
   const [rolePermissions, setRolePermissions] = useState({});
+  const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0, admins: 0, roleCounts: {} });
 
   const [activitySearch, setActivitySearch] = useState("");
   const [activityTypeFilter, setActivityTypeFilter] = useState("");
@@ -290,9 +252,26 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
     user?.status !== "inactive";
 
   const formatRole = (role) => {
-    const found = SYSTEM_ROLES.find((item) => item.value === role);
-    return found ? `${found.icon} ${found.label}` : role || "-";
+    const found = roleOptions.find((item) => item.value === role);
+    return found ? found.label : role || "-";
   };
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const response = await apiClient.get('/api/admin/users/stats');
+      const payload = response?.data?.data || response?.data || {};
+      const nextStats = {
+        total: Number(payload.total ?? payload.totalUsers ?? 0),
+        active: Number(payload.active ?? payload.activeUsers ?? 0),
+        inactive: Number(payload.inactive ?? payload.inactiveUsers ?? 0),
+        admins: Number(payload.admins ?? payload.adminCount ?? 0),
+        roleCounts: payload.roleCounts || payload.roles || {},
+      };
+      setStats(nextStats);
+    } catch (error) {
+      setStats({ total: 0, active: 0, inactive: 0, admins: 0, roleCounts: {} });
+    }
+  }, []);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -329,6 +308,55 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
       setLoading(false);
     }
   }, [searchQuery, roleFilter, statusFilter, currentPage, pageSize]);
+
+  const fetchRoleOptions = useCallback(async () => {
+    try {
+      const response = await apiClient.get('/api/admin/roles');
+      const roles = Array.isArray(response?.data?.roles)
+        ? response.data.roles
+        : Array.isArray(response?.data?.data)
+          ? response.data.data
+          : [];
+      if (roles.length) {
+        const mapped = roles.map((role) => ({
+          value: role.name || role.id || role.value,
+          label: role.displayName || role.name || role.label || String(role.id || role.value),
+          description: role.description || `Role: ${role.displayName || role.name || role.label || role.id}`,
+        }));
+        setRoleOptions(mapped);
+        if (selectedRole && !mapped.some((role) => role.value === selectedRole) && mapped[0]) {
+          setSelectedRole(mapped[0].value);
+        }
+      }
+    } catch (error) {
+      setRoleOptions(FALLBACK_ROLES);
+    }
+  }, [selectedRole]);
+
+  const fetchPermissions = useCallback(async () => {
+    try {
+      const response = await apiClient.get('/api/admin/permissions');
+      const backendPermissions = Array.isArray(response?.data?.permissions)
+        ? response.data.permissions
+        : Array.isArray(response?.data?.data)
+          ? response.data.data.map((entry) => entry.name || entry.permission || entry)
+          : [];
+
+      if (backendPermissions.length) {
+        const mapped = backendPermissions.reduce((groups, permission) => {
+          const [groupName, action] = String(permission).split('.');
+          if (!groupName || !action) return groups;
+          const key = groupName;
+          if (!groups[key]) groups[key] = { key, label: groupName.replace(/_/g, ' '), permissions: [] };
+          groups[key].permissions.push(permission);
+          return groups;
+        }, {});
+        setPermissionOptions(Object.values(mapped));
+      }
+    } catch (error) {
+      setPermissionOptions(PERMISSION_GROUPS);
+    }
+  }, []);
 
   const fetchDepartments = useCallback(async () => {
     try {
@@ -372,11 +400,17 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
 
   useEffect(() => {
     fetchUsers();
-  }, [fetchUsers]);
+    fetchStats();
+  }, [fetchUsers, fetchStats]);
 
   useEffect(() => {
     setActiveSection(initialSection);
   }, [initialSection]);
+
+  useEffect(() => {
+    fetchRoleOptions();
+    fetchPermissions();
+  }, [fetchRoleOptions, fetchPermissions]);
 
   useEffect(() => {
     fetchDepartments();
@@ -413,6 +447,10 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
       console.warn('Failed to load role permissions:', error.message);
     }
   }, []);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.allSettled([fetchStats(), fetchUsers(), fetchRoleOptions(), fetchPermissions(), fetchRolePermissions()]);
+  }, [fetchStats, fetchUsers, fetchRoleOptions, fetchPermissions, fetchRolePermissions]);
 
   useEffect(() => {
     fetchRolePermissions();
@@ -485,7 +523,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
     setSaving(true);
 
     try {
-      await apiClient.post("/api/users", {
+      await apiClient.post('/api/admin/users', {
         username: formData.username.trim(),
         email: formData.email.trim(),
         password: formData.password,
@@ -522,7 +560,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
     setSaving(true);
 
     try {
-      await apiClient.put(`/api/users/${selectedUser.id}`, {
+      await apiClient.put(`/api/admin/users/${selectedUser.id}`, {
         username: formData.username.trim(),
         email: formData.email.trim(),
         ...(formData.password
@@ -599,7 +637,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
     if (!confirmed) return;
 
     try {
-      await apiClient.delete(`/api/users/${user.id}`);
+      await apiClient.delete(`/api/admin/users/${user.id}`);
 
       toast.success("User deleted successfully");
       await fetchUsers();
@@ -620,7 +658,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
     const newStatus = !currentlyActive;
 
     try {
-      await apiClient.put(`/api/users/${user.id}`, {
+      await apiClient.put(`/api/admin/users/${user.id}`, {
         active: newStatus,
       });
 
@@ -648,7 +686,8 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
 
     try {
       await apiClient.post(
-        `/api/users/${user.id}/reset-password`
+        `/api/admin/users/${user.id}/reset-password`,
+        {}
       );
 
       toast.success("Password reset successfully");
@@ -721,16 +760,12 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
     });
   }, [users, searchQuery, roleFilter, statusFilter]);
 
-  const stats = useMemo(() => {
+  const roleStats = useMemo(() => {
     const total = users.length;
     const active = users.filter(isUserActive).length;
     const inactive = total - active;
-
-    const roleCounts = SYSTEM_ROLES.reduce((accumulator, role) => {
-      accumulator[role.value] = users.filter(
-        (user) => user.role === role.value
-      ).length;
-
+    const roleCounts = roleOptions.reduce((accumulator, role) => {
+      accumulator[role.value] = users.filter((user) => user.role === role.value).length;
       return accumulator;
     }, {});
 
@@ -740,10 +775,12 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
       inactive,
       roleCounts,
     };
-  }, [users]);
+  }, [users, roleOptions]);
 
-  const filteredRoles = SYSTEM_ROLES.filter((role) =>
-    `${role.label} ${role.value} ${role.description}`
+  const statsSummary = { ...stats, roleCounts: { ...(stats.roleCounts || {}), ...(roleStats.roleCounts || {}) } };
+
+  const filteredRoles = roleOptions.filter((role) =>
+    `${role.label} ${role.value} ${role.description || ''}`
       .toLowerCase()
       .includes(roleSearch.toLowerCase())
   );
@@ -937,7 +974,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
         {renderStatCard(
           <Users size={23} />,
           "Total Users",
-          stats.total,
+          statsSummary.total || stats.total,
           "All registered accounts",
           () => {
             setStatusFilter("");
@@ -948,7 +985,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
         {renderStatCard(
           <UserCheck size={23} />,
           "Active Users",
-          stats.active,
+          statsSummary.active || stats.active,
           "Login enabled",
           () => setStatusFilter("active")
         )}
@@ -956,7 +993,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
         {renderStatCard(
           <UserX size={23} />,
           "Inactive Users",
-          stats.inactive,
+          statsSummary.inactive || stats.inactive,
           "Login disabled",
           () => setStatusFilter("inactive")
         )}
@@ -964,7 +1001,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
         {renderStatCard(
           <Shield size={23} />,
           "Admins",
-          stats.roleCounts.admin || 0,
+          statsSummary.admins || statsSummary.roleCounts.admin || 0,
           "System administrators",
           () => setRoleFilter("admin")
         )}
@@ -1005,7 +1042,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
         >
           <option value="">All Roles</option>
 
-          {SYSTEM_ROLES.map((role) => (
+          {roleOptions.map((role) => (
             <option key={role.value} value={role.value}>
               {role.label}
             </option>
@@ -1027,17 +1064,8 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
 
         <button
           type="button"
-          className="um-btn um-btn-primary"
-          onClick={openCreate}
-        >
-          <Plus size={18} />
-          Create User
-        </button>
-
-        <button
-          type="button"
           className="um-btn um-btn-secondary"
-          onClick={fetchUsers}
+          onClick={refreshAll}
         >
           <RefreshCw size={17} />
           Refresh
@@ -1338,7 +1366,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
         formData={formData}
         formErrors={formErrors}
         departments={departments}
-        roles={SYSTEM_ROLES}
+        roles={roleOptions}
         saving={saving}
         editing={false}
         isDark={isDark}
@@ -1391,8 +1419,8 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
                 setSelectedRole(role.value)
               }
             >
-              <span className="um-role-icon">
-                {role.icon}
+                <span className="um-role-icon">
+                {role.label.charAt(0).toUpperCase()}
               </span>
 
               <span>
@@ -1401,7 +1429,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
               </span>
 
               <em>
-                {stats.roleCounts[role.value] || 0}
+                {statsSummary.roleCounts[role.value] || 0}
               </em>
             </button>
           ))}
@@ -1412,23 +1440,14 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
         <div className="um-card-header">
           <div>
             <h3>
-              {
-                SYSTEM_ROLES.find(
-                  (role) => role.value === selectedRole
-                )?.icon
-              }{" "}
-              {
-                SYSTEM_ROLES.find(
-                  (role) => role.value === selectedRole
-                )?.label
-              }
+              {roleOptions.find((role) => role.value === selectedRole)?.label || selectedRole}
             </h3>
 
             <p>
               {
-                SYSTEM_ROLES.find(
+                roleOptions.find(
                   (role) => role.value === selectedRole
-                )?.description
+                )?.description || 'Active role configuration'
               }
             </p>
           </div>
@@ -1445,7 +1464,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
         <div className="um-role-summary">
           <div>
             <strong>
-              {stats.roleCounts[selectedRole] || 0}
+              {statsSummary.roleCounts[selectedRole] || 0}
             </strong>
             <span>Users assigned</span>
           </div>
@@ -1538,7 +1557,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
               setSelectedRole(event.target.value)
             }
           >
-            {SYSTEM_ROLES.map((role) => (
+            {roleOptions.map((role) => (
               <option
                 key={role.value}
                 value={role.value}
@@ -1563,7 +1582,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
       </div>
 
       <div className="um-permission-grid">
-        {PERMISSION_GROUPS.map((group) => {
+        {permissionOptions.map((group) => {
           const permissions = group.permissions.filter(
             (permission) =>
               !permissionSearch ||
@@ -1690,6 +1709,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
           description="Users currently allowed to log in."
           icon={<UserCheck size={24} />}
           users={activeUsers}
+          roleOptions={roleOptions}
           active
           onToggle={toggleUserStatus}
           onDetails={openDetails}
@@ -1700,6 +1720,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
           description="Accounts with login disabled."
           icon={<UserX size={24} />}
           users={inactiveUsers}
+          roleOptions={roleOptions}
           active={false}
           onToggle={toggleUserStatus}
           onDetails={openDetails}
@@ -1874,7 +1895,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
           </div>
 
           <h1>
-            👥 {t.title}
+            {t.title}
           </h1>
 
           <p>
@@ -1990,7 +2011,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
             formData={formData}
             formErrors={formErrors}
             departments={departments}
-            roles={SYSTEM_ROLES}
+            roles={roleOptions}
             saving={saving}
             editing={false}
             isDark={isDark}
@@ -2012,7 +2033,7 @@ const AdminUserManagement = ({ initialSection = "users" }) => {
             formData={formData}
             formErrors={formErrors}
             departments={departments}
-            roles={SYSTEM_ROLES}
+            roles={roleOptions}
             saving={saving}
             editing
             isDark={isDark}
@@ -3834,6 +3855,7 @@ const StatusPanel = ({
   description,
   icon,
   users,
+  roleOptions,
   active,
   onToggle,
   onDetails,
@@ -3883,7 +3905,7 @@ const StatusPanel = ({
 
               <small>
                 @{user.username || "-"} •{" "}
-                {formatStaticRole(user.role)}
+                {formatStaticRole(user.role, roleOptions)}
               </small>
             </div>
 
@@ -3916,11 +3938,11 @@ const StatusPanel = ({
 );
 
 const formatStaticRole = (role) => {
-  const found = SYSTEM_ROLES.find(
+  const found = FALLBACK_ROLES.find(
     (item) => item.value === role
   );
 
-  return found ? found.label : role || "-";
+  return found ? found.label : String(role || "-").replace(/[_-]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
 };
 
 export default AdminUserManagement;

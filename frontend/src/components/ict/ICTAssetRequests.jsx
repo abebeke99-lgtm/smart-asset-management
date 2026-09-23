@@ -1,794 +1,795 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useLanguage } from '../../contexts/UiContext';
-import { useAuth } from '../../contexts/AuthContext';
-import { toast } from 'react-toastify';
-import axios from 'axios';
-import * as XLSX from 'xlsx';
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  AlertCircle,
+  Building2,
+  CalendarDays,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  CircleX,
+  ClipboardList,
+  Clock3,
+  Eye,
+  FilePlus2,
+  Filter,
+  LoaderCircle,
+  MapPin,
+  MonitorSmartphone,
+  MoreHorizontal,
+  PackageCheck,
+  RefreshCw,
+  Search,
+  SlidersHorizontal,
+  Tags,
+  TriangleAlert,
+  UserRound,
+  X,
+} from "lucide-react";
+import { toast } from "react-toastify";
+import { useAuth } from "../../contexts/AuthContext";
+import apiClient from "../../services/apiClient";
+import "./ICTAssetRequests.css";
 
-const englishTranslations = {
-    assetRequests: 'Asset Requests',
-    allRequests: 'All Requests',
-    pendingRequests: 'Pending',
-    approvedRequests: 'Approved',
-    rejectedRequests: 'Rejected',
-    requestID: 'Request ID',
-    type: 'Type',
-    priority: 'Priority',
-    status: 'Status',
-    requestedBy: 'Requested By',
-    department: 'Department',
-    item: 'Item',
-    quantity: 'Quantity',
-    reason: 'Reason',
-    createdDate: 'Created Date',
-    approvedDate: 'Approved Date',
-    rejectedDate: 'Rejected Date',
-    approvalComment: 'Approval Comment',
-    rejectionReason: 'Rejection Reason',
-    view: 'View',
-    approve: 'Approve',
-    reject: 'Reject',
-    export: 'Export to Excel',
-    refresh: 'Refresh',
-    search: 'Search by Request ID or Item...',
-    noRequests: 'No asset requests found',
-    loading: 'Loading requests...',
-    approvalSuccess: 'Request approved successfully',
-    rejectionSuccess: 'Request rejected successfully',
-    actionError: 'Failed to process request',
-    fetchError: 'Failed to load requests',
-    comment: 'Comment',
-    reason: 'Reason',
-    submittedBy: 'Submitted By',
-    requestDetails: 'Request Details',
-    requestedItem: 'Requested Item',
-    comments: 'Comments',
-    approveButton: 'Approve Request',
-    rejectButton: 'Reject Request',
-    cancel: 'Cancel',
-    critical: 'Critical',
-    high: 'High',
-    medium: 'Medium',
-    low: 'Low',
-    pending: 'Pending',
-    approved: 'Approved',
-    rejected: 'Rejected',
-    cancelled: 'Cancelled'
+const PAGE_SIZE = 10;
+const statuses = ["pending", "approved", "rejected", "cancelled"];
+const priorities = ["low", "medium", "high", "critical"];
+const requestTypes = [
+  "new_asset",
+  "asset_issue",
+  "replacement",
+  "transfer",
+  "return",
+  "maintenance",
+  "other",
+];
+
+const label = (value) =>
+  String(value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+const display = (value) =>
+  value === null || value === undefined || value === ""
+    ? "Not recorded"
+    : value;
+const formatDate = (value) =>
+  value ? new Date(value).toLocaleString() : "Not recorded";
+const getErrorMessage = (error, fallback) =>
+  ({
+    401: "Authentication is required to view asset requests.",
+    403: "You do not have permission to access asset requests.",
+    404: "The requested resource was not found.",
+    409: "This request conflicts with the current workflow state.",
+  })[error.response?.status] ||
+  error.response?.data?.message ||
+  fallback;
+
+const normalizeRequest = (request) => ({
+  ...request,
+  requestNumber:
+    request.requestNumber ||
+    request.request_id ||
+    `REQ-${String(request.id).padStart(6, "0")}`,
+  requesterName:
+    request.requester?.name ||
+    request.requested_by ||
+    request.Requester?.fullName ||
+    request.Requester?.username,
+  departmentName:
+    request.department?.name || request.department || request.Department?.name,
+  itemName: request.item || request.asset?.name || request.Asset?.name,
+  createdDate: request.createdAt || request.created_at,
+});
+
+const emptyForm = {
+  type: "new_asset",
+  item: "",
+  asset_id: "",
+  quantity: "1",
+  priority: "medium",
+  reason: "",
 };
 
-const amharicTranslations = {
-    assetRequests: 'ንብረት ጠየቅ',
-    allRequests: 'ሁሉም ጠየቆች',
-    pendingRequests: 'በመጠባበቅ ላይ',
-    approvedRequests: 'ተጋግዖ',
-    rejectedRequests: 'ተከልክሎ',
-    requestID: 'ጠየቅ ID',
-    type: 'ዓይነት',
-    priority: 'ቅድሚያ',
-    status: 'ሁኔታ',
-    requestedBy: 'ተጠየቀ በ',
-    department: 'ክፍል',
-    item: 'ንብረት',
-    quantity: 'ብዛት',
-    reason: 'ምክንያት',
-    createdDate: 'ተፈጠረ',
-    approvedDate: 'ጋግዞ',
-    rejectedDate: 'ተከልክሎ',
-    approvalComment: 'ማጠናከሪያ አስተያየት',
-    rejectionReason: 'ሳይቀበል ምክንያት',
-    view: 'ይመልከቱ',
-    approve: 'ማጠናከር',
-    reject: 'ይቀበላሉ',
-    export: 'Excelに書き出す',
-    refresh: 'ዳግም ሙላት',
-    search: 'በጠየቅ ID ወይም ንብረት ይፈልጉ...',
-    noRequests: 'ንብረት ጠየቆች አልተገኙም',
-    loading: 'ጠየቆችን በማስጫን ላይ...',
-    approvalSuccess: 'ጠየቅ በተሳካ ሁኔታ ተጋግዞ',
-    rejectionSuccess: 'ጠየቅ በተሳካ ሁኔታ ተከልክሎ',
-    actionError: 'ጠየቅን መስተናገድ ወደ ውድቅ ደረሰ',
-    fetchError: 'ጠየቆችን ማስጫን ወደ ውድቅ ደረሰ',
-    comment: 'አስተያየት',
-    reason: 'ምክንያት',
-    submittedBy: 'ከሞሌ',
-    requestDetails: 'ጠየቅ ዝርዝር',
-    requestedItem: 'ታሳቢ ንብረት',
-    comments: 'አስተያየቶች',
-    approveButton: 'ጠየቅ ማጠናከር',
-    rejectButton: 'ጠየቅ ውድቅ',
-    cancel: 'ተወው',
-    critical: 'ወሳኝ',
-    high: 'ከፍተኛ',
-    medium: 'መካከለኛ',
-    low: 'ዝቅተኛ',
-    pending: 'በመጠባበቅ ላይ',
-    approved: 'ተጋግዖ',
-    rejected: 'ተከልክሎ',
-    cancelled: 'ተወው'
-};
-
-const ICTAssetRequests = () => {
+export default function ICTAssetRequests() {
   const { user } = useAuth();
-  const { language, theme } = useLanguage();
-
-  // State
   const [requests, setRequests] = useState([]);
-  const [filteredRequests, setFilteredRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterPriority, setFilterPriority] = useState('all');
-  const [selectedRequest, setSelectedRequest] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState('view');
-  const [approvalComment, setApprovalComment] = useState('');
-  const [approvalReason, setApprovalReason] = useState('');
-
-  // Stats
-  const [stats, setStats] = useState({
-    total: 0,
-    pending: 0,
-    approved: 0,
-    rejected: 0,
-    byPriority: {}
+  const [assets, setAssets] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [filters, setFilters] = useState({
+    search: "",
+    status: "",
+    priority: "",
   });
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [menuId, setMenuId] = useState(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
 
-  const isDark = theme === 'dark';
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
-
-  // Fetch requests
-  const fetchRequests = useCallback(async () => {
-    setLoading(true);
+  const loadRequests = async () => {
+    setError("");
     try {
-      const response = await axios.get('/api/approvals', {
-        params: {
-          limit: 200,
-          status: activeTab === 'all' ? undefined : activeTab
-        }
+      const response = await apiClient.get("/api/approvals", {
+        params: { status: filters.status || undefined },
       });
-
-      let data = response.data.requests || response.data.approvals || [];
-      
-      // Filter for ICT-relevant requests
-      data = data.filter(r => 
-        r.type && (
-          r.type.toLowerCase().includes('ict') ||
-          r.type.toLowerCase().includes('equipment') ||
-          r.type.toLowerCase().includes('computer') ||
-          r.type.toLowerCase().includes('network') ||
-          r.type.toLowerCase().includes('tech') ||
-          r.type === 'Asset Request' ||
-          r.type === 'New Equipment Request'
-        )
-      );
-
-      // Normalize status
-      const normalizedRequests = data.map(r => ({
-        ...r,
-        status: r.status ? String(r.status).charAt(0).toUpperCase() + String(r.status).slice(1).toLowerCase() : 'Pending',
-        priority: r.priority ? String(r.priority).charAt(0).toUpperCase() + String(r.priority).slice(1).toLowerCase() : 'Medium'
-      }));
-
-      setRequests(normalizedRequests);
-      calculateStats(normalizedRequests);
-      applyFilters(normalizedRequests);
-    } catch (error) {
-      toast.error(t.fetchError || 'Failed to load requests');
+      const payload = response.data || {};
+      const rows = Array.isArray(payload.requests)
+        ? payload.requests
+        : Array.isArray(payload.approvals)
+          ? payload.approvals
+          : [];
+      setRequests(rows.map(normalizeRequest));
+      setSummary({
+        total: Number.isFinite(Number(payload.total))
+          ? Number(payload.total)
+          : rows.length,
+      });
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "Unable to load asset requests."));
       setRequests([]);
-      calculateStats([]);
+      setSummary(null);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-    setLoading(false);
-  }, [activeTab, t]);
+  };
 
-  // Apply filters
-  const applyFilters = useCallback((data) => {
-    let filtered = data;
+  useEffect(() => {
+    if (user?.role !== "ict_officer") return undefined;
+    setLoading(true);
+    const timer = setTimeout(loadRequests, filters.search ? 350 : 0);
+    return () => clearTimeout(timer);
+  }, [user?.role, filters.status, filters.search]);
 
-    // Status filter
-    if (activeTab !== 'all') {
-      filtered = filtered.filter(r => r.status?.toLowerCase() === activeTab.toLowerCase());
-    }
+  useEffect(() => {
+    if (user?.role !== "ict_officer") return undefined;
+    apiClient
+      .get("/api/ict/assets", { params: { limit: 100 } })
+      .then(({ data }) =>
+        setAssets(Array.isArray(data?.assets) ? data.assets : []),
+      )
+      .catch(() => setAssets([]));
+    return undefined;
+  }, [user?.role]);
 
-    // Priority filter
-    if (filterPriority !== 'all') {
-      filtered = filtered.filter(r => r.priority?.toLowerCase() === filterPriority.toLowerCase());
-    }
-
-    // Search filter
-    if (searchQuery) {
-      filtered = filtered.filter(r =>
-        (r.request_id && r.request_id.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (r.item && r.item.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (r.type && r.type.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredRequests = useMemo(() => {
+    const search = filters.search.trim().toLowerCase();
+    return requests.filter((request) => {
+      if (
+        filters.priority &&
+        String(request.priority).toLowerCase() !== filters.priority
+      )
+        return false;
+      if (!search) return true;
+      return [
+        request.requestNumber,
+        request.itemName,
+        request.type,
+        request.requesterName,
+        request.departmentName,
+        request.reason,
+        request.asset?.assetCode,
+      ].some((value) =>
+        String(value || "")
+          .toLowerCase()
+          .includes(search),
       );
-    }
-
-    setFilteredRequests(filtered);
-  }, [activeTab, filterPriority, searchQuery]);
-
-  const calculateStats = (data) => {
-    const pending = data.filter(r => r.status === 'Pending').length;
-    const approved = data.filter(r => r.status === 'Approved').length;
-    const rejected = data.filter(r => r.status === 'Rejected').length;
-    const byPriority = data.reduce((acc, r) => {
-      acc[r.priority] = (acc[r.priority] || 0) + 1;
-      return acc;
-    }, {});
-
-    setStats({
-      total: data.length,
-      pending,
-      approved,
-      rejected,
-      byPriority
     });
+  }, [requests, filters.priority, filters.search]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+  const pageRows = filteredRequests.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
+
+  const updateFilter = (name, value) => {
+    setPage(1);
+    setFilters((current) => ({ ...current, [name]: value }));
+  };
+  const refresh = () => {
+    setRefreshing(true);
+    loadRequests();
   };
 
-  const handleApproval = async (decision) => {
-    if (!selectedRequest) return;
-
-    try {
-      await axios.patch(`/api/approvals/${selectedRequest.id}`, {
-        status: decision.toLowerCase(),
-        comment: approvalComment,
-        reason: approvalReason
-      });
-
-      toast.success(decision === 'Approved' ? t.approvalSuccess : t.rejectionSuccess);
-      setShowModal(false);
-      setApprovalComment('');
-      setApprovalReason('');
-      fetchRequests();
-    } catch (error) {
-      toast.error(t.actionError || 'Failed to process request');
-    }
-  };
-
-  const handleViewRequest = (request) => {
-    setSelectedRequest(request);
-    setModalMode('view');
-    setShowModal(true);
-  };
-
-  const handleApproveClick = (request) => {
-    setSelectedRequest(request);
-    setModalMode('approve');
-    setShowModal(true);
-  };
-
-  const handleRejectClick = (request) => {
-    setSelectedRequest(request);
-    setModalMode('reject');
-    setShowModal(true);
-  };
-
-  const exportToExcel = () => {
-    if (filteredRequests.length === 0) {
-      toast.warning('No data to export');
+  const submitRequest = async (event) => {
+    event.preventDefault();
+    const quantity = Number(form.quantity);
+    if (
+      !form.type ||
+      !form.reason.trim() ||
+      !form.item.trim() ||
+      !Number.isInteger(quantity) ||
+      quantity < 1
+    ) {
+      toast.error("Type, item, reason, and a positive quantity are required.");
       return;
     }
-
-    const data = filteredRequests.map(r => ({
-      'Request ID': r.request_id,
-      'Type': r.type,
-      'Item': r.item,
-      'Quantity': r.quantity,
-      'Priority': r.priority,
-      'Status': r.status,
-      'Requested By': r.requested_by,
-      'Department': r.department,
-      'Reason': r.reason,
-      'Created Date': r.created_at ? new Date(r.created_at).toLocaleDateString() : ''
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Asset Requests');
-    XLSX.writeFile(wb, 'asset_requests.xlsx');
-    toast.success('File exported successfully');
-  };
-
-  // Effects
-  useEffect(() => {
-    fetchRequests();
-  }, [activeTab]);
-
-  useEffect(() => {
-    applyFilters(requests);
-  }, [searchQuery, filterPriority, applyFilters, requests]);
-
-  // Styles
-  const styles = {
-    container: {
-      padding: '20px',
-      backgroundColor: isDark ? '#0f1419' : '#f8f9fa',
-      borderRadius: '8px',
-      minHeight: 'calc(100vh - 120px)'
-    },
-    header: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '24px',
-      flexWrap: 'wrap',
-      gap: '12px'
-    },
-    title: {
-      fontSize: '24px',
-      fontWeight: '700',
-      color: isDark ? '#ffffff' : '#000000',
-      margin: 0
-    },
-    buttonGroup: {
-      display: 'flex',
-      gap: '8px',
-      flexWrap: 'wrap'
-    },
-    button: {
-      padding: '8px 16px',
-      borderRadius: '6px',
-      border: 'none',
-      cursor: 'pointer',
-      fontWeight: '500',
-      fontSize: '14px',
-      transition: 'all 0.3s ease'
-    },
-    primaryButton: {
-      backgroundColor: '#3b82f6',
-      color: '#ffffff'
-    },
-    primaryButtonHover: {
-      backgroundColor: '#2563eb',
-      transform: 'translateY(-2px)'
-    },
-    secondaryButton: {
-      backgroundColor: isDark ? '#374151' : '#e5e7eb',
-      color: isDark ? '#f3f4f6' : '#111827'
-    },
-    statsContainer: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-      gap: '16px',
-      marginBottom: '24px'
-    },
-    statCard: {
-      backgroundColor: isDark ? '#1f2937' : '#ffffff',
-      border: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`,
-      borderRadius: '8px',
-      padding: '16px',
-      textAlign: 'center'
-    },
-    statValue: {
-      fontSize: '28px',
-      fontWeight: '700',
-      color: '#3b82f6',
-      margin: '8px 0 0 0'
-    },
-    statLabel: {
-      fontSize: '14px',
-      color: isDark ? '#9ca3af' : '#6b7280'
-    },
-    tabsContainer: {
-      display: 'flex',
-      gap: '8px',
-      marginBottom: '20px',
-      borderBottom: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`,
-      overflowX: 'auto'
-    },
-    tab: {
-      padding: '12px 16px',
-      borderBottom: '3px solid transparent',
-      cursor: 'pointer',
-      fontWeight: '500',
-      color: isDark ? '#9ca3af' : '#6b7280',
-      whiteSpace: 'nowrap',
-      transition: 'all 0.3s ease'
-    },
-    tabActive: {
-      borderBottomColor: '#3b82f6',
-      color: '#3b82f6'
-    },
-    filterContainer: {
-      display: 'flex',
-      gap: '12px',
-      marginBottom: '20px',
-      flexWrap: 'wrap'
-    },
-    input: {
-      flex: 1,
-      minWidth: '200px',
-      padding: '10px 14px',
-      borderRadius: '6px',
-      border: `1px solid ${isDark ? '#374151' : '#d1d5db'}`,
-      backgroundColor: isDark ? '#1f2937' : '#ffffff',
-      color: isDark ? '#f3f4f6' : '#000000',
-      fontSize: '14px'
-    },
-    select: {
-      padding: '10px 14px',
-      borderRadius: '6px',
-      border: `1px solid ${isDark ? '#374151' : '#d1d5db'}`,
-      backgroundColor: isDark ? '#1f2937' : '#ffffff',
-      color: isDark ? '#f3f4f6' : '#000000',
-      fontSize: '14px',
-      cursor: 'pointer'
-    },
-    table: {
-      width: '100%',
-      borderCollapse: 'collapse',
-      backgroundColor: isDark ? '#1f2937' : '#ffffff',
-      border: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`,
-      borderRadius: '8px',
-      overflow: 'hidden'
-    },
-    th: {
-      padding: '12px 16px',
-      textAlign: 'left',
-      backgroundColor: isDark ? '#111827' : '#f3f4f6',
-      fontWeight: '600',
-      color: isDark ? '#f3f4f6' : '#111827',
-      borderBottom: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`,
-      fontSize: '13px'
-    },
-    td: {
-      padding: '12px 16px',
-      borderBottom: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`,
-      color: isDark ? '#e5e7eb' : '#111827',
-      fontSize: '13px'
-    },
-    statusBadge: (status) => {
-      const baseStyle = {
-        padding: '4px 8px',
-        borderRadius: '4px',
-        fontSize: '12px',
-        fontWeight: '600',
-        display: 'inline-block'
-      };
-      if (status === 'Pending') return { ...baseStyle, backgroundColor: '#fef3c7', color: '#92400e' };
-      if (status === 'Approved') return { ...baseStyle, backgroundColor: '#dcfce7', color: '#15803d' };
-      if (status === 'Rejected') return { ...baseStyle, backgroundColor: '#fee2e2', color: '#991b1b' };
-      return baseStyle;
-    },
-    priorityBadge: (priority) => {
-      const baseStyle = {
-        padding: '4px 8px',
-        borderRadius: '4px',
-        fontSize: '12px',
-        fontWeight: '600',
-        display: 'inline-block'
-      };
-      if (priority === 'Critical') return { ...baseStyle, backgroundColor: '#fee2e2', color: '#991b1b' };
-      if (priority === 'High') return { ...baseStyle, backgroundColor: '#fed7aa', color: '#92400e' };
-      if (priority === 'Medium') return { ...baseStyle, backgroundColor: '#fef3c7', color: '#ca8a04' };
-      if (priority === 'Low') return { ...baseStyle, backgroundColor: '#dbeafe', color: '#0c4a6e' };
-      return baseStyle;
-    },
-    modal: {
-      display: showModal ? 'flex' : 'none',
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 1000,
-      padding: '20px'
-    },
-    modalContent: {
-      backgroundColor: isDark ? '#1f2937' : '#ffffff',
-      borderRadius: '8px',
-      padding: '24px',
-      maxWidth: '600px',
-      width: '100%',
-      maxHeight: '90vh',
-      overflowY: 'auto',
-      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
-    },
-    modalHeader: {
-      fontSize: '20px',
-      fontWeight: '700',
-      marginBottom: '16px',
-      color: isDark ? '#f3f4f6' : '#000000'
-    },
-    fieldGroup: {
-      marginBottom: '16px'
-    },
-    label: {
-      display: 'block',
-      fontSize: '14px',
-      fontWeight: '500',
-      marginBottom: '6px',
-      color: isDark ? '#e5e7eb' : '#374151'
-    },
-    textarea: {
-      width: '100%',
-      padding: '10px 14px',
-      borderRadius: '6px',
-      border: `1px solid ${isDark ? '#374151' : '#d1d5db'}`,
-      backgroundColor: isDark ? '#111827' : '#f9fafb',
-      color: isDark ? '#f3f4f6' : '#000000',
-      fontSize: '14px',
-      fontFamily: 'inherit',
-      minHeight: '80px',
-      resize: 'vertical'
-    },
-    modalActions: {
-      display: 'flex',
-      gap: '12px',
-      justifyContent: 'flex-end',
-      marginTop: '24px'
-    },
-    emptyState: {
-      textAlign: 'center',
-      padding: '40px 20px',
-      color: isDark ? '#9ca3af' : '#6b7280'
-    },
-    emptyIcon: {
-      fontSize: '48px',
-      marginBottom: '16px'
+    setSubmitting(true);
+    try {
+      await apiClient.post("/api/approvals", {
+        ...form,
+        asset_id: form.asset_id || undefined,
+        quantity,
+        reason: form.reason.trim(),
+      });
+      toast.success("Request submitted successfully.");
+      setForm(emptyForm);
+      setShowCreate(false);
+      await loadRequests();
+    } catch (requestError) {
+      toast.error(
+        getErrorMessage(requestError, "Unable to submit the asset request."),
+      );
+    } finally {
+      setSubmitting(false);
     }
   };
 
+  if (!user || user.role !== "ict_officer") return null;
+
   return (
-    <div style={styles.container}>
-      {/* Header */}
-      <div style={styles.header}>
-        <h1 style={styles.title}>{t.assetRequests}</h1>
-        <div style={styles.buttonGroup}>
-          <button
-            style={{ ...styles.button, ...styles.primaryButton }}
-            onMouseEnter={(e) => Object.assign(e.target.style, styles.primaryButtonHover)}
-            onMouseLeave={(e) => Object.assign(e.target.style, { backgroundColor: '#3b82f6', transform: 'none' })}
-            onClick={fetchRequests}
-          >
-            {t.refresh}
-          </button>
-          <button
-            style={{ ...styles.button, ...styles.secondaryButton }}
-            onClick={exportToExcel}
-          >
-            {t.export}
-          </button>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div style={styles.statsContainer}>
-        <div style={styles.statCard}>
-          <div style={styles.statLabel}>{t.allRequests}</div>
-          <div style={styles.statValue}>{stats.total}</div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statLabel}>{t.pendingRequests}</div>
-          <div style={{ ...styles.statValue, color: '#f59e0b' }}>{stats.pending}</div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statLabel}>{t.approvedRequests}</div>
-          <div style={{ ...styles.statValue, color: '#10b981' }}>{stats.approved}</div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statLabel}>{t.rejectedRequests}</div>
-          <div style={{ ...styles.statValue, color: '#ef4444' }}>{stats.rejected}</div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={styles.tabsContainer}>
-        {['all', 'pending', 'approved', 'rejected'].map(tab => (
-          <div
-            key={tab}
-            style={{
-              ...styles.tab,
-              ...(activeTab === tab ? styles.tabActive : {})
-            }}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab === 'all' ? t.allRequests : tab === 'pending' ? t.pendingRequests : tab === 'approved' ? t.approvedRequests : t.rejectedRequests}
+    <main className="ict-requests-page">
+      <div className="ict-requests-container">
+        <header className="ict-requests-header">
+          <div className="ict-requests-heading">
+            <span className="ict-requests-heading-icon">
+              <ClipboardList size={22} />
+            </span>
+            <div>
+              <p className="ict-requests-eyebrow">ICT / ASSET REQUESTS</p>
+              <h1>Asset Requests</h1>
+              <p>
+                Request ICT equipment and assets, review approvals, track
+                fulfillment, and maintain complete request history.
+              </p>
+            </div>
           </div>
-        ))}
-      </div>
+          <div className="ict-requests-actions">
+            <button
+              className="ict-requests-secondary"
+              type="button"
+              onClick={refresh}
+              disabled={loading || refreshing}
+            >
+              <RefreshCw size={16} className={refreshing ? "spin" : ""} />{" "}
+              Refresh
+            </button>
+            <button
+              className="ict-requests-primary"
+              type="button"
+              onClick={() => setShowCreate(true)}
+            >
+              <FilePlus2 size={17} /> New Request
+            </button>
+          </div>
+        </header>
 
-      {/* Filters */}
-      <div style={styles.filterContainer}>
-        <input
-          type="text"
-          placeholder={t.search}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={styles.input}
-        />
-        <select
-          value={filterPriority}
-          onChange={(e) => setFilterPriority(e.target.value)}
-          style={styles.select}
-        >
-          <option value="all">All Priorities</option>
-          <option value="critical">{t.critical}</option>
-          <option value="high">{t.high}</option>
-          <option value="medium">{t.medium}</option>
-          <option value="low">{t.low}</option>
-        </select>
-      </div>
+        <section className="ict-requests-summary" aria-label="Request summary">
+          <SummaryCard
+            icon={ClipboardList}
+            label="Total Requests"
+            value={summary?.total}
+            tone="blue"
+          />
+        </section>
 
-      {/* Table */}
-      {loading ? (
-        <div style={styles.emptyState}>
-          <div style={styles.emptyIcon}>⏳</div>
-          <p>{t.loading}</p>
-        </div>
-      ) : filteredRequests.length === 0 ? (
-        <div style={styles.emptyState}>
-          <div style={styles.emptyIcon}>📋</div>
-          <p>{t.noRequests}</p>
-        </div>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>{t.requestID}</th>
-                <th style={styles.th}>{t.type}</th>
-                <th style={styles.th}>{t.item}</th>
-                <th style={styles.th}>{t.quantity}</th>
-                <th style={styles.th}>{t.priority}</th>
-                <th style={styles.th}>{t.status}</th>
-                <th style={styles.th}>{t.requestedBy}</th>
-                <th style={styles.th}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRequests.map(request => (
-                <tr key={request.id}>
-                  <td style={styles.td}>{request.request_id}</td>
-                  <td style={styles.td}>{request.type}</td>
-                  <td style={styles.td}>{request.item}</td>
-                  <td style={styles.td}>{request.quantity}</td>
-                  <td style={styles.td}>
-                    <span style={styles.priorityBadge(request.priority)}>
-                      {request.priority}
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    <span style={styles.statusBadge(request.status)}>
-                      {request.status}
-                    </span>
-                  </td>
-                  <td style={styles.td}>{request.requested_by}</td>
-                  <td style={styles.td}>
-                    <button
-                      style={{ ...styles.button, ...styles.secondaryButton, fontSize: '12px', padding: '6px 12px' }}
-                      onClick={() => handleViewRequest(request)}
-                    >
-                      {t.view}
-                    </button>
-                    {request.status === 'Pending' && (
-                      <>
-                        <button
-                          style={{
-                            ...styles.button,
-                            backgroundColor: '#10b981',
-                            color: '#ffffff',
-                            fontSize: '12px',
-                            padding: '6px 12px',
-                            marginLeft: '4px'
-                          }}
-                          onClick={() => handleApproveClick(request)}
-                        >
-                          {t.approve}
-                        </button>
-                        <button
-                          style={{
-                            ...styles.button,
-                            backgroundColor: '#ef4444',
-                            color: '#ffffff',
-                            fontSize: '12px',
-                            padding: '6px 12px',
-                            marginLeft: '4px'
-                          }}
-                          onClick={() => handleRejectClick(request)}
-                        >
-                          {t.reject}
-                        </button>
-                      </>
-                    )}
-                  </td>
-                </tr>
+        <section className="ict-requests-toolbar" aria-label="Request filters">
+          <div className="ict-requests-filter-title">
+            <SlidersHorizontal size={17} /> Search and filters
+          </div>
+          <label className="ict-requests-search">
+            <Search size={17} />
+            <span className="sr-only">Search asset requests</span>
+            <input
+              value={filters.search}
+              onChange={(event) => updateFilter("search", event.target.value)}
+              placeholder="Search request, requester, department, item..."
+            />
+          </label>
+          <label>
+            <span className="sr-only">Status</span>
+            <select
+              value={filters.status}
+              onChange={(event) => updateFilter("status", event.target.value)}
+            >
+              <option value="">All statuses</option>
+              {statuses.map((value) => (
+                <option key={value} value={value}>
+                  {label(value)}
+                </option>
               ))}
-            </tbody>
-          </table>
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Priority</span>
+            <select
+              value={filters.priority}
+              onChange={(event) => updateFilter("priority", event.target.value)}
+            >
+              <option value="">All priorities</option>
+              {priorities.map((value) => (
+                <option key={value} value={value}>
+                  {label(value)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Filter size={17} className="ict-requests-filter-icon" />
+        </section>
+
+        {error && (
+          <div className="ict-requests-error" role="alert">
+            <AlertCircle size={18} />
+            <span>{error}</span>
+            <button type="button" onClick={refresh}>
+              Retry
+            </button>
+          </div>
+        )}
+        <section className="ict-requests-panel">
+          <div className="ict-requests-panel-head">
+            <div>
+              <h2>Request register</h2>
+              <span>
+                {loading
+                  ? "Loading asset requests..."
+                  : `${filteredRequests.length} request${filteredRequests.length === 1 ? "" : "s"} in the current view`}
+              </span>
+            </div>
+            {loading && <LoaderCircle size={18} className="spin" />}
+          </div>
+          {loading ? (
+            <RequestSkeleton />
+          ) : pageRows.length ? (
+            <div className="ict-requests-table-wrap">
+              <table>
+                <caption className="sr-only">ICT asset requests</caption>
+                <thead>
+                  <tr>
+                    <th>Request</th>
+                    <th>Requester</th>
+                    <th>Department</th>
+                    <th>Requested Item</th>
+                    <th>Priority</th>
+                    <th>Request Date</th>
+                    <th>Status</th>
+                    <th aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageRows.map((request) => (
+                    <tr key={request.id}>
+                      <td>
+                        <button
+                          className="ict-requests-identity"
+                          type="button"
+                          onClick={() => setSelected(request)}
+                        >
+                          <strong>{request.requestNumber}</strong>
+                          <span>{display(request.reason)}</span>
+                        </button>
+                      </td>
+                      <td>
+                        <span className="ict-requests-person">
+                          <UserRound size={15} />
+                          {display(request.requesterName)}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="ict-requests-person">
+                          <Building2 size={15} />
+                          {display(request.departmentName)}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="ict-requests-person">
+                          <MonitorSmartphone size={15} />
+                          {display(request.itemName)}
+                        </span>
+                        <small>
+                          {request.asset?.assetCode || "Asset not linked"}
+                        </small>
+                      </td>
+                      <td>
+                        <Priority value={request.priority} />
+                      </td>
+                      <td>{formatDate(request.createdDate)}</td>
+                      <td>
+                        <Status value={request.status} />
+                      </td>
+                      <td className="ict-requests-menu-cell">
+                        <button
+                          className="ict-requests-icon-button"
+                          type="button"
+                          onClick={() =>
+                            setMenuId(menuId === request.id ? null : request.id)
+                          }
+                          aria-label={`More actions for ${request.requestNumber}`}
+                          title="More actions"
+                        >
+                          <MoreHorizontal size={18} />
+                        </button>
+                        {menuId === request.id && (
+                          <div className="ict-requests-menu">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelected(request);
+                                setMenuId(null);
+                              }}
+                            >
+                              <Eye size={15} /> View details
+                            </button>
+                            <span title="Backend workflow does not expose fulfillment for ICT officers">
+                              <PackageCheck size={15} /> Fulfillment not
+                              available
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState
+              hasFilters={Boolean(
+                filters.search || filters.status || filters.priority,
+              )}
+              onCreate={() => setShowCreate(true)}
+            />
+          )}
+          {!loading && filteredRequests.length > 0 && (
+            <nav className="ict-requests-pagination" aria-label="Request pages">
+              <span>
+                Page {page} of {pageCount}
+              </span>
+              <div>
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage((value) => value - 1)}
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft size={17} />
+                </button>
+                <button
+                  type="button"
+                  disabled={page >= pageCount}
+                  onClick={() => setPage((value) => value + 1)}
+                  aria-label="Next page"
+                >
+                  <ChevronRight size={17} />
+                </button>
+              </div>
+            </nav>
+          )}
+        </section>
+      </div>
+
+      {selected && (
+        <Details request={selected} onClose={() => setSelected(null)} />
+      )}
+      {showCreate && (
+        <div
+          className="ict-requests-modal-backdrop"
+          role="presentation"
+          onMouseDown={(event) =>
+            event.target === event.currentTarget && setShowCreate(false)
+          }
+        >
+          <section
+            className="ict-requests-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-request-title"
+          >
+            <div className="ict-requests-modal-head">
+              <div>
+                <p className="ict-requests-eyebrow">REQUEST WORKFLOW</p>
+                <h2 id="new-request-title">New Asset Request</h2>
+              </div>
+              <button
+                className="ict-requests-icon-button"
+                type="button"
+                onClick={() => setShowCreate(false)}
+                aria-label="Close"
+              >
+                <X size={19} />
+              </button>
+            </div>
+            <form onSubmit={submitRequest}>
+              <div className="ict-requests-form-grid">
+                <label>
+                  Request type
+                  <select
+                    value={form.type}
+                    onChange={(event) =>
+                      setForm({ ...form, type: event.target.value })
+                    }
+                  >
+                    {requestTypes.map((value) => (
+                      <option key={value} value={value}>
+                        {label(value)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Priority
+                  <select
+                    value={form.priority}
+                    onChange={(event) =>
+                      setForm({ ...form, priority: event.target.value })
+                    }
+                  >
+                    {priorities.map((value) => (
+                      <option key={value} value={value}>
+                        {label(value)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Requested item
+                  <input
+                    required
+                    value={form.item}
+                    onChange={(event) =>
+                      setForm({ ...form, item: event.target.value })
+                    }
+                    placeholder="Equipment or asset name"
+                  />
+                </label>
+                <label>
+                  Quantity
+                  <input
+                    required
+                    min="1"
+                    step="1"
+                    type="number"
+                    value={form.quantity}
+                    onChange={(event) =>
+                      setForm({ ...form, quantity: event.target.value })
+                    }
+                  />
+                </label>
+                <label className="ict-requests-form-wide">
+                  Existing ICT asset
+                  <select
+                    value={form.asset_id}
+                    onChange={(event) =>
+                      setForm({ ...form, asset_id: event.target.value })
+                    }
+                  >
+                    <option value="">No existing asset</option>
+                    {assets.map((asset) => (
+                      <option key={asset.id} value={asset.id}>
+                        {asset.assetCode || asset.assetTag} - {asset.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="ict-requests-form-wide">
+                  Purpose and reason
+                  <textarea
+                    required
+                    rows="5"
+                    value={form.reason}
+                    onChange={(event) =>
+                      setForm({ ...form, reason: event.target.value })
+                    }
+                    placeholder="Explain why this request is needed"
+                  />
+                </label>
+              </div>
+              <div className="ict-requests-form-footer">
+                <span>
+                  <TriangleAlert size={15} /> Required date, attachments, and
+                  fulfillment are not available in the current request API.
+                </span>
+                <button
+                  className="ict-requests-primary"
+                  type="submit"
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <LoaderCircle size={16} className="spin" />
+                  ) : (
+                    <CheckCircle2 size={16} />
+                  )}{" "}
+                  {submitting ? "Submitting..." : "Submit Request"}
+                </button>
+              </div>
+            </form>
+          </section>
         </div>
       )}
+    </main>
+  );
+}
 
-      {/* Modal */}
-      <div style={styles.modal}>
-        <div style={styles.modalContent}>
-          <div style={styles.modalHeader}>
-            {modalMode === 'view' ? t.requestDetails : modalMode === 'approve' ? t.approveButton : t.rejectButton}
-          </div>
-
-          {selectedRequest && (
-            <>
-              <div style={styles.fieldGroup}>
-                <div style={styles.label}>{t.requestID}</div>
-                <div>{selectedRequest.request_id}</div>
-              </div>
-              <div style={styles.fieldGroup}>
-                <div style={styles.label}>{t.type}</div>
-                <div>{selectedRequest.type}</div>
-              </div>
-              <div style={styles.fieldGroup}>
-                <div style={styles.label}>{t.requestedItem}</div>
-                <div>{selectedRequest.item}</div>
-              </div>
-              <div style={styles.fieldGroup}>
-                <div style={styles.label}>{t.quantity}</div>
-                <div>{selectedRequest.quantity}</div>
-              </div>
-              <div style={styles.fieldGroup}>
-                <div style={styles.label}>{t.priority}</div>
-                <div>
-                  <span style={styles.priorityBadge(selectedRequest.priority)}>
-                    {selectedRequest.priority}
-                  </span>
-                </div>
-              </div>
-              <div style={styles.fieldGroup}>
-                <div style={styles.label}>{t.reason}</div>
-                <div>{selectedRequest.reason}</div>
-              </div>
-              <div style={styles.fieldGroup}>
-                <div style={styles.label}>{t.requestedBy}</div>
-                <div>{selectedRequest.requested_by}</div>
-              </div>
-              <div style={styles.fieldGroup}>
-                <div style={styles.label}>{t.department}</div>
-                <div>{selectedRequest.department}</div>
-              </div>
-
-              {(modalMode === 'approve' || modalMode === 'reject') && (
-                <>
-                  <div style={styles.fieldGroup}>
-                    <label style={styles.label}>
-                      {modalMode === 'approve' ? t.approvalComment : t.rejectionReason}
-                    </label>
-                    <textarea
-                      style={styles.textarea}
-                      value={modalMode === 'approve' ? approvalComment : approvalReason}
-                      onChange={(e) => modalMode === 'approve' ? setApprovalComment(e.target.value) : setApprovalReason(e.target.value)}
-                      placeholder={modalMode === 'approve' ? 'Add approval comment...' : 'Provide rejection reason...'}
-                    />
-                  </div>
-                </>
-              )}
-            </>
+function SummaryCard({ icon: Icon, label: title, value, tone }) {
+  return (
+    <article className={`ict-requests-summary-card ${tone}`}>
+      <span className="ict-requests-summary-icon">
+        <Icon size={19} />
+      </span>
+      <div>
+        <strong>
+          {value === undefined ? (
+            <span className="skeleton-value" />
+          ) : (
+            value.toLocaleString()
           )}
-
-          <div style={styles.modalActions}>
-            <button
-              style={{ ...styles.button, ...styles.secondaryButton }}
-              onClick={() => setShowModal(false)}
-            >
-              {t.cancel}
-            </button>
-            {(modalMode === 'approve' || modalMode === 'reject') && (
-              <button
-                style={{
-                  ...styles.button,
-                  backgroundColor: modalMode === 'approve' ? '#10b981' : '#ef4444',
-                  color: '#ffffff'
-                }}
-                onClick={() => handleApproval(modalMode === 'approve' ? 'Approved' : 'Rejected')}
-              >
-                {modalMode === 'approve' ? t.approveButton : t.rejectButton}
-              </button>
-            )}
-          </div>
-        </div>
+        </strong>
+        <span>{title}</span>
       </div>
+    </article>
+  );
+}
+function Priority({ value }) {
+  const normalized = String(value || "").toLowerCase();
+  return (
+    <span className={`ict-requests-badge priority-${normalized}`}>
+      <TriangleAlert size={13} />
+      {label(value)}
+    </span>
+  );
+}
+function Status({ value }) {
+  const normalized = String(value || "").toLowerCase();
+  const Icon =
+    normalized === "approved"
+      ? CircleCheck
+      : normalized === "rejected"
+        ? CircleX
+        : normalized === "pending"
+          ? Clock3
+          : CheckCircle2;
+  return (
+    <span className={`ict-requests-badge status-${normalized}`}>
+      <Icon size={13} />
+      {label(value)}
+    </span>
+  );
+}
+function RequestSkeleton() {
+  return (
+    <div className="ict-requests-skeleton" aria-label="Loading asset requests">
+      {Array.from({ length: 5 }, (_, index) => (
+        <div key={index}>
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+      ))}
     </div>
   );
-};
-
-export default ICTAssetRequests;
+}
+function EmptyState({ hasFilters, onCreate }) {
+  return (
+    <div className="ict-requests-empty">
+      <ClipboardList size={32} />
+      <strong>
+        {hasFilters
+          ? "No requests match the current filters."
+          : "No asset requests found."}
+      </strong>
+      <span>
+        {hasFilters
+          ? "Clear a filter or try a different search."
+          : "Create a request to begin the ICT asset request workflow."}
+      </span>
+      {!hasFilters && (
+        <button
+          className="ict-requests-primary"
+          type="button"
+          onClick={onCreate}
+        >
+          <FilePlus2 size={16} /> New Request
+        </button>
+      )}
+    </div>
+  );
+}
+function Details({ request, onClose }) {
+  return (
+    <div
+      className="ict-requests-modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <section
+        className="ict-requests-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="request-details-title"
+      >
+        <div className="ict-requests-modal-head">
+          <div>
+            <p className="ict-requests-eyebrow">REQUEST DETAILS</p>
+            <h2 id="request-details-title">{request.requestNumber}</h2>
+          </div>
+          <button
+            className="ict-requests-icon-button"
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={19} />
+          </button>
+        </div>
+        <div className="ict-requests-detail-grid">
+          <Detail
+            icon={ClipboardList}
+            title="Status"
+            value={<Status value={request.status} />}
+          />
+          <Detail
+            icon={TriangleAlert}
+            title="Priority"
+            value={<Priority value={request.priority} />}
+          />
+          <Detail
+            icon={CalendarDays}
+            title="Request date"
+            value={formatDate(request.createdDate)}
+          />
+          <Detail icon={Tags} title="Type" value={label(request.type)} />
+          <Detail
+            icon={UserRound}
+            title="Requester"
+            value={display(request.requesterName)}
+          />
+          <Detail
+            icon={Building2}
+            title="Department"
+            value={display(request.departmentName)}
+          />
+          <Detail
+            icon={MonitorSmartphone}
+            title="Requested item"
+            value={display(request.itemName)}
+          />
+          <Detail
+            icon={MapPin}
+            title="Asset"
+            value={request.asset?.assetCode || "Not linked"}
+          />
+        </div>
+        <div className="ict-requests-description">
+          <strong>Purpose and reason</strong>
+          <p>{display(request.reason)}</p>
+        </div>
+        <div className="ict-requests-not-available">
+          <AlertCircle size={16} /> Approval history, fulfillment, assignment,
+          inventory issue, attachments, and notification links are not exposed
+          by the current backend request architecture.
+        </div>
+      </section>
+    </div>
+  );
+}
+function Detail({ icon: Icon, title, value }) {
+  return (
+    <div>
+      <span>
+        <Icon size={15} />
+        {title}
+      </span>
+      <strong>{value}</strong>
+    </div>
+  );
+}

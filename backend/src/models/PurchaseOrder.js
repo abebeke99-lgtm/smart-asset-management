@@ -5,6 +5,7 @@ const PurchaseOrder = sequelize.define('PurchaseOrder', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   poNumber: { type: DataTypes.STRING(80), allowNull: false, unique: true },
   purchaseRequestId: { type: DataTypes.INTEGER, allowNull: true },
+  budgetId: { type: DataTypes.INTEGER, allowNull: true },
   supplierName: { type: DataTypes.STRING(255), allowNull: false },
   departmentId: { type: DataTypes.INTEGER, allowNull: true },
   orderDate: { type: DataTypes.DATEONLY, allowNull: false },

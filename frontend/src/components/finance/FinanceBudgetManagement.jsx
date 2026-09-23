@@ -31,22 +31,15 @@ import api from "../../services/api";
 const emptyForm = {
   budgetCode: "",
   budgetName: "",
-  financialYear: "",
+  fiscalYearId: "",
+  fundSourceId: "",
+  collegeId: "",
   departmentId: "",
-  departmentName: "",
-  budgetCategory: "",
-  accountCode: "",
   description: "",
-  allocatedAmount: "",
-  revisedAmount: "",
-  spentAmount: "",
-  committedAmount: "",
-  remainingAmount: "",
-  currency: "ETB",
+  allocation: "",
   startDate: "",
   endDate: "",
-  status: "Draft",
-  notes: "",
+  status: "DRAFT",
 };
 
 const firstValue = (...values) =>
@@ -126,133 +119,29 @@ const extractPagination = (response, fallbackLength, page, pageSize) => {
 
 const normalizeBudget = (row) => ({
   ...row,
-
   id: firstValue(row.id, row.budgetId, row._id),
-
-  budgetCode: firstValue(
-    row.budgetCode,
-    row.budget_code,
-    row.code,
-    row.budgetNumber,
-    row.budget_number
-  ),
-
-  budgetName: firstValue(
-    row.budgetName,
-    row.budget_name,
-    row.name,
-    row.title
-  ),
-
-  financialYear: firstValue(
-    row.financialYear,
-    row.financial_year,
-    row.fiscalYear,
-    row.fiscal_year
-  ),
-
-  departmentId: firstValue(
-    row.departmentId,
-    row.department_id
-  ),
-
-  departmentName: firstValue(
-    row.departmentName,
-    row.department_name,
-    row.department
-  ),
-
-  budgetCategory: firstValue(
-    row.budgetCategory,
-    row.budget_category,
-    row.category
-  ),
-
-  accountCode: firstValue(
-    row.accountCode,
-    row.account_code,
-    row.account
-  ),
-
-  description: firstValue(row.description, row.details),
-
-  allocatedAmount: Number(
-    firstValue(
-      row.allocatedAmount,
-      row.allocated_amount,
-      row.originalAmount,
-      row.original_amount,
-      0
-    )
-  ),
-
-  revisedAmount: Number(
-    firstValue(
-      row.revisedAmount,
-      row.revised_amount,
-      row.currentAmount,
-      row.current_amount,
-      row.allocatedAmount,
-      row.allocated_amount,
-      0
-    )
-  ),
-
-  spentAmount: Number(
-    firstValue(
-      row.spentAmount,
-      row.spent_amount,
-      row.actualSpent,
-      row.actual_spent,
-      row.actualAmount,
-      row.actual_amount,
-      0
-    )
-  ),
-
-  committedAmount: Number(
-    firstValue(
-      row.committedAmount,
-      row.committed_amount,
-      0
-    )
-  ),
-
-  remainingAmount: Number(
-    firstValue(
-      row.remainingAmount,
-      row.remaining_amount,
-      row.balance,
-      row.remaining,
-      0
-    )
-  ),
-
+  budgetCode: firstValue(row.budgetCode, row.budget_code, row.code, ""),
+  budgetName: firstValue(row.budgetName, row.budget_name, row.name, ""),
+  fiscalYearId: row.fiscalYearId,
+  financialYear: firstValue(row.fiscalYear?.code, row.financialYear, row.financial_year, ""),
+  fundSourceId: row.fundSourceId,
+  fundSourceName: row.fundSource?.name || "",
+  departmentId: row.departmentId,
+  departmentName: row.department?.name || row.departmentName || "",
+  collegeId: row.collegeId,
+  description: firstValue(row.description, ""),
+  allocatedAmount: Number(firstValue(row.allocation, 0)),
+  revisedAmount: Number(firstValue(row.allocation, 0)),
+  spentAmount: Number(firstValue(row.spent, 0)),
+  committedAmount: Number(firstValue(row.committed, 0)),
+  remainingAmount: Number(firstValue(row.available, 0)),
   currency: firstValue(row.currency, row.currency_code, "ETB"),
-
-  startDate: firstValue(
-    row.startDate,
-    row.start_date
-  ),
-
-  endDate: firstValue(
-    row.endDate,
-    row.end_date
-  ),
-
-  status: firstValue(row.status, "Draft"),
-
+  startDate: firstValue(row.startDate, row.start_date),
+  endDate: firstValue(row.endDate, row.end_date),
+  status: firstValue(row.status, "DRAFT"),
   notes: firstValue(row.notes, ""),
-
-  createdAt: firstValue(
-    row.createdAt,
-    row.created_at
-  ),
-
-  updatedAt: firstValue(
-    row.updatedAt,
-    row.updated_at
-  ),
+  createdAt: firstValue(row.createdAt, row.created_at),
+  updatedAt: firstValue(row.updatedAt, row.updated_at),
 });
 
 const money = (value, currency = "ETB") => {
@@ -308,12 +197,14 @@ export default function FinanceBudgetManagement() {
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [backendSummary, setBackendSummary] = useState(null);
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [financialYear, setFinancialYear] = useState("");
   const [department, setDepartment] = useState("");
   const [category, setCategory] = useState("");
+  const [lookups, setLookups] = useState({ fiscalYears: [], fundSources: [], colleges: [], departments: [] });
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -347,15 +238,18 @@ export default function FinanceBudgetManagement() {
 
       if (search.trim()) params.search = search.trim();
       if (status) params.status = status;
-      if (financialYear) params.financialYear = financialYear;
-      if (department) params.department = department;
-      if (category) params.budgetCategory = category;
+      if (financialYear) params.fiscalYearId = financialYear;
+      if (department) params.departmentId = department;
+      if (category) params.fundSourceId = category;
 
       const response = await api.get("/finance/budget-management", {
         params,
       });
 
       const rows = extractRows(response).map(normalizeBudget);
+      const responseData = response?.data || {};
+      setLookups(responseData.filters || { fiscalYears: [], fundSources: [], colleges: [], departments: [] });
+      setBackendSummary(responseData.summary || null);
 
       setBudgets(rows);
       setPagination(
@@ -394,7 +288,7 @@ export default function FinanceBudgetManagement() {
     setPage(1);
   }, [search, status, financialYear, department, category, pageSize]);
 
-  const summary = useMemo(() => {
+  const localSummary = useMemo(() => {
     return budgets.reduce(
       (acc, item) => {
         const allocated =
@@ -454,6 +348,7 @@ export default function FinanceBudgetManagement() {
       }
     );
   }, [budgets]);
+  const summary = backendSummary || localSummary;
 
   const years = useMemo(() => {
     const values = budgets
@@ -489,11 +384,7 @@ export default function FinanceBudgetManagement() {
   const openCreate = () => {
     setEditingBudget(null);
 
-    setForm({
-      ...emptyForm,
-      currency: "ETB",
-      status: "Draft",
-    });
+    setForm({ ...emptyForm });
 
     setError("");
     setSuccess("");
@@ -506,26 +397,19 @@ export default function FinanceBudgetManagement() {
     setForm({
       budgetCode: budget.budgetCode || "",
       budgetName: budget.budgetName || "",
-      financialYear: budget.financialYear || "",
+      fiscalYearId: budget.fiscalYearId || "",
+      fundSourceId: budget.fundSourceId || "",
+      collegeId: budget.collegeId || "",
       departmentId: budget.departmentId || "",
-      departmentName: budget.departmentName || "",
-      budgetCategory: budget.budgetCategory || "",
-      accountCode: budget.accountCode || "",
       description: budget.description || "",
-      allocatedAmount: budget.allocatedAmount ?? "",
-      revisedAmount: budget.revisedAmount ?? "",
-      spentAmount: budget.spentAmount ?? "",
-      committedAmount: budget.committedAmount ?? "",
-      remainingAmount: budget.remainingAmount ?? "",
-      currency: budget.currency || "ETB",
+      allocation: budget.allocatedAmount ?? "",
       startDate: budget.startDate
         ? String(budget.startDate).slice(0, 10)
         : "",
       endDate: budget.endDate
         ? String(budget.endDate).slice(0, 10)
         : "",
-      status: budget.status || "Draft",
-      notes: budget.notes || "",
+      status: budget.status || "DRAFT",
     });
 
     setError("");
@@ -541,39 +425,18 @@ export default function FinanceBudgetManagement() {
       setError("");
       setSuccess("");
 
-      const allocated = Number(form.allocatedAmount || 0);
-      const revised =
-        form.revisedAmount === ""
-          ? allocated
-          : Number(form.revisedAmount || 0);
-
-      const spent = Number(form.spentAmount || 0);
-      const committed = Number(form.committedAmount || 0);
-
-      const calculatedRemaining = Math.max(
-        0,
-        revised - spent - committed
-      );
-
       const payload = {
         budgetCode: form.budgetCode.trim(),
         budgetName: form.budgetName.trim(),
-        financialYear: form.financialYear.trim(),
+        fiscalYearId: form.fiscalYearId || null,
+        fundSourceId: form.fundSourceId || null,
+        collegeId: form.collegeId || null,
         departmentId: form.departmentId || null,
-        departmentName: form.departmentName.trim(),
-        budgetCategory: form.budgetCategory.trim(),
-        accountCode: form.accountCode.trim(),
         description: form.description.trim(),
-        allocatedAmount: allocated,
-        revisedAmount: revised,
-        spentAmount: spent,
-        committedAmount: committed,
-        remainingAmount: calculatedRemaining,
-        currency: form.currency || "ETB",
+        allocation: form.allocation,
         startDate: form.startDate || null,
         endDate: form.endDate || null,
         status: form.status,
-        notes: form.notes.trim(),
       };
 
       if (!payload.budgetCode || !payload.budgetName) {
@@ -581,8 +444,8 @@ export default function FinanceBudgetManagement() {
         return;
       }
 
-      if (!payload.financialYear) {
-        setError("Financial year is required.");
+      if (!payload.fiscalYearId || !payload.fundSourceId || !payload.allocation) {
+        setError("Fiscal year, fund source, and allocation are required.");
         return;
       }
 
@@ -628,7 +491,7 @@ export default function FinanceBudgetManagement() {
       await api.put(
         `/finance/budget-management/${budget.id}`,
         {
-          status: nextStatus,
+          status: String(nextStatus).toUpperCase(),
         }
       );
 
@@ -837,16 +700,12 @@ export default function FinanceBudgetManagement() {
     setPage(1);
   };
 
-  const canApprove = (budget) => {
-    const value = String(budget.status || "").toLowerCase();
-
-    return ["draft", "pending", "submitted"].includes(value);
-  };
+  const canApprove = (budget) => String(budget.status || "").toUpperCase() === "DRAFT";
 
   const canClose = (budget) => {
     const value = String(budget.status || "").toLowerCase();
 
-    return ["approved", "active", "posted"].includes(value);
+    return ["ACTIVE", "SUSPENDED"].includes(value);
   };
 
   return (
@@ -1758,19 +1617,9 @@ export default function FinanceBudgetManagement() {
               ))}
             </select>
 
-            <select
-              value={category}
-              onChange={(e) =>
-                setCategory(e.target.value)
-              }
-            >
-              <option value="">All categories</option>
-
-              {categories.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
+            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="">All fund sources</option>
+              {(lookups.fundSources || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
 
             <select
@@ -1780,14 +1629,7 @@ export default function FinanceBudgetManagement() {
               }
             >
               <option value="">All statuses</option>
-              <option value="Draft">Draft</option>
-              <option value="Pending">Pending</option>
-              <option value="Submitted">Submitted</option>
-              <option value="Approved">Approved</option>
-              <option value="Active">Active</option>
-              <option value="Closed">Closed</option>
-              <option value="Rejected">Rejected</option>
-              <option value="Cancelled">Cancelled</option>
+              {(lookups.statuses || ['DRAFT', 'ACTIVE', 'CLOSED', 'SUSPENDED', 'CANCELLED']).map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
 
             <button
@@ -1989,7 +1831,7 @@ export default function FinanceBudgetManagement() {
                                   onClick={() =>
                                     updateStatus(
                                       budget,
-                                      "Approved"
+                                      "ACTIVE"
                                     )
                                   }
                                   disabled={
@@ -2018,7 +1860,7 @@ export default function FinanceBudgetManagement() {
                                   onClick={() =>
                                     updateStatus(
                                       budget,
-                                      "Closed"
+                                      "CLOSED"
                                     )
                                   }
                                   disabled={
@@ -2247,165 +2089,44 @@ export default function FinanceBudgetManagement() {
                       </span>
                     </label>
 
-                    <input
-                      value={form.financialYear}
-                      onChange={(e) =>
-                        updateForm(
-                          "financialYear",
-                          e.target.value
-                        )
-                      }
-                      placeholder="e.g. 2026/27"
-                      required
-                    />
+                    <select value={form.fiscalYearId} onChange={(e) => updateForm("fiscalYearId", e.target.value)} required>
+                      <option value="">Select fiscal year</option>
+                      {(lookups.fiscalYears || []).map((item) => <option key={item.id} value={item.id}>{item.code} {item.name ? `(${item.name})` : ""}</option>)}
+                    </select>
                   </div>
 
                   <div className="field">
                     <label>Department</label>
 
-                    <input
-                      value={form.departmentName}
-                      onChange={(e) =>
-                        updateForm(
-                          "departmentName",
-                          e.target.value
-                        )
-                      }
-                      placeholder="Department name"
-                    />
+                    <select value={form.departmentId} onChange={(e) => updateForm("departmentId", e.target.value)}>
+                      <option value="">All departments</option>
+                      {(lookups.departments || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                    </select>
                   </div>
 
                   <div className="field">
                     <label>Department ID</label>
 
-                    <input
-                      value={form.departmentId}
-                      onChange={(e) =>
-                        updateForm(
-                          "departmentId",
-                          e.target.value
-                        )
-                      }
-                      placeholder="Department ID"
-                    />
+                    <select value={form.fundSourceId} onChange={(e) => updateForm("fundSourceId", e.target.value)} required>
+                      <option value="">Select fund source</option>
+                      {(lookups.fundSources || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                    </select>
                   </div>
 
                   <div className="field">
-                    <label>Budget Category</label>
-
-                    <input
-                      value={form.budgetCategory}
-                      onChange={(e) =>
-                        updateForm(
-                          "budgetCategory",
-                          e.target.value
-                        )
-                      }
-                      placeholder="Operational, Capital..."
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label>Account Code</label>
-
-                    <input
-                      value={form.accountCode}
-                      onChange={(e) =>
-                        updateForm(
-                          "accountCode",
-                          e.target.value
-                        )
-                      }
-                      placeholder="Account code"
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label>Currency</label>
-
-                    <input
-                      value={form.currency}
-                      onChange={(e) =>
-                        updateForm(
-                          "currency",
-                          e.target.value
-                        )
-                      }
-                      placeholder="ETB"
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label>Allocated Amount</label>
+                    <label>Allocation</label>
 
                     <input
                       type="number"
                       min="0"
                       step="0.01"
-                      value={form.allocatedAmount}
-                      onChange={(e) =>
-                        updateForm(
-                          "allocatedAmount",
-                          e.target.value
-                        )
-                      }
+                      value={form.allocation}
+                      onChange={(e) => updateForm("allocation", e.target.value)}
+                      required
                       placeholder="0.00"
                     />
                   </div>
 
-                  <div className="field">
-                    <label>Revised Amount</label>
-
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={form.revisedAmount}
-                      onChange={(e) =>
-                        updateForm(
-                          "revisedAmount",
-                          e.target.value
-                        )
-                      }
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label>Spent Amount</label>
-
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={form.spentAmount}
-                      onChange={(e) =>
-                        updateForm(
-                          "spentAmount",
-                          e.target.value
-                        )
-                      }
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label>Committed Amount</label>
-
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={form.committedAmount}
-                      onChange={(e) =>
-                        updateForm(
-                          "committedAmount",
-                          e.target.value
-                        )
-                      }
-                      placeholder="0.00"
-                    />
-                  </div>
 
                   <div className="field">
                     <label>Start Date</label>

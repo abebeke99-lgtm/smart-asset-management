@@ -1,10 +1,90 @@
 ﻿const express = require('express');
 const router = express.Router();
 const { requireAuth, requireRole } = require('../middlewares/auth');
-const { Department, User, Asset, AuditLog } = require('../models');
+const { Department, User, Asset, AuditLog, College, Location } = require('../models');
 const { Op } = require('sequelize');
 
 const requireAdmin = [requireAuth, requireRole('admin')];
+
+const departmentIncludes = [
+  { model: College, attributes: ['id', 'collegeCode', 'collegeName'], required: false },
+  { model: User, as: 'Head', attributes: ['id', 'fullName', 'username', 'email'], required: false },
+  { model: Location, as: 'LocationRecord', attributes: ['id', 'name', 'code'], required: false },
+];
+
+const buildScope = (req) => {
+  const scope = {};
+  const organizationScope = req.organizationScope || {};
+  const role = req.user?.role;
+  const collegeId = organizationScope.collegeId || req.user?.collegeId;
+  const departmentId = organizationScope.departmentId || req.user?.departmentId;
+
+  if (role === 'college' && collegeId) scope.collegeId = collegeId;
+  if (role === 'department_head' && departmentId) scope.id = departmentId;
+  return scope;
+};
+
+const buildWhere = (req) => {
+  const where = { ...buildScope(req) };
+  const search = String(req.query.search || '').trim();
+  const status = String(req.query.status || '').trim().toLowerCase();
+  const collegeId = Number(req.query.collegeId);
+
+  if (status === 'active' || status === 'inactive') where.status = status;
+  if (Number.isInteger(collegeId) && collegeId > 0 && req.user?.role === 'admin') where.collegeId = collegeId;
+  if (search) {
+    where[Op.or] = [
+      { name: { [Op.like]: `%${search}%` } },
+      { code: { [Op.like]: `%${search}%` } },
+      { description: { [Op.like]: `%${search}%` } },
+      { '$Head.fullName$': { [Op.like]: `%${search}%` } },
+      { '$Head.username$': { [Op.like]: `%${search}%` } },
+      { '$College.collegeName$': { [Op.like]: `%${search}%` } },
+      { '$LocationRecord.name$': { [Op.like]: `%${search}%` } },
+    ];
+  }
+  return where;
+};
+
+const serializeDepartment = (department, counts = {}) => ({
+  ...department.toJSON(),
+  userCount: Number(counts.userCount ?? department.userCount ?? 0),
+  assetCount: Number(counts.assetCount ?? department.assetCount ?? 0),
+  college: department.College || null,
+  head: department.Head || null,
+  locationRecord: department.LocationRecord || null,
+});
+
+// Get department statistics from the same scoped, relationship-backed data.
+router.get('/stats', requireAuth, async (req, res, next) => {
+  try {
+    const where = buildWhere(req);
+    const departments = await Department.findAll({ where, attributes: ['id', 'headId', 'locationId', 'status'] });
+    const departmentIds = departments.map((department) => department.id);
+    const [departmentUsers, departmentAssets, validHeads] = departmentIds.length
+      ? await Promise.all([
+        User.count({ where: { departmentId: { [Op.in]: departmentIds } } }),
+        Asset.count({ where: { departmentId: { [Op.in]: departmentIds } } }),
+        User.findAll({ where: { id: { [Op.in]: departments.map((department) => department.headId).filter(Boolean) } }, attributes: ['id'], raw: true }),
+      ])
+      : [0, 0, []];
+    const validHeadIds = new Set(validHeads.map((user) => String(user.id)));
+
+    res.json({
+      success: true,
+      data: {
+        total: departments.length,
+        heads: departments.filter((department) => validHeadIds.has(String(department.headId))).length,
+        departmentUsers,
+        departmentAssets,
+        locations: new Set(departments.map((department) => department.locationId).filter(Boolean)).size,
+        inactive: departments.filter((department) => department.status === 'inactive').length,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // Get all departments
 router.get('/', requireAuth, async (req, res, next) => {
@@ -13,26 +93,24 @@ router.get('/', requireAuth, async (req, res, next) => {
     const currentPage = Math.max(1, Number.parseInt(page, 10) || 1);
     const pageSize = Math.min(100, Math.max(1, Number.parseInt(limit, 10) || 25));
     
-    const where = search ? { name: { [Op.like]: `%${search}%` } } : {};
+    const where = buildWhere({ ...req, query: { ...req.query, search } });
     
     const { count, rows } = await Department.findAndCountAll({
       where,
+      include: departmentIncludes,
       order: [['name', 'ASC']],
       limit: pageSize,
       offset: (currentPage - 1) * pageSize,
+      distinct: true,
     });
 
     // Enrich with user and asset counts
     const enriched = await Promise.all(rows.map(async (dept) => {
       const [userCount, assetCount] = await Promise.all([
-        User.count({ where: { department: dept.name } }),
-        Asset.count({ where: { department: dept.name } }),
+        User.count({ where: { departmentId: dept.id } }),
+        Asset.count({ where: { departmentId: dept.id } }),
       ]);
-      return {
-        ...dept.toJSON(),
-        userCount,
-        assetCount,
-      };
+      return serializeDepartment(dept, { userCount, assetCount });
     }));
 
     const pagination = { page: currentPage, limit: pageSize, total: count, pages: Math.max(1, Math.ceil(count / pageSize)) };
@@ -45,20 +123,18 @@ router.get('/', requireAuth, async (req, res, next) => {
 // Get single department
 router.get('/:id', requireAuth, async (req, res, next) => {
   try {
-    const dept = await Department.findByPk(req.params.id);
+    const dept = await Department.findOne({ where: { ...buildScope(req), id: req.params.id }, include: departmentIncludes });
     if (!dept) return res.status(404).json({ success: false, message: 'Department not found' });
     
     const [userCount, assetCount] = await Promise.all([
-      User.count({ where: { department: dept.name } }),
-      Asset.count({ where: { department: dept.name } }),
+      User.count({ where: { departmentId: dept.id } }),
+      Asset.count({ where: { departmentId: dept.id } }),
     ]);
     
     res.json({
       success: true,
       data: {
-        ...dept.toJSON(),
-        userCount,
-        assetCount,
+        ...serializeDepartment(dept, { userCount, assetCount }),
       }
     });
   } catch (error) {
@@ -69,7 +145,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
 // Create department (admin only)
 router.post('/', ...requireAdmin, async (req, res, next) => {
   try {
-    const { name, code = '', description = '', headId = null } = req.body;
+    const { name, code = '', description = '', headId = null, collegeId = null, locationId = null, status = 'active' } = req.body;
     
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Department name is required' });
@@ -84,6 +160,15 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
       const head = await User.findByPk(headId);
       if (!head) return res.status(404).json({ success: false, message: 'Department head not found' });
     }
+    if (collegeId && !await College.findByPk(collegeId)) {
+      return res.status(404).json({ success: false, message: 'College not found' });
+    }
+    if (locationId && !await Location.findByPk(locationId)) {
+      return res.status(404).json({ success: false, message: 'Location not found' });
+    }
+    if (!['active', 'inactive'].includes(status)) {
+      return res.status(422).json({ success: false, message: 'Invalid department status' });
+    }
     
     const existing = await Department.findOne({ where: { name: name.trim() } });
     if (existing) {
@@ -95,6 +180,9 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
       code: code || '',
       description: description || '',
       headId: headId || null,
+      collegeId: collegeId || null,
+      locationId: locationId || null,
+      status,
     });
     
     await AuditLog.create({
@@ -116,7 +204,7 @@ router.put('/:id', ...requireAdmin, async (req, res, next) => {
     const dept = await Department.findByPk(req.params.id);
     if (!dept) return res.status(404).json({ success: false, message: 'Department not found' });
     
-    const { name, code, description, headId } = req.body;
+    const { name, code, description, headId, collegeId, locationId, status } = req.body;
     const previousValue = dept.toJSON();
     
     if (name !== undefined && name && name.trim().length > 255) {
@@ -132,6 +220,15 @@ router.put('/:id', ...requireAdmin, async (req, res, next) => {
       const head = await User.findByPk(headId);
       if (!head) return res.status(404).json({ success: false, message: 'Department head not found' });
     }
+    if (collegeId !== undefined && collegeId && !await College.findByPk(collegeId)) {
+      return res.status(404).json({ success: false, message: 'College not found' });
+    }
+    if (locationId !== undefined && locationId && !await Location.findByPk(locationId)) {
+      return res.status(404).json({ success: false, message: 'Location not found' });
+    }
+    if (status !== undefined && !['active', 'inactive'].includes(status)) {
+      return res.status(422).json({ success: false, message: 'Invalid department status' });
+    }
     
     if (name && name.trim() && name !== dept.name) {
       const existing = await Department.findOne({ where: { name: name.trim() } });
@@ -143,6 +240,9 @@ router.put('/:id', ...requireAdmin, async (req, res, next) => {
     if (code !== undefined) updates.code = code || '';
     if (description !== undefined) updates.description = description || '';
     if (headId !== undefined) updates.headId = headId || null;
+    if (collegeId !== undefined) updates.collegeId = collegeId || null;
+    if (locationId !== undefined) updates.locationId = locationId || null;
+    if (status !== undefined) updates.status = status;
     
     await dept.update(updates);
     
@@ -167,8 +267,8 @@ router.delete('/:id', ...requireAdmin, async (req, res, next) => {
     
     // Check if department has users or assets
     const [userCount, assetCount] = await Promise.all([
-      User.count({ where: { department: dept.name } }),
-      Asset.count({ where: { department: dept.name } }),
+      User.count({ where: { departmentId: dept.id } }),
+      Asset.count({ where: { departmentId: dept.id } }),
     ]);
     
     if (userCount > 0 || assetCount > 0) {

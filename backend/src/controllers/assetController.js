@@ -1,6 +1,6 @@
 const { sequelize, Asset, Inventory, Assignment, Transfer, Maintenance, RFIDLog, AuditLog, User, Department } = require('../models');
 const { Op } = require('sequelize');
-const { nextDigitalId } = require('./assetExtendedController');
+const { nextDigitalId, buildAssetCodeFromConfig } = require('./assetExtendedController');
 
 const serializeAsset = (asset, assignment = null) => {
   const data = asset.toJSON ? asset.toJSON() : asset;
@@ -88,7 +88,7 @@ const createAsset = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
     const body = req.body || {};
-    const assetCode = String(body.assetCode || body.asset_id || '').trim();
+    const providedAssetCode = String(body.assetCode || body.asset_id || '').trim();
     const serialNumber = String(body.serialNumber || body.serial_number || '').trim();
     const rfidTag = String(body.rfidTag || body.rfid_tag || '').trim();
     const name = String(body.name || '').trim();
@@ -96,7 +96,9 @@ const createAsset = async (req, res) => {
     const purchaseDate = body.purchaseDate || body.purchase_date || null;
     const warrantyExpiry = body.warrantyExpiry || body.warranty_expiry || null;
 
-    if (!name || !assetCode) return res.status(400).json({ success: false, message: 'Asset name and code are required' });
+    if (!name) return res.status(400).json({ success: false, message: 'Asset name is required' });
+    const assetCode = providedAssetCode || await buildAssetCodeFromConfig({ category: body.category || body.category_id || '', transaction });
+    if (!assetCode) return res.status(400).json({ success: false, message: 'Asset code could not be generated' });
     if (!Number.isFinite(Number(purchasePrice)) || Number(purchasePrice) < 0) return res.status(400).json({ success: false, message: 'Purchase cost must be a non-negative number' });
     if (purchaseDate && Number.isNaN(Date.parse(purchaseDate))) return res.status(400).json({ success: false, message: 'Invalid purchase date' });
     if (warrantyExpiry && Number.isNaN(Date.parse(warrantyExpiry))) return res.status(400).json({ success: false, message: 'Invalid warranty expiry date' });

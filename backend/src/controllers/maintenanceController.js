@@ -1,5 +1,6 @@
 const { Op } = require('sequelize');
 const { sequelize, Maintenance, Asset, User, Assignment, AuditLog } = require('../models');
+const { createEventNotification } = require('../services/notificationService');
 
 const managerRoles = ['admin', 'maintenance', 'ict_officer', 'store_manager', 'infrastructure'];
 const canManage = (req) => managerRoles.includes(req.user.role);
@@ -94,7 +95,7 @@ const getInfrastructureMaintenanceAssets = async (req, res, next) => {
 
 const createMaintenance = async (req, res, next) => {
   try { 
-    const { asset_id, title, problem, description, priority = 'medium', requested_date, preferred_repair_date, estimated_cost } = req.body; 
+    const { asset_id, title, problem, description, priority = 'medium', requested_date, preferred_repair_date } = req.body;
     const requestTitle = title || problem;
     if (!asset_id || !requestTitle) return res.status(400).json({ success: false, message: 'Asset and problem are required' }); 
     const asset = await Asset.findByPk(asset_id);
@@ -108,10 +109,13 @@ const createMaintenance = async (req, res, next) => {
     if (!requestDescription) return res.status(400).json({ success: false, message: 'Maintenance description is required' });
     if (requested_date && Number.isNaN(Date.parse(requested_date))) return res.status(400).json({ success: false, message: 'Invalid requested date' });
     if (preferred_repair_date && Number.isNaN(Date.parse(preferred_repair_date))) return res.status(400).json({ success: false, message: 'Invalid preferred repair date' });
-    if (estimated_cost !== undefined && (!Number.isFinite(Number(estimated_cost)) || Number(estimated_cost) < 0)) return res.status(400).json({ success: false, message: 'Estimated cost cannot be negative' });
     const duplicate = await Maintenance.findOne({ where: { assetId: asset_id, requestedBy: req.user.id, status: { [Op.in]: ['pending', 'approved', 'assigned', 'in-progress'] } } });
     if (duplicate) return res.status(409).json({ success: false, message: 'An open maintenance request already exists for this asset' });
     const item = await Maintenance.create({ assetId: asset_id, requestedBy: req.user.id, title: requestTitle, description: requestDescription, priority: normalizedPriority });
+    const technicians = await User.findAll({ where: { active: true, role: 'maintenance' }, attributes: ['id'] });
+    try {
+      await createEventNotification({ event: 'maintenance_created', eventKey: `maintenance_created:${item.id}`, entityId: item.id, userIds: technicians.map((user) => user.id), senderId: req.user.id, assetId: asset.id, type: 'maintenance', title: 'Maintenance request created', message: `Maintenance request ${item.id} was created for ${asset.name || asset.assetCode}.` });
+    } catch (notificationError) { console.error('Maintenance creation notification failed:', notificationError.message); }
     res.status(201).json({ success: true, data: normalize(item) }); 
   } catch (error) { next(error); }
 };
@@ -142,6 +146,9 @@ const updateMaintenance = async (req, res, next) => {
     }
     await item.update(updates);
     if (updates.status && updates.status !== previousStatus) await AuditLog.create({ userId: req.user.id, action: 'MAINTENANCE_STATUS_CHANGED', entity: `maintenance:${item.id}`, details: JSON.stringify({ requestId: item.id, assetId: item.assetId, previousStatus: displayStatus(previousStatus), newStatus: displayStatus(updates.status), comment: req.body.comment || req.body.notes || '' }) });
+    if (updates.status && updates.status !== previousStatus) {
+      try { await createEventNotification({ event: 'maintenance_status_changed', eventKey: `maintenance_status_changed:${item.id}:${updates.status}`, entityId: item.id, userIds: [item.requestedBy, item.assignedTo].filter(Boolean), senderId: req.user.id, assetId: item.assetId, type: 'maintenance', title: `Maintenance ${displayStatus(updates.status)}`, message: `Maintenance request ${item.id} is now ${displayStatus(updates.status)}.` }); } catch (notificationError) { console.error('Maintenance status notification failed:', notificationError.message); }
+    }
     res.json({ success: true, data: normalize(item) });
   } catch (error) { next(error); }
 };
@@ -152,11 +159,6 @@ const setStatus = async (req, res, next) => {
     const item = await Maintenance.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
     if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Maintenance request not found' }); }
     const status = normalizeStatus(req.body.status);
-    const actualCost = req.body.actual_cost === undefined ? undefined : Number(req.body.actual_cost);
-    if (actualCost !== undefined && (!Number.isFinite(actualCost) || actualCost < 0)) {
-      await transaction.rollback();
-      return res.status(400).json({ success: false, message: 'Actual cost cannot be negative' });
-    }
     if (!['pending', 'approved', 'assigned', 'in-progress', 'waiting-for-parts', 'testing', 'completed', 'rejected', 'cancelled'].includes(status)) {
       await transaction.rollback();
       return res.status(400).json({ success: false, message: 'Invalid maintenance status' });
@@ -177,8 +179,9 @@ const setStatus = async (req, res, next) => {
       const activeAssignment = await Assignment.findOne({ where: { assetId: asset.id, status: 'active' }, transaction });
       await asset.update({ status: activeAssignment ? 'assigned' : 'available' }, { transaction });
     }
-    await AuditLog.create({ userId: req.user.id, action: 'MAINTENANCE_STATUS_CHANGED', entity: `maintenance:${item.id}`, details: JSON.stringify({ requestId: item.id, assetId: item.assetId, previousStatus: displayStatus(previousStatus), newStatus: displayStatus(status), comment: req.body.comment || req.body.reason || req.body.notes || '', completion: status === 'completed' ? { resolution: req.body.resolution || '', partsUsed: req.body.parts_used || '', actualCost: actualCost || 0 } : undefined }) }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'MAINTENANCE_STATUS_CHANGED', entity: `maintenance:${item.id}`, details: JSON.stringify({ requestId: item.id, assetId: item.assetId, previousStatus: displayStatus(previousStatus), newStatus: displayStatus(status), comment: req.body.comment || req.body.reason || req.body.notes || '', completion: status === 'completed' ? { resolution: req.body.resolution || '', partsUsed: req.body.parts_used || '' } : undefined }) }, { transaction });
     await transaction.commit();
+    try { await createEventNotification({ event: 'maintenance_status_changed', eventKey: `maintenance_status_changed:${item.id}:${status}`, entityId: item.id, userIds: [item.requestedBy, item.assignedTo].filter(Boolean), senderId: req.user.id, assetId: item.assetId, type: 'maintenance', title: `Maintenance ${displayStatus(status)}`, message: `Maintenance request ${item.id} is now ${displayStatus(status)}.` }); } catch (notificationError) { console.error('Maintenance status notification failed:', notificationError.message); }
     res.json({ success: true, data: normalize(item) });
   } catch (error) {
     await transaction.rollback();

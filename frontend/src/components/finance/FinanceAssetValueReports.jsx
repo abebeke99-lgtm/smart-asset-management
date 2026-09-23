@@ -35,16 +35,6 @@ const EMPTY_FILTERS = {
   location: "",
 };
 
-const STATUSES = [
-  "Active",
-  "Available",
-  "Assigned",
-  "Under Maintenance",
-  "Disposed",
-  "Missing",
-  "Damaged",
-];
-
 function authHeaders() {
   const token =
     localStorage.getItem("token") ||
@@ -162,12 +152,12 @@ function textValue(...values) {
     : String(value);
 }
 
-function formatMoney(value, currency = "ETB") {
+function formatMoney(value, currency) {
   if (value === null || value === undefined || value === "") {
-    return "Unavailable";
+    return "Not Available";
   }
 
-  return `${currency} ${(
+  return `${currency ? `${currency} ` : ""}${(
     Number(value) || 0
   ).toLocaleString(undefined, {
     minimumFractionDigits: 2,
@@ -345,8 +335,7 @@ function normalizeReport(item) {
 
     currency: textValue(
       item.currency,
-      asset.currency,
-      "ETB"
+      asset.currency
     ),
 
     status: textValue(
@@ -368,84 +357,49 @@ function normalizeSummary(payload, rows) {
       ? root.summary
       : {};
 
-  const calculated = rows.reduce(
-    (acc, row) => ({
-      assets: acc.assets + 1,
-      acquisitionCost:
-        acc.acquisitionCost +
-        row.acquisitionCost,
-      accumulatedDepreciation:
-        acc.accumulatedDepreciation +
-        (row.accumulatedDepreciation || 0),
-      bookValue:
-        acc.bookValue + (row.bookValue || 0),
-      fairValue:
-        acc.fairValue + (row.fairValue || 0),
-      replacementValue:
-        acc.replacementValue +
-        (row.replacementValue || 0),
-    }),
-    {
-      assets: 0,
-      acquisitionCost: 0,
-      accumulatedDepreciation: 0,
-      bookValue: 0,
-      fairValue: 0,
-      replacementValue: 0,
-    }
-  );
-
   return {
-    assets: numberValue(
+    assets: firstValue(
       summary.assets,
       summary.total_assets,
       summary.totalAssets,
       summary.asset_count,
-      summary.assetCount,
-      calculated.assets
+      summary.assetCount
     ),
 
-    acquisitionCost: numberValue(
+    acquisitionCost: firstValue(
       summary.acquisition_cost,
       summary.acquisitionCost,
       summary.total_acquisition_cost,
-      summary.totalAcquisitionCost,
-      calculated.acquisitionCost
+      summary.totalAcquisitionCost
     ),
 
-    capitalizedValue: numberValue(
+    capitalizedValue: firstValue(
       summary.capitalized_value,
       summary.capitalizedValue
     ),
 
-    accumulatedDepreciation: numberValue(
+    accumulatedDepreciation: firstValue(
       summary.accumulated_depreciation,
       summary.accumulatedDepreciation,
       summary.total_depreciation,
-      summary.totalDepreciation,
-      calculated.accumulatedDepreciation
+      summary.totalDepreciation
     ),
 
-    netBookValue: numberValue(
+    netBookValue: firstValue(
       summary.net_book_value,
       summary.netBookValue,
       summary.book_value,
-      summary.netBookValue,
       summary.current_book_value,
-      summary.currentBookValue,
-      summary.net_book_value,
-      summary.netBookValue,
-      calculated.bookValue
+      summary.currentBookValue
     ),
 
-    currentValuation: numberValue(
+    currentValuation: firstValue(
       summary.current_valuation,
       summary.currentValuation,
       summary.fair_value,
       summary.currentValuation,
       summary.total_fair_value,
-      summary.totalFairValue,
-      calculated.fairValue
+      summary.totalFairValue
     ),
 
   };
@@ -508,7 +462,7 @@ export default function FinanceAssetValueReports() {
     acquisitionCost: 0,
     capitalizedValue: 0,
     accumulatedDepreciation: 0,
-    netBookValue: 0,
+    netBookValue: null,
     currentValuation: 0,
   });
 
@@ -663,14 +617,7 @@ export default function FinanceAssetValueReports() {
     } catch (err) {
       setReports([]);
 
-      setSummary({
-        assets: 0,
-        acquisitionCost: 0,
-        capitalizedValue: 0,
-        accumulatedDepreciation: 0,
-        netBookValue: 0,
-        currentValuation: 0,
-      });
+      setSummary({ assets: null, acquisitionCost: null, capitalizedValue: null, accumulatedDepreciation: null, netBookValue: null, currentValuation: null });
 
       setError(
         err.message ||
@@ -692,11 +639,11 @@ export default function FinanceAssetValueReports() {
   const totalPages = Math.max(1, Number(pagination.pages || 1));
 
   const bookValuePercentage =
-    summary.acquisitionCost > 0
+    Number(summary.acquisitionCost) > 0 && summary.netBookValue !== null
         ? (summary.netBookValue /
           summary.acquisitionCost) *
         100
-      : 0;
+      : null;
 
   const handleFilterChange = (event) => {
     const { name, value } =
@@ -1624,10 +1571,9 @@ export default function FinanceAssetValueReports() {
                 </span>
 
                 <strong>
-                  {bookValuePercentage.toFixed(
-                    1
-                  )}
-                  %
+                  {bookValuePercentage === null
+                    ? "Not Available"
+                    : `${bookValuePercentage.toFixed(1)}%`}
                 </strong>
               </div>
 
@@ -1636,10 +1582,7 @@ export default function FinanceAssetValueReports() {
                   className="progress-fill"
                   style={{
                     width: `${Math.min(
-                      Math.max(
-                        bookValuePercentage,
-                        0
-                      ),
+                      Math.max(bookValuePercentage || 0, 0),
                       100
                     )}%`,
                   }}
@@ -1835,7 +1778,7 @@ export default function FinanceAssetValueReports() {
                     All Statuses
                   </option>
 
-                  {(statuses.length ? statuses : STATUSES).map(
+                  {statuses.map(
                     (status) => (
                       <option
                         key={status}

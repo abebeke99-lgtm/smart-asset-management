@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { apiClient } from "../../utils/api";
 import { useLanguage } from "../../contexts/UiContext";
@@ -28,6 +28,15 @@ const AdminDepartmentManagement = () => {
   const [departments, setDepartments] = useState([]);
   const [users, setUsers] = useState([]);
   const [assets, setAssets] = useState([]);
+  const [colleges, setColleges] = useState([]);
+  const [statistics, setStatistics] = useState({
+    total: 0,
+    heads: 0,
+    departmentUsers: 0,
+    departmentAssets: 0,
+    locations: 0,
+    inactive: 0,
+  });
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -40,6 +49,7 @@ const AdminDepartmentManagement = () => {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [collegeFilter, setCollegeFilter] = useState("");
 
   const [formErrors, setFormErrors] = useState({});
 
@@ -48,6 +58,7 @@ const AdminDepartmentManagement = () => {
     code: "",
     description: "",
     head: "",
+    collegeId: "",
     location: "",
     building: "",
     floor: "",
@@ -142,7 +153,14 @@ const AdminDepartmentManagement = () => {
     setLoading(true);
 
     try {
-      const response = await apiClient.get("/api/departments");
+      const response = await apiClient.get("/api/departments", {
+        params: {
+          search: searchQuery.trim() || undefined,
+          status: statusFilter || undefined,
+          collegeId: collegeFilter || undefined,
+          limit: 100,
+        },
+      });
 
       const data = normalizeArray(response, [
         "departments",
@@ -162,7 +180,36 @@ const AdminDepartmentManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [t.loadFailed]);
+  }, [collegeFilter, searchQuery, statusFilter, t.loadFailed]);
+
+  const fetchStatistics = useCallback(async () => {
+    try {
+      const response = await apiClient.get("/api/departments/stats");
+      setStatistics(response.data?.data || {});
+    } catch (error) {
+      console.error("Failed to load department statistics:", error);
+      setStatistics({
+        total: 0,
+        heads: 0,
+        departmentUsers: 0,
+        departmentAssets: 0,
+        locations: 0,
+        inactive: 0,
+      });
+    }
+  }, []);
+
+  const fetchColleges = useCallback(async () => {
+    try {
+      const response = await apiClient.get("/api/admin/colleges", {
+        params: { limit: 100, status: "active" },
+      });
+      setColleges(normalizeArray(response, ["colleges", "items", "results"]));
+    } catch (error) {
+      console.error("Failed to load colleges:", error);
+      setColleges([]);
+    }
+  }, []);
 
   /* =========================================================
      FETCH USERS
@@ -212,9 +259,11 @@ const AdminDepartmentManagement = () => {
 
   useEffect(() => {
     fetchDepartments();
+    fetchStatistics();
     fetchUsers();
     fetchAssets();
-  }, [fetchDepartments, fetchUsers, fetchAssets]);
+    fetchColleges();
+  }, [fetchDepartments, fetchStatistics, fetchUsers, fetchAssets, fetchColleges]);
 
   /* =========================================================
      DEPARTMENT USERS
@@ -286,6 +335,7 @@ const AdminDepartmentManagement = () => {
 
   const getDepartmentHead = useCallback(
     (department) => {
+      if (department?.head) return department.head;
       const departmentId = String(getDepartmentId(department) || "");
       const departmentName = getDepartmentName(department).toLowerCase();
 
@@ -347,89 +397,7 @@ const AdminDepartmentManagement = () => {
      FILTERED DEPARTMENTS
   ========================================================= */
 
-  const filteredDepartments = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
-    return departments.filter((department) => {
-      const name = getDepartmentName(department).toLowerCase();
-      const code = getDepartmentCode(department).toLowerCase();
-      const description = String(
-        department?.description || ""
-      ).toLowerCase();
-      const location = String(
-        department?.location || department?.building || ""
-      ).toLowerCase();
-
-      const matchesSearch =
-        !query ||
-        name.includes(query) ||
-        code.includes(query) ||
-        description.includes(query) ||
-        location.includes(query);
-
-      const matchesStatus =
-        !statusFilter ||
-        getDepartmentStatus(department) === statusFilter;
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [departments, searchQuery, statusFilter]);
-
-  /* =========================================================
-     STATISTICS
-  ========================================================= */
-
-  const statistics = useMemo(() => {
-    const total = departments.length;
-
-    const active = departments.filter(
-      (department) =>
-        getDepartmentStatus(department) === "active"
-    ).length;
-
-    const inactive = departments.filter(
-      (department) =>
-        getDepartmentStatus(department) === "inactive"
-    ).length;
-
-    const totalDepartmentUsers = departments.reduce(
-      (sum, department) =>
-        sum + getDepartmentUsers(department).length,
-      0
-    );
-
-    const totalDepartmentAssets = departments.reduce(
-      (sum, department) =>
-        sum + getDepartmentAssets(department).length,
-      0
-    );
-
-    const heads = departments.filter(
-      (department) => getDepartmentHead(department)
-    ).length;
-
-    const locations = departments.filter(
-      (department) =>
-        department?.location ||
-        department?.building ||
-        department?.room
-    ).length;
-
-    return {
-      total,
-      active,
-      inactive,
-      totalDepartmentUsers,
-      totalDepartmentAssets,
-      heads,
-      locations,
-    };
-  }, [
-    departments,
-    getDepartmentAssets,
-    getDepartmentHead,
-    getDepartmentUsers,
-  ]);
+  const filteredDepartments = departments;
 
   /* =========================================================
      FORM HANDLING
@@ -475,6 +443,7 @@ const AdminDepartmentManagement = () => {
       code: "",
       description: "",
       head: "",
+      collegeId: "",
       location: "",
       building: "",
       floor: "",
@@ -505,7 +474,8 @@ const AdminDepartmentManagement = () => {
         name: formData.name.trim(),
         code: formData.code.trim(),
         description: formData.description.trim(),
-        head: formData.head || "",
+        headId: formData.head || null,
+        collegeId: formData.collegeId || null,
         location: formData.location.trim(),
         building: formData.building.trim(),
         floor: formData.floor.trim(),
@@ -521,7 +491,7 @@ const AdminDepartmentManagement = () => {
       setShowCreate(false);
       resetForm();
 
-      await fetchDepartments();
+      await Promise.all([fetchDepartments(), fetchStatistics()]);
     } catch (error) {
       console.error("Create department error:", error);
 
@@ -558,6 +528,8 @@ const AdminDepartmentManagement = () => {
         department?.head ||
         department?.department_head_id ||
         "",
+
+      collegeId: department?.collegeId || department?.college?.id || "",
 
       location: department?.location || "",
 
@@ -602,7 +574,8 @@ const AdminDepartmentManagement = () => {
         name: formData.name.trim(),
         code: formData.code.trim(),
         description: formData.description.trim(),
-        head: formData.head || "",
+        headId: formData.head || null,
+        collegeId: formData.collegeId || null,
         location: formData.location.trim(),
         building: formData.building.trim(),
         floor: formData.floor.trim(),
@@ -619,7 +592,7 @@ const AdminDepartmentManagement = () => {
       setSelectedDepartment(null);
       resetForm();
 
-      await fetchDepartments();
+      await Promise.all([fetchDepartments(), fetchStatistics()]);
     } catch (error) {
       console.error("Update department error:", error);
 
@@ -667,7 +640,7 @@ const AdminDepartmentManagement = () => {
 
       toast.success(t.deleteSuccess);
 
-      await fetchDepartments();
+      await Promise.all([fetchDepartments(), fetchStatistics()]);
     } catch (error) {
       console.error("Delete department error:", error);
 
@@ -709,8 +682,10 @@ const AdminDepartmentManagement = () => {
   const refreshAll = async () => {
     await Promise.all([
       fetchDepartments(),
+      fetchStatistics(),
       fetchUsers(),
       fetchAssets(),
+      fetchColleges(),
     ]);
 
     toast.success(t.refreshed);
@@ -848,6 +823,21 @@ const AdminDepartmentManagement = () => {
               <option value="inactive">
                 {t.inactive}
               </option>
+            </select>
+          </div>
+
+          <div className="dam-form-group">
+            <label>{t.college}</label>
+            <select
+              value={formData.collegeId}
+              onChange={(event) => updateForm("collegeId", event.target.value)}
+            >
+              <option value="">{t.selectCollege}</option>
+              {colleges.map((college) => (
+                <option key={college.id} value={college.id}>
+                  {college.collegeName || college.name || college.college_code}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -1013,6 +1003,7 @@ const AdminDepartmentManagement = () => {
       {/* HEADER */}
       <div className="dam-header">
         <div>
+          <div className="dam-breadcrumb">Admin / Organization / Departments</div>
           <div className="dam-title-row">
             <div className="dam-title-icon">
               <Building2 size={25} />
@@ -1080,7 +1071,7 @@ const AdminDepartmentManagement = () => {
           <div>
             <span>{t.departmentUsers}</span>
             <strong>
-              {statistics.totalDepartmentUsers}
+              {statistics.departmentUsers}
             </strong>
           </div>
         </div>
@@ -1093,7 +1084,7 @@ const AdminDepartmentManagement = () => {
           <div>
             <span>{t.departmentAssets}</span>
             <strong>
-              {statistics.totalDepartmentAssets}
+              {statistics.departmentAssets}
             </strong>
           </div>
         </div>
@@ -1165,6 +1156,34 @@ const AdminDepartmentManagement = () => {
             {t.inactive}
           </option>
         </select>
+
+        <select
+          className="dam-filter"
+          value={collegeFilter}
+          onChange={(event) => setCollegeFilter(event.target.value)}
+        >
+          <option value="">{t.allColleges}</option>
+          {colleges.map((college) => (
+            <option key={college.id} value={college.id}>
+              {college.collegeName || college.name || college.college_code}
+            </option>
+          ))}
+        </select>
+
+        {(searchQuery || statusFilter || collegeFilter) && (
+          <button
+            type="button"
+            className="dam-btn dam-btn-secondary"
+            onClick={() => {
+              setSearchQuery("");
+              setStatusFilter("");
+              setCollegeFilter("");
+            }}
+          >
+            <X size={16} />
+            {t.clearFilters}
+          </button>
+        )}
       </div>
 
       {/* CONTENT */}
@@ -1180,18 +1199,6 @@ const AdminDepartmentManagement = () => {
               : t.createFirstDepartment}
           </p>
 
-          {!searchQuery && (
-            <button
-              className="dam-btn dam-btn-primary"
-              onClick={() => {
-                resetForm();
-                setShowCreate(true);
-              }}
-            >
-              <Plus size={18} />
-              {t.createDepartment}
-            </button>
-          )}
         </div>
       ) : (
         <div className="dam-table-wrapper">
@@ -1200,6 +1207,7 @@ const AdminDepartmentManagement = () => {
               <tr>
                 <th>{t.department}</th>
                 <th>{t.code}</th>
+                <th>{t.college}</th>
                 <th>{t.departmentHead}</th>
                 <th>{t.users}</th>
                 <th>{t.assets}</th>
@@ -1257,6 +1265,10 @@ const AdminDepartmentManagement = () => {
                     </td>
 
                     <td>
+                      {department?.college?.collegeName || t.notAssigned}
+                    </td>
+
+                    <td>
                       {head ? (
                         <div className="dam-head-cell">
                           <div className="dam-user-avatar">
@@ -1285,14 +1297,14 @@ const AdminDepartmentManagement = () => {
                     <td>
                       <span className="dam-count">
                         <Users size={15} />
-                        {departmentUsers.length}
+                        {Number(department.userCount ?? departmentUsers.length)}
                       </span>
                     </td>
 
                     <td>
                       <span className="dam-count">
                         <Package size={15} />
-                        {departmentAssets.length}
+                        {Number(department.assetCount ?? departmentAssets.length)}
                       </span>
                     </td>
 
@@ -1301,7 +1313,8 @@ const AdminDepartmentManagement = () => {
                         <MapPin size={15} />
 
                         <span>
-                          {department?.location ||
+                          {department?.locationRecord?.name ||
+                            department?.location ||
                             department?.building ||
                             department?.room ||
                             "-"}
@@ -2615,7 +2628,7 @@ const englishTranslations = {
   loading: "Loading departments...",
   departmentManagement: "Department Management",
   departmentSubtitle:
-    "Manage university departments, heads, users, assets and locations.",
+    "Manage university departments, heads, users, assets, locations, and operational status.",
 
   refresh: "Refresh",
 
@@ -2633,6 +2646,7 @@ const englishTranslations = {
 
   department: "Department",
   code: "Code",
+  college: "College",
   departmentCode: "Department Code",
   departmentName: "Department Name",
 
@@ -2657,6 +2671,9 @@ const englishTranslations = {
 
   searchDepartments: "Search departments...",
   allStatus: "All Status",
+  allColleges: "All Colleges",
+  selectCollege: "Select college",
+  clearFilters: "Clear Filters",
 
   noDepartments: "No Departments Found",
   adjustSearch: "Try adjusting your search or filters.",
@@ -2731,7 +2748,7 @@ const amharicTranslations = {
   loading: "ዲፓርትመንቶች በመጫን ላይ...",
   departmentManagement: "የዲፓርትመንት አስተዳደር",
   departmentSubtitle:
-    "የዩኒቨርሲቲ ዲፓርትመንቶችን፣ ኃላፊዎችን፣ ተጠቃሚዎችን፣ assets እና አካባቢዎችን ያስተዳድሩ።",
+    "የዩኒቨርሲቲ ዲፓርትመንቶችን፣ ኃላፊዎችን፣ ተጠቃሚዎችን፣ assets፣ አካባቢዎችን እና የሥራ ሁኔታን ያስተዳድሩ።",
 
   refresh: "አድስ",
 
@@ -2749,6 +2766,7 @@ const amharicTranslations = {
 
   department: "ዲፓርትመንት",
   code: "ኮድ",
+  college: "ኮሌጅ",
   departmentCode: "የዲፓርትመንት ኮድ",
   departmentName: "የዲፓርትመንት ስም",
 
@@ -2775,6 +2793,9 @@ const amharicTranslations = {
     "ዲፓርትመንቶችን ይፈልጉ...",
 
   allStatus: "ሁሉም ሁኔታ",
+  allColleges: "ሁሉም ኮሌጆች",
+  selectCollege: "ኮሌጅ ይምረጡ",
+  clearFilters: "ማጣሪያዎችን አጽዳ",
 
   noDepartments:
     "ምንም ዲፓርትመንት አልተገኘም",

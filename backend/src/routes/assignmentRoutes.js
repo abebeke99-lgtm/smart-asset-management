@@ -1,6 +1,7 @@
 const express = require('express');
 const { sequelize, Assignment, Asset, User, Department, Inventory, InventoryTransaction, AuditLog } = require('../models');
 const { requireAuth, requireRole } = require('../middlewares/auth');
+const { createEventNotification } = require('../services/notificationService');
 const { Op } = require('sequelize');
 
 const router = express.Router();
@@ -297,6 +298,9 @@ router.post('/', ...canManageAssignments, async (req, res, next) => {
     }, { transaction });
 
     await transaction.commit();
+    try {
+      await createEventNotification({ event: 'assignment_created', eventKey: `assignment_created:${assignment.id}:user:${userId}`, entityId: assignment.id, userIds: [userId], senderId: req.user.id, assetId, type: 'assignment', title: 'Asset assigned to you', message: `${asset.name || asset.assetCode} has been assigned to you.` });
+    } catch (notificationError) { console.error('Assignment notification failed:', notificationError.message); }
     const populatedAssignment = await Assignment.findByPk(assignment.id, { include: assignmentInclude });
     const assignmentResponse = toAssignmentResponse(populatedAssignment);
     res.status(201).json({ success: true, message: 'Asset assigned successfully', data: assignmentResponse, assignment: assignmentResponse });
@@ -330,6 +334,9 @@ router.post('/:id/return', ...canManageAssignments, async (req, res, next) => {
     await asset.update({ status: 'available' }, { transaction });
     await InventoryTransaction.create({ inventoryId: inventory.id, assetId: assignment.assetId, userId: req.user.id, type: 'return', quantity: 1, reason: 'Asset returned', notes: req.body.notes || '' }, { transaction });
     await transaction.commit();
+    try {
+      await createEventNotification({ event: 'assignment_returned', eventKey: `assignment_returned:${assignment.id}:user:${assignment.assignedTo}`, entityId: assignment.id, userIds: [assignment.assignedTo], senderId: req.user.id, assetId: assignment.assetId, type: 'assignment', title: 'Asset returned', message: 'An asset assigned to you has been returned.' });
+    } catch (notificationError) { console.error('Assignment return notification failed:', notificationError.message); }
     res.json({ success: true, assignment: toAssignmentResponse(assignment) });
   } catch (error) {
     await transaction.rollback();

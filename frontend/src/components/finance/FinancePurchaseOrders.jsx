@@ -36,6 +36,7 @@ const emptyItem = {
 const emptyForm = {
   poNumber: "",
   purchaseRequestId: "",
+  budgetId: "",
   supplierId: "",
   supplierName: "",
   departmentId: "",
@@ -161,6 +162,8 @@ const normalizeOrder = (item) => ({
     item?.requestId ??
     item?.request_id ??
     "",
+
+  budgetId: item?.budgetId ?? item?.budget_id ?? "",
 
   requestNumber:
     item?.requestNumber ??
@@ -358,6 +361,7 @@ const calculateItem = (item) => {
 export default function FinancePurchaseOrders() {
   const [orders, setOrders] = useState([]);
   const [summary, setSummary] = useState(null);
+  const [budgets, setBudgets] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -424,6 +428,7 @@ export default function FinancePurchaseOrders() {
           response?.data?.stats ||
           null
       );
+      setBudgets(response?.data?.data?.filters?.budgets || response?.data?.filters?.budgets || []);
 
       setPagination(
         extractPagination(
@@ -629,6 +634,7 @@ export default function FinancePurchaseOrders() {
       poNumber: order.poNumber || "",
       purchaseRequestId:
         order.purchaseRequestId || "",
+      budgetId: order.budgetId || "",
       supplierId: order.supplierId || "",
       supplierName: order.supplierName || "",
       departmentId: order.departmentId || "",
@@ -733,6 +739,10 @@ export default function FinancePurchaseOrders() {
       setError("Department is required.");
       return;
     }
+    if (!form.budgetId) {
+      setError("Budget is required before a purchase order can be approved.");
+      return;
+    }
 
     if (!form.items.length) {
       setError("At least one purchase item is required.");
@@ -779,6 +789,7 @@ export default function FinancePurchaseOrders() {
         poNumber: form.poNumber.trim(),
         purchaseRequestId:
           form.purchaseRequestId.trim(),
+        budgetId: form.budgetId ? Number(form.budgetId) : null,
         supplierId: form.supplierId.trim(),
         supplierName: form.supplierName.trim(),
         departmentId: form.departmentId.trim(),
@@ -2291,6 +2302,18 @@ export default function FinancePurchaseOrders() {
                     onChange={handleFormChange}
                     placeholder="Approved request ID"
                   />
+                </div>
+
+                <div className="field">
+                  <label>Budget *</label>
+                  <select name="budgetId" value={form.budgetId} onChange={handleFormChange} required>
+                    <option value="">Select an active budget</option>
+                    {budgets.map((budget) => (
+                      <option key={budget.id} value={budget.id}>
+                        {budget.budgetCode} - {budget.budgetName}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="field">

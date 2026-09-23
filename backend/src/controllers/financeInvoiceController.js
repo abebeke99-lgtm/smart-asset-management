@@ -1,5 +1,6 @@
 const { Op } = require('sequelize');
-const { sequelize, AuditLog, Department, Invoice, InvoiceItem, PurchaseOrder, User } = require('../models');
+const { sequelize, AuditLog, Department, Invoice, InvoiceItem, PurchaseOrder, PurchaseOrderItem, InventoryTransaction, Payment, User } = require('../models');
+const { createFinanceNotification } = require('../services/notificationService');
 
 const STATUSES = ['Draft', 'Pending', 'Approved', 'Due', 'Paid', 'Cancelled'];
 const number = (value, fallback = 0) => {
@@ -28,10 +29,61 @@ const normalize = (record) => {
     paidAmount,
     balanceAmount: Math.max(0, totalAmount - paidAmount),
     paymentStatus: paidAmount >= totalAmount && totalAmount > 0 ? 'Paid' : paidAmount > 0 ? 'Partially Paid' : 'Unpaid',
+    verificationStatus: value.verificationStatus || 'Pending',
+    approvalStatus: value.approvalStatus || 'Pending',
     purchaseOrderNumber: value.PurchaseOrder?.poNumber || '',
     departmentName: value.DepartmentRecord?.name || '',
     createdByName: value.Creator?.fullName || value.Creator?.username || '',
     items: (value.items || []).map((item) => ({ ...item, quantity: number(item.quantity), unitPrice: number(item.unitPrice), taxRate: number(item.taxRate), discount: number(item.discount), lineTotal: number(item.lineTotal) })),
+  };
+};
+
+const paymentUserInclude = (as) => ({ model: User, as, attributes: ['id', 'username', 'fullName'], required: false });
+
+const normalizePayment = (record) => {
+  const value = record.toJSON ? record.toJSON() : record;
+  return {
+    ...value,
+    id: value.id,
+    amount: number(value.amount),
+    paymentDate: value.paymentDate || value.createdAt || null,
+    requestedByName: value.Requester?.fullName || value.Requester?.username || '',
+    approvedByName: value.Approver?.fullName || value.Approver?.username || '',
+    processedByName: value.Processor?.fullName || value.Processor?.username || '',
+    invoiceNumber: value.InvoiceRecord?.invoiceNumber || '',
+    supplierName: value.InvoiceRecord?.supplierName || '',
+  };
+};
+
+const getMatch = async (invoice, transaction) => {
+  const purchaseOrder = invoice.purchaseOrderId
+    ? await PurchaseOrder.findByPk(invoice.purchaseOrderId, { include: [{ model: PurchaseOrderItem, as: 'items' }], transaction })
+    : null;
+  if (!purchaseOrder) return { status: 'NOT_MATCHED', reasons: ['A purchase order is required'] };
+  const receiving = await InventoryTransaction.findAll({
+    where: { type: 'receive' },
+    attributes: ['id', 'quantity', 'notes', 'createdAt'],
+    order: [['createdAt', 'ASC']],
+    transaction,
+  });
+  const poNumber = String(purchaseOrder.poNumber || '').toLowerCase();
+  const supplier = String(purchaseOrder.supplierName || '').toLowerCase();
+  const linkedReceiving = receiving.filter((row) => {
+    const notes = String(row.notes || '').toLowerCase();
+    return notes.includes(poNumber) || (supplier && notes.includes(supplier));
+  });
+  const reasons = [];
+  if (purchaseOrder.status !== 'Approved' && purchaseOrder.status !== 'Completed') reasons.push('Purchase order is not approved');
+  if (!linkedReceiving.length) reasons.push('No receiving evidence is linked to this purchase order');
+  const invoiceTotal = number(invoice.totalAmount);
+  const poTotal = number(purchaseOrder.totalAmount);
+  if (poTotal > 0 && Math.abs(invoiceTotal - poTotal) > 0.01) reasons.push('Invoice total does not match the purchase order total');
+  return {
+    status: reasons.length ? 'MISMATCH' : 'MATCHED',
+    reasons,
+    purchaseOrder: { id: purchaseOrder.id, number: purchaseOrder.poNumber, status: purchaseOrder.status, total: poTotal },
+    receiving: linkedReceiving.map((row) => ({ id: row.id, quantity: number(row.quantity), receivedAt: row.createdAt })),
+    invoice: { id: invoice.id, total: invoiceTotal },
   };
 };
 
@@ -95,6 +147,36 @@ const getInvoice = async (req, res, next) => {
   } catch (error) { return next(error); }
 };
 
+const listInvoicePayments = async (req, res, next) => {
+  try {
+    const invoice = await Invoice.findByPk(req.params.id, { include });
+    if (!invoice) return res.status(404).json({ success: false, message: 'Invoice not found' });
+
+    const payments = await Payment.findAll({
+      where: { invoiceId: invoice.id },
+      include: [
+        { model: Invoice, as: 'InvoiceRecord', attributes: ['id', 'invoiceNumber', 'supplierName', 'totalAmount', 'paidAmount', 'currency'] },
+        paymentUserInclude('Requester'),
+        paymentUserInclude('Approver'),
+        paymentUserInclude('Processor'),
+      ],
+      order: [['paymentDate', 'DESC'], ['createdAt', 'DESC']],
+    });
+
+    const normalizedPayments = payments.map(normalizePayment);
+    return res.json({
+      success: true,
+      data: normalizedPayments,
+      summary: {
+        totalPayments: normalizedPayments.length,
+        totalPaid: normalizedPayments.reduce((sum, payment) => sum + number(payment.amount), 0),
+        outstandingAmount: Math.max(0, number(invoice.totalAmount) - number(invoice.paidAmount)),
+      },
+      invoice: normalize(invoice),
+    });
+  } catch (error) { return next(error); }
+};
+
 const listInvoices = async (req, res, next) => {
   try {
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
@@ -113,9 +195,50 @@ const createInvoice = async (req, res, next) => {
   try {
     const prepared = await payloadFor(req.body, transaction);
     if (!prepared.values.invoiceNumber) throw fail('Invoice number is required');
+    const duplicate = await Invoice.findOne({ where: { invoiceNumber: prepared.values.invoiceNumber, supplierName: prepared.values.supplierName }, transaction });
+    if (duplicate) throw fail('An invoice with this number already exists for this supplier', 409);
     const invoice = await Invoice.create({ ...prepared.values, createdBy: req.user.id }, { transaction });
     await InvoiceItem.bulkCreate(prepared.items.map((item) => ({ ...item, invoiceId: invoice.id })), { transaction });
     await AuditLog.create({ userId: req.user.id, action: 'INVOICE_CREATED', entity: `invoice:${invoice.id}`, details: JSON.stringify({ invoiceNumber: invoice.invoiceNumber }) }, { transaction });
+    await transaction.commit();
+    await createFinanceNotification({ event: 'finance_invoice_registered', eventKey: `finance_invoice_registered:${invoice.id}`, entityId: invoice.id, senderId: req.user.id, type: 'financial', title: 'Invoice awaiting verification', message: `Invoice ${invoice.invoiceNumber} from ${invoice.supplierName} is awaiting verification.` });
+    return getInvoice({ ...req, params: { id: invoice.id } }, res, next);
+  } catch (error) { await transaction.rollback(); return next(error); }
+};
+
+const matchInvoice = async (req, res, next) => {
+  try {
+    const invoice = await Invoice.findByPk(req.params.id);
+    if (!invoice) return res.status(404).json({ success: false, message: 'Invoice not found' });
+    const match = await getMatch(invoice);
+    await AuditLog.create({ userId: req.user.id, action: match.status === 'MATCHED' ? 'INVOICE_MATCHED' : 'INVOICE_MISMATCH', entity: `invoice:${invoice.id}`, details: JSON.stringify(match) });
+    return res.json({ success: true, data: match });
+  } catch (error) { return next(error); }
+};
+
+const verifyInvoice = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const invoice = await Invoice.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!invoice) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Invoice not found' }); }
+    if (invoice.verificationStatus !== 'Pending') throw fail('Invoice has already been verified or rejected', 409);
+    await invoice.update({ verificationStatus: 'Verified', verifiedBy: req.user.id, verifiedAt: new Date() }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'INVOICE_VERIFIED', entity: `invoice:${invoice.id}`, details: JSON.stringify({ invoiceNumber: invoice.invoiceNumber }) }, { transaction });
+    await transaction.commit();
+    return getInvoice({ ...req, params: { id: invoice.id } }, res, next);
+  } catch (error) { await transaction.rollback(); return next(error); }
+};
+
+const approveInvoice = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const invoice = await Invoice.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!invoice) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Invoice not found' }); }
+    if (invoice.verificationStatus !== 'Verified') throw fail('Invoice must be verified before approval', 409);
+    const match = await getMatch(invoice, transaction);
+    if (match.status !== 'MATCHED') throw fail(`Invoice cannot be approved: ${match.reasons.join('; ')}`, 409);
+    await invoice.update({ approvalStatus: 'Approved', approvedBy: req.user.id, approvedAt: new Date(), status: 'Approved' }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'INVOICE_APPROVED', entity: `invoice:${invoice.id}`, details: JSON.stringify({ invoiceNumber: invoice.invoiceNumber, match }) }, { transaction });
     await transaction.commit();
     return getInvoice({ ...req, params: { id: invoice.id } }, res, next);
   } catch (error) { await transaction.rollback(); return next(error); }
@@ -126,9 +249,10 @@ const updateInvoice = async (req, res, next) => {
   try {
     const invoice = await Invoice.findByPk(req.params.id, { include: [{ model: InvoiceItem, as: 'items' }], transaction, lock: transaction.LOCK.UPDATE });
     if (!invoice) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Invoice not found' }); }
+    if (req.body.status !== undefined && req.body.status !== invoice.status && req.body.status !== 'Cancelled') throw fail('Use the invoice verification or approval workflow to change invoice status', 409);
     const prepared = await payloadFor(req.body, transaction, invoice);
-    if (prepared.values.invoiceNumber && prepared.values.invoiceNumber !== invoice.invoiceNumber) {
-      const duplicate = await Invoice.findOne({ where: { invoiceNumber: prepared.values.invoiceNumber, id: { [Op.ne]: invoice.id } }, transaction });
+    if (prepared.values.invoiceNumber && (prepared.values.invoiceNumber !== invoice.invoiceNumber || prepared.values.supplierName !== invoice.supplierName)) {
+      const duplicate = await Invoice.findOne({ where: { invoiceNumber: prepared.values.invoiceNumber, supplierName: prepared.values.supplierName, id: { [Op.ne]: invoice.id } }, transaction });
       if (duplicate) throw fail('Invoice number already exists', 409);
     }
     if (prepared.values.paidAmount > prepared.values.totalAmount) throw fail('Paid amount cannot exceed invoice total');
@@ -154,4 +278,4 @@ const deleteInvoice = async (req, res, next) => {
   } catch (error) { await transaction.rollback(); return next(error); }
 };
 
-module.exports = { listInvoices, getInvoice, createInvoice, updateInvoice, deleteInvoice };
+module.exports = { listInvoices, getInvoice, listInvoicePayments, createInvoice, updateInvoice, deleteInvoice, matchInvoice, verifyInvoice, approveInvoice };

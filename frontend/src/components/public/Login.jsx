@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 import { useAuth } from '../../contexts/AuthContext';
@@ -19,6 +19,9 @@ const Login = () => {
   const { login } = useAuth();
   const { language } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectParam = new URLSearchParams(location.search).get('redirect');
+  const requestedPath = redirectParam || '/';
 
   const t = language === 'en' ? englishTranslations : amharicTranslations;
 
@@ -62,7 +65,9 @@ const Login = () => {
         infrastructure: '/infrastructure',
         staff: '/department',
       };
-      navigate(roleRoutes[result?.user?.role] || '/home', { replace: true });
+      const fallbackDestination = roleRoutes[result?.user?.role] || '/dashboard';
+      const destination = '/dashboard';
+      navigate(destination, { replace: true });
     } catch (err) {
       setError(err?.response?.data?.message || 'Unable to connect to server.');
     } finally {
@@ -73,56 +78,162 @@ const Login = () => {
   return (
     <>
       <style>{`
-        .login-page { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(420px, .92fr); background: #f8fafc; color: #0f172a; font-family: Georgia, 'Times New Roman', serif; }
-        .login-brand { position: relative; display: flex; align-items: center; overflow: hidden; padding: clamp(32px, 7vw, 96px); background: linear-gradient(145deg, #082f49 0%, #0f4c81 54%, #0ea5e9 100%); color: white; }
-        .login-brand:before, .login-brand:after { content: ''; position: absolute; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; pointer-events: none; }
-        .login-brand:before { width: 560px; height: 560px; right: -260px; top: -140px; }
-        .login-brand:after { width: 330px; height: 330px; left: -200px; bottom: -170px; }
-        .login-brand-content { position: relative; z-index: 1; max-width: 580px; animation: login-rise .6s ease-out both; }
-        .login-logo { display: block; width: 190px; height: 190px; margin-bottom: 24px; border-radius: 24px; object-fit: contain; background: rgba(255,255,255,.98); box-shadow: 0 15px 35px rgba(2, 24, 44, .25); }
-        .login-brand h1 { max-width: 550px; margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(2.15rem, 4vw, 4rem); line-height: 1.04; letter-spacing: 0; }
-        .login-brand p { max-width: 450px; margin: 24px 0 0; color: #dbeafe; font: 500 1.05rem/1.7 Arial, sans-serif; }
-        .login-brand-mark { display: inline-flex; align-items: center; gap: 10px; margin-top: 46px; color: #bae6fd; font: 700 .76rem/1 Arial, sans-serif; letter-spacing: .12em; text-transform: uppercase; }
-        .login-panel { display: flex; align-items: center; justify-content: center; padding: 28px; background: #f8fafc; }
-        .login-card { width: min(100%, 450px); padding: clamp(28px, 4vw, 48px); border: 1px solid #e2e8f0; border-radius: 20px; background: #fff; box-shadow: 0 24px 70px rgba(15,23,42,.12); animation: login-rise .6s .08s ease-out both; }
-        .login-heading { margin-bottom: 30px; }
-        .login-heading h2 { margin: 0; font: 800 clamp(1.7rem, 3vw, 2.15rem)/1.1 Arial, sans-serif; letter-spacing: 0; }
-        .login-heading p { margin: 10px 0 0; color: #64748b; font: 400 .95rem/1.5 Arial, sans-serif; }
-        .login-status { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 25px; color: #475569; font: 700 .78rem/1 Arial, sans-serif; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; }
-        .status-online { background: #10b981; box-shadow: 0 0 0 4px #d1fae5; }
-        .status-offline { background: #ef4444; box-shadow: 0 0 0 4px #fee2e2; }
+        .login-page *, .login-page *::before, .login-page *::after {
+          animation: none !important;
+          animation-duration: 0s !important;
+          animation-iteration-count: 1 !important;
+          transition: none !important;
+          transition-duration: 0.01ms !important;
+          transform: none !important;
+          scroll-behavior: auto !important;
+        }
+        .login-page {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 32px 20px;
+          background: #EEF2F5;
+          color: #17212B;
+          font-family: Arial, sans-serif;
+        }
+        .login-panel {
+          width: min(100%, 440px);
+          display: flex;
+          justify-content: center;
+        }
+        .login-card {
+          width: min(100%, 440px);
+          padding: 32px 28px;
+          border: 1px solid #D7DEE5;
+          border-radius: 18px;
+          background: #FFFFFF;
+          box-shadow: 0 10px 24px rgba(23, 33, 43, 0.06);
+        }
+        .login-back-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 18px;
+          color: #536575;
+          font-size: 0.9rem;
+          font-weight: 700;
+          text-decoration: none;
+          cursor: pointer;
+          border: 1px solid #C8D1D9;
+          border-radius: 999px;
+          background: #FFFFFF;
+          padding: 8px 12px;
+        }
+        .login-back-link:hover {
+          color: #435463;
+          background: #F3F6F8;
+        }
+        .login-back-link:focus-visible {
+          outline: 2px solid #536575;
+          outline-offset: 2px;
+        }
+        .login-logo {
+          display: block;
+          width: 70px;
+          height: 70px;
+          margin: 0 auto 18px;
+          border-radius: 16px;
+          object-fit: contain;
+          background: #F8FAFC;
+          border: 1px solid #D7DEE5;
+        }
+        .login-heading { margin-bottom: 24px; text-align: center; }
+        .login-heading h2 { margin: 0; font-size: clamp(1.8rem, 3vw, 2.2rem); line-height: 1.2; color: #17212B; }
+        .login-heading p { margin: 8px 0 0; color: #52606D; font-size: 0.95rem; }
+        .login-status { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; color: #334155; font-size: 0.78rem; font-weight: 700; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #F59E0B; }
+        .status-online { background: #10B981; box-shadow: 0 0 0 4px rgba(16,185,129,0.12); }
+        .status-offline { background: #EF4444; box-shadow: 0 0 0 4px rgba(239,68,68,0.12); }
         .login-field { margin-bottom: 18px; }
-        .login-field label { display: block; margin-bottom: 8px; color: #334155; font: 700 .8rem/1 Arial, sans-serif; }
+        .login-field label { display: block; margin-bottom: 8px; color: #334155; font-size: 0.8rem; font-weight: 700; }
         .login-input { position: relative; }
-        .login-input svg { position: absolute; left: 15px; top: 15px; color: #64748b; }
-        .login-input input { width: 100%; height: 50px; padding: 0 44px; border: 1px solid #cbd5e1; border-radius: 11px; outline: none; color: #0f172a; background: #fff; font: 400 .95rem Arial, sans-serif; transition: border-color .2s, box-shadow .2s; }
-        .login-input input:focus { border-color: #0ea5e9; box-shadow: 0 0 0 4px rgba(14,165,233,.13); }
-        .password-toggle { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 7px; color: #64748b; background: transparent; cursor: pointer; }
-        .password-toggle:hover { background: #f1f5f9; color: #2563eb; }
-        .login-error { display: flex; gap: 9px; align-items: flex-start; margin-bottom: 18px; padding: 12px 13px; border: 1px solid #fecaca; border-radius: 10px; color: #b91c1c; background: #fef2f2; font: 500 .82rem/1.45 Arial, sans-serif; }
-        .forgot-link { display: block; margin: 4px 0 24px; color: #2563eb; text-align: right; text-decoration: none; font: 700 .82rem Arial, sans-serif; }
+        .login-input svg { position: absolute; left: 14px; top: 14px; color: #718096; }
+        .login-input input {
+          width: 100%;
+          height: 48px;
+          padding: 0 42px 0 42px;
+          border: 1px solid #C8D1D9;
+          border-radius: 10px;
+          outline: none;
+          color: #17212B;
+          background: #FFFFFF;
+          font-size: 0.95rem;
+        }
+        .login-input input::placeholder { color: #718096; }
+        .login-input input:focus { border-color: #536575; }
+        .password-toggle {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 32px;
+          height: 32px;
+          display: grid;
+          place-items: center;
+          border: 0;
+          border-radius: 8px;
+          color: #718096;
+          background: transparent;
+          cursor: pointer;
+        }
+        .password-toggle:hover { background: #F3F6F8; color: #536575; }
+        .login-error {
+          display: flex;
+          gap: 9px;
+          align-items: flex-start;
+          margin-bottom: 18px;
+          padding: 12px 13px;
+          border: 1px solid #fecaca;
+          border-radius: 10px;
+          color: #b91c1c;
+          background: #fef2f2;
+          font-size: 0.82rem;
+        }
+        .forgot-link {
+          display: block;
+          margin: 4px 0 22px;
+          color: #536575;
+          text-align: right;
+          text-decoration: none;
+          font-size: 0.82rem;
+          font-weight: 700;
+        }
         .forgot-link:hover { text-decoration: underline; }
-        .login-submit { width: 100%; min-height: 50px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; border: 0; border-radius: 11px; color: white; background: linear-gradient(100deg, #0ea5e9, #2563eb); cursor: pointer; font: 700 .95rem Arial, sans-serif; transition: transform .2s, box-shadow .2s, opacity .2s; }
-        .login-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 22px rgba(37,99,235,.24); }
-        .login-submit:disabled { cursor: wait; opacity: .7; }
-        .login-signup { margin-top: 25px; color: #64748b; text-align: center; font: 400 .82rem Arial, sans-serif; }
-        .login-signup a { color: #2563eb; font-weight: 700; text-decoration: none; }
-        @keyframes login-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
-        @media (max-width: 800px) { .login-page { display: block; } .login-brand { min-height: 320px; padding: 38px 28px; align-items: flex-end; } .login-logo { width: 132px; height: 132px; margin-bottom: 18px; border-radius: 20px; } .login-brand h1 { font-size: 2rem; } .login-brand p { margin-top: 12px; font-size: .9rem; } .login-brand-mark { margin-top: 22px; } .login-panel { min-height: calc(100vh - 320px); padding: 22px 16px 36px; } }
+        .login-submit {
+          width: 100%;
+          min-height: 48px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          border: 0;
+          border-radius: 10px;
+          color: #FFFFFF;
+          background: #536575;
+          cursor: pointer;
+          font-size: 0.95rem;
+          font-weight: 700;
+        }
+        .login-submit:hover { background: #435463; }
+        .login-submit:active { background: #384754; }
+        .login-submit:disabled { cursor: wait; opacity: 0.7; }
+        .login-signup { margin-top: 22px; color: #52606D; text-align: center; font-size: 0.82rem; }
+        .login-signup a { color: #536575; font-weight: 700; text-decoration: none; }
+        @media (max-width: 640px) {
+          .login-page { padding: 18px 14px; }
+          .login-card { padding: 24px 18px; }
+        }
       `}</style>
       <main className="login-page">
-        <section className="login-brand" aria-label="Mekdela Amba University">
-          <div className="login-brand-content">
-            <img className="login-logo" src="/assets/mekdela-amba-university-logo.png" alt="Mekdela Amba University logo" width="190" height="190" />
-            <h1>Mekdela Amba University</h1>
-            <p>University Asset Management System</p>
-            <p>Securely manage university assets, inventory, assignments and operations.</p>
-            <div className="login-brand-mark"><ShieldCheck size={16} aria-hidden="true" /> Trusted institutional access</div>
-          </div>
-        </section>
         <section className="login-panel">
           <main className="login-card">
+            <Link to="/home" className="login-back-link" aria-label={t.backToHomepage}>{t.backToHomepage}</Link>
+            <img className="login-logo" src="/assets/mekdela-amba-university-logo.png" alt="Mekdela Amba University logo" />
             <div className="login-heading"><h2>{t.title}</h2><p>Sign in to access the system</p></div>
             <div className="login-status"><span className={`status-dot ${backendStatus === 'online' ? 'status-online' : backendStatus === 'offline' ? 'status-offline' : ''}`} /><Activity size={15} aria-hidden="true" /> System {backendStatus}</div>
             {error && <div className="login-error" role="alert"><ShieldCheck size={17} aria-hidden="true" /> <span>{error}</span></div>}
@@ -149,6 +260,7 @@ const englishTranslations = {
   forgotPassword: 'Forgot Password?',
   noAccount: "Don't have an account?",
   signUp: 'Sign Up',
+  backToHomepage: '← Back to Homepage',
 };
 
 const amharicTranslations = {
@@ -160,6 +272,7 @@ const amharicTranslations = {
   forgotPassword: 'የይለፍ ቃል ረሱ?',
   noAccount: 'መለያ የለዎትም?',
   signUp: 'ይመዝገቡ',
+  backToHomepage: '← ወደ መነሻ ገጽ ተመለስ',
 };
 
 export default Login;

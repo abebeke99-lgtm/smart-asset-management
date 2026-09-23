@@ -2,6 +2,21 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLanguage } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import {
+  Activity,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  Filter,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Stethoscope,
+  UserCog,
+  Wrench,
+  XCircle
+} from 'lucide-react';
 
 const AdminMaintenance = () => {
   const { language, theme } = useLanguage();
@@ -44,7 +59,6 @@ const AdminMaintenance = () => {
     title: '',
     description: '',
     scheduled_date: '',
-    estimated_cost: '',
     technician_id: '',
     due_date: ''
   });
@@ -87,19 +101,6 @@ const AdminMaintenance = () => {
     }
 
     return date.toLocaleDateString();
-  };
-
-  const formatCurrency = (value) => {
-    const amount = Number(value);
-
-    if (!Number.isFinite(amount)) {
-      return '$0.00';
-    }
-
-    return `$${amount.toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })}`;
   };
 
   const numberValue = (value) => {
@@ -176,17 +177,17 @@ const AdminMaintenance = () => {
     const normalized = normalizeStatusValue(status);
 
     const icons = {
-      Pending: '⏳',
-      Approved: '✅',
-      Assigned: '👤',
-      'In Progress': '🔄',
-      Completed: '✔️',
-      Cancelled: '❌',
-      Rejected: '🚫',
-      'Waiting for Parts': '🧩'
+      Pending: 'pending',
+      Approved: 'approved',
+      Assigned: 'assigned',
+      'In Progress': 'progress',
+      Completed: 'completed',
+      Cancelled: 'cancelled',
+      Rejected: 'rejected',
+      'Waiting for Parts': 'waiting'
     };
 
-    return icons[normalized] || '📌';
+    return icons[normalized] || 'default';
   };
 
   // ============================================================
@@ -352,11 +353,6 @@ const AdminMaintenance = () => {
 
         due_date:
           formData.due_date || undefined,
-
-        estimated_cost:
-          formData.estimated_cost
-            ? Number(formData.estimated_cost)
-            : 0,
 
         technician_id:
           formData.technician_id || undefined
@@ -568,29 +564,11 @@ const AdminMaintenance = () => {
         t.completedByAdmin
       ).trim();
 
-    const laborCost =
-      numberValue(current.labor_cost);
-
-    const partsCost =
-      numberValue(current.parts_cost);
-
-    const serviceCost =
-      numberValue(current.service_cost);
-
-    const actualCost =
-      laborCost +
-      partsCost +
-      serviceCost;
-
     try {
       await axios.post(
         `/api/admin/maintenance/${id}/complete`,
         {
           resolution,
-          labor_cost: laborCost,
-          parts_cost: partsCost,
-          service_cost: serviceCost,
-          actual_cost: actualCost,
           parts_used:
             current.parts_used || ''
         }
@@ -657,49 +635,6 @@ const AdminMaintenance = () => {
     }
   };
 
-  const getLaborCost = (item) => {
-    return numberValue(
-      item?.labor_cost ??
-      item?.laborCost ??
-      0
-    );
-  };
-
-  const getPartsCost = (item) => {
-    return numberValue(
-      item?.parts_cost ??
-      item?.partsCost ??
-      0
-    );
-  };
-
-  const getServiceCost = (item) => {
-    return numberValue(
-      item?.service_cost ??
-      item?.serviceCost ??
-      0
-    );
-  };
-
-  const getTotalCost = (item) => {
-    const storedTotal =
-      numberValue(
-        item?.actual_cost ??
-        item?.total_cost ??
-        item?.totalCost ??
-        0
-      );
-
-    const calculated =
-      getLaborCost(item) +
-      getPartsCost(item) +
-      getServiceCost(item);
-
-    return storedTotal > 0
-      ? storedTotal
-      : calculated;
-  };
-
   // ============================================================
   // RESET
   // ============================================================
@@ -712,7 +647,6 @@ const AdminMaintenance = () => {
       title: '',
       description: '',
       scheduled_date: '',
-      estimated_cost: '',
       technician_id: '',
       due_date: ''
     });
@@ -865,44 +799,6 @@ const AdminMaintenance = () => {
         ) === 'Assigned'
     ).length;
 
-    const totalEstimated =
-      all.reduce(
-        (sum, item) =>
-          sum +
-          numberValue(
-            item?.estimated_cost
-          ),
-        0
-      );
-
-    const totalLabor =
-      all.reduce(
-        (sum, item) =>
-          sum + getLaborCost(item),
-        0
-      );
-
-    const totalParts =
-      all.reduce(
-        (sum, item) =>
-          sum + getPartsCost(item),
-        0
-      );
-
-    const totalService =
-      all.reduce(
-        (sum, item) =>
-          sum + getServiceCost(item),
-        0
-      );
-
-    const totalActual =
-      all.reduce(
-        (sum, item) =>
-          sum + getTotalCost(item),
-        0
-      );
-
     return {
       total: all.length,
       pending,
@@ -913,12 +809,7 @@ const AdminMaintenance = () => {
       scheduled:
         scheduledMaintenance.length,
       technicians:
-        technicians.length,
-      totalEstimated,
-      totalLabor,
-      totalParts,
-      totalService,
-      totalActual
+        technicians.length
     };
   }, [
     requests,
@@ -1416,7 +1307,16 @@ const AdminMaintenance = () => {
         <div style={styles.cardHeader}>
           <div style={{ flex: 1 }}>
             <div style={styles.cardTitle}>
-              {getStatusIcon(status)}{' '}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {status === 'Pending' && <Clock3 size={14} />}
+                {status === 'Approved' && <ShieldCheck size={14} />}
+                {status === 'Assigned' && <UserCog size={14} />}
+                {status === 'In Progress' && <Activity size={14} />}
+                {status === 'Completed' && <CheckCircle2 size={14} />}
+                {status === 'Rejected' && <XCircle size={14} />}
+                {status === 'Cancelled' && <XCircle size={14} />}
+                {!['Pending','Approved','Assigned','In Progress','Completed','Rejected','Cancelled'].includes(status) && <ClipboardList size={14} />}
+              </span>{' '}
               {safeText(
                 request?.title ||
                 request?.problem
@@ -1514,126 +1414,7 @@ const AdminMaintenance = () => {
                   )}
                 </span>
               )}
-
-              {request?.estimated_cost !==
-                undefined && (
-                <span
-                  style={
-                    styles.metaText
-                  }
-                >
-                  {t.estimatedCost}:{' '}
-                  {formatCurrency(
-                    request.estimated_cost
-                  )}
-                </span>
-              )}
             </div>
-
-            {(status === 'In Progress' ||
-              status === 'Completed') && (
-              <div style={styles.costGrid}>
-                <div
-                  style={
-                    styles.costCard
-                  }
-                >
-                  <div
-                    style={
-                      styles.costLabel
-                    }
-                  >
-                    {t.laborCost}
-                  </div>
-                  <div
-                    style={
-                      styles.costValue
-                    }
-                  >
-                    {formatCurrency(
-                      getLaborCost(
-                        request
-                      )
-                    )}
-                  </div>
-                </div>
-
-                <div
-                  style={
-                    styles.costCard
-                  }
-                >
-                  <div
-                    style={
-                      styles.costLabel
-                    }
-                  >
-                    {t.partsCost}
-                  </div>
-                  <div
-                    style={
-                      styles.costValue
-                    }
-                  >
-                    {formatCurrency(
-                      getPartsCost(
-                        request
-                      )
-                    )}
-                  </div>
-                </div>
-
-                <div
-                  style={
-                    styles.costCard
-                  }
-                >
-                  <div
-                    style={
-                      styles.costLabel
-                    }
-                  >
-                    {t.serviceCost}
-                  </div>
-                  <div
-                    style={
-                      styles.costValue
-                    }
-                  >
-                    {formatCurrency(
-                      getServiceCost(
-                        request
-                      )
-                    )}
-                  </div>
-                </div>
-
-                <div
-                  style={
-                    styles.costCard
-                  }
-                >
-                  <div
-                    style={
-                      styles.costLabel
-                    }
-                  >
-                    {t.totalCost}
-                  </div>
-                  <div
-                    style={
-                      styles.costValue
-                    }
-                  >
-                    {formatCurrency(
-                      getTotalCost(
-                        request
-                      )
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
           <div style={styles.actions}>
@@ -1726,113 +1507,8 @@ const AdminMaintenance = () => {
                   style={{
                     ...styles.input,
                     flex: 'none',
-                    width: '120px',
-                    minWidth: '120px',
-                    padding: '7px'
-                  }}
-                  placeholder={
-                    t.laborCost
-                  }
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={
-                    completion.labor_cost ??
-                    ''
-                  }
-                  onChange={(event) =>
-                    setCompletionMap(
-                      (previous) => ({
-                        ...previous,
-                        [request.id]: {
-                          ...(previous[
-                            request.id
-                          ] || {}),
-                          labor_cost:
-                            event.target
-                              .value
-                        }
-                      })
-                    )
-                  }
-                />
-
-                <input
-                  style={{
-                    ...styles.input,
-                    flex: 'none',
-                    width: '120px',
-                    minWidth: '120px',
-                    padding: '7px'
-                  }}
-                  placeholder={
-                    t.partsCost
-                  }
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={
-                    completion.parts_cost ??
-                    ''
-                  }
-                  onChange={(event) =>
-                    setCompletionMap(
-                      (previous) => ({
-                        ...previous,
-                        [request.id]: {
-                          ...(previous[
-                            request.id
-                          ] || {}),
-                          parts_cost:
-                            event.target
-                              .value
-                        }
-                      })
-                    )
-                  }
-                />
-
-                <input
-                  style={{
-                    ...styles.input,
-                    flex: 'none',
-                    width: '120px',
-                    minWidth: '120px',
-                    padding: '7px'
-                  }}
-                  placeholder={
-                    t.serviceCost
-                  }
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={
-                    completion.service_cost ??
-                    ''
-                  }
-                  onChange={(event) =>
-                    setCompletionMap(
-                      (previous) => ({
-                        ...previous,
-                        [request.id]: {
-                          ...(previous[
-                            request.id
-                          ] || {}),
-                          service_cost:
-                            event.target
-                              .value
-                        }
-                      })
-                    )
-                  }
-                />
-
-                <input
-                  style={{
-                    ...styles.input,
-                    flex: 'none',
-                    width: '150px',
-                    minWidth: '150px',
+                    width: '180px',
+                    minWidth: '180px',
                     padding: '7px'
                   }}
                   placeholder={
@@ -2168,19 +1844,6 @@ const AdminMaintenance = () => {
           </div>
 
           <div>
-            <div
-              style={{
-                fontWeight: 700,
-                color: isDark
-                  ? '#c8dcf5'
-                  : '#1a365d'
-              }}
-            >
-              {formatCurrency(
-                getTotalCost(item)
-              )}
-            </div>
-
           </div>
         </div>
       </div>
@@ -2222,9 +1885,6 @@ const AdminMaintenance = () => {
             {viewMode === 'technicians' &&
               t.manageTechnicians}
 
-            {viewMode === 'cost' &&
-              t.manageCosts}
-
             {viewMode === 'history' &&
               t.viewHistory}
           </div>
@@ -2242,7 +1902,7 @@ const AdminMaintenance = () => {
                 setShowCreate(true)
               }
             >
-              ➕ {t.createRequest}
+              <Wrench size={14} /> {t.createRequest}
             </button>
           )}
 
@@ -2267,7 +1927,7 @@ const AdminMaintenance = () => {
             )}
             onClick={fetchAllData}
           >
-            🔄 {t.refresh}
+            <RefreshCw size={14} /> {t.refresh}
           </button>
         </div>
       </div>
@@ -2276,75 +1936,51 @@ const AdminMaintenance = () => {
 
       <div style={styles.statsGrid}>
         <div style={styles.statCard}>
-          <div style={styles.statIcon}>
-            📋
-          </div>
-          <div style={styles.statLabel}>
-            {t.totalRequests}
-          </div>
-          <div style={styles.statValue}>
-            {statistics.total}
-          </div>
+          <div style={styles.statIcon}><ClipboardList size={18} /></div>
+          <div style={styles.statLabel}>{t.totalRequests}</div>
+          <div style={styles.statValue}>{statistics.total}</div>
         </div>
 
         <div style={styles.statCard}>
-          <div style={styles.statIcon}>
-            ⏳
-          </div>
-          <div style={styles.statLabel}>
-            {t.pending}
-          </div>
-          <div style={styles.statValue}>
-            {statistics.pending}
-          </div>
+          <div style={styles.statIcon}><Clock3 size={18} /></div>
+          <div style={styles.statLabel}>{t.pending}</div>
+          <div style={styles.statValue}>{statistics.pending}</div>
         </div>
 
         <div style={styles.statCard}>
-          <div style={styles.statIcon}>
-            🔄
-          </div>
-          <div style={styles.statLabel}>
-            {t.inProgress}
-          </div>
-          <div style={styles.statValue}>
-            {statistics.inProgress}
-          </div>
+          <div style={styles.statIcon}><ShieldCheck size={18} /></div>
+          <div style={styles.statLabel}>{t.approved}</div>
+          <div style={styles.statValue}>{statistics.approved}</div>
         </div>
 
         <div style={styles.statCard}>
-          <div style={styles.statIcon}>
-            ✅
-          </div>
-          <div style={styles.statLabel}>
-            {t.completed}
-          </div>
-          <div style={styles.statValue}>
-            {statistics.completed}
-          </div>
+          <div style={styles.statIcon}><UserCog size={18} /></div>
+          <div style={styles.statLabel}>{t.assigned}</div>
+          <div style={styles.statValue}>{statistics.assigned}</div>
         </div>
 
         <div style={styles.statCard}>
-          <div style={styles.statIcon}>
-            📅
-          </div>
-          <div style={styles.statLabel}>
-            {t.scheduledMaintenance}
-          </div>
-          <div style={styles.statValue}>
-            {statistics.scheduled}
-          </div>
+          <div style={styles.statIcon}><Activity size={18} /></div>
+          <div style={styles.statLabel}>{t.inProgress}</div>
+          <div style={styles.statValue}>{statistics.inProgress}</div>
         </div>
 
         <div style={styles.statCard}>
-          <div style={styles.statIcon}>
-            👨‍🔧
-          </div>
-          <div style={styles.statLabel}>
-            {t.technicians}
-          </div>
-          <div style={styles.statValue}>
-            {statistics.technicians}
-          </div>
+          <div style={styles.statIcon}><CheckCircle2 size={18} /></div>
+          <div style={styles.statLabel}>{t.completed}</div>
+          <div style={styles.statValue}>{statistics.completed}</div>
+        </div>
+
+        <div style={styles.statCard}>
+          <div style={styles.statIcon}><CalendarDays size={18} /></div>
+          <div style={styles.statLabel}>{t.scheduledMaintenance}</div>
+          <div style={styles.statValue}>{statistics.scheduled}</div>
+        </div>
+
+        <div style={styles.statCard}>
+          <div style={styles.statIcon}><Stethoscope size={18} /></div>
+          <div style={styles.statLabel}>{t.technicians}</div>
+          <div style={styles.statValue}>{statistics.technicians}</div>
         </div>
       </div>
 
@@ -2359,7 +1995,7 @@ const AdminMaintenance = () => {
             setViewMode('requests')
           }
         >
-          📋 {t.requests}
+          <ClipboardList size={14} /> {t.requests}
         </button>
 
         <button
@@ -2370,7 +2006,7 @@ const AdminMaintenance = () => {
             setViewMode('scheduled')
           }
         >
-          📅 {t.scheduledMaintenance}
+          <CalendarDays size={14} /> {t.scheduledMaintenance}
         </button>
 
         <button
@@ -2381,7 +2017,7 @@ const AdminMaintenance = () => {
             setViewMode('pending')
           }
         >
-          ⏳ {t.pending}
+          <Clock3 size={14} /> {t.pending}
         </button>
 
         <button
@@ -2392,7 +2028,7 @@ const AdminMaintenance = () => {
             setViewMode('progress')
           }
         >
-          🔄 {t.inProgress}
+          <Activity size={14} /> {t.inProgress}
         </button>
 
         <button
@@ -2403,7 +2039,7 @@ const AdminMaintenance = () => {
             setViewMode('completed')
           }
         >
-          ✅ {t.completed}
+          <CheckCircle2 size={14} /> {t.completed}
         </button>
 
         <button
@@ -2414,7 +2050,7 @@ const AdminMaintenance = () => {
             setViewMode('technicians')
           }
         >
-          👨‍🔧 {t.technicians}
+          <Stethoscope size={14} /> {t.technicians}
         </button>
 
         <button
@@ -2425,7 +2061,7 @@ const AdminMaintenance = () => {
             setViewMode('history')
           }
         >
-          📜 {t.history}
+          <ClipboardList size={14} /> {t.history}
         </button>
       </div>
 
@@ -2547,7 +2183,7 @@ const AdminMaintenance = () => {
           style={styles.button()}
           onClick={fetchAllData}
         >
-          🔍 {t.filter}
+          <Filter size={14} /> {t.filter}
         </button>
       </div>
 
@@ -3022,29 +2658,6 @@ const AdminMaintenance = () => {
                   )
                 )}
               </select>
-
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                style={
-                  styles.modalInput
-                }
-                placeholder={
-                  t.estimatedCost
-                }
-                value={
-                  formData.estimated_cost
-                }
-                onChange={(event) =>
-                  setFormData({
-                    ...formData,
-                    estimated_cost:
-                      event.target
-                        .value
-                  })
-                }
-              />
 
               <div
                 style={
@@ -3651,24 +3264,6 @@ const englishTranslations = {
   expectedCompletion:
     'Expected Completion',
 
-  estimatedCost:
-    'Estimated Cost',
-
-  actualCost:
-    'Actual Cost',
-
-  laborCost:
-    'Labor Cost',
-
-  partsCost:
-    'Parts Cost',
-
-  serviceCost:
-    'Service Cost',
-
-  totalCost:
-    'Total Cost',
-
   low:
     'Low',
 
@@ -3957,24 +3552,6 @@ const amharicTranslations = {
 
   expectedCompletion:
     'የሚጠበቅ ማጠናቀቂያ',
-
-  estimatedCost:
-    'የግምት ወጪ',
-
-  actualCost:
-    'ትክክለኛ ወጪ',
-
-  laborCost:
-    'የሰራተኛ ወጪ',
-
-  partsCost:
-    'የእቃ/ክፍል ወጪ',
-
-  serviceCost:
-    'የአገልግሎት ወጪ',
-
-  totalCost:
-    'ጠቅላላ ወጪ',
 
   low:
     'ዝቅተኛ',

@@ -28,10 +28,18 @@ export const useAuth = () => useContext(AuthContext);
 const normalizeRoleValue = (role) => {
   if (!role) return '';
   const value = String(role).trim().toLowerCase();
-  if (['department head', 'dept_head', 'department-head', 'department'].includes(value)) {
-    return 'department_head';
-  }
-  return value;
+  const aliases = {
+    'department head': 'department_head',
+    'dept_head': 'department_head',
+    'department-head': 'department_head',
+    'department': 'department_head',
+    'infrastructure director': 'infrastructure',
+    'infrastructure directorate': 'infrastructure',
+    'infrastructure_directorate': 'infrastructure',
+    'infrastructure-directorate': 'infrastructure',
+    'infra': 'infrastructure'
+  };
+  return aliases[value] || value;
 };
 
 const normalizeUser = (userData) => {

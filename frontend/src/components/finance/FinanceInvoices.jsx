@@ -36,6 +36,8 @@ const emptyItem = {
   discount: 0,
 };
 
+const INVOICE_STATUS_OPTIONS = ["Draft", "Pending", "Approved", "Due", "Paid", "Cancelled"];
+
 const emptyForm = {
   invoiceNumber: "",
   supplierId: "",
@@ -58,63 +60,84 @@ const emptyForm = {
 const firstValue = (...values) =>
   values.find((value) => value !== undefined && value !== null && value !== "");
 
-const extractRows = (response) => {
-  const payload = response?.data ?? response;
+export const extractRows = (response) => {
+  const root = response?.data ?? response;
+  const candidates = [root, root?.data, root?.payload];
 
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload?.records)) return payload.records;
-  if (Array.isArray(payload?.results)) return payload.results;
-  if (Array.isArray(payload?.rows)) return payload.rows;
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+
+    if (candidate && typeof candidate === 'object') {
+      for (const key of ['invoices', 'items', 'records', 'results', 'rows']) {
+        if (Array.isArray(candidate[key])) return candidate[key];
+      }
+    }
+  }
+
+  if (root && typeof root === 'object') {
+    const nested = root?.data;
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      for (const key of ['invoices', 'items', 'records', 'results', 'rows']) {
+        if (Array.isArray(nested[key])) return nested[key];
+      }
+    }
+  }
 
   return [];
 };
 
-const extractPagination = (response, fallbackTotal = 0, page = 1, pageSize = 10) => {
-  const payload = response?.data ?? response;
-  const pagination =
-    payload?.pagination ||
-    payload?.meta?.pagination ||
-    payload?.meta ||
-    payload?.pageInfo ||
+export const extractPagination = (response, fallbackTotal = 0, page = 1, pageSize = 10) => {
+  const root = response?.data ?? response;
+  const paginationSource =
+    root?.pagination ||
+    root?.meta?.pagination ||
+    root?.meta ||
+    root?.pageInfo ||
+    root?.data?.pagination ||
+    root?.data?.meta ||
+    root?.data?.pageInfo ||
     {};
 
   const total = Number(
     firstValue(
-      pagination.total,
-      pagination.totalItems,
-      pagination.totalRecords,
-      payload?.total,
-      payload?.totalItems,
+      paginationSource.total,
+      paginationSource.totalItems,
+      paginationSource.totalRecords,
+      root?.total,
+      root?.totalItems,
+      root?.data?.total,
+      root?.data?.totalItems,
       fallbackTotal
     )
   );
 
   const currentPage = Number(
     firstValue(
-      pagination.page,
-      pagination.currentPage,
-      payload?.page,
+      paginationSource.page,
+      paginationSource.currentPage,
+      root?.page,
+      root?.data?.page,
       page
     )
   );
 
   const limit = Number(
     firstValue(
-      pagination.pageSize,
-      pagination.limit,
-      pagination.perPage,
-      payload?.pageSize,
+      paginationSource.pageSize,
+      paginationSource.limit,
+      paginationSource.perPage,
+      root?.pageSize,
+      root?.data?.pageSize,
       pageSize
     )
   );
 
   const totalPages = Number(
     firstValue(
-      pagination.totalPages,
-      pagination.pages,
-      payload?.totalPages,
+      paginationSource.totalPages,
+      paginationSource.pages,
+      root?.totalPages,
+      root?.data?.totalPages,
       Math.max(1, Math.ceil(total / Math.max(limit, 1)))
     )
   );
@@ -126,6 +149,25 @@ const extractPagination = (response, fallbackTotal = 0, page = 1, pageSize = 10)
     totalPages: Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1,
   };
 };
+
+const normalizeSupplierOption = (item) => ({
+  id: firstValue(item?.id, item?.supplierId, item?.supplier_id, ""),
+  supplierCode: firstValue(item?.supplierCode, item?.supplier_code, ""),
+  supplierName: firstValue(item?.supplierName, item?.supplier_name, item?.name, ""),
+  status: firstValue(item?.status, "active"),
+  email: firstValue(item?.email, ""),
+  phone: firstValue(item?.phone, ""),
+});
+
+const normalizePurchaseOrderOption = (item) => ({
+  id: firstValue(item?.id, item?.purchaseOrderId, item?.purchase_order_id, ""),
+  poNumber: firstValue(item?.poNumber, item?.po_number, item?.orderNumber, item?.order_number, ""),
+  supplierName: firstValue(item?.supplierName, item?.supplier_name, item?.supplier?.name, ""),
+  departmentName: firstValue(item?.departmentName, item?.department_name, item?.department?.name, ""),
+  orderDate: firstValue(item?.orderDate, item?.order_date, item?.createdAt, ""),
+  totalAmount: Number(firstValue(item?.totalAmount, item?.total_amount, item?.grandTotal, item?.grand_total, 0)),
+  status: firstValue(item?.status, "Draft"),
+});
 
 const normalizeInvoice = (item) => ({
   ...item,
@@ -370,8 +412,30 @@ export default function FinanceInvoices() {
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [invoicePayments, setInvoicePayments] = useState([]);
+  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
+  const [supplierOptions, setSupplierOptions] = useState([]);
+  const [purchaseOrderOptions, setPurchaseOrderOptions] = useState([]);
+  const [invoiceSummary, setInvoiceSummary] = useState({ total: 0, totalValue: 0, outstanding: 0 });
 
   const [form, setForm] = useState(emptyForm);
+
+  const loadReferenceData = async () => {
+    try {
+      const [supplierResponse, poResponse] = await Promise.all([
+        api.get("/finance/suppliers", { params: { page: 1, limit: 200 } }),
+        api.get("/finance/purchase-orders", { params: { page: 1, limit: 200 } }),
+      ]);
+
+      const supplierRows = extractRows(supplierResponse).map(normalizeSupplierOption);
+      const purchaseRows = extractRows(poResponse).map(normalizePurchaseOrderOption);
+
+      setSupplierOptions(supplierRows.filter((item) => item.supplierName));
+      setPurchaseOrderOptions(purchaseRows.filter((item) => item.poNumber));
+    } catch (error) {
+      console.error("Failed to load invoice reference data:", error);
+    }
+  };
 
   const loadInvoices = async () => {
     setLoading(true);
@@ -391,8 +455,14 @@ export default function FinanceInvoices() {
       const response = await api.get("/finance/invoices", { params });
 
       const rows = extractRows(response).map(normalizeInvoice);
+      const summary = response?.data?.summary || response?.summary || response?.data?.data?.summary || {};
 
       setInvoices(rows);
+      setInvoiceSummary({
+        total: Number(summary.total ?? rows.length ?? 0),
+        totalValue: Number(summary.totalValue ?? rows.reduce((sum, row) => sum + Number(row.totalAmount || 0), 0)),
+        outstanding: Number(summary.outstanding ?? rows.reduce((sum, row) => sum + Number(row.balanceAmount || 0), 0)),
+      });
       setPagination(
         extractPagination(response, rows.length, page, pageSize)
       );
@@ -400,6 +470,7 @@ export default function FinanceInvoices() {
       console.error("Failed to load invoices:", err);
 
       setInvoices([]);
+      setInvoiceSummary({ total: 0, totalValue: 0, outstanding: 0 });
       setError(
         err?.response?.data?.message ||
           err?.message ||
@@ -409,6 +480,10 @@ export default function FinanceInvoices() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadReferenceData();
+  }, []);
 
   useEffect(() => {
     loadInvoices();
@@ -427,7 +502,7 @@ export default function FinanceInvoices() {
   }, [search]);
 
   const stats = useMemo(() => {
-    const total = invoices.length;
+    const total = invoiceSummary.total || invoices.length;
 
     const pending = invoices.filter((item) =>
       ["pending", "draft", "due"].includes(
@@ -445,12 +520,12 @@ export default function FinanceInvoices() {
       )
     ).length;
 
-    const totalValue = invoices.reduce(
+    const totalValue = invoiceSummary.totalValue || invoices.reduce(
       (sum, item) => sum + Number(item.totalAmount || 0),
       0
     );
 
-    const outstanding = invoices.reduce(
+    const outstanding = invoiceSummary.outstanding || invoices.reduce(
       (sum, item) =>
         sum +
         Number(
@@ -472,7 +547,7 @@ export default function FinanceInvoices() {
       totalValue,
       outstanding,
     };
-  }, [invoices]);
+  }, [invoices, invoiceSummary]);
 
   const openCreate = () => {
     setEditingInvoice(null);
@@ -483,6 +558,25 @@ export default function FinanceInvoices() {
     setError("");
     setSuccess("");
     setShowForm(true);
+  };
+
+  const setSupplierSelection = (supplierId) => {
+    const selectedSupplier = supplierOptions.find((option) => String(option.id) === String(supplierId));
+    setForm((previous) => ({
+      ...previous,
+      supplierId: supplierId || "",
+      supplierName: selectedSupplier?.supplierName || previous.supplierName,
+    }));
+  };
+
+  const setPurchaseOrderSelection = (purchaseOrderId) => {
+    const selectedOrder = purchaseOrderOptions.find((option) => String(option.id) === String(purchaseOrderId));
+    setForm((previous) => ({
+      ...previous,
+      purchaseOrderId: purchaseOrderId || "",
+      purchaseOrderNumber: selectedOrder?.poNumber || previous.purchaseOrderNumber,
+      supplierName: selectedOrder?.supplierName || previous.supplierName,
+    }));
   };
 
   const openEdit = (invoice) => {
@@ -526,9 +620,32 @@ export default function FinanceInvoices() {
     setShowForm(true);
   };
 
+  const loadInvoicePaymentHistory = async (invoiceId) => {
+    if (!invoiceId) {
+      setInvoicePayments([]);
+      return;
+    }
+
+    setPaymentHistoryLoading(true);
+    try {
+      const response = await api.get(`/finance/invoices/${invoiceId}/payments`);
+      const rows = Array.isArray(response?.data?.data)
+        ? response.data.data
+        : [];
+      setInvoicePayments(rows);
+    } catch (err) {
+      console.error("Failed to load invoice payment history:", err);
+      setInvoicePayments([]);
+    } finally {
+      setPaymentHistoryLoading(false);
+    }
+  };
+
   const openDetails = (invoice) => {
     setSelectedInvoice(invoice);
+    setInvoicePayments([]);
     setShowDetails(true);
+    loadInvoicePaymentHistory(invoice?.id);
   };
 
   const openDelete = (invoice) => {
@@ -538,6 +655,28 @@ export default function FinanceInvoices() {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
+
+    if (name === "supplierId") {
+      const selectedSupplier = supplierOptions.find((option) => String(option.id) === String(value));
+      setForm((previous) => ({
+        ...previous,
+        supplierId: value,
+        supplierName: selectedSupplier?.supplierName || previous.supplierName,
+      }));
+      return;
+    }
+
+    if (name === "purchaseOrderId") {
+      const selectedOrder = purchaseOrderOptions.find((option) => String(option.id) === String(value));
+      setForm((previous) => ({
+        ...previous,
+        purchaseOrderId: value,
+        purchaseOrderNumber: selectedOrder?.poNumber || previous.purchaseOrderNumber,
+        supplierId: selectedOrder?.supplierName ? previous.supplierId : previous.supplierId,
+        supplierName: selectedOrder?.supplierName || previous.supplierName,
+      }));
+      return;
+    }
 
     setForm((previous) => ({
       ...previous,
@@ -717,9 +856,16 @@ export default function FinanceInvoices() {
     setSuccess("");
 
     try {
-      await api.put(`/finance/invoices/${invoice.id}`, {
-        status: nextStatus,
-      });
+      const endpoint = nextStatus === "Verified"
+        ? `/finance/invoices/${invoice.id}/verify`
+        : nextStatus === "Approved"
+          ? `/finance/invoices/${invoice.id}/approve`
+          : `/finance/invoices/${invoice.id}`;
+      if (nextStatus === "Cancelled") {
+        await api.put(endpoint, { status: nextStatus });
+      } else {
+        await api.post(endpoint);
+      }
 
       setSuccess(`Invoice marked as ${nextStatus}.`);
 
@@ -922,11 +1068,18 @@ export default function FinanceInvoices() {
     setPage(1);
   };
 
+  const supplierFilterOptions = supplierOptions.map((supplier) => ({
+    value: supplier.supplierName,
+    label: supplier.supplierName,
+  }));
+
   const canApprove = (invoice) => {
     const current = String(invoice.status || "").toLowerCase();
 
-    return ["pending", "draft"].includes(current);
+    return ["pending", "draft"].includes(current) && invoice.verificationStatus === "Verified";
   };
+
+  const canVerify = (invoice) => String(invoice.verificationStatus || "Pending").toLowerCase() === "pending";
 
   const canCancel = (invoice) => {
     const current = String(invoice.status || "").toLowerCase();
@@ -1738,7 +1891,7 @@ export default function FinanceInvoices() {
 
             <button className="btn btn-primary" onClick={openCreate}>
               <Plus size={17} />
-              New Invoice
+              Register Invoice
             </button>
           </div>
         </div>
@@ -1858,23 +2011,24 @@ export default function FinanceInvoices() {
               }}
             >
               <option value="">All Statuses</option>
-              <option value="Draft">Draft</option>
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Due">Due</option>
-              <option value="Paid">Paid</option>
-              <option value="Cancelled">Cancelled</option>
+              {INVOICE_STATUS_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
             </select>
 
-            <input
-              className="input"
-              placeholder="Supplier"
+            <select
+              className="select"
               value={supplier}
               onChange={(e) => {
                 setSupplier(e.target.value);
                 setPage(1);
               }}
-            />
+            >
+              <option value="">All Suppliers</option>
+              {supplierFilterOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
 
             <input
               className="input"
@@ -1929,7 +2083,7 @@ export default function FinanceInvoices() {
 
               <button className="btn btn-primary" onClick={openCreate}>
                 <Plus size={16} />
-                Create Invoice
+                Register Invoice
               </button>
             </div>
           ) : (
@@ -2044,6 +2198,17 @@ export default function FinanceInvoices() {
                                 onClick={() =>
                                   updateStatus(invoice, "Approved")
                                 }
+                              >
+                                <CheckCircle size={15} />
+                              </button>
+                            )}
+
+                            {canVerify(invoice) && (
+                              <button
+                                className="icon-btn"
+                                title="Verify"
+                                disabled={processingId === invoice.id}
+                                onClick={() => updateStatus(invoice, "Verified")}
                               >
                                 <CheckCircle size={15} />
                               </button>
@@ -2203,40 +2368,57 @@ export default function FinanceInvoices() {
                       value={form.status}
                       onChange={handleChange}
                     >
-                      <option value="Draft">Draft</option>
-                      <option value="Pending">Pending</option>
-                      <option value="Approved">Approved</option>
-                      <option value="Due">Due</option>
-                      <option value="Paid">Paid</option>
-                      <option value="Cancelled">Cancelled</option>
+                      {INVOICE_STATUS_OPTIONS.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
                     </select>
                   </div>
 
                   <div className="field">
                     <label>
-                      Supplier Name <span className="required">*</span>
+                      Supplier <span className="required">*</span>
                     </label>
+
+                    <select
+                      className="select"
+                      name="supplierId"
+                      value={form.supplierId || ""}
+                      onChange={handleChange}
+                      required
+                    >
+                      <option value="">Select real supplier</option>
+                      {supplierOptions.map((supplier) => (
+                        <option key={supplier.id} value={supplier.id}>{supplier.supplierName}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="field">
+                    <label>Supplier Name</label>
 
                     <input
                       className="input"
                       name="supplierName"
                       value={form.supplierName}
                       onChange={handleChange}
-                      placeholder="Registered supplier"
-                      required
+                      placeholder="Selected supplier name"
                     />
                   </div>
 
                   <div className="field">
-                    <label>Supplier ID</label>
+                    <label>Purchase Order</label>
 
-                    <input
-                      className="input"
-                      name="supplierId"
-                      value={form.supplierId}
+                    <select
+                      className="select"
+                      name="purchaseOrderId"
+                      value={form.purchaseOrderId || ""}
                       onChange={handleChange}
-                      placeholder="Supplier database ID"
-                    />
+                    >
+                      <option value="">Select purchase order</option>
+                      {purchaseOrderOptions.map((order) => (
+                        <option key={order.id} value={order.id}>{order.poNumber} — {order.supplierName}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="field">
@@ -2247,19 +2429,7 @@ export default function FinanceInvoices() {
                       name="purchaseOrderNumber"
                       value={form.purchaseOrderNumber}
                       onChange={handleChange}
-                      placeholder="PO-2026-0001"
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label>Purchase Order ID</label>
-
-                    <input
-                      className="input"
-                      name="purchaseOrderId"
-                      value={form.purchaseOrderId}
-                      onChange={handleChange}
-                      placeholder="PO database ID"
+                      placeholder="Selected PO number"
                     />
                   </div>
 
@@ -2836,6 +3006,60 @@ export default function FinanceInvoices() {
                     </strong>
                   </div>
                 </div>
+              </div>
+
+              <div style={{ marginTop: 18 }}>
+                <div className="items-header" style={{ marginBottom: 12 }}>
+                  <strong>Payment History</strong>
+                </div>
+
+                {paymentHistoryLoading ? (
+                  <div className="loading-state" style={{ padding: "24px 20px" }}>
+                    <RefreshCw size={18} className="spinner" />
+                    <p>Loading payment history...</p>
+                  </div>
+                ) : invoicePayments.length === 0 ? (
+                  <div className="empty-state" style={{ padding: "24px 20px" }}>
+                    <div className="empty-icon">
+                      <CreditCard size={18} />
+                    </div>
+                    <h3>No payment records</h3>
+                    <p>No real payment history has been recorded for this invoice yet.</p>
+                  </div>
+                ) : (
+                  <div className="items-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Payment No.</th>
+                          <th>Date</th>
+                          <th>Method</th>
+                          <th>Amount</th>
+                          <th>Reference</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {invoicePayments.map((payment) => (
+                          <tr key={payment.id || payment.paymentNumber}>
+                            <td>{payment.paymentNumber || "—"}</td>
+                            <td>{formatDate(payment.paymentDate)}</td>
+                            <td>{payment.paymentMethod || "—"}</td>
+                            <td className="amount">
+                              {formatMoney(payment.amount, payment.currency || selectedInvoice.currency)}
+                            </td>
+                            <td>{payment.referenceNumber || "—"}</td>
+                            <td>
+                              <span className={statusClass(payment.status)}>
+                                {payment.status || "—"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               {selectedInvoice.notes && (

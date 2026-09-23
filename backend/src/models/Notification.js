@@ -9,6 +9,7 @@ const Notification = sequelize.define('Notification', {
   collegeId: { type: DataTypes.INTEGER, allowNull: true, field: 'college_id' },
   departmentId: { type: DataTypes.INTEGER, allowNull: true, field: 'department_id' },
   assetId: { type: DataTypes.INTEGER, allowNull: true, field: 'asset_id' },
+  eventKey: { type: DataTypes.STRING(160), allowNull: true, field: 'event_key' },
   title: { type: DataTypes.STRING(255), allowNull: false },
   message: { type: DataTypes.TEXT, defaultValue: '' },
   type: { type: DataTypes.STRING(100), defaultValue: 'system' },

@@ -133,12 +133,14 @@ export default function DisposalFinancialRecords() {
   const getAssetId = (item) =>
     item?.asset_id ??
     item?.assetId ??
+    item?.Asset?.id ??
     item?.asset?.id ??
     "";
 
   const getName = (item) =>
     item?.asset_name ??
     item?.assetName ??
+    item?.Asset?.name ??
     item?.asset?.name ??
     item?.asset?.asset_name ??
     item?.name ??
@@ -148,6 +150,7 @@ export default function DisposalFinancialRecords() {
   const getCode = (item) =>
     item?.asset_code ??
     item?.assetCode ??
+    item?.Asset?.assetCode ??
     item?.asset?.asset_code ??
     item?.asset?.assetCode ??
     item?.code ??
@@ -170,6 +173,7 @@ export default function DisposalFinancialRecords() {
     return (
       item?.department_name ??
       item?.departmentName ??
+      item?.Asset?.department ??
       item?.asset?.department_name ??
       item?.department ??
       "—"
@@ -189,17 +193,20 @@ export default function DisposalFinancialRecords() {
 
   const getOriginalCost = (item) =>
     number(
+      item?.financialBasis?.originalCost,
       item?.original_cost,
       item?.originalCost,
       item?.acquisition_cost,
       item?.acquisitionCost,
       item?.asset?.acquisition_cost,
       item?.asset?.acquisitionCost,
+      item?.Asset?.purchasePrice,
       item?.cost
     );
 
   const getAccumulatedDepreciation = (item) =>
     number(
+      item?.financialBasis?.accumulatedDepreciation,
       item?.accumulated_depreciation,
       item?.accumulatedDepreciation,
       item?.depreciation_amount,
@@ -208,6 +215,7 @@ export default function DisposalFinancialRecords() {
 
   const getNetBookValue = (item) => {
     const explicit = number(
+      item?.financialBasis?.netBookValue,
       item?.net_book_value,
       item?.netBookValue,
       item?.book_value,
@@ -440,7 +448,7 @@ export default function DisposalFinancialRecords() {
     try {
       const result = await Promise.allSettled([
         request(`${API_URL}/finance/disposal-financial-records`),
-        request(`${API_URL}/assets`),
+        request(`${API_URL}/finance/disposal-financial-records/candidates`),
         request(`${API_URL}/departments`),
       ]);
 
@@ -637,67 +645,17 @@ export default function DisposalFinancialRecords() {
     setError("");
   };
 
-  const calculateValues = () => {
-    const originalCost =
-      Number(form.originalCost) || 0;
-
-    const accumulated =
-      Number(form.accumulatedDepreciation) || 0;
-
-    const proceeds =
-      Number(form.disposalProceeds) || 0;
-
-    const disposalCost =
-      Number(form.disposalCost) || 0;
-
-    const netBookValue = Math.max(
-      0,
-      originalCost - accumulated
-    );
-
-    const gainLoss =
-      proceeds - netBookValue - disposalCost;
-
-    setForm((previous) => ({
-      ...previous,
-      netBookValue: netBookValue.toFixed(2),
-      gainLoss: gainLoss.toFixed(2),
-    }));
-
-    setSuccess(
-      `Calculated NBV: ${formatMoney(
-        netBookValue
-      )} ETB | ${gainLossLabel(gainLoss)}: ${formatMoney(
-        Math.abs(gainLoss)
-      )} ETB`
-    );
-  };
-
   const saveRecord = async (event) => {
     event.preventDefault();
 
     setSaving(true);
     setError("");
 
-    const originalCost =
-      Number(form.originalCost) || 0;
-
-    const accumulated =
-      Number(form.accumulatedDepreciation) || 0;
-
     const proceeds =
       Number(form.disposalProceeds) || 0;
 
     const disposalCost =
       Number(form.disposalCost) || 0;
-
-    const netBookValue = Math.max(
-      0,
-      originalCost - accumulated
-    );
-
-    const gainLoss =
-      proceeds - netBookValue - disposalCost;
 
     if (!form.assetId) {
       setError("Please select an asset.");
@@ -713,21 +671,14 @@ export default function DisposalFinancialRecords() {
 
     const payload = {
       assetId: form.assetId,
-      disposalDate: form.disposalDate,
       disposalMethod: form.disposalMethod,
-      originalCost,
-      accumulatedDepreciation: accumulated,
-      netBookValue,
       disposalProceeds: proceeds,
       disposalCost,
-      gainLoss,
-      department: form.department || null,
       referenceNumber:
         form.referenceNumber || null,
       buyer: form.buyer || null,
       approvalNumber:
         form.approvalNumber || null,
-      status: form.status,
       notes: form.notes || null,
     };
 
@@ -1692,6 +1643,8 @@ export default function DisposalFinancialRecords() {
                               selected
                             )
                           : previous.originalCost,
+                          accumulatedDepreciation: selected ? getAccumulatedDepreciation(selected) : previous.accumulatedDepreciation,
+                          netBookValue: selected ? getNetBookValue(selected) : previous.netBookValue,
                       department:
                         selected &&
                         getDepartment(selected) !==
@@ -1793,12 +1746,7 @@ export default function DisposalFinancialRecords() {
                 min="0"
                 step="0.01"
                 value={form.originalCost}
-                onChange={(value) =>
-                  setForm({
-                    ...form,
-                    originalCost: value,
-                  })
-                }
+                readOnly
               />
 
               <FormInput
@@ -1809,13 +1757,7 @@ export default function DisposalFinancialRecords() {
                 value={
                   form.accumulatedDepreciation
                 }
-                onChange={(value) =>
-                  setForm({
-                    ...form,
-                    accumulatedDepreciation:
-                      value,
-                  })
-                }
+                readOnly
               />
 
               <FormInput
@@ -1824,12 +1766,7 @@ export default function DisposalFinancialRecords() {
                 min="0"
                 step="0.01"
                 value={form.netBookValue}
-                onChange={(value) =>
-                  setForm({
-                    ...form,
-                    netBookValue: value,
-                  })
-                }
+                readOnly
               />
 
               <FormInput
@@ -1986,19 +1923,6 @@ export default function DisposalFinancialRecords() {
                 </select>
               </div>
             </div>
-
-            {/* CALCULATE */}
-            <button
-              type="button"
-              onClick={calculateValues}
-              style={{
-                ...secondaryButton,
-                marginTop: "16px",
-              }}
-            >
-              <Calculator size={16} />
-              Calculate NBV & Gain/Loss
-            </button>
 
             {/* NOTES */}
             <div

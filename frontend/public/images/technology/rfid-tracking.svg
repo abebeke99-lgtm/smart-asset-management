@@ -1,0 +1,28 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="rfidBg" x1="180" y1="70" x2="1020" y2="720" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EEF2FF"/>
+      <stop offset="1" stop-color="#F8FAFC"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#rfidBg)"/>
+  <circle cx="990" cy="180" r="120" fill="#C7D2FE" fill-opacity="0.7"/>
+  <g>
+    <rect x="190" y="170" width="360" height="420" rx="32" fill="#FFFFFF" stroke="#C7D2FE"/>
+    <rect x="240" y="226" width="240" height="160" rx="18" fill="#EEF2FF"/>
+    <path d="M294 306V270H360V306H294ZM402 306V270H468V306H402ZM294 334H468V354H294V334Z" fill="#4F46E5"/>
+    <circle cx="318" cy="420" r="54" fill="#DBEAFE"/>
+    <path d="M336 420H470" stroke="#4F46E5" stroke-width="12" stroke-linecap="round"/>
+    <path d="M318 402V438" stroke="#4F46E5" stroke-width="12" stroke-linecap="round"/>
+    <path d="M302 420H334" stroke="#4F46E5" stroke-width="12" stroke-linecap="round"/>
+    <path d="M334 420H366" stroke="#4F46E5" stroke-width="12" stroke-linecap="round"/>
+    <rect x="620" y="200" width="342" height="270" rx="28" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <rect x="660" y="246" width="130" height="18" rx="9" fill="#CBD5E1"/>
+    <rect x="660" y="280" width="240" height="14" rx="7" fill="#E2E8F0"/>
+    <rect x="660" y="316" width="200" height="14" rx="7" fill="#E2E8F0"/>
+    <rect x="660" y="386" width="188" height="14" rx="7" fill="#CBD5E1"/>
+    <rect x="660" y="420" width="148" height="14" rx="7" fill="#CBD5E1"/>
+    <rect x="663" y="516" width="270" height="84" rx="20" fill="#E0F2FE"/>
+    <path d="M700 561L744 517L781 544L832 494L915 561H700Z" fill="#2563EB" opacity="0.9"/>
+  </g>
+</svg>

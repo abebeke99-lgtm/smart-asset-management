@@ -81,19 +81,13 @@ const ForgotPassword = () => {
         .forgot-root { min-height: 100vh; width: 100%; display: flex; align-items: center; justify-content: center; padding: 20px; position: relative; overflow: hidden; font-family: Inter, system-ui, sans-serif; }
         .forgot-light { background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%); }
         .forgot-dark { background: linear-gradient(135deg, #020617 0%, #111827 100%); }
-        .orb { position: absolute; border-radius: 50%; filter: blur(80px); z-index: 0; animation: float 15s infinite alternate ease-in-out; }
-        .orb-1 { width: 400px; height: 400px; background: rgba(59, 130, 246, 0.15); top: -10%; left: -10%; }
-        .orb-2 { width: 500px; height: 500px; background: rgba(139, 92, 246, 0.12); bottom: -10%; right: -10%; }
-        @keyframes float { from { transform: translate(0, 0); } to { transform: translate(40px, 40px); } }
-        .forgot-card { width: 100%; max-width: 480px; background: ${isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.9)'}; backdrop-filter: blur(16px); border: 1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'}; border-radius: 24px; padding: 32px 28px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); z-index: 1; animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .input-field { width: 100%; padding: 14px 16px; border-radius: 12px; border: 2px solid transparent; background: ${isDark ? '#0f172a' : '#f1f5f9'}; color: ${isDark ? '#f8fafc' : '#0f172a'}; transition: all 0.2s; margin-top: 8px; outline: none; box-sizing: border-box; }
+        .forgot-card { width: 100%; max-width: 480px; background: ${isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.9)'}; border: 1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'}; border-radius: 24px; padding: 32px 28px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); z-index: 1; }
+        .input-field { width: 100%; padding: 14px 16px; border-radius: 12px; border: 2px solid transparent; background: ${isDark ? '#0f172a' : '#f1f5f9'}; color: ${isDark ? '#f8fafc' : '#0f172a'}; margin-top: 8px; outline: none; box-sizing: border-box; }
         .input-field:focus { border-color: #0EA5E9; background: ${isDark ? '#020617' : '#fff'}; }
         .method-group { display: flex; gap: 10px; margin: 16px 0 20px; }
         .method-option { flex: 1; border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 12px; background: ${isDark ? '#0f172a' : '#f8fafc'}; color: ${isDark ? '#f8fafc' : '#0f172a'}; padding: 10px 12px; cursor: pointer; font-weight: 600; }
         .method-option.active { border-color: #0EA5E9; background: rgba(14, 165, 233, 0.15); }
-        .btn-reset { background: linear-gradient(135deg, #0EA5E9, #2563EB); width: 100%; padding: 14px; border-radius: 12px; border: none; color: white; font-weight: 700; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; margin-top: 20px; }
-        .btn-reset:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.4); }
+        .btn-reset { background: linear-gradient(135deg, #0EA5E9, #2563EB); width: 100%; padding: 14px; border-radius: 12px; border: none; color: white; font-weight: 700; cursor: pointer; margin-top: 20px; }
         .btn-reset:disabled { opacity: 0.6; cursor: not-allowed; }
         .error-msg { background: rgba(239, 68, 68, 0.1); color: #ef4444; padding: 12px; border-radius: 10px; font-size: 13px; margin-top: 15px; border: 1px solid #ef4444; }
         .success-box { text-align: center; }
@@ -101,8 +95,6 @@ const ForgotPassword = () => {
       `}</style>
 
       <div className={`forgot-root ${isDark ? 'forgot-dark' : 'forgot-light'}`}>
-        <div className="orb orb-1"></div>
-        <div className="orb orb-2"></div>
 
         <main className="forgot-card">
           {!submitted ? (
@@ -178,7 +170,7 @@ const isValidEmail = (value) => {
 };
 
 const normalizePhoneNumber = (value) => {
-  const raw = String(value || '').replace(/[\s()\-]/g, '');
+  const raw = String(value || '').replace(/[\s() -]/g, '');
   if (/^09\d{8}$/.test(raw)) return `+251${raw.slice(1)}`;
   if (/^\+2519\d{8}$/.test(raw)) return raw;
   return null;

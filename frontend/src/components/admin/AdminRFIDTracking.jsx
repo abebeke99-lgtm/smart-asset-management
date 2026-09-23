@@ -45,10 +45,10 @@ const AdminRFIDTracking = () => {
   const [logs, setLogs] = useState([]);
   const [devices, setDevices] = useState([]);
   const [assets, setAssets] = useState([]);
+  const [rfidTaggedAssets, setRfidTaggedAssets] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [devicesLoading, setDevicesLoading] = useState(false);
-  const [assetsLoading, setAssetsLoading] = useState(false);
 
   const [search, setSearch] = useState('');
   const [locationSearch, setLocationSearch] = useState('');
@@ -63,13 +63,16 @@ const AdminRFIDTracking = () => {
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showDeviceModal, setShowDeviceModal] = useState(false);
   const [showCodeModal, setShowCodeModal] = useState(false);
+  const [lookupIdentifier, setLookupIdentifier] = useState('');
+  const [lookupAsset, setLookupAsset] = useState(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState('');
 
   const [editingDevice, setEditingDevice] = useState(null);
 
   const [registerForm, setRegisterForm] = useState({
     asset_id: '',
     asset_name: '',
-    tag_type: 'RFID',
     tag_code: '',
     location: ''
   });
@@ -101,8 +104,30 @@ const AdminRFIDTracking = () => {
     await Promise.all([
       fetchLogs(),
       fetchDevices(),
-      fetchAssets()
+      fetchAssets(),
+      fetchTaggedAssets()
     ]);
+  };
+
+  const fetchTaggedAssets = async () => {
+    try {
+      const response = await axios.get('/api/admin/rfid/assets', {
+        params: { limit: 500 }
+      });
+
+      const data = Array.isArray(response.data?.assets)
+        ? response.data.assets
+        : Array.isArray(response.data?.data)
+          ? response.data.data
+          : Array.isArray(response.data)
+            ? response.data
+            : [];
+
+      setRfidTaggedAssets(data);
+    } catch (error) {
+      console.warn('RFID tagged assets API unavailable:', error.message);
+      setRfidTaggedAssets([]);
+    }
   };
 
   const fetchLogs = async () => {
@@ -157,8 +182,6 @@ const AdminRFIDTracking = () => {
   };
 
   const fetchAssets = async () => {
-    setAssetsLoading(true);
-
     try {
       const response = await axios.get('/api/admin/assets', {
         params: {
@@ -178,8 +201,24 @@ const AdminRFIDTracking = () => {
     } catch (error) {
       console.warn('Assets API unavailable:', error.message);
       setAssets([]);
+    }
+  };
+
+  const lookupIdentifierInBackend = async (event) => {
+    event.preventDefault();
+    const identifier = lookupIdentifier.trim();
+    if (!identifier) return;
+
+    setLookupLoading(true);
+    setLookupError('');
+    setLookupAsset(null);
+    try {
+      const response = await axios.get(`/api/assets/scan/${encodeURIComponent(identifier)}`);
+      setLookupAsset(response.data?.data || response.data?.asset || null);
+    } catch (error) {
+      setLookupError(error.response?.data?.message || t.lookupNotFound);
     } finally {
-      setAssetsLoading(false);
+      setLookupLoading(false);
     }
   };
 
@@ -188,59 +227,61 @@ const AdminRFIDTracking = () => {
      ========================================================= */
 
   const stats = useMemo(() => {
-    const uniqueAssets = new Set();
+    const trackedAssetCount = Array.isArray(rfidTaggedAssets) && rfidTaggedAssets.length > 0
+      ? rfidTaggedAssets.filter((asset) => {
+          const identifier = asset.rfid_tag || asset.rfidTag || asset.tag_code || asset.tagCode || '';
+          return String(identifier).trim().length > 0;
+        }).length
+      : assets.filter((asset) => {
+          const identifier = asset.rfidTag || asset.rfid_tag || asset.tag || '';
+          return String(identifier).trim().length > 0;
+        }).length;
 
-    logs.forEach((log) => {
-      const id =
-        log.asset_id ||
-        log.asset?.id ||
-        log.rfid_tag ||
-        log.tag_code;
-
-      if (id) uniqueAssets.add(String(id));
+    const readerIds = new Set();
+    devices.forEach((device) => {
+      const reader = device.reader_id || device.readerId || device.name;
+      if (reader) readerIds.add(String(reader));
     });
 
-    const uniqueReaders = new Set();
-
+    const locations = new Set();
     logs.forEach((log) => {
-      const reader =
-        log.reader_id ||
-        log.reader?.id;
-
-      if (reader) uniqueReaders.add(String(reader));
+      const location = log.new_location || log.reader_location || log.location || '';
+      if (String(location).trim()) locations.add(String(location).trim());
     });
 
-    const anomalies = logs.filter(
+    const anomalyCount = logs.filter(
       (log) => log.isAnomaly === true || log.is_anomaly === true
     ).length;
 
-    const locations = new Set();
-
-    logs.forEach((log) => {
-      const location =
-        log.new_location ||
-        log.reader_location ||
-        log.location ||
-        log.current_location;
-
-      if (location) locations.add(location);
-    });
-
     return {
       totalScans: logs.length,
-      trackedAssets: uniqueAssets.size,
-      readers: uniqueReaders.size || devices.length,
-      anomalies,
+      trackedAssets: trackedAssetCount,
+      readers: readerIds.size || devices.length,
+      anomalies: anomalyCount > 0 ? anomalyCount : null,
       locations: locations.size,
       devices: devices.length
     };
-  }, [logs, devices]);
+  }, [logs, devices, assets, rfidTaggedAssets]);
 
   /* =========================================================
      RFID ASSETS
      ========================================================= */
 
   const rfidAssets = useMemo(() => {
+    if (Array.isArray(rfidTaggedAssets) && rfidTaggedAssets.length > 0) {
+      return rfidTaggedAssets.map((asset) => ({
+        id: asset.id || asset.asset_id || asset.assetId,
+        asset_name: asset.asset_name || asset.assetName || asset.name || 'Unknown Asset',
+        asset_code: asset.asset_code || asset.assetCode || asset.code || asset.serialNumber || '-',
+        rfid_tag: asset.rfid_tag || asset.rfidTag || asset.tag || '-',
+        location: asset.location || asset.current_location || asset.currentLocation || 'Not assigned',
+        reader_id: asset.reader_id || asset.readerId || asset.reader || 'Not detected',
+        timestamp: asset.timestamp || asset.lastScan || asset.updatedAt || asset.createdAt,
+        status: asset.status || 'Active',
+        isAnomaly: Boolean(asset.isAnomaly || asset.is_anomaly),
+      }));
+    }
+
     const map = new Map();
 
     logs.forEach((log) => {
@@ -272,10 +313,10 @@ const AdminRFIDTracking = () => {
             log.new_location ||
             log.reader_location ||
             log.location ||
-            '-',
+            'Not assigned',
           reader_id:
             log.reader_id ||
-            '-',
+            'Not detected',
           timestamp:
             log.timestamp ||
             log.created_at,
@@ -287,7 +328,7 @@ const AdminRFIDTracking = () => {
     });
 
     return Array.from(map.values());
-  }, [logs]);
+  }, [logs, rfidTaggedAssets]);
 
   const filteredRFIDAssets = useMemo(() => {
     const value = search.toLowerCase().trim();
@@ -477,8 +518,7 @@ const AdminRFIDTracking = () => {
       await axios.post('/api/admin/rfid/tags', {
         asset_id: registerForm.asset_id,
         rfid_tag: registerForm.tag_code.trim(),
-        location: registerForm.location,
-        tag_type: registerForm.tag_type
+        location: registerForm.location
       });
 
       toast.success(t.tagRegistered);
@@ -488,7 +528,6 @@ const AdminRFIDTracking = () => {
       setRegisterForm({
         asset_id: '',
         asset_name: '',
-        tag_type: 'RFID',
         tag_code: '',
         location: ''
       });
@@ -633,17 +672,6 @@ const AdminRFIDTracking = () => {
   /* =========================================================
      QR / BARCODE
      ========================================================= */
-
-  const openCodeGenerator = () => {
-    setCodeForm({
-      asset_id: '',
-      asset_name: '',
-      code_type: 'QR',
-      code_value: ''
-    });
-
-    setShowCodeModal(true);
-  };
 
   const generateCode = () => {
     if (!codeForm.asset_id) {
@@ -1216,11 +1244,6 @@ const AdminRFIDTracking = () => {
       icon: <QrCode size={16} />
     },
     {
-      id: 'register',
-      label: t.registerTag,
-      icon: <Tag size={16} />
-    },
-    {
       id: 'scan-activity',
       label: t.scanActivity,
       icon: <Activity size={16} />
@@ -1251,7 +1274,7 @@ const AdminRFIDTracking = () => {
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>
-            📡 {t.title}
+            {t.title}
           </h1>
 
           <p style={styles.subtitle}>
@@ -1311,7 +1334,7 @@ const AdminRFIDTracking = () => {
 
           <div>
             <div style={styles.statValue}>
-              {stats.totalScans}
+              {loading ? '...' : stats.totalScans}
             </div>
 
             <div style={styles.statLabel}>
@@ -1327,7 +1350,7 @@ const AdminRFIDTracking = () => {
 
           <div>
             <div style={styles.statValue}>
-              {stats.trackedAssets}
+              {loading ? '...' : stats.trackedAssets}
             </div>
 
             <div style={styles.statLabel}>
@@ -1343,7 +1366,7 @@ const AdminRFIDTracking = () => {
 
           <div>
             <div style={styles.statValue}>
-              {stats.readers}
+              {devicesLoading ? '...' : stats.readers}
             </div>
 
             <div style={styles.statLabel}>
@@ -1359,7 +1382,7 @@ const AdminRFIDTracking = () => {
 
           <div>
             <div style={styles.statValue}>
-              {stats.locations}
+              {loading ? '...' : stats.locations}
             </div>
 
             <div style={styles.statLabel}>
@@ -1375,7 +1398,7 @@ const AdminRFIDTracking = () => {
 
           <div>
             <div style={styles.statValue}>
-              {stats.anomalies}
+              {loading ? '...' : (stats.anomalies === null ? 'Not available' : stats.anomalies)}
             </div>
 
             <div style={styles.statLabel}>
@@ -1393,18 +1416,8 @@ const AdminRFIDTracking = () => {
         <div style={styles.panel}>
           <div style={styles.panelHeader}>
             <h2 style={styles.panelTitle}>
-              📡 {t.rfidAssets}
+              {t.rfidAssets}
             </h2>
-
-            <button
-              style={styles.button(colors.primary)}
-              onClick={() =>
-                setShowRegisterModal(true)
-              }
-            >
-              <Plus size={15} />
-              {t.registerTag}
-            </button>
           </div>
 
           <div style={styles.controls}>
@@ -1425,7 +1438,7 @@ const AdminRFIDTracking = () => {
 
           {loading ? (
             <div style={styles.empty}>
-              ⏳ {t.loading}
+              {t.loading}
             </div>
           ) : filteredRFIDAssets.length === 0 ? (
             <div style={styles.empty}>
@@ -1534,7 +1547,7 @@ const AdminRFIDTracking = () => {
                                 '#dc2626'
                               )}
                             >
-                              ⚠️ {t.anomaly}
+                              {t.anomaly}
                             </span>
                           ) : (
                             <span
@@ -1583,181 +1596,60 @@ const AdminRFIDTracking = () => {
       {activeSection === 'qr-barcode' && (
         <div style={styles.panel}>
           <div style={styles.panelHeader}>
-            <h2 style={styles.panelTitle}>
-              🔳 {t.qrBarcode}
-            </h2>
-
-            <button
-              style={styles.button(colors.primary)}
-              onClick={openCodeGenerator}
-            >
-              <Plus size={15} />
-              {t.generateCode}
-            </button>
-          </div>
-
-          <div style={styles.locationGrid}>
-            {assetsLoading ? (
-              <div style={styles.empty}>
-                ⏳ {t.loading}
-              </div>
-            ) : assets.length === 0 ? (
-              <div style={styles.empty}>
-                {t.noAssets}
-              </div>
-            ) : (
-              assets.map((asset) => (
-                <div
-                  key={asset.id}
-                  style={styles.locationCard}
-                >
-                  <div style={styles.locationName}>
-                    <Package
-                      size={17}
-                      style={{
-                        verticalAlign: 'middle'
-                      }}
-                    />{' '}
-                    {asset.name ||
-                      asset.asset_name ||
-                      `Asset ${asset.id}`}
-                  </div>
-
-                  <p style={styles.statLabel}>
-                    {t.assetCode}:{' '}
-                    <strong>
-                      {asset.asset_code ||
-                        asset.code ||
-                        '-'}
-                    </strong>
-                  </p>
-
-                  <button
-                    style={styles.button(
-                      colors.primary
-                    )}
-                    onClick={() =>
-                      openCodeForAsset({
-                        id: asset.id,
-                        asset_name:
-                          asset.name ||
-                          asset.asset_name,
-                        asset_code:
-                          asset.asset_code ||
-                          asset.code
-                      })
-                    }
-                  >
-                    <QrCode size={15} />
-                    {t.generateCode}
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* =====================================================
-          REGISTER TAG
-      ===================================================== */}
-
-      {activeSection === 'register' && (
-        <div style={styles.panel}>
-          <div style={styles.panelHeader}>
             <div>
-              <h2 style={styles.panelTitle}>
-                🔗 {t.registerTag}
-              </h2>
-
-              <p style={styles.subtitle}>
-                {t.registerDescription}
-              </p>
+              <h2 style={styles.panelTitle}>{t.qrBarcode}</h2>
+              <p style={styles.subtitle}>{t.lookupDescription}</p>
             </div>
-
-            <button
-              style={styles.button(colors.primary)}
-              onClick={() =>
-                setShowRegisterModal(true)
-              }
-            >
-              <Plus size={15} />
-              {t.registerTag}
-            </button>
           </div>
 
-          <div style={styles.tableWrapper}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>
-                    {t.asset}
-                  </th>
+          <form style={styles.controls} onSubmit={lookupIdentifierInBackend}>
+            <Search size={17} color={colors.muted} />
+            <input
+              style={styles.input}
+              value={lookupIdentifier}
+              onChange={(event) => setLookupIdentifier(event.target.value)}
+              placeholder={t.lookupPlaceholder}
+              aria-label={t.lookupPlaceholder}
+            />
+            <button type="submit" style={styles.button(colors.primary)} disabled={lookupLoading}>
+              <Search size={15} />
+              {lookupLoading ? t.loading : t.lookup}
+            </button>
+          </form>
 
-                  <th style={styles.th}>
-                    {t.tagType}
-                  </th>
+          {lookupError && (
+            <div style={{ ...styles.empty, color: colors.danger }} role="alert">
+              {lookupError}
+            </div>
+          )}
 
-                  <th style={styles.th}>
-                    {t.tagCode}
-                  </th>
+          {lookupAsset && (
+            <div style={styles.locationGrid}>
+              <div style={styles.locationCard}>
+                <div style={styles.locationName}>{lookupAsset.name || t.asset}</div>
+                <p style={styles.statLabel}>{t.assetCode}: <strong>{lookupAsset.asset_code || lookupAsset.assetCode || '-'}</strong></p>
+                <p style={styles.statLabel}>{t.rfidTag}: <strong>{lookupAsset.rfid_tag || lookupAsset.rfidTag || lookupIdentifier}</strong></p>
+                <p style={styles.statLabel}>{t.department}: <strong>{lookupAsset.department || '-'}</strong></p>
+                <p style={styles.statLabel}>{t.location}: <strong>{lookupAsset.location || 'Unknown'}</strong></p>
+                <p style={styles.statLabel}>{t.condition}: <strong>{lookupAsset.condition || '-'}</strong></p>
+                <p style={styles.statLabel}>{t.status}: <strong>{lookupAsset.status || '-'}</strong></p>
+                <p style={styles.statLabel}>{t.lastScan}: <strong>{formatDate(lookupAsset.last_tracking_event?.createdAt)}</strong></p>
+              </div>
+            </div>
+          )}
 
-                  <th style={styles.th}>
-                    {t.location}
-                  </th>
+          {!lookupAsset && !lookupError && (
+            <div style={styles.empty}>
+              <QrCode size={40} color={colors.muted} />
+              <p>{t.lookupEmpty}</p>
+            </div>
+          )}
 
-                  <th style={styles.th}>
-                    {t.lastScan}
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {rfidAssets.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan="5"
-                      style={styles.empty}
-                    >
-                      {t.noRegisteredTags}
-                    </td>
-                  </tr>
-                ) : (
-                  rfidAssets.map((asset) => (
-                    <tr key={asset.id}>
-                      <td style={styles.td}>
-                        {asset.asset_name}
-                      </td>
-
-                      <td style={styles.td}>
-                        <span
-                          style={styles.badge(
-                            '#eff6ff',
-                            '#2563eb'
-                          )}
-                        >
-                          RFID
-                        </span>
-                      </td>
-
-                      <td style={styles.td}>
-                        {asset.rfid_tag}
-                      </td>
-
-                      <td style={styles.td}>
-                        {asset.location}
-                      </td>
-
-                      <td style={styles.td}>
-                        {formatDate(
-                          asset.timestamp
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <div style={{ ...styles.panelHeader, borderTop: `1px solid ${colors.border}`, borderBottom: 'none' }}>
+            <div>
+              <h3 style={styles.panelTitle}>{t.integrationTitle}</h3>
+              <p style={styles.subtitle}>{t.integrationDescription}</p>
+            </div>
           </div>
         </div>
       )}
@@ -1770,7 +1662,7 @@ const AdminRFIDTracking = () => {
         <div style={styles.panel}>
           <div style={styles.panelHeader}>
             <h2 style={styles.panelTitle}>
-              📡 {t.scanActivity}
+              {t.scanActivity}
             </h2>
 
             <span
@@ -1779,7 +1671,6 @@ const AdminRFIDTracking = () => {
                 '#16a34a'
               )}
             >
-              <span>●</span>
               {t.live}
             </span>
           </div>
@@ -1802,7 +1693,7 @@ const AdminRFIDTracking = () => {
 
           {loading ? (
             <div style={styles.empty}>
-              ⏳ {t.loading}
+              {t.loading}
             </div>
           ) : (
             <div style={styles.tableWrapper}>
@@ -1902,7 +1793,7 @@ const AdminRFIDTracking = () => {
                                   '#dc2626'
                                 )}
                               >
-                                ⚠️ {t.anomaly}
+                                {t.anomaly}
                               </span>
                             ) : (
                               <span
@@ -1937,7 +1828,7 @@ const AdminRFIDTracking = () => {
           <div style={styles.panelHeader}>
             <div>
               <h2 style={styles.panelTitle}>
-                📍 {t.currentLocation}
+                {t.currentLocation}
               </h2>
 
               <p style={styles.subtitle}>
@@ -2047,7 +1938,7 @@ const AdminRFIDTracking = () => {
         <div style={styles.panel}>
           <div style={styles.panelHeader}>
             <h2 style={styles.panelTitle}>
-              📜 {t.trackingHistory}
+              {t.trackingHistory}
             </h2>
           </div>
 
@@ -2220,8 +2111,8 @@ const AdminRFIDTracking = () => {
                               )}
                             >
                               {moved
-                                ? `🔄 ${t.transferred}`
-                                : `📡 ${t.scanned}`}
+                                ? t.transferred
+                                : t.scanned}
                             </span>
                           </td>
 
@@ -2249,7 +2140,7 @@ const AdminRFIDTracking = () => {
           <div style={styles.panelHeader}>
             <div>
               <h2 style={styles.panelTitle}>
-                📟 {t.devices}
+                {t.devices}
               </h2>
 
               <p style={styles.subtitle}>
@@ -2268,7 +2159,7 @@ const AdminRFIDTracking = () => {
 
           {devicesLoading ? (
             <div style={styles.empty}>
-              ⏳ {t.loading}
+              {t.loading}
             </div>
           ) : devices.length === 0 ? (
             <div style={styles.empty}>
@@ -2305,7 +2196,6 @@ const AdminRFIDTracking = () => {
                           styles.deviceName
                         }
                       >
-                        📟{' '}
                         {device.name ||
                           `Reader ${device.id}`}
                       </div>
@@ -2510,7 +2400,7 @@ const AdminRFIDTracking = () => {
           >
             <div style={styles.modalHeader}>
               <h2 style={styles.modalTitle}>
-                🔗 {t.registerTag}
+                {t.registerDialogTitle}
               </h2>
 
               <button
@@ -2577,38 +2467,6 @@ const AdminRFIDTracking = () => {
                         ''}
                     </option>
                   ))}
-                </select>
-              </div>
-
-              <div style={styles.field}>
-                <label style={styles.label}>
-                  {t.tagType}
-                </label>
-
-                <select
-                  style={styles.modalInput}
-                  value={
-                    registerForm.tag_type
-                  }
-                  onChange={(event) =>
-                    setRegisterForm({
-                      ...registerForm,
-                      tag_type:
-                        event.target.value
-                    })
-                  }
-                >
-                  <option value="RFID">
-                    RFID
-                  </option>
-
-                  <option value="QR">
-                    QR Code
-                  </option>
-
-                  <option value="BARCODE">
-                    Barcode
-                  </option>
                 </select>
               </div>
 
@@ -2708,7 +2566,6 @@ const AdminRFIDTracking = () => {
           >
             <div style={styles.modalHeader}>
               <h2 style={styles.modalTitle}>
-                📟{' '}
                 {editingDevice
                   ? t.editDevice
                   : t.addDevice}
@@ -2886,7 +2743,7 @@ const AdminRFIDTracking = () => {
           >
             <div style={styles.modalHeader}>
               <h2 style={styles.modalTitle}>
-                🔳 {t.qrBarcode}
+                {t.qrBarcode}
               </h2>
 
               <button
@@ -3061,21 +2918,21 @@ const AdminRFIDTracking = () => {
    ========================================================= */
 
 const english = {
-  title: 'RFID / QR Tracking',
+  title: 'Admin / RFID / QR Tracking',
   subtitle:
-    'Complete asset identification, scanning and location tracking',
-
+    'Identify, scan, locate, and track university assets using RFID tags and QR/barcodes.',
   rfidAssets: 'RFID Assets',
-  qrBarcode: 'QR / Barcode',
+  qrBarcode: 'QR / Barcodes',
   registerTag: 'Register Tag',
+  registerDialogTitle: 'Register RFID Tag',
   scanActivity: 'Scan Activity',
-  currentLocation: 'Current Location',
+  currentLocation: 'Current Locations',
   trackingHistory: 'Tracking History',
-  devices: 'RFID Devices',
+  devices: 'RFID Readers',
 
   totalScans: 'Total Scans',
   trackedAssets: 'Tracked Assets',
-  readers: 'Readers',
+  readers: 'RFID Readers',
   locations: 'Locations',
   anomalies: 'Anomalies',
 
@@ -3085,6 +2942,8 @@ const english = {
 
   asset: 'Asset',
   assetCode: 'Asset Code',
+  department: 'Department',
+  condition: 'Condition',
   rfidTag: 'RFID Tag',
   tagType: 'Tag Type',
   tagCode: 'Tag Code',
@@ -3166,14 +3025,14 @@ const english = {
     'Are you sure you want to delete this device?',
 
   selectAsset: 'Select Asset',
-  enterTag: 'Enter RFID/QR tag',
+  enterTag: 'Enter RFID tag',
   tagCodePlaceholder:
     'Enter unique tag code',
   locationPlaceholder:
     'Enter current location',
 
   registerDescription:
-    'Connect an RFID, QR or barcode identifier to an asset.',
+    'Connect a registered RFID identifier to an asset. QR/barcode lookup uses existing asset identifiers.',
 
   locationDescription:
     'Latest known location based on the most recent scan.',
@@ -3196,7 +3055,14 @@ const english = {
     'No RFID devices found',
 
   loadFailed:
-    'Failed to load RFID data'
+    'Failed to load RFID data',
+  lookup: 'Lookup',
+  lookupPlaceholder: 'Search RFID, QR, barcode, asset code, or serial number',
+  lookupDescription: 'Resolve a registered asset identifier using the backend.',
+  lookupEmpty: 'Enter an identifier to find a registered asset.',
+  lookupNotFound: 'No registered asset was found for this identifier.',
+  integrationTitle: 'RFID Reader Integration',
+  integrationDescription: 'Backend ingestion is available. Browser hardware access is not configured; scan events must be submitted by a supported reader or gateway.'
 };
 
 /* =========================================================
@@ -3204,17 +3070,18 @@ const english = {
    ========================================================= */
 
 const amharic = {
-  title: 'RFID / QR ክትትል',
+  title: 'Admin / RFID / QR ክትትል',
   subtitle:
-    'የንብረት መለያ፣ ቅኝት እና የቦታ ክትትል ሙሉ ስርዓት',
+    'የዩኒቨርሲቲ ንብረቶችን በRFID ታግ እና QR/barcode በመለየት፣ በመቃኘት እና በቦታ ክትትል ይከታተሉ።',
 
   rfidAssets: 'RFID ንብረቶች',
-  qrBarcode: 'QR / Barcode',
+  qrBarcode: 'QR / Barcodes',
   registerTag: 'Tag መመዝገብ',
+  registerDialogTitle: 'RFID Tag መመዝገብ',
   scanActivity: 'የScan እንቅስቃሴ',
-  currentLocation: 'የአሁኑ ቦታ',
+  currentLocation: 'የአሁኑ ቦታዎች',
   trackingHistory: 'የክትትል ታሪክ',
-  devices: 'RFID መሳሪያዎች',
+  devices: 'RFID አንባቢዎች',
 
   totalScans: 'ጠቅላላ Scans',
   trackedAssets: 'የሚከታተሉ ንብረቶች',
@@ -3228,6 +3095,8 @@ const amharic = {
 
   asset: 'ንብረት',
   assetCode: 'የንብረት ኮድ',
+  department: 'ዲፓርትመንት',
+  condition: 'ሁኔታ',
   rfidTag: 'RFID Tag',
   tagType: 'የTag አይነት',
   tagCode: 'Tag ኮድ',
@@ -3309,14 +3178,14 @@ const amharic = {
     'ይህንን መሳሪያ ለመሰረዝ እርግጠኛ ነዎት?',
 
   selectAsset: 'ንብረት ይምረጡ',
-  enterTag: 'RFID/QR Tag ያስገቡ',
+  enterTag: 'RFID Tag ያስገቡ',
   tagCodePlaceholder:
     'ልዩ Tag ኮድ ያስገቡ',
   locationPlaceholder:
     'የአሁኑን ቦታ ያስገቡ',
 
   registerDescription:
-    'RFID፣ QR ወይም Barcode መለያን ከንብረት ጋር ያገናኙ።',
+    'የተመዘገበ RFID መለያን ከንብረት ጋር ያገናኙ። QR/barcode ፍለጋ ያሉ የንብረት መለያዎችን ይጠቀማል።',
 
   locationDescription:
     'በመጨረሻው Scan ላይ የተመሰረተ የንብረቱ የቅርብ ጊዜ ቦታ።',
@@ -3340,7 +3209,14 @@ const amharic = {
     'ምንም RFID መሳሪያ አልተገኘም',
 
   loadFailed:
-    'RFID መረጃ መጫን አልተቻለም'
+    'RFID መረጃ መጫን አልተቻለም',
+  lookup: 'ፈልግ',
+  lookupPlaceholder: 'RFID፣ QR፣ barcode፣ asset code ወይም serial number ይፈልጉ',
+  lookupDescription: 'የተመዘገበ ንብረት መለያን በbackend ይፈልጉ።',
+  lookupEmpty: 'የተመዘገበ ንብረት ለመፈለግ መለያ ያስገቡ።',
+  lookupNotFound: 'ለዚህ መለያ የተመዘገበ ንብረት አልተገኘም።',
+  integrationTitle: 'የRFID አንባቢ ግንኙነት',
+  integrationDescription: 'የbackend ingestion ይገኛል። የbrowser hardware ግንኙነት አልተዋቀረም፤ scan event በተደገፈ አንባቢ ወይም gateway መላክ አለበት።'
 };
 
 export default AdminRFIDTracking;

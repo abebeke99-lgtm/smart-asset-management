@@ -10,10 +10,12 @@ A full-stack asset management system with role-based dashboards.
 ## Run backend
 
 ```bash
-cd backend
-npm install
-npm run dev
+npm install --prefix backend
+npm start
 ```
+
+The root `npm start` automatically starts the backend on `http://localhost:5000`.
+For backend-only development with file watching, use `npm run dev` from the `backend` directory.
 
 ## Deploy backend to Render
 

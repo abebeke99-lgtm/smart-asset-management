@@ -669,12 +669,6 @@ const InfrastructureDashboard = () => {
               Registered infrastructure assets will appear here.
             </p>
 
-            <Link
-              to="/infrastructure/assets/register"
-              className="empty-action"
-            >
-              Register Asset
-            </Link>
           </div>
         ) : (
           <div className="table-wrapper">

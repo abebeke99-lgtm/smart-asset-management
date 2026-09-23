@@ -8,7 +8,6 @@ import {
   CheckCheck,
   ChevronLeft,
   ChevronRight,
-  Clock3,
   DollarSign,
   FileText,
   Filter,
@@ -33,15 +32,10 @@ const EMPTY_FILTERS = {
 };
 
 const TYPES = [
-  "Purchase Request",
-  "Purchase Order",
-  "Invoice",
-  "Payment",
-  "Budget",
-  "Asset Valuation",
-  "Depreciation",
-  "Disposal",
-  "System",
+  { label: "Purchase Requests", value: "procurement" },
+  { label: "Invoices", value: "financial" },
+  { label: "Payments", value: "financial" },
+  { label: "System", value: "system" },
 ];
 
 const PRIORITIES = [
@@ -76,13 +70,9 @@ async function request(path, options = {}) {
     ...options,
     headers: headers(options.headers || {}),
   });
-
-  const contentType =
-    response.headers.get("content-type") || "";
-
   let payload;
 
-  if (contentType.includes("application/json")) {
+  if (response.headers.get("content-type")?.includes("application/json")) {
     payload = await response.json();
   } else {
     payload = await response.text();
@@ -591,7 +581,7 @@ export default function FinanceNotifications() {
 
     try {
       await request(
-        `/finance/notifications/${notification.id}/read`,
+        `/notifications/${notification.id}/read`,
         {
           method: "PATCH",
         }
@@ -636,7 +626,7 @@ export default function FinanceNotifications() {
 
     try {
       await request(
-        `/finance/notifications/${notification.id}/unread`,
+        `/notifications/${notification.id}/unread`,
         {
           method: "PATCH",
         }
@@ -679,7 +669,7 @@ export default function FinanceNotifications() {
 
     try {
       await request(
-        "/finance/notifications/read-all",
+        "/notifications/read-all",
         {
           method: "PATCH",
         }
@@ -725,7 +715,7 @@ export default function FinanceNotifications() {
 
     try {
       await request(
-        `/finance/notifications/${notification.id}`,
+        `/notifications/${notification.id}`,
         {
           method: "DELETE",
         }
@@ -1475,13 +1465,11 @@ export default function FinanceNotifications() {
 
               <div>
                 <h1>
-                  Finance Notifications
+                  Notifications
                 </h1>
 
                 <p className="subtitle">
-                  Monitor financial events,
-                  approvals, payments, budgets
-                  and system alerts.
+                  Review financial workflow notifications, approvals, warnings, and transaction events.
                 </p>
               </div>
             </div>
@@ -1547,7 +1535,7 @@ export default function FinanceNotifications() {
             </div>
 
             <div className="stat-value">
-              {stats.total}
+              {loading ? "Loading..." : stats.total}
             </div>
 
             <div className="stat-note">
@@ -1567,7 +1555,7 @@ export default function FinanceNotifications() {
             </div>
 
             <div className="stat-value">
-              {stats.unread}
+              {loading ? "Loading..." : stats.unread}
             </div>
 
             <div className="stat-note">
@@ -1587,7 +1575,7 @@ export default function FinanceNotifications() {
             </div>
 
             <div className="stat-value">
-              {stats.read}
+              {loading ? "Loading..." : stats.read}
             </div>
 
             <div className="stat-note">
@@ -1607,7 +1595,7 @@ export default function FinanceNotifications() {
             </div>
 
             <div className="stat-value">
-              {stats.critical}
+              {loading ? "Loading..." : stats.critical}
             </div>
 
             <div className="stat-note">
@@ -1666,11 +1654,8 @@ export default function FinanceNotifications() {
                 </option>
 
                 {TYPES.map((type) => (
-                  <option
-                    key={type}
-                    value={type}
-                  >
-                    {type}
+                  <option key={type.label} value={type.value}>
+                    {type.label}
                   </option>
                 ))}
               </select>

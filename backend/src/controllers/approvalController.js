@@ -1,5 +1,6 @@
 const { Approval, Asset, Department, User } = require('../models');
 const { Op } = require('sequelize');
+const { createFinanceNotification } = require('../services/notificationService');
 
 const normalize = (item) => {
   const data = item.toJSON();
@@ -35,6 +36,7 @@ const createApproval = async (req, res, next) => {
     const authenticatedDepartment = req.user.department_id || req.user.departmentId || (Number.isInteger(Number(req.user.department)) ? Number(req.user.department) : null);
     if (req.user.role === 'college' && department_id && String(department_id) !== String(authenticatedDepartment) && String(department_id) !== String(req.user.department)) return res.status(403).json({ success: false, message: 'Department authorization required' });
     const record = await Approval.create({ type, assetId: asset_id || null, requestedBy: req.user.id, departmentId: authenticatedDepartment || department_id || null, item: item || '', quantity, priority, reason });
+    if (String(type).toLowerCase().includes('purchase')) await createFinanceNotification({ event: 'finance_purchase_request_submitted', eventKey: `finance_purchase_request_submitted:${record.id}`, entityId: record.id, senderId: req.user.id, type: 'procurement', title: 'Purchase request awaiting approval', message: `Purchase request REQ-${String(record.id).padStart(6, '0')} requires approval.` });
     res.status(201).json({ success: true, request: normalize(record) });
   } catch (error) { next(error); }
 };

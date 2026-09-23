@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useLanguage, useTheme } from '../../contexts/UiContext';
+import { useLanguage } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
 import { toast } from 'react-toastify';
 import { ArrowLeft, CheckCircle2, LockKeyhole, Save, ShieldCheck } from 'lucide-react';
@@ -15,9 +15,9 @@ const ResetPassword = () => {
   const initialEmail = searchParams.get('email') || '';
   const initialToken = searchParams.get('token') || '';
 
-  const [method, setMethod] = useState(initialMethod === 'phone' ? 'phone' : 'email');
-  const [phone, setPhone] = useState(initialPhone);
-  const [email, setEmail] = useState(initialEmail);
+  const [method] = useState(initialMethod === 'phone' ? 'phone' : 'email');
+  const [phone] = useState(initialPhone);
+  const [email] = useState(initialEmail);
   const [otp, setOtp] = useState('');
   const [token, setToken] = useState(initialToken);
   const [password, setPassword] = useState('');
@@ -134,29 +134,19 @@ const ResetPassword = () => {
         .reset-root { min-height: 100vh; width: 100%; display: flex; align-items: center; justify-content: center; padding: 20px; position: relative; overflow: hidden; font-family: Inter, system-ui, sans-serif; }
         .reset-light { background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%); }
         .reset-dark { background: linear-gradient(135deg, #020617 0%, #111827 100%); }
-        .orb { position: absolute; border-radius: 50%; filter: blur(80px); z-index: 0; animation: float 15s infinite alternate ease-in-out; }
-        .orb-1 { width: 450px; height: 450px; background: rgba(37, 99, 235, 0.15); top: -10%; left: -10%; }
-        .orb-2 { width: 550px; height: 550px; background: rgba(139, 92, 246, 0.12); bottom: -10%; right: -10%; }
-        @keyframes float { from { transform: translate(0, 0); } to { transform: translate(50px, 50px); } }
-        .reset-card { width: 100%; max-width: 460px; background: ${isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.9)'}; backdrop-filter: blur(16px); border: 1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'}; border-radius: 24px; padding: 40px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); z-index: 1; animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .reset-card { width: 100%; max-width: 460px; background: ${isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.9)'}; border: 1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'}; border-radius: 24px; padding: 40px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); z-index: 1; }
         .input-group { margin-bottom: 20px; }
         .input-label { display: block; font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 8px; margin-left: 4px; text-transform: uppercase; }
-        .input-field { width: 100%; padding: 14px 16px; border-radius: 12px; border: 2px solid transparent; background: ${isDark ? '#0f172a' : '#f1f5f9'}; color: ${isDark ? '#f8fafc' : '#0f172a'}; transition: all 0.2s; outline: none; box-sizing: border-box; }
+        .input-field { width: 100%; padding: 14px 16px; border-radius: 12px; border: 2px solid transparent; background: ${isDark ? '#0f172a' : '#f1f5f9'}; color: ${isDark ? '#f8fafc' : '#0f172a'}; outline: none; box-sizing: border-box; }
         .input-field:focus { border-color: #0EA5E9; background: ${isDark ? '#020617' : '#fff'}; }
-        .btn-submit { background: linear-gradient(135deg, #0EA5E9, #2563EB); width: 100%; padding: 15px; border-radius: 12px; border: none; color: white; font-weight: 700; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; margin-top: 10px; font-size: 15px; }
-        .btn-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.4); }
+        .btn-submit { background: linear-gradient(135deg, #0EA5E9, #2563EB); width: 100%; padding: 15px; border-radius: 12px; border: none; color: white; font-weight: 700; cursor: pointer; margin-top: 10px; font-size: 15px; }
         .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
-        .error-box { background: rgba(239, 68, 68, 0.1); color: #ef4444; padding: 12px; border-radius: 10px; font-size: 13px; margin-bottom: 20px; border: 1px solid #ef4444; text-align: center; animation: shake 0.4s; }
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        .error-box { background: rgba(239, 68, 68, 0.1); color: #ef4444; padding: 12px; border-radius: 10px; font-size: 13px; margin-bottom: 20px; border: 1px solid #ef4444; text-align: center; }
         .success-state { text-align: center; }
-        .success-icon { font-size: 60px; color: #10b981; margin-bottom: 20px; display: block; animation: scaleIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-        @keyframes scaleIn { from { transform: scale(0); } to { transform: scale(1); } }
+        .success-icon { font-size: 60px; color: #10b981; margin-bottom: 20px; display: block; }
       `}</style>
 
       <div className={`reset-root ${isDark ? 'reset-dark' : 'reset-light'}`}>
-        <div className="orb orb-1"></div>
-        <div className="orb orb-2"></div>
 
         <main className="reset-card">
           {!otpVerified && !token ? (
@@ -227,7 +217,7 @@ const ResetPassword = () => {
 };
 
 const normalizePhoneNumber = (value) => {
-  const raw = String(value || '').replace(/[\s()\-]/g, '');
+  const raw = String(value || '').replace(/[\s() -]/g, '');
   if (/^09\d{8}$/.test(raw)) return `+251${raw.slice(1)}`;
   if (/^\+2519\d{8}$/.test(raw)) return raw;
   return null;

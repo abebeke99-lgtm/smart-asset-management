@@ -32,6 +32,8 @@ const getRows = (response) => {
   return [];
 };
 
+const getPayload = (response) => response?.data?.data || {};
+
 const getPagination = (response, rowsLength, currentPage, pageSize) => {
   const root = response?.data?.pagination || response?.data?.meta || response?.data;
 
@@ -281,16 +283,20 @@ export default function FinancePurchaseHistory() {
       });
 
       const rows = getRows(response).map(normalizePurchase);
+      const payload = getPayload(response);
 
       setPurchases(rows);
 
       setSummary(
-        response?.data?.summary ||
+        payload.summary ||
+          payload.statistics ||
+          payload.stats ||
+          response?.data?.summary ||
           response?.data?.statistics ||
           response?.data?.stats ||
           null
       );
-      setFilters(response?.data?.data?.filters || response?.data?.filters || { statuses: [], suppliers: [], departments: [] });
+      setFilters(payload.filters || response?.data?.filters || { statuses: [], suppliers: [], departments: [] });
 
       setPagination(
         getPagination(response, rows.length, page, pageSize)
@@ -1165,6 +1171,15 @@ export default function FinancePurchaseHistory() {
                   </div>
                 </div>
               ))}
+
+              <div className="detail-item full">
+                <div className="detail-label">Items</div>
+                <div className="detail-value">
+                  {(selectedPurchase.items || [])
+                    .map((item) => `${item.itemName} | Qty ${item.quantity} | ${formatMoney(item.unitPrice)} each | ${formatMoney(item.lineTotal)}`)
+                    .join("\n") || "—"}
+                </div>
+              </div>
             </div>
 
             <div className="modal-footer">
@@ -1178,12 +1193,6 @@ export default function FinancePurchaseHistory() {
           </div>
         </div>
       )}
-              <div className="detail-item full">
-                <div className="detail-label">Items</div>
-                <div className="detail-value">
-                  {(selectedPurchase.items || []).map((item) => `${item.itemName} | Qty ${item.quantity} | ${formatMoney(item.unitPrice)} each | ${formatMoney(item.lineTotal)}`).join("\n") || "—"}
-                </div>
-              </div>
     </div>
   );
 }

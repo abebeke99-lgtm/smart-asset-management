@@ -206,14 +206,12 @@
   margin: 3px 10px;
   border-radius: 10px !important;
   color: #0f172a !important;
-  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
 
 .admin-nav-link:hover,
 .admin-nav-link.is-active {
   background: var(--primary-blue-hover) !important;
   color: #0f172a !important;
-  transform: translateX(2px);
 }
 
 .admin-sidebar-nav {
@@ -247,13 +245,12 @@
 
 .sidebar-section-children {
   overflow: hidden;
-  max-height: 0;
-  opacity: 0;
-  transition: max-height 220ms ease, opacity 180ms ease;
+  max-height: none;
+  opacity: 1;
 }
 
 .sidebar-section-children.is-expanded {
-  max-height: 900px;
+  max-height: none;
   opacity: 1;
 }
 

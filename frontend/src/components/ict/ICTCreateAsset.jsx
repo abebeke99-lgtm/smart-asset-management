@@ -1,1239 +1,658 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { useLanguage } from '../../contexts/UiContext';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, CheckCircle2, FileText, FolderPlus, MapPin, Package, Save, ShieldCheck, Upload, UserRound, Wrench } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axios from 'axios';
-import { QRCodeCanvas } from 'qrcode.react';
+
+const fieldStyles = {
+  wrapper: { display: 'grid', gap: '14px' },
+  row: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' },
+  full: { gridColumn: '1 / -1' },
+  label: { display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: '#0f172a' },
+  required: { color: '#dc2626', marginLeft: '4px' },
+  input: {
+    width: '100%',
+    border: '1px solid #dfe7f1',
+    borderRadius: '12px',
+    padding: '12px 14px',
+    background: '#fff',
+    color: '#0f172a',
+    fontSize: '14px',
+    outline: 'none',
+    boxSizing: 'border-box'
+  },
+  textarea: {
+    width: '100%',
+    minHeight: '110px',
+    border: '1px solid #dfe7f1',
+    borderRadius: '12px',
+    padding: '12px 14px',
+    background: '#fff',
+    color: '#0f172a',
+    fontSize: '14px',
+    resize: 'vertical',
+    boxSizing: 'border-box'
+  },
+  error: { color: '#b91c1c', fontSize: '12px', marginTop: '6px', display: 'block' },
+  success: { color: '#15803d', fontSize: '12px', marginTop: '6px', display: 'block' },
+  select: {
+    width: '100%',
+    border: '1px solid #dfe7f1',
+    borderRadius: '12px',
+    padding: '12px 14px',
+    background: '#fff',
+    color: '#0f172a',
+    fontSize: '14px',
+    boxSizing: 'border-box'
+  }
+};
+
+const TECHNICAL_FIELDS_BY_CATEGORY = {
+  Computer: ['processor', 'ram', 'storage', 'operatingSystem'],
+  Laptop: ['processor', 'ram', 'storage', 'operatingSystem'],
+  Server: ['processor', 'ram', 'storage', 'operatingSystem', 'hostname', 'ipAddress'],
+  'Network Device': ['ipAddress', 'macAddress', 'hostname', 'networkRole'],
+  Printer: ['hostname', 'ipAddress', 'networkRole'],
+  Software: [],
+  Furniture: ['material', 'condition'],
+  Vehicle: ['vehicleRegistration', 'engineNumber'],
+  Equipment: ['specificationNotes']
+};
+
+const categoryNameFromValue = (value, categories) => {
+  if (!value) return 'N/A';
+  const match = categories.find((item) => String(item.id) === String(value) || item.name === value);
+  return match?.name || value;
+};
 
 const ICTCreateAsset = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { language, theme } = useLanguage();
-  
-  // State
-  const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(false);
-  const [departments, setDepartments] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [categories, setCategories] = useState([]);
-  const [generatedQR, setGeneratedQR] = useState(null);
-  const [assetTag, setAssetTag] = useState(null);
-  const [validationErrors, setValidationErrors] = useState({});
-  const [duplicateChecks, setDuplicateChecks] = useState({
-    assetId: false,
-    serialNumber: false,
-    rfid: false
-  });
-
-  // Form Data
+  const [departments, setDepartments] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [users, setUsers] = useState([]);
   const [formData, setFormData] = useState({
-    asset_id: '',
+    assetCode: '',
     name: '',
+    categoryId: '',
+    assetType: '',
     description: '',
-    category_id: '',
-    department_id: '',
-    serial_number: '',
-    model: '',
     manufacturer: '',
-    purchase_date: '',
-    purchase_cost: '',
-    warranty_expiry: '',
-    location: '',
-    condition_status: 'Good',
-    notes: '',
-    rfid_tag: '',
+    model: '',
+    serialNumber: '',
+    purchaseDate: '',
+    purchasePrice: '',
+    currency: 'ETB',
     supplier: '',
-    brand: ''
+    purchaseOrderNumber: '',
+    invoiceNumber: '',
+    warrantyStart: '',
+    warrantyEnd: '',
+    campus: '',
+    building: '',
+    departmentId: '',
+    room: '',
+    custodian: '',
+    assignedUser: '',
+    status: 'available',
+    ipAddress: '',
+    macAddress: '',
+    hostname: '',
+    operatingSystem: '',
+    processor: '',
+    ram: '',
+    storage: '',
+    networkRole: '',
+    material: '',
+    vehicleRegistration: '',
+    engineNumber: '',
+    specificationNotes: '',
+    internalNotes: '',
+    additionalInformation: '',
+    assetImage: '',
+    invoiceDocument: '',
+    purchaseDocument: '',
+    warrantyDocument: '',
+    otherAttachment: ''
   });
+  const [errors, setErrors] = useState({});
+  const [createdAsset, setCreatedAsset] = useState(null);
+  const [isReviewing, setIsReviewing] = useState(false);
 
-  // Step tracking
-  const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 3;
-
-  const isDark = theme === 'dark';
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
-
-  // Fetch options
   useEffect(() => {
     const fetchOptions = async () => {
       try {
-        const [deptsRes, catsRes] = await Promise.all([
+        const [categoryResponse, departmentResponse, locationResponse, userResponse] = await Promise.all([
+          axios.get('/api/categories'),
           axios.get('/api/departments'),
-          axios.get('/api/categories')
+          axios.get('/api/locations'),
+          axios.get('/api/users')
         ]);
-        setDepartments(deptsRes.data.departments || []);
-        setCategories(catsRes.data.categories || []);
-        
-        // Generate initial asset ID
-        generateAssetId();
+
+        setCategories(Array.isArray(categoryResponse.data?.categories) ? categoryResponse.data.categories : Array.isArray(categoryResponse.data?.items) ? categoryResponse.data.items : categoryResponse.data?.data || []);
+        setDepartments(Array.isArray(departmentResponse.data?.departments) ? departmentResponse.data.departments : departmentResponse.data?.data || []);
+        setLocations(Array.isArray(locationResponse.data?.locations) ? locationResponse.data.locations : locationResponse.data?.data || []);
+        setUsers(Array.isArray(userResponse.data?.users) ? userResponse.data.users : userResponse.data?.data || []);
       } catch (error) {
-        toast.error('Failed to load options');
+        toast.error('Unable to load asset registration options from the system.');
       }
     };
-    fetchOptions();
-  }, []);
 
-  useEffect(() => {
-    const source = location.state?.cloneFrom;
-    if (!source) return;
-    setFormData(prev => ({
-      ...prev,
-      name: source.name || prev.name,
-      description: source.description || '',
-      category_id: source.category_id || source.category || '',
-      department_id: source.department_id || source.department || '',
-      model: source.model || '',
-      manufacturer: source.manufacturer || source.brand || '',
-      brand: source.brand || '',
-      purchase_date: source.purchase_date || '',
-      purchase_cost: source.purchase_cost || '',
-      warranty_expiry: source.warranty_expiry || '',
-      location: source.location || '',
-      condition_status: source.condition_status || source.condition || 'Good',
-      notes: source.notes || '',
-      supplier: source.supplier || '',
-      asset_id: '',
-      serial_number: '',
-      rfid_tag: ''
-    }));
+    fetchOptions();
+    if (location.state?.cloneFrom) {
+      const source = location.state.cloneFrom;
+      setFormData((current) => ({
+        ...current,
+        name: source.name || '',
+        description: source.description || '',
+        categoryId: source.categoryId || source.category_id || source.category || '',
+        departmentId: source.departmentId || source.department_id || source.department || '',
+        manufacturer: source.manufacturer || '',
+        model: source.model || '',
+        serialNumber: source.serialNumber || source.serial_number || '',
+        purchaseDate: source.purchaseDate || source.purchase_date || '',
+        purchasePrice: source.purchasePrice || source.purchase_cost || '',
+        warrantyEnd: source.warrantyExpiry || source.warranty_expiry || '',
+        location: source.location || '',
+        status: source.status || 'available'
+      }));
+    }
   }, [location.state]);
 
-  // Generate unique Asset ID
-  const generateAssetId = async () => {
-    try {
-      const response = await axios.get('/api/assets/next-id');
-      const newId = response.data.asset_id || `ICT-${Date.now().toString().slice(-6)}`;
-      setFormData(prev => ({ ...prev, asset_id: newId }));
-    } catch (error) {
-      console.error('Asset ID generation failed', error);
-      setValidationErrors(prev => ({ ...prev, asset_id: t.validationUnavailable || 'Unable to generate an asset ID' }));
-    }
-  };
+  const selectedCategoryName = useMemo(
+    () => categoryNameFromValue(formData.categoryId, categories),
+    [categories, formData.categoryId]
+  );
 
-  // Validate a single field
-  const validateField = useCallback(async (field, value) => {
-    const errors = { ...validationErrors };
-    
-    switch(field) {
-      case 'asset_id':
-        if (!value || value.trim() === '') {
-          errors.asset_id = t.required;
-        } else {
-          try {
-            const response = await axios.get(`/api/assets/check-id/${value}`);
-            if (response.data.exists) {
-              errors.asset_id = t.duplicateId;
-              setDuplicateChecks(prev => ({ ...prev, assetId: true }));
-            } else {
-              delete errors.asset_id;
-              setDuplicateChecks(prev => ({ ...prev, assetId: false }));
-            }
-          } catch (error) {
-            console.error('Asset ID validation failed', error);
-            errors.asset_id = t.validationUnavailable || 'Unable to validate asset ID';
-          }
-        }
-        break;
+  const technicalFields = useMemo(() => {
+    const grouped = TECHNICAL_FIELDS_BY_CATEGORY[selectedCategoryName] || [];
+    return grouped.filter((field) => {
+      if (field === 'processor' || field === 'ram' || field === 'storage' || field === 'operatingSystem') return ['Computer', 'Laptop', 'Server'].includes(selectedCategoryName) || (selectedCategoryName && formData.assetType && ['Computer', 'Laptop', 'Server'].includes(formData.assetType));
+      if (field === 'ipAddress' || field === 'macAddress' || field === 'hostname' || field === 'networkRole') return ['Network Device', 'Printer', 'Server'].includes(selectedCategoryName) || (selectedCategoryName && formData.assetType && ['Network Device', 'Printer', 'Server'].includes(formData.assetType));
+      return true;
+    });
+  }, [formData.assetType, selectedCategoryName]);
 
-      case 'serial_number':
-        if (value && value.trim() !== '') {
-          try {
-            const response = await axios.get(`/api/assets/check-serial/${value}`);
-            if (response.data.exists) {
-              errors.serial_number = t.duplicateSerial;
-              setDuplicateChecks(prev => ({ ...prev, serialNumber: true }));
-            } else {
-              delete errors.serial_number;
-              setDuplicateChecks(prev => ({ ...prev, serialNumber: false }));
-            }
-          } catch (error) {
-            console.error('Serial number validation failed', error);
-            errors.serial_number = t.validationUnavailable || 'Unable to validate serial number';
-          }
-        } else {
-          delete errors.serial_number;
-          setDuplicateChecks(prev => ({ ...prev, serialNumber: false }));
-        }
-        break;
-
-      case 'rfid_tag':
-        if (value && value.trim() !== '') {
-          try {
-            const response = await axios.get(`/api/assets/check-rfid/${value}`);
-            if (response.data.exists) {
-              errors.rfid_tag = t.duplicateRfid;
-              setDuplicateChecks(prev => ({ ...prev, rfid: true }));
-            } else {
-              delete errors.rfid_tag;
-              setDuplicateChecks(prev => ({ ...prev, rfid: false }));
-            }
-          } catch (error) {
-            console.error('RFID validation failed', error);
-            errors.rfid_tag = t.validationUnavailable || 'Unable to validate RFID tag';
-          }
-        } else {
-          delete errors.rfid_tag;
-          setDuplicateChecks(prev => ({ ...prev, rfid: false }));
-        }
-        break;
-
+  const validateField = (name, value) => {
+    const nextErrors = { ...errors };
+    switch (name) {
       case 'name':
-        if (!value || value.trim() === '') {
-          errors.name = t.required;
-        } else {
-          delete errors.name;
-        }
+        if (!String(value || '').trim()) nextErrors.name = 'Asset name is required.';
+        else delete nextErrors.name;
         break;
-
-      case 'category_id':
-        if (!value) {
-          errors.category_id = t.required;
-        } else {
-          delete errors.category_id;
-        }
+      case 'assetCode':
+        if (!String(value || '').trim()) nextErrors.assetCode = 'Asset tag or asset code is required.';
+        else delete nextErrors.assetCode;
         break;
-
-      case 'department_id':
-        if (!value) {
-          errors.department_id = t.required;
-        } else {
-          delete errors.department_id;
-        }
+      case 'categoryId':
+        if (!value) nextErrors.categoryId = 'Asset category is required.';
+        else delete nextErrors.categoryId;
         break;
-
-      case 'purchase_date':
-        if (!value) {
-          errors.purchase_date = t.required;
-        } else if (new Date(value) > new Date()) {
-          errors.purchase_date = t.futureDate;
-        } else {
-          delete errors.purchase_date;
-        }
+      case 'departmentId':
+        if (!value) nextErrors.departmentId = 'Department is required.';
+        else delete nextErrors.departmentId;
         break;
-
-      case 'purchase_cost':
-        if (!value) {
-          errors.purchase_cost = t.required;
-        } else if (isNaN(value) || parseFloat(value) < 0) {
-          errors.purchase_cost = t.invalidCost;
-        } else {
-          delete errors.purchase_cost;
-        }
+      case 'serialNumber':
+        if (String(value || '').trim() && !/^[A-Za-z0-9\-_/]+$/.test(String(value).trim())) {
+          nextErrors.serialNumber = 'Serial number contains invalid characters.';
+        } else delete nextErrors.serialNumber;
         break;
-
-      case 'warranty_expiry':
-        if (value && new Date(value) < new Date(formData.purchase_date)) {
-          errors.warranty_expiry = t.warrantyBeforePurchase;
-        } else {
-          delete errors.warranty_expiry;
-        }
+      case 'purchasePrice':
+        if (value === '' || value === null || value === undefined) delete nextErrors.purchasePrice;
+        else if (Number(value) < 0) nextErrors.purchasePrice = 'Purchase price cannot be negative.';
+        else delete nextErrors.purchasePrice;
         break;
-
+      case 'purchaseDate':
+        if (value && Number.isNaN(Date.parse(value))) nextErrors.purchaseDate = 'Purchase date is invalid.';
+        else delete nextErrors.purchaseDate;
+        break;
+      case 'warrantyEnd':
+        if (value && formData.purchaseDate && new Date(value) < new Date(formData.purchaseDate)) nextErrors.warrantyEnd = 'Warranty end must be on or after purchase date.';
+        else delete nextErrors.warrantyEnd;
+        break;
+      case 'ipAddress':
+        if (String(value || '').trim() && !/^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/.test(String(value).trim())) {
+          nextErrors.ipAddress = 'IP address format is invalid.';
+        } else delete nextErrors.ipAddress;
+        break;
+      case 'macAddress':
+        if (String(value || '').trim() && !/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(String(value).trim())) {
+          nextErrors.macAddress = 'MAC address format is invalid.';
+        } else delete nextErrors.macAddress;
+        break;
       default:
         break;
     }
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).filter((key) => nextErrors[key]).length === 0;
+  };
 
-    setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
-  }, [formData.purchase_date, t, validationErrors]);
-
-  // Handle input change with validation
-  const handleChange = async (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    
-    // Validate on change for important fields
-    if (['asset_id', 'serial_number', 'rfid_tag', 'name', 'category_id', 
-         'department_id', 'purchase_date', 'purchase_cost', 'warranty_expiry'].includes(name)) {
-      await validateField(name, value);
+  const handleFieldChange = (event) => {
+    const { name, value } = event.target;
+    const next = { ...formData, [name]: value };
+    setFormData(next);
+    if (['name', 'assetCode', 'categoryId', 'departmentId', 'serialNumber', 'purchasePrice', 'purchaseDate', 'warrantyEnd', 'ipAddress', 'macAddress'].includes(name)) {
+      validateField(name, value);
     }
   };
 
-  // Validate entire form before submission
   const validateForm = async () => {
-    const fields = [
-      'asset_id', 'name', 'category_id', 'department_id', 
-      'purchase_date', 'purchase_cost'
-    ];
-    
-    let isValid = true;
-    for (const field of fields) {
-      const valid = await validateField(field, formData[field]);
-      if (!valid) isValid = false;
+    const requiredFields = ['name', 'assetCode', 'categoryId', 'departmentId'];
+    let valid = true;
+    const nextErrors = { ...errors };
+
+    requiredFields.forEach((field) => {
+      if (!String(formData[field] || '').trim()) {
+        nextErrors[field] = field === 'assetCode' ? 'Asset tag or asset code is required.' : field === 'categoryId' ? 'Asset category is required.' : field === 'departmentId' ? 'Department is required.' : 'Asset name is required.';
+        valid = false;
+      }
+    });
+
+    if (formData.purchasePrice !== '' && Number(formData.purchasePrice) < 0) {
+      nextErrors.purchasePrice = 'Purchase price cannot be negative.';
+      valid = false;
     }
-    
-    // Check duplicates
-    if (duplicateChecks.assetId) {
-      toast.error(t.duplicateIdError);
-      return false;
+
+    if (formData.ipAddress && !/^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/.test(formData.ipAddress)) {
+      nextErrors.ipAddress = 'IP address format is invalid.';
+      valid = false;
     }
-    if (duplicateChecks.serialNumber) {
-      toast.error(t.duplicateSerialError);
-      return false;
+
+    if (formData.macAddress && !/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(formData.macAddress)) {
+      nextErrors.macAddress = 'MAC address format is invalid.';
+      valid = false;
     }
-    if (duplicateChecks.rfid) {
-      toast.error(t.duplicateRfidError);
-      return false;
+
+    if (formData.assetCode) {
+      try {
+        const duplicateCheck = await axios.get(`/api/assets/check-id/${encodeURIComponent(formData.assetCode)}`);
+        if (duplicateCheck.data?.exists) {
+          nextErrors.assetCode = 'An asset with this Asset Tag already exists.';
+          valid = false;
+        } else {
+          delete nextErrors.assetCode;
+        }
+      } catch (error) {
+        // Ignore duplicate check failures; backend remains authoritative.
+      }
     }
-    
-    return isValid && Object.keys(validationErrors).length === 0;
+
+    if (formData.serialNumber) {
+      try {
+        const duplicateCheck = await axios.get(`/api/assets/check-serial/${encodeURIComponent(formData.serialNumber)}`);
+        if (duplicateCheck.data?.exists) {
+          nextErrors.serialNumber = 'An asset with this serial number already exists.';
+          valid = false;
+        } else {
+          delete nextErrors.serialNumber;
+        }
+      } catch (error) {
+        // Ignore duplicate check failures; backend remains authoritative.
+      }
+    }
+
+    setErrors(nextErrors);
+    return valid;
   };
 
-  // Handle form submission
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    // Validate all fields
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
     const isValid = await validateForm();
     if (!isValid) {
-      toast.error(t.fixErrors);
+      toast.error('Please correct the highlighted fields before creating the asset.');
       return;
     }
 
-    setLoading(true);
+    setIsSubmitting(true);
     try {
-      // Prepare data for submission
-      const submitData = {
-        ...formData,
-        status: 'Available',
-        purchase_cost: parseFloat(formData.purchase_cost)
+      const payload = {
+        assetCode: String(formData.assetCode || '').trim(),
+        name: String(formData.name || '').trim(),
+        category: categoryNameFromValue(formData.categoryId, categories),
+        category_id: formData.categoryId,
+        assetType: formData.assetType,
+        description: formData.description,
+        manufacturer: formData.manufacturer,
+        model: formData.model,
+        serialNumber: String(formData.serialNumber || '').trim(),
+        rfidTag: String(formData.macAddress || '').trim() || '',
+        department: departments.find((dept) => String(dept.id) === String(formData.departmentId))?.name || '',
+        department_id: formData.departmentId,
+        location: formData.building || formData.room || formData.campus || '',
+        campus: formData.campus,
+        building: formData.building,
+        room: formData.room,
+        assignedTo: formData.assignedUser,
+        custodian: formData.custodian,
+        status: formData.status || 'available',
+        condition: formData.status === 'in-use' ? 'Good' : 'Good',
+        purchaseDate: formData.purchaseDate || null,
+        purchasePrice: Number(formData.purchasePrice || 0),
+        supplier: formData.supplier,
+        purchaseOrderNumber: formData.purchaseOrderNumber,
+        invoiceNumber: formData.invoiceNumber,
+        warrantyExpiry: formData.warrantyEnd || null,
+        notes: `${formData.internalNotes || ''}\n${formData.additionalInformation || ''}`.trim(),
+        specifications: {
+          ipAddress: formData.ipAddress,
+          macAddress: formData.macAddress,
+          hostname: formData.hostname,
+          operatingSystem: formData.operatingSystem,
+          processor: formData.processor,
+          ram: formData.ram,
+          storage: formData.storage,
+          networkRole: formData.networkRole,
+          material: formData.material,
+          vehicleRegistration: formData.vehicleRegistration,
+          engineNumber: formData.engineNumber,
+          specificationNotes: formData.specificationNotes,
+          additionalInformation: formData.additionalInformation,
+        }
       };
 
-      const response = await axios.post('/api/assets', submitData);
-      
-      // Success
-      toast.success(t.assetCreated);
-      setAssetTag(response.data.asset_tag);
-      setGeneratedQR(response.data.asset_tag || formData.asset_id);
-      
-      // Navigate after delay
-      setTimeout(() => navigate('/ict/assets'), 3000);
-      
+      const response = await axios.post('/api/assets', payload);
+      const nextAsset = response.data?.data || response.data?.asset || response.data;
+      setCreatedAsset(nextAsset);
+      toast.success('Asset created successfully.');
     } catch (error) {
-      const message = error.response?.data?.message || t.createError;
+      const message = error.response?.data?.message || 'Asset creation failed. Please try again.';
       toast.error(message);
-      
-      // Handle specific duplicate errors from backend
-      if (message.includes('duplicate') || message.includes('already exists')) {
-        toast.info(t.checkDuplicate);
-      }
-    }
-    setLoading(false);
-  };
-
-  // Handle step navigation
-  const nextStep = async () => {
-    // Validate current step fields
-    let stepValid = true;
-    if (currentStep === 1) {
-      const fields = ['asset_id', 'name', 'category_id', 'department_id'];
-      for (const field of fields) {
-        const valid = await validateField(field, formData[field]);
-        if (!valid) stepValid = false;
-      }
-    }
-    if (currentStep === 2) {
-      const fields = ['purchase_date', 'purchase_cost'];
-      for (const field of fields) {
-        const valid = await validateField(field, formData[field]);
-        if (!valid) stepValid = false;
-      }
-    }
-    
-    if (!stepValid) {
-      toast.error(t.fixErrors);
-      return;
-    }
-    
-    if (currentStep < totalSteps) {
-      setCurrentStep(prev => prev + 1);
+      setErrors((current) => ({ ...current, form: message }));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const prevStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(prev => prev - 1);
-    }
-  };
+  const inputClass = (name) => ({
+    ...fieldStyles.input,
+    borderColor: errors[name] ? '#ef4444' : '#dfe7f1',
+    boxShadow: errors[name] ? '0 0 0 3px rgba(239, 68, 68, 0.08)' : 'none'
+  });
 
-  // Styles
-  const styles = {
-    container: { 
-      maxWidth: '1000px', 
-      margin: '0 auto', 
-      padding: '20px' 
-    },
-    card: {
-      background: isDark ? '#1e2d45' : '#ffffff',
-      padding: '30px',
-      borderRadius: '16px',
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      boxShadow: isDark ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(0,0,100,0.08)'
-    },
-    header: {
-      marginBottom: '24px'
-    },
-    title: {
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontSize: '1.75rem',
-      fontWeight: 700,
-      marginBottom: '4px'
-    },
-    subtitle: {
-      color: isDark ? '#8896b0' : '#4a5568',
-      fontSize: '0.95rem'
-    },
-    // Steps
-    stepsContainer: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      marginBottom: '30px',
-      position: 'relative',
-      padding: '0 10px'
-    },
-    step: {
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      flex: 1,
-      position: 'relative'
-    },
-    stepNumber: (active, completed) => ({
-      width: '40px',
-      height: '40px',
-      borderRadius: '50%',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontWeight: 700,
-      fontSize: '16px',
-      background: active ? '#2b6cb0' : completed ? '#48bb78' : isDark ? '#32465f' : '#e8edf5',
-      color: active || completed ? 'white' : isDark ? '#8896b0' : '#4a5568',
-      transition: 'all 0.3s ease',
-      border: active ? '2px solid #63b3ed' : 'none',
-      zIndex: 2
-    }),
-    stepLabel: {
-      marginTop: '8px',
-      fontSize: '12px',
-      fontWeight: 600,
-      color: isDark ? '#8896b0' : '#4a5568',
-      textAlign: 'center'
-    },
-    stepLine: {
-      position: 'absolute',
-      top: '20px',
-      left: '50%',
-      right: '-50%',
-      height: '3px',
-      background: isDark ? '#32465f' : '#e8edf5',
-      zIndex: 1
-    },
-    stepLineActive: {
-      background: '#2b6cb0'
-    },
-    // Form
-    grid: {
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: '18px'
-    },
-    fullWidth: {
-      gridColumn: '1 / -1'
-    },
-    label: {
-      display: 'block',
-      marginBottom: '6px',
-      color: isDark ? '#c8dcf5' : '#2d3748',
-      fontWeight: 600,
-      fontSize: '0.85rem'
-    },
-    required: {
-      color: '#fc8181',
-      marginLeft: '2px'
-    },
-    input: {
-      width: '100%',
-      padding: '11px 14px',
-      borderRadius: '10px',
-      border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`,
-      background: isDark ? '#0d1b2a' : '#f7fafc',
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontSize: '0.95rem',
-      transition: 'all 0.2s ease'
-    },
-    inputError: {
-      borderColor: '#fc8181',
-      boxShadow: '0 0 0 2px rgba(252, 129, 129, 0.2)'
-    },
-    inputSuccess: {
-      borderColor: '#48bb78',
-      boxShadow: '0 0 0 2px rgba(72, 187, 120, 0.2)'
-    },
-    select: {
-      width: '100%',
-      padding: '11px 14px',
-      borderRadius: '10px',
-      border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`,
-      background: isDark ? '#0d1b2a' : '#f7fafc',
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontSize: '0.95rem',
-      cursor: 'pointer'
-    },
-    textarea: {
-      width: '100%',
-      padding: '11px 14px',
-      borderRadius: '10px',
-      border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`,
-      background: isDark ? '#0d1b2a' : '#f7fafc',
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontSize: '0.95rem',
-      minHeight: '80px',
-      resize: 'vertical'
-    },
-    errorText: {
-      color: '#fc8181',
-      fontSize: '12px',
-      marginTop: '4px',
-      display: 'block'
-    },
-    successText: {
-      color: '#48bb78',
-      fontSize: '12px',
-      marginTop: '4px',
-      display: 'block'
-    },
-    // Buttons
-    buttonGroup: {
-      display: 'flex',
-      gap: '12px',
-      marginTop: '24px'
-    },
-    button: (primary = true) => ({
-      padding: '12px 32px',
-      background: primary 
-        ? 'linear-gradient(135deg, #1a365d, #2b6cb0)' 
-        : 'transparent',
-      color: primary ? 'white' : isDark ? '#c8dcf5' : '#1a365d',
-      border: primary ? 'none' : `2px solid ${isDark ? '#32465f' : '#d0d8e8'}`,
-      borderRadius: '10px',
-      fontSize: '1rem',
-      fontWeight: 600,
-      cursor: 'pointer',
-      transition: 'all 0.2s ease',
-      flex: 1,
-      maxWidth: '200px',
-      disabled: loading
-    }),
-    // QR Code
-    qrContainer: {
-      marginTop: '24px',
-      padding: '20px',
-      background: 'white',
-      borderRadius: '12px',
-      textAlign: 'center',
-      border: `2px solid ${isDark ? '#32465f' : '#e8edf5'}`
-    },
-    qrTitle: {
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontWeight: 700,
-      marginBottom: '12px'
-    },
-    // Alert
-    alert: (type = 'info') => ({
-      padding: '12px 16px',
-      borderRadius: '8px',
-      marginBottom: '16px',
-      background: type === 'success' ? 'rgba(72, 187, 120, 0.1)' : 
-                  type === 'error' ? 'rgba(252, 129, 129, 0.1)' : 
-                  'rgba(43, 108, 176, 0.1)',
-      border: `1px solid ${type === 'success' ? '#48bb78' : 
-                          type === 'error' ? '#fc8181' : '#2b6cb0'}`,
-      color: isDark ? '#c8dcf5' : '#1a365d'
-    }),
-    duplicateCheck: (isDuplicate) => ({
-      fontSize: '12px',
-      marginTop: '4px',
-      color: isDuplicate ? '#fc8181' : '#48bb78',
-      fontWeight: 600
-    })
-  };
+  const selectClass = (name) => ({
+    ...fieldStyles.select,
+    borderColor: errors[name] ? '#ef4444' : '#dfe7f1',
+    boxShadow: errors[name] ? '0 0 0 3px rgba(239, 68, 68, 0.08)' : 'none'
+  });
 
-  // Render step content
-  const renderStepContent = () => {
-    const getFieldError = (field) => validationErrors[field];
-    const isFieldValid = (field) => !validationErrors[field] && formData[field] && formData[field].trim() !== '';
-    const isFieldInvalid = (field) => validationErrors[field];
-
-    switch(currentStep) {
-      case 1: // Basic Information
-        return (
-          <div style={styles.grid}>
-            <div>
-              <label style={styles.label}>
-                {t.assetId} <span style={styles.required}>*</span>
-              </label>
-              <input
-                type="text"
-                name="asset_id"
-                style={{
-                  ...styles.input,
-                  ...(isFieldInvalid('asset_id') ? styles.inputError : {}),
-                  ...(isFieldValid('asset_id') && !duplicateChecks.assetId ? styles.inputSuccess : {})
-                }}
-                value={formData.asset_id}
-                onChange={handleChange}
-                onBlur={() => validateField('asset_id', formData.asset_id)}
-                placeholder="ICT-XXXXXX"
-                required
-                disabled={loading}
-              />
-              {getFieldError('asset_id') && (
-                <span style={styles.errorText}>❌ {getFieldError('asset_id')}</span>
-              )}
-              {isFieldValid('asset_id') && !duplicateChecks.assetId && (
-                <span style={styles.successText}>✅ {t.uniqueId}</span>
-              )}
-            </div>
-
-            <div>
-              <label style={styles.label}>
-                {t.name} <span style={styles.required}>*</span>
-              </label>
-              <input
-                type="text"
-                name="name"
-                style={{
-                  ...styles.input,
-                  ...(isFieldInvalid('name') ? styles.inputError : {}),
-                  ...(isFieldValid('name') ? styles.inputSuccess : {})
-                }}
-                value={formData.name}
-                onChange={handleChange}
-                onBlur={() => validateField('name', formData.name)}
-                placeholder={t.namePlaceholder}
-                required
-                disabled={loading}
-              />
-              {getFieldError('name') && (
-                <span style={styles.errorText}>❌ {getFieldError('name')}</span>
-              )}
-            </div>
-
-            <div>
-              <label style={styles.label}>
-                {t.category} <span style={styles.required}>*</span>
-              </label>
-              <select
-                name="category_id"
-                style={{
-                  ...styles.select,
-                  ...(isFieldInvalid('category_id') ? styles.inputError : {}),
-                  ...(isFieldValid('category_id') ? styles.inputSuccess : {})
-                }}
-                value={formData.category_id}
-                onChange={handleChange}
-                onBlur={() => validateField('category_id', formData.category_id)}
-                required
-                disabled={loading}
-              >
-                <option value="">{t.selectCategory}</option>
-                {categories.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-              {getFieldError('category_id') && (
-                <span style={styles.errorText}>❌ {getFieldError('category_id')}</span>
-              )}
-            </div>
-
-            <div>
-              <label style={styles.label}>
-                {t.department} <span style={styles.required}>*</span>
-              </label>
-              <select
-                name="department_id"
-                style={{
-                  ...styles.select,
-                  ...(isFieldInvalid('department_id') ? styles.inputError : {}),
-                  ...(isFieldValid('department_id') ? styles.inputSuccess : {})
-                }}
-                value={formData.department_id}
-                onChange={handleChange}
-                onBlur={() => validateField('department_id', formData.department_id)}
-                required
-                disabled={loading}
-              >
-                <option value="">{t.selectDepartment}</option>
-                {departments.map(dept => (
-                  <option key={dept.id} value={dept.id}>{dept.name}</option>
-                ))}
-              </select>
-              {getFieldError('department_id') && (
-                <span style={styles.errorText}>❌ {getFieldError('department_id')}</span>
-              )}
-            </div>
-
-            <div>
-              <label style={styles.label}>{t.serialNumber}</label>
-              <input
-                type="text"
-                name="serial_number"
-                style={{
-                  ...styles.input,
-                  ...(isFieldInvalid('serial_number') ? styles.inputError : {}),
-                  ...(formData.serial_number && !duplicateChecks.serialNumber ? styles.inputSuccess : {})
-                }}
-                value={formData.serial_number}
-                onChange={handleChange}
-                onBlur={() => validateField('serial_number', formData.serial_number)}
-                placeholder={t.serialPlaceholder}
-                disabled={loading}
-              />
-              {getFieldError('serial_number') && (
-                <span style={styles.errorText}>❌ {getFieldError('serial_number')}</span>
-              )}
-              {formData.serial_number && !duplicateChecks.serialNumber && !getFieldError('serial_number') && (
-                <span style={styles.successText}>✅ {t.uniqueSerial}</span>
-              )}
-            </div>
-
-            <div>
-              <label style={styles.label}>{t.rfidTag}</label>
-              <input
-                type="text"
-                name="rfid_tag"
-                style={{
-                  ...styles.input,
-                  ...(isFieldInvalid('rfid_tag') ? styles.inputError : {}),
-                  ...(formData.rfid_tag && !duplicateChecks.rfid ? styles.inputSuccess : {})
-                }}
-                value={formData.rfid_tag}
-                onChange={handleChange}
-                onBlur={() => validateField('rfid_tag', formData.rfid_tag)}
-                placeholder={t.rfidPlaceholder}
-                disabled={loading}
-              />
-              {getFieldError('rfid_tag') && (
-                <span style={styles.errorText}>❌ {getFieldError('rfid_tag')}</span>
-              )}
-              {formData.rfid_tag && !duplicateChecks.rfid && !getFieldError('rfid_tag') && (
-                <span style={styles.successText}>✅ {t.uniqueRfid}</span>
-              )}
-            </div>
-
-            <div>
-              <label style={styles.label}>{t.brand}</label>
-              <input
-                type="text"
-                name="brand"
-                style={styles.input}
-                value={formData.brand}
-                onChange={handleChange}
-                placeholder={t.brandPlaceholder}
-                disabled={loading}
-              />
-            </div>
-
-            <div>
-              <label style={styles.label}>{t.model}</label>
-              <input
-                type="text"
-                name="model"
-                style={styles.input}
-                value={formData.model}
-                onChange={handleChange}
-                placeholder={t.modelPlaceholder}
-                disabled={loading}
-              />
-            </div>
-
-            <div>
-              <label style={styles.label}>{t.manufacturer}</label>
-              <input
-                type="text"
-                name="manufacturer"
-                style={styles.input}
-                value={formData.manufacturer}
-                onChange={handleChange}
-                placeholder={t.manufacturerPlaceholder}
-                disabled={loading}
-              />
-            </div>
-
-            <div>
-              <label style={styles.label}>{t.supplier}</label>
-              <input
-                type="text"
-                name="supplier"
-                style={styles.input}
-                value={formData.supplier}
-                onChange={handleChange}
-                placeholder={t.supplierPlaceholder}
-                disabled={loading}
-              />
-            </div>
-
-            <div style={styles.fullWidth}>
-              <label style={styles.label}>{t.description}</label>
-              <textarea
-                name="description"
-                style={styles.textarea}
-                value={formData.description}
-                onChange={handleChange}
-                placeholder={t.descriptionPlaceholder}
-                disabled={loading}
-              />
-            </div>
-          </div>
-        );
-
-      case 2: // Financial & Location
-        return (
-          <div style={styles.grid}>
-            <div>
-              <label style={styles.label}>
-                {t.purchaseDate} <span style={styles.required}>*</span>
-              </label>
-              <input
-                type="date"
-                name="purchase_date"
-                style={{
-                  ...styles.input,
-                  ...(isFieldInvalid('purchase_date') ? styles.inputError : {}),
-                  ...(isFieldValid('purchase_date') ? styles.inputSuccess : {})
-                }}
-                value={formData.purchase_date}
-                onChange={handleChange}
-                onBlur={() => validateField('purchase_date', formData.purchase_date)}
-                required
-                disabled={loading}
-              />
-              {getFieldError('purchase_date') && (
-                <span style={styles.errorText}>❌ {getFieldError('purchase_date')}</span>
-              )}
-            </div>
-
-            <div>
-              <label style={styles.label}>
-                {t.purchaseCost} <span style={styles.required}>*</span>
-              </label>
-              <input
-                type="number"
-                name="purchase_cost"
-                style={{
-                  ...styles.input,
-                  ...(isFieldInvalid('purchase_cost') ? styles.inputError : {}),
-                  ...(isFieldValid('purchase_cost') ? styles.inputSuccess : {})
-                }}
-                value={formData.purchase_cost}
-                onChange={handleChange}
-                onBlur={() => validateField('purchase_cost', formData.purchase_cost)}
-                placeholder="0.00"
-                min="0"
-                step="0.01"
-                required
-                disabled={loading}
-              />
-              {getFieldError('purchase_cost') && (
-                <span style={styles.errorText}>❌ {getFieldError('purchase_cost')}</span>
-              )}
-            </div>
-
-            <div>
-              <label style={styles.label}>{t.warrantyExpiry}</label>
-              <input
-                type="date"
-                name="warranty_expiry"
-                style={{
-                  ...styles.input,
-                  ...(isFieldInvalid('warranty_expiry') ? styles.inputError : {})
-                }}
-                value={formData.warranty_expiry}
-                onChange={handleChange}
-                onBlur={() => validateField('warranty_expiry', formData.warranty_expiry)}
-                disabled={loading}
-              />
-              {getFieldError('warranty_expiry') && (
-                <span style={styles.errorText}>❌ {getFieldError('warranty_expiry')}</span>
-              )}
-            </div>
-
-            <div>
-              <label style={styles.label}>{t.location}</label>
-              <input
-                type="text"
-                name="location"
-                style={styles.input}
-                value={formData.location}
-                onChange={handleChange}
-                placeholder={t.locationPlaceholder}
-                disabled={loading}
-              />
-            </div>
-
-            <div>
-              <label style={styles.label}>{t.condition}</label>
-              <select
-                name="condition_status"
-                style={styles.select}
-                value={formData.condition_status}
-                onChange={handleChange}
-                disabled={loading}
-              >
-                <option value="Excellent">{t.excellent}</option>
-                <option value="Good">{t.good}</option>
-                <option value="Fair">{t.fair}</option>
-                <option value="Poor">{t.poor}</option>
-                <option value="Damaged">{t.damaged}</option>
-              </select>
-            </div>
-
-            <div style={styles.fullWidth}>
-              <label style={styles.label}>{t.notes}</label>
-              <textarea
-                name="notes"
-                style={styles.textarea}
-                value={formData.notes}
-                onChange={handleChange}
-                placeholder={t.notesPlaceholder}
-                disabled={loading}
-              />
-            </div>
-          </div>
-        );
-
-      case 3: // Review & Confirm
-        return (
-          <div>
-            <div style={styles.alert('info')}>
-              <strong>📋 {t.reviewTitle}</strong>
-              <p style={{ marginTop: '8px' }}>{t.reviewDesc}</p>
-            </div>
-
-            <div style={styles.grid}>
-              <div style={styles.detailItem}>
-                <label style={styles.label}>{t.assetId}</label>
-                <div style={styles.detailValue}><code>{formData.asset_id}</code></div>
-              </div>
-              <div style={styles.detailItem}>
-                <label style={styles.label}>{t.name}</label>
-                <div style={styles.detailValue}>{formData.name}</div>
-              </div>
-              <div style={styles.detailItem}>
-                <label style={styles.label}>{t.category}</label>
-                <div style={styles.detailValue}>
-                  {categories.find(c => c.id === parseInt(formData.category_id))?.name || 'N/A'}
-                </div>
-              </div>
-              <div style={styles.detailItem}>
-                <label style={styles.label}>{t.department}</label>
-                <div style={styles.detailValue}>
-                  {departments.find(d => d.id === parseInt(formData.department_id))?.name || 'N/A'}
-                </div>
-              </div>
-              <div style={styles.detailItem}>
-                <label style={styles.label}>{t.serialNumber}</label>
-                <div style={styles.detailValue}>{formData.serial_number || 'N/A'}</div>
-              </div>
-              <div style={styles.detailItem}>
-                <label style={styles.label}>{t.rfidTag}</label>
-                <div style={styles.detailValue}>{formData.rfid_tag || 'N/A'}</div>
-              </div>
-              <div style={styles.detailItem}>
-                <label style={styles.label}>{t.brand}</label>
-                <div style={styles.detailValue}>{formData.brand || 'N/A'}</div>
-              </div>
-              <div style={styles.detailItem}>
-                <label style={styles.label}>{t.model}</label>
-                <div style={styles.detailValue}>{formData.model || 'N/A'}</div>
-              </div>
-              <div style={styles.detailItem}>
-                <label style={styles.label}>{t.purchaseDate}</label>
-                <div style={styles.detailValue}>
-                  {formData.purchase_date ? new Date(formData.purchase_date).toLocaleDateString() : 'N/A'}
-                </div>
-              </div>
-              <div style={styles.detailItem}>
-                <label style={styles.label}>{t.purchaseCost}</label>
-                <div style={styles.detailValue}>
-                  ${formData.purchase_cost ? parseFloat(formData.purchase_cost).toLocaleString() : 'N/A'}
-                </div>
-              </div>
-              <div style={styles.detailItem}>
-                <label style={styles.label}>{t.warrantyExpiry}</label>
-                <div style={styles.detailValue}>
-                  {formData.warranty_expiry ? new Date(formData.warranty_expiry).toLocaleDateString() : 'N/A'}
-                </div>
-              </div>
-              <div style={styles.detailItem}>
-                <label style={styles.label}>{t.location}</label>
-                <div style={styles.detailValue}>{formData.location || 'N/A'}</div>
-              </div>
-              <div style={styles.detailItem}>
-                <label style={styles.label}>{t.condition}</label>
-                <div style={styles.detailValue}>
-                  <span style={{
-                    display: 'inline-block',
-                    padding: '4px 12px',
-                    borderRadius: '20px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    background: formData.condition_status === 'Excellent' ? 'rgba(72, 187, 120, 0.2)' :
-                               formData.condition_status === 'Good' ? 'rgba(43, 108, 176, 0.2)' :
-                               formData.condition_status === 'Fair' ? 'rgba(237, 137, 54, 0.2)' :
-                               formData.condition_status === 'Poor' ? 'rgba(252, 129, 129, 0.2)' :
-                               'rgba(229, 62, 62, 0.2)',
-                    color: formData.condition_status === 'Excellent' ? '#48bb78' :
-                           formData.condition_status === 'Good' ? '#4299e1' :
-                           formData.condition_status === 'Fair' ? '#ed8936' :
-                           formData.condition_status === 'Poor' ? '#fc8181' :
-                           '#e53e3e'
-                  }}>
-                    {formData.condition_status}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginTop: '20px' }}>
-              <div style={styles.alert('success')}>
-                <strong>✅ {t.readyToCreate}</strong>
-                <p style={{ marginTop: '8px' }}>{t.readyDesc}</p>
-              </div>
-            </div>
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        {/* Header */}
-        <div style={styles.header}>
-          <h1 style={styles.title}>➕ {t.createAsset}</h1>
-          <p style={styles.subtitle}>{t.createAssetDesc}</p>
-        </div>
-
-        {/* Steps */}
-        <div style={styles.stepsContainer}>
-          {[1, 2, 3].map((step) => (
-            <div key={step} style={styles.step}>
-              {step < 3 && (
-                <div style={{
-                  ...styles.stepLine,
-                  ...(step < currentStep ? styles.stepLineActive : {})
-                }} />
-              )}
-              <div style={styles.stepNumber(
-                step === currentStep,
-                step < currentStep
-              )}>
-                {step < currentStep ? '✓' : step}
-              </div>
-              <div style={styles.stepLabel}>
-                {step === 1 ? t.stepBasic :
-                 step === 2 ? t.stepFinancial :
-                 t.stepReview}
-              </div>
-            </div>
+  const renderField = (label, name, type = 'text', options = null, placeholder = '', required = false) => (
+    <div>
+      <label style={fieldStyles.label}>
+        {label}
+        {required && <span style={fieldStyles.required}>*</span>}
+      </label>
+      {type === 'select' ? (
+        <select name={name} value={formData[name]} onChange={handleFieldChange} style={selectClass(name)}>
+          <option value="">Select</option>
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
           ))}
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit}>
-          {renderStepContent()}
-
-          {/* Navigation Buttons */}
-          <div style={styles.buttonGroup}>
-            {currentStep > 1 && (
-              <button
-                type="button"
-                style={styles.button(false)}
-                onClick={prevStep}
-                disabled={loading}
-              >
-                ◀ {t.back}
-              </button>
-            )}
-            
-            {currentStep < totalSteps ? (
-              <button
-                type="button"
-                style={styles.button(true)}
-                onClick={nextStep}
-                disabled={loading}
-              >
-                {t.next} ▶
-              </button>
-            ) : (
-              <button
-                type="submit"
-                style={styles.button(true)}
-                disabled={loading}
-              >
-                {loading ? '⏳ ' + t.creating : '✅ ' + t.createAsset}
-              </button>
-            )}
-          </div>
-        </form>
-
-        {/* QR Code */}
-        {generatedQR && (
-          <div style={styles.qrContainer}>
-            <h4 style={styles.qrTitle}>📱 {t.qrGenerated}</h4>
-            <QRCodeCanvas value={generatedQR} size={160} />
-            <p style={{ marginTop: '12px', color: '#1a365d', fontWeight: 600 }}>
-              {formData.asset_id}
-            </p>
-            <p style={{ fontSize: '12px', color: '#4a5568' }}>
-              {t.assetCreatedSuccess}
-            </p>
-          </div>
-        )}
-      </div>
+        </select>
+      ) : type === 'textarea' ? (
+        <textarea name={name} value={formData[name]} onChange={handleFieldChange} placeholder={placeholder} style={{ ...fieldStyles.textarea, borderColor: errors[name] ? '#ef4444' : '#dfe7f1' }} />
+      ) : (
+        <input name={name} type={type} value={formData[name]} onChange={handleFieldChange} placeholder={placeholder} style={inputClass(name)} />
+      )}
+      {errors[name] && <span style={fieldStyles.error}>{errors[name]}</span>}
     </div>
   );
-};
 
-// Translations
-const englishTranslations = {
-  createAsset: 'Create ICT Asset',
-  createAssetDesc: 'Register a new ICT asset in the system',
-  assetId: 'Asset ID',
-  name: 'Asset Name',
-  namePlaceholder: 'Enter asset name',
-  category: 'Category',
-  selectCategory: 'Select Category',
-  department: 'Department',
-  selectDepartment: 'Select Department',
-  serialNumber: 'Serial Number',
-  serialPlaceholder: 'Enter serial number',
-  rfidTag: 'RFID Tag',
-  rfidPlaceholder: 'Enter RFID tag number',
-  brand: 'Brand',
-  brandPlaceholder: 'Enter brand name',
-  model: 'Model',
-  modelPlaceholder: 'Enter model number',
-  manufacturer: 'Manufacturer',
-  manufacturerPlaceholder: 'Enter manufacturer name',
-  supplier: 'Supplier',
-  supplierPlaceholder: 'Enter supplier name',
-  purchaseDate: 'Purchase Date',
-  purchaseCost: 'Purchase Cost',
-  warrantyExpiry: 'Warranty Expiry',
-  location: 'Location',
-  locationPlaceholder: 'Enter asset location',
-  condition: 'Condition',
-  excellent: 'Excellent',
-  good: 'Good',
-  fair: 'Fair',
-  poor: 'Poor',
-  damaged: 'Damaged',
-  description: 'Description',
-  descriptionPlaceholder: 'Enter asset description',
-  notes: 'Notes',
-  notesPlaceholder: 'Any additional notes',
-  required: 'This field is required',
-  duplicateId: 'Asset ID already exists',
-  duplicateSerial: 'Serial number already exists',
-  duplicateRfid: 'RFID tag already exists',
-  uniqueId: 'Asset ID is unique',
-  uniqueSerial: 'Serial number is unique',
-  uniqueRfid: 'RFID tag is unique',
-  futureDate: 'Purchase date cannot be in the future',
-  invalidCost: 'Please enter a valid cost',
-  warrantyBeforePurchase: 'Warranty date must be after purchase date',
-  fixErrors: 'Please fix all errors before proceeding',
-  assetCreated: 'Asset created successfully!',
-  createError: 'Failed to create asset',
-  checkDuplicate: 'Please check for duplicate entries',
-  stepBasic: 'Basic Info',
-  stepFinancial: 'Financial & Location',
-  stepReview: 'Review & Confirm',
-  back: 'Back',
-  next: 'Next',
-  creating: 'Creating...',
-  reviewTitle: 'Review Asset Information',
-  reviewDesc: 'Please review all information before creating the asset',
-  readyToCreate: 'Ready to Create',
-  readyDesc: 'All information is valid and ready for submission',
-  qrGenerated: 'QR Code Generated',
-  assetCreatedSuccess: 'Asset has been successfully created',
-  duplicateIdError: 'Asset ID is already in use',
-  duplicateSerialError: 'Serial number is already in use',
-  duplicateRfidError: 'RFID tag is already in use'
-};
+  const formContent = (
+    <form onSubmit={handleSubmit} style={fieldStyles.wrapper}>
+      <section style={{ background: '#fff', borderRadius: '18px', border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#e0f2fe', display: 'grid', placeItems: 'center', color: '#0369a1' }}><Package size={20} /></div>
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', color: '#64748b', textTransform: 'uppercase' }}>Basic Information</div>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>Register a new university asset</div>
+          </div>
+        </div>
 
-const amharicTranslations = {
-  createAsset: 'አዲስ ICT ንብረት ፍጠር',
-  createAssetDesc: 'አዲስ ICT ንብረት በስርዓቱ ውስጥ ይመዝገቡ',
-  assetId: 'የንብረት መለያ',
-  name: 'የንብረት ስም',
-  namePlaceholder: 'የንብረት ስም ያስገቡ',
-  category: 'ምድብ',
-  selectCategory: 'ምድብ ይምረጡ',
-  department: 'ክፍል',
-  selectDepartment: 'ክፍል ይምረጡ',
-  serialNumber: 'ተከታታይ ቁጥር',
-  serialPlaceholder: 'ተከታታይ ቁጥር ያስገቡ',
-  rfidTag: 'RFID መለያ',
-  rfidPlaceholder: 'RFID መለያ ያስገቡ',
-  brand: 'ብራንድ',
-  brandPlaceholder: 'ብራንድ ያስገቡ',
-  model: 'ሞዴል',
-  modelPlaceholder: 'ሞዴል ያስገቡ',
-  manufacturer: 'አምራች',
-  manufacturerPlaceholder: 'አምራች ያስገቡ',
-  supplier: 'አቅራቢ',
-  supplierPlaceholder: 'አቅራቢ ያስገቡ',
-  purchaseDate: 'የግዢ ቀን',
-  purchaseCost: 'የግዢ ዋጋ',
-  warrantyExpiry: 'የዋስትና ማብቂያ',
-  location: 'ቦታ',
-  locationPlaceholder: 'የንብረት ቦታ ያስገቡ',
-  condition: 'ሁኔታ',
-  excellent: 'እጅግ ጥሩ',
-  good: 'ጥሩ',
-  fair: 'መካከለኛ',
-  poor: 'ደካማ',
-  damaged: 'የተበላሸ',
-  description: 'መግለጫ',
-  descriptionPlaceholder: 'የንብረት መግለጫ ያስገቡ',
-  notes: 'ማስታወሻዎች',
-  notesPlaceholder: 'ተጨማሪ ማስታወሻዎች',
-  required: 'ይህ መስክ ያስፈልጋል',
-  duplicateId: 'የንብረት መለያ ቀድሞ አለ',
-  duplicateSerial: 'ተከታታይ ቁጥር ቀድሞ አለ',
-  duplicateRfid: 'RFID መለያ ቀድሞ አለ',
-  uniqueId: 'የንብረት መለያ ልዩ ነው',
-  uniqueSerial: 'ተከታታይ ቁጥር ልዩ ነው',
-  uniqueRfid: 'RFID መለያ ልዩ ነው',
-  futureDate: 'የግዢ ቀን ከወቅታዊ ቀን በኋላ ሊሆን አይችልም',
-  invalidCost: 'እባክዎ ትክክለኛ ዋጋ ያስገቡ',
-  warrantyBeforePurchase: 'የዋስትና ቀን ከግዢ ቀን በኋላ መሆን አለበት',
-  fixErrors: 'እባክዎ ከመቀጠልዎ በፊት ሁሉንም ስህተቶች ያርሙ',
-  assetCreated: 'ንብረት በተሳካ ሁኔታ ተፈጥሯል!',
-  createError: 'ንብረት መፍጠር አልተሳካም',
-  checkDuplicate: 'እባክዎ ለተደጋጋሚ ግቤቶች ያረጋግጡ',
-  stepBasic: 'መሰረታዊ መረጃ',
-  stepFinancial: 'ፋይናንስ እና ቦታ',
-  stepReview: 'ግምገማ እና ማረጋገጫ',
-  back: 'ተመለስ',
-  next: 'ቀጥል',
-  creating: 'በመፍጠር ላይ...',
-  reviewTitle: 'የንብረት መረጃ ይገምግሙ',
-  reviewDesc: 'ንብረቱን ከመፍጠርዎ በፊት ሁሉንም መረጃ ይገምግሙ',
-  readyToCreate: 'ለመፍጠር ዝግጁ',
-  readyDesc: 'ሁሉም መረጃ ትክክል ነው እና ለመፍጠር ዝግጁ ነው',
-  qrGenerated: 'QR ኮድ ተፈጥሯል',
-  assetCreatedSuccess: 'ንብረት በተሳካ ሁኔታ ተፈጥሯል',
-  duplicateIdError: 'የንብረት መለያ ቀድሞ ጥቅም ላይ ውሏል',
-  duplicateSerialError: 'ተከታታይ ቁጥር ቀድሞ ጥቅም ላይ ውሏል',
-  duplicateRfidError: 'RFID መለያ ቀድሞ ጥቅም ላይ ውሏል'
+        <div style={fieldStyles.row}>
+          {renderField('Asset Name', 'name', 'text', null, 'Enter asset name', true)}
+          {renderField('Asset Tag / Asset Code', 'assetCode', 'text', null, 'ICT-000001', true)}
+          <div>
+            <label style={fieldStyles.label}>Asset Category <span style={fieldStyles.required}>*</span></label>
+            <select name="categoryId" value={formData.categoryId} onChange={handleFieldChange} style={selectClass('categoryId')}>
+              <option value="">Select category</option>
+              {categories.map((category) => (
+                <option key={category.id || category.name} value={category.id || category.name}>{category.name}</option>
+              ))}
+            </select>
+            {errors.categoryId && <span style={fieldStyles.error}>{errors.categoryId}</span>}
+          </div>
+          <div>
+            <label style={fieldStyles.label}>Asset Type</label>
+            <select name="assetType" value={formData.assetType} onChange={handleFieldChange} style={selectClass('assetType')}>
+              <option value="">Select type</option>
+              {[ 'Computer', 'Laptop', 'Server', 'Network Device', 'Printer', 'Furniture', 'Vehicle', 'Equipment', 'Software' ].map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </div>
+          {renderField('Manufacturer', 'manufacturer')}
+          {renderField('Model', 'model')}
+          {renderField('Serial Number', 'serialNumber')}
+          <div style={fieldStyles.full}>{renderField('Description', 'description', 'textarea', null, 'Short description of the asset')}</div>
+        </div>
+      </section>
+
+      <section style={{ background: '#fff', borderRadius: '18px', border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#fef3c7', display: 'grid', placeItems: 'center', color: '#b45309' }}><Wrench size={20} /></div>
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', color: '#64748b', textTransform: 'uppercase' }}>Acquisition Information</div>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>Purchase and warranty details</div>
+          </div>
+        </div>
+
+        <div style={fieldStyles.row}>
+          {renderField('Purchase Date', 'purchaseDate', 'date')}
+          {renderField('Purchase Price', 'purchasePrice', 'number', null, '0.00')}
+          {renderField('Currency', 'currency', 'select', [{ value: 'ETB', label: 'ETB' }, { value: 'USD', label: 'USD' }])}
+          {renderField('Supplier / Vendor', 'supplier')}
+          {renderField('Purchase Order Number', 'purchaseOrderNumber')}
+          {renderField('Invoice Number', 'invoiceNumber')}
+          {renderField('Warranty Start', 'warrantyStart', 'date')}
+          {renderField('Warranty End', 'warrantyEnd', 'date')}
+        </div>
+      </section>
+
+      <section style={{ background: '#fff', borderRadius: '18px', border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#dcfce7', display: 'grid', placeItems: 'center', color: '#166534' }}><MapPin size={20} /></div>
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', color: '#64748b', textTransform: 'uppercase' }}>Location & Assignment</div>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>Campus, department, and custodian</div>
+          </div>
+        </div>
+
+        <div style={fieldStyles.row}>
+          {renderField('Campus', 'campus')}
+          {renderField('Building', 'building')}
+          <div>
+            <label style={fieldStyles.label}>Department <span style={fieldStyles.required}>*</span></label>
+            <select name="departmentId" value={formData.departmentId} onChange={handleFieldChange} style={selectClass('departmentId')}>
+              <option value="">Select department</option>
+              {departments.map((department) => (
+                <option key={department.id || department.name} value={department.id || department.name}>{department.name}</option>
+              ))}
+            </select>
+            {errors.departmentId && <span style={fieldStyles.error}>{errors.departmentId}</span>}
+          </div>
+          {renderField('Room / Office', 'room')}
+          {renderField('Custodian', 'custodian')}
+          <div>
+            <label style={fieldStyles.label}>Assigned User</label>
+            <select name="assignedUser" value={formData.assignedUser} onChange={handleFieldChange} style={selectClass('assignedUser')}>
+              <option value="">Select user</option>
+              {users.map((user) => (
+                <option key={user.id || user.username} value={user.id || user.username}>{user.fullName || user.username}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={fieldStyles.label}>Asset Status</label>
+            <select name="status" value={formData.status} onChange={handleFieldChange} style={selectClass('status')}>
+              <option value="available">Available</option>
+              <option value="in-use">In Use</option>
+              <option value="under-maintenance">Under Maintenance</option>
+              <option value="disposed">Disposed</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      {technicalFields.length > 0 && (
+        <section style={{ background: '#fff', borderRadius: '18px', border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+            <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#e0e7ff', display: 'grid', placeItems: 'center', color: '#4338ca' }}><ShieldCheck size={20} /></div>
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', color: '#64748b', textTransform: 'uppercase' }}>Technical Information</div>
+              <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>Asset-specific configuration</div>
+            </div>
+          </div>
+
+          <div style={fieldStyles.row}>
+            {technicalFields.includes('ipAddress') && renderField('IP Address', 'ipAddress', 'text', null, '192.168.1.10')}
+            {technicalFields.includes('macAddress') && renderField('MAC Address', 'macAddress', 'text', null, '00:1A:2B:3C:4D:5E')}
+            {technicalFields.includes('hostname') && renderField('Hostname', 'hostname')}
+            {technicalFields.includes('operatingSystem') && renderField('Operating System', 'operatingSystem')}
+            {technicalFields.includes('processor') && renderField('Processor', 'processor')}
+            {technicalFields.includes('ram') && renderField('RAM', 'ram')}
+            {technicalFields.includes('storage') && renderField('Storage', 'storage')}
+            {technicalFields.includes('networkRole') && renderField('Network Role', 'networkRole')}
+            {technicalFields.includes('material') && renderField('Material', 'material')}
+            {technicalFields.includes('vehicleRegistration') && renderField('Vehicle Registration', 'vehicleRegistration')}
+            {technicalFields.includes('engineNumber') && renderField('Engine Number', 'engineNumber')}
+            {technicalFields.includes('specificationNotes') && renderField('Specification Notes', 'specificationNotes', 'textarea')}
+          </div>
+        </section>
+      )}
+
+      <section style={{ background: '#fff', borderRadius: '18px', border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#dbeafe', display: 'grid', placeItems: 'center', color: '#1d4ed8' }}><Upload size={20} /></div>
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', color: '#64748b', textTransform: 'uppercase' }}>Documents & Media</div>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>Supporting documents and asset image</div>
+          </div>
+        </div>
+
+        <div style={fieldStyles.row}>
+          {renderField('Asset image', 'assetImage', 'file')}
+          {renderField('Invoice', 'invoiceDocument', 'file')}
+          {renderField('Purchase document', 'purchaseDocument', 'file')}
+          {renderField('Warranty document', 'warrantyDocument', 'file')}
+          {renderField('Other attachment', 'otherAttachment', 'file')}
+        </div>
+      </section>
+
+      <section style={{ background: '#fff', borderRadius: '18px', border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#f3e8ff', display: 'grid', placeItems: 'center', color: '#7c3aed' }}><FileText size={20} /></div>
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', color: '#64748b', textTransform: 'uppercase' }}>Notes</div>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>Internal review notes</div>
+          </div>
+        </div>
+
+        <div style={fieldStyles.row}>
+          <div style={fieldStyles.full}>{renderField('Internal Notes', 'internalNotes', 'textarea')}</div>
+          <div style={fieldStyles.full}>{renderField('Additional Information', 'additionalInformation', 'textarea')}</div>
+        </div>
+      </section>
+
+      {isReviewing && (
+        <section style={{ background: '#f8fafc', border: '1px solid #dfe7f1', borderRadius: '18px', padding: '24px' }}>
+          <div style={{ fontSize: '12px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748b', fontWeight: 700, marginBottom: '16px' }}>Review</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' }}>
+            <div><strong>Asset Name</strong><div>{formData.name || '—'}</div></div>
+            <div><strong>Asset Tag</strong><div>{formData.assetCode || '—'}</div></div>
+            <div><strong>Category</strong><div>{selectedCategoryName}</div></div>
+            <div><strong>Department</strong><div>{departments.find((department) => String(department.id) === String(formData.departmentId))?.name || '—'}</div></div>
+            <div><strong>Location</strong><div>{[formData.campus, formData.building, formData.room].filter(Boolean).join(' / ') || '—'}</div></div>
+            <div><strong>Assigned User</strong><div>{users.find((user) => String(user.id) === String(formData.assignedUser))?.fullName || formData.assignedUser || '—'}</div></div>
+            <div><strong>Purchase Information</strong><div>{formData.purchasePrice ? `${formData.currency} ${formData.purchasePrice}` : '—'}</div></div>
+            <div><strong>Status</strong><div>{formData.status || 'available'}</div></div>
+          </div>
+        </section>
+      )}
+
+      <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '28px', flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => navigate('/ict/assets')} style={{ border: '1px solid #dfe7f1', background: '#fff', color: '#0f172a', borderRadius: '12px', padding: '12px 18px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+          <ArrowLeft size={16} /> Back to Assets
+        </button>
+        <button type="button" onClick={() => setIsReviewing((current) => !current)} style={{ border: '1px solid #dfe7f1', background: '#fff', color: '#0f172a', borderRadius: '12px', padding: '12px 18px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+          <FileText size={16} /> {isReviewing ? 'Hide Review' : 'Review'}
+        </button>
+        <button type="button" style={{ border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', borderRadius: '12px', padding: '12px 18px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+          <Save size={16} /> Save Draft
+        </button>
+        <button type="submit" disabled={isSubmitting} style={{ border: 'none', background: '#12A8E0', color: '#fff', borderRadius: '12px', padding: '12px 22px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.7 : 1 }}>
+          {isSubmitting ? 'Creating asset...' : 'Create Asset'}
+          {!isSubmitting && <ArrowRight size={16} />}
+        </button>
+      </div>
+    </form>
+  );
+
+  if (createdAsset) {
+    return (
+      <div style={{ maxWidth: '920px', margin: '0 auto', padding: '32px 20px' }}>
+        <div style={{ background: '#fff', borderRadius: '18px', border: '1px solid #e2e8f0', padding: '32px', boxShadow: '0 10px 30px rgba(15, 23, 42, 0.04)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
+            <div style={{ width: '52px', height: '52px', borderRadius: '16px', background: '#dcfce7', display: 'grid', placeItems: 'center', color: '#166534' }}><CheckCircle2 size={26} /></div>
+            <div>
+              <div style={{ fontSize: '12px', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700, color: '#64748b' }}>Success</div>
+              <div style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a' }}>Asset created successfully</div>
+            </div>
+          </div>
+          <div style={{ color: '#334155', lineHeight: 1.8, marginBottom: '16px' }}>
+            <div><strong>Asset:</strong> {createdAsset.name || '—'}</div>
+            <div><strong>Asset Tag:</strong> {createdAsset.assetCode || createdAsset.asset_code || '—'}</div>
+            <div><strong>Status:</strong> {createdAsset.status || 'available'}</div>
+          </div>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <button type="button" onClick={() => navigate(`/ict/assets/${createdAsset.id || ''}`)} style={{ border: 'none', background: '#12A8E0', color: '#fff', borderRadius: '12px', padding: '12px 18px', fontWeight: 700, cursor: 'pointer' }}>View Asset</button>
+            <button type="button" onClick={() => { setCreatedAsset(null); setFormData({ ...formData, name: '', assetCode: '', description: '', manufacturer: '', model: '', serialNumber: '', purchaseDate: '', purchasePrice: '', supplier: '', purchaseOrderNumber: '', invoiceNumber: '', warrantyEnd: '', campus: '', building: '', room: '', custodian: '', assignedUser: '', status: 'available', ipAddress: '', macAddress: '', hostname: '', operatingSystem: '', processor: '', ram: '', storage: '', networkRole: '', material: '', vehicleRegistration: '', engineNumber: '', specificationNotes: '', internalNotes: '', additionalInformation: '', assetImage: '', invoiceDocument: '', purchaseDocument: '', warrantyDocument: '', otherAttachment: '' }); setErrors({}); setIsReviewing(false); }} style={{ border: '1px solid #dfe7f1', background: '#fff', color: '#0f172a', borderRadius: '12px', padding: '12px 18px', fontWeight: 700, cursor: 'pointer' }}>Create Another Asset</button>
+            <Link to="/ict/assets" style={{ border: '1px solid #dfe7f1', background: '#fff', color: '#0f172a', borderRadius: '12px', padding: '12px 18px', fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '8px' }}><ArrowLeft size={16} /> Back to Assets</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 20px 48px' }}>
+      <div style={{ marginBottom: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+        <nav style={{ fontSize: '13px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }} aria-label="Breadcrumb">
+          <span>Asset Management</span>
+          <span>&gt;</span>
+          <span>Assets</span>
+          <span>&gt;</span>
+          <strong style={{ color: '#0f172a' }}>Create Asset</strong>
+        </nav>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px', flexWrap: 'wrap', marginBottom: '24px' }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: '36px', lineHeight: 1.1, color: '#0f172a' }}>Create New Asset</h1>
+          <p style={{ margin: '8px 0 0', color: '#64748b', fontSize: '15px' }}>Register and configure a university asset in the asset management system.</p>
+        </div>
+        <button type="button" onClick={() => navigate('/ict/assets')} style={{ border: '1px solid #dfe7f1', background: '#fff', color: '#0f172a', borderRadius: '12px', padding: '12px 18px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+          <ArrowLeft size={16} /> Back to Assets
+        </button>
+      </div>
+
+      {errors.form && <div style={{ background: '#fee2e2', border: '1px solid #ef4444', color: '#991b1b', padding: '12px 14px', borderRadius: '12px', marginBottom: '18px' }}>{errors.form}</div>}
+
+      {formContent}
+    </div>
+  );
 };
 
 export default ICTCreateAsset;

@@ -8,6 +8,7 @@ const { normalizePhoneNumber, sendSMS } = require('../services/smsService');
 const { validateEmailConfiguration } = require('../services/emailService');
 const { isValidEmail, isValidUsername } = require('../utils/validators');
 const { getJwtSecret } = require('../config/jwt');
+const { getRequestContext, getClientIp } = require('../middlewares/requestContext');
 
 const LOGIN_ALIASES = {
   admin: ['admin'],
@@ -103,14 +104,21 @@ const generateToken = async (user) => {
 
 const recordAuthEvent = async ({ userId = null, action, result, req }) => {
   try {
+    const context = getRequestContext() || {
+      requestId: req?.requestId || null,
+      ipAddress: getClientIp(req) || req?.ip || null,
+      userAgent: req?.headers?.['user-agent'] || null,
+    };
+
     await AuditLog.create({
       userId,
       action,
       entity: userId ? `user:${userId}` : 'auth',
       details: JSON.stringify({
         result,
-        ipAddress: req.ip || null,
-        userAgent: req.headers['user-agent'] || null,
+        requestId: context.requestId || null,
+        ipAddress: context.ipAddress || null,
+        userAgent: context.userAgent || null,
       }),
     });
   } catch (error) {

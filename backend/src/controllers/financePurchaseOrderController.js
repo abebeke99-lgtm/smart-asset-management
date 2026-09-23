@@ -1,12 +1,14 @@
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/database');
-const { Approval, AuditLog, Department, PurchaseOrder, PurchaseOrderItem, User } = require('../models');
+const { Approval, AuditLog, Budget, Department, PurchaseOrder, PurchaseOrderItem, User } = require('../models');
+const { assertCommitmentAvailable } = require('../services/budgetService');
 
 const STATUSES = ['Draft', 'Pending Approval', 'Approved', 'Issued', 'Completed', 'Cancelled'];
 const include = [
   { model: PurchaseOrderItem, as: 'items' },
   { model: Approval, as: 'PurchaseRequest', attributes: ['id', 'item', 'quantity', 'status'] },
   { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name', 'code'] },
+  { association: 'BudgetRecord', attributes: ['id', 'budgetCode', 'budgetName', 'allocation', 'status'], required: false },
   { model: User, as: 'Creator', attributes: ['id', 'username', 'fullName'] },
   { model: User, as: 'Approver', attributes: ['id', 'username', 'fullName'], required: false },
 ];
@@ -58,8 +60,11 @@ const listPurchaseOrders = async (req, res, next) => {
     const result = await PurchaseOrder.findAndCountAll({ where, include, distinct: true, limit, offset: (page - 1) * limit, order: [['createdAt', 'DESC']] });
     const statusCounts = await Promise.all(STATUSES.map(async (status) => [status, await PurchaseOrder.count({ where: { ...where, status } })]));
     const totalValue = await PurchaseOrder.sum('totalAmount', { where });
-    const departments = await Department.findAll({ attributes: ['id', 'name', 'code'], order: [['name', 'ASC']] });
-    return res.json({ success: true, data: { orders: result.rows.map(normalize), summary: { total: result.count, totalValue: number(totalValue), ...Object.fromEntries(statusCounts) }, filters: { statuses: STATUSES, departments } }, pagination: { page, limit, total: result.count, totalPages: Math.max(1, Math.ceil(result.count / limit)), pages: Math.max(1, Math.ceil(result.count / limit)) } });
+    const [departments, budgets] = await Promise.all([
+      Department.findAll({ attributes: ['id', 'name', 'code'], order: [['name', 'ASC']] }),
+      Budget.findAll({ where: { status: 'ACTIVE' }, attributes: ['id', 'budgetCode', 'budgetName', 'allocation'], order: [['budgetCode', 'ASC']] }),
+    ]);
+    return res.json({ success: true, data: { orders: result.rows.map(normalize), summary: { total: result.count, totalValue: number(totalValue), ...Object.fromEntries(statusCounts) }, filters: { statuses: STATUSES, departments, budgets } }, pagination: { page, limit, total: result.count, totalPages: Math.max(1, Math.ceil(result.count / limit)), pages: Math.max(1, Math.ceil(result.count / limit)) } });
   } catch (error) { return next(error); }
 };
 
@@ -106,7 +111,7 @@ const createPurchaseOrder = async (req, res, next) => {
   try {
     const validated = await validatePayload(req.body, transaction);
     const poNumber = String(req.body.poNumber || `PO-${Date.now()}`).trim();
-    const order = await PurchaseOrder.create({ poNumber, purchaseRequestId: validated.purchaseRequestId, supplierName: String(req.body.supplierName).trim(), departmentId: validated.departmentId, orderDate: req.body.orderDate || new Date(), expectedDeliveryDate: req.body.expectedDeliveryDate || null, currency: req.body.currency || 'ETB', status: req.body.status === 'Pending Approval' ? 'Pending Approval' : 'Draft', priority: req.body.priority || 'Normal', paymentTerms: req.body.paymentTerms || '', deliveryTerms: req.body.deliveryTerms || '', notes: req.body.notes || '', createdBy: req.user.id, ...validated }, { transaction });
+    const order = await PurchaseOrder.create({ poNumber, purchaseRequestId: validated.purchaseRequestId, budgetId: req.body.budgetId ? Number(req.body.budgetId) : null, supplierName: String(req.body.supplierName).trim(), departmentId: validated.departmentId, orderDate: req.body.orderDate || new Date(), expectedDeliveryDate: req.body.expectedDeliveryDate || null, currency: req.body.currency || 'ETB', status: req.body.status === 'Pending Approval' ? 'Pending Approval' : 'Draft', priority: req.body.priority || 'Normal', paymentTerms: req.body.paymentTerms || '', deliveryTerms: req.body.deliveryTerms || '', notes: req.body.notes || '', createdBy: req.user.id, ...validated }, { transaction });
     await PurchaseOrderItem.bulkCreate(validated.items.map((item) => ({ ...item, purchaseOrderId: order.id })), { transaction });
     await audit(transaction, req, 'PURCHASE_ORDER_CREATED', order.id, { poNumber });
     await transaction.commit();
@@ -121,7 +126,7 @@ const updatePurchaseOrder = async (req, res, next) => {
     if (!order) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Purchase order not found' }); }
     if (!['Draft', 'Pending Approval'].includes(order.status)) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Only draft or pending purchase orders can be edited' }); }
     const validated = await validatePayload(req.body, transaction, order.id);
-    await order.update({ poNumber: String(req.body.poNumber || order.poNumber).trim(), supplierName: String(req.body.supplierName).trim(), orderDate: req.body.orderDate || order.orderDate, expectedDeliveryDate: req.body.expectedDeliveryDate || null, currency: req.body.currency || order.currency, priority: req.body.priority || order.priority, paymentTerms: req.body.paymentTerms || '', deliveryTerms: req.body.deliveryTerms || '', notes: req.body.notes || '', ...validated }, { transaction });
+    await order.update({ poNumber: String(req.body.poNumber || order.poNumber).trim(), budgetId: req.body.budgetId ? Number(req.body.budgetId) : null, supplierName: String(req.body.supplierName).trim(), orderDate: req.body.orderDate || order.orderDate, expectedDeliveryDate: req.body.expectedDeliveryDate || null, currency: req.body.currency || order.currency, priority: req.body.priority || order.priority, paymentTerms: req.body.paymentTerms || '', deliveryTerms: req.body.deliveryTerms || '', notes: req.body.notes || '', ...validated }, { transaction });
     await PurchaseOrderItem.destroy({ where: { purchaseOrderId: order.id }, transaction });
     await PurchaseOrderItem.bulkCreate(validated.items.map((item) => ({ ...item, purchaseOrderId: order.id })), { transaction });
     await audit(transaction, req, 'PURCHASE_ORDER_UPDATED', order.id);
@@ -136,6 +141,10 @@ const transition = (targetStatus, action) => async (req, res, next) => {
     const order = await PurchaseOrder.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
     if (!order) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Purchase order not found' }); }
     if (targetStatus === 'Approved' && !['Draft', 'Pending Approval'].includes(order.status)) throw Object.assign(new Error('Only draft or pending purchase orders can be approved'), { status: 409 });
+    if (targetStatus === 'Approved') {
+      if (!order.budgetId) throw Object.assign(new Error('A budget must be selected before a purchase order can be approved'), { status: 422 });
+      await assertCommitmentAvailable(order.budgetId, order.totalAmount, transaction);
+    }
     if (targetStatus === 'Cancelled' && ['Cancelled', 'Completed'].includes(order.status)) throw Object.assign(new Error('This purchase order has already been processed'), { status: 409 });
     await order.update({ status: targetStatus, ...(targetStatus === 'Approved' ? { approvedBy: req.user.id, approvedAt: new Date() } : {}) }, { transaction });
     await audit(transaction, req, action, order.id, { previousStatus: order.previous('status'), status: targetStatus });

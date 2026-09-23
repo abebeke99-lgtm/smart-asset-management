@@ -1,12 +1,15 @@
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const passport = require('./config/passport');
 const { sequelize, testConnection } = require('./config/database');
 const { syncDatabase } = require('./config/sync');
 const { seedDatabase } = require('./config/seed');
+const { ensureUploadDirectories } = require('./utils/uploadUtils');
 
 const authRoutes = require('./routes/authRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 const userRoutes = require('./routes/userRoutes');
 const assetRoutes = require('./routes/assetRoutes');
 const ictAssetRoutes = require('./routes/ictAssetRoutes');
@@ -38,10 +41,13 @@ const chemicalRoutes = require('./routes/chemicalRoutes');
 const serviceRequestRoutes = require('./routes/serviceRequestRoutes');
 const locationRoutes = require('./routes/locationRoutes');
 const cleaningRoutes = require('./routes/cleaningRoutes');
+const backupService = require('./services/backupService');
 const { requestMetricsMiddleware } = require('./middlewares/requestMetrics');
+const { requestContextMiddleware } = require('./middlewares/requestContext');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const uploadRoot = path.resolve(__dirname, '..', (process.env.UPLOAD_DIR || './uploads').replace(/^\.\//, ''));
 const configuredOrigins = [
   process.env.FRONTEND_URL,
   process.env.CLIENT_URL,
@@ -93,6 +99,7 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
+app.use(requestContextMiddleware);
 app.use(requestMetricsMiddleware);
 
 let databaseReady = false;
@@ -120,6 +127,8 @@ app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 
 app.use('/api/auth', authRoutes);
+app.use('/api/uploads', uploadRoutes);
+app.use('/uploads', express.static(uploadRoot, { index: false, dotfiles: 'ignore' }));
 app.use('/api/users', userRoutes);
 app.use('/api/admin/users', userRoutes);
 app.use('/api/assets', assetRoutes);
@@ -171,24 +180,8 @@ app.use((err, req, res, next) => {
 });
 
 async function startServer() {
+  ensureUploadDirectories();
   const retryDelays = [5000, 10000, 20000, 30000, 60000];
-  for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
-    if (await testConnection() && await syncDatabase()) {
-      if (process.env.NODE_ENV !== 'production' && process.env.SEED_DEMO_DATA === 'true') await seedDatabase();
-      databaseReady = true;
-      console.log('Database initialization completed.');
-      break;
-    }
-
-    if (attempt === retryDelays.length) {
-      throw new Error('Database initialization failed after retry limit. Verify Render DB_HOST, DB_PORT, credentials, SSL, and provider firewall settings.');
-    }
-
-    const delay = retryDelays[attempt];
-    console.error(`Database unavailable. Retrying in ${delay / 1000} seconds (attempt ${attempt + 1}/${retryDelays.length}).`);
-    await new Promise((resolve) => setTimeout(resolve, delay));
-  }
-
   await new Promise((resolve, reject) => {
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
@@ -196,6 +189,25 @@ async function startServer() {
     });
     server.once('error', reject);
   });
+
+  for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
+    if (await testConnection() && await syncDatabase()) {
+      if (process.env.NODE_ENV !== 'production' && process.env.SEED_DEMO_DATA === 'true') await seedDatabase();
+      backupService.startAutomaticBackupScheduler();
+      databaseReady = true;
+      console.log('Database initialization completed.');
+      return;
+    }
+
+    if (attempt === retryDelays.length) {
+      console.error('Database initialization failed after retry limit. Verify Render DB_HOST, DB_PORT, credentials, SSL, and provider firewall settings.');
+      return;
+    }
+
+    const delay = retryDelays[attempt];
+    console.error(`Database unavailable. Retrying in ${delay / 1000} seconds (attempt ${attempt + 1}/${retryDelays.length}).`);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
 }
 
 if (require.main === module) {

@@ -17,6 +17,7 @@ const {
   Transfer,
   AuditLog,
   RFIDLog,
+  Config,
 } = require('../models');
 
 const ALLOWED_DOC_TYPES = ['application/pdf', 'application/msword', 'image/jpeg', 'image/png'];
@@ -29,6 +30,68 @@ const normalizeStatus = (value) => {
   const status = String(value || '').trim().toLowerCase().replace(/[_ ]+/g, '-');
   const aliases = { active: 'available', assigned: 'in-use', 'in-use': 'in-use', damage: 'damaged', damaged: 'damaged', 'under-maintenance': 'under-maintenance', maintenance: 'under-maintenance', replaced: 'replaced', expired: 'expired', disposed: 'disposed', retired: 'disposed', testing: 'testing' };
   return aliases[status] || 'available';
+};
+
+const defaultAssetNumberSettings = {
+  enabled: true,
+  prefix: 'MAU',
+  categoryCode: 'GEN',
+  year: new Date().getFullYear(),
+  sequenceLength: 6,
+  startNumber: 1,
+  separator: '-',
+  format: '{PREFIX}-{CATEGORY}-{YEAR}-{SEQUENCE}',
+};
+
+const escapeLikePattern = (value = '') => String(value).replace(/[\\%_]/g, '\\$&');
+
+const readAssetNumberSettings = async () => {
+  try {
+    const record = await Config.findByPk('settings:assets');
+    if (!record?.value) return { ...defaultAssetNumberSettings };
+    const parsed = JSON.parse(record.value || '{}');
+    return { ...defaultAssetNumberSettings, ...parsed };
+  } catch {
+    return { ...defaultAssetNumberSettings };
+  }
+};
+
+const buildAssetCodeFromConfig = async ({ category = '', transaction } = {}) => {
+  const settings = await readAssetNumberSettings();
+  if (!settings.enabled) return '';
+
+  const prefix = String(settings.prefix || 'MAU').trim() || 'MAU';
+  const categoryCode = String(category || settings.categoryCode || settings.category || 'GEN').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'GEN';
+  const year = String(settings.year || new Date().getFullYear());
+  const separator = String(settings.separator || '-');
+  const sequenceLength = Math.max(1, Number(settings.sequenceLength || settings.sequence_length || 6));
+  const startNumber = Math.max(1, Number(settings.startNumber || settings.start_number || 1));
+  const template = String(settings.format || settings.pattern || '{PREFIX}-{CATEGORY}-{YEAR}-{SEQUENCE}').trim() || '{PREFIX}-{CATEGORY}-{YEAR}-{SEQUENCE}';
+
+  const likePattern = `${escapeLikePattern(prefix)}${escapeLikePattern(separator)}${escapeLikePattern(categoryCode)}${escapeLikePattern(separator)}${escapeLikePattern(year)}${escapeLikePattern(separator)}%`;
+  const last = await Asset.findOne({
+    where: { assetCode: { [Op.like]: likePattern } },
+    paranoid: false,
+    order: [['id', 'DESC']],
+    transaction,
+  });
+
+  let sequence = startNumber;
+  if (last?.assetCode) {
+    const match = String(last.assetCode).match(/(\d+)$/);
+    if (match) sequence = Number(match[1]) + 1;
+  }
+
+  const renderedSequence = String(sequence).padStart(sequenceLength, '0');
+  const generated = template
+    .replace(/\{PREFIX\}/gi, prefix)
+    .replace(/\{CATEGORY\}/gi, categoryCode)
+    .replace(/\{YEAR\}/gi, year)
+    .replace(/\{SEQUENCE\}/gi, renderedSequence)
+    .replace(/\{SEP\}/gi, separator)
+    .replace(/\{SEPARATOR\}/gi, separator);
+
+  return generated;
 };
 
 async function nextDigitalId(transaction) {
@@ -111,13 +174,13 @@ const lookupByQr = async (req, res, next) => {
       ],
     });
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found for identifier' });
-    const [assignment, maintenance, documents, custody] = await Promise.all([
+    const [assignment, maintenance, documents, custody, lastTrackingEvent] = await Promise.all([
       Assignment.findOne({ where: { assetId: asset.id, status: 'active' }, include: [{ model: User, attributes: ['id', 'username', 'fullName', 'department'] }] }),
       Maintenance.findAll({ where: { assetId: asset.id }, order: [['createdAt', 'DESC']], limit: 10 }),
       AssetDocument.findAll({ where: { assetId: asset.id, status: 'active' } }),
       AssetCustody.findAll({ where: { assetId: asset.id, status: 'active' }, include: [{ model: User, as: 'Custodian', attributes: ['id', 'username', 'fullName'] }] }),
+      RFIDLog.findOne({ where: { assetId: asset.id, action: { [Op.in]: ['scan', 'reader_scan', 'rfid_scan'] } }, order: [['createdAt', 'DESC']] }),
     ]);
-    await RFIDLog.create({ assetId: asset.id, tag: identifier, action: 'qr-lookup', location: asset.location || '', notes: `QR lookup by user ${req.user.id}` });
     res.json({
       success: true,
       data: serializedExtended(asset, {
@@ -126,6 +189,7 @@ const lookupByQr = async (req, res, next) => {
         maintenance_history: maintenance,
         documents,
         custody,
+        last_tracking_event: lastTrackingEvent,
       }),
       asset: serializedExtended(asset),
     });
@@ -455,6 +519,8 @@ const assetImportTemplate = async (req, res) => {
 };
 
 module.exports = {
+  readAssetNumberSettings,
+  buildAssetCodeFromConfig,
   nextDigitalId,
   generateDigitalId,
   lookupByQr,

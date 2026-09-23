@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { RFIDLog, Asset } = require('../models');
+const { RFIDLog, Asset, RfidDevice, AuditLog } = require('../models');
 
 const include = [{ model: Asset, attributes: ['id', 'name', 'assetCode', 'category', 'department', 'location', 'status', 'condition', 'rfidTag'] }];
 const normalize = (item) => {
@@ -9,7 +9,7 @@ const normalize = (item) => {
     asset_id: data.assetId,
     rfid_tag: data.tag,
     reader_location: data.location,
-    reader_id: null,
+    reader_id: data.readerId || null,
     timestamp: data.createdAt,
     asset: item.Asset,
     asset_name: item.Asset?.name,
@@ -45,13 +45,25 @@ const getAllLogs = async (req, res) => {
 
 const createLog = async (req, res) => {
   try {
-    const assetId = req.body.asset_id || req.body.assetId;
     const tag = String(req.body.rfid_tag || req.body.tag || '').trim();
-    if (!assetId || !tag) return res.status(400).json({ success: false, message: 'Asset and RFID tag are required' });
-    const asset = await Asset.findByPk(assetId);
-    if (!asset) return res.status(404).json({ success: false, message: 'Asset not found for RFID event' });
+    const assetId = req.body.asset_id || req.body.assetId;
+    if (!tag) return res.status(400).json({ success: false, message: 'RFID tag is required' });
+    const asset = assetId
+      ? await Asset.findByPk(assetId)
+      : await Asset.findOne({ where: { rfidTag: tag } });
+    if (!asset) return res.status(404).json({ success: false, result: 'Unknown Tag', message: 'RFID tag is not registered' });
     if (!asset.rfidTag || asset.rfidTag !== tag) return res.status(409).json({ success: false, message: 'RFID tag is not registered to this asset' });
-    const log = await RFIDLog.create({ assetId: asset.id, tag, action: req.body.action || 'scan', location: req.body.location || req.body.reader_location || '', notes: req.body.notes || '' });
+    const readerId = String(req.body.reader_id || req.body.readerId || '').trim();
+    const reader = readerId ? await RfidDevice.findOne({ where: { reader_id: readerId } }) : null;
+    if (readerId && !reader) return res.status(404).json({ success: false, message: 'RFID reader not found' });
+    const location = String(req.body.location || req.body.reader_location || reader?.location || '').trim();
+    const log = await RFIDLog.create({ assetId: asset.id, tag, readerId: reader?.reader_id || null, action: req.body.action || 'scan', location, notes: req.body.notes || '' });
+    await AuditLog.create({
+      userId: req.user.id,
+      action: 'RFID_SCAN_RECEIVED',
+      entity: `asset:${asset.id}`,
+      details: JSON.stringify({ assetId: asset.id, tag, readerId: reader?.reader_id || null, location, scanId: log.id }),
+    });
     const saved = await RFIDLog.findByPk(log.id, { include });
     res.status(201).json({ success: true, data: normalize(saved) });
   } catch (error) {
