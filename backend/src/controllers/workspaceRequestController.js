@@ -7,7 +7,7 @@ const include = [
   { model: User, as: 'Requester', attributes: ['id', 'username', 'fullName', 'role', 'departmentId'] },
 ];
 const normalize = (record) => ({ ...record.toJSON(), requestNumber: `REQ-${String(record.id).padStart(6, '0')}`, requester: record.Requester?.fullName || record.Requester?.username || null });
-const scopedWhere = (req) => req.organizationScope.departmentId ? { departmentId: req.organizationScope.departmentId } : { '$Department.college_id$': req.organizationScope.collegeId };
+const scopedWhere = (req) => req.organizationScope.departmentId ? { departmentId: req.organizationScope.departmentId } : { '$Department.collegeId$': req.organizationScope.collegeId };
 const isCollegeScope = (req) => Boolean(req.organizationScope.collegeId && !req.organizationScope.departmentId);
 
 const collegeApprovalScope = async (req) => {

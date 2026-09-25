@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Download,
   Eye,
+  History,
   MapPin,
   Package2,
   Search,
@@ -26,6 +27,7 @@ const DeptAssets = () => {
   const { user } = useAuth();
   const { language, theme } = useLanguage();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +50,7 @@ const DeptAssets = () => {
   const isDark = theme === 'dark';
   const t = language === 'en' ? englishTranslations : amharicTranslations;
   const isAssignmentView = location.pathname.includes('/assignments');
+  const historyBasePath = location.pathname.startsWith('/college') ? '/college/history' : '/department/history';
 
   const normalizeAssignmentRows = (rows = []) => rows.map((assignment) => ({
     ...assignment,
@@ -1011,6 +1014,7 @@ const DeptAssets = () => {
               <button style={styles.actionButton('#ed8936')} onClick={() => handleAction('request_maintenance', selectedAsset)}><Wrench size={15} /> {t.requestMaintenance}</button>
               <button style={styles.actionButton('#fc8181')} onClick={() => handleAction('report_damaged', selectedAsset)}><AlertTriangle size={15} /> {t.reportDamaged}</button>
               <button style={styles.actionButton('#805ad5')} onClick={() => handleAction('request_asset', selectedAsset)}><MapPin size={15} /> {t.requestAsset}</button>
+              <button style={styles.actionButton('#2b6cb0')} onClick={() => navigate(`${historyBasePath}/${selectedAsset.id}`)}><History size={15} /> Full history</button>
             </div>
 
             <div style={{ marginBottom: '16px' }}>

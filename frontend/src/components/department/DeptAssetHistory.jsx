@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import axios from 'axios';
 
 const value = (item) => {
@@ -10,12 +10,21 @@ const value = (item) => {
 
 const DeptAssetHistory = () => {
   const { id } = useParams();
+  const location = useLocation();
+  const assetsPath = location.pathname.startsWith('/college') ? '/college/assets' : '/department/assets';
   const [asset, setAsset] = useState(null);
   const [events, setEvents] = useState([]);
   const [state, setState] = useState({ loading: true, error: '' });
 
   useEffect(() => {
     let mounted = true;
+    if (!id) {
+      setAsset(null);
+      setEvents([]);
+      setState({ loading: false, error: '' });
+      return () => { mounted = false; };
+    }
+    setState({ loading: true, error: '' });
     Promise.all([
       axios.get(`/api/assets/${id}`),
       axios.get(`/api/assets/${id}/assignments`),
@@ -37,6 +46,7 @@ const DeptAssetHistory = () => {
     return () => { mounted = false; };
   }, [id]);
 
+  if (!id) return <section style={{ padding: 24 }}><h1>📜 Asset History</h1><p>Select an asset from the asset list to view its history.</p><Link to={assetsPath}>Browse assets</Link></section>;
   if (state.loading) return <section style={{ padding: 24 }}><h1>📜 Asset History</h1><p>Loading history...</p></section>;
   if (state.error) return <section style={{ padding: 24 }}><h1>📜 Asset History</h1><p role="alert">{state.error}</p></section>;
   return <section style={{ padding: 24, overflowX: 'auto' }}>

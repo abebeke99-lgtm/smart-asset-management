@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Building2, CalendarDays, CheckCircle2, CircleX, Clock3, Eye, FileText, Flag, LoaderCircle, MapPin, Package, Plus, RefreshCw, Search, SlidersHorizontal, UserRound, Wrench, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { apiClient } from '../../utils/api';
@@ -35,7 +35,7 @@ const DepartmentMaintenance = () => {
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState('');
 
-  const loadRecords = useCallback(async () => {
+  const loadRecords = async () => {
     setLoading(true);
     setError('');
     try {
@@ -54,9 +54,9 @@ const DepartmentMaintenance = () => {
     } finally {
       setLoading(false);
     }
-  }, [filters.search, filters.priority, filters.status]);
+  };
 
-  useEffect(() => { loadRecords(); }, [loadRecords]);
+  useEffect(() => { loadRecords(); }, [filters.search, filters.status, filters.priority]);
 
   const visibleRecords = useMemo(() => records, [records]);
 

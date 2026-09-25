@@ -1,4 +1,8 @@
 const { Op, fn, col, literal } = require('sequelize');
+
+const snakeCaseColumn = (field) => String(field).replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+const sqlColumn = (field) => col(snakeCaseColumn(field));
+const sqlQualifiedColumn = (model, field) => col(`${model.name}.${snakeCaseColumn(field)}`);
 const { Asset, User, Department, Maintenance, Approval, Transfer, AuditLog, College, AssetReturn, VerificationSession, VerificationItem, Assignment, Category, AssetMovement, RFIDLog } = require('../models');
 
 const collegeScope = (req) => String(req.user?.department || '').trim();
@@ -134,12 +138,12 @@ const listCollegeMaintenance = async (req, res, next) => {
         { '$Asset.assetCode$': contains },
         { '$Asset.name$': contains },
         { '$Asset.serialNumber$': contains },
-        { '$Asset.department$': contains },
-        { '$Technician.fullName$': contains },
-        { '$Requester.fullName$': contains },
-        { '$DepartmentRecord.name$': contains },
-      ];
-    }
+            { '$Asset.department$': contains },
+            { '$Asset.DepartmentRecord.name$': contains },
+            { '$Technician.fullName$': contains },
+            { '$Requester.fullName$': contains },
+          ];
+        }
 
     if (type) {
       where['$Asset.category$'] = type;
@@ -158,12 +162,17 @@ const listCollegeMaintenance = async (req, res, next) => {
     const [result, allScopedRows] = await Promise.all([
       Maintenance.findAndCountAll({
         where,
-        include: [
-          { model: Asset, where: assetWhere, required: true, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'category', 'department', 'departmentId', 'collegeId', 'location', 'status', 'condition'] },
-          { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name', 'code'], required: false },
-          { model: User, as: 'Requester', attributes: ['id', 'fullName', 'username', 'role'], required: false },
-          { model: User, as: 'Technician', attributes: ['id', 'fullName', 'username', 'role'], required: false },
-        ],
+            include: [
+              {
+                model: Asset,
+                where: assetWhere,
+                required: true,
+                attributes: ['id', 'name', 'assetCode', 'serialNumber', 'category', 'department', 'departmentId', 'collegeId', 'location', 'status', 'condition'],
+                include: [{ model: Department, as: 'DepartmentRecord', attributes: ['id', 'name', 'code'], required: false }],
+              },
+              { model: User, as: 'Requester', attributes: ['id', 'fullName', 'username', 'role'], required: false },
+              { model: User, as: 'Technician', attributes: ['id', 'fullName', 'username', 'role'], required: false },
+            ],
         order: [['createdAt', 'DESC']],
         limit,
         offset,
@@ -574,8 +583,8 @@ const buildTrendSeries = async (model, where, dateField = 'createdAt', include =
   const rows = await model.findAll({
     where,
     include,
-    attributes: [[literal(`DATE(${dateField})`), 'period'], [fn('COUNT', col('id')), 'count']],
-    group: [literal(`DATE(${dateField})`)],
+    attributes: [[literal(`DATE(${model.name}.${snakeCaseColumn(dateField)})`), 'period'], [fn('COUNT', sqlQualifiedColumn(model, 'id')), 'count']],
+    group: [literal(`DATE(${model.name}.${snakeCaseColumn(dateField)})`)],
     order: [[literal(`DATE(${dateField})`), 'ASC']],
     raw: true,
   });
@@ -653,9 +662,9 @@ const getCollegeAssetAnalytics = async (req, res, next) => {
       Asset.count({ where: assetWhere }),
       Asset.findAll({ where: assetWhere, attributes: ['status', [fn('COUNT', col('id')), 'count']], group: ['status'], raw: true }),
       Asset.findAll({ where: assetWhere, attributes: ['condition', [fn('COUNT', col('id')), 'count']], group: ['condition'], raw: true }),
-      Asset.findAll({ where: assetWhere, attributes: ['category', [fn('COUNT', col('id')), 'count'], [fn('SUM', col('currentValue')), 'value']], group: ['category'], raw: true }),
+      Asset.findAll({ where: assetWhere, attributes: ['category', [fn('COUNT', col('id')), 'count'], [fn('SUM', sqlColumn('currentValue')), 'value']], group: ['category'], raw: true }),
       Asset.findAll({ where: assetWhere, attributes: ['location', [fn('COUNT', col('id')), 'count']], group: ['location'], raw: true }),
-      Asset.findAll({ where: assetWhere, attributes: ['departmentId', 'department', [fn('COUNT', col('id')), 'count'], [fn('SUM', col('currentValue')), 'value']], group: ['departmentId', 'department'], raw: true }),
+      Asset.findAll({ where: assetWhere, attributes: ['departmentId', 'department', [fn('COUNT', col('id')), 'count'], [fn('SUM', sqlColumn('currentValue')), 'value']], group: ['departmentId', 'department'], raw: true }),
       Assignment.findAll({
         where: { status: { [Op.in]: ['active', 'assigned', 'in_use', 'issued'] } },
         include: [{ model: Asset, required: true, where: assetWhere, attributes: ['id'] }],

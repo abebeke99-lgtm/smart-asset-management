@@ -7,8 +7,8 @@ const requestInclude = [
 	{ model: User, as: 'Requester', attributes: ['id', 'username', 'fullName'] },
 	{ model: User, as: 'Technician', attributes: ['id', 'username', 'fullName'] },
 ];
-const scopedWhere = (req) => ({ '$Asset.department_id$': req.organizationScope.departmentId || undefined, '$Asset.college_id$': req.organizationScope.departmentId ? undefined : req.organizationScope.collegeId });
-const cleanWhere = (req) => req.organizationScope.departmentId ? { '$Asset.department_id$': req.organizationScope.departmentId } : { '$Asset.college_id$': req.organizationScope.collegeId };
+const scopedWhere = (req) => ({ '$Asset.departmentId$': req.organizationScope.departmentId || undefined, '$Asset.collegeId$': req.organizationScope.departmentId ? undefined : req.organizationScope.collegeId });
+const cleanWhere = (req) => req.organizationScope.departmentId ? { '$Asset.departmentId$': req.organizationScope.departmentId } : { '$Asset.collegeId$': req.organizationScope.collegeId };
 
 const listRequests = async (req, res, next) => {
 	try {

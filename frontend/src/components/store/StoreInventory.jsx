@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BadgeCheck, Boxes, CheckCircle2, ChevronLeft, ChevronRight, Download, Eye, History, MapPin, PackageCheck, PackagePlus, RefreshCw, Search, X } from 'lucide-react';
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend } from 'chart.js';

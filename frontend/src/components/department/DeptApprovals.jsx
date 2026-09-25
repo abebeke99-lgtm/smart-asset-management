@@ -13,7 +13,7 @@ const DeptApprovals = () => {
   const { language, theme } = useLanguage();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('Pending');
+    const [filter, setFilter] = useState('pending');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterPriority, setFilterPriority] = useState('');

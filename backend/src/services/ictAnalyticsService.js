@@ -10,6 +10,10 @@ const {
 const numberValue = (value) => Number(value || 0);
 const nonBlank = (field) => ({ [field]: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] } });
 
+const snakeCase = (field) => String(field).replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+const rawColumn = (field) => col(snakeCase(field));
+const qualifiedColumn = (model, field) => col(`${model.name}.${snakeCase(field)}`);
+
 const parseDate = (value, label) => {
   if (!value) return null;
   const date = new Date(value);
@@ -60,7 +64,7 @@ const groupedCount = async (model, where, field, label = field, include = []) =>
   const rows = await model.findAll({
     where,
     include,
-    attributes: [[col(field), label], [fn('COUNT', col('id')), 'count']],
+    attributes: [[qualifiedColumn(model, field), label], [fn('COUNT', qualifiedColumn(model, 'id')), 'count']],
     group: [field],
     order: [[field, 'ASC']],
     raw: true,
@@ -71,7 +75,7 @@ const groupedCount = async (model, where, field, label = field, include = []) =>
 const groupedAssetValue = async (where, field, label = field) => {
   const rows = await Asset.findAll({
     where,
-    attributes: [[col(field), label], [fn('COUNT', col('id')), 'total'], [fn('SUM', col('purchasePrice')), 'value']],
+    attributes: [[rawColumn(field), label], [fn('COUNT', rawColumn('id')), 'total'], [fn('SUM', rawColumn('purchasePrice')), 'value']],
     group: [field],
     order: [[literal('total'), 'DESC']],
     raw: true,
@@ -80,11 +84,11 @@ const groupedAssetValue = async (where, field, label = field) => {
 };
 
 const trend = async (model, where, field = 'createdAt', include = []) => {
-  const expression = `DATE_FORMAT(${field}, '%Y-%m-%d')`;
+  const expression = `DATE_FORMAT(${model.name}.${snakeCase(field)}, '%Y-%m-%d')`;
   const rows = await model.findAll({
     where,
     include,
-    attributes: [[literal(expression), 'period'], [fn('COUNT', col('id')), 'count']],
+    attributes: [[literal(expression), 'period'], [fn('COUNT', qualifiedColumn(model, 'id')), 'count']],
     group: [literal(expression)],
     order: [[literal(expression), 'ASC']],
     raw: true,
@@ -110,18 +114,18 @@ const getIctAssetAnalytics = async (query = {}, collegeId) => {
     groupedAssetValue(assetWhere, 'category'),
     groupedAssetValue(assetWhere, 'department'),
     groupedAssetValue(assetWhere, 'location'),
-    Asset.findAll({ where: assetWhere, attributes: ['category', 'status', [fn('COUNT', col('id')), 'count']], group: ['category', 'status'], raw: true }),
+    Asset.findAll({ where: assetWhere, attributes: ['category', 'status', [fn('COUNT', rawColumn('id')), 'count']], group: ['category', 'status'], raw: true }),
     Asset.sum('purchasePrice', { where: assetWhere }),
     Assignment.count({ where: { status: 'active' }, include: assetScopeInclude }),
     Asset.count({ where: { ...assetWhere, status: { [Op.in]: ['maintenance', 'under-maintenance', 'under maintenance', 'in_maintenance'] } } }),
     MaintenanceRepair.count({ where: maintenanceWhere, include: assetScopeInclude }),
     groupedCount(Maintenance, maintenanceWhere, 'status', 'status', assetScopeInclude),
     groupedCount(MaintenanceRepair, maintenanceWhere, 'status', 'status', assetScopeInclude),
-    Asset.findOne({ where: { ...assetWhere, healthScore: { [Op.not]: null } }, attributes: [[fn('AVG', col('healthScore')), 'average']], raw: true }),
-    Asset.findAll({ where: { ...assetWhere, healthScore: { [Op.not]: null } }, attributes: [[literal("CASE WHEN health_score >= 80 THEN 'Healthy' WHEN health_score >= 50 THEN 'Warning' ELSE 'Critical' END"), 'healthStatus'], [fn('COUNT', col('id')), 'count']], group: [literal("CASE WHEN health_score >= 80 THEN 'Healthy' WHEN health_score >= 50 THEN 'Warning' ELSE 'Critical' END")], raw: true }),
+    Asset.findOne({ where: { ...assetWhere, healthScore: { [Op.not]: null } }, attributes: [[fn('AVG', rawColumn('healthScore')), 'average']], raw: true }),
+    Asset.findAll({ where: { ...assetWhere, healthScore: { [Op.not]: null } }, attributes: [[literal("CASE WHEN health_score >= 80 THEN 'Healthy' WHEN health_score >= 50 THEN 'Warning' ELSE 'Critical' END"), 'healthStatus'], [fn('COUNT', rawColumn('id')), 'count']], group: [literal("CASE WHEN health_score >= 80 THEN 'Healthy' WHEN health_score >= 50 THEN 'Warning' ELSE 'Critical' END")], raw: true }),
     Asset.count({ where: { ...assetWhere, [Op.or]: [{ assetCode: nonBlank('assetCode').assetCode }, { rfidTag: nonBlank('rfidTag').rfidTag }] } }),
-    Asset.findAll({ where: assetWhere, attributes: [[literal("CASE WHEN asset_code IS NOT NULL AND asset_code <> '' AND rfid_tag IS NOT NULL AND rfid_tag <> '' THEN 'QR + RFID' WHEN rfid_tag IS NOT NULL AND rfid_tag <> '' THEN 'RFID' WHEN asset_code IS NOT NULL AND asset_code <> '' THEN 'QR' ELSE 'Not tracked' END"), 'trackingType'], [fn('COUNT', col('id')), 'count']], group: [literal("CASE WHEN asset_code IS NOT NULL AND asset_code <> '' AND rfid_tag IS NOT NULL AND rfid_tag <> '' THEN 'QR + RFID' WHEN rfid_tag IS NOT NULL AND rfid_tag <> '' THEN 'RFID' WHEN asset_code IS NOT NULL AND asset_code <> '' THEN 'QR' ELSE 'Not tracked' END")], raw: true }),
-    Asset.findAll({ where: { ...assetWhere, purchaseDate: { [Op.not]: null } }, attributes: [[literal("CASE WHEN DATEDIFF(CURDATE(), purchase_date) < 365 THEN '< 1 year' WHEN DATEDIFF(CURDATE(), purchase_date) < 1095 THEN '1-3 years' WHEN DATEDIFF(CURDATE(), purchase_date) < 1825 THEN '3-5 years' WHEN DATEDIFF(CURDATE(), purchase_date) < 2555 THEN '5-7 years' ELSE '> 7 years' END"), 'bucket'], [fn('COUNT', col('id')), 'count']], group: [literal("CASE WHEN DATEDIFF(CURDATE(), purchase_date) < 365 THEN '< 1 year' WHEN DATEDIFF(CURDATE(), purchase_date) < 1095 THEN '1-3 years' WHEN DATEDIFF(CURDATE(), purchase_date) < 1825 THEN '3-5 years' WHEN DATEDIFF(CURDATE(), purchase_date) < 2555 THEN '5-7 years' ELSE '> 7 years' END")], raw: true }),
+    Asset.findAll({ where: assetWhere, attributes: [[literal("CASE WHEN asset_code IS NOT NULL AND asset_code <> '' AND rfid_tag IS NOT NULL AND rfid_tag <> '' THEN 'QR + RFID' WHEN rfid_tag IS NOT NULL AND rfid_tag <> '' THEN 'RFID' WHEN asset_code IS NOT NULL AND asset_code <> '' THEN 'QR' ELSE 'Not tracked' END"), 'trackingType'], [fn('COUNT', rawColumn('id')), 'count']], group: [literal("CASE WHEN asset_code IS NOT NULL AND asset_code <> '' AND rfid_tag IS NOT NULL AND rfid_tag <> '' THEN 'QR + RFID' WHEN rfid_tag IS NOT NULL AND rfid_tag <> '' THEN 'RFID' WHEN asset_code IS NOT NULL AND asset_code <> '' THEN 'QR' ELSE 'Not tracked' END")], raw: true }),
+    Asset.findAll({ where: { ...assetWhere, purchaseDate: { [Op.not]: null } }, attributes: [[literal("CASE WHEN DATEDIFF(CURDATE(), purchase_date) < 365 THEN '< 1 year' WHEN DATEDIFF(CURDATE(), purchase_date) < 1095 THEN '1-3 years' WHEN DATEDIFF(CURDATE(), purchase_date) < 1825 THEN '3-5 years' WHEN DATEDIFF(CURDATE(), purchase_date) < 2555 THEN '5-7 years' ELSE '> 7 years' END"), 'bucket'], [fn('COUNT', rawColumn('id')), 'count']], group: [literal("CASE WHEN DATEDIFF(CURDATE(), purchase_date) < 365 THEN '< 1 year' WHEN DATEDIFF(CURDATE(), purchase_date) < 1095 THEN '1-3 years' WHEN DATEDIFF(CURDATE(), purchase_date) < 1825 THEN '3-5 years' WHEN DATEDIFF(CURDATE(), purchase_date) < 2555 THEN '5-7 years' ELSE '> 7 years' END")], raw: true }),
     trend(Asset, assetWhere),
     trend(Assignment, { status: 'active', ...(period.from || period.to ? { createdAt: { [Op.between]: [period.from, period.to] } } : {}) }, 'createdAt', assetScopeInclude),
     trend(Maintenance, maintenanceWhere, 'createdAt', assetScopeInclude),
@@ -133,7 +137,7 @@ const getIctAssetAnalytics = async (query = {}, collegeId) => {
     Department.findAll({ where: { collegeId }, attributes: ['id', 'name', 'code'], order: [['name', 'ASC']], raw: true }),
   ]);
 
-  const assignedByCategory = await Asset.findAll({ where: assetWhere, include: [{ model: Assignment, required: true, where: { status: 'active' }, attributes: [] }], attributes: ['category', [fn('COUNT', col('id')), 'assigned']], group: ['category'], raw: true });
+  const assignedByCategory = await Asset.findAll({ where: assetWhere, include: [{ model: Assignment, required: true, where: { status: 'active' }, attributes: [] }], attributes: [[qualifiedColumn(Asset, 'category'), 'category'], [fn('COUNT', qualifiedColumn(Asset, 'id')), 'assigned']], group: [[qualifiedColumn(Asset, 'category')]], raw: true });
   const assignedMap = Object.fromEntries(assignedByCategory.map((row) => [row.category || 'Unassigned', numberValue(row.assigned)]));
   const categoryTable = categories.map((row) => {
     const statusRows = categoryStatus.filter((item) => (item.category || 'Unassigned') === (row.category || 'Unassigned'));

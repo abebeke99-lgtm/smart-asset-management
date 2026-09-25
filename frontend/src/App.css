@@ -546,6 +546,101 @@ body {
   transform-origin: left;
 }
 
+/* Active navigation state */
+.public-site-header .app-header-actions nav a.is-active::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+.public-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 8px;
+  transition: opacity 160ms ease;
+}
+
+.public-nav-link:hover {
+  opacity: 0.85;
+}
+
+.public-nav-link:focus-visible,
+.public-mobile-nav-toggle:focus-visible,
+.public-language-toggle:focus-visible,
+.public-theme-toggle:focus-visible,
+.public-login-button:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Mobile navigation: hidden on desktop */
+.public-mobile-nav {
+  display: none;
+}
+
+.public-mobile-nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgba(23, 33, 43, 0.18);
+  background: #ffffff;
+  color: #17212b;
+  cursor: pointer;
+}
+
+.public-mobile-nav-toggle:hover {
+  background: #eef2f5;
+}
+
+@media (max-width: 1023px) {
+  .public-site-header .public-header-desktop-actions {
+    display: none !important;
+  }
+
+  .public-site-header .public-mobile-nav-toggle {
+    display: inline-flex !important;
+  }
+
+  .public-site-header.mobile-nav-open .public-mobile-nav {
+    display: flex !important;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .public-site-header .public-mobile-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    color: #17212b !important;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(23, 33, 43, 0.1);
+  }
+
+  .public-site-header .public-mobile-nav-link.is-active {
+    background: #ffffff;
+    border-color: rgba(23, 33, 43, 0.28);
+    box-shadow: inset 3px 0 0 #17212b;
+  }
+
+  .public-site-header .public-mobile-nav-actions {
+    width: 100%;
+  }
+
+  .public-site-header .public-mobile-nav-actions .public-login-button {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}
+
 .public-site-header .public-login-button {
   min-height: 40px;
   padding: 0 17px !important;
@@ -625,7 +720,7 @@ body {
 
 .public-site-footer .footer-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(120px, 0.75fr) minmax(140px, 0.9fr) auto;
+  grid-template-columns: minmax(0, 1.5fr) minmax(140px, 0.9fr) auto;
   gap: 2rem;
   max-width: 1120px;
   margin: 0 auto;

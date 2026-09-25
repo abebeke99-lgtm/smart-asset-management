@@ -95,7 +95,6 @@ Asset.hasMany(AssetReturn, { foreignKey: 'assetId' });
 AssetReturn.belongsTo(Asset, { foreignKey: 'assetId' });
 User.hasMany(AssetReturn, { foreignKey: 'requestedBy', as: 'RequestedReturns' });
 AssetReturn.belongsTo(User, { foreignKey: 'requestedBy', as: 'Requester' });
-AssetReturn.belongsTo(User, { foreignKey: 'sourceUserId', as: 'SourceUser' });
 Transfer.hasMany(AssetMovement, { foreignKey: 'referenceId', constraints: false, scope: { referenceType: 'transfer' } });
 Department.hasMany(User, { foreignKey: 'departmentId' });
 User.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
@@ -463,6 +462,7 @@ module.exports = {
   Supplier,
   Invoice,
   InvoiceItem,
+  Payment,
   FiscalYear,
   FundSource,
   Budget,

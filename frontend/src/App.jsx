@@ -9,14 +9,13 @@ import './App.css';
 import './admin-design-system.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Archive, ArrowLeftRight, BarChart3, Bell, Building2, Check, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, Home as HomeIcon, Info, Languages, LayoutDashboard, LockKeyhole, LogIn, LogOut, Mail, MapPin, Moon, MoreHorizontal, Package, PanelLeft, Phone, Radio, Search, Settings, ShieldCheck, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
+import { Archive, ArrowLeftRight, BarChart3, Bell, Building2, Check, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, Home as HomeIcon, Info, Languages, LayoutDashboard, LockKeyhole, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, PanelLeft, Phone, Radio, Search, Settings, ShieldCheck, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
 import CollegeDepartments from './pages/college/CollegeDepartments';
 import DepartmentDetails from './components/college/DepartmentDetails';
 import DepartmentMaintenance from './components/department/DepartmentMaintenance';
-import DepartmentReturnsPage from './components/department/DepartmentReturnsPage';
 import ScopedWorkflowPage from './components/shared/ScopedWorkflowPage';
 
 // ==========================================
@@ -2384,11 +2383,9 @@ function AppContent() {
     phone: '',
     address: ''
   });
-  const [notificationBellOpen, setNotificationBellOpen] = useState(false);
-  const [userNotifications, setUserNotifications] = useState([]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
-  const [notificationLoading, setNotificationLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [collegeManagementOpen, setCollegeManagementOpen] = useState(() => JSON.parse(localStorage.getItem('collegeManagementOpen') || 'true'));
@@ -2398,6 +2395,8 @@ function AppContent() {
   const allowPublicNavigationRef = useRef(false);
   const logoutDestinationRef = useRef(null);
   const notificationMenuRef = useRef(null);
+  const mobileNavRef = useRef(null);
+  const mobileNavToggleRef = useRef(null);
 
   const t = translations[language] || translations.en;
 
@@ -2421,37 +2420,24 @@ function AppContent() {
 
   useEffect(() => {
     if (!user) {
-      setUserNotifications([]);
       setUnreadNotificationCount(0);
       return;
     }
 
     let active = true;
 
-    const fetchUserNotifications = async () => {
-      setNotificationLoading(true);
+    const fetchUnreadNotificationCount = async () => {
       try {
-        const [notificationResponse, unreadResponse] = await Promise.all([
-          apiClient.get('/api/notifications', { params: { limit: 6, page: 1 } }),
-          apiClient.get('/api/notifications/unread-count')
-        ]);
-        const notifications = Array.isArray(notificationResponse?.data?.notifications) ? notificationResponse.data.notifications : [];
+        const unreadResponse = await apiClient.get('/api/notifications/unread-count');
         const unreadCount = Number(unreadResponse?.data?.unreadCount ?? unreadResponse?.data?.count ?? 0);
-        if (!active) return;
-        setUserNotifications(notifications);
-        setUnreadNotificationCount(unreadCount);
+        if (active) setUnreadNotificationCount(unreadCount);
       } catch (error) {
-        if (active) {
-          setUserNotifications([]);
-          setUnreadNotificationCount(0);
-        }
-      } finally {
-        if (active) setNotificationLoading(false);
+        if (active) setUnreadNotificationCount(0);
       }
     };
 
-    fetchUserNotifications();
-    const interval = window.setInterval(fetchUserNotifications, 30000);
+    fetchUnreadNotificationCount();
+    const interval = window.setInterval(fetchUnreadNotificationCount, 30000);
     return () => {
       active = false;
       window.clearInterval(interval);
@@ -2461,7 +2447,6 @@ function AppContent() {
   useEffect(() => {
     const handleDocumentClick = (event) => {
       if (notificationMenuRef.current && !notificationMenuRef.current.contains(event.target)) {
-        setNotificationBellOpen(false);
         setProfileMenuOpen(false);
       }
     };
@@ -2471,8 +2456,39 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    setNotificationBellOpen(false);
+    setMobileNavOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      setMobileNavOpen(false);
+      mobileNavToggleRef.current?.focus();
+    };
+
+    const handleDocumentClick = (event) => {
+      const panel = mobileNavRef.current;
+      const toggle = mobileNavToggleRef.current;
+      const target = event.target;
+      if (panel?.contains(target) || toggle?.contains(target)) return;
+      setMobileNavOpen(false);
+    };
+
+    const handleResize = () => {
+      if (window.innerWidth > 1023) setMobileNavOpen(false);
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleDocumentClick);
+    window.addEventListener('resize', handleResize);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleDocumentClick);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [mobileNavOpen]);
 
   useEffect(() => {
     const collegeManagementActive = [
@@ -2554,21 +2570,6 @@ function AppContent() {
   };
 
   const dashboardRoute = getDashboardRoute(user?.role);
-  const notificationsRoute = location.pathname.startsWith('/department')
-    ? '/department/notifications'
-    : location.pathname.startsWith('/college')
-      ? '/college/notifications'
-      : location.pathname.startsWith('/ict')
-        ? '/ict/notifications'
-        : location.pathname.startsWith('/finance')
-          ? '/finance/notifications'
-          : location.pathname.startsWith('/store')
-            ? '/store/notifications'
-            : location.pathname.startsWith('/maintenance')
-              ? '/maintenance/notifications'
-              : location.pathname.startsWith('/infrastructure')
-                ? '/infrastructure/notifications'
-                : '/admin/notifications';
   const publicPaths = ['/home', '/about', '/contact', '/register', '/forgot-password', '/reset-password'];
   const requestPublicNavigation = (path, event) => {
     if (user) {
@@ -2655,257 +2656,53 @@ function AppContent() {
   // HEADER COMPONENT
   // ==========================================
 
-  const HeaderLink = ({ to, children }) => (
-    <Link to={to} onClick={(event) => requestPublicNavigation(to, event)} style={{
-      color: !user && (location.pathname === '/' || location.pathname === '/home') ? '#FFFFFF' : currentTheme.headerText,
-      textDecoration: 'none',
-      fontWeight: 700,
-      fontSize: '1.08rem',
-      opacity: 0.96,
-      cursor: 'pointer',
-      letterSpacing: '0.01em'
-    }}>
-      {children}
-    </Link>
-  );
+  // Only destinations backed by a real registered route are listed here.
+  // Services / Features / Help are intentionally absent: no such route exists.
+  const publicNavLinks = [
+    { to: '/home', label: t.home, icon: HomeIcon },
+    { to: '/about', label: t.about, icon: Info },
+    { to: '/contact', label: t.contact, icon: Mail }
+  ];
 
-  const Header = ({ publicOnly = false }) => (
-    <header className={`app-header${!user ? ' public-site-header sticky top-0 z-50' : ''}${!user && (location.pathname === '/' || location.pathname === '/home') ? ' home-public-header' : ''}`} style={{
-      background: !user && (location.pathname === '/' || location.pathname === '/home') ? 'rgba(15, 23, 42, 0.38)' : '#5e7f95',
-      color: !user && (location.pathname === '/' || location.pathname === '/home') ? '#FFFFFF' : '#17212B',
-      padding: '0.9rem 2rem',
-      borderBottom: '1px solid rgba(23, 33, 43, 0.08)',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      flexWrap: 'wrap',
-      gap: '20px',
-      width: '100%',
-      boxSizing: 'border-box',
-      boxShadow: 'none',
-      ...(!user && (location.pathname === '/' || location.pathname === '/home') ? { position: 'absolute', top: 0, left: 0, zIndex: 50 } : {})
-    }}>
-      <div className="app-header-brand" style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap', flex: '1 1 auto', minWidth: 0 }}>
-        <div style={{
-          width: '64px',
-          height: '64px',
-          borderRadius: '14px',
-          border: '1px solid rgba(255,255,255,0.7)',
-          background: '#ffffff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          flexShrink: 0,
-          boxShadow: '0 4px 12px rgba(23, 43, 61, 0.12)'
-        }}>
-          {!logoError ? (
-            <img 
-              src={organizationProfile.logo || UNIVERSITY_LOGO}
-              alt={organizationProfile.name || 'Institution logo'}
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-              onError={handleLogoError}
-            />
-          ) : (
-            <span style={{ fontSize: '1.5rem' }}>🏫</span>
-          )}
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <h1 style={{ margin: 0, fontSize: 'clamp(2.1rem, 3vw, 3.5rem)', fontWeight: 900, letterSpacing: '-0.05em', lineHeight: 1.08, color: !user && (location.pathname === '/' || location.pathname === '/home') ? '#FFFFFF' : '#17212B' }}>
-            {organizationProfile.name || t.university}
-          </h1>
-          <p style={{ margin: '10px 0 0', fontSize: '0.98rem', color: !user && (location.pathname === '/' || location.pathname === '/home') ? 'rgba(255,255,255,0.86)' : 'rgba(23,33,43,0.82)', fontWeight: 600 }}>
-            {t.systemName}
-          </p>
-        </div>
-      </div>
+  const isPublicNavActive = (to) => {
+    if (to === '/home') return location.pathname === '/' || location.pathname === '/home';
+    return location.pathname === to || location.pathname.startsWith(`${to}/`);
+  };
 
-      <div className="app-header-actions" style={{ display: 'flex', gap: '18px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-        <nav style={{ display: 'flex', gap: '28px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center' }}>
-          <HeaderLink to="/home">{t.home}</HeaderLink>
-          <HeaderLink to="/about">{t.about}</HeaderLink>
-          <HeaderLink to="/contact">{t.contact}</HeaderLink>
-        </nav>
+  const HeaderLink = ({ to, children, icon: Icon, className = '' }) => {
+    const active = isPublicNavActive(to);
+    return (
+      <Link
+        to={to}
+        onClick={(event) => requestPublicNavigation(to, event)}
+        aria-current={active ? 'page' : undefined}
+        className={`public-nav-link${active ? ' is-active' : ''}${className ? ` ${className}` : ''}`}
+        style={{
+          color: !user && (location.pathname === '/' || location.pathname === '/home') ? '#FFFFFF' : currentTheme.headerText,
+          textDecoration: 'none',
+          fontWeight: 700,
+          fontSize: '1.08rem',
+          cursor: 'pointer',
+          letterSpacing: '0.01em'
+        }}
+      >
+        {Icon ? <Icon size={17} aria-hidden="true" className="public-nav-link-icon" /> : null}
+        <span>{children}</span>
+      </Link>
+    );
+  };
 
-        <EthiopianClock language={language} theme={currentTheme} />
+  const Header = () => {
+    const onHomeRoute = !user && (location.pathname === '/' || location.pathname === '/home');
+    const headerTextColor = onHomeRoute ? '#FFFFFF' : currentTheme.headerText;
 
-        {user && !publicOnly ? (
-          <div className="app-header-user" style={{ display: 'flex', alignItems: 'center', gap: '10px', position: 'relative' }} ref={notificationMenuRef}>
-            <div style={{ position: 'relative' }}>
-              <button
-                type="button"
-                aria-label="Notifications"
-                onClick={() => setNotificationBellOpen((current) => !current)}
-                style={{
-                  position: 'relative',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  border: '1px solid rgba(23, 33, 43, 0.18)',
-                  background: 'rgba(255, 255, 255, 0.26)',
-                  color: '#17212B',
-                  cursor: 'pointer'
-                }}
-              >
-                <Bell size={18} />
-                {unreadNotificationCount > 0 && (
-                  <span style={{
-                    position: 'absolute',
-                    top: '-4px',
-                    right: '-4px',
-                    minWidth: '18px',
-                    height: '18px',
-                    borderRadius: '999px',
-                    background: '#ef4444',
-                    color: '#fff',
-                    fontSize: '10px',
-                    fontWeight: 700,
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    padding: '0 4px'
-                  }}>
-                    {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
-                  </span>
-                )}
-              </button>
-
-              {notificationBellOpen && (
-                <div style={{
-                  position: 'absolute',
-                  right: 0,
-                  top: 'calc(100% + 10px)',
-                  width: '360px',
-                  maxWidth: '90vw',
-                  background: '#ffffff',
-                  color: '#0f172a',
-                  borderRadius: '14px',
-                  boxShadow: '0 20px 50px rgba(15, 23, 42, 0.2)',
-                  border: '1px solid #e2e8f0',
-                  overflow: 'hidden',
-                  zIndex: 40
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid #e2e8f0' }}>
-                    <div style={{ fontWeight: 700 }}>Notifications</div>
-                    <button type="button" onClick={() => setNotificationBellOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b' }}>
-                      <X size={16} />
-                    </button>
-                  </div>
-
-                  {notificationLoading ? (
-                    <div style={{ padding: '18px 16px', color: '#64748b' }}>Loading notifications...</div>
-                  ) : userNotifications.length === 0 ? (
-                    <div style={{ padding: '18px 16px', color: '#64748b' }}>You are all caught up.</div>
-                  ) : (
-                    <div>
-                      {userNotifications.map((item) => {
-                        const readState = Boolean(item.is_read ?? item.read);
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={async () => {
-                              if (!readState) {
-                                try { await apiClient.patch(`/api/notifications/${item.id}/read`); } catch (error) { /* no-op */ }
-                              }
-                              setNotificationBellOpen(false);
-                              navigate(notificationsRoute);
-                            }}
-                            style={{
-                              display: 'block',
-                              width: '100%',
-                              padding: '12px 16px',
-                              border: 'none',
-                              borderBottom: '1px solid #f1f5f9',
-                              background: readState ? '#ffffff' : '#f8fafc',
-                              textAlign: 'left',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                              <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{item.title || 'Notification'}</strong>
-                              {!readState && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2563eb', display: 'inline-block' }} />}
-                            </div>
-                            <div style={{ marginTop: 4, fontSize: '0.8rem', color: '#475569', lineHeight: 1.45 }}>{item.message || 'No message available.'}</div>
-                            <div style={{ marginTop: 6, fontSize: '0.72rem', color: '#64748b' }}>{item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Recent'}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  <div style={{ padding: '12px 16px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNotificationBellOpen(false);
-                        navigate(notificationsRoute);
-                      }}
-                      style={{
-                        width: '100%',
-                        border: '1px solid #dbeafe',
-                        background: '#eff6ff',
-                        color: '#1d4ed8',
-                        borderRadius: '8px',
-                        padding: '8px 10px',
-                        fontWeight: 600,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      View all notifications
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '50%',
-                overflow: 'hidden',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: '#fff',
-                border: '2px solid rgba(255,255,255,0.15)',
-                flexShrink: 0
-              }}>
-                <div style={{ fontWeight: 800, color: '#2b6cb0', fontSize: '0.9rem' }}>
-                  {(user.username || 'U').split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', color: currentTheme.headerText, lineHeight: 1.1 }}>
-                <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{user.username}</div>
-                <div style={{ fontSize: '0.6rem', opacity: 0.8, textTransform: 'capitalize' }}>{user.role}</div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <Link className="public-login-button" to="/login" style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: '#ffffff',
-            color: '#17212B',
-            textDecoration: 'none',
-            padding: '10px 18px',
-            borderRadius: 12,
-            fontWeight: 800,
-            fontSize: '1.02rem',
-            minHeight: '48px',
-            boxShadow: '0 4px 10px rgba(23, 43, 61, 0.12)'
-          }}>
-            <LockKeyhole size={18} aria-hidden="true" />
-            <span>{t.login}</span>
-          </Link>
-        )}
-
-        <button onClick={toggleLanguage} aria-label={language === 'en' ? 'Switch to Amharic' : 'Switch to English'} style={{
+    const LanguageToggle = ({ variant }) => (
+      <button
+        type="button"
+        onClick={toggleLanguage}
+        aria-label={language === 'en' ? 'Switch to Amharic' : 'Switch to English'}
+        className={`public-language-toggle${variant ? ` ${variant}` : ''}`}
+        style={{
           display: 'inline-flex',
           alignItems: 'center',
           gap: '5px',
@@ -2917,12 +2714,20 @@ function AppContent() {
           color: '#0F172A',
           fontSize: '0.8rem',
           fontWeight: 600
-        }}>
-          <Languages size={15} aria-hidden="true" />
-          <span>{language === 'en' ? 'አማ' : 'EN'}</span>
-        </button>
+        }}
+      >
+        <Languages size={15} aria-hidden="true" />
+        <span>{language === 'en' ? 'አማ' : 'EN'}</span>
+      </button>
+    );
 
-        <button onClick={toggleTheme} aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'} style={{
+    const ThemeToggle = () => (
+      <button
+        type="button"
+        onClick={toggleTheme}
+        aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
+        className="public-theme-toggle"
+        style={{
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -2933,13 +2738,145 @@ function AppContent() {
           cursor: 'pointer',
           color: '#0F172A',
           fontSize: '0.9rem'
-        }}>
-          {theme === 'light' ? <Moon size={16} aria-hidden="true" /> : <Sun size={16} aria-hidden="true" />}
-        </button>
-      </div>
-    </header>
-  );
+        }}
+      >
+        {theme === 'light' ? <Moon size={16} aria-hidden="true" /> : <Sun size={16} aria-hidden="true" />}
+      </button>
+    );
 
+    const LoginButton = () => (
+      <Link className="public-login-button" to="/login" style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '8px',
+        background: '#ffffff',
+        color: '#17212B',
+        textDecoration: 'none',
+        padding: '10px 18px',
+        borderRadius: 12,
+        fontWeight: 800,
+        fontSize: '1.02rem',
+        minHeight: '48px',
+        boxShadow: '0 4px 10px rgba(23, 43, 61, 0.12)'
+      }}>
+        <LockKeyhole size={18} aria-hidden="true" />
+        <span>{t.login}</span>
+      </Link>
+    );
+
+    return (
+      <header
+        className={`app-header public-site-header${onHomeRoute ? ' home-public-header' : ''}${mobileNavOpen ? ' mobile-nav-open' : ''}`}
+        style={{
+          background: onHomeRoute ? 'rgba(15, 23, 42, 0.38)' : '#5e7f95',
+          color: headerTextColor,
+          padding: '0.9rem 2rem',
+          borderBottom: '1px solid rgba(23, 33, 43, 0.08)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '20px',
+          width: '100%',
+          boxSizing: 'border-box',
+          boxShadow: 'none',
+          position: onHomeRoute ? 'absolute' : 'sticky',
+          top: 0,
+          left: 0,
+          zIndex: 50
+        }}
+      >
+        <div className="app-header-brand" style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap', flex: '1 1 auto', minWidth: 0 }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '14px',
+            border: '1px solid rgba(255,255,255,0.7)',
+            background: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            flexShrink: 0,
+            boxShadow: '0 4px 12px rgba(23, 43, 61, 0.12)'
+          }}>
+            {!logoError ? (
+              <img
+                src={organizationProfile.logo || UNIVERSITY_LOGO}
+                alt={organizationProfile.name || 'Institution logo'}
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                onError={handleLogoError}
+              />
+            ) : (
+              <span style={{ fontSize: '1.5rem' }}>🏫</span>
+            )}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ margin: 0, fontSize: 'clamp(1.1rem, 2.4vw, 2.1rem)', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1.12, color: headerTextColor }}>
+              {organizationProfile.name || t.university}
+            </h1>
+            <p style={{ margin: '6px 0 0', fontSize: '0.9rem', color: onHomeRoute ? 'rgba(255,255,255,0.86)' : 'rgba(23,33,43,0.82)', fontWeight: 600 }}>
+              {t.systemName}
+            </p>
+          </div>
+        </div>
+
+        <div className="app-header-actions public-header-actions" style={{ display: 'flex', gap: '18px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <div className="public-header-desktop-actions" style={{ display: 'flex', gap: '18px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <nav className="public-desktop-nav" aria-label={t.footerNavigation} style={{ display: 'flex', gap: '28px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center' }}>
+              {publicNavLinks.map((item) => (
+                <HeaderLink key={item.to} to={item.to} icon={item.icon}>{item.label}</HeaderLink>
+              ))}
+            </nav>
+
+            <EthiopianClock language={language} theme={currentTheme} />
+
+            <LanguageToggle />
+            <ThemeToggle />
+            <LoginButton />
+          </div>
+
+          <button
+            type="button"
+            ref={mobileNavToggleRef}
+            className="public-mobile-nav-toggle"
+            onClick={() => setMobileNavOpen((current) => !current)}
+            aria-expanded={mobileNavOpen}
+            aria-controls="public-mobile-nav"
+            aria-label={mobileNavOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          >
+            {mobileNavOpen ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
+          </button>
+        </div>
+
+        <div
+          id="public-mobile-nav"
+          ref={mobileNavRef}
+          className="public-mobile-nav"
+          hidden={!mobileNavOpen}
+          style={{
+            width: '100%',
+            flexBasis: '100%',
+            flexDirection: 'column',
+            gap: '4px',
+            padding: '12px 0 4px'
+          }}
+        >
+          {publicNavLinks.map((item) => (
+            <HeaderLink key={item.to} to={item.to} icon={item.icon} className="public-mobile-nav-link">
+              {item.label}
+            </HeaderLink>
+          ))}
+
+          <div className="public-mobile-nav-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', paddingTop: '10px', marginTop: '6px', borderTop: '1px solid rgba(23, 33, 43, 0.12)' }}>
+            <LanguageToggle variant="public-mobile-language-toggle" />
+            <ThemeToggle />
+            <LoginButton />
+          </div>
+        </div>
+      </header>
+    );
+  };
   const Footer = () => (
     <footer className={`app-footer${!user ? ' public-site-footer' : ''}`}>
       <div className="footer-grid">
@@ -2955,17 +2892,21 @@ function AppContent() {
 
         <nav className="footer-section" aria-label={t.footerNavigation}>
           <h3>Quick Links</h3>
-          <Link className="footer-link" to="/" onClick={(event) => requestPublicNavigation('/', event)}><HomeIcon size={16} aria-hidden="true" />{t.home}</Link>
-          <Link className="footer-link" to="/about" onClick={(event) => requestPublicNavigation('/about', event)}><Info size={16} aria-hidden="true" />{t.about}</Link>
-          <Link className="footer-link" to="/contact" onClick={(event) => requestPublicNavigation('/contact', event)}><Mail size={16} aria-hidden="true" />{t.contact}</Link>
+          {publicNavLinks.map((item) => {
+            const NavIcon = item.icon;
+            return (
+              <Link
+                key={item.to}
+                className="footer-link"
+                to={item.to}
+                aria-current={isPublicNavActive(item.to) ? 'page' : undefined}
+                onClick={(event) => requestPublicNavigation(item.to, event)}
+              >
+                <NavIcon size={16} aria-hidden="true" />{item.label}
+              </Link>
+            );
+          })}
           <Link className="footer-link" to="/login"><LogIn size={16} aria-hidden="true" />Sign In</Link>
-        </nav>
-
-        <nav className="footer-section" aria-label="System">
-          <h3>System</h3>
-          <Link className="footer-link" to="/ict/assets"><Package size={16} aria-hidden="true" />Asset Management</Link>
-          <Link className="footer-link" to="/login"><Wrench size={16} aria-hidden="true" />Maintenance</Link>
-          <Link className="footer-link" to="/login"><BarChart3 size={16} aria-hidden="true" />Reports</Link>
         </nav>
 
         <div className="footer-controls">
@@ -2986,7 +2927,7 @@ function AppContent() {
     </footer>
   );
 
-  const PublicHeader = () => <Header publicOnly />;
+  const PublicHeader = () => <Header />;
   const PublicFooter = () => <Footer />;
 
   const PublicLayout = ({ children }) => {
@@ -3843,6 +3784,7 @@ function AppContent() {
             <Route path="analytics/departments" element={<CollegeManagerPages section="department-reports" />} />
             <Route path="notifications" element={<CollegeManagerPages section="notifications" />} />
             <Route path="history" element={<CollegeManagerPages section="history" />} />
+            <Route path="history/:id" element={<DeptAssetHistory />} />
           </Route>
 
           <Route path="/department" element={<DepartmentWorkspaceRoute />}>
@@ -3856,15 +3798,16 @@ function AppContent() {
             <Route path="approvals" element={<DepartmentDeanRoute />} />
             <Route path="assignments" element={<DeptAssets />} />
             <Route path="transfers" element={<ScopedWorkflowPage type="transfers" />} />
-            <Route path="returns" element={<DepartmentReturnsPage />} />
+            <Route path="returns" element={<ScopedWorkflowPage type="returns" />} />
             <Route path="maintenance" element={<DepartmentMaintenance />} />
             <Route path="maintenance-requests" element={<DepartmentMaintenance />} />
-            <Route path="movement" element={<DeptAssetHistory />} />
+            <Route path="movement" element={<Navigate to="/department/history" replace />} />
             <Route path="utilization" element={<DeptUtilization />} />
             <Route path="verification" element={<DeptAssets />} />
             <Route path="reports" element={<DeptReports />} />
             <Route path="notifications" element={<DeptNotifications />} />
             <Route path="history" element={<DeptAssetHistory />} />
+            <Route path="history/:id" element={<DeptAssetHistory />} />
           </Route>
 
           {/* FINANCE ROUTES - Fixed with RoleLayout */}
