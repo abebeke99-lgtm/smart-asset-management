@@ -240,13 +240,13 @@ const getInventory = async (req, res, next) => {
     if (req.query.status) assetWhere.status = String(req.query.status).toLowerCase();
     if (req.query.category) assetWhere.category = String(req.query.category);
     if (req.query.condition) assetWhere.condition = String(req.query.condition);
-    if (req.query.location) inventoryWhere.location = String(req.query.location);
+    if (req.query.location) assetWhere.location = String(req.query.location);
     if (search) assetWhere[Op.or] = ['assetCode', 'name', 'category', 'serialNumber', 'rfidTag'].map((field) => ({ [field]: { [Op.like]: `%${search}%` } }));
     if (String(req.query.lowStockOnly).toLowerCase() === 'true') inventoryWhere[Op.and] = Sequelize.where(Sequelize.col('available_quantity'), Op.lte, Sequelize.col('minimum_quantity'));
 
     const result = await Inventory.findAndCountAll({ where: inventoryWhere, include: [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'category', 'serialNumber', 'rfidTag', 'status', 'condition', 'location', 'collegeId'], required: true, where: assetWhere }, { model: Department, attributes: ['id', 'name'] }], order: [['id', 'ASC']], limit: pageSize, offset: (page - 1) * pageSize, distinct: true });
     const items = result.rows.map(normalizeInventory);
-    const allScopeRows = await Inventory.findAll({ where: inventoryWhere, include: [{ model: Asset, attributes: ['status', 'collegeId'], required: true, where: assetWhere }], attributes: ['quantity', 'availableQuantity', 'reservedQuantity', 'damagedQuantity', 'minimumQuantity'] });
+    const allScopeRows = await Inventory.findAll({ where: inventoryWhere, include: [{ model: Asset, attributes: ['status', 'collegeId', 'category', 'condition', 'location'], required: true, where: assetWhere }], attributes: ['quantity', 'availableQuantity', 'reservedQuantity', 'damagedQuantity', 'minimumQuantity'] });
     const summary = allScopeRows.reduce((stats, item) => {
       const status = String(item.Asset?.status || item.status || '').toLowerCase();
       stats.total += Number(item.quantity || 0);
@@ -258,7 +258,17 @@ const getInventory = async (req, res, next) => {
       stats.lowStock += Number(item.availableQuantity || 0) <= Number(item.minimumQuantity || 0) ? 1 : 0;
       return stats;
     }, { total: 0, available: 0, reserved: 0, assigned: 0, damaged: 0, missing: 0, lowStock: 0 });
-    return res.json({ success: true, data: items, summary, pagination: { page, pageSize, limit: pageSize, total: result.count, totalPages: Math.ceil(result.count / pageSize) } });
+    return res.json({
+      success: true,
+      data: items,
+      summary,
+      filters: {
+        categories: [...new Set(allScopeRows.map((row) => row.Asset?.category).filter(Boolean))].sort(),
+        locations: [...new Set(allScopeRows.map((row) => row.Asset?.location || row.location).filter(Boolean))].sort(),
+        conditions: [...new Set(allScopeRows.map((row) => row.Asset?.condition).filter(Boolean))].sort(),
+      },
+      pagination: { page, pageSize, limit: pageSize, total: result.count, totalPages: Math.ceil(result.count / pageSize) },
+    });
   } catch (error) { return next(error); }
 };
 

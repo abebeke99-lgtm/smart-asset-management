@@ -75,9 +75,89 @@
 .college-overview-list { display: grid; grid-template-columns: 1fr auto; gap: 11px 16px; margin: 0; font-size: 13px; }
 .college-overview-list dt { color: #64748b; }
 .college-overview-list dd { margin: 0; color: #0f172a; font-weight: 700; text-align: right; }
-.college-skeleton-card { min-height: 132px; border-radius: 16px; background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%); background-size: 200% 100%; animation: skeletonPulse 1.2s ease-in-out infinite; }
-@keyframes skeletonPulse { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.college-skeleton-card { min-height: 132px; border-radius: 16px; background: #f1f5f9; }
 .college-dashboard-hero--loading { opacity: 0.8; }
+
+.college-verification-page { padding: 0 24px 28px; color: #0f172a; }
+.college-verification-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+.college-verification-eyebrow { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; color: #0369a1; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.college-verification-header h3 { margin: 0; font-size: 24px; line-height: 1.2; }
+.college-verification-refresh, .college-verification-clear, .college-verification-action, .college-verification-pagination button, .college-verification-modal-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #334155; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; padding: 9px 12px; }
+.college-verification-refresh:hover, .college-verification-clear:hover, .college-verification-action:hover { border-color: #0284c7; color: #0369a1; }
+.college-verification-refresh:disabled, .college-verification-action:disabled, .college-verification-pagination button:disabled, .college-verification-modal-actions button:disabled { cursor: not-allowed; opacity: .55; }
+.college-verification-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+.college-verification-kpi { padding: 16px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; box-shadow: 0 3px 10px rgba(15, 23, 42, .04); }
+.college-verification-kpi span { display: block; color: #64748b; font-size: 12px; font-weight: 700; }
+.college-verification-kpi strong { display: block; margin-top: 8px; color: #0f172a; font-size: 25px; }
+.college-verification-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
+.college-verification-search { display: flex; align-items: center; flex: 1 1 280px; gap: 8px; min-width: 220px; color: #64748b; }
+.college-verification-search input, .college-verification-toolbar select, .college-verification-modal select, .college-verification-modal textarea { width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #0f172a; font: inherit; font-size: 13px; padding: 9px 10px; }
+.college-verification-search input { border: 0; outline: 0; }
+.college-verification-toolbar select { width: auto; min-width: 145px; }
+.college-verification-filter-icon { color: #64748b; }
+.college-verification-panel { margin-bottom: 18px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; box-shadow: 0 3px 10px rgba(15, 23, 42, .04); }
+.college-verification-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 16px; border-bottom: 1px solid #e2e8f0; }
+.college-verification-panel-header h4 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 15px; }
+.college-verification-panel-header span { color: #64748b; font-size: 12px; }
+.college-verification-table-wrap { overflow-x: auto; }
+.college-verification-table { width: 100%; min-width: 920px; border-collapse: collapse; font-size: 13px; }
+.college-verification-table th { color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-align: left; text-transform: uppercase; }
+.college-verification-table th, .college-verification-table td { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; text-align: left; vertical-align: middle; white-space: nowrap; }
+.college-verification-table td { color: #334155; }
+.college-verification-table td strong, .college-verification-table td small { display: block; }
+.college-verification-table td strong { color: #0f172a; }
+.college-verification-table td small { margin-top: 3px; color: #94a3b8; font-size: 11px; }
+.college-verification-table td > svg { margin-right: 4px; vertical-align: -3px; color: #64748b; }
+.status-pill { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 5px 8px; font-size: 11px; font-weight: 800; }
+.status-success { color: #166534; background: #dcfce7; }
+.status-danger { color: #991b1b; background: #fee2e2; }
+.status-warning { color: #92400e; background: #fef3c7; }
+.status-info { color: #075985; background: #e0f2fe; }
+.status-muted { color: #475569; background: #f1f5f9; }
+.college-verification-status-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 15px; }
+.college-verification-status-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; border: 1px solid #f1f5f9; border-radius: 8px; }
+.college-verification-status-item strong { color: #0f172a; }
+.college-verification-empty, .college-verification-state { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 150px; color: #64748b; font-size: 13px; text-align: center; }
+.college-verification-error { flex-direction: column; color: #991b1b; }
+.college-verification-error button { margin-left: 10px; border: 0; background: transparent; color: #0369a1; cursor: pointer; font-weight: 700; }
+.college-verification-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 12px; color: #64748b; font-size: 12px; }
+.college-verification-icon-button { display: inline-flex; border: 0; background: transparent; color: #64748b; cursor: pointer; padding: 5px; }
+.college-verification-modal-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(15, 23, 42, .45); }
+.college-verification-modal { width: min(620px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; padding: 22px; border-radius: 14px; background: #fff; box-shadow: 0 20px 50px rgba(15, 23, 42, .25); }
+.college-verification-modal-header { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.college-verification-modal-header h4 { margin: 0; font-size: 20px; }
+.college-verification-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+.college-verification-detail-grid div { min-width: 0; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; }
+.college-verification-detail-grid span { display: flex; align-items: center; gap: 5px; color: #64748b; font-size: 11px; }
+.college-verification-detail-grid strong { display: block; margin-top: 5px; overflow-wrap: anywhere; color: #0f172a; font-size: 13px; }
+.college-verification-modal label { display: block; margin-top: 13px; color: #334155; font-size: 12px; font-weight: 800; }
+.college-verification-modal label select, .college-verification-modal label textarea { display: block; margin-top: 6px; }
+.college-verification-modal textarea { resize: vertical; }
+.college-verification-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.college-verification-modal-actions .primary { border-color: #0369a1; background: #0369a1; color: #fff; }
+.college-verification-refresh:focus-visible, .college-verification-clear:focus-visible, .college-verification-action:focus-visible, .college-verification-toolbar select:focus-visible, .college-verification-modal select:focus-visible, .college-verification-modal textarea:focus-visible, .college-verification-icon-button:focus-visible { outline: 3px solid rgba(14, 165, 233, .35); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .college-verification-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .college-verification-toolbar select { flex: 1 1 145px; }
+}
+
+@media (max-width: 600px) {
+  .college-verification-page { padding: 0 12px 22px; }
+  .college-verification-header { align-items: stretch; flex-direction: column; }
+  .college-verification-header h3 { font-size: 20px; }
+  .college-verification-refresh { align-self: flex-start; }
+  .college-verification-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .college-verification-toolbar { align-items: stretch; flex-direction: column; }
+  .college-verification-search { flex-basis: auto; }
+  .college-verification-toolbar select { width: 100%; }
+  .college-verification-filter-icon { display: none; }
+  .college-verification-status-list, .college-verification-detail-grid { grid-template-columns: 1fr; }
+  .college-verification-modal-backdrop { padding: 10px; }
+  .college-verification-modal { max-height: calc(100vh - 20px); padding: 16px; }
+  .college-verification-modal-actions { flex-direction: column-reverse; }
+  .college-verification-modal-actions button { width: 100%; }
+}
 
 .college-dashboard-kpis {
   display: grid;

@@ -235,15 +235,15 @@ const CollegeAssetAnalytics = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18 }}>
         <div className="college-dashboard-card" style={{ padding: 16 }}>
           <div className="college-section-heading"><div><h2>Asset Status Distribution</h2></div><BarChart3 size={18} /></div>
-          {statusChartData.labels.length ? <Doughnut data={statusChartData} options={{ responsive: true, maintainAspectRatio: false }} height={220} /> : <p className="college-empty-state">No asset data available.</p>}
+          {statusChartData.labels.length ? <Doughnut data={statusChartData} options={{ responsive: true, maintainAspectRatio: false, animation: false }} height={220} /> : <p className="college-empty-state">No asset data available.</p>}
         </div>
         <div className="college-dashboard-card" style={{ padding: 16 }}>
           <div className="college-section-heading"><div><h2>Asset Condition</h2></div><Filter size={18} /></div>
-          {conditionChartData.labels.length ? <Bar data={conditionChartData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} height={220} /> : <p className="college-empty-state">No asset data available.</p>}
+          {conditionChartData.labels.length ? <Bar data={conditionChartData} options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } } }} height={220} /> : <p className="college-empty-state">No asset data available.</p>}
         </div>
         <div className="college-dashboard-card" style={{ padding: 16, gridColumn: '1 / -1' }}>
           <div className="college-section-heading"><div><h2>Asset Additions Over Time</h2></div><TrendingUpIcon /></div>
-          {trendChartData.labels.length ? <Line data={trendChartData} options={{ responsive: true, maintainAspectRatio: false }} height={220} /> : <p className="college-empty-state">No historical data available.</p>}
+          {trendChartData.labels.length ? <Line data={trendChartData} options={{ responsive: true, maintainAspectRatio: false, animation: false }} height={220} /> : <p className="college-empty-state">No historical data available.</p>}
         </div>
       </div>
 

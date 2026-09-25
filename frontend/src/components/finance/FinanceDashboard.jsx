@@ -905,7 +905,7 @@ export default function FinanceDashboard() {
           margin: 0 auto;
         }
 
-        .dashboard-header {
+        .finance-dashboard-header {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
@@ -1609,7 +1609,7 @@ export default function FinanceDashboard() {
             padding: 15px;
           }
 
-          .dashboard-header {
+          .finance-dashboard-header {
             flex-direction: column;
           }
 
@@ -1658,7 +1658,7 @@ export default function FinanceDashboard() {
       `}</style>
 
       <div className="finance-container">
-        <div className="dashboard-header">
+        <div className="finance-dashboard-header">
           <div className="welcome-area">
             <div className="finance-logo">
               <CircleDollarSign

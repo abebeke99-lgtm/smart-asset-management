@@ -407,6 +407,7 @@ const FinanceDepreciation = () => {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,
     plugins: {
       legend: {
         position: 'top',
@@ -1299,7 +1300,7 @@ const englishTranslations = {
   costComparison: 'Purchase Cost vs Book Value',
   depreciationByCategory: 'Depreciation by Category',
   depreciationTrend: 'Depreciation Trend (10 Years)',
-  purchaseCost: 'Purchase Cost',
+  purchaseCostChart: 'Purchase Cost',
   currentValue: 'Current Value'
 };
 
@@ -1359,7 +1360,6 @@ const amharicTranslations = {
   costComparison: 'የግዢ ዋጋ እና የመጽሐፍ ዋጋ',
   depreciationByCategory: 'በምድብ የእሴት መቀነስ',
   depreciationTrend: 'የእሴት መቀነስ አዝማሚያ (10 ዓመታት)',
-  purchaseCost: 'የግዢ ዋጋ',
   currentValue: 'የአሁኑ ዋጋ'
 };
 

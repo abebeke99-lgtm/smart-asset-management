@@ -1,6 +1,9 @@
+const fs = require('fs');
+const path = require('path');
 const { Op } = require('sequelize');
 const { User, Department, AuditLog } = require('../models');
 const bcrypt = require('bcryptjs');
+const { saveProfilePhoto, validateProfilePhoto, buildPublicFileUrl } = require('../utils/uploadUtils');
 
 const roles = ['admin', 'ict_officer', 'college', 'finance', 'store_manager', 'maintenance', 'infrastructure', 'staff', 'student'];
 const safeUser = (user) => {
@@ -129,6 +132,16 @@ const deleteUser = async (req, res) => {
   }
 };
 
+const getCurrentUserProfile = async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    return res.json({ success: true, data: safeUser(user) });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 const updateProfile = async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id);
@@ -144,6 +157,77 @@ const updateProfile = async (req, res) => {
     await AuditLog.create({ userId: user.id, action: 'PROFILE_UPDATED', entity: `user:${user.id}`, details: JSON.stringify({ fields: Object.keys(updates) }) });
     res.json({ success: true, user: safeUser(user) });
   } catch (error) { res.status(500).json({ success: false, message: error.message }); }
+};
+
+const getServerPhotoPath = (profilePhoto) => {
+  if (!profilePhoto) return null;
+  const relative = String(profilePhoto).trim().replace(/\\/g, '/');
+  const normalized = relative.startsWith('/') ? relative.slice(1) : relative;
+  const relativePath = normalized.replace(/^uploads\//, '');
+  return path.resolve(process.cwd(), 'uploads', relativePath);
+};
+
+const updateCurrentUserProfilePhoto = async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (!req.file) return res.status(400).json({ success: false, message: 'No image selected.' });
+
+    const validation = validateProfilePhoto(req.file, { maxSize: 5 * 1024 * 1024 });
+    if (!validation.valid) {
+      return res.status(400).json({ success: false, message: validation.message });
+    }
+
+    const previousPhoto = user.profilePhoto;
+    const saved = saveProfilePhoto({
+      buffer: Buffer.from(req.file.buffer),
+      originalName: req.file.originalname,
+      mimeType: req.file.mimetype,
+    }, user.id);
+
+    if (previousPhoto && previousPhoto !== saved.filePath) {
+      const previousPath = getServerPhotoPath(previousPhoto);
+      if (previousPath && fs.existsSync(previousPath)) {
+        try {
+          fs.unlinkSync(previousPath);
+        } catch (unlinkError) {
+          console.warn('Failed to remove previous profile photo:', unlinkError.message);
+        }
+      }
+    }
+
+    await user.update({ profilePhoto: saved.filePath });
+    const refreshedUser = await User.findByPk(user.id);
+    await AuditLog.create({ userId: user.id, action: 'PROFILE_PHOTO_UPDATED', entity: `user:${user.id}`, details: JSON.stringify({ profilePhoto: saved.filePath }) });
+    return res.json({ success: true, message: 'Profile photo updated successfully.', user: safeUser(refreshedUser), data: safeUser(refreshedUser) });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message || 'Unable to update profile photo. Please try again.' });
+  }
+};
+
+const removeCurrentUserProfilePhoto = async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (!user.profilePhoto) {
+      return res.json({ success: true, message: 'No profile photo to remove.', user: safeUser(user), data: safeUser(user) });
+    }
+
+    const previousPath = getServerPhotoPath(user.profilePhoto);
+    await user.update({ profilePhoto: null });
+    if (previousPath && fs.existsSync(previousPath)) {
+      try {
+        fs.unlinkSync(previousPath);
+      } catch (unlinkError) {
+        console.warn('Failed to delete profile photo file:', unlinkError.message);
+      }
+    }
+    const refreshedUser = await User.findByPk(user.id);
+    await AuditLog.create({ userId: user.id, action: 'PROFILE_PHOTO_REMOVED', entity: `user:${user.id}`, details: JSON.stringify({ profilePhoto: null }) });
+    return res.json({ success: true, message: 'Profile photo removed.', user: safeUser(refreshedUser), data: safeUser(refreshedUser) });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message || 'Unable to remove profile photo. Please try again.' });
+  }
 };
 
 const setUserSecurityState = async (req, res, state) => {
@@ -183,4 +267,4 @@ const terminateUserSession = async (req, res) => {
   return res.json({ success: true, message: 'User sessions terminated' });
 };
 
-module.exports = { getAllUsers, getUserById, createUser, updateUser, deleteUser, updateProfile, setUserSecurityState, resetUserPassword, forcePasswordChange, terminateUserSession };
+module.exports = { getAllUsers, getUserById, createUser, updateUser, deleteUser, getCurrentUserProfile, updateProfile, updateCurrentUserProfilePhoto, removeCurrentUserProfilePhoto, setUserSecurityState, resetUserPassword, forcePasswordChange, terminateUserSession };

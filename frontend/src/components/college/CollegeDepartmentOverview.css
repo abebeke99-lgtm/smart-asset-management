@@ -7,7 +7,7 @@
 .college-department-overview-state { display: flex; align-items: center; gap: 10px; padding: 48px 24px; color: var(--text-muted, #64748b); }
 .college-department-overview-error { display: grid; justify-items: start; }
 .college-department-overview-error button { display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; border: 0; border-radius: 6px; background: var(--primary-blue, #155e75); color: #fff; cursor: pointer; }
-.college-overview-spin { animation: college-overview-spin 1s linear infinite; }
+.college-overview-spin {  }
 @keyframes college-overview-spin { to { transform: rotate(360deg); } }
 .college-overview-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .college-overview-search, .college-overview-filter { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border: 1px solid var(--border-color, #dbe3ec); border-radius: 8px; background: var(--card-bg, #fff); color: var(--text-muted, #64748b); }

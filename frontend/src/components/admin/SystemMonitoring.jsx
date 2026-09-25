@@ -1,9 +1,8 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
   CheckCircle2,
-  Clock3,
   Cpu,
   Database,
   Download,
@@ -11,7 +10,6 @@ import {
   MemoryStick,
   RefreshCw,
   Server,
-  ShieldAlert,
   Wifi,
   XCircle,
 } from 'lucide-react';
@@ -76,20 +74,6 @@ const formatTimestamp = (value) => {
   return Number.isNaN(date.getTime()) ? 'Not available' : date.toLocaleString();
 };
 
-const formatDuration = (seconds) => {
-  if (!Number.isFinite(Number(seconds))) return 'Not available';
-  const total = Math.max(0, Number(seconds));
-  const days = Math.floor(total / 86400);
-  const hours = Math.floor((total % 86400) / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const remaining = Math.floor(total % 60);
-
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${remaining}s`;
-  return `${remaining}s`;
-};
-
 const MetricTile = ({ label, value, icon: Icon, status }) => {
   const config = getStatusConfig(status || value);
   return (
@@ -117,20 +101,74 @@ const SystemMonitoring = () => {
     setLoading(true);
     setError('');
     try {
-      const [overview, alerts, activity] = await Promise.all([
+      const results = await Promise.allSettled([
         apiClient.get('/api/admin/monitoring/overview'),
         apiClient.get('/api/admin/monitoring/alerts'),
         apiClient.get('/api/admin/monitoring/activity'),
       ]);
+
+      const overviewResult = results[0];
+      const alertsResult = results[1];
+      const activityResult = results[2];
+
+      const hasOverview = overviewResult.status === 'fulfilled';
+      const hasAlerts = alertsResult.status === 'fulfilled';
+      const hasActivity = activityResult.status === 'fulfilled';
+
+      if (!hasOverview && !hasAlerts && !hasActivity) {
+        throw overviewResult.reason || alertsResult.reason || activityResult.reason;
+      }
+
+      const errors = [];
+      if (!hasOverview) errors.push(`Overview: ${overviewResult.reason?.message || 'Failed'}`);
+      if (!hasAlerts) errors.push(`Alerts: ${alertsResult.reason?.message || 'Failed'}`);
+      if (!hasActivity) errors.push(`Activity: ${activityResult.reason?.message || 'Failed'}`);
+
+      if (errors.length > 0) {
+        console.warn('System monitoring partial failure:', errors.join('; '));
+      }
+
       setData({
-        ...(overview.data?.data || {}),
-        alerts: alerts.data?.data || [],
-        activity: activity.data?.data || [],
+        ...(hasOverview ? overviewResult.value.data?.data || {} : {}),
+        alerts: hasAlerts ? alertsResult.value.data?.data || [] : [],
+        activity: hasActivity ? activityResult.value.data?.data || [] : [],
       });
       setLastChecked(new Date());
+
+      if (errors.length > 0 && !hasOverview) {
+        setError(`Partial data loaded. Failed: ${errors.join(', ')}`);
+      }
     } catch (requestError) {
       const status = requestError?.response?.status;
-      setError(status === 403 ? 'Access denied. Admin monitoring is required.' : status === 401 ? 'Authentication required. Please sign in again.' : 'Unable to retrieve system monitoring data.');
+      const backendMessage = requestError?.response?.data?.message;
+      const isNetworkError = !requestError?.response && (requestError?.code === 'ERR_NETWORK' || requestError?.message === 'Network Error');
+      const isTimeout = requestError?.code === 'ECONNABORTED';
+      
+      if (isNetworkError) {
+        setError('Network error: Unable to connect to the backend server. Please verify the backend is running and accessible.');
+      } else if (isTimeout) {
+        setError('Request timeout: The backend took too long to respond.');
+      } else if (status === 403) {
+        setError('Access denied. Admin monitoring permission required.');
+      } else if (status === 401) {
+        setError('Authentication required. Please sign in again.');
+      } else if (status >= 500) {
+        setError(`Server error (${status}): ${backendMessage || 'Internal server error'}`);
+      } else if (status === 404) {
+        setError('Monitoring endpoint not found. Please check backend routing.');
+      } else if (status) {
+        setError(`Request failed (${status}): ${backendMessage || 'Unknown error'}`);
+      } else {
+        setError('Unable to retrieve system monitoring data. Check browser console for details.');
+      }
+      console.error('System monitoring load failed:', {
+        status,
+        message: requestError?.message,
+        code: requestError?.code,
+        backendMessage,
+        url: requestError?.config?.url,
+        baseURL: requestError?.config?.baseURL
+      });
     } finally {
       setLoading(false);
     }
@@ -158,7 +196,26 @@ const SystemMonitoring = () => {
       link.click();
       URL.revokeObjectURL(url);
     } catch (requestError) {
-      toast.error(requestError?.response?.data?.message || 'Unable to export monitoring status');
+      const backendMessage = requestError?.response?.data?.message;
+      const status = requestError?.response?.status;
+      const isNetworkError = !requestError?.response && (requestError?.code === 'ERR_NETWORK' || requestError?.message === 'Network Error');
+      const isTimeout = requestError?.code === 'ECONNABORTED';
+      
+      let message = 'Unable to export monitoring status';
+      if (isNetworkError) {
+        message = 'Network error: Unable to connect to the backend server.';
+      } else if (isTimeout) {
+        message = 'Request timeout during export.';
+      } else if (status) {
+        message = `Export failed (${status}): ${backendMessage || 'Unknown error'}`;
+      }
+      toast.error(message);
+      console.error('System monitoring export failed:', {
+        status,
+        message: requestError?.message,
+        code: requestError?.code,
+        backendMessage
+      });
     }
   };
 
@@ -341,3 +398,4 @@ const SystemMonitoring = () => {
 };
 
 export default SystemMonitoring;
+

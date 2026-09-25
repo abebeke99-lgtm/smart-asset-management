@@ -350,7 +350,7 @@
 }
 
 .college-spin {
-  animation: college-spin 1s linear infinite;
+  
 }
 
 @keyframes college-spin { to { transform: rotate(360deg); } }

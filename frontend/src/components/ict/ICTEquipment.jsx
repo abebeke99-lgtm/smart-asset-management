@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/UiContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-toastify';
@@ -6,6 +7,7 @@ import apiClient from '../../services/apiClient';
 import * as XLSX from 'xlsx';
 
 const ICTEquipment = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { language, theme } = useLanguage();
 
@@ -133,7 +135,6 @@ const ICTEquipment = () => {
     { value: 'laptops', label: t.laptops, filter: c => c && c.toLowerCase().includes('laptop') },
     { value: 'printers', label: t.printers, filter: c => c && c.toLowerCase().includes('printer') },
     { value: 'servers', label: t.servers, filter: c => c && c.toLowerCase().includes('server') },
-    { value: 'network', label: t.networkDevices, filter: c => c && (c.toLowerCase().includes('network') || c.toLowerCase().includes('router') || c.toLowerCase().includes('switch')) },
     { value: 'monitors', label: t.monitors, filter: c => c && c.toLowerCase().includes('monitor') },
     { value: 'ups', label: t.ups, filter: c => c && c.toLowerCase().includes('ups') },
     { value: 'other', label: t.otherDevices, filter: () => true }
@@ -143,41 +144,26 @@ const ICTEquipment = () => {
   const fetchEquipment = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/api/assets', {
-        params: { limit: 1000 }
+      const response = await apiClient.get('/api/ict/equipment', {
+        params: { page: currentPage, limit: pageSize, search: searchQuery, type: equipmentType === 'all' ? '' : equipmentType, status: filterStatus === 'all' ? '' : filterStatus, condition: filterCondition === 'all' ? '' : filterCondition }
       });
 
-      let assets = response.data?.assets || response.data?.data || [];
+      let assets = response.data?.equipment || [];
       if (!Array.isArray(assets)) assets = [];
-      
-      // Filter for ICT equipment
-      assets = assets.filter(a => 
-        String(a.category_name || a.category || '').toLowerCase() && (
-          String(a.category_name || a.category).toLowerCase().includes('computer') ||
-          String(a.category_name || a.category).toLowerCase().includes('printer') ||
-          String(a.category_name || a.category).toLowerCase().includes('server') ||
-          String(a.category_name || a.category).toLowerCase().includes('network') ||
-          String(a.category_name || a.category).toLowerCase().includes('monitor') ||
-          String(a.category_name || a.category).toLowerCase().includes('ups') ||
-          String(a.category_name || a.category).toLowerCase().includes('keyboard') ||
-          String(a.category_name || a.category).toLowerCase().includes('mouse') ||
-          String(a.category_name || a.category).toLowerCase().includes('device') ||
-          String(a.category_name || a.category).toLowerCase().includes('equipment')
-        )
-      );
 
       setAllAssets(assets);
-      calculateStats(assets);
-      applyFilters(assets);
+      setStats(response.data?.summary || { total: 0, byType: {}, byStatus: {}, byCondition: {} });
+      setFilteredAssets(assets);
+      setCurrentPage(response.data?.pagination?.page || currentPage);
     } catch (error) {
       console.error('Failed to load ICT equipment:', error);
-      toast.error(t.fetchError || 'Failed to load equipment');
+      toast.error('Failed to load equipment');
       setAllAssets([]);
       setFilteredAssets([]);
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [currentPage, pageSize, searchQuery, equipmentType, filterStatus, filterCondition]);
 
   // Calculate statistics
   const calculateStats = (assets) => {
@@ -202,42 +188,6 @@ const ICTEquipment = () => {
       byCondition
     });
   };
-
-  // Apply filters
-  const applyFilters = useCallback((assets) => {
-    let filtered = assets;
-
-    // Equipment type filter
-    if (equipmentType !== 'all') {
-      const selectedCategory = equipmentCategories.find(c => c.value === equipmentType);
-      if (selectedCategory) {
-        filtered = filtered.filter(a => selectedCategory.filter(a.category_name));
-      }
-    }
-
-    // Status filter
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(a => a.status && a.status.toLowerCase() === filterStatus.toLowerCase());
-    }
-
-    // Condition filter
-    if (filterCondition !== 'all') {
-      filtered = filtered.filter(a => a.condition && a.condition.toLowerCase() === filterCondition.toLowerCase());
-    }
-
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(a =>
-        (a.asset_tag && a.asset_tag.toLowerCase().includes(query)) ||
-        (a.name && a.name.toLowerCase().includes(query)) ||
-        (a.serial_number && a.serial_number.toLowerCase().includes(query))
-      );
-    }
-
-    setFilteredAssets(filtered);
-    setCurrentPage(1);
-  }, [equipmentType, filterStatus, filterCondition, searchQuery]);
 
   const exportToExcel = () => {
     if (filteredAssets.length === 0) {
@@ -273,16 +223,9 @@ const ICTEquipment = () => {
     fetchEquipment();
   }, [fetchEquipment]);
 
-  useEffect(() => {
-    applyFilters(allAssets);
-  }, [equipmentType, filterStatus, filterCondition, searchQuery, applyFilters]);
-
   // Pagination
-  const totalPages = Math.ceil(filteredAssets.length / pageSize);
-  const paginatedAssets = filteredAssets.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
+  const totalPages = Math.max(1, Math.ceil((stats.total || 0) / pageSize));
+  const paginatedAssets = filteredAssets;
 
   // Styles
   const styles = {
@@ -437,15 +380,30 @@ const ICTEquipment = () => {
     <div style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
-        <h1 style={styles.title}>{t.itEquipment}</h1>
+        <div>
+          <h1 style={styles.title}>{t.itEquipment}</h1>
+          <p style={{ margin: '6px 0 0', color: isDark ? '#9ca3af' : '#6b7280' }}>Manage, monitor, and maintain institutional IT equipment.</p>
+        </div>
         <div style={styles.buttonGroup}>
           <button style={{ ...styles.button, ...styles.primaryButton }} onClick={fetchEquipment}>
             {t.refresh}
+          </button>
+          <button style={{ ...styles.button, ...styles.primaryButton }} onClick={() => navigate('/ict/assets/create')}>
+            + Add Equipment
           </button>
           <button style={{ ...styles.button, ...styles.secondaryButton }} onClick={exportToExcel}>
             {t.export}
           </button>
         </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+        {[['Total Equipment', stats.total], ['Available', stats.available || 0], ['Assigned', stats.assigned || 0], ['Maintenance', stats.maintenance || 0], ['Repair', stats.repair || 0], ['Retired', stats.retired || 0]].map(([label, value]) => (
+          <div key={label} style={{ ...styles.table, marginBottom: 0, padding: '16px' }}>
+            <div style={{ color: isDark ? '#9ca3af' : '#6b7280', fontSize: '13px' }}>{label}</div>
+            <strong style={{ display: 'block', fontSize: '24px', marginTop: '8px', color: isDark ? '#fff' : '#111827' }}>{value}</strong>
+          </div>
+        ))}
       </div>
 
       {/* Equipment Type Categories */}
@@ -524,10 +482,10 @@ const ICTEquipment = () => {
               <tbody>
                 {paginatedAssets.map(asset => (
                   <tr key={asset.id}>
-                    <td style={styles.td}>{asset.asset_tag}</td>
+                    <td style={styles.td}>{asset.assetTag || asset.assetCode || '-'}</td>
                     <td style={styles.td}>{asset.name}</td>
-                    <td style={styles.td}>{asset.category_name}</td>
-                    <td style={styles.td}>{asset.serial_number || '-'}</td>
+                    <td style={styles.td}>{asset.category || '-'}</td>
+                    <td style={styles.td}>{asset.serialNumber || '-'}</td>
                     <td style={styles.td}>{asset.brand || asset.manufacturer || '-'}</td>
                     <td style={styles.td}>{asset.model || '-'}</td>
                     <td style={styles.td}>
@@ -540,7 +498,7 @@ const ICTEquipment = () => {
                         {asset.condition}
                       </span>
                     </td>
-                    <td style={styles.td}>{asset.department_name || asset.department || '-'}</td>
+                    <td style={styles.td}>{asset.department || '-'}</td>
                   </tr>
                 ))}
               </tbody>

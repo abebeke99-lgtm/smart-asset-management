@@ -11,6 +11,26 @@ export const getMaintenance = async (params = {}) => {
   return (body.data || body.requests || []).map(normalizeItem);
 };
 
+export const getRepairHistory = async (params = {}) => {
+  const res = await apiClient.get('/maintenance/repairs', { params });
+  return res.data || {};
+};
+
+export const getRepairDetails = async (id) => {
+  const res = await apiClient.get(`/maintenance/repairs/${id}`);
+  return res.data?.data;
+};
+
+export const createRepair = async (payload) => {
+  const res = await apiClient.post('/maintenance/repairs', payload);
+  return res.data?.data;
+};
+
+export const updateRepair = async (id, payload) => {
+  const res = await apiClient.put(`/maintenance/repairs/${id}`, payload);
+  return res.data?.data;
+};
+
 export const getMaintenanceDashboard = async () => {
   const res = await apiClient.get("/maintenance/dashboard");
   return (res.data || {}).data || {};

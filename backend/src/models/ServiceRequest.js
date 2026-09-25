@@ -27,10 +27,22 @@ const ServiceRequest = sequelize.define('ServiceRequest', {
   completedAt: { type: DataTypes.DATE, allowNull: true, field: 'completed_at' },
   cancelledReason: { type: DataTypes.STRING(500), allowNull: true, field: 'cancelled_reason' },
   resolution: { type: DataTypes.TEXT, defaultValue: '' },
+  dueDate: { type: DataTypes.DATE, allowNull: true, field: 'due_date' },
+  resolvedBy: { type: DataTypes.INTEGER, allowNull: true, field: 'resolved_by' },
+  closedBy: { type: DataTypes.INTEGER, allowNull: true, field: 'closed_by' },
+  resolutionSummary: { type: DataTypes.TEXT, allowNull: true, field: 'resolution_summary' },
+  rootCause: { type: DataTypes.TEXT, allowNull: true, field: 'root_cause' },
+  resolutionType: { type: DataTypes.STRING(80), allowNull: true, field: 'resolution_type' },
+  reopenReason: { type: DataTypes.TEXT, allowNull: true, field: 'reopen_reason' },
+  responseDeadline: { type: DataTypes.DATE, allowNull: true, field: 'response_deadline' },
+  resolutionDeadline: { type: DataTypes.DATE, allowNull: true, field: 'resolution_deadline' },
+  slaStatus: { type: DataTypes.STRING(30), allowNull: true, field: 'sla_status' },
+  supportTeam: { type: DataTypes.STRING(120), allowNull: true, field: 'support_team' },
+  supportLocation: { type: DataTypes.STRING(255), allowNull: true, field: 'support_location' },
 }, {
   tableName: 'service_requests',
   timestamps: true,
-  indexes: [{ fields: ['status'] }, { fields: ['request_type'] }, { fields: ['routed_to'] }, { fields: ['reported_by'] }, { fields: ['asset_id'] }],
+  indexes: [{ fields: ['status'] }, { fields: ['request_type'] }, { fields: ['routed_to'] }, { fields: ['reported_by'] }, { fields: ['asset_id'] }, { fields: ['priority'] }, { fields: ['due_date'] }],
 });
 
 module.exports = ServiceRequest;

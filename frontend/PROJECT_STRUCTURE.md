@@ -24,7 +24,6 @@ frontend/
 │   │   │   ├── ICTOfficer.jsx        (Router/Layout)
 │   │   │   ├── ICTDashboard.jsx
 │   │   │   ├── ICTAssets.jsx
-│   │   │   ├── ICTCreateAsset.jsx
 │   │   │   ├── ICTAssignments.jsx
 │   │   │   ├── ICTMaintenance.jsx
 │   │   │   ├── ICTRFIDTracking.jsx

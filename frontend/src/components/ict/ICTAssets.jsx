@@ -2,30 +2,29 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowRightLeft,
-  Boxes,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CircleUserRound,
+  Download,
   Eye,
   History,
   MapPinOff,
   MonitorSmartphone,
   MoreHorizontal,
-  PackageCheck,
+  Package,
   Pencil,
   PlusCircle,
   RefreshCw,
   ScanLine,
   Search,
   SlidersHorizontal,
-  TriangleAlert,
+  Trash2,
   UserCheck,
   Wrench,
   X,
-  Download,
-  Trash2,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import apiClient from "../../services/apiClient";
@@ -40,6 +39,8 @@ const emptyFilters = {
   department: "",
   location: "",
   assignmentStatus: "",
+  sortBy: "updatedAt",
+  sortOrder: "DESC",
 };
 const valueOrDash = (value) =>
   value === null || value === undefined || value === "" ? "—" : value;
@@ -49,15 +50,6 @@ const normalize = (value) =>
   String(value || "")
     .toLowerCase()
     .replace(/[_ ]/g, "-");
-
-const summaryCards = [
-  ["total", "Total Equipment", Boxes, "blue"],
-  ["available", "Available", PackageCheck, "green"],
-  ["assigned", "Assigned", UserCheck, "indigo"],
-  ["maintenance", "Maintenance", Wrench, "orange"],
-  ["damaged", "Faulty / Damaged", TriangleAlert, "red"],
-  ["missing", "Missing", MapPinOff, "red"],
-];
 
 const statusClass = (status) => {
   const normalized = normalize(status);
@@ -84,6 +76,7 @@ const ICTAssets = () => {
   const canDelete = String(user?.role || "").toLowerCase() === "admin";
   const [assets, setAssets] = useState([]);
   const [filters, setFilters] = useState(emptyFilters);
+  const [statusTab, setStatusTab] = useState("all");
   const [options, setOptions] = useState({
     categories: [],
     departments: [],
@@ -115,6 +108,41 @@ const ICTAssets = () => {
       ),
     [filters, pagination.page, pagination.limit],
   );
+
+  const visibleAssets = useMemo(() => {
+    if (statusTab === "all") return assets;
+    return assets.filter((asset) => {
+      const normalized = normalize(asset.status || "");
+      if (statusTab === "assigned") return normalized === "assigned" || normalized === "in-use";
+      if (statusTab === "available") return normalized === "available";
+      if (statusTab === "maintenance") return normalized.includes("maintenance");
+      if (statusTab === "missing") return normalized === "missing" || normalized === "lost";
+      return true;
+    });
+  }, [assets, statusTab]);
+
+  const summaryCards = useMemo(() => {
+    const currentSummary = summary || {};
+    const total = Number(currentSummary.total ?? assets.length ?? 0);
+    const assigned = Number(currentSummary.assigned ?? assets.filter((asset) => {
+      const normalized = normalize(asset.status || "");
+      return normalized === "assigned" || normalized === "in-use";
+    }).length ?? 0);
+    const available = Number(currentSummary.available ?? assets.filter((asset) => normalize(asset.status || "") === "available").length ?? 0);
+    const maintenance = Number(currentSummary.maintenance ?? assets.filter((asset) => normalize(asset.status || "").includes("maintenance")).length ?? 0);
+    const missing = Number(currentSummary.missing ?? assets.filter((asset) => {
+      const normalized = normalize(asset.status || "");
+      return normalized === "missing" || normalized === "lost";
+    }).length ?? 0);
+
+    return [
+      { label: "Total Assets", value: total, icon: Package, tone: "blue" },
+      { label: "Assigned", value: assigned, icon: UserCheck, tone: "green" },
+      { label: "Available", value: available, icon: CheckCircle2, tone: "teal" },
+      { label: "Maintenance", value: maintenance, icon: Wrench, tone: "amber" },
+      { label: "Missing", value: missing, icon: AlertTriangle, tone: "red" },
+    ];
+  }, [assets, summary]);
 
   const loadAssets = async (signal) => {
     setLoading(true);
@@ -253,7 +281,7 @@ const ICTAssets = () => {
     URL.revokeObjectURL(url);
   };
 
-  if (!user || user.role !== "ict_officer") return null;
+  if (!user || !["ict_officer", "admin"].includes(user.role)) return null;
 
   return (
     <main className="ict-assets-page">
@@ -263,11 +291,10 @@ const ICTAssets = () => {
             <MonitorSmartphone size={22} />
           </div>
           <div>
-            <p className="eyebrow">ICT OPERATIONS / IT ASSET MANAGEMENT</p>
-            <h1>IT Equipment</h1>
+            <p className="eyebrow">ICT ASSETS</p>
+            <h1>ICT Assets</h1>
             <p className="subtitle">
-              Manage ICT computers, peripherals, servers, assignments, locations,
-              maintenance, and asset history.
+              Manage, track, assign, transfer, maintain, and verify university ICT assets.
             </p>
           </div>
         </div>
@@ -280,7 +307,7 @@ const ICTAssets = () => {
             <RefreshCw size={16} className={loading ? "spin" : ""} /> Refresh
           </button>
           <button className="quiet-button" onClick={exportCsv} disabled={loading || !assets.length}>
-            <Download size={16} /> Export CSV
+            <Download size={16} /> Export
           </button>
           {canEdit && <button
             className="primary-button"
@@ -292,17 +319,15 @@ const ICTAssets = () => {
       </header>
 
       <section className="summary-grid" aria-label="ICT asset summary">
-        {summaryCards.map(([key, label, Icon, tone]) => (
-          <article className={`summary-card ${tone}`} key={key}>
-            <div className="summary-card-top">
-              <span>{label}</span>
-              <span className="summary-icon">
-                <Icon size={19} />
+        {summaryCards.map(({ label, value, icon: Icon, tone }) => (
+          <article className={`summary-card summary-card--${tone}`} key={label}>
+            <div className="summary-card__header">
+              <span className="summary-card__icon">
+                <Icon size={18} />
               </span>
+              <span className="summary-card__label">{label}</span>
             </div>
-            <strong className={summary ? "" : "skeleton-value"}>
-              {summary ? Number(summary[key] || 0) : ""}
-            </strong>
+            <strong className="summary-card__value">{value}</strong>
           </article>
         ))}
       </section>
@@ -317,7 +342,7 @@ const ICTAssets = () => {
             <input
               value={filters.search}
               onChange={(event) => updateFilter("search", event.target.value)}
-              placeholder="Search asset number, name, serial, model, user..."
+              placeholder="Search asset ID, name, serial, barcode, custodian..."
               aria-label="Search ICT assets"
             />
           </label>
@@ -375,13 +400,34 @@ const ICTAssets = () => {
             <option value="assigned">Assigned</option>
             <option value="unassigned">Unassigned</option>
           </select>
+          <select
+            value={filters.sortBy}
+            onChange={(event) => updateFilter("sortBy", event.target.value)}
+            aria-label="Sort ICT assets by"
+          >
+            <option value="updatedAt">Sort: recent</option>
+            <option value="name">Sort: name</option>
+            <option value="assetCode">Sort: asset ID</option>
+            <option value="category">Sort: category</option>
+            <option value="department">Sort: department</option>
+            <option value="location">Sort: location</option>
+            <option value="status">Sort: status</option>
+          </select>
+          <select
+            value={filters.sortOrder}
+            onChange={(event) => updateFilter("sortOrder", event.target.value)}
+            aria-label="Sort direction"
+          >
+            <option value="DESC">Descending</option>
+            <option value="ASC">Ascending</option>
+          </select>
           <input
             value={filters.location}
             onChange={(event) => updateFilter("location", event.target.value)}
             placeholder="Location"
             aria-label="Filter by location"
           />
-          {Object.values(filters).some(Boolean) && (
+          {Object.values(filters).some((value) => value !== "" && value !== "updatedAt" && value !== "DESC") && (
             <button
               className="link-button"
               onClick={() => {
@@ -394,6 +440,25 @@ const ICTAssets = () => {
           )}
         </div>
       </section>
+
+      <div className="asset-tabs" role="tablist" aria-label="Asset status quick filters">
+        {[
+          { value: "all", label: "All" },
+          { value: "assigned", label: "Assigned" },
+          { value: "available", label: "Available" },
+          { value: "maintenance", label: "Maintenance" },
+          { value: "missing", label: "Missing" },
+        ].map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            className={`asset-tab${statusTab === tab.value ? " active" : ""}`}
+            onClick={() => setStatusTab(tab.value)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       {error && (
         <div className="error-banner">
@@ -440,8 +505,8 @@ const ICTAssets = () => {
                     </td>
                   </tr>
                 ))
-              ) : assets.length > 0 ? (
-                assets.map((asset) => (
+              ) : visibleAssets.length > 0 ? (
+                visibleAssets.map((asset) => (
                   <tr key={asset.id}>
                     <td>
                       <button
@@ -530,7 +595,7 @@ const ICTAssets = () => {
                           </button>}
                           <button
                             onClick={() =>
-                              navigate(`/ict/assets/${asset.id}/history`)
+                              navigate(`/ict/asset-history?assetId=${asset.id}`)
                             }
                           >
                             <History size={15} /> View history
@@ -557,8 +622,8 @@ const ICTAssets = () => {
                     <strong>No ICT assets found</strong>
                     <span>
                       {Object.values(filters).some(Boolean)
-                        ? "Try clearing the current filters or search."
-                        : "Create your first ICT asset to begin asset management."}
+                        ? "Try changing your filters or search terms."
+                        : "Create a new asset to begin the register."}
                     </span>
                     {!Object.values(filters).some(Boolean) && (
                       <button
@@ -580,7 +645,22 @@ const ICTAssets = () => {
               ? `${(pagination.page - 1) * pagination.limit + 1}-${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total}`
               : "0 records"}
           </span>
-          <div>
+          <div className="pagination-controls">
+            <label className="rows-per-page">
+              <span>Rows per page</span>
+              <select
+                value={pagination.limit}
+                onChange={(event) => {
+                  const nextLimit = Number(event.target.value) || 25;
+                  setPagination((current) => ({ ...current, limit: nextLimit, page: 1 }));
+                }}
+                aria-label="Rows per page"
+              >
+                {[10, 25, 50, 100].map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </label>
             <button
               className="icon-button"
               disabled={pagination.page <= 1 || loading}

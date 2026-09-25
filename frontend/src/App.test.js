@@ -58,6 +58,10 @@ describe('Public and dashboard route rules', () => {
     expect(isPublicRoute('/home')).toBe(true);
     expect(isPublicRoute('/about')).toBe(true);
     expect(isPublicRoute('/contact')).toBe(true);
+    expect(isPublicRoute('/register')).toBe(true);
+    expect(isPublicRoute('/forgot-password')).toBe(true);
+    expect(isPublicRoute('/reset-password')).toBe(true);
+    expect(isPublicRoute('/reset-password/token-123')).toBe(true);
     expect(isPublicRoute('/login')).toBe(false);
     expect(isPublicRoute('/dashboard')).toBe(false);
   });

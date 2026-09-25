@@ -9,13 +9,14 @@ import './App.css';
 import './admin-design-system.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Archive, ArrowLeftRight, BarChart3, Bell, Building2, Check, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, Clock, DatabaseBackup, ExternalLink, FilePlus2, FileText, GitBranch, Languages, LayoutDashboard, LockKeyhole, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, Phone, Radio, Search, Settings, ShieldCheck, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
-import packageInfo from '../package.json';
+import { Archive, ArrowLeftRight, BarChart3, Bell, Building2, Check, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, Home as HomeIcon, Info, Languages, LayoutDashboard, LockKeyhole, LogIn, LogOut, Mail, MapPin, Moon, MoreHorizontal, Package, PanelLeft, Phone, Radio, Search, Settings, ShieldCheck, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
 import CollegeDepartments from './pages/college/CollegeDepartments';
 import DepartmentDetails from './components/college/DepartmentDetails';
+import DepartmentMaintenance from './components/department/DepartmentMaintenance';
+import DepartmentReturnsPage from './components/department/DepartmentReturnsPage';
 import ScopedWorkflowPage from './components/shared/ScopedWorkflowPage';
 
 // ==========================================
@@ -32,8 +33,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
 import { getDepartmentLabel } from './utils/department';
 import { apiClient } from './utils/api';
+import UserAvatar from './components/common/UserAvatar';
 import StoreTracking from './components/store/StoreTracking';
-import DashboardSidebar from './components/dashboard/DashboardSidebar';
 
 // ==========================================
 // LAZY LOAD ALL COMPONENTS
@@ -62,11 +63,13 @@ const AdminAnalyticsCenter = lazy(() => import('./components/admin/AdminAnalytic
 // ICT Components
 const ICTDashboard = lazy(() => import('./components/ict/ICTDashboard'));
 const ICTAssets = lazy(() => import('./components/ict/ICTAssets'));
-const ICTCreateAsset = lazy(() => import('./components/ict/ICTCreateAsset'));
 const ICTAssignments = lazy(() => import('./components/ict/ICTAssignments'));
 const ICTMaintenance = lazy(() => import('./components/ict/ICTMaintenance'));
+const ICTDeviceHealth = lazy(() => import('./components/ict/ICTDeviceHealth'));
+const ICTRepairHistory = lazy(() => import('./components/ict/ICTRepairHistory'));
 const ICTRFIDTracking = lazy(() => import('./components/ict/ICTRFIDTracking'));
 const ICTReports = lazy(() => import('./components/ict/ICTReports'));
+const ICTAssetAnalytics = lazy(() => import('./components/ict/ICTAssetAnalytics'));
 const ICTInventory = lazy(() => import('./components/ict/ICTInventory'));
 const ICTNotifications = lazy(() => import('./components/ict/ICTNotifications'));
 const ICTAssetHistory = lazy(() => import('./components/ict/ICTAssetHistory'));
@@ -74,12 +77,17 @@ const ICTAssetRequests = lazy(() => import('./components/ict/ICTAssetRequests'))
 const ICTEquipment = lazy(() => import('./components/ict/ICTEquipment'));
 const ICTNetwork = lazy(() => import('./components/ict/ICTNetwork'));
 const ICTTechnicalSupport = lazy(() => import('./components/ict/ICTTechnicalSupport'));
+const ICTIncidents = lazy(() => import('./components/ict/ICTIncidents'));
+const ICTSoftwareLicenses = lazy(() => import('./components/ict/ICTSoftwareLicenses'));
 
 // Department Components
 const DeptDashboard = lazy(() => import('./components/department/DeptDashboard'));
 const DeptAssets = lazy(() => import('./components/department/DeptAssets'));
 const DeptApprovals = lazy(() => import('./components/department/DeptApprovals'));
 const DeptReports = lazy(() => import('./components/department/DeptReports'));
+const DeptUtilization = lazy(() => import('./components/department/DeptUtilization'));
+const DeptLocations = lazy(() => import('./components/department/DeptLocations'));
+const DeptProfile = lazy(() => import('./components/department/DeptProfile'));
 const DeptStaff = lazy(() => import('./components/department/DeptStaff'));
 const DeptNotifications = lazy(() => import('./components/department/DeptNotifications'));
 const DeptAssetHistory = lazy(() => import('./components/department/DeptAssetHistory'));
@@ -162,6 +170,7 @@ const InfrastructureSpareParts = lazy(() => import('./components/infrastructure/
 const InfrastructureEnergy = lazy(() => import('./components/infrastructure/InfrastructureEnergy'));
 const InfrastructureFuel = lazy(() => import('./components/infrastructure/InfrastructureFuel'));
 const InfrastructureInspection = lazy(() => import('./components/infrastructure/InfrastructureInspection'));
+const InfrastructureVerification = lazy(() => import('./components/infrastructure/InfrastructureVerification'));
 const InfrastructureTracking = lazy(() => import('./components/infrastructure/InfrastructureTracking'));
 const InfrastructureRequests = lazy(() => import('./components/infrastructure/InfrastructureRequests'));
 const InfrastructureReports = lazy(() => import('./components/infrastructure/InfrastructureReports'));
@@ -193,14 +202,16 @@ export const shouldHideSidebarForPath = (pathname = '') => {
 
 export const isPublicRoute = (pathname = '') => {
   const normalizedPath = String(pathname || '').split('?')[0].split('#')[0].trim();
-  return ['/', '/home', '/about', '/about-us', '/contact', '/login', '/register', '/forgot-password', '/reset-password'].includes(normalizedPath)
+  return ['/', '/home', '/about', '/about-us', '/contact', '/register', '/forgot-password', '/reset-password'].includes(normalizedPath)
     || normalizedPath.startsWith('/reset-password/');
 };
 
 export const isDashboardRoute = (pathname = '') => {
   const normalizedPath = String(pathname || '').split('?')[0].split('#')[0].trim();
   if (!normalizedPath || normalizedPath === '/' || isPublicRoute(normalizedPath)) return false;
-  return normalizedPath.startsWith('/admin')
+  return normalizedPath === '/dashboard'
+    || normalizedPath.startsWith('/dashboard/')
+    || normalizedPath.startsWith('/admin')
     || normalizedPath.startsWith('/ict')
     || normalizedPath.startsWith('/college')
     || normalizedPath.startsWith('/department')
@@ -259,18 +270,26 @@ export const normalizeRole = (role) => {
 
 const getDashboardRoute = (role) => {
   const roleMap = {
-    admin: '/dashboard',
-    ict_officer: '/dashboard',
-    college: '/dashboard',
-    department_head: '/dashboard',
-    finance: '/dashboard',
-    store_manager: '/dashboard',
-    maintenance: '/dashboard',
-    infrastructure: '/dashboard',
-    staff: '/dashboard'
+    admin: '/admin',
+    ict_officer: '/ict',
+    college: '/college',
+    department_head: '/department',
+    finance: '/finance',
+    store_manager: '/store',
+    maintenance: '/maintenance',
+    infrastructure: '/infrastructure',
+    staff: '/department'
   };
-  return roleMap[normalizeRole(role)] || '/dashboard';
+  return roleMap[normalizeRole(role)] || '/home';
 };
+
+const AccessDenied = () => (
+  <main role="alert" aria-labelledby="access-denied-title" style={{ padding: '48px 24px', textAlign: 'center' }}>
+    <h1 id="access-denied-title">Access denied</h1>
+    <p>You do not have permission to access this section.</p>
+    <Link to="/dashboard">Return to your dashboard</Link>
+  </main>
+);
 
 export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { user, loading: authLoading } = useAuth();
@@ -287,7 +306,7 @@ export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   }
 
   if (allowedRoles.length > 0 && !allowedRoles.includes(currentRole)) {
-    return <Navigate to={getDashboardRoute(user.role)} replace />;
+    return <AccessDenied />;
   }
 
   return children;
@@ -428,6 +447,10 @@ const translations = {
     depreciation: "Depreciation",
     audit: "Audit Trail",
     footer: "© 2026 Mekdela Amba University | University Asset Management System | All rights reserved.",
+    footerDescription: "A clear, reliable way to manage university assets.",
+    footerNavigation: "Navigation",
+    footerUsefulLinks: "Useful links",
+    footerCopyright: "All rights reserved.",
     light: "Light",
     dark: "Dark",
     language: "Language",
@@ -514,6 +537,10 @@ const translations = {
     depreciation: "ውድመት",
     audit: "የኦዲት መንገድ",
     footer: "2026 መቅደላ አምባ ዩኒቨርሲቲ -  ንብረት አስተዳደር ስርዓት | ሁሉም መብቶች ተጠብቀዋል | የተሰራዉ በ: በቀለ :0986481821",
+    footerDescription: "የዩኒቨርሲቲ ንብረቶችን ለማስተዳደር ግልጽና አስተማማኝ መንገድ።",
+    footerNavigation: "አሰሳ",
+    footerUsefulLinks: "ጠቃሚ አገናኞች",
+    footerCopyright: "መብቱ በሙሉ የተጠበቀ ነው።",
     light: "ብርሃን",
     dark: "ጨለማ",
     language: "ቋንቋ",
@@ -589,6 +616,7 @@ const normalizeListResponse = (payload) => {
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== 'object') return [];
   if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.items)) return payload.items;
   if (Array.isArray(payload.assets)) return payload.assets;
   if (Array.isArray(payload.categories)) return payload.categories;
   if (Array.isArray(payload.locations)) return payload.locations;
@@ -668,13 +696,7 @@ const AdminAssetCategories = () => {
     setError('');
     try {
       const response = await axios.get('/api/categories', { params: { page: 1, limit: 100 } });
-      const rows = Array.isArray(response?.data?.categories)
-        ? response.data.categories
-        : Array.isArray(response?.data?.items)
-          ? response.data.items
-          : Array.isArray(response?.data?.data)
-            ? response.data.data
-            : normalizeListResponse(response?.data ?? []);
+      const rows = normalizeListResponse(response?.data ?? []);
       setCategories(Array.isArray(rows) ? rows.map(normalizeCategory) : []);
     } catch (loadError) {
       console.error('Category load failed:', loadError);
@@ -782,14 +804,14 @@ const AdminAssetCategories = () => {
 
       if (editingId) {
         const response = await axios.put(`/api/categories/${editingId}`, payload);
-        const updatedItem = response?.data?.category || response?.data?.data || response?.data;
+        const updatedItem = normalizeListResponse(response?.data ?? []);
         setCategories((previous) => previous.map((category) => String(category.id) === String(editingId)
-          ? normalizeCategory({ ...category, ...updatedItem })
+          ? normalizeCategory({ ...category, ...(Array.isArray(updatedItem) ? updatedItem[0] : updatedItem) })
           : category));
       } else {
         const response = await axios.post('/api/categories', payload);
-        const createdItem = response?.data?.category || response?.data?.data || response?.data;
-        setCategories((previous) => [normalizeCategory(createdItem), ...previous]);
+        const createdItem = normalizeListResponse(response?.data ?? []);
+        setCategories((previous) => [normalizeCategory(createdItem.length > 0 ? createdItem[0] : createdItem), ...previous]);
       }
 
       setIsFormOpen(false);
@@ -808,11 +830,11 @@ const AdminAssetCategories = () => {
     if (!deleteCandidate) return;
 
     try {
-      await axios.delete(`/api/categories/${deleteCandidate.id}`);
-      setCategories((previous) => previous.filter((category) => String(category.id) !== String(deleteCandidate.id)));
+      await axios.delete(`/api/categories/${deleteCandidate?.id}`);
+      setCategories((previous) => previous.filter((category) => String(category.id) !== String(deleteCandidate?.id)));
       setDeleteCandidate(null);
       setMenuOpenId(null);
-      if (editingId === deleteCandidate.id) {
+      if (editingId === deleteCandidate?.id) {
         resetCategoryForm();
       }
     } catch (deleteError) {
@@ -2274,6 +2296,46 @@ const DashboardLayout = () => (
   </Suspense>
 );
 
+const EthiopianClock = ({ language, theme }) => {
+  const [time, setTime] = useState('');
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      const ethiopiaTime = new Date(now.getTime() + (3 * 60 * 60 * 1000));
+      setTime(ethiopiaTime.toLocaleTimeString(language === 'en' ? 'en-US' : 'am-ET', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      }));
+    };
+
+    updateTime();
+    const timer = setInterval(updateTime, 1000);
+    return () => clearInterval(timer);
+  }, [language]);
+
+  return (
+    <div style={{
+      minWidth: '140px',
+      textAlign: 'right',
+      color: theme.headerText,
+      fontWeight: 700,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '2px',
+      lineHeight: 1.3,
+      fontSize: '0.78rem'
+    }} aria-live="polite">
+      <span style={{ opacity: 0.9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        {language === 'en' ? 'Ethiopia Time' : 'የኢትዮጵያ ሰዓት'}
+      </span>
+      <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.9rem' }}>{time}</span>
+    </div>
+  );
+};
+
 // Admin Layout with Sidebar
 const AdminLayout = () => {
   const { theme } = useTheme();
@@ -2310,7 +2372,6 @@ function AppContent() {
   const { user, logout, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [ethiopianTime, setEthiopianTime] = useState('');
   const { language, setLanguage } = useLanguage();
   const { theme, setTheme } = useTheme();
   const [logoError, setLogoError] = useState(false);
@@ -2323,12 +2384,13 @@ function AppContent() {
     phone: '',
     address: ''
   });
-  const [systemHealth, setSystemHealth] = useState({ status: 'unknown', label: 'System Status', message: 'Public health check unavailable.' });
   const [notificationBellOpen, setNotificationBellOpen] = useState(false);
   const [userNotifications, setUserNotifications] = useState([]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [collegeManagementOpen, setCollegeManagementOpen] = useState(() => JSON.parse(localStorage.getItem('collegeManagementOpen') || 'true'));
   const [departmentManagementOpen, setDepartmentManagementOpen] = useState(() => JSON.parse(localStorage.getItem('departmentManagementOpen') || 'false'));
   const [departmentsNavOpen, setDepartmentsNavOpen] = useState(() => JSON.parse(localStorage.getItem('departmentsNavOpen') || (location.pathname.startsWith('/department') ? 'true' : 'false')));
@@ -2369,11 +2431,15 @@ function AppContent() {
     const fetchUserNotifications = async () => {
       setNotificationLoading(true);
       try {
-        const response = await apiClient.get('/api/notifications', { params: { limit: 6, page: 1 } });
-        const notifications = Array.isArray(response?.data?.notifications) ? response.data.notifications : [];
+        const [notificationResponse, unreadResponse] = await Promise.all([
+          apiClient.get('/api/notifications', { params: { limit: 6, page: 1 } }),
+          apiClient.get('/api/notifications/unread-count')
+        ]);
+        const notifications = Array.isArray(notificationResponse?.data?.notifications) ? notificationResponse.data.notifications : [];
+        const unreadCount = Number(unreadResponse?.data?.unreadCount ?? unreadResponse?.data?.count ?? 0);
         if (!active) return;
         setUserNotifications(notifications);
-        setUnreadNotificationCount(Number(response?.data?.unreadCount || notifications.filter((item) => !item.is_read && !item.read).length || 0));
+        setUnreadNotificationCount(unreadCount);
       } catch (error) {
         if (active) {
           setUserNotifications([]);
@@ -2385,13 +2451,18 @@ function AppContent() {
     };
 
     fetchUserNotifications();
-    return () => { active = false; };
+    const interval = window.setInterval(fetchUserNotifications, 30000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
   }, [user?.id, user?.role, location.pathname]);
 
   useEffect(() => {
     const handleDocumentClick = (event) => {
       if (notificationMenuRef.current && !notificationMenuRef.current.contains(event.target)) {
         setNotificationBellOpen(false);
+        setProfileMenuOpen(false);
       }
     };
 
@@ -2404,7 +2475,28 @@ function AppContent() {
   }, [location.pathname]);
 
   useEffect(() => {
-    const collegeManagementActive = ['/college', '/college/profile', '/college/staff', '/college/locations', '/college/assets', '/college/inventory', '/college/requests', '/college/approvals', '/college/assignments', '/college/transfers', '/college/returns', '/college/maintenance', '/college/rfid', '/college/reports', '/college/notifications', '/college/history'].includes(location.pathname);
+    const collegeManagementActive = [
+      '/college',
+      '/college/profile',
+      '/college/staff',
+      '/college/locations',
+      '/college/departments',
+      '/college/assets',
+      '/college/inventory',
+      '/college/requests',
+      '/college/approvals',
+      '/college/assignments',
+      '/college/transfers',
+      '/college/returns',
+      '/college/maintenance',
+      '/college/rfid',
+      '/college/verification',
+      '/college/reports',
+      '/college/analytics/assets',
+      '/college/analytics/departments',
+      '/college/notifications',
+      '/college/history'
+    ].includes(location.pathname);
     const departmentManagementActive = location.pathname.startsWith('/college/department');
     const departmentsActive = location.pathname.startsWith('/department');
     if (collegeManagementActive) setCollegeManagementOpen(true);
@@ -2414,20 +2506,6 @@ function AppContent() {
     localStorage.setItem('departmentManagementOpen', JSON.stringify(departmentManagementOpen));
     localStorage.setItem('departmentsNavOpen', JSON.stringify(departmentsNavOpen));
   }, [location.pathname, collegeManagementOpen, departmentManagementOpen, departmentsNavOpen]);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date();
-      const ethiopiaTime = new Date(now.getTime() + (3 * 60 * 60 * 1000));
-      setEthiopianTime(ethiopiaTime.toLocaleTimeString(language === 'en' ? 'en-US' : 'am-ET', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-      }));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [language]);
 
   useEffect(() => {
     let active = true;
@@ -2467,38 +2545,6 @@ function AppContent() {
     return () => { active = false; };
   }, [authLoading, user?.role]);
 
-  useEffect(() => {
-    let active = true;
-
-    const fetchHealth = async () => {
-      try {
-        const response = await axios.get('/api/health', { timeout: 4000 });
-        const status = String(response?.data?.status || 'degraded').toLowerCase();
-        const normalizedStatus = status === 'ok' ? 'operational' : status === 'degraded' ? 'degraded' : 'unavailable';
-
-        if (!active) return;
-
-        setSystemHealth({
-          status: normalizedStatus,
-          label: normalizedStatus === 'operational' ? 'System Operational' : normalizedStatus === 'degraded' ? 'System Degraded' : 'System Unavailable',
-          message: response?.data?.message || 'System status is currently unavailable.'
-        });
-      } catch (error) {
-        if (!active) return;
-        setSystemHealth({
-          status: 'unavailable',
-          label: 'System Status',
-          message: 'System status is currently unavailable.'
-        });
-      }
-    };
-
-    fetchHealth();
-    return () => {
-      active = false;
-    };
-  }, []);
-
   const handleLogout = async () => {
     logoutDestinationRef.current = '/login';
     allowPublicNavigationRef.current = true;
@@ -2507,9 +2553,23 @@ function AppContent() {
     navigate('/login', { replace: true });
   };
 
-  const APP_VERSION = packageInfo?.version || '1.0.0';
   const dashboardRoute = getDashboardRoute(user?.role);
-  const publicPaths = ['/home', '/about', '/contact'];
+  const notificationsRoute = location.pathname.startsWith('/department')
+    ? '/department/notifications'
+    : location.pathname.startsWith('/college')
+      ? '/college/notifications'
+      : location.pathname.startsWith('/ict')
+        ? '/ict/notifications'
+        : location.pathname.startsWith('/finance')
+          ? '/finance/notifications'
+          : location.pathname.startsWith('/store')
+            ? '/store/notifications'
+            : location.pathname.startsWith('/maintenance')
+              ? '/maintenance/notifications'
+              : location.pathname.startsWith('/infrastructure')
+                ? '/infrastructure/notifications'
+                : '/admin/notifications';
+  const publicPaths = ['/home', '/about', '/contact', '/register', '/forgot-password', '/reset-password'];
   const requestPublicNavigation = (path, event) => {
     if (user) {
       event?.preventDefault();
@@ -2596,39 +2656,48 @@ function AppContent() {
   // ==========================================
 
   const HeaderLink = ({ to, children }) => (
-    <Link to={to} onClick={(event) => requestPublicNavigation(to, event)} style={{ color: currentTheme.headerText, textDecoration: 'none', fontWeight: 600, opacity: 0.95, cursor: 'pointer' }}>
+    <Link to={to} onClick={(event) => requestPublicNavigation(to, event)} style={{
+      color: !user && (location.pathname === '/' || location.pathname === '/home') ? '#FFFFFF' : currentTheme.headerText,
+      textDecoration: 'none',
+      fontWeight: 700,
+      fontSize: '1.08rem',
+      opacity: 0.96,
+      cursor: 'pointer',
+      letterSpacing: '0.01em'
+    }}>
       {children}
     </Link>
   );
 
   const Header = ({ publicOnly = false }) => (
-    <header className={`app-header${!user ? ' public-site-header sticky top-0 z-50' : ''}`} style={{
-      background: currentTheme.headerBg,
-      color: currentTheme.headerText,
-      padding: '0.75rem 2rem',
+    <header className={`app-header${!user ? ' public-site-header sticky top-0 z-50' : ''}${!user && (location.pathname === '/' || location.pathname === '/home') ? ' home-public-header' : ''}`} style={{
+      background: !user && (location.pathname === '/' || location.pathname === '/home') ? 'rgba(15, 23, 42, 0.38)' : '#5e7f95',
+      color: !user && (location.pathname === '/' || location.pathname === '/home') ? '#FFFFFF' : '#17212B',
+      padding: '0.9rem 2rem',
       borderBottom: '1px solid rgba(23, 33, 43, 0.08)',
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
       flexWrap: 'wrap',
-      gap: '10px',
+      gap: '20px',
       width: '100%',
       boxSizing: 'border-box',
-      boxShadow: 'none'
+      boxShadow: 'none',
+      ...(!user && (location.pathname === '/' || location.pathname === '/home') ? { position: 'absolute', top: 0, left: 0, zIndex: 50 } : {})
     }}>
-      <div className="app-header-brand" style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
+      <div className="app-header-brand" style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap', flex: '1 1 auto', minWidth: 0 }}>
         <div style={{
-          width: '55px',
-          height: '55px',
-          borderRadius: '8px',
-          border: '2px solid rgba(23, 33, 43, 0.12)',
-          background: '#FFFFFF',
+          width: '64px',
+          height: '64px',
+          borderRadius: '14px',
+          border: '1px solid rgba(255,255,255,0.7)',
+          background: '#ffffff',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'hidden',
           flexShrink: 0,
-          boxShadow: 'none'
+          boxShadow: '0 4px 12px rgba(23, 43, 61, 0.12)'
         }}>
           {!logoError ? (
             <img 
@@ -2641,39 +2710,24 @@ function AppContent() {
             <span style={{ fontSize: '1.5rem' }}>🏫</span>
           )}
         </div>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 800, letterSpacing: '0.25px', color: '#17212B' }}>
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ margin: 0, fontSize: 'clamp(2.1rem, 3vw, 3.5rem)', fontWeight: 900, letterSpacing: '-0.05em', lineHeight: 1.08, color: !user && (location.pathname === '/' || location.pathname === '/home') ? '#FFFFFF' : '#17212B' }}>
             {organizationProfile.name || t.university}
           </h1>
-          <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', fontWeight: 500 }}>
+          <p style={{ margin: '10px 0 0', fontSize: '0.98rem', color: !user && (location.pathname === '/' || location.pathname === '/home') ? 'rgba(255,255,255,0.86)' : 'rgba(23,33,43,0.82)', fontWeight: 600 }}>
             {t.systemName}
           </p>
         </div>
       </div>
 
-      <div className="app-header-actions" style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <nav style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+      <div className="app-header-actions" style={{ display: 'flex', gap: '18px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <nav style={{ display: 'flex', gap: '28px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center' }}>
           <HeaderLink to="/home">{t.home}</HeaderLink>
           <HeaderLink to="/about">{t.about}</HeaderLink>
           <HeaderLink to="/contact">{t.contact}</HeaderLink>
         </nav>
 
-        <div style={{
-          minWidth: '140px',
-          textAlign: 'right',
-          color: currentTheme.headerText,
-          fontWeight: 700,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '2px',
-          lineHeight: 1.3,
-          fontSize: '0.78rem'
-        }} aria-live="polite">
-          <span style={{ opacity: 0.9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            {language === 'en' ? 'Ethiopia Time' : 'የኢትዮጵያ ሰዓት'}
-          </span>
-          <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.9rem' }}>{ethiopianTime}</span>
-        </div>
+        <EthiopianClock language={language} theme={currentTheme} />
 
         {user && !publicOnly ? (
           <div className="app-header-user" style={{ display: 'flex', alignItems: 'center', gap: '10px', position: 'relative' }} ref={notificationMenuRef}>
@@ -2758,7 +2812,7 @@ function AppContent() {
                                 try { await apiClient.patch(`/api/notifications/${item.id}/read`); } catch (error) { /* no-op */ }
                               }
                               setNotificationBellOpen(false);
-                              navigate('/admin/notifications');
+                              navigate(notificationsRoute);
                             }}
                             style={{
                               display: 'block',
@@ -2788,7 +2842,7 @@ function AppContent() {
                       type="button"
                       onClick={() => {
                         setNotificationBellOpen(false);
-                        navigate('/admin/notifications');
+                        navigate(notificationsRoute);
                       }}
                       style={{
                         width: '100%',
@@ -2835,16 +2889,18 @@ function AppContent() {
           <Link className="public-login-button" to="/login" style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '7px',
+            gap: '8px',
             background: '#ffffff',
             color: '#17212B',
             textDecoration: 'none',
-            padding: '7px 16px',
-            borderRadius: 8,
-            fontWeight: 700,
-            fontSize: '0.9rem'
+            padding: '10px 18px',
+            borderRadius: 12,
+            fontWeight: 800,
+            fontSize: '1.02rem',
+            minHeight: '48px',
+            boxShadow: '0 4px 10px rgba(23, 43, 61, 0.12)'
           }}>
-            <LockKeyhole size={16} aria-hidden="true" />
+            <LockKeyhole size={18} aria-hidden="true" />
             <span>{t.login}</span>
           </Link>
         )}
@@ -2884,228 +2940,169 @@ function AppContent() {
     </header>
   );
 
-  const footerStatusColor = {
-    operational: '#22c55e',
-    degraded: '#f59e0b',
-    unavailable: '#ef4444',
-    unknown: '#94a3b8'
-  }[systemHealth.status] || '#94a3b8';
-
   const Footer = () => (
-    <footer className={`app-footer${!user ? ' public-site-footer bg-sky-900' : ''}`} style={{
-      background: '#687784',
-      color: '#FFFFFF',
-      padding: '1.5rem 1.25rem 1rem',
-      borderTop: '1px solid rgba(23, 33, 43, 0.15)',
-      marginTop: 'auto'
-    }}>
-      <div className="footer-grid" style={{
-        maxWidth: '1200px',
-        margin: '0 auto',
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1.6fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(0, 1.3fr)',
-        gap: '2rem',
-        marginBottom: '2rem'
-      }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', marginBottom: '0.9rem' }}>
-            <div style={{
-              width: '52px',
-              height: '52px',
-              borderRadius: '12px',
-              background: '#FFFFFF',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden',
-              border: '1px solid rgba(255,255,255,0.12)',
-              flexShrink: 0
-            }}>
-              <img
-                src={organizationProfile.logo || UNIVERSITY_LOGO}
-                alt={`${organizationProfile.name || 'Institution'} logo`}
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                onError={() => setLogoError(true)}
-              />
-            </div>
-            <div>
-              <h4 style={{ color: '#FFFFFF', margin: 0, fontSize: '1.05rem', fontWeight: 800, lineHeight: 1.3 }}>{organizationProfile.name || t.companyName}</h4>
-              <div style={{ color: '#BFDBFE', fontSize: '0.76rem', fontWeight: 600, letterSpacing: '0.02em', marginTop: '2px' }}>University Asset Management System</div>
-            </div>
-          </div>
-
-          <p style={{ color: '#E2E8F0', fontSize: '0.92rem', lineHeight: 1.7, margin: '0 0 1rem', maxWidth: '28rem' }}>
-            Centralized digital management of university assets, maintenance, tracking, verification, and reporting.
-          </p>
-
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.65rem', color: '#E2E8F0', fontSize: '0.82rem', padding: '0.5rem 0.7rem', borderRadius: '999px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)' }}>
-            <ShieldCheck size={15} color="#E2E8F0" />
-            Secure Role-Based Access
+    <footer className={`app-footer${!user ? ' public-site-footer' : ''}`}>
+      <div className="footer-grid">
+        <div className="footer-brand">
+          <h2>{organizationProfile.name || t.companyName}</h2>
+          <p>{t.footerDescription}</p>
+          <div className="footer-contact" aria-label="Contact information">
+            <p><MapPin size={15} aria-hidden="true" />{t.addressValue}</p>
+            <p><Phone size={15} aria-hidden="true" />{t.phoneValue}</p>
+            <p><Mail size={15} aria-hidden="true" />{t.emailValue}</p>
           </div>
         </div>
 
-        <div>
-          <h4 style={{ color: '#FFFFFF', margin: '0 0 0.9rem', fontSize: '1rem', fontWeight: 700 }}>Quick Links</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <Link to="/home" onClick={(event) => requestPublicNavigation('/home', event)} style={{ color: '#E2E8F0', textDecoration: 'none', fontSize: '0.92rem', transition: 'color 0.2s ease', lineHeight: 1.7 }} className="footer-link">{t.home}</Link>
-            <Link to="/about" onClick={(event) => requestPublicNavigation('/about', event)} style={{ color: '#E2E8F0', textDecoration: 'none', fontSize: '0.92rem', transition: 'color 0.2s ease', lineHeight: 1.7 }} className="footer-link">{t.about}</Link>
-            <Link to="/contact" onClick={(event) => requestPublicNavigation('/contact', event)} style={{ color: '#E2E8F0', textDecoration: 'none', fontSize: '0.92rem', transition: 'color 0.2s ease', lineHeight: 1.7 }} className="footer-link">{t.contact}</Link>
-            <Link to="/login" style={{ color: '#E2E8F0', textDecoration: 'none', fontSize: '0.92rem', transition: 'color 0.2s ease', lineHeight: 1.7 }} className="footer-link">{t.login}</Link>
-          </div>
-        </div>
+        <nav className="footer-section" aria-label={t.footerNavigation}>
+          <h3>Quick Links</h3>
+          <Link className="footer-link" to="/" onClick={(event) => requestPublicNavigation('/', event)}><HomeIcon size={16} aria-hidden="true" />{t.home}</Link>
+          <Link className="footer-link" to="/about" onClick={(event) => requestPublicNavigation('/about', event)}><Info size={16} aria-hidden="true" />{t.about}</Link>
+          <Link className="footer-link" to="/contact" onClick={(event) => requestPublicNavigation('/contact', event)}><Mail size={16} aria-hidden="true" />{t.contact}</Link>
+          <Link className="footer-link" to="/login"><LogIn size={16} aria-hidden="true" />Sign In</Link>
+        </nav>
 
-        <div>
-          <h4 style={{ color: '#FFFFFF', margin: '0 0 0.9rem', fontSize: '1rem', fontWeight: 700 }}>System</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', color: '#E2E8F0', fontSize: '0.92rem', lineHeight: 1.7 }}>
-            <span>Asset Management</span>
-            <span>Maintenance Management</span>
-            <span>RFID / QR Tracking</span>
-            <span>Reports &amp; Analytics</span>
-            <span>Security &amp; Compliance</span>
-          </div>
-        </div>
+        <nav className="footer-section" aria-label="System">
+          <h3>System</h3>
+          <Link className="footer-link" to="/ict/assets"><Package size={16} aria-hidden="true" />Asset Management</Link>
+          <Link className="footer-link" to="/login"><Wrench size={16} aria-hidden="true" />Maintenance</Link>
+          <Link className="footer-link" to="/login"><BarChart3 size={16} aria-hidden="true" />Reports</Link>
+        </nav>
 
-        <div>
-          <h4 style={{ color: '#FFFFFF', margin: '0 0 0.9rem', fontSize: '1rem', fontWeight: 700 }}>Contact &amp; Support</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem', color: '#E2E8F0', fontSize: '0.92rem' }}>
-            <a href={`mailto:${t.emailValue}`} style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#E2E8F0', textDecoration: 'none', lineHeight: 1.6 }}>
-              <Mail size={15} color="#E2E8F0" />
-              <span>{t.emailValue}</span>
-            </a>
-            <a href={`tel:${t.phoneValue.replace(/\s+/g, '')}`} style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#E2E8F0', textDecoration: 'none', lineHeight: 1.6 }}>
-              <Phone size={15} color="#E2E8F0" />
-              <span>{t.phoneValue}</span>
-            </a>
-            <a href={`https://maps.google.com/?q=${encodeURIComponent(t.addressValue)}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#E2E8F0', textDecoration: 'none', lineHeight: 1.6 }}>
-              <MapPin size={15} color="#E2E8F0" />
-              <span>{t.addressValue}</span>
-              <ExternalLink size={13} style={{ opacity: 0.8 }} />
-            </a>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: '#E2E8F0', lineHeight: 1.6 }}>
-              <Clock size={15} color="#E2E8F0" />
-              <span>{t.workingHoursValue}</span>
-            </div>
-            <Link to="/contact" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#FFFFFF', textDecoration: 'none', fontWeight: 600, marginTop: '0.2rem' }}>
-              Contact the university through the official contact page
-            </Link>
-          </div>
+        <div className="footer-controls">
+          <button type="button" onClick={toggleLanguage} aria-label={language === 'en' ? 'Switch to Amharic' : 'Switch to English'}>
+            <Languages size={16} aria-hidden="true" />
+            <span>{language === 'en' ? 'አማ' : 'EN'}</span>
+          </button>
+          <button type="button" onClick={toggleTheme} aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}>
+            {theme === 'light' ? <Moon size={16} aria-hidden="true" /> : <Sun size={16} aria-hidden="true" />}
+          </button>
         </div>
       </div>
 
-      <div style={{
-        maxWidth: '1200px',
-        margin: '0 auto',
-        borderTop: '1px solid rgba(148, 163, 184, 0.18)',
-        paddingTop: '1rem'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.9rem', color: '#E2E8F0' }}>
-              <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: footerStatusColor, display: 'inline-block', boxShadow: `0 0 0 4px rgba(255,255,255,0.06)` }} />
-              {systemHealth.label}
-            </div>
-            <div style={{ color: '#CBD5E1', fontSize: '0.8rem' }}>{systemHealth.message}</div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '1.4rem', alignItems: 'center', color: '#E2E8F0', fontSize: '0.82rem', flexWrap: 'wrap' }}>
-            <span>Version: {APP_VERSION}</span>
-            <span>© {new Date().getFullYear()} {organizationProfile.name || 'Mekdela Amba University'}</span>
-          </div>
-        </div>
+      <div className="footer-bottom">
+        <span>© {new Date().getFullYear()} {organizationProfile.name || t.companyName}</span>
+        <span>{t.footerCopyright}</span>
       </div>
-
-      <div style={{
-        backgroundColor: '#111827',
-        borderTop: '1px solid rgba(148, 163, 184, 0.12)',
-        marginTop: '1.2rem',
-        padding: '0.9rem 0 0.2rem'
-      }}>
-        <div style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '0.75rem',
-          color: '#CBD5E1',
-          fontSize: '0.78rem',
-          lineHeight: 1.6
-        }}>
-          <div>© {new Date().getFullYear()} {organizationProfile.name || 'Mekdela Amba University'}. University Asset Management System. All rights reserved.</div>
-          <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap' }}>
-            <Link to="/contact" style={{ color: '#BFDBFE', textDecoration: 'none' }}>Contact</Link>
-            <Link to="/about" style={{ color: '#BFDBFE', textDecoration: 'none' }}>About</Link>
-          </div>
-        </div>
-      </div>
-
-      <style>{`
-        .footer-link:hover,
-        .footer-link:focus-visible {
-          color: #D9E0E6 !important;
-          text-decoration: underline;
-          outline: none;
-        }
-
-        .footer-link:focus-visible {
-          outline: 2px solid rgba(217, 224, 230, 0.9);
-          outline-offset: 3px;
-          border-radius: 4px;
-        }
-
-        @media (max-width: 980px) {
-          .app-footer .footer-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-        }
-
-        @media (max-width: 640px) {
-          .app-footer {
-            padding-left: 1rem;
-            padding-right: 1rem;
-          }
-
-          .app-footer .footer-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .footer-link {
-            transition: none !important;
-          }
-        }
-      `}</style>
     </footer>
   );
 
   const PublicHeader = () => <Header publicOnly />;
   const PublicFooter = () => <Footer />;
 
-  const PublicLayout = ({ children }) => (
-    <div className="public-layout">
-      <PublicHeader />
-      <main className="public-main" style={{ backgroundColor: currentTheme.mainBg }}>
-        {children}
-      </main>
-      <PublicFooter />
-      <ToastContainer position="top-right" autoClose={3000} />
-    </div>
-  );
+  const PublicLayout = ({ children }) => {
+    const isHomeRoute = location.pathname === '/' || location.pathname === '/home';
+
+    return (
+      <div className={`public-layout${isHomeRoute ? ' home-route' : ''}`}>
+        <PublicHeader />
+        <main className="public-main" style={{ backgroundColor: currentTheme.mainBg }}>
+          {children}
+        </main>
+        <PublicFooter />
+        <ToastContainer position="top-right" autoClose={3000} />
+      </div>
+    );
+  };
+
+  const DashboardHeader = () => {
+    const activeItem = navigationItems
+      .slice()
+      .sort((left, right) => right.path.length - left.path.length)
+      .find((item) => item.path === currentActiveSidebar);
+    const pageTitle = String(activeItem?.label || t.dashboard).replace(/^[^\w]+\s*/, '');
+    const notificationPath = sidebarItems.find((item) => item.path.endsWith('/notifications'))?.path || getDashboardRoute(user?.role);
+    const settingsPath = sidebarItems.find((item) => item.path.endsWith('/settings'))?.path;
+    const toggleSidebar = () => {
+      if (window.innerWidth <= 900) {
+        setSidebarOpen(true);
+        return;
+      }
+      setSidebarCollapsed((current) => !current);
+    };
+
+    return (
+      <header className="dashboard-header">
+        <div className="dashboard-header-left">
+          <button
+            type="button"
+            className="dashboard-menu-button"
+            onClick={toggleSidebar}
+            aria-label={sidebarCollapsed ? 'Expand navigation menu' : 'Collapse navigation menu'}
+            aria-expanded={!sidebarCollapsed}
+            title={sidebarCollapsed ? 'Expand navigation menu' : 'Collapse navigation menu'}
+          >
+            <PanelLeft size={19} aria-hidden="true" />
+          </button>
+          <div className="dashboard-heading">
+            <span className="dashboard-heading-context">Dashboard</span>
+            <h1>{pageTitle}</h1>
+          </div>
+        </div>
+
+        <div className="dashboard-header-actions">
+          <button
+            type="button"
+            className="dashboard-icon-button"
+            onClick={() => navigate(notificationPath)}
+            aria-label="Open notifications"
+            title="Notifications"
+          >
+            <Bell size={18} aria-hidden="true" />
+            {unreadNotificationCount > 0 && <span className="dashboard-notification-count">{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</span>}
+          </button>
+
+          <button
+            type="button"
+            className="dashboard-language-button"
+            onClick={() => setLanguage((current) => current === 'en' ? 'am' : 'en')}
+            aria-label={language === 'en' ? 'Switch to Amharic' : 'Switch to English'}
+          >
+            <Languages size={16} aria-hidden="true" />
+            <span>{language === 'en' ? 'አማ' : 'EN'}</span>
+          </button>
+
+          <div className="dashboard-profile" ref={notificationMenuRef}>
+            <button
+              type="button"
+              className="dashboard-profile-button"
+              onClick={() => setProfileMenuOpen((current) => !current)}
+              aria-expanded={profileMenuOpen}
+              aria-haspopup="menu"
+              aria-label="Open user menu"
+            >
+              <UserAvatar user={user} size="sm" className="dashboard-profile-avatar" />
+              <span className="dashboard-profile-name">{user.fullName || user.username || 'User'}</span>
+              <ChevronDown size={16} aria-hidden="true" />
+            </button>
+            {profileMenuOpen && (
+              <div className="dashboard-profile-menu" role="menu">
+                {settingsPath && (
+                  <Link to={settingsPath} role="menuitem" onClick={() => setProfileMenuOpen(false)}>
+                    <Settings size={15} aria-hidden="true" /> Settings
+                  </Link>
+                )}
+                <button type="button" role="menuitem" onClick={handleLogout}>
+                  <LogOut size={15} aria-hidden="true" /> {t.logout}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+    );
+  };
 
   const AuthenticatedLayout = ({ children }) => (
     <div className="App" style={{ backgroundColor: currentTheme.mainBg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Header />
+      <DashboardHeader />
       {showDashboardSidebar && (
         <>
-          <button className="mobile-sidebar-toggle" type="button" onClick={() => setSidebarOpen(true)} aria-label="Open navigation menu"><Menu size={20} /></button>
           {sidebarOpen && <button className="sidebar-backdrop is-visible" type="button" onClick={() => setSidebarOpen(false)} aria-label="Close navigation menu" />}
         </>
       )}
       <div className={`authenticated-shell${isStoreManager ? ' store-manager-body' : ''}`} style={hideSidebar || !showDashboardSidebar ? { display: 'block' } : undefined}>
         {showDashboardSidebar && (
-          <aside className={`admin-sidebar${isStoreManager ? ' store-manager-sidebar' : ''}${sidebarOpen ? ' is-open' : ''}`} style={{
+          <aside className={`admin-sidebar${isStoreManager ? ' store-manager-sidebar' : ''}${sidebarOpen ? ' is-open' : ''}${sidebarCollapsed ? ' is-collapsed' : ''}`} style={{
             backgroundColor: '#8F9BA7',
             borderRight: `1px solid ${currentTheme.cardBorder}`,
             display: 'flex',
@@ -3114,7 +3111,7 @@ function AppContent() {
           }}>
             <div className="admin-sidebar-profile">
               <button className="sidebar-close" type="button" onClick={() => setSidebarOpen(false)} aria-label="Close navigation menu"><X size={18} /></button>
-              <div className="sidebar-avatar" aria-hidden="true">{(user.fullName || user.username || 'A').charAt(0).toUpperCase()}</div>
+              <UserAvatar user={user} size="lg" className="sidebar-avatar" />
               <div className="sidebar-user-name">{user.fullName || user.username || 'Admin'}</div>
               <div className="sidebar-role">{getRoleDisplay(sidebarRole).label}</div>
               <div className="sidebar-organization">{user.department ? getDepartmentLabel(user.department) : 'Administration'}</div>
@@ -3131,22 +3128,27 @@ function AppContent() {
                   {collegeManagementItems.map((item) => renderSidebarLink(item, true))}
                   <div className="sidebar-subsection-label">ASSET MANAGEMENT</div>
                   {collegeAssetItems.map((item) => renderSidebarLink(item, true))}
-                  <div className="sidebar-subsection-label">DEPARTMENT MANAGEMENT</div>
-                  {collegeDepartmentManagementItems.map((item) => renderSidebarLink(item, true))}
                   <div className="sidebar-subsection-label">OPERATIONS</div>
                   {collegeOperationsItems.map((item) => renderSidebarLink(item, true))}
-                  <div className="sidebar-subsection-label">ANALYTICS</div>
+                  <div className="sidebar-subsection-label">REPORTS & ANALYTICS</div>
                   {collegeAnalyticsItems.map((item) => renderSidebarLink(item, true))}
                   <div className="sidebar-subsection-label">SYSTEM</div>
                   {collegeSystemItems.map((item) => renderSidebarLink(item, true))}
                 </>
               )}
               {showDepartmentsNavigation && renderCollapsibleSection(
-                'DEPARTMENT HEAD',
+                sidebarRole === 'department_head' ? 'DEPARTMENT MANAGER' : 'DEPARTMENT HEAD',
                 departmentsNavOpen,
                 setDepartmentsNavOpen,
-                isDepartmentDean
-                  ? <><div className="sidebar-subsection-label">Overview</div>{departmentDeanItems.map((item) => renderSidebarLink(item, true))}</>
+                isDepartmentDean || sidebarRole === 'department_head'
+                  ? sidebarRole === 'department_head'
+                    ? departmentManagerSections.map((section) => (
+                      <React.Fragment key={section.label}>
+                        <div className="sidebar-subsection-label">{section.label}</div>
+                        {section.items.map((item) => renderSidebarLink(item, true))}
+                      </React.Fragment>
+                    ))
+                    : <><div className="sidebar-subsection-label">Overview</div>{departmentDeanItems.map((item) => renderSidebarLink(item, true))}</>
                   : isDepartmentStaff
                     ? <><div className="sidebar-subsection-label">Department Assets</div>{departmentStaffItems.map((item) => renderSidebarLink(item, true))}</>
                     : <><div className="sidebar-subsection-label">Department Workspace</div>{renderSidebarLink({ path: '/department', label: 'Dashboard', icon: LayoutDashboard }, true)}</>,
@@ -3182,8 +3184,8 @@ function AppContent() {
               )}
               {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'ict_officer' && (
                 <>
-                  {['Overview', 'IT ASSET MANAGEMENT', 'TECHNICAL OPERATIONS', 'MAINTENANCE', 'TRACKING', 'ANALYTICS', 'SYSTEM'].map((sectionName) => {
-                    const visibleItems = sidebarItems.filter((item) => (item.section === sectionName || (sectionName === 'Overview' && item.path === '/ict')) && !(location.pathname === '/ict/assets/create' && item.path === '/ict'));
+                  {['IT ASSET MANAGEMENT', 'ASSET MANAGEMENT', 'TECHNICAL OPERATIONS', 'MAINTENANCE', 'TRACKING', 'ANALYTICS & REPORTS', 'SYSTEM'].map((sectionName) => {
+                    const visibleItems = sidebarItems.filter((item) => item.section === sectionName);
                     if (!visibleItems.length) return null;
                     return (
                       <React.Fragment key={sectionName}>
@@ -3234,8 +3236,8 @@ function AppContent() {
             </nav>
 
             <div className="admin-sidebar-footer">
-              <div className="sidebar-account"><div className="sidebar-account-avatar">{(user.fullName || user.username || 'A').charAt(0).toUpperCase()}</div><div><strong>{user.username || 'Admin'}</strong><span>System Administrator</span></div></div>
-              <button className="sidebar-logout" type="button" onClick={handleLogout}><LogOut size={16} aria-hidden="true" /> {t.logout}</button>
+              <div className="sidebar-account"><UserAvatar user={user} size="sm" className="sidebar-account-avatar" /><div><strong>{user.username || 'Admin'}</strong><span>System Administrator</span></div></div>
+              <button className="sidebar-logout" type="button" onClick={handleLogout}><LogOut size={16} aria-hidden="true" /><span>{t.logout}</span></button>
             </div>
           </aside>
         )}
@@ -3333,43 +3335,44 @@ function AppContent() {
         { path: '/admin/monitoring', label: 'System Monitoring', icon: BarChart3, group: 'System' }
       ],
       'ict_officer': [
-        { path: '/ict', label: '📊 ' + t.dashboard, section: 'Overview' },
-        { path: '/ict/assets', label: '📦 ICT Assets', section: 'IT ASSET MANAGEMENT' },
-        { path: '/ict/assets/create', label: '➕ Create Asset', section: 'IT ASSET MANAGEMENT' },
-        { path: '/ict/inventory', label: '📋 Inventory', section: 'IT ASSET MANAGEMENT' },
-        { path: '/ict/assets/assign', label: '👤 Assignments', section: 'IT ASSET MANAGEMENT' },
-        { path: '/ict/requests', label: '📝 Asset Requests', section: 'IT ASSET MANAGEMENT' },
-        { path: '/ict/equipment', label: '💻 IT Equipment', section: 'TECHNICAL OPERATIONS' },
-        { path: '/ict/network', label: '🌐 Network Equipment', section: 'TECHNICAL OPERATIONS' },
-        { path: '/ict/software-licenses', label: '📜 Software Licenses', section: 'TECHNICAL OPERATIONS' },
-        { path: '/ict/support', label: '🛠️ Technical Support', section: 'TECHNICAL OPERATIONS' },
-        { path: '/ict/incidents', label: '⚠️ Incident Management', section: 'TECHNICAL OPERATIONS' },
-        { path: '/ict/maintenance', label: '🔧 ICT Maintenance', section: 'MAINTENANCE' },
-        { path: '/ict/repair-history', label: '🕘 Repair History', section: 'MAINTENANCE' },
-        { path: '/ict/device-health', label: '❤️ Device Health', section: 'MAINTENANCE' },
-        { path: '/ict/rfid', label: '📡 RFID / QR Tracking', section: 'TRACKING' },
-        { path: '/ict/assets/history', label: '📜 Asset History', section: 'TRACKING' },
-        { path: '/ict/reports', label: '📊 ICT Reports', section: 'ANALYTICS' },
-        { path: '/ict/asset-analytics', label: '📈 Asset Analytics', section: 'ANALYTICS' },
-        { path: '/ict/notifications', label: '🔔 Notifications', section: 'SYSTEM' }
+        { path: '/ict/dashboard', label: 'Dashboard Overview', icon: LayoutDashboard, section: 'IT ASSET MANAGEMENT' },
+        { path: '/ict/assets', label: 'ICT Assets', section: 'ASSET MANAGEMENT' },
+        { path: '/ict/inventory', label: 'Inventory', section: 'ASSET MANAGEMENT' },
+        { path: '/ict/assignments', label: 'Assignments', section: 'ASSET MANAGEMENT' },
+        { path: '/ict/asset-requests', label: 'Asset Requests', section: 'ASSET MANAGEMENT' },
+        { path: '/ict/equipment', label: 'IT Equipment', section: 'TECHNICAL OPERATIONS' },
+        { path: '/ict/network', label: 'Network Equipment', section: 'TECHNICAL OPERATIONS' },
+        { path: '/ict/software-licenses', label: 'Software Licenses', section: 'TECHNICAL OPERATIONS' },
+        { path: '/ict/support', label: 'Technical Support', section: 'TECHNICAL OPERATIONS' },
+        { path: '/ict/incidents', label: 'Incident Management', section: 'TECHNICAL OPERATIONS' },
+        { path: '/ict/maintenance', label: 'ICT Maintenance', section: 'MAINTENANCE' },
+        { path: '/ict/repairs', label: 'Repair History', section: 'MAINTENANCE' },
+        { path: '/ict/device-health', label: 'Device Health', section: 'MAINTENANCE' },
+        { path: '/ict/tracking', label: 'RFID / QR Tracking', section: 'TRACKING' },
+        { path: '/ict/asset-history', label: 'Asset History', section: 'TRACKING' },
+        { path: '/ict/reports', label: 'ICT Reports', section: 'ANALYTICS & REPORTS' },
+        { path: '/ict/analytics', label: 'Asset Analytics', section: 'ANALYTICS & REPORTS' },
+        { path: '/ict/notifications', label: 'Notifications', section: 'SYSTEM' }
       ],
       'college': [
-        { path: '/college', label: '📊 ' + t.dashboard },
-        { path: '/college/profile', label: '🏢 College Profile' },
-        { path: '/college/departments', label: '🏫 Departments' },
-        { path: '/college/staff', label: '👥 ' + t.staff },
-        { path: '/college/locations', label: '📍 Locations' },
-        { path: '/college/assets', label: '📦 ' + t.assets },
-        { path: '/college/inventory', label: '📋 ' + t.inventory },
-        { path: '/college/requests', label: '📝 Asset Requests' },
-        { path: '/college/approvals', label: '✅ Approvals' },
-        { path: '/college/assignments', label: '👤 Assignments' },
-        { path: '/college/transfers', label: '🔄 Transfers' },
-        { path: '/college/returns', label: '↩️ Returns' },
-        { path: '/college/maintenance', label: '🔧 ' + t.maintenance },
-        { path: '/college/rfid', label: '📡 RFID / QR Tracking' },
-        { path: '/college/reports', label: '📊 ' + t.reports },
-        { path: '/college/notifications', label: '🔔 ' + t.notifications }
+        { path: '/college', label: 'Dashboard' },
+        { path: '/college/profile', label: 'College Profile' },
+        { path: '/college/staff', label: 'College Staff' },
+        { path: '/college/locations', label: 'Locations' },
+        { path: '/college/departments', label: 'Departments' },
+        { path: '/college/assets', label: 'All College Assets' },
+        { path: '/college/inventory', label: 'Inventory' },
+        { path: '/college/requests', label: 'Asset Requests' },
+        { path: '/college/approvals', label: 'Approvals' },
+        { path: '/college/assignments', label: 'Assignments' },
+        { path: '/college/transfers', label: 'Transfers' },
+        { path: '/college/returns', label: 'Returns' },
+        { path: '/college/maintenance', label: 'Maintenance Oversight' },
+        { path: '/college/rfid', label: 'RFID / QR Tracking' },
+        { path: '/college/verification', label: 'Asset Verification' },
+        { path: '/college/reports', label: 'College Reports' },
+        { path: '/college/analytics/assets', label: 'College Analytics' },
+        { path: '/college/notifications', label: 'Notifications' }
       ],
       'staff': [],
       'finance': [
@@ -3463,7 +3466,7 @@ function AppContent() {
         { path: '/infrastructure/notifications', label: '🔔 Notifications', section: 'SYSTEM' }
       ]
     };
-    return items[normalizedRole] || items['admin'];
+    return items[normalizedRole] || [];
   };
 
   const sidebarRole = normalizeRole(user?.role || user?.roles);
@@ -3475,7 +3478,7 @@ function AppContent() {
   const isDepartmentStaff = sidebarRole === 'staff' || responsibility === 'department staff';
   const isDepartmentDean = responsibility === 'department dean' || responsibility === 'dean';
   const showCollegeNavigation = sidebarRole === 'college' && !isDepartmentStaff && !isDepartmentDean;
-  const showDepartmentsNavigation = isDepartmentStaff || isDepartmentDean;
+  const showDepartmentsNavigation = sidebarRole === 'department_head' || isDepartmentStaff || isDepartmentDean;
   const financeSectionLabels = {
     'Overview': 'OVERVIEW',
     'PROCUREMENT': 'PROCUREMENT',
@@ -3489,13 +3492,12 @@ function AppContent() {
   ];
   const collegeManagementItems = [
     { path: '/college/profile', label: 'College Profile', icon: Building2, group: 'College Management' },
-    { path: '/college/staff', label: 'Staff', icon: Users, group: 'College Management' },
+    { path: '/college/staff', label: 'College Staff', icon: Users, group: 'College Management' },
     { path: '/college/locations', label: 'Locations', icon: MapPin, group: 'College Management' },
-    { path: '/college/departments', label: 'Departments', icon: Building2, group: 'College Management' },
-    { path: '/college/department-overview', label: 'Department Overview', icon: GitBranch, group: 'College Management' }
+    { path: '/college/departments', label: 'Departments', icon: Building2, group: 'College Management' }
   ];
   const collegeAssetItems = [
-    { path: '/college/assets', label: 'Assets', icon: Package, group: 'Asset Management' },
+    { path: '/college/assets', label: 'All College Assets', icon: Package, group: 'Asset Management' },
     { path: '/college/inventory', label: 'Inventory', icon: ClipboardList, group: 'Asset Management' },
     { path: '/college/requests', label: 'Asset Requests', icon: ClipboardList, group: 'Asset Management' },
     { path: '/college/approvals', label: 'Approvals', icon: ClipboardCheck, group: 'Asset Management' },
@@ -3503,22 +3505,14 @@ function AppContent() {
     { path: '/college/transfers', label: 'Transfers', icon: ArrowLeftRight, group: 'Asset Management' },
     { path: '/college/returns', label: 'Returns', icon: ArrowLeftRight, group: 'Asset Management' }
   ];
-  const collegeDepartmentManagementItems = [
-    { path: '/college/department-overview', label: 'Department Overview', icon: Building2, group: 'Department Management' },
-    { path: '/college/department-staff', label: 'Department Staff', icon: Users, group: 'Department Management' },
-    { path: '/college/department-assets', label: 'Department Assets', icon: Package, group: 'Department Management' },
-    { path: '/college/department-requests', label: 'Department Requests', icon: ClipboardList, group: 'Department Management' },
-    { path: '/college/department-performance', label: 'Department Performance', icon: BarChart3, group: 'Department Management' }
-  ];
   const collegeOperationsItems = [
-    { path: '/college/maintenance', label: 'Maintenance', icon: Wrench, group: 'Operations' },
+    { path: '/college/maintenance', label: 'Maintenance Oversight', icon: Wrench, group: 'Operations' },
     { path: '/college/rfid', label: 'RFID / QR Tracking', icon: Radio, group: 'Operations' },
     { path: '/college/verification', label: 'Asset Verification', icon: Radio, group: 'Operations' }
   ];
   const collegeAnalyticsItems = [
-    { path: '/college/reports', label: 'Reports', icon: BarChart3, group: 'Analytics' },
-    { path: '/college/analytics/assets', label: 'Asset Analytics', icon: BarChart3, group: 'Analytics' },
-    { path: '/college/analytics/departments', label: 'Department Reports', icon: BarChart3, group: 'Analytics' }
+    { path: '/college/reports', label: 'College Reports', icon: BarChart3, group: 'Reports & Analytics' },
+    { path: '/college/analytics/assets', label: 'College Analytics', icon: BarChart3, group: 'Reports & Analytics' }
   ];
   const collegeSystemItems = [
     { path: '/college/notifications', label: 'Notifications', icon: Bell, group: 'System' }
@@ -3526,6 +3520,8 @@ function AppContent() {
   const departmentDeanItems = [
     { path: '/department', label: 'Overview Dashboard', icon: LayoutDashboard },
     { path: '/department/profile', label: 'Department Profile', icon: Users },
+    { path: '/department/staff', label: 'Department Staff', icon: Users },
+    { path: '/department/locations', label: 'Department Locations', icon: MapPin },
     { path: '/department/assets', label: 'Assets', icon: Package },
     { path: '/department/assignments', label: 'Asset Assignments', icon: ClipboardList },
     { path: '/department/inventory', label: 'Inventory', icon: Package },
@@ -3556,6 +3552,14 @@ function AppContent() {
     { path: '/department/movement', label: 'Asset Movement', icon: ArrowLeftRight },
     { path: '/department/notifications', label: 'Notifications', icon: Bell },
     { path: '/department/history', label: 'Asset History', icon: ClipboardCheck }
+  ];
+  const departmentManagerSections = [
+    { label: 'OVERVIEW', items: departmentDeanItems.slice(0, 1) },
+    { label: 'DEPARTMENT MANAGEMENT', items: departmentDeanItems.slice(1, 4) },
+    { label: 'ASSET MANAGEMENT', items: departmentDeanItems.slice(4, 10) },
+    { label: 'OPERATIONS', items: departmentDeanItems.slice(10, 13) },
+    { label: 'REPORTS & ANALYTICS', items: departmentDeanItems.slice(13, 15) },
+    { label: 'SYSTEM', items: departmentDeanItems.slice(15) }
   ];
   const navigationItems = [...sidebarItems, ...(isDepartmentDean ? departmentDeanItems : isDepartmentStaff ? departmentStaffItems : [])];
   const currentActiveSidebar = [...navigationItems]
@@ -3593,6 +3597,7 @@ function AppContent() {
         className={`admin-nav-link${isActive ? ' is-active' : ''}`}
         aria-current={isActive ? 'page' : undefined}
         onClick={() => setSidebarOpen(false)}
+        title={sidebarCollapsed ? item.label.replace(/^[^\w]+\s*/, '') : undefined}
         style={nested ? { paddingLeft: '34px', fontSize: '0.86rem' } : undefined}
       >
         <Icon size={17} strokeWidth={1.9} aria-hidden="true" />
@@ -3633,7 +3638,7 @@ function AppContent() {
           <Route path="/contact" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
           <Route path="/login" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
 
-          <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+          <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout /></ProtectedRoute>}>
             <Route index element={<DashboardOverview />} />
             <Route path="assets" element={<AdminAssets />} />
             <Route path="categories" element={<AdminAssetCategories />} />
@@ -3771,25 +3776,33 @@ function AppContent() {
           </Route>
 
           {/* ICT OFFICER ROUTES - Fixed with RoleLayout */}
-          <Route path="/ict" element={<ProtectedRoute allowedRoles={['ict_officer']}><RoleLayout /></ProtectedRoute>}>
-            <Route index element={<ICTDashboard />} />
+          <Route path="/ict" element={<ProtectedRoute allowedRoles={['ict_officer', 'admin']}><RoleLayout /></ProtectedRoute>}>
+            <Route index element={<Navigate to="/ict/dashboard" replace />} />
+            <Route path="dashboard" element={<ICTDashboard />} />
             <Route path="assets" element={<ICTAssets />} />
-            <Route path="assets/create" element={<ICTCreateAsset />} />
-            <Route path="assets/assign" element={<ICTAssignments />} />
+            <Route path="assets/create" element={<AssetCreate />} />
+            <Route path="assignments" element={<ICTAssignments />} />
+            <Route path="assets/assign" element={<Navigate to="/ict/assignments" replace />} />
             <Route path="assets/:id" element={<AssetDetails />} />
             <Route path="maintenance" element={<ICTMaintenance />} />
-            <Route path="repair-history" element={<ICTMaintenance />} />
-            <Route path="device-health" element={<ICTMaintenance />} />
-            <Route path="rfid" element={<ICTRFIDTracking />} />
+            <Route path="repairs" element={<ICTRepairHistory />} />
+            <Route path="repair-history" element={<Navigate to="/ict/repairs" replace />} />
+            <Route path="device-health" element={<ICTDeviceHealth />} />
+            <Route path="tracking" element={<ICTRFIDTracking />} />
+            <Route path="rfid" element={<Navigate to="/ict/tracking" replace />} />
+            <Route path="asset-history" element={<ICTAssetHistory />} />
             <Route path="reports" element={<ICTReports />} />
-            <Route path="asset-analytics" element={<ICTReports />} />
+            <Route path="analytics" element={<ICTAssetAnalytics />} />
+            <Route path="asset-analytics" element={<Navigate to="/ict/analytics" replace />} />
             <Route path="inventory" element={<ICTInventory />} />
-            <Route path="requests" element={<ICTAssetRequests />} />
-            <Route path="equipment" element={<ICTAssets />} />
+            <Route path="asset-requests" element={<ICTAssetRequests />} />
+            <Route path="requests" element={<Navigate to="/ict/asset-requests" replace />} />
+            <Route path="equipment" element={<ICTEquipment />} />
             <Route path="network" element={<ICTNetwork />} />
-            <Route path="software-licenses" element={<ICTEquipment />} />
-            <Route path="support" element={<ICTTechnicalSupport />} />
-            <Route path="incidents" element={<ICTTechnicalSupport />} />
+            <Route path="software-licenses" element={<ICTSoftwareLicenses />} />
+            <Route path="technical-support" element={<ICTTechnicalSupport />} />
+            <Route path="support" element={<Navigate to="/ict/technical-support" replace />} />
+            <Route path="incidents" element={<ICTIncidents />} />
             <Route path="notifications" element={<ICTNotifications />} />
             <Route path="assets/:id/history" element={<ICTAssetHistory />} />
           </Route>
@@ -3834,19 +3847,20 @@ function AppContent() {
 
           <Route path="/department" element={<DepartmentWorkspaceRoute />}>
             <Route index element={<DeptDashboard />} />
-            <Route path="profile" element={<DeptDashboard />} />
+            <Route path="profile" element={<DeptProfile />} />
             <Route path="staff" element={<DeptStaff />} />
+            <Route path="locations" element={<DeptLocations />} />
             <Route path="assets" element={<DeptAssets />} />
             <Route path="inventory" element={<DeptReports />} />
             <Route path="requests" element={<DeptApprovals />} />
             <Route path="approvals" element={<DepartmentDeanRoute />} />
             <Route path="assignments" element={<DeptAssets />} />
             <Route path="transfers" element={<ScopedWorkflowPage type="transfers" />} />
-            <Route path="returns" element={<ScopedWorkflowPage type="returns" />} />
-            <Route path="maintenance" element={<ScopedWorkflowPage type="maintenance" />} />
-            <Route path="maintenance-requests" element={<ScopedWorkflowPage type="maintenance" />} />
+            <Route path="returns" element={<DepartmentReturnsPage />} />
+            <Route path="maintenance" element={<DepartmentMaintenance />} />
+            <Route path="maintenance-requests" element={<DepartmentMaintenance />} />
             <Route path="movement" element={<DeptAssetHistory />} />
-            <Route path="utilization" element={<DeptReports />} />
+            <Route path="utilization" element={<DeptUtilization />} />
             <Route path="verification" element={<DeptAssets />} />
             <Route path="reports" element={<DeptReports />} />
             <Route path="notifications" element={<DeptNotifications />} />
@@ -3945,7 +3959,7 @@ function AppContent() {
             <Route path="inventory" element={<InfrastructureInventory />} />
             <Route path="assignment" element={<InfrastructureAssignment />} />
             <Route path="transfer" element={<InfrastructureAssets />} />
-            <Route path="verification" element={<InfrastructureInspection />} />
+            <Route path="verification" element={<InfrastructureVerification />} />
             
             {/* Infrastructure Categories */}
             <Route path="buildings" element={<InfrastructureBuildings />} />
@@ -3978,12 +3992,7 @@ function AppContent() {
             <Route path="notifications" element={<InfrastructureNotifications />} />
           </Route>
 
-          {/* Redirects */}
-          <Route path="/" element={<Navigate to={getDashboardRoute(user.role)} replace />} />
-          <Route path="/home" element={<Navigate to={getDashboardRoute(user.role)} replace />} />
-          <Route path="/about" element={<Navigate to={getDashboardRoute(user.role)} replace />} />
-          <Route path="/contact" element={<Navigate to={getDashboardRoute(user.role)} replace />} />
-          <Route path="/dashboard" element={<Navigate to={getDashboardRoute(user.role)} replace />} />
+          {/* Catch-all redirect for authenticated routes. */}
           <Route path="*" element={<Navigate to={getDashboardRoute(user.role)} replace />} />
         </Routes>
       </Suspense>

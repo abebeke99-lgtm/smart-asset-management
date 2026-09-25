@@ -2,6 +2,7 @@ require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const College = require('../models/College');
+const Department = require('../models/Department');
 
 function resolveDemoPassword() {
   const configured = String(process.env.SEED_DEMO_PASSWORD || process.env.DEMO_USER_PASSWORD || '').trim();
@@ -37,6 +38,15 @@ const DEMO_USERS = [
     role: 'college',
     department: 'Engineering',
     phone: '0922345678',
+    active: true,
+  },
+  {
+    username: 'department_head',
+    email: 'department@bekelei.com',
+    fullName: 'Department Manager',
+    role: 'department_head',
+    department: 'Engineering',
+    phone: '0972345678',
     active: true,
   },
   {
@@ -80,7 +90,8 @@ const DEMO_USERS = [
 const LEGACY_USERNAME_ALIASES = {
   admin: ['admin'],
   ict_officer: ['ict_officer', 'ict officer', 'ict-officer', 'ict'],
-  college: ['college', 'department_head', 'department head', 'dept_head', 'dept-head', 'department'],
+  college: ['college'],
+  department_head: ['department_head', 'dept_head', 'department head', 'department'],
   finance: ['finance'],
   store_manager: ['store_manager', 'store manager', 'store-manager', 'store'],
   maintenance: ['maintenance'],
@@ -116,6 +127,51 @@ async function ensureCollegeScopeForUser(userRecord) {
   }
 }
 
+async function ensureDepartmentScopeForUser(userRecord) {
+  if (!userRecord || userRecord.role !== 'department_head') return;
+
+  const departmentName = String(userRecord.department || 'Engineering').trim() || 'Engineering';
+  let department = await Department.findOne({ where: { name: departmentName, status: 'active' } });
+
+  if (!department) {
+    let college = await College.findOne({ where: { managerId: userRecord.id, status: 'active' } });
+    if (!college) {
+      college = await College.findOne({ where: { collegeName: departmentName, status: 'active' } });
+    }
+    if (!college) {
+      const collegeCode = `CLG-${String(departmentName).slice(0, 6).toUpperCase().replace(/[^A-Z0-9]/g, '') || 'ENG'}`;
+      college = await College.create({
+        collegeCode,
+        collegeName: departmentName,
+        managerId: userRecord.id,
+        description: `Auto-created college scope for ${userRecord.fullName || userRecord.username}`,
+        status: 'active',
+      });
+    }
+
+    const departmentCode = String(departmentName).slice(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, '') || 'DEPT';
+    try {
+      department = await Department.create({
+        name: departmentName,
+        code: departmentCode,
+        description: `Auto-created department scope for ${userRecord.fullName || userRecord.username}`,
+        headId: userRecord.id,
+        collegeId: college.id,
+        status: 'active',
+      });
+    } catch (error) {
+      department = await Department.findOne({ where: { name: departmentName } });
+      if (!department) {
+        throw error;
+      }
+    }
+  }
+
+  if (department && (Number(userRecord.departmentId) !== Number(department.id) || Number(userRecord.collegeId) !== Number(department.collegeId || userRecord.collegeId))) {
+    await userRecord.update({ departmentId: department.id, collegeId: department.collegeId || userRecord.collegeId || null });
+  }
+}
+
 async function ensureDemoUser(userData) {
   const aliasNames = LEGACY_USERNAME_ALIASES[userData.role] || [userData.username];
   const candidates = [...new Set(aliasNames.map((value) => String(value).trim()).filter(Boolean))];
@@ -138,6 +194,9 @@ async function ensureDemoUser(userData) {
     if (userData.role === 'college') {
       await ensureCollegeScopeForUser(createdUser);
     }
+    if (userData.role === 'department_head') {
+      await ensureDepartmentScopeForUser(createdUser);
+    }
     console.log(`✅ Created missing user: ${userData.username} (${userData.role})`);
     return;
   }
@@ -159,6 +218,9 @@ async function ensureDemoUser(userData) {
 
   if (userData.role === 'college') {
     await ensureCollegeScopeForUser(existingUser);
+  }
+  if (userData.role === 'department_head') {
+    await ensureDepartmentScopeForUser(existingUser);
   }
 
   for (const legacyUsername of aliasUpdates) {
@@ -190,12 +252,14 @@ async function seedDatabase() {
     if (totalUsers === 0) {
       for (const userData of demoUsers) {
         const hashedPassword = await bcrypt.hash(userData.password, 10);
-        await User.create({
+        const createdUser = await User.create({
           ...userData,
           password: hashedPassword,
         });
+        if (userData.role === 'college') await ensureCollegeScopeForUser(createdUser);
+        if (userData.role === 'department_head') await ensureDepartmentScopeForUser(createdUser);
       }
-      console.log('✅ Seeded all demo accounts with roles: admin, ict_officer, college, finance, store_manager, maintenance, infrastructure');
+      console.log('✅ Seeded all demo accounts with role-scoped access');
       return;
     }
 

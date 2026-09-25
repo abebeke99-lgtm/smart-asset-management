@@ -1,13 +1,36 @@
 const express = require('express');
-const { getAllUsers, getUserById, createUser, updateUser, deleteUser, updateProfile, setUserSecurityState, resetUserPassword, forcePasswordChange, terminateUserSession } = require('../controllers/userController');
+const multer = require('multer');
+const { getAllUsers, getUserById, createUser, updateUser, deleteUser, getCurrentUserProfile, updateProfile, updateCurrentUserProfilePhoto, removeCurrentUserProfilePhoto, setUserSecurityState, resetUserPassword, forcePasswordChange, terminateUserSession } = require('../controllers/userController');
 const { AuditLog, User } = require('../models');
 const { requireAuth, requireRole } = require('../middlewares/auth');
+const { validateProfilePhoto } = require('../utils/uploadUtils');
 
 const router = express.Router();
+const profilePhotoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const validation = validateProfilePhoto({
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      buffer: Buffer.alloc(0),
+    }, { maxSize: 5 * 1024 * 1024 });
+
+    if (!validation.valid) {
+      return cb(new Error(validation.message));
+    }
+
+    cb(null, true);
+  },
+});
 
 router.get('/', requireAuth, requireRole('admin', 'college', 'store_manager', 'ict_officer', 'maintenance'), getAllUsers);
 router.get('/technicians', requireAuth, requireRole('admin', 'maintenance', 'ict_officer'), getAllUsers);
+router.get('/profile', requireAuth, getCurrentUserProfile);
 router.put('/profile', requireAuth, updateProfile);
+router.post('/profile/photo', requireAuth, profilePhotoUpload.single('photo'), updateCurrentUserProfilePhoto);
+router.delete('/profile/photo', requireAuth, removeCurrentUserProfilePhoto);
 router.post('/:id/lock', requireAuth, requireRole('admin'), (req, res, next) => setUserSecurityState(req, res, 'lock').catch(next));
 router.post('/:id/unlock', requireAuth, requireRole('admin'), (req, res, next) => setUserSecurityState(req, res, 'unlock').catch(next));
 router.post('/:id/reset-password', requireAuth, requireRole('admin'), (req, res, next) => resetUserPassword(req, res).catch(next));

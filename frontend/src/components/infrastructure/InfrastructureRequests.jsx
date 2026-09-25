@@ -160,7 +160,7 @@ const InfrastructureRequests = () => {
   if (state.loading) {
     return (
       <div style={styles.loadingState} aria-live="polite">
-        <LoaderCircle size={22} style={{ animation: 'spin 1s linear infinite' }} />
+        <LoaderCircle size={22} style={{ animation: 'none' }} />
         Loading infrastructure requests...
       </div>
     );
@@ -275,7 +275,7 @@ const InfrastructureRequests = () => {
               ? `Showing ${((pagination.page - 1) * pagination.limit) + 1}-${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total} requests`
               : 'No request records found'}
           </span>
-          {state.tableLoading && <RefreshCw size={15} style={{ animation: 'spin 1s linear infinite' }} />}
+          {state.tableLoading && <RefreshCw size={15} style={{ animation: 'none' }} />}
         </div>
 
         {requests.length ? (

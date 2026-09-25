@@ -1,20 +1,19 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Archive, Check, CheckCircle2, ClipboardCheck, Download, Eye, FileText, Loader2, PackageCheck, RefreshCw, ShieldAlert, Wrench, X, XCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { getDepartmentLabel } from '../../utils/department';
+import './DeptApprovals.css';
 
 const DeptApprovals = () => {
   const { user } = useAuth();
   const { language, theme } = useLanguage();
-  const navigate = useNavigate();
-  
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('pending');
+  const [filter, setFilter] = useState('Pending');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
@@ -24,6 +23,7 @@ const DeptApprovals = () => {
   const [modalMode, setModalMode] = useState('view');
   const [approvalComment, setApprovalComment] = useState('');
   const [approvalReason, setApprovalReason] = useState('');
+  const [processing, setProcessing] = useState(false);
   
   const [stats, setStats] = useState({
     pending: 0,
@@ -39,22 +39,22 @@ const DeptApprovals = () => {
 
   useEffect(() => {
     fetchRequests();
-  }, [filter, filterType, filterPriority]);
+  }, [filterType, filterPriority]);
 
   const fetchRequests = async () => {
     setLoading(true);
     try {
-      const params = {
-        department: user?.department,
-        status: filter || undefined,
-        type: filterType || undefined,
-        priority: filterPriority || undefined,
-        limit: 200
-      };
-      const response = await axios.get('/api/approvals', { params });
-      const data = response.data.requests || [];
+      const response = await axios.get('/api/department/approvals', { params: { limit: 200 } });
+      const data = response.data?.data || [];
       const normalizedRequests = data.map((request) => ({
         ...request,
+        request_id: request.request_id || request.requestNumber,
+        requested_by: request.requested_by || request.requester?.name || request.requester,
+        department: request.department?.name || request.department,
+        item: request.item || request.asset?.name,
+        created_at: request.created_at || request.createdAt,
+        updated_at: request.updated_at || request.updatedAt,
+        approval_comment: request.approval_comment || request.comment,
         status: request.status ? request.status.charAt(0).toUpperCase() + request.status.slice(1).toLowerCase() : request.status,
         priority: request.priority ? request.priority.charAt(0).toUpperCase() + request.priority.slice(1).toLowerCase() : request.priority,
       }));
@@ -88,14 +88,17 @@ const DeptApprovals = () => {
   };
 
   const handleApproval = async (decision) => {
-    if (!selectedRequest) return;
+    if (!selectedRequest || processing) return;
+    setProcessing(true);
     
     try {
-      await axios.patch(`/api/approvals/${selectedRequest.id}`, {
-        status: decision.toLowerCase(),
-        comment: approvalComment,
-        reason: approvalReason
-      });
+      const isRejecting = decision === 'Rejected';
+      const reason = approvalReason.trim() || approvalComment.trim();
+      if (isRejecting && !reason) {
+        toast.error(t.rejectionCommentRequired || 'A rejection reason is required');
+        return;
+      }
+      await axios.post(`/api/department/approvals/${selectedRequest.id}/${isRejecting ? 'reject' : 'approve'}`, { reason });
       
       toast.success(
         decision === 'Approved' 
@@ -109,6 +112,8 @@ const DeptApprovals = () => {
       await fetchRequests();
     } catch (error) {
       toast.error(t.approvalError || 'Failed to process approval');
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -176,15 +181,15 @@ const DeptApprovals = () => {
 
   const getTypeIcon = (type) => {
     const icons = {
-      'Asset Request': '📋',
-      'Asset Assignment': '📤',
-      'Asset Transfer': '🔄',
-      'Maintenance Request': '🔧',
-      'Asset Return': '📥',
-      'New Equipment Request': '🆕',
-      'Disposal Request': '🗑️'
+      'Asset Request': ClipboardCheck,
+      'Asset Assignment': PackageCheck,
+      'Asset Transfer': RefreshCw,
+      'Maintenance Request': Wrench,
+      'Asset Return': Archive,
+      'New Equipment Request': FileText,
+      'Disposal Request': Archive
     };
-    return icons[type] || '📄';
+    return icons[type] || FileText;
   };
 
   const filteredRequests = useMemo(() => {
@@ -201,7 +206,7 @@ const DeptApprovals = () => {
     }
     
     if (filter && filter !== 'all') {
-      result = result.filter(r => r.status === filter);
+      result = result.filter(r => r.status?.toLowerCase() === filter.toLowerCase());
     }
     
     if (filterType) {
@@ -215,7 +220,6 @@ const DeptApprovals = () => {
     return result;
   }, [requests, search, filter, filterType, filterPriority]);
 
-  // Unique types for filter
   const uniqueTypes = useMemo(() => [...new Set(requests.map(r => r.type).filter(Boolean))], [requests]);
 
   const styles = {
@@ -607,9 +611,9 @@ const DeptApprovals = () => {
 
   if (loading) {
     return (
-      <div style={styles.container}>
+      <div className="dept-approvals-page" style={styles.container}>
         <div style={styles.emptyState}>
-          <div style={{ fontSize: '2rem', marginBottom: '12px' }}>⏳</div>
+          <Loader2 size={30} className="dept-approvals-spin" aria-hidden="true" />
           <div>{t.loading}</div>
         </div>
       </div>
@@ -617,11 +621,11 @@ const DeptApprovals = () => {
   }
 
   return (
-    <div style={styles.container}>
+    <div className="dept-approvals-page" style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>✅ {t.approvals}</h1>
+          <h1 style={styles.title}><ClipboardCheck size={28} aria-hidden="true" /> {t.approvals}</h1>
           <p style={styles.subtitle}>
             {t.approvalsDesc} - {user?.department || 'Department'}
             <span style={{ marginLeft: '12px', fontSize: '0.85rem', color: isDark ? '#8896b0' : '#4a5568' }}>
@@ -630,8 +634,8 @@ const DeptApprovals = () => {
           </p>
         </div>
         <div style={styles.headerActions}>
-          <button style={styles.exportButton} onClick={exportToExcel}>
-            📥 {t.exportExcel}
+          <button style={styles.exportButton} onClick={exportToExcel} title={t.exportExcel}>
+            <Download size={16} aria-hidden="true" /> {t.exportExcel}
           </button>
         </div>
       </div>
@@ -665,6 +669,7 @@ const DeptApprovals = () => {
         <input
           type="text"
           style={styles.input}
+          aria-label={t.searchPlaceholder}
           placeholder={t.searchPlaceholder}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -686,9 +691,9 @@ const DeptApprovals = () => {
           setSearch('');
           setFilterType('');
           setFilterPriority('');
-          setFilter('pending');
-        }}>
-          ✕ {t.clearFilters}
+          setFilter('Pending');
+        }} title={t.clearFilters}>
+          <X size={15} aria-hidden="true" /> {t.clearFilters}
         </button>
       </div>
 
@@ -726,11 +731,11 @@ const DeptApprovals = () => {
                   <td style={styles.td}>
                     <span style={styles.requestId}>{request.request_id}</span>
                     {request.is_urgent && (
-                      <span style={{ marginLeft: '6px', color: '#fc8181' }}>🚨</span>
+                      <ShieldAlert size={15} style={{ marginLeft: '6px', color: '#fc8181', verticalAlign: 'middle' }} aria-label={t.urgent} />
                     )}
                   </td>
                   <td style={styles.td}>
-                    <span style={{ marginRight: '4px' }}>{getTypeIcon(request.type)}</span>
+                    {React.createElement(getTypeIcon(request.type), { size: 16, style: { marginRight: '5px', verticalAlign: 'middle' }, 'aria-hidden': true })}
                     {request.type}
                   </td>
                   <td style={styles.td}>
@@ -761,14 +766,18 @@ const DeptApprovals = () => {
                         <button
                           style={{ ...styles.actionButton, background: 'linear-gradient(135deg, #48bb78, #38a169)', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 12px', cursor: 'pointer', fontSize: '0.8rem' }}
                           onClick={(e) => { e.stopPropagation(); handleApproveClick(request); }}
+                          title={t.approve}
+                          aria-label={`${t.approve} ${request.request_id}`}
                         >
-                          {t.approve}
+                          <Check size={14} aria-hidden="true" /> {t.approve}
                         </button>
                         <button
                           style={{ ...styles.actionButton, background: 'linear-gradient(135deg, #fc8181, #e53e3e)', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 12px', cursor: 'pointer', fontSize: '0.8rem' }}
                           onClick={(e) => { e.stopPropagation(); handleRejectClick(request); }}
+                          title={t.reject}
+                          aria-label={`${t.reject} ${request.request_id}`}
                         >
-                          {t.reject}
+                          <X size={14} aria-hidden="true" /> {t.reject}
                         </button>
                       </div>
                     )}
@@ -776,8 +785,10 @@ const DeptApprovals = () => {
                       <button
                         style={{ ...styles.actionButton, background: isDark ? '#2d4a6f' : '#e8edf5', color: isDark ? '#c8dcf5' : '#1a365d', border: 'none', borderRadius: '4px', padding: '4px 12px', cursor: 'pointer', fontSize: '0.8rem' }}
                         onClick={(e) => { e.stopPropagation(); handleViewRequest(request); }}
+                        title={t.view}
+                        aria-label={`${t.view} ${request.request_id}`}
                       >
-                        {t.view}
+                        <Eye size={14} aria-hidden="true" /> {t.view}
                       </button>
                     )}
                   </td>
@@ -797,14 +808,14 @@ const DeptApprovals = () => {
                 <h2 style={styles.modalTitle}>
                   {selectedRequest.request_id}
                   <span style={{ marginLeft: '12px', fontSize: '0.9rem', fontWeight: 'normal' }}>
-                    {getTypeIcon(selectedRequest.type)} {selectedRequest.type}
+                    {React.createElement(getTypeIcon(selectedRequest.type), { size: 16, style: { verticalAlign: 'middle' }, 'aria-hidden': true })} {selectedRequest.type}
                   </span>
                 </h2>
                 <div style={{ color: isDark ? '#8896b0' : '#4a5568', fontSize: '0.9rem', marginTop: '4px' }}>
                   {t.requestedBy}: {selectedRequest.requested_by} • {getDepartmentLabel(selectedRequest.department) || '-'}
                 </div>
               </div>
-              <button style={styles.modalClose} onClick={() => setShowModal(false)}>✕</button>
+              <button style={styles.modalClose} onClick={() => setShowModal(false)} aria-label={t.close} title={t.close}><X size={20} /></button>
             </div>
 
             {/* Request Details */}
@@ -869,7 +880,7 @@ const DeptApprovals = () => {
             {/* Approval Record */}
             {selectedRequest.status === 'Approved' && (
               <div style={styles.approvalRecord}>
-                <div style={{ fontWeight: 600, color: '#48bb78' }}>✅ {t.approved}</div>
+                <div style={{ fontWeight: 600, color: '#48bb78' }}><CheckCircle2 size={16} style={{ verticalAlign: 'middle' }} /> {t.approved}</div>
                 <div style={{ fontSize: '0.9rem', marginTop: '4px' }}>
                   {t.by}: {selectedRequest.approved_by || 'Department Head'}
                 </div>
@@ -891,7 +902,7 @@ const DeptApprovals = () => {
 
             {selectedRequest.status === 'Rejected' && (
               <div style={styles.rejectionRecord}>
-                <div style={{ fontWeight: 600, color: '#fc8181' }}>❌ {t.rejected}</div>
+                <div style={{ fontWeight: 600, color: '#fc8181' }}><XCircle size={16} style={{ verticalAlign: 'middle' }} /> {t.rejected}</div>
                 <div style={{ fontSize: '0.9rem', marginTop: '4px' }}>
                   {t.by}: {selectedRequest.rejected_by || 'Department Head'}
                 </div>
@@ -961,8 +972,10 @@ const DeptApprovals = () => {
                 <button 
                   style={modalMode === 'approve' ? styles.buttonSuccess : styles.buttonDanger}
                   onClick={() => handleApproval(modalMode === 'approve' ? 'Approved' : 'Rejected')}
+                  disabled={processing}
                 >
-                  {modalMode === 'approve' ? `✅ ${t.confirmApprove}` : `❌ ${t.confirmReject}`}
+                  {processing ? <Loader2 size={15} className="dept-approvals-spin" /> : modalMode === 'approve' ? <Check size={15} /> : <X size={15} />}
+                  {processing ? t.processing : modalMode === 'approve' ? t.confirmApprove : t.confirmReject}
                 </button>
               </div>
             )}
@@ -1033,6 +1046,8 @@ const englishTranslations = {
   rejectionSuccess: 'Request rejected successfully',
   approvalError: 'Failed to process approval',
   requestedAt: 'Requested At'
+  ,urgent: 'Urgent request'
+  ,processing: 'Processing...'
 };
 
 const amharicTranslations = {
@@ -1086,6 +1101,8 @@ const amharicTranslations = {
   rejectionSuccess: 'ጥያቄ በተሳካ ሁኔታ ውድቅ ተደርጓል',
   approvalError: 'ማጽደቂያውን ማከናወን አልተቻለም',
   requestedAt: 'የተጠየቀበት ቀን'
+  ,urgent: 'አስቸኳይ ጥያቄ'
+  ,processing: 'በማስኬድ ላይ...'
 };
 
 export default DeptApprovals;

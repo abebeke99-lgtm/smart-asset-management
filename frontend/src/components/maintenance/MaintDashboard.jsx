@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   TrendingUp,
   AlertCircle,
@@ -6,6 +6,8 @@ import {
   CheckCircle,
   BarChart3,
   Calendar,
+  Package,
+  FlaskConical,
 } from 'lucide-react';
 import { getMaintenance, getMaintenanceDashboard, getAssets } from '../../services/maintenanceApi';
 import './MaintDashboard.css';
@@ -58,6 +60,8 @@ const MaintDashboard = () => {
   }, [items]);
 
   const criticalAlerts = useMemo(() => items.filter((it) => it.priority === 'Critical' && !['completed', 'rejected', 'cancelled'].includes(it.statusRaw)).length, [items]);
+
+  const countByStatus = useCallback((status) => items.filter((it) => it.statusRaw === status).length, [items]);
 
   const efficiency = useMemo(() => {
     if (!dashboardData.total) return 0;
@@ -132,18 +136,18 @@ const MaintDashboard = () => {
       trend: totalAssets ? `${Math.round((assetsUnderMaintenance.length / (totalAssets || 1)) * 100)}% of assets` : '0%',
     },
     {
-      title: 'Monthly Maintenance Cost',
-      value: '$0',
-      icon: BarChart3,
+      title: 'Waiting on Parts',
+      value: countByStatus('waiting-for-parts'),
+      icon: Package,
       color: 'indigo',
-      trend: 'no cost data tracked',
+      trend: 'requests awaiting spare parts',
     },
     {
-      title: 'Average Downtime',
-      value: `${'0'}h`,
-      icon: Clock,
+      title: 'In Testing',
+      value: countByStatus('testing'),
+      icon: FlaskConical,
       color: 'pink',
-      trend: 'no downtime data tracked',
+      trend: 'requests in testing/verification',
     },
   ];
 
@@ -235,7 +239,7 @@ const MaintDashboard = () => {
   return (
     <div className="dashboard-container">
       {/* Header Section */}
-      <div className="dashboard-header">
+      <div className="maintenance-dashboard-header">
         <div className="header-content">
           <h1 className="dashboard-title">🏢 Maintenance Management Dashboard</h1>
           <p className="dashboard-subtitle">

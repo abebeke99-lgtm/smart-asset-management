@@ -13,3 +13,9 @@ test('assignment routes support server-side pagination and search filtering for 
   assert.match(source, /status\s*=\s*String\(req\.query\.status\s*\|\|\s*''\)/);
   assert.match(source, /pagination\s*:\s*\{\s*page,\s*limit,\s*total:\s*count,\s*pages/);
 });
+
+test('department-scoped assignment access includes department heads and filters by department scope', () => {
+  assert.match(source, /department_head/);
+  assert.match(source, /req\.organizationScope\.?departmentId|req\.user\.departmentId|req\.user\.department_id/);
+  assert.match(source, /\$Asset\.departmentId\$\s*:\s*Number\(departmentScope\)|\$Asset\.departmentId\$\s*:\s*departmentScope/);
+});

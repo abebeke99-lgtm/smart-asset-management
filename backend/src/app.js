@@ -41,6 +41,9 @@ const chemicalRoutes = require('./routes/chemicalRoutes');
 const serviceRequestRoutes = require('./routes/serviceRequestRoutes');
 const locationRoutes = require('./routes/locationRoutes');
 const cleaningRoutes = require('./routes/cleaningRoutes');
+const softwareLicenseRoutes = require('./routes/softwareLicenseRoutes');
+const technicalSupportRoutes = require('./routes/technicalSupportRoutes');
+const incidentRoutes = require('./routes/incidentRoutes');
 const backupService = require('./services/backupService');
 const { requestMetricsMiddleware } = require('./middlewares/requestMetrics');
 const { requestContextMiddleware } = require('./middlewares/requestContext');
@@ -132,7 +135,8 @@ app.use('/uploads', express.static(uploadRoot, { index: false, dotfiles: 'ignore
 app.use('/api/users', userRoutes);
 app.use('/api/admin/users', userRoutes);
 app.use('/api/assets', assetRoutes);
-app.use('/api/ict/assets', ictAssetRoutes);
+app.use('/api/ict/software-licenses', softwareLicenseRoutes);
+app.use('/api/ict', ictAssetRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/rfid', rfidRoutes);
 app.use('/api/tracking', rfidRoutes);
@@ -165,6 +169,9 @@ app.use('/api/chemicals', chemicalRoutes);
 app.use('/api/service-requests', serviceRequestRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/cleaning', cleaningRoutes);
+app.use('/api/software-licenses', softwareLicenseRoutes);
+app.use('/api/technical-support', technicalSupportRoutes);
+app.use('/api/incidents', incidentRoutes);
 
 app.use('/api', (req, res) => {
   res.status(404).json({ success: false, message: 'API endpoint not found' });
@@ -176,6 +183,7 @@ app.use((err, req, res, next) => {
   res.status(status).json({
     success: false,
     message: process.env.NODE_ENV === 'production' ? 'Internal server error' : (err.message || 'Internal server error'),
+    ...(err.errors ? { errors: err.errors } : {}),
   });
 });
 

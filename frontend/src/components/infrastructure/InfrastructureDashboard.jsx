@@ -327,7 +327,7 @@ const InfrastructureDashboard = () => {
             <Loader2
               size={36}
               style={{
-                animation: "spin 1s linear infinite",
+                animation: "none",
                 color: "#0EA5E9",
               }}
             />

@@ -1,0 +1,46 @@
+.dept-approvals-page h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dept-approvals-page button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.dept-approvals-page button:focus-visible,
+.dept-approvals-page input:focus-visible,
+.dept-approvals-page select:focus-visible,
+.dept-approvals-page textarea:focus-visible {
+  outline: 3px solid rgba(66, 153, 225, 0.35);
+  outline-offset: 2px;
+}
+
+.dept-approvals-spin {
+  animation: deptApprovalsSpin 0.9s linear infinite;
+}
+
+@keyframes deptApprovalsSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 640px) {
+  .dept-approvals-page {
+    padding: 16px !important;
+  }
+
+  .dept-approvals-page h1 {
+    font-size: 1.4rem !important;
+  }
+
+  .dept-approvals-page table {
+    min-width: 780px;
+  }
+
+  .dept-approvals-page [role='dialog'] {
+    max-height: 92vh;
+  }
+}

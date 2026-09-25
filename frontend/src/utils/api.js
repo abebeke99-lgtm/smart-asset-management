@@ -1,4 +1,4 @@
-import apiClient, { API_BASE_URL } from '../services/apiClient';
+import apiClient, { API_BASE_URL, getApiErrorMessage, resolveAssetUrl } from '../services/apiClient';
 
 export const apiBase = () => API_BASE_URL;
-export { apiClient };
+export { apiClient, getApiErrorMessage, resolveAssetUrl };

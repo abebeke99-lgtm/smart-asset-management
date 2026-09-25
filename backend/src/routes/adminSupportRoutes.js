@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const { Asset, User, Assignment, Maintenance, MaintenanceCost, RFIDLog, Category, College, Department, Notification, AuditLog, AuditLogArchive, Config, SettingsVersion, MfaSetting, Transfer, Inventory, InventoryTransaction, Approval, FinancialRecord, DisposalRequest, sequelize } = require('../models');
+const { Asset, User, Assignment, Maintenance, MaintenanceCost, RFIDLog, RfidDevice, Category, College, Department, Notification, AuditLog, AuditLogArchive, Config, SettingsVersion, MfaSetting, Transfer, Inventory, InventoryTransaction, Approval, FinancialRecord, DisposalRequest, sequelize } = require('../models');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const { Op } = require('sequelize');
 const speakeasy = require('speakeasy');
@@ -1192,7 +1192,7 @@ router.get(['/categories', '/asset-categories'], requireAuth, async (req, res, n
     const items = await Promise.all(rows.map((category) => normalizeCategoryItem(category)));
     const activeCount = await Category.count({ where: { status: 'active' } });
     const inactiveCount = await Category.count({ where: { status: 'inactive' } });
-    const categorizedAssets = await Asset.sum('id', { where: { category: { [Op.ne]: '' } } }) || 0;
+    const categorizedAssets = await Asset.count({ where: { category: { [Op.ne]: '' } } });
 
     const response = {
       success: true,
@@ -1915,12 +1915,13 @@ router.get('/assets', ...requireAdmin, async (req, res, next) => {
 
 router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
   try {
-    const [assets, users, assignments, maintenance, rfidLogs, departments, auditLogs, transfers, inventory, colleges, disposalRequests] = await Promise.all([
+    const [assets, users, assignments, maintenance, rfidLogs, rfidDevices, departments, auditLogs, transfers, inventory, colleges, disposalRequests] = await Promise.all([
       Asset.findAll({ order: [['updatedAt', 'DESC']] }),
       User.findAll({ attributes: ['id', 'username', 'fullName', 'role', 'active', 'createdAt', 'updatedAt'] }),
       Assignment.findAll({ order: [['createdAt', 'DESC']] }),
       Maintenance.findAll({ order: [['updatedAt', 'DESC']] }),
-      RFIDLog.findAll({ order: [['createdAt', 'DESC']], limit: 20 }),
+      RFIDLog.findAll({ order: [['createdAt', 'DESC']] }),
+      RfidDevice.findAll({ attributes: ['status'], raw: true }),
       Department.findAll({ attributes: ['id', 'name', 'createdAt', 'updatedAt'], order: [['name', 'ASC']] }),
       AuditLog.findAll({ order: [['createdAt', 'DESC']], limit: 20 }),
       Transfer.findAll({ order: [['transferDate', 'DESC'], ['createdAt', 'DESC']] }),
@@ -2067,7 +2068,7 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
       return !['completed', 'cancelled', 'rejected'].includes(status) && item.updatedAt && new Date(item.updatedAt).getTime() < weekAgo;
     });
 
-    const totalAssetValue = assets.reduce((total, asset) => total + Number(asset.currentValue || 0), 0);
+    const totalAssetValue = assets.reduce((total, asset) => total + Number(asset.currentValue || asset.purchasePrice || 0), 0);
     const availableAssets = assets.filter((asset) => normalizeStatus(asset.status) === 'available').length;
     const assignedAssets = assets.filter((asset) => displayStatus(asset.status) === 'Assigned').length;
     const maintenanceAssets = assets.filter((asset) => ['under-maintenance', 'under maintenance'].includes(normalizeStatus(asset.status))).length;
@@ -2176,9 +2177,9 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
         detectedTags: rfidLogs.length,
         uniqueTags: new Set(rfidLogs.map((log) => log.tag)).size,
         latestActivity: rfidLogs[0]?.createdAt || null,
-        totalDevices: new Set(rfidLogs.map((log) => log.location).filter(Boolean)).size,
-        onlineDevices: rfidLogs.length ? 1 : 0,
-        offlineDevices: rfidLogs.length ? 0 : 0,
+        totalDevices: rfidDevices.length,
+        onlineDevices: rfidDevices.filter((device) => device.status === 'Active').length,
+        offlineDevices: rfidDevices.filter((device) => device.status === 'Inactive').length,
         unknownAlerts: unknownRfidLogs.length,
       },
       maintenanceSummary: {

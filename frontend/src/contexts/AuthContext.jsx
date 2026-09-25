@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
-import { apiClient } from '../utils/api';
+import { apiClient, getApiErrorMessage } from '../utils/api';
 
 let diagnosticsInstalled = false;
 
@@ -14,8 +14,6 @@ const installApiDiagnostics = () => {
         url: error.config?.baseURL ? `${error.config.baseURL}${error.config.url || ''}` : error.config?.url,
         method: error.config?.method?.toUpperCase(),
         status: error.response?.status || 0,
-        responseData: error.response?.data,
-        message: error.message
       });
       return Promise.reject(error);
     }
@@ -48,13 +46,25 @@ const normalizeUser = (userData) => {
   }
 
   const department = userData.department;
+  const profilePhoto = userData.profilePhoto ?? userData.profile_photo ?? userData.avatar ?? userData.photo_url ?? userData.avatar_url ?? null;
   return {
     ...userData,
     role: normalizeRoleValue(userData.role),
     department: department && typeof department === 'object'
       ? department.name || department.code || ''
-      : department || ''
+      : department || '',
+    profilePhoto: profilePhoto ? String(profilePhoto) : null,
+    profile_photo: profilePhoto ? String(profilePhoto) : null,
   };
+};
+
+const isExpiredToken = (token) => {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return !payload.exp || payload.exp * 1000 <= Date.now();
+  } catch (error) {
+    return true;
+  }
 };
 
 export const AuthProvider = ({ children }) => {
@@ -68,40 +78,51 @@ export const AuthProvider = ({ children }) => {
 
   const api = apiClient;
 
-  api.interceptors.response.use(
-    response => response,
-    error => {
-      console.error('API Error Details:', {
-        message: error.message,
-        code: error.code,
-        status: error.response?.status,
-        data: error.response?.data
-      });
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onUnauthorized = () => {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      localStorage.removeItem('authToken');
+      delete axios.defaults.headers.common.Authorization;
+      if (window.location.pathname !== '/login') {
+        window.location.assign('/login');
+      }
+    };
 
-      if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
-        const networkError = new Error('Unable to connect to server. Please try again.');
-        networkError.code = 'NETWORK_ERROR';
-        throw networkError;
+    const interceptor = api.interceptors.response.use(
+      response => response,
+      error => {
+        if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
+          const networkError = new Error('Unable to connect to server. Please try again.');
+          networkError.code = 'NETWORK_ERROR';
+          throw networkError;
+        }
+        if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+          const networkError = new Error('Unable to connect to server. Please try again.');
+          networkError.code = 'NETWORK_ERROR';
+          throw networkError;
+        }
+        if (error.response) {
+          if (error.response.status === 401) {
+            onUnauthorized();
+          }
+          const status = error.response.status ? ` (${error.response.status})` : '';
+          const apiError = new Error(getApiErrorMessage(error, `Server error occurred${status}`));
+          apiError.status = error.response.status;
+          throw apiError;
+        }
+        if (error.request) {
+          const networkError = new Error('Unable to connect to server. Please try again.');
+          networkError.code = 'NETWORK_ERROR';
+          throw networkError;
+        }
+        throw error;
       }
-      if (error.code === 'ERR_NETWORK') {
-        const networkError = new Error('Unable to connect to server. Please try again.');
-        networkError.code = 'NETWORK_ERROR';
-        throw networkError;
-      }
-      if (error.response) {
-        const status = error.response.status ? ` (${error.response.status})` : '';
-        const apiError = new Error(error.response.data?.message || `Server error occurred${status}`);
-        apiError.status = error.response.status;
-        throw apiError;
-      }
-      if (error.request) {
-        const networkError = new Error('Unable to connect to server. Please try again.');
-        networkError.code = 'NETWORK_ERROR';
-        throw networkError;
-      }
-      throw error;
-    }
-  );
+    );
+
+    return () => api.interceptors.response.eject(interceptor);
+  }, [api]);
 
   const login = async (username, password) => {
     try {
@@ -139,6 +160,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     localStorage.removeItem('user');
     localStorage.removeItem('token');
+    localStorage.removeItem('authToken');
     delete axios.defaults.headers.common.Authorization;
   };
 
@@ -152,7 +174,7 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
     
-    if (token && storedUser) {
+    if (token && storedUser && !isExpiredToken(token)) {
       try {
         setUser(normalizeUser(JSON.parse(storedUser)));
         axios.defaults.headers.common.Authorization = `Bearer ${token}`;
@@ -161,6 +183,10 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('user');
         localStorage.removeItem('token');
       }
+    } else if (token || storedUser) {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      localStorage.removeItem('authToken');
     }
     setLoading(false);
   }, []);

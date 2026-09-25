@@ -1,51 +1,245 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-import { Activity, AlertCircle, BarChart3, Boxes, CheckCircle2, ChevronRight, CircleAlert, CircleX, Clock3, Download, FileBarChart2, History, Laptop, Package, Plus, Radio, RefreshCw, Search, ShieldCheck, SlidersHorizontal, Trash2, UserCheck, UserPlus, Wrench, X } from 'lucide-react';
-import { toast } from 'react-toastify';
-import { useAuth } from '../../contexts/AuthContext';
-import { useLanguage } from '../../contexts/UiContext';
-import { Chart as ChartJS, ArcElement, BarElement, CategoryScale, Filler, Legend, LinearScale, LineElement, PointElement, Tooltip } from 'chart.js';
-import { Bar, Doughnut, Line } from 'react-chartjs-2';
-import './ICTDashboard.css';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertCircle, Bell, CheckCircle2, ClipboardList, Headphones, History, Package, RefreshCw, ShieldCheck, UserCheck, Wrench, Activity } from "lucide-react";
+import { Bar, Doughnut } from "react-chartjs-2";
+import { ArcElement, BarElement, CategoryScale, Chart as ChartJS, Legend, LinearScale, Tooltip } from "chart.js";
+import apiClient from "../../services/apiClient";
+import "./ICTDashboard.css";
 
-ChartJS.register(ArcElement, BarElement, CategoryScale, Filler, Legend, LinearScale, LineElement, PointElement, Tooltip);
-const keyOf = (value = '') => String(value).trim().toLowerCase().replace(/[_\s]+/g, '-');
-const labels = { available: 'Available', assigned: 'Assigned', maintenance: 'Maintenance', 'under-maintenance': 'In Maintenance', lost: 'Lost', disposed: 'Disposed', pending: 'Pending', 'in-progress': 'In Progress', completed: 'Completed', 'low-stock': 'Low Stock', 'out-of-stock': 'Out of Stock', 'normal-stock': 'In Stock' };
-const labelOf = (value) => labels[keyOf(value)] || String(value || 'Unknown');
-const listOf = (payload, keys) => { if (Array.isArray(payload)) return payload; for (const key of keys) if (Array.isArray(payload?.[key])) return payload[key]; return Array.isArray(payload?.data) ? payload.data : []; };
-const dateOf = (item) => item?.created_at || item?.createdAt || item?.updated_at || item?.updatedAt || item?.requested_date;
-const ictTerms = ['computer', 'laptop', 'server', 'printer', 'scanner', 'monitor', 'network', 'router', 'switch', 'projector', 'firewall', 'ups', 'storage', 'software', 'telecom', 'access point', 'ict', 'it'];
+ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Legend, Tooltip);
 
-const EmptyChart = () => <div className="ict-empty-chart"><BarChart3 size={22} /><span>No data available</span><small>Data will appear here once records are added.</small></div>;
-const Loading = () => <div className="ict-dashboard ict-loading" aria-label="Loading dashboard">{Array.from({ length: 8 }).map((_, i) => <div className="ict-skeleton" key={i} />)}</div>;
-const Metric = ({ icon: Icon, label, value, tone = 'blue', onClick }) => <button className="ict-metric-card" onClick={onClick} type="button"><span className={`ict-metric-icon ict-tone-${tone}`}><Icon size={20} /></span><span className="ict-metric-copy"><strong>{value}</strong><span>{label}</span></span><ChevronRight className="ict-card-arrow" size={17} /></button>;
-const ChartCard = ({ title, children, className = '' }) => <section className={`ict-card ict-chart-card ${className}`}><div className="ict-card-heading"><h2>{title}</h2></div>{children}</section>;
+const safeNumber = (value) => Number(value || 0);
+
+const getNestedArray = (payload, keys) => {
+  if (Array.isArray(payload)) return payload;
+  for (const key of keys) {
+    if (Array.isArray(payload?.[key])) return payload[key];
+  }
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+};
+
+const toDate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatDateTime = (value) => {
+  const date = toDate(value);
+  return date ? date.toLocaleString() : "—";
+};
+
+const iconForActivity = { package: Package, "user-check": UserCheck, wrench: Wrench };
+const displayLabel = (value) => String(value || "Unspecified").replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const LoadingState = () => (
+  <main className="ict-dashboard" aria-label="Loading dashboard">
+    <div className="ict-loading-header">
+      <div className="ict-skeleton-line long" />
+      <div className="ict-skeleton-line short" />
+    </div>
+    <div className="ict-skeleton-grid">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div key={index} className="ict-skeleton-card" />
+      ))}
+    </div>
+  </main>
+);
+
+const ErrorState = ({ message, onRetry }) => (
+  <main className="ict-dashboard ict-empty-state-panel">
+    <div className="ict-empty-panel">
+      <AlertCircle size={36} />
+      <h1>Unable to load dashboard data.</h1>
+      <p>{message}</p>
+      <button type="button" className="ict-primary-button" onClick={onRetry}>
+        <RefreshCw size={15} /> Retry
+      </button>
+    </div>
+  </main>
+);
 
 export default function ICTDashboard() {
-  const { user } = useAuth(); const { theme } = useLanguage(); const navigate = useNavigate(); const dark = theme === 'dark';
-  const [raw, setRaw] = useState(null); const [loading, setLoading] = useState(true); const [failed, setFailed] = useState(false); const [details, setDetails] = useState(null);
-  const [filters, setFilters] = useState({ dateRange: 'all', department: 'all', category: 'all', status: 'all', search: '' });
-  const load = useCallback(async () => { setLoading(true); setFailed(false); try { const [a, i, m, r, as] = await Promise.all([axios.get('/api/assets', { params: { limit: 1000 } }), axios.get('/api/inventory', { params: { limit: 1000 } }), axios.get('/api/maintenance', { params: { limit: 1000 } }), axios.get('/api/rfid', { params: { limit: 500 } }), axios.get('/api/assignments', { params: { limit: 500 } })]); setRaw({ assets: listOf(a.data, ['assets']), inventory: listOf(i.data, ['inventory', 'items']), maintenance: listOf(m.data, ['requests']), rfid: listOf(r.data, ['logs']), assignments: listOf(as.data, ['assignments']) }); } catch (error) { console.error('ICT dashboard fetch error:', error); setFailed(true); } finally { setLoading(false); } }, []);
-  useEffect(() => { load(); }, [load]);
-  const data = useMemo(() => { if (!raw) return null; const now = Date.now(); const days = { today: 1, week: 7, month: 31, quarter: 92 }[filters.dateRange]; const inRange = (item) => !days || !dateOf(item) || now - new Date(dateOf(item)).getTime() <= days * 86400000; const query = filters.search.trim().toLowerCase(); const matches = (item) => !query || [item.name, item.title, item.asset_name, item.serial_number, item.department, item.department_name, item.category, item.category_name].filter(Boolean).join(' ').toLowerCase().includes(query); const assets = raw.assets.filter((item) => { const source = [item.category, item.category_name, item.name, item.department, item.department_name, item.location].filter(Boolean).join(' ').toLowerCase(); return ictTerms.some((term) => source.includes(term)) && (filters.department === 'all' || (item.department_name || item.department) === filters.department) && (filters.category === 'all' || (item.category_name || item.category) === filters.category) && (filters.status === 'all' || keyOf(item.status) === filters.status) && inRange(item) && matches(item); }); const inventory = raw.inventory.filter((item) => inRange(item) && matches(item)); const maintenance = raw.maintenance.filter((item) => inRange(item) && matches(item)); const count = (items, fn) => items.reduce((out, item) => { const key = fn(item); out[key] = (out[key] || 0) + 1; return out; }, {}); const assetStatus = count(assets, (item) => keyOf(item.status)); const categories = count(assets, (item) => item.category || item.category_name || 'Other'); const inventoryStatus = count(inventory, (item) => { const quantity = Number(item.quantity ?? item.total_quantity ?? 0); const available = Number(item.available_quantity ?? item.availableQuantity ?? quantity); const minimum = Number(item.min_stock ?? item.minimum_quantity ?? 0); return keyOf(item.stock_status || item.stockStatus || (quantity <= 0 ? 'out-of-stock' : available <= minimum ? 'low-stock' : 'normal-stock')); }); const maintenanceStatus = count(maintenance, (item) => keyOf(item.status)); const activities = [...assets.slice(0, 6).map((item) => ({ name: item.name || 'Asset', type: 'Asset update', detail: labelOf(item.status), time: dateOf(item), icon: Package })), ...maintenance.slice(0, 6).map((item) => ({ name: item.title || 'Maintenance request', type: 'Maintenance request', detail: labelOf(item.status), time: dateOf(item), icon: Wrench })), ...raw.assignments.slice(0, 6).map((item) => ({ name: item.asset_name || item.assetName || 'Asset', type: 'Asset assignment', detail: item.assigned_to_name || item.assignedToName || 'User', time: dateOf(item), icon: UserCheck }))].filter((item) => item.time).sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 8); const trends = Array.from({ length: 6 }, (_, index) => { const month = new Date(); month.setMonth(month.getMonth() - (5 - index)); return { label: month.toLocaleString('default', { month: 'short' }), value: assets.filter((item) => { const date = dateOf(item) && new Date(dateOf(item)); return date && date.getMonth() === month.getMonth() && date.getFullYear() === month.getFullYear(); }).length }; }); return { assets, inventory, maintenance, assetStatus, categories, inventoryStatus, maintenanceStatus, activities, trends, rfidAlerts: raw.rfid.filter((item) => Boolean(item.is_anomaly ?? item.isAnomaly ?? item.anomaly) || String(item.action || item.type || '').toLowerCase().includes('alert')).length }; }, [filters, raw]);
-  const departments = useMemo(() => [...new Set((raw?.assets || []).map((item) => item.department_name || item.department).filter(Boolean))], [raw]); const categories = useMemo(() => [...new Set((raw?.assets || []).map((item) => item.category_name || item.category).filter(Boolean))], [raw]);
-  const openDetails = (type, status) => setDetails({ title: `${status === 'all' ? 'All' : labelOf(status)} ${type}`, items: type === 'Assets' ? data.assets.filter((item) => status === 'all' || keyOf(item.status) === status) : type === 'Inventory' ? data.inventory : data.maintenance.filter((item) => status === 'all' || keyOf(item.status) === status) });
-  const exportReport = (format = 'excel') => { const rows = [['Asset status', ...Object.entries(data.assetStatus).map(([k, v]) => `${labelOf(k)}: ${v}`)], ['Inventory status', ...Object.entries(data.inventoryStatus).map(([k, v]) => `${labelOf(k)}: ${v}`)], ['Maintenance status', ...Object.entries(data.maintenanceStatus).map(([k, v]) => `${labelOf(k)}: ${v}`)]]; const filename = `ICT_Dashboard_${new Date().toISOString().slice(0, 10)}`; if (format === 'pdf') { const doc = new jsPDF(); doc.text('ICT Dashboard Report', 14, 15); doc.autoTable({ head: [['Metric', 'Value']], body: rows.flatMap(([name, ...values]) => values.map((value) => [name, value])), startY: 25 }); doc.save(`${filename}.pdf`); } else { const sheet = XLSX.utils.aoa_to_sheet(rows); const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, sheet, 'ICT Dashboard'); XLSX.writeFile(workbook, `${filename}.xlsx`); } toast.success('Dashboard exported successfully'); };
-  if (loading) return <Loading />; if (failed || !data) return <main className="ict-dashboard"><div className="ict-error-state"><AlertCircle size={34} /><h1>Unable to load dashboard data</h1><p>We could not retrieve the latest ICT statistics.</p><button className="ict-primary-button" onClick={load} type="button"><RefreshCw size={17} /> Retry</button></div></main>;
-  const options = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: dark ? '#cbd5e1' : '#475569', usePointStyle: true, padding: 16 } } }, scales: { x: { ticks: { color: dark ? '#94a3b8' : '#64748b' }, grid: { display: false } }, y: { beginAtZero: true, ticks: { color: dark ? '#94a3b8' : '#64748b' }, grid: { color: dark ? '#334155' : '#e2e8f0' } } } }; const donut = (items, colors) => ({ labels: Object.keys(items).map(labelOf), datasets: [{ data: Object.values(items), backgroundColor: colors, borderWidth: 3, borderColor: dark ? '#1e293b' : '#fff' }] }); const maintenanceTotal = data.maintenance.length;
-  const cards = [{ label: 'Total ICT assets', value: data.assets.length, icon: Laptop, tone: 'blue', status: 'all' }, { label: 'Available', value: data.assetStatus.available || 0, icon: CheckCircle2, tone: 'green', status: 'available' }, { label: 'Assigned', value: data.assetStatus.assigned || 0, icon: UserCheck, tone: 'cyan', status: 'assigned' }, { label: 'In maintenance', value: data.assetStatus.maintenance || data.assetStatus['under-maintenance'] || 0, icon: Wrench, tone: 'amber', status: 'maintenance' }, { label: 'Lost', value: data.assetStatus.lost || 0, icon: CircleAlert, tone: 'red', status: 'lost' }, { label: 'Disposed', value: data.assetStatus.disposed || 0, icon: Trash2, tone: 'slate', status: 'disposed' }];
-  return <main className="ict-dashboard"><header className="ict-dashboard-header"><div><span className="ict-eyebrow">ICT OPERATIONS</span><h1>Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, {user?.fullName || user?.username || 'ICT Officer'}</h1><p>Monitor assets, inventory, maintenance and RFID activity from one place.</p></div><div className="ict-header-actions"><span className="ict-updated"><Activity size={15} /> Last updated just now</span><button className="ict-icon-button" onClick={load} title="Refresh dashboard" aria-label="Refresh dashboard" type="button"><RefreshCw size={18} /></button></div></header>
-    <section className="ict-filter-bar"><div className="ict-search"><Search size={17} /><input aria-label="Search dashboard" placeholder="Search assets, serial numbers, users..." value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} /></div><SlidersHorizontal size={18} className="ict-filter-symbol" />{[['dateRange', [['all', 'All dates'], ['today', 'Today'], ['week', 'This week'], ['month', 'This month'], ['quarter', 'This quarter']]], ['department', [['all', 'All departments'], ...departments.map((x) => [x, x])]], ['category', [['all', 'All categories'], ...categories.map((x) => [x, x])]], ['status', [['all', 'All statuses'], ...Object.keys(data.assetStatus).map((x) => [x, labelOf(x)])]]].map(([key, values]) => <select key={key} aria-label={key} value={filters[key]} onChange={(e) => setFilters({ ...filters, [key]: e.target.value })}>{values.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select>)}<button className="ict-primary-button" onClick={() => exportReport('excel')} type="button"><Download size={16} /> Excel</button><button className="ict-icon-button" onClick={() => exportReport('pdf')} title="Export PDF" aria-label="Export PDF" type="button"><FileBarChart2 size={17} /></button></section>
-    <section className="ict-section"><div className="ict-section-heading"><div><span className="ict-eyebrow">ASSET OVERVIEW</span><h2>Portfolio at a glance</h2></div><button className="ict-link-button" onClick={() => navigate('/ict/assets')} type="button">View all assets <ChevronRight size={16} /></button></div><div className="ict-metric-grid">{cards.map((card) => <Metric key={card.label} {...card} onClick={() => openDetails('Assets', card.status)} />)}</div></section>
-    <section className="ict-section"><div className="ict-section-heading"><div><span className="ict-eyebrow">OPERATIONS</span><h2>Inventory and maintenance</h2></div></div><div className="ict-operation-grid"><Metric icon={Boxes} label="Total inventory" value={data.inventory.length} onClick={() => navigate('/ict/inventory')} /><Metric icon={AlertCircle} label="Low stock" value={data.inventoryStatus['low-stock'] || 0} tone="amber" onClick={() => navigate('/ict/inventory')} /><Metric icon={CircleX} label="Out of stock" value={data.inventoryStatus['out-of-stock'] || 0} tone="red" onClick={() => navigate('/ict/inventory')} /><Metric icon={Clock3} label="Pending maintenance" value={data.maintenanceStatus.pending || 0} tone="amber" onClick={() => navigate('/ict/maintenance')} /><Metric icon={RefreshCw} label="In progress" value={data.maintenanceStatus['in-progress'] || 0} tone="cyan" onClick={() => navigate('/ict/maintenance')} /><Metric icon={CheckCircle2} label="Completed" value={data.maintenanceStatus.completed || 0} tone="green" onClick={() => navigate('/ict/maintenance')} /></div></section>
-    <section className="ict-chart-grid"><ChartCard title="Assets by status"><div className="ict-chart-wrap">{data.assets.length ? <Doughnut data={donut(data.assetStatus, ['#16a34a', '#2563eb', '#f59e0b', '#dc2626', '#64748b'])} options={options} /> : <EmptyChart />}</div></ChartCard><ChartCard title="Assets by category"><div className="ict-chart-wrap">{data.assets.length ? <Bar data={{ labels: Object.keys(data.categories), datasets: [{ label: 'Assets', data: Object.values(data.categories), backgroundColor: '#2563eb', borderRadius: 6 }] }} options={{ ...options, indexAxis: 'y' }} /> : <EmptyChart />}</div></ChartCard><ChartCard title="Maintenance status"><div className="ict-chart-wrap">{maintenanceTotal ? <Doughnut data={donut(data.maintenanceStatus, ['#f59e0b', '#0891b2', '#16a34a', '#dc2626'])} options={options} /> : <EmptyChart />}</div></ChartCard></section>
-    <ChartCard title="Monthly ICT activity" className="ict-trend-card"><div className="ict-chart-wrap ict-trend-wrap">{data.assets.length ? <Line data={{ labels: data.trends.map((x) => x.label), datasets: [{ label: 'Assets added', data: data.trends.map((x) => x.value), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.12)', fill: true, tension: .35 }] }} options={options} /> : <EmptyChart />}</div></ChartCard>
-    <section className="ict-lower-grid"><section className="ict-card"><div className="ict-card-heading"><div><span className="ict-eyebrow">ACTIVITY FEED</span><h2>Recent activities</h2></div><button className="ict-link-button" onClick={() => navigate('/ict/assets/history')} type="button">View history <ChevronRight size={16} /></button></div>{data.activities.length ? <div className="ict-activity-list">{data.activities.map((item, i) => { const Icon = item.icon; return <div className="ict-activity" key={`${item.type}-${i}`}><span className="ict-activity-icon"><Icon size={17} /></span><div><strong>{item.name}</strong><span>{item.type} · {item.detail}</span></div><time>{new Date(item.time).toLocaleString()}</time></div>; })}</div> : <div className="ict-empty-state"><History size={27} /><strong>No recent activity</strong><span>Your latest ICT operations will appear here.</span></div>}</section><section className="ict-card"><div className="ict-card-heading"><div><span className="ict-eyebrow">CONTROL CENTER</span><h2>System health</h2></div><ShieldCheck size={21} className="ict-health-icon" /></div>{[['API server', true], ['Database', true], ['RFID system', data.rfidAlerts === 0], ['Backup', true]].map(([name, healthy]) => <div className="ict-health-row" key={name}><span className={`ict-status-dot ${healthy ? '' : 'warning'}`} /><strong>{name}</strong><span>{healthy ? 'Operational' : 'Attention required'}</span></div>)}<p className="ict-health-note">Checked after the latest dashboard request</p><div className="ict-performance"><div><span>Asset utilization</span><strong>{data.assets.length ? Math.round((data.assetStatus.assigned || 0) / data.assets.length * 100) : 0}%</strong></div><div className="ict-progress"><span style={{ width: `${data.assets.length ? Math.round((data.assetStatus.assigned || 0) / data.assets.length * 100) : 0}%` }} /></div><div><span>Maintenance completion</span><strong>{maintenanceTotal ? Math.round((data.maintenanceStatus.completed || 0) / maintenanceTotal * 100) : 0}%</strong></div><div className="ict-progress"><span style={{ width: `${maintenanceTotal ? Math.round((data.maintenanceStatus.completed || 0) / maintenanceTotal * 100) : 0}%` }} /></div></div></section></section>
-    <section className="ict-card ict-quick-actions"><div className="ict-card-heading"><div><span className="ict-eyebrow">SHORTCUTS</span><h2>Quick actions</h2></div></div><div className="ict-action-grid">{[[Plus, 'Create asset', '/ict/assets/create'], [UserPlus, 'Assign asset', '/ict/assets/assign'], [Wrench, 'Log maintenance', '/ict/maintenance'], [FileBarChart2, 'Generate report', '/ict/reports'], [Radio, 'Monitor RFID', '/ict/rfid']].map(([Icon, text, route]) => <button key={route} onClick={() => navigate(route)} type="button"><Icon size={19} /><span>{text}</span><ChevronRight size={15} /></button>)}</div></section>
-    {details && <div className="ict-modal-backdrop" role="presentation" onClick={() => setDetails(null)}><section className="ict-modal" role="dialog" aria-modal="true" aria-labelledby="ict-detail-title" onClick={(e) => e.stopPropagation()}><div className="ict-card-heading"><h2 id="ict-detail-title">{details.title}</h2><button className="ict-icon-button" onClick={() => setDetails(null)} aria-label="Close details" type="button"><X size={18} /></button></div>{details.items.length ? <div className="ict-detail-list">{details.items.slice(0, 20).map((item, i) => <div key={item.id || i}><strong>{item.name || item.title || 'Unnamed record'}</strong><span>{labelOf(item.status)} · {dateOf(item) ? new Date(dateOf(item)).toLocaleDateString() : 'Date unavailable'}</span></div>)}</div> : <div className="ict-empty-state"><Package size={27} /><strong>No records found</strong><span>Try adjusting the dashboard filters.</span></div>}</section></div>}
-  </main>;
+  const [dashboard, setDashboard] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadDashboard = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await apiClient.get("/api/ict/dashboard");
+      const payload = response.data?.dashboard || response.data || {};
+      const maintenance = getNestedArray(payload.maintenance, ["maintenance", "data"]);
+      const requests = getNestedArray(payload.requests, ["requests", "data"]);
+      const rfidDevices = getNestedArray(payload.rfidDevices, ["devices", "data"]);
+      const assetSummary = payload.summary || payload.stats || {};
+      const maintenanceSummary = payload.maintenanceSummary || {};
+      const healthData = payload.health || { success: true, database: "connected" };
+      const apiStatus = healthData.success === false ? "Unavailable" : "Operational";
+      const databaseStatus = healthData.database === "connected" ? "Operational" : healthData.database === "unavailable" ? "Unavailable" : "Checking...";
+      const rfidStatus = payload.rfidStatus || (rfidDevices.length > 0 ? "Operational" : "Not configured");
+
+      setDashboard({
+        assetSummary,
+        totalAssets: safeNumber(assetSummary.total),
+        maintenance,
+        maintenanceSummary,
+        requests,
+        assetStatus: getNestedArray(payload.assetStatus, ["assetStatus"]),
+        assetCategories: getNestedArray(payload.assetCategories, ["assetCategories"]),
+        recentActivities: getNestedArray(payload.recentActivities, ["recentActivities"]),
+        notifications: getNestedArray(payload.notifications, ["notifications"]),
+        supportTickets: getNestedArray(payload.supportTickets, ["supportTickets"]),
+        incidents: getNestedArray(payload.incidents, ["incidents"]),
+        health: {
+          api: apiStatus,
+          database: databaseStatus,
+          rfid: rfidStatus,
+        },
+      });
+    } catch (requestError) {
+      setError(requestError?.response?.data?.message || "Unable to load dashboard data. Please try again.");
+      setDashboard(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      if (!active) return;
+      await loadDashboard();
+    };
+
+    load();
+
+    return () => {
+      active = false;
+    };
+  }, [loadDashboard]);
+
+  const metricCards = useMemo(() => {
+    if (!dashboard) return [];
+    const summary = dashboard.assetSummary;
+    return [
+      { label: "Total ICT Assets", value: dashboard.totalAssets, tone: "blue", icon: Package },
+      { label: "Assigned Assets", value: summary.assigned || 0, tone: "green", icon: UserCheck },
+      { label: "Available Assets", value: summary.available || 0, tone: "cyan", icon: CheckCircle2 },
+      { label: "Maintenance", value: summary.maintenance || 0, tone: "amber", icon: Wrench },
+      { label: "Repair Assets", value: summary.repair || 0, tone: "red", icon: AlertCircle },
+      { label: "Pending Requests", value: summary.pendingRequests || 0, tone: "blue", icon: Activity },
+      { label: "Open Incidents", value: summary.openIncidents || 0, tone: "red", icon: AlertCircle },
+      { label: "Support Tickets", value: summary.openSupportTickets || 0, tone: "amber", icon: Headphones },
+      { label: "Expiring Licenses", value: summary.expiringLicenses || 0, tone: "amber", icon: ShieldCheck },
+    ];
+  }, [dashboard]);
+
+  const statusChart = useMemo(() => ({ labels: dashboard?.assetStatus.map((entry) => displayLabel(entry.label)) || [], datasets: [{ data: dashboard?.assetStatus.map((entry) => entry.count) || [], backgroundColor: ["#0f766e", "#2563eb", "#d97706", "#dc2626", "#64748b"], borderWidth: 0 }] }), [dashboard]);
+  const categoryChart = useMemo(() => ({ labels: dashboard?.assetCategories.map((entry) => displayLabel(entry.label)) || [], datasets: [{ label: "Assets", data: dashboard?.assetCategories.map((entry) => entry.count) || [], backgroundColor: "#2563eb", borderRadius: 4 }] }), [dashboard]);
+  const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } };
+
+  if (loading) return <LoadingState />;
+  if (error || !dashboard) return <ErrorState message={error || "Unable to load dashboard data. Please try again."} onRetry={loadDashboard} />;
+
+  return (
+    <main className="ict-dashboard">
+      <header className="ict-dashboard-header">
+        <div>
+          <h1>ICT Dashboard</h1>
+          <p>Overview of ICT asset operations and maintenance.</p>
+        </div>
+        <button type="button" className="ict-primary-button" onClick={loadDashboard} disabled={loading}><RefreshCw size={15} /> Refresh</button>
+      </header>
+
+      <section className="ict-summary-grid" aria-label="ICT dashboard overview">
+        {metricCards.map(({ label, value, icon: Icon, tone }) => (
+          <article className={`ict-stat-card ict-tone-${tone}`} key={label}>
+            <div className="ict-stat-icon"><Icon size={18} /></div>
+            <div className="ict-stat-copy">
+              <span>{label}</span>
+              <strong>{value}</strong>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <section className="ict-panels-grid">
+        <article className="ict-panel">
+          <div className="ict-panel-header">
+            <h2>Asset Status</h2>
+            <Package size={18} />
+          </div>
+          {dashboard.assetStatus.length ? <div className="ict-chart-canvas doughnut"><Doughnut data={statusChart} options={chartOptions} aria-label="Asset status distribution" /></div> : (
+            <div className="ict-empty-message">No asset status data available.</div>
+          )}
+        </article>
+
+        <article className="ict-panel">
+          <div className="ict-panel-header">
+            <h2>Asset Categories</h2>
+            <ClipboardList size={18} />
+          </div>
+          {dashboard.assetCategories.length ? <div className="ict-chart-canvas"><Bar data={categoryChart} options={chartOptions} aria-label="Asset category distribution" /></div> : <div className="ict-empty-message">No asset category data available.</div>}
+        </article>
+      </section>
+
+      <section className="ict-panels-grid lower">
+        <article className="ict-panel">
+          <div className="ict-panel-header">
+            <h2>Recent Activity</h2>
+            <History size={18} />
+          </div>
+          {dashboard.recentActivities.length ? (
+            <ul className="ict-activity-list">
+              {dashboard.recentActivities.map((item) => {
+                const Icon = iconForActivity[item.icon] || Package;
+                return (
+                  <li key={item.id} className="ict-activity-item">
+                    <span className="ict-activity-icon"><Icon size={15} /></span>
+                    <div className="ict-activity-copy">
+                      <strong>{item.kind}</strong>
+                      <span>{item.detail}</span>
+                    </div>
+                    <time>{formatDateTime(item.time)}</time>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <div className="ict-empty-message">No recent activity</div>
+          )}
+        </article>
+
+        <article className="ict-panel">
+          <div className="ict-panel-header"><h2>Notifications</h2><Bell size={18} /></div>
+          {dashboard.notifications.length ? <ul className="ict-activity-list">{dashboard.notifications.slice(0, 5).map((notification) => <li key={notification.id} className="ict-activity-item"><span className="ict-activity-icon"><Bell size={15} /></span><div className="ict-activity-copy"><strong>{notification.title || "Notification"}</strong><span>{notification.message}</span></div><time>{formatDateTime(notification.createdAt)}</time></li>)}</ul> : <div className="ict-empty-message">No notifications.</div>}
+        </article>
+      </section>
+
+      <section className="ict-panels-grid">
+        <article className="ict-panel">
+          <div className="ict-panel-header"><h2>Requests</h2><ClipboardList size={18} /></div>
+          {dashboard.requests.length ? <div className="ict-table-wrap"><table className="ict-table"><thead><tr><th>Request</th><th>Item</th><th>Priority</th><th>Status</th></tr></thead><tbody>{dashboard.requests.slice(0, 6).map((request) => <tr key={request.id}><td>{request.id || "-"}</td><td>{request.item || request.type || "Asset request"}</td><td>{displayLabel(request.priority)}</td><td>{displayLabel(request.status)}</td></tr>)}</tbody></table></div> : <div className="ict-empty-message">No pending requests.</div>}
+        </article>
+        <article className="ict-panel">
+          <div className="ict-panel-header"><h2>Operational Overview</h2><ShieldCheck size={18} /></div>
+          <div className="ict-health-list">
+            <div className="ict-health-row">
+              <span>Open incidents</span><strong>{dashboard.assetSummary.openIncidents || 0}</strong>
+            </div>
+            <div className="ict-health-row">
+              <span>Upcoming maintenance</span><strong>{dashboard.assetSummary.upcomingMaintenance || 0}</strong>
+            </div>
+            <div className="ict-health-row">
+              <span>Database</span><strong className={dashboard.health.database === "Operational" ? "healthy" : "warning"}>{dashboard.health.database}</strong>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  );
 }

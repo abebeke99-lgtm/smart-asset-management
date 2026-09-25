@@ -1,566 +1,129 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useLanguage } from '../../contexts/UiContext';
-import { useAuth } from '../../contexts/AuthContext';
-import { toast } from 'react-toastify';
-import axios from 'axios';
-import * as XLSX from 'xlsx';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Activity, CircleAlert, CircleCheck, Eye, Filter, Network, Plus, RefreshCw, Search, User, X } from 'lucide-react';
+import apiClient, { getApiErrorMessage } from '../../services/apiClient';
+import './ICTNetwork.css';
+
+const emptySummary = { total: 0, available: 0, active: 0, assigned: 0, maintenance: 0, repair: 0 };
+
+const readNetworkValue = (equipment, ...keys) => {
+  const specifications = equipment?.specifications && typeof equipment.specifications === 'object' ? equipment.specifications : {};
+  for (const key of keys) {
+    const value = equipment?.[key] ?? specifications[key];
+    if (value !== undefined && value !== null && String(value).trim()) return value;
+  }
+  return '';
+};
+
+const formatDate = (value) => value ? new Date(value).toLocaleDateString() : '-';
+const statusLabel = (status) => String(status || 'Unknown').replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+const statusClass = (status) => {
+  const normalized = String(status || '').toLowerCase().replace(/[_-]+/g, ' ');
+  if (['available', 'active', 'in use', 'assigned'].includes(normalized)) return 'network-status network-status--success';
+  if (normalized.includes('maintenance') || normalized.includes('repair')) return 'network-status network-status--warning';
+  if (['inactive', 'missing', 'retired', 'disposed'].includes(normalized)) return 'network-status network-status--danger';
+  return 'network-status';
+};
 
 const ICTNetwork = () => {
-  const { user } = useAuth();
-  const { language, theme } = useLanguage();
-
-  // State
-  const [allAssets, setAllAssets] = useState([]);
-  const [filteredAssets, setFilteredAssets] = useState([]);
+  const navigate = useNavigate();
+  const [equipment, setEquipment] = useState([]);
+  const [summary, setSummary] = useState(emptySummary);
+  const [filters, setFilters] = useState({ search: '', type: '', status: '', condition: '', location: '', department: '', assignmentStatus: '' });
+  const [query, setQuery] = useState(filters);
+  const [pagination, setPagination] = useState({ page: 1, limit: 20, pages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
-  const [networkType, setNetworkType] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 20;
+  const [error, setError] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
 
-  // Stats
-  const [stats, setStats] = useState({
-    total: 0,
-    byType: {},
-    online: 0,
-    offline: 0,
-    maintenance: 0
-  });
+  useEffect(() => {
+    const timer = window.setTimeout(() => setQuery(filters), 350);
+    return () => window.clearTimeout(timer);
+  }, [filters]);
 
-  const isDark = theme === 'dark';
-
-  const englishTranslations = {
-    networkEquipment: 'Network & Technical Equipment',
-    allEquipment: 'All Equipment',
-    networkEquip: 'Network Equipment',
-    routers: 'Routers',
-    switches: 'Switches',
-    accessPoints: 'Access Points',
-    servers: 'Servers',
-    ipInformation: 'IP Information',
-    deviceStatus: 'Device Status',
-    assetTag: 'Asset Tag',
-    assetName: 'Asset Name',
-    category: 'Category',
-    serialNumber: 'Serial Number',
-    brand: 'Brand',
-    model: 'Model',
-    ipAddress: 'IP Address',
-    macAddress: 'MAC Address',
-    hostname: 'Hostname',
-    location: 'Location',
-    status: 'Status',
-    department: 'Department',
-    lastUpdate: 'Last Updated',
-    search: 'Search by asset, IP, or hostname...',
-    noEquipment: 'No network equipment found',
-    loading: 'Loading network equipment...',
-    export: 'Export to Excel',
-    refresh: 'Refresh',
-    fetchError: 'Failed to load equipment',
-    online: 'Online',
-    offline: 'Offline',
-    maintenance: 'Maintenance',
-    unknown: 'Unknown',
-    total: 'Total',
-    page: 'Page',
-    of: 'of',
-    previousPage: 'Previous',
-    nextPage: 'Next',
-    note: 'IP information displayed only if configured in the system'
-  };
-
-  const amharicTranslations = {
-    networkEquipment: 'ネットワーク & ቴክኒካል መሳሪያ',
-    allEquipment: 'ሁሉም መሳሪያ',
-    networkEquip: 'ネットワーク መሳሪያ',
-    routers: 'ራውተሮች',
-    switches: 'ስዊቶች',
-    accessPoints: 'ዳራ ነጥቦች',
-    servers: 'አገልግሎት ሰጪዎች',
-    ipInformation: 'IP መረጃ',
-    deviceStatus: 'ስልት ሁኔታ',
-    assetTag: 'ንብረት ታግ',
-    assetName: 'ንብረት ስም',
-    category: 'ምድብ',
-    serialNumber: 'ተከታታይ ቁጥር',
-    brand: 'ብራንድ',
-    model: 'ሞዴል',
-    ipAddress: 'IP አድራሻ',
-    macAddress: 'MAC አድራሻ',
-    hostname: 'ሆስታዊ ስም',
-    location: 'ቦታ',
-    status: 'ሁኔታ',
-    department: 'ክፍል',
-    lastUpdate: 'ቅርብ ጊዜ ተሻሽሏል',
-    search: 'በንብረት፣ IP ወይም ሆስታዊ ስም ይፈልጉ...',
-    noEquipment: 'ネットワーク መሳሪያ አልተገኙም',
-    loading: 'ネットワーク መሳሪያን በማስጫን ላይ...',
-    export: 'Excelに書き出す',
-    refresh: 'ዳግም ሙላት',
-    fetchError: 'መሳሪያን ማስጫን ወደ ውድቅ ደረሰ',
-    online: 'በመስመር ላይ',
-    offline: 'ከመስመር ውጭ',
-    maintenance: 'ጥገና',
-    unknown: 'ያልታወቀ',
-    total: 'አጠቃላይ',
-    page: 'ገጽ',
-    of: 'ስብስብ',
-    previousPage: 'ቀደም',
-    nextPage: 'ተከታዩ',
-    note: 'IP መረጃ በስርዓቱ ውስጥ ከተዋቀረ ብቻ ይታያል'
-  };
-
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
-
-  const networkCategories = [
-    { value: 'routers', label: t.routers, filter: c => c && c.toLowerCase().includes('router') },
-    { value: 'switches', label: t.switches, filter: c => c && c.toLowerCase().includes('switch') },
-    { value: 'access_points', label: t.accessPoints, filter: c => c && (c.toLowerCase().includes('access point') || c.toLowerCase().includes('ap')) },
-    { value: 'servers', label: t.servers, filter: c => c && c.toLowerCase().includes('server') },
-  ];
-
-  // Fetch network equipment
-  const fetchEquipment = useCallback(async () => {
+  const loadEquipment = useCallback(async (page = 1) => {
     setLoading(true);
+    setError('');
     try {
-      const response = await axios.get('/api/assets', {
-        params: { limit: 1000 }
-      });
-
-      let assets = response.data.assets || [];
-      
-      // Filter for network equipment
-      assets = assets.filter(a => 
-        a.category_name && (
-          a.category_name.toLowerCase().includes('router') ||
-          a.category_name.toLowerCase().includes('switch') ||
-          a.category_name.toLowerCase().includes('access point') ||
-          a.category_name.toLowerCase().includes('network') ||
-          a.category_name.toLowerCase().includes('server') ||
-          a.category_name.toLowerCase().includes('firewall') ||
-          a.category_name.toLowerCase().includes('modem') ||
-          a.category_name.toLowerCase().includes('gateway')
-        )
-      );
-
-      setAllAssets(assets);
-      calculateStats(assets);
-      applyFilters(assets);
-    } catch (error) {
-      toast.error(t.fetchError || 'Failed to load equipment');
-      setAllAssets([]);
+      const response = await apiClient.get('/api/ict/network', { params: { ...query, page, limit: pagination.limit } });
+      const data = response.data || {};
+      setEquipment(Array.isArray(data.equipment) ? data.equipment : []);
+      setSummary({ ...emptySummary, ...(data.summary || {}) });
+      setPagination((current) => ({ ...current, ...(data.pagination || {}), page }));
+    } catch (requestError) {
+      setEquipment([]);
+      setSummary(emptySummary);
+      setError(getApiErrorMessage(requestError, 'Unable to load network equipment.'));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [t]);
+  }, [pagination.limit, query]);
 
-  // Calculate statistics
-  const calculateStats = (assets) => {
-    const byType = {};
-    assets.forEach(a => {
-      const category = a.category_name || 'Other';
-      byType[category] = (byType[category] || 0) + 1;
-    });
+  useEffect(() => { loadEquipment(1); }, [loadEquipment]);
 
-    setStats({
-      total: assets.length,
-      byType,
-      online: assets.filter(a => a.status && a.status.toLowerCase() === 'available').length,
-      offline: assets.filter(a => a.status && a.status.toLowerCase() === 'missing').length,
-      maintenance: assets.filter(a => a.status && a.status.toLowerCase() === 'maintenance').length
-    });
-  };
-
-  // Apply filters
-  const applyFilters = useCallback((assets) => {
-    let filtered = assets;
-
-    // Network type filter
-    if (networkType !== 'all') {
-      const selectedCategory = networkCategories.find(c => c.value === networkType);
-      if (selectedCategory) {
-        filtered = filtered.filter(a => selectedCategory.filter(a.category_name));
-      }
-    }
-
-    // Status filter
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(a => a.status && a.status.toLowerCase() === filterStatus.toLowerCase());
-    }
-
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(a =>
-        (a.asset_tag && a.asset_tag.toLowerCase().includes(query)) ||
-        (a.name && a.name.toLowerCase().includes(query)) ||
-        (a.serial_number && a.serial_number.toLowerCase().includes(query))
-      );
-    }
-
-    setFilteredAssets(filtered);
-    setCurrentPage(1);
-  }, [networkType, filterStatus, searchQuery]);
-
-  const exportToExcel = () => {
-    if (filteredAssets.length === 0) {
-      toast.warning('No data to export');
-      return;
-    }
-
-    const data = filteredAssets.map(a => ({
-      'Asset Tag': a.asset_tag,
-      'Asset Name': a.name,
-      'Category': a.category_name,
-      'Serial Number': a.serial_number || '-',
-      'Brand': a.brand || a.manufacturer || '-',
-      'Model': a.model || '-',
-      'Status': a.status,
-      'Department': a.department_name || a.department || '-',
-      'Location': a.location || '-'
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Network Equipment');
-    XLSX.writeFile(wb, 'network_equipment.xlsx');
-    toast.success('File exported successfully');
-  };
-
-  // Effects
-  useEffect(() => {
-    fetchEquipment();
-  }, [fetchEquipment]);
-
-  useEffect(() => {
-    applyFilters(allAssets);
-  }, [networkType, filterStatus, searchQuery, applyFilters]);
-
-  // Pagination
-  const totalPages = Math.ceil(filteredAssets.length / pageSize);
-  const paginatedAssets = filteredAssets.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
-
-  // Styles
-  const styles = {
-    container: {
-      padding: '20px',
-      backgroundColor: isDark ? '#0f1419' : '#f8f9fa',
-      borderRadius: '8px',
-      minHeight: 'calc(100vh - 120px)'
-    },
-    header: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '24px',
-      flexWrap: 'wrap',
-      gap: '12px'
-    },
-    title: {
-      fontSize: '24px',
-      fontWeight: '700',
-      color: isDark ? '#ffffff' : '#000000'
-    },
-    buttonGroup: {
-      display: 'flex',
-      gap: '8px',
-      flexWrap: 'wrap'
-    },
-    button: {
-      padding: '8px 16px',
-      borderRadius: '6px',
-      border: 'none',
-      cursor: 'pointer',
-      fontWeight: '500',
-      fontSize: '14px'
-    },
-    primaryButton: {
-      backgroundColor: '#3b82f6',
-      color: '#ffffff'
-    },
-    secondaryButton: {
-      backgroundColor: isDark ? '#374151' : '#e5e7eb',
-      color: isDark ? '#f3f4f6' : '#111827'
-    },
-    categoriesContainer: {
-      display: 'flex',
-      gap: '8px',
-      marginBottom: '20px',
-      overflowX: 'auto',
-      paddingBottom: '8px'
-    },
-    categoryButton: (isActive) => ({
-      padding: '8px 14px',
-      borderRadius: '6px',
-      border: isActive ? '2px solid #3b82f6' : `1px solid ${isDark ? '#374151' : '#d1d5db'}`,
-      backgroundColor: isActive ? '#3b82f6' : isDark ? '#1f2937' : '#ffffff',
-      color: isActive ? '#ffffff' : isDark ? '#e5e7eb' : '#111827',
-      cursor: 'pointer',
-      fontWeight: '500',
-      whiteSpace: 'nowrap',
-      fontSize: '13px'
-    }),
-    statsContainer: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-      gap: '16px',
-      marginBottom: '24px'
-    },
-    statCard: {
-      backgroundColor: isDark ? '#1f2937' : '#ffffff',
-      border: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`,
-      borderRadius: '8px',
-      padding: '16px',
-      textAlign: 'center'
-    },
-    statValue: {
-      fontSize: '28px',
-      fontWeight: '700',
-      color: '#3b82f6',
-      margin: '8px 0 0 0'
-    },
-    statLabel: {
-      fontSize: '14px',
-      color: isDark ? '#9ca3af' : '#6b7280'
-    },
-    filterContainer: {
-      display: 'flex',
-      gap: '12px',
-      marginBottom: '20px',
-      flexWrap: 'wrap'
-    },
-    input: {
-      flex: 1,
-      minWidth: '200px',
-      padding: '10px 14px',
-      borderRadius: '6px',
-      border: `1px solid ${isDark ? '#374151' : '#d1d5db'}`,
-      backgroundColor: isDark ? '#1f2937' : '#ffffff',
-      color: isDark ? '#f3f4f6' : '#000000',
-      fontSize: '14px'
-    },
-    select: {
-      padding: '10px 14px',
-      borderRadius: '6px',
-      border: `1px solid ${isDark ? '#374151' : '#d1d5db'}`,
-      backgroundColor: isDark ? '#1f2937' : '#ffffff',
-      color: isDark ? '#f3f4f6' : '#000000',
-      fontSize: '14px',
-      cursor: 'pointer'
-    },
-    table: {
-      width: '100%',
-      borderCollapse: 'collapse',
-      backgroundColor: isDark ? '#1f2937' : '#ffffff',
-      border: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`,
-      borderRadius: '8px',
-      marginBottom: '20px'
-    },
-    th: {
-      padding: '12px 16px',
-      textAlign: 'left',
-      backgroundColor: isDark ? '#111827' : '#f3f4f6',
-      fontWeight: '600',
-      color: isDark ? '#f3f4f6' : '#111827',
-      borderBottom: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`,
-      fontSize: '13px'
-    },
-    td: {
-      padding: '12px 16px',
-      borderBottom: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`,
-      color: isDark ? '#e5e7eb' : '#111827',
-      fontSize: '13px'
-    },
-    statusBadge: (status) => {
-      const baseStyle = {
-        padding: '4px 8px',
-        borderRadius: '4px',
-        fontSize: '12px',
-        fontWeight: '600'
-      };
-      if (status === 'Available') return { ...baseStyle, backgroundColor: '#dcfce7', color: '#15803d' };
-      if (status === 'Maintenance') return { ...baseStyle, backgroundColor: '#fed7aa', color: '#92400e' };
-      if (status === 'Missing') return { ...baseStyle, backgroundColor: '#fee2e2', color: '#991b1b' };
-      return baseStyle;
-    },
-    pagination: {
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      gap: '12px',
-      marginTop: '20px'
-    },
-    emptyState: {
-      textAlign: 'center',
-      padding: '40px 20px',
-      color: isDark ? '#9ca3af' : '#6b7280'
-    },
-    note: {
-      padding: '12px 16px',
-      backgroundColor: isDark ? '#1f2937' : '#f3f4f6',
-      border: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`,
-      borderRadius: '6px',
-      marginBottom: '20px',
-      fontSize: '13px',
-      color: isDark ? '#d1d5db' : '#6b7280'
+  const openDetails = async (asset) => {
+    setSelected({ ...asset });
+    setDetailsLoading(true);
+    try {
+      const response = await apiClient.get(`/api/ict/network/${asset.id}`);
+      setSelected(response.data?.equipment || asset);
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, 'Unable to load equipment details.'));
+    } finally {
+      setDetailsLoading(false);
     }
   };
+
+  const setFilter = (name, value) => setFilters((current) => ({ ...current, [name]: value }));
+  const clearFilters = () => setFilters({ search: '', type: '', status: '', condition: '', location: '', department: '', assignmentStatus: '' });
+  const hasFilters = Object.values(filters).some(Boolean);
+  const firstRow = pagination.total ? ((pagination.page - 1) * pagination.limit) + 1 : 0;
+  const lastRow = Math.min(pagination.page * pagination.limit, pagination.total);
 
   return (
-    <div style={styles.container}>
-      {/* Header */}
-      <div style={styles.header}>
-        <h1 style={styles.title}>{t.networkEquipment}</h1>
-        <div style={styles.buttonGroup}>
-          <button style={{ ...styles.button, ...styles.primaryButton }} onClick={fetchEquipment}>
-            {t.refresh}
-          </button>
-          <button style={{ ...styles.button, ...styles.secondaryButton }} onClick={exportToExcel}>
-            {t.export}
-          </button>
+    <main className="network-page">
+      <header className="network-page__header">
+        <div>
+          <div className="network-eyebrow"><Network size={16} aria-hidden="true" /> Technical Operations</div>
+          <h1>Network Equipment</h1>
+          <p>Manage institutional network infrastructure, devices, status, and deployment information.</p>
         </div>
-      </div>
+        <div className="network-page__actions">
+          <button type="button" className="network-button network-button--secondary" onClick={() => loadEquipment(pagination.page)} disabled={loading}><RefreshCw size={16} aria-hidden="true" /> Refresh</button>
+          <button type="button" className="network-button network-button--primary" onClick={() => navigate('/ict/assets/create')}><Plus size={16} aria-hidden="true" /> Add Network Equipment</button>
+        </div>
+      </header>
 
-      {/* Note about IP information */}
-      <div style={styles.note}>
-        ℹ️ {t.note}
-      </div>
+      <section className="network-summary" aria-label="Network equipment summary">
+        <div className="network-summary__card"><span>Total Equipment</span><strong>{summary.total}</strong><Network size={18} aria-hidden="true" /></div>
+        <div className="network-summary__card"><span>Active</span><strong>{summary.active ?? summary.available ?? 0}</strong><CircleCheck size={18} aria-hidden="true" /></div>
+        <div className="network-summary__card"><span>Assigned</span><strong>{summary.assigned}</strong><User size={18} aria-hidden="true" /></div>
+        <div className="network-summary__card"><span>Maintenance</span><strong>{summary.maintenance}</strong><Activity size={18} aria-hidden="true" /></div>
+        <div className="network-summary__card"><span>Repair / Other</span><strong>{summary.repair ?? 0}</strong><CircleAlert size={18} aria-hidden="true" /></div>
+      </section>
 
-      {/* Stats */}
-      <div style={styles.statsContainer}>
-        <div style={styles.statCard}>
-          <div style={styles.statLabel}>{t.total}</div>
-          <div style={styles.statValue}>{stats.total}</div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statLabel}>{t.online}</div>
-          <div style={{ ...styles.statValue, color: '#10b981' }}>{stats.online}</div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statLabel}>{t.maintenance}</div>
-          <div style={{ ...styles.statValue, color: '#f59e0b' }}>{stats.maintenance}</div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statLabel}>{t.offline}</div>
-          <div style={{ ...styles.statValue, color: '#ef4444' }}>{stats.offline}</div>
-        </div>
-      </div>
+      <section className="network-toolbar" aria-label="Network equipment filters">
+        <label className="network-search"><Search size={17} aria-hidden="true" /><span className="sr-only">Search network equipment</span><input value={filters.search} onChange={(event) => setFilter('search', event.target.value)} placeholder="Search name, asset tag, serial, IP, or MAC" /></label>
+        <label><span>Type</span><input value={filters.type} onChange={(event) => setFilter('type', event.target.value)} placeholder="Switch, router..." /></label>
+        <label><span>Status</span><select value={filters.status} onChange={(event) => setFilter('status', event.target.value)}><option value="">All statuses</option><option value="available">Available</option><option value="assigned">Assigned</option><option value="maintenance">Maintenance</option><option value="repair">Repair</option><option value="inactive">Inactive</option></select></label>
+        <label><span>Condition</span><input value={filters.condition} onChange={(event) => setFilter('condition', event.target.value)} placeholder="Good, fair..." /></label>
+        <label><span>Assignment</span><select value={filters.assignmentStatus} onChange={(event) => setFilter('assignmentStatus', event.target.value)}><option value="">All assignments</option><option value="assigned">Assigned</option><option value="unassigned">Unassigned</option></select></label>
+        <label><span>Location</span><input value={filters.location} onChange={(event) => setFilter('location', event.target.value)} placeholder="Location" /></label>
+        {hasFilters && <button type="button" className="network-clear" onClick={clearFilters}><Filter size={15} aria-hidden="true" /> Clear filters</button>}
+      </section>
 
-      {/* Network Type Categories */}
-      <div style={styles.categoriesContainer}>
-        <button
-          style={styles.categoryButton(networkType === 'all')}
-          onClick={() => setNetworkType('all')}
-        >
-          {t.allEquipment}
-        </button>
-        {networkCategories.map(cat => (
-          <button
-            key={cat.value}
-            style={styles.categoryButton(networkType === cat.value)}
-            onClick={() => setNetworkType(cat.value)}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
+      {error && <section className="network-state network-state--error" role="alert"><CircleAlert size={22} aria-hidden="true" /><div><strong>Unable to load network equipment.</strong><p>{error}</p><button type="button" className="network-button network-button--secondary" onClick={() => loadEquipment(pagination.page)}>Retry</button></div></section>}
+      {!error && loading && <section className="network-state"><RefreshCw className="network-spin" size={26} aria-hidden="true" /><p>Loading network equipment...</p></section>}
+      {!error && !loading && equipment.length === 0 && <section className="network-state"><Network size={32} aria-hidden="true" /><h2>No network equipment found</h2><p>There are no network devices matching your current filters.</p>{hasFilters && <button type="button" className="network-button network-button--secondary" onClick={clearFilters}>Clear filters</button>}</section>}
 
-      {/* Filters */}
-      <div style={styles.filterContainer}>
-        <input
-          type="text"
-          placeholder={t.search}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={styles.input}
-        />
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={styles.select}>
-          <option value="all">All Status</option>
-          <option value="available">{t.online}</option>
-          <option value="maintenance">{t.maintenance}</option>
-          <option value="missing">{t.offline}</option>
-        </select>
-      </div>
+      {!error && !loading && equipment.length > 0 && <>
+        <section className="network-table-wrap"><table className="network-table"><caption className="sr-only">Network equipment records</caption><thead><tr><th>Device</th><th>Asset Tag</th><th>Type</th><th>Manufacturer / Model</th><th>IP Address</th><th>Status</th><th>Condition</th><th>Location</th><th>Assigned To</th><th>Actions</th></tr></thead><tbody>{equipment.map((asset) => <tr key={asset.id}><td><strong>{asset.name || '-'}</strong><small>{asset.serialNumber || asset.serial_number || 'No serial number'}</small></td><td>{asset.assetTag || asset.assetCode || '-'}</td><td>{asset.category || '-'}</td><td>{[asset.manufacturer, asset.model].filter(Boolean).join(' / ') || '-'}</td><td>{readNetworkValue(asset, 'ipAddress', 'ip_address') || '-'}</td><td><span className={statusClass(asset.status)}>{statusLabel(asset.status)}</span></td><td>{asset.condition || '-'}</td><td>{asset.location || '-'}</td><td>{asset.assignedTo || 'Unassigned'}</td><td><button type="button" className="network-icon-button" onClick={() => openDetails(asset)} aria-label={`View ${asset.name || 'equipment'} details`} title="View details"><Eye size={17} aria-hidden="true" /></button></td></tr>)}</tbody></table></section>
+        <footer className="network-pagination"><span>Showing {firstRow}-{lastRow} of {pagination.total} devices</span><div><label>Rows <select value={pagination.limit} onChange={(event) => setPagination((current) => ({ ...current, limit: Number(event.target.value) }))}><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label><button type="button" onClick={() => loadEquipment(pagination.page - 1)} disabled={pagination.page <= 1}>Previous</button><span>Page {pagination.page} of {pagination.pages}</span><button type="button" onClick={() => loadEquipment(pagination.page + 1)} disabled={pagination.page >= pagination.pages}>Next</button></div></footer>
+      </>}
 
-      {/* Table */}
-      {loading ? (
-        <div style={styles.emptyState}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-          <p>{t.loading}</p>
-        </div>
-      ) : paginatedAssets.length === 0 ? (
-        <div style={styles.emptyState}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🌐</div>
-          <p>{t.noEquipment}</p>
-        </div>
-      ) : (
-        <>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>{t.assetTag}</th>
-                  <th style={styles.th}>{t.assetName}</th>
-                  <th style={styles.th}>{t.category}</th>
-                  <th style={styles.th}>{t.serialNumber}</th>
-                  <th style={styles.th}>{t.brand}</th>
-                  <th style={styles.th}>{t.model}</th>
-                  <th style={styles.th}>{t.status}</th>
-                  <th style={styles.th}>{t.location}</th>
-                  <th style={styles.th}>{t.department}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedAssets.map(asset => (
-                  <tr key={asset.id}>
-                    <td style={styles.td}>{asset.asset_tag}</td>
-                    <td style={styles.td}>{asset.name}</td>
-                    <td style={styles.td}>{asset.category_name}</td>
-                    <td style={styles.td}>{asset.serial_number || '-'}</td>
-                    <td style={styles.td}>{asset.brand || asset.manufacturer || '-'}</td>
-                    <td style={styles.td}>{asset.model || '-'}</td>
-                    <td style={styles.td}>
-                      <span style={styles.statusBadge(asset.status)}>
-                        {asset.status}
-                      </span>
-                    </td>
-                    <td style={styles.td}>{asset.location || '-'}</td>
-                    <td style={styles.td}>{asset.department_name || asset.department || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div style={styles.pagination}>
-              <button
-                style={{ ...styles.button, ...styles.secondaryButton }}
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(currentPage - 1)}
-              >
-                {t.previousPage}
-              </button>
-              <span style={{ color: isDark ? '#e5e7eb' : '#111827' }}>
-                {t.page} {currentPage} {t.of} {totalPages}
-              </span>
-              <button
-                style={{ ...styles.button, ...styles.secondaryButton }}
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(currentPage + 1)}
-              >
-                {t.nextPage}
-              </button>
-            </div>
-          )}
-        </>
-      )}
-    </div>
+      {selected && <div className="network-drawer-backdrop" role="presentation" onClick={() => setSelected(null)}><aside className="network-drawer" role="dialog" aria-modal="true" aria-labelledby="network-details-title" onClick={(event) => event.stopPropagation()}><header><div><span className="network-eyebrow"><Network size={15} aria-hidden="true" /> Equipment details</span><h2 id="network-details-title">{selected.name || '-'}</h2></div><button type="button" className="network-icon-button" onClick={() => setSelected(null)} aria-label="Close details"><X size={18} aria-hidden="true" /></button></header>{detailsLoading ? <div className="network-state"><RefreshCw className="network-spin" size={22} aria-hidden="true" /><p>Loading details...</p></div> : <dl className="network-details"><div className="network-detail-status"><span className={statusClass(selected.status)}>{statusLabel(selected.status)}</span><span>{selected.condition || 'Condition not recorded'}</span></div>{[['Asset Tag', selected.assetTag || selected.assetCode], ['Type', selected.category], ['Manufacturer', selected.manufacturer], ['Model', selected.model], ['Serial Number', selected.serialNumber || selected.serial_number], ['IP Address', readNetworkValue(selected, 'ipAddress', 'ip_address')], ['MAC Address', readNetworkValue(selected, 'macAddress', 'mac_address')], ['Firmware Version', readNetworkValue(selected, 'firmwareVersion', 'firmware_version')], ['Network Segment', readNetworkValue(selected, 'networkSegment', 'network_segment', 'vlan')], ['Rack Location', readNetworkValue(selected, 'rackLocation', 'rack_location')], ['Location', selected.location], ['Department', selected.department], ['Assigned To', selected.assignedTo], ['Purchase Date', formatDate(selected.purchaseDate || selected.purchase_date)], ['Warranty Expiry', formatDate(selected.warrantyExpiry || selected.warranty_expiry)], ['Last Updated', formatDate(selected.updatedAt || selected.updated_at)]].filter(([, value]) => value).map(([label, value]) => <div className="network-detail" key={label}><dt>{label}</dt><dd>{value}</dd></div>)}{selected.description && <div className="network-detail network-detail--wide"><dt>Description</dt><dd>{selected.description}</dd></div>}</dl>}</aside></div>}
+    </main>
   );
 };
 

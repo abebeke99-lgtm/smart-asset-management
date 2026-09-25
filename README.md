@@ -40,10 +40,9 @@ npm install
 npm start
 ```
 
-## Default login
+## Local login
 
-- Username: admin
-- Password: bekelei123
+Create local credentials through the configured seed or registration flow. Do not commit passwords.
 
 ## Features
 

@@ -1,473 +1,142 @@
 import React, { useState } from 'react';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
-import { Mail, Phone, MapPin, Clock, Send } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { MessageCircle, Send } from 'lucide-react';
+
+const initialForm = { name: '', email: '', subject: '', message: '' };
 
 const Contact = () => {
   const { language } = useLanguage();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const [formData, setFormData] = useState({ name: '', email: '', subject: '', message: '' });
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [formData, setFormData] = useState(initialForm);
+  const [errors, setErrors] = useState({});
+  const [status, setStatus] = useState('idle');
 
   const t = language === 'en' ? {
-    pageTitle: 'Contact Us',
-    pageSubtitle: 'Have questions or need assistance? We\'re here to help.',
-    contactInfo: 'Contact Information',
-    form: 'Send Us a Message',
-    email: 'Email',
-    phone: 'Phone',
-    address: 'Address',
-    workingHours: 'Working Hours',
-    emailValue: 'bekelea906@gmail.com',
-    phoneValue: '+251-986481821',
-    addressValue: 'tulu awliya, Ethiopia',
-    hoursValue: 'Monday - Friday, 2:30 AM - 11:30 AM',
-    name: 'Full Name',
-    subject: 'Subject',
-    message: 'Message',
-    send: 'Send Message',
-    sending: 'Sending...',
-    nameRequired: 'Please enter your name',
-    emailRequired: 'Please enter a valid email',
-    subjectRequired: 'Please enter a subject',
-    messageRequired: 'Please enter a message',
-    success: 'Message sent successfully! We\'ll get back to you soon.',
-    successTitle: 'Thank You!',
-    successMsg: 'Your message has been sent successfully. We will respond within 24 hours.',
-    backToHome: 'Back to Home'
+    pageTitle: 'Contact the University Asset Management Team', pageSubtitle: 'Have a question about university assets, records, assignments, transfers, maintenance, or the asset management system? Send us a message and the appropriate team can review your request.',
+    information: 'Contact Information', informationText: 'Official contact information is not currently configured.',
+    formTitle: 'Send a message', submissionUnavailable: 'Public message submission is not currently available. Please try again after the university enables this service.',
+    name: 'Name', email: 'Email', subject: 'Subject', message: 'Message',
+    nameRequired: 'Enter your name.', emailRequired: 'Enter a valid email address.', subjectRequired: 'Enter a subject.', messageRequired: 'Enter a message.',
+    validationSummary: 'Please correct the highlighted fields before sending.',
+    send: 'Send message', submitting: 'Submitting...', success: 'Your message was sent successfully.',
+    serverError: 'Message delivery is not available right now. Please try again later.', networkError: 'A network error prevented delivery. Please try again.'
   } : {
-    pageTitle: 'አግኙን',
-    pageSubtitle: 'ጥያቄዎች ወይም እርዳታ ያስፈልግዎት? እኛ እዚህ ነን እና ለመርዳት ዝግጁ ነን።',
-    contactInfo: 'የግንኙነት መረጃ',
-    form: 'መልዕክት ላክልን',
-    email: 'ኢሜይል',
-    phone: 'ስልክ',
-    address: 'አድራሻ',
-    workingHours: 'የሥራ ጊዜ',
-    emailValue: 'bekelea906@gmail.com',
-    phoneValue: '+251-986481821',
-    addressValue: 'ቱሉ አውሊያ፣ ኢትዮጵያ',
-    hoursValue: 'ሰኞ - አርብ, 2:30 ጠዋት - 11:30 ጠዋት',
-    name: 'ሙሉ ስም',
-    subject: 'ርዕስ',
-    message: 'መልዕክት',
-    send: 'መልዕክት ላክ',
-    sending: 'ይላካል...',
-    nameRequired: 'እባክዎ ስምዎን ያስገቡ',
-    emailRequired: 'እባክዎ ትክክለኛ ኢሜይል ያስገቡ',
-    subjectRequired: 'እባክዎ ርዕስ ያስገቡ',
-    messageRequired: 'እባክዎ መልዕክት ያስገቡ',
-    success: 'መልዕክት በተሳካ ሁኔታ ተልካ! በቅርቡ ለእርስዎ መልስ እንሰጣለን።',
-    successTitle: 'ምስጋና!',
-    successMsg: 'መልዕክትዎ በተሳካ ሁኔታ ተልካል። በ 24 ሰዓት ውስጥ መልስ እንሰጣለን።',
-    backToHome: 'ወደ ወጣታው'
+    pageTitle: 'የዩኒቨርሲቲ ንብረት አስተዳደር ቡድንን ያግኙ', pageSubtitle: 'ስለ ዩኒቨርሲቲ ንብረቶች፣ መዝገቦች፣ ምደባዎች፣ ዝውውሮች፣ ጥገና ወይም የንብረት አስተዳደር ስርዓቱ ጥያቄ ካለዎት መልዕክት ይላኩ። ተገቢው ቡድን ጥያቄዎን ሊመለከተው ይችላል።',
+    information: 'የግንኙነት መረጃ', informationText: 'ይፋዊ የግንኙነት መረጃ በአሁኑ ጊዜ አልተዋቀረም።',
+    formTitle: 'መልዕክት ይላኩ', submissionUnavailable: 'የህዝብ መልዕክት መላኪያ በአሁኑ ጊዜ አይገኝም። ዩኒቨርሲቲው ይህን አገልግሎት ካነቃ በኋላ እንደገና ይሞክሩ።',
+    name: 'ስም', email: 'ኢሜይል', subject: 'ርዕስ', message: 'መልዕክት',
+    nameRequired: 'ስምዎን ያስገቡ።', emailRequired: 'ትክክለኛ የኢሜይል አድራሻ ያስገቡ።', subjectRequired: 'ርዕስ ያስገቡ።', messageRequired: 'መልዕክት ያስገቡ።',
+    validationSummary: 'ከመላክዎ በፊት የተጠቆሙትን መስኮች ያስተካክሉ።',
+    send: 'መልዕክት ላክ', submitting: 'በመላክ ላይ...', success: 'መልዕክትዎ በተሳካ ሁኔታ ተልኳል።',
+    serverError: 'የመልዕክት ማድረስ አሁን አይገኝም። በኋላ እንደገና ይሞክሩ።', networkError: 'የኔትወርክ ስህተት መልዕክቱን እንዳይደርስ አድርጓል። እንደገና ይሞክሩ።'
   };
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const validate = () => {
+    const nextErrors = {};
+    if (!formData.name.trim()) nextErrors.name = t.nameRequired;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) nextErrors.email = t.emailRequired;
+    if (!formData.subject.trim()) nextErrors.subject = t.subjectRequired;
+    if (!formData.message.trim()) nextErrors.message = t.messageRequired;
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.name.trim()) {
-      toast.error(t.nameRequired);
-      return;
-    }
-    if (!formData.email.trim() || !formData.email.includes('@')) {
-      toast.error(t.emailRequired);
-      return;
-    }
-    if (!formData.subject.trim()) {
-      toast.error(t.subjectRequired);
-      return;
-    }
-    if (!formData.message.trim()) {
-      toast.error(t.messageRequired);
-      return;
-    }
-
-    setLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setSubmitted(true);
-    setLoading(false);
-    toast.success(t.success);
-    setFormData({ name: '', email: '', subject: '', message: '' });
-    setTimeout(() => setSubmitted(false), 3000);
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((current) => ({ ...current, [name]: value }));
+    if (errors[name]) setErrors((current) => ({ ...current, [name]: '' }));
+    if (status !== 'idle') setStatus('idle');
   };
 
-  const contactItems = [
-    { icon: Mail, label: t.email, value: t.emailValue, href: `mailto:${t.emailValue}` },
-    { icon: Phone, label: t.phone, value: t.phoneValue, href: `tel:${t.phoneValue}` },
-    { icon: MapPin, label: t.address, value: t.addressValue, href: '#' },
-    { icon: Clock, label: t.workingHours, value: t.hoursValue, href: '#' }
-  ];
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    if (!validate()) { setStatus('validation'); return; }
+    setStatus('unavailable');
+  };
+
+  const field = (name, label, type = 'text') => (
+    <div className="contact-field">
+      <label htmlFor={`contact-${name}`}>{label}</label>
+      <input id={`contact-${name}`} name={name} type={type} value={formData[name]} onChange={handleChange} aria-invalid={Boolean(errors[name])} aria-describedby={errors[name] ? `contact-${name}-error` : undefined} required />
+      {errors[name] && <span id={`contact-${name}-error`} className="contact-error" role="alert">{errors[name]}</span>}
+    </div>
+  );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <main style={{ flex: 1 }}>
-        {/* Hero Section */}
-        <section style={{
-          background: '#0EA5E9',
-          color: 'white',
-          padding: '80px 20px',
-          textAlign: 'center'
-        }}>
-          <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-            <h1 style={{
-              fontSize: '2.8rem',
-              fontWeight: 900,
-              marginBottom: '16px'
-            }}>
-              {t.pageTitle}
-            </h1>
-            <p style={{
-              fontSize: '1.2rem',
-              opacity: 0.95
-            }}>
-              {t.pageSubtitle}
-            </p>
+    <main className={`contact-page${isDark ? ' contact-page-dark' : ''}`}>
+      <section className="contact-hero" aria-labelledby="contact-title">
+        <div className="contact-shell">
+          <span className="contact-eyebrow">Mekdela Amba University</span>
+          <h1 id="contact-title">{t.pageTitle}</h1>
+          <p>{t.pageSubtitle}</p>
+        </div>
+      </section>
+
+      <section className="contact-content contact-shell">
+        <div className="contact-information">
+          <div className="contact-section-heading">
+            <span className="contact-eyebrow">{t.information}</span>
+            <h2>{t.information}</h2>
+            <p>{t.informationText}</p>
           </div>
-        </section>
+        </div>
 
-        {/* Contact Section */}
-        <section style={{
-          maxWidth: '1200px',
-          margin: '60px auto',
-          padding: '0 20px'
-        }}>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-            gap: '32px'
-          }}>
-            {/* Contact Information */}
-            <div>
-              <h2 style={{
-                fontSize: '1.8rem',
-                fontWeight: 800,
-                marginBottom: '32px',
-                color: isDark ? '#f1f5f9' : '#0f172a'
-              }}>
-                {t.contactInfo}
-              </h2>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                {contactItems.map((item, idx) => {
-                  const IconComponent = item.icon;
-                  return (
-                    <a
-                      key={idx}
-                      href={item.href}
-                      style={{
-                        display: 'flex',
-                        gap: '16px',
-                        textDecoration: 'none',
-                        padding: '16px',
-                        borderRadius: '12px',
-                        background: isDark ? '#1e293b' : '#f8fafc',
-                        border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`
-                      }}
-                    >
-                      <div style={{
-                        width: '48px',
-                        height: '48px',
-                        borderRadius: '12px',
-                        background: '#3b82f615',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}>
-                        <IconComponent size={24} color='#0EA5E9' />
-                      </div>
-                      <div>
-                        <div style={{
-                          fontSize: '0.9rem',
-                          fontWeight: 600,
-                          color: isDark ? '#cbd5e1' : '#475569',
-                          marginBottom: '4px'
-                        }}>
-                          {item.label}
-                        </div>
-                        <div style={{
-                          fontSize: '1rem',
-                          fontWeight: 600,
-                          color: isDark ? '#f1f5f9' : '#0f172a'
-                        }}>
-                          {item.value}
-                        </div>
-                      </div>
-                    </a>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Contact Form */}
-            <div>
-              <h2 style={{
-                fontSize: '1.8rem',
-                fontWeight: 800,
-                marginBottom: '24px',
-                color: isDark ? '#f1f5f9' : '#0f172a'
-              }}>
-                {t.form}
-              </h2>
-
-              {submitted ? (
-                <div style={{
-                  background: isDark ? '#1e293b' : '#f0fdf4',
-                  border: `1px solid ${isDark ? '#334155' : '#86efac'}`,
-                  borderRadius: '12px',
-                  padding: '32px 24px',
-                  textAlign: 'center',
-                  animation: 'slideUp 0.4s ease'
-                }}>
-                  <div style={{
-                    fontSize: '3rem',
-                    marginBottom: '16px'
-                  }}>
-                    ✅
-                  </div>
-                  <h3 style={{
-                    fontSize: '1.5rem',
-                    fontWeight: 700,
-                    marginBottom: '8px',
-                    color: isDark ? '#f1f5f9' : '#0f172a'
-                  }}>
-                    {t.successTitle}
-                  </h3>
-                  <p style={{
-                    color: isDark ? '#cbd5e1' : '#475569',
-                    lineHeight: 1.6
-                  }}>
-                    {t.successMsg}
-                  </p>
-                </div>
-              ) : (
-                <form onSubmit={handleSubmit} style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '16px'
-                }}>
-                  <div>
-                    <label style={{
-                      display: 'block',
-                      fontSize: '0.9rem',
-                      fontWeight: 600,
-                      marginBottom: '8px',
-                      color: isDark ? '#f1f5f9' : '#0f172a'
-                    }}>
-                      {t.name}
-                    </label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleChange}
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        border: `2px solid ${isDark ? '#334155' : '#d0d8e8'}`,
-                        background: isDark ? '#0f172a' : '#f7fafc',
-                        color: isDark ? '#f1f5f9' : '#0f172a',
-                        fontSize: '1rem',
-                        transition: 'all 0.3s ease',
-                        boxSizing: 'border-box'
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#0EA5E9';
-                        e.target.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.16)';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = isDark ? '#334155' : '#d0d8e8';
-                        e.target.style.boxShadow = 'none';
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{
-                      display: 'block',
-                      fontSize: '0.9rem',
-                      fontWeight: 600,
-                      marginBottom: '8px',
-                      color: isDark ? '#f1f5f9' : '#0f172a'
-                    }}>
-                      {t.email}
-                    </label>
-                    <input
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        border: `2px solid ${isDark ? '#334155' : '#d0d8e8'}`,
-                        background: isDark ? '#0f172a' : '#f7fafc',
-                        color: isDark ? '#f1f5f9' : '#0f172a',
-                        fontSize: '1rem',
-                        transition: 'all 0.3s ease',
-                        boxSizing: 'border-box'
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#2563eb';
-                        e.target.style.boxShadow = '0 0 0 3px rgba(37, 99, 235, 0.1)';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = isDark ? '#334155' : '#d0d8e8';
-                        e.target.style.boxShadow = 'none';
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{
-                      display: 'block',
-                      fontSize: '0.9rem',
-                      fontWeight: 600,
-                      marginBottom: '8px',
-                      color: isDark ? '#f1f5f9' : '#0f172a'
-                    }}>
-                      {t.subject}
-                    </label>
-                    <input
-                      type="text"
-                      name="subject"
-                      value={formData.subject}
-                      onChange={handleChange}
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        border: `2px solid ${isDark ? '#334155' : '#d0d8e8'}`,
-                        background: isDark ? '#0f172a' : '#f7fafc',
-                        color: isDark ? '#f1f5f9' : '#0f172a',
-                        fontSize: '1rem',
-                        transition: 'all 0.3s ease',
-                        boxSizing: 'border-box'
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#2563eb';
-                        e.target.style.boxShadow = '0 0 0 3px rgba(37, 99, 235, 0.1)';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = isDark ? '#334155' : '#d0d8e8';
-                        e.target.style.boxShadow = 'none';
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{
-                      display: 'block',
-                      fontSize: '0.9rem',
-                      fontWeight: 600,
-                      marginBottom: '8px',
-                      color: isDark ? '#f1f5f9' : '#0f172a'
-                    }}>
-                      {t.message}
-                    </label>
-                    <textarea
-                      name="message"
-                      value={formData.message}
-                      onChange={handleChange}
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        border: `2px solid ${isDark ? '#334155' : '#d0d8e8'}`,
-                        background: isDark ? '#0f172a' : '#f7fafc',
-                        color: isDark ? '#f1f5f9' : '#0f172a',
-                        fontSize: '1rem',
-                        minHeight: '120px',
-                        resize: 'vertical',
-                        transition: 'all 0.3s ease',
-                        boxSizing: 'border-box',
-                        fontFamily: 'inherit'
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#2563eb';
-                        e.target.style.boxShadow = '0 0 0 3px rgba(37, 99, 235, 0.1)';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = isDark ? '#334155' : '#d0d8e8';
-                        e.target.style.boxShadow = 'none';
-                      }}
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    style={{
-                      padding: '14px',
-                      background: 'linear-gradient(135deg, #2563eb, #1e40af)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      fontWeight: 700,
-                      fontSize: '1rem',
-                      cursor: loading ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.3s ease',
-                      opacity: loading ? 0.7 : 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!loading) {
-                        e.target.style.transform = 'translateY(-2px)';
-                        e.target.style.boxShadow = '0 10px 20px rgba(37, 99, 235, 0.3)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!loading) {
-                        e.target.style.transform = 'translateY(0)';
-                        e.target.style.boxShadow = 'none';
-                      }
-                    }}
-                  >
-                    <Send size={18} />
-                    {loading ? t.sending : t.send}
-                  </button>
-                </form>
-              )}
-            </div>
+        <section className="contact-form-panel" aria-labelledby="contact-form-title">
+          <div className="contact-section-heading">
+            <span className="contact-eyebrow"><MessageCircle size={15} aria-hidden="true" /> {t.formTitle}</span>
+            <h2 id="contact-form-title">{t.formTitle}</h2>
           </div>
+          <form onSubmit={handleSubmit} noValidate>
+            {field('name', t.name)}
+            {field('email', t.email, 'email')}
+            {field('subject', t.subject)}
+            <div className="contact-field">
+              <label htmlFor="contact-message">{t.message}</label>
+              <textarea id="contact-message" name="message" value={formData.message} onChange={handleChange} aria-invalid={Boolean(errors.message)} aria-describedby={errors.message ? 'contact-message-error' : undefined} rows="6" required />
+              {errors.message && <span id="contact-message-error" className="contact-error" role="alert">{errors.message}</span>}
+            </div>
+            {status === 'validation' && <p className="contact-status contact-status-error" role="alert">{t.validationSummary}</p>}
+            {status === 'success' && <p className="contact-status contact-status-success" role="status">{t.success}</p>}
+            {status === 'server-error' && <p className="contact-status contact-status-error" role="alert">{t.serverError}</p>}
+            {status === 'network-error' && <p className="contact-status contact-status-error" role="alert">{t.networkError}</p>}
+            {status === 'unavailable' && <p className="contact-status contact-status-error" role="alert">{t.submissionUnavailable}</p>}
+            <button type="submit" disabled={status === 'submitting'}><Send size={17} aria-hidden="true" />{status === 'submitting' ? t.submitting : t.send}</button>
+          </form>
         </section>
-      </main>
+      </section>
 
       <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          * {
-            animation-duration: 0.01ms !important;
-            transition-duration: 0.01ms !important;
-          }
-        }
+        .contact-page { --contact-bg:#f5f7f9; --contact-surface:#fff; --contact-border:#d7dee5; --contact-text:#17212b; --contact-muted:#52606d; --contact-primary:#536575; min-height:100vh; background:var(--contact-bg); color:var(--contact-text); }
+        .contact-page-dark { --contact-bg:#0f172a; --contact-surface:#111827; --contact-border:rgba(148,163,184,.24); --contact-text:#e2e8f0; --contact-muted:#cbd5e1; --contact-primary:#93c5fd; }
+        .contact-shell { width:min(1120px,calc(100% - 40px)); margin:0 auto; }
+        .contact-hero { padding:72px 0 68px; background:#b1bac4; }
+        .contact-hero h1 { margin:0 0 12px; color:#17212b; font-size:clamp(2.2rem,5vw,4rem); line-height:1.05; }
+        .contact-hero p { max-width:600px; margin:0; color:#334155; font-size:1.08rem; line-height:1.7; }
+        .contact-eyebrow { display:inline-flex; align-items:center; gap:7px; margin-bottom:15px; color:var(--contact-primary); font-size:.74rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+        .contact-hero .contact-eyebrow { color:#334155; }
+        .contact-content { display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr); gap:64px; padding-top:72px; padding-bottom:88px; }
+        .contact-section-heading h2 { margin:0 0 12px; font-size:clamp(1.65rem,3vw,2.35rem); line-height:1.15; }
+        .contact-section-heading p { margin:0; color:var(--contact-muted); line-height:1.7; }
+        .contact-information { padding-top:8px; }
+        .contact-form-panel { padding:clamp(24px,4vw,40px); }
+        .contact-form-panel form { display:grid; gap:18px; margin-top:28px; }
+        .contact-field { display:grid; gap:7px; }
+        .contact-field label { font-size:.9rem; font-weight:700; }
+        .contact-field input,.contact-field textarea { width:100%; box-sizing:border-box; border:1px solid var(--contact-border); border-radius:9px; padding:12px 14px; background:var(--contact-bg); color:var(--contact-text); font:inherit; line-height:1.45; }
+        .contact-field textarea { min-height:140px; resize:vertical; }
+        .contact-field input:focus,.contact-field textarea:focus { outline:3px solid rgba(83,101,117,.22); border-color:var(--contact-primary); }
+        .contact-field input[aria-invalid="true"],.contact-field textarea[aria-invalid="true"] { border-color:#b42318; }
+        .contact-error { color:#b42318; font-size:.84rem; }
+        .contact-status { margin:0; padding:12px 14px; border-radius:9px; line-height:1.5; }
+        .contact-status-error { color:#9b1c1c; background:#fef3f2; }
+        .contact-status-success { color:#166534; background:#f0fdf4; }
+        .contact-form-panel button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:48px; border:0; border-radius:9px; background:var(--contact-primary); color:#fff; font:inherit; font-weight:750; cursor:pointer; }
+        .contact-form-panel button:hover { filter:brightness(.92); }
+        .contact-form-panel button:disabled { cursor:wait; opacity:.7; }
+        @media (max-width:760px) { .contact-shell { width:min(100% - 28px,1120px); } .contact-hero { padding:52px 0 48px; } .contact-content { grid-template-columns:1fr; gap:42px; padding-top:48px; padding-bottom:60px; } }
       `}</style>
-    </div>
+    </main>
   );
 };
 

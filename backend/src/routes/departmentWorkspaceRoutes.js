@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { requireDepartmentHead, resolveDepartmentScope } = require('../middlewares/organizationScope');
-const { getDepartmentDashboard, listDepartmentAssets, listDepartmentStaff } = require('../controllers/departmentController');
+const { getDepartmentDashboard, listDepartmentAssets, listDepartmentStaff, listDepartmentLocations, getDepartmentReports } = require('../controllers/departmentController');
 const { listRequests, getRequest, createRequest, decideRequest } = require('../controllers/workspaceRequestController');
 const verification = require('../controllers/verificationController');
 const maintenance = require('../controllers/maintenanceRequestWorkflowController');
@@ -9,6 +9,8 @@ router.use(...requireDepartmentHead, resolveDepartmentScope);
 router.get('/dashboard', getDepartmentDashboard);
 router.get('/assets', listDepartmentAssets);
 router.get('/staff', listDepartmentStaff);
+router.get('/locations', listDepartmentLocations);
+router.get('/reports', getDepartmentReports);
 router.get('/inventory', getDepartmentDashboard);
 router.get('/requests', listRequests);
 router.post('/requests', createRequest);

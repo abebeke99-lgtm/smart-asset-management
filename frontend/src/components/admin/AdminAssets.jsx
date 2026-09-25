@@ -17,7 +17,6 @@ import {
   Radio,
   RotateCcw,
   Search,
-  SlidersHorizontal,
   Tags,
   Trash2,
   UserCheck,
@@ -673,11 +672,15 @@ const AdminAssets = () => {
     try {
       const response = await axios.get('/api/categories');
 
-      const rows = Array.isArray(response.data?.categories)
-        ? response.data.categories
-        : Array.isArray(response.data?.data)
-        ? response.data.data
-        : [];
+      const rows = Array.isArray(response.data?.items)
+        ? response.data.items
+        : Array.isArray(response.data?.categories)
+          ? response.data.categories
+          : Array.isArray(response.data?.data)
+            ? response.data.data
+            : Array.isArray(response.data)
+              ? response.data
+              : [];
 
       setCategories(rows);
     } catch (error) {

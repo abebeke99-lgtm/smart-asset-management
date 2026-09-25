@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useLanguage } from "../../contexts/UiContext";
 import { toast } from "react-toastify";
@@ -3946,3 +3946,4 @@ const formatStaticRole = (role) => {
 };
 
 export default AdminUserManagement;
+

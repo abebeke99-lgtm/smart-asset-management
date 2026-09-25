@@ -117,6 +117,39 @@ const findDepartmentFromName = async (departmentName) => {
   return Department.findOne({ where: { name, status: 'active' } });
 };
 
+const ensureDepartmentScopeForUser = async (user) => {
+  if (!user || String(user.role).trim().toLowerCase() !== 'department_head') {
+    return null;
+  }
+
+  const departmentName = String(user.department || user.department_name || 'Engineering').trim() || 'Engineering';
+  let department = await findDepartmentFromName(departmentName);
+  if (department) {
+    return department;
+  }
+
+  const collegeScope = await findCollegeScopeForUser(user);
+  const collegeId = collegeScope?.collegeId ?? null;
+  const departmentCode = String(departmentName).slice(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, '') || 'DEPT';
+
+  try {
+    department = await Department.create({
+      name: departmentName,
+      code: departmentCode,
+      description: `Auto-created department scope for ${user.fullName || user.username || 'department head'}`,
+      headId: user.id,
+      collegeId,
+      status: 'active',
+    });
+  } catch (error) {
+    department = await findDepartmentFromName(departmentName);
+    if (!department) throw error;
+  }
+
+  await User.update({ departmentId: department.id, collegeId: collegeId || null }, { where: { id: user.id } });
+  return department;
+};
+
 const resolveCollegeScope = async (req, res, next) => {
   const scope = await findCollegeScopeForUser(req.user);
   if (!scope?.collegeId || !scope?.college) {
@@ -130,16 +163,19 @@ const resolveCollegeScope = async (req, res, next) => {
 
 const resolveDepartmentScope = async (req, res, next) => {
   const requestedDepartmentId = req.user?.departmentId ?? req.user?.department_id ?? null;
-  if (!requestedDepartmentId) {
-    const fallbackDepartment = await findDepartmentFromName(req.user?.department || req.user?.department_name || '');
-    if (!fallbackDepartment) {
-      return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
-    }
-    req.user.departmentId = fallbackDepartment.id;
+  let department = requestedDepartmentId
+    ? await Department.findOne({ where: { id: requestedDepartmentId, status: 'active' } })
+    : null;
+
+  if (!department) {
+    department = await ensureDepartmentScopeForUser(req.user);
   }
 
-  const department = await Department.findOne({ where: { id: req.user.departmentId, status: 'active' } });
-  if (!department) return res.status(403).json({ success: false, message: 'Authorized department was not found or is inactive' });
+  if (!department) {
+    return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+  }
+
+  req.user.departmentId = department.id;
   req.organizationScope = { department, departmentId: department.id, collegeId: department.collegeId };
   return next();
 };

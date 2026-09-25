@@ -132,18 +132,18 @@ const ResetPassword = () => {
     <>
       <style>{`
         .reset-root { min-height: 100vh; width: 100%; display: flex; align-items: center; justify-content: center; padding: 20px; position: relative; overflow: hidden; font-family: Inter, system-ui, sans-serif; }
-        .reset-light { background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%); }
-        .reset-dark { background: linear-gradient(135deg, #020617 0%, #111827 100%); }
-        .reset-card { width: 100%; max-width: 460px; background: ${isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.9)'}; border: 1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'}; border-radius: 24px; padding: 40px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); z-index: 1; }
+        .reset-light { background: #EEF2F5; }
+        .reset-dark { background: #2C3C49; }
+        .reset-card { width: 100%; max-width: 460px; background: ${isDark ? '#1E2B34' : '#FFFFFF'}; border: 1px solid #D7DEE5; border-radius: 24px; padding: 40px; box-shadow: 0 20px 40px rgba(23, 33, 43, 0.08); z-index: 1; }
         .input-group { margin-bottom: 20px; }
-        .input-label { display: block; font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 8px; margin-left: 4px; text-transform: uppercase; }
-        .input-field { width: 100%; padding: 14px 16px; border-radius: 12px; border: 2px solid transparent; background: ${isDark ? '#0f172a' : '#f1f5f9'}; color: ${isDark ? '#f8fafc' : '#0f172a'}; outline: none; box-sizing: border-box; }
-        .input-field:focus { border-color: #0EA5E9; background: ${isDark ? '#020617' : '#fff'}; }
-        .btn-submit { background: linear-gradient(135deg, #0EA5E9, #2563EB); width: 100%; padding: 15px; border-radius: 12px; border: none; color: white; font-weight: 700; cursor: pointer; margin-top: 10px; font-size: 15px; }
+        .input-label { display: block; font-size: 12px; font-weight: 700; color: #52606D; margin-bottom: 8px; margin-left: 4px; text-transform: uppercase; }
+        .input-field { width: 100%; padding: 14px 16px; border-radius: 12px; border: 2px solid #D7DEE5; background: #F5F7F9; color: #17212B; outline: none; box-sizing: border-box; }
+        .input-field:focus { border-color: #536575; background: #FFFFFF; }
+        .btn-submit { background: #536575; width: 100%; padding: 15px; border-radius: 12px; border: none; color: white; font-weight: 700; cursor: pointer; margin-top: 10px; font-size: 15px; }
         .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
-        .error-box { background: rgba(239, 68, 68, 0.1); color: #ef4444; padding: 12px; border-radius: 10px; font-size: 13px; margin-bottom: 20px; border: 1px solid #ef4444; text-align: center; }
+        .error-box { background: rgba(239, 68, 68, 0.08); color: #b91c1c; padding: 12px; border-radius: 10px; font-size: 13px; margin-bottom: 20px; border: 1px solid rgba(185, 28, 28, 0.2); text-align: center; }
         .success-state { text-align: center; }
-        .success-icon { font-size: 60px; color: #10b981; margin-bottom: 20px; display: block; }
+        .success-icon { font-size: 60px; color: #536575; margin-bottom: 20px; display: block; }
       `}</style>
 
       <div className={`reset-root ${isDark ? 'reset-dark' : 'reset-light'}`}>
@@ -152,7 +152,7 @@ const ResetPassword = () => {
           {!otpVerified && !token ? (
             <>
               <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-                <ShieldCheck size={40} color="#0EA5E9" aria-hidden="true" />
+                <ShieldCheck size={40} color="#536575" aria-hidden="true" />
                 <h1 style={{ fontSize: '24px', fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a' }}>{t.verifyTitle}</h1>
               </div>
 
@@ -181,7 +181,7 @@ const ResetPassword = () => {
           ) : (
             <>
               <div style={{ textAlign: 'center', marginBottom: '35px' }}>
-                <LockKeyhole size={40} color="#0EA5E9" aria-hidden="true" />
+                <LockKeyhole size={40} color="#536575" aria-hidden="true" />
                 <h1 style={{ fontSize: '24px', fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a' }}>{t.title}</h1>
               </div>
 
@@ -206,7 +206,7 @@ const ResetPassword = () => {
           )}
 
           <div style={{ marginTop: '25px', textAlign: 'center' }}>
-            <Link to="/login" style={{ color: '#0284C7', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <Link to="/login" style={{ color: '#536575', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
               <ArrowLeft size={16} aria-hidden="true" /> {t.login}
             </Link>
           </div>

@@ -548,6 +548,7 @@ const StoreReports = () => {
     () => ({
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
       plugins: {
         legend: {
           position: 'bottom',

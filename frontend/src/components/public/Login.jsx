@@ -21,7 +21,6 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const redirectParam = new URLSearchParams(location.search).get('redirect');
-  const requestedPath = redirectParam || '/';
 
   const t = language === 'en' ? englishTranslations : amharicTranslations;
 
@@ -65,8 +64,27 @@ const Login = () => {
         infrastructure: '/infrastructure',
         staff: '/department',
       };
-      const fallbackDestination = roleRoutes[result?.user?.role] || '/dashboard';
-      const destination = '/dashboard';
+      const role = String(result?.user?.role || '').trim().toLowerCase();
+      const fallbackDestination = roleRoutes[role] || '/home';
+      const allowedRedirectPrefixes = {
+        admin: '/admin',
+        ict_officer: '/ict',
+        college: '/college',
+        department_head: '/department',
+        department: '/department',
+        finance: '/finance',
+        store_manager: '/store',
+        maintenance: '/maintenance',
+        infrastructure: '/infrastructure',
+        staff: '/department',
+      };
+      const allowedPrefix = allowedRedirectPrefixes[role];
+      const isAllowedRedirect = allowedPrefix && redirectParam && (
+        redirectParam === allowedPrefix || redirectParam.startsWith(`${allowedPrefix}/`)
+      );
+      const destination = isAllowedRedirect
+        ? redirectParam
+        : fallbackDestination;
       navigate(destination, { replace: true });
     } catch (err) {
       setError(err?.response?.data?.message || 'Unable to connect to server.');

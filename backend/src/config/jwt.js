@@ -14,9 +14,9 @@ function getJwtSecret() {
   }
 
   if (!cachedDevSecret) {
-    cachedDevSecret = crypto.randomBytes(48).toString('hex');
+    cachedDevSecret = process.env.JWT_DEV_SECRET || crypto.randomBytes(48).toString('hex');
     console.warn(
-      'JWT_SECRET is not set. Using a generated development secret; issued tokens become invalid on restart. Set JWT_SECRET in the environment.'
+      'JWT_SECRET is not set. Using JWT_DEV_SECRET or a generated development secret. Set JWT_SECRET in the environment.'
     );
   }
   return cachedDevSecret;

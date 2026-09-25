@@ -64,11 +64,18 @@ const ServiceRequest = require('./ServiceRequest');
 const RequestAttachment = require('./RequestAttachment');
 const RequestStatusHistory = require('./RequestStatusHistory');
 const Feedback = require('./Feedback');
+const SupportTicketComment = require('./SupportTicketComment');
 const CleaningSchedule = require('./CleaningSchedule');
 const UploadRecord = require('./UploadRecord');
 const AssetDocument = require('./AssetDocument');
 const AssetGrant = require('./AssetGrant');
 const AssetCustody = require('./AssetCustody');
+const SoftwareLicense = require('./SoftwareLicense');
+const SoftwareLicenseAssignment = require('./SoftwareLicenseAssignment');
+const Incident = require('./Incident');
+const IncidentComment = require('./IncidentComment');
+const IncidentHistory = require('./IncidentHistory');
+const IncidentAttachment = require('./IncidentAttachment');
 
 Asset.hasMany(Assignment, { foreignKey: 'assetId' });
 Assignment.belongsTo(Asset, { foreignKey: 'assetId' });
@@ -88,6 +95,7 @@ Asset.hasMany(AssetReturn, { foreignKey: 'assetId' });
 AssetReturn.belongsTo(Asset, { foreignKey: 'assetId' });
 User.hasMany(AssetReturn, { foreignKey: 'requestedBy', as: 'RequestedReturns' });
 AssetReturn.belongsTo(User, { foreignKey: 'requestedBy', as: 'Requester' });
+AssetReturn.belongsTo(User, { foreignKey: 'sourceUserId', as: 'SourceUser' });
 Transfer.hasMany(AssetMovement, { foreignKey: 'referenceId', constraints: false, scope: { referenceType: 'transfer' } });
 Department.hasMany(User, { foreignKey: 'departmentId' });
 User.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
@@ -355,6 +363,10 @@ ServiceRequest.belongsTo(Asset, { foreignKey: 'assetId' });
 ServiceRequest.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
 ServiceRequest.belongsTo(College, { foreignKey: 'collegeId', as: 'CollegeRecord' });
 ServiceRequest.hasOne(Feedback, { foreignKey: 'requestId', as: 'RequestFeedback' });
+ServiceRequest.hasMany(SupportTicketComment, { foreignKey: 'ticketId', onDelete: 'CASCADE' });
+SupportTicketComment.belongsTo(ServiceRequest, { foreignKey: 'ticketId' });
+SupportTicketComment.belongsTo(User, { foreignKey: 'userId', as: 'Author' });
+User.hasMany(SupportTicketComment, { foreignKey: 'userId' });
 User.hasMany(Feedback, { foreignKey: 'submittedBy', as: 'SubmittedFeedback' });
 Feedback.belongsTo(User, { foreignKey: 'submittedBy', as: 'Submitter' });
 
@@ -371,6 +383,35 @@ Asset.hasMany(AssetCustody, { foreignKey: 'assetId' });
 AssetCustody.belongsTo(Asset, { foreignKey: 'assetId' });
 User.hasMany(AssetCustody, { foreignKey: 'custodianId', as: 'CustodianRecords' });
 AssetCustody.belongsTo(User, { foreignKey: 'custodianId', as: 'Custodian' });
+
+SoftwareLicense.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
+SoftwareLicense.belongsTo(User, { foreignKey: 'updatedBy', as: 'Updater' });
+SoftwareLicense.belongsTo(College, { foreignKey: 'collegeId', as: 'CollegeRecord' });
+SoftwareLicense.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
+SoftwareLicense.belongsTo(Location, { foreignKey: 'locationId', as: 'LocationRecord' });
+SoftwareLicense.belongsTo(Supplier, { foreignKey: 'supplierId', as: 'SupplierRecord' });
+SoftwareLicense.hasMany(SoftwareLicenseAssignment, { foreignKey: 'softwareLicenseId', as: 'Assignments', onDelete: 'RESTRICT' });
+SoftwareLicenseAssignment.belongsTo(SoftwareLicense, { foreignKey: 'softwareLicenseId' });
+SoftwareLicenseAssignment.belongsTo(User, { foreignKey: 'userId', as: 'User' });
+SoftwareLicenseAssignment.belongsTo(Asset, { foreignKey: 'assetId', as: 'Asset' });
+
+// Incident management relationships
+Incident.belongsTo(User, { foreignKey: 'reporterId', as: 'Reporter' });
+Incident.belongsTo(User, { foreignKey: 'assignedTechnicianId', as: 'Technician' });
+Incident.belongsTo(User, { foreignKey: 'resolvedBy', as: 'Resolver' });
+Incident.belongsTo(User, { foreignKey: 'closedBy', as: 'Closer' });
+Incident.belongsTo(Asset, { foreignKey: 'assetId' });
+Incident.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
+Incident.belongsTo(Location, { foreignKey: 'locationId', as: 'LocationRecord' });
+Incident.hasMany(IncidentComment, { foreignKey: 'incidentId', onDelete: 'CASCADE' });
+IncidentComment.belongsTo(Incident, { foreignKey: 'incidentId' });
+IncidentComment.belongsTo(User, { foreignKey: 'userId', as: 'Author' });
+Incident.hasMany(IncidentHistory, { foreignKey: 'incidentId', onDelete: 'CASCADE' });
+IncidentHistory.belongsTo(Incident, { foreignKey: 'incidentId' });
+IncidentHistory.belongsTo(User, { foreignKey: 'userId', as: 'Actor' });
+Incident.hasMany(IncidentAttachment, { foreignKey: 'incidentId', onDelete: 'CASCADE' });
+IncidentAttachment.belongsTo(Incident, { foreignKey: 'incidentId' });
+IncidentAttachment.belongsTo(User, { foreignKey: 'uploadedBy', as: 'Uploader' });
 
 module.exports = {
   sequelize,
@@ -437,10 +478,17 @@ module.exports = {
   ServiceRequest,
   RequestAttachment,
   RequestStatusHistory,
+  SupportTicketComment,
   Feedback,
   CleaningSchedule,
   UploadRecord,
   AssetDocument,
   AssetGrant,
   AssetCustody,
+  SoftwareLicense,
+  SoftwareLicenseAssignment,
+  Incident,
+  IncidentComment,
+  IncidentHistory,
+  IncidentAttachment,
 };

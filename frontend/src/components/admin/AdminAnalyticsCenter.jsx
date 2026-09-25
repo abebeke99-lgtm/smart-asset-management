@@ -260,12 +260,12 @@ const AdminAnalyticsCenter = ({ system = false }) => {
           <div className="admin-analytics-grid">
             <ChartCard title="System activity over time" subtitle="Audit events for the selected period" empty={!auditTrend.length}>
               <div style={{ height: 220 }}>
-                <Line data={auditChart} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true } } }} />
+                <Line data={auditChart} options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: true } } }} />
               </div>
             </ChartCard>
             <ChartCard title="Users by role" subtitle="Current user distribution" empty={!roleBreakdown.length}>
               <div style={{ height: 220 }}>
-                <Bar data={roleChart} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
+                <Bar data={roleChart} options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } } }} />
               </div>
             </ChartCard>
           </div>
@@ -357,12 +357,12 @@ const AdminAnalyticsCenter = ({ system = false }) => {
           <div className="admin-analytics-grid">
             <ChartCard title="Audit by action" subtitle="Most frequent platform actions" empty={!actionBreakdown.length}>
               <div style={{ height: 220 }}>
-                <Bar data={actionChart} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
+                <Bar data={actionChart} options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } } }} />
               </div>
             </ChartCard>
             <ChartCard title="Activity by module" subtitle="Usage grouped by module or entity" empty={!moduleActivity.length}>
               <div style={{ height: 220 }}>
-                <Bar data={moduleChart} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
+                <Bar data={moduleChart} options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } } }} />
               </div>
             </ChartCard>
           </div>

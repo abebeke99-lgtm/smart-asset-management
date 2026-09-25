@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
+import apiClient from '../../services/apiClient';
 import { toast } from 'react-toastify';
+import { BarChart3, FileSpreadsheet, FileText, Printer, RefreshCw, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import axios from 'axios';
 import { Bar, Line, Doughnut, Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement, PointElement, LineElement, Filler } from 'chart.js';
 
@@ -59,36 +60,32 @@ const DeptReports = () => {
 
   useEffect(() => {
     fetchReports();
-  }, []);
+  }, [fetchReports]);
 
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
     setLoading(true);
     try {
+      const requestParams = { limit: 100, dateFrom: filters.dateFrom || undefined, dateTo: filters.dateTo || undefined };
       const [assetsRes, maintRes, staffRes, approvalsRes] = await Promise.all([
-        axios.get('/api/assets', { params: { department: user?.department, limit: 500 } }),
-        axios.get('/api/maintenance', { params: { limit: 500 } }),
-        axios.get('/api/users', { params: { department: user?.department } }),
-        axios.get('/api/approvals', { params: { department: user?.department, limit: 200 } })
+        apiClient.get('/department/reports', { params: { ...requestParams, reportType: 'assets', category: filters.category || undefined, employee: filters.employee || undefined, location: filters.location || undefined, status: filters.assetStatus || undefined } }),
+        apiClient.get('/department/reports', { params: { ...requestParams, reportType: 'maintenance', status: filters.maintenanceStatus || filters.requestStatus || undefined } }),
+        apiClient.get('/department/reports', { params: { limit: 100, reportType: 'staff', search: filters.employee || undefined } }),
+        apiClient.get('/department/reports', { params: { ...requestParams, reportType: 'approvals', status: filters.requestStatus || undefined } })
       ]);
 
-      const assets = assetsRes.data?.assets || assetsRes.data?.data || [];
-      const maintenance = maintRes.data?.requests || [];
-      const staff = staffRes.data?.users || [];
-      const approvals = approvalsRes.data?.requests || [];
-
-      // Filter maintenance by department
-      const deptMaintenance = maintenance.filter(m => 
-        m.asset?.department === user?.department || m.department === user?.department
-      );
+      const assets = assetsRes.data?.data || [];
+      const maintenance = maintRes.data?.data || [];
+      const staff = staffRes.data?.data || [];
+      const approvals = approvalsRes.data?.data || [];
 
       setReportData({ 
         assets, 
-        maintenance: deptMaintenance, 
+        maintenance,
         staff,
         approvals 
       });
 
-      calculateSummary(assets, deptMaintenance, staff, approvals);
+      calculateSummary(assets, maintenance, staff, approvals);
     } catch (error) {
       toast.error(t.fetchError || 'Failed to load report data');
       setReportData({ 
@@ -100,7 +97,7 @@ const DeptReports = () => {
       calculateSummary([], [], [], []);
     }
     setLoading(false);
-  };
+  }, [filters.dateFrom, filters.dateTo, filters.category, filters.employee, filters.location, filters.assetStatus, filters.requestStatus, filters.maintenanceStatus, t]);
 
   const calculateSummary = (assets, maintenance, staff, approvals) => {
     const totalAssets = assets.length;
@@ -219,7 +216,9 @@ const DeptReports = () => {
       result = result.filter(a => new Date(a.purchase_date) >= new Date(filters.dateFrom));
     }
     if (filters.dateTo) {
-      result = result.filter(a => new Date(a.purchase_date) <= new Date(filters.dateTo));
+      const endDate = new Date(filters.dateTo);
+      endDate.setHours(23, 59, 59, 999);
+      result = result.filter(a => new Date(a.purchase_date) <= endDate);
     }
     if (filters.category) {
       result = result.filter(a => a.category_name === filters.category);
@@ -244,7 +243,9 @@ const DeptReports = () => {
       result = result.filter(m => new Date(m.created_at) >= new Date(filters.dateFrom));
     }
     if (filters.dateTo) {
-      result = result.filter(m => new Date(m.created_at) <= new Date(filters.dateTo));
+      const endDate = new Date(filters.dateTo);
+      endDate.setHours(23, 59, 59, 999);
+      result = result.filter(m => new Date(m.created_at) <= endDate);
     }
     if (filters.maintenanceStatus) {
       result = result.filter(m => m.status === filters.maintenanceStatus);
@@ -419,6 +420,7 @@ const DeptReports = () => {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,
     plugins: {
       legend: {
         position: 'bottom',
@@ -502,6 +504,16 @@ const DeptReports = () => {
     printButton: {
       background: 'linear-gradient(135deg, #63b3ed, #3182ce)',
       color: 'white',
+      padding: '8px 16px',
+      borderRadius: '8px',
+      border: 'none',
+      fontWeight: 600,
+      cursor: 'pointer',
+      fontSize: '0.9rem'
+    },
+    refreshButton: {
+      background: isDark ? '#2d4a6f' : '#e8edf5',
+      color: isDark ? '#c8dcf5' : '#1a365d',
       padding: '8px 16px',
       borderRadius: '8px',
       border: 'none',
@@ -707,7 +719,7 @@ const DeptReports = () => {
     return (
       <div style={styles.container}>
         <div style={styles.emptyState}>
-          <div style={{ fontSize: '2rem', marginBottom: '12px' }}>⏳</div>
+          <RefreshCw size={28} aria-hidden="true" style={{ marginBottom: '12px' }} />
           <div>{t.loading}</div>
         </div>
       </div>
@@ -719,20 +731,23 @@ const DeptReports = () => {
       {/* Header */}
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>📊 {t.reports}</h1>
+          <h1 style={styles.title}><BarChart3 size={28} aria-hidden="true" /> {t.reports}</h1>
           <p style={styles.subtitle}>
             {t.reportsFor} <strong>{user?.department || 'Department'}</strong>
           </p>
         </div>
         <div style={styles.headerActions}>
-          <button style={styles.exportButton} onClick={exportToExcel}>
-            📥 {t.exportExcel}
+          <button style={styles.refreshButton} onClick={fetchReports} disabled={loading}>
+            <RefreshCw size={16} aria-hidden="true" /> {t.refresh || 'Refresh'}
           </button>
-          <button style={styles.pdfButton} onClick={exportToPDF}>
-            📄 {t.exportPDF}
+          <button style={styles.exportButton} onClick={exportToExcel} disabled={loading}>
+            <FileSpreadsheet size={16} aria-hidden="true" /> {t.exportExcel}
           </button>
-          <button style={styles.printButton} onClick={handlePrint}>
-            🖨️ {t.print}
+          <button style={styles.pdfButton} onClick={exportToPDF} disabled={loading}>
+            <FileText size={16} aria-hidden="true" /> {t.exportPDF}
+          </button>
+          <button style={styles.printButton} onClick={handlePrint} disabled={loading}>
+            <Printer size={16} aria-hidden="true" /> {t.print}
           </button>
         </div>
       </div>
@@ -850,7 +865,7 @@ const DeptReports = () => {
           </>
         )}
         <button style={styles.clearFiltersButton} onClick={clearFilters}>
-          ✕ {t.clearFilters}
+          <X size={15} aria-hidden="true" /> {t.clearFilters}
         </button>
       </div>
 

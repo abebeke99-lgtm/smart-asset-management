@@ -68,7 +68,7 @@ Decision deferred to product owner: (a) implement payments/budget-management as 
 - MySQL backup preserved: `C:\Users\desta\AppData\Local\Temp\opencode\smart_asset_db_backup_before_audit.sql`.
 - `createMissingTables()` created only `invoices`, `invoice_items` (empty). No existing table altered; no rows modified/destroyed by Phase 3.
 - Boot idempotency re-verified (N boots → "Database synced successfully.", 0 suffixed indexes regression).
-- Demo accounts verified: `admin`, `ict_officer`, `college`, `finance`, `store_manager`, `maintenance`, `infrastructure` / `bekelei123` all `active:1`.
+- Demo account roles were verified as active; credentials are supplied through local environment configuration and are not documented here.
 
 ## Overall Phase 3 Status
 

@@ -18,6 +18,39 @@ const defaultEventRules = {
   finance_invoice_overdue: { enabled: true, inApp: true, email: false, recipientRule: 'Finance', priority: 'high' },
 };
 
+const normalizeNotificationScope = (value) => {
+  const normalized = String(value || '').trim().toUpperCase();
+  return ['GLOBAL', 'ORGANIZATION', 'COLLEGE', 'DEPARTMENT', 'ROLE', 'USER'].includes(normalized) ? normalized : 'USER';
+};
+
+const buildNotificationVisibilityWhere = (user = {}) => {
+  const clauses = [{ userId: user.id }, { recipientId: user.id }, { scope: 'GLOBAL' }];
+  const role = user.role ? String(user.role).trim().toLowerCase() : '';
+  const collegeId = Number(user.collegeId ?? user.college_id ?? 0);
+  const departmentId = Number(user.departmentId ?? user.department_id ?? 0);
+  const organizationId = Number(user.organizationId ?? user.organization_id ?? 0);
+
+  if (organizationId) {
+    clauses.push({ organizationId }, { scope: 'ORGANIZATION', organizationId });
+  }
+  if (collegeId) {
+    clauses.push({ collegeId }, { scope: 'COLLEGE', collegeId });
+  }
+  if (departmentId) {
+    clauses.push({ departmentId }, { scope: 'DEPARTMENT', departmentId });
+  }
+  if (role) {
+    clauses.push({ role }, { scope: 'ROLE', role });
+  }
+
+  return { [Op.or]: clauses.filter((clause) => {
+    if (clause && clause.scope === 'GLOBAL') return true;
+    if (clause && 'userId' in clause && clause.userId === undefined) return false;
+    if (clause && 'recipientId' in clause && clause.recipientId === undefined) return false;
+    return true;
+  }) };
+};
+
 const normalizeChannels = (channels) => {
   const values = Array.isArray(channels) ? channels : [channels || 'in_app'];
   return [...new Set(values.map((value) => String(value).toLowerCase()).flatMap((value) => value === 'multi_channel' ? ['in_app', 'email', 'sms'] : value === 'in-app' ? ['in_app'] : [value]).filter((value) => allowedChannels.has(value)))];
@@ -144,4 +177,18 @@ const createBulkNotification = async (payload, senderId) => {
   }
 };
 
-module.exports = { allowedTypes, allowedPriorities, allowedChannels, normalizeChannels, resolveRecipients, createBulkNotification, createEventNotification, createFinanceNotification, deliver, getNotificationSettings, defaultEventRules };
+module.exports = {
+  allowedTypes,
+  allowedPriorities,
+  allowedChannels,
+  normalizeChannels,
+  resolveRecipients,
+  createBulkNotification,
+  createEventNotification,
+  createFinanceNotification,
+  deliver,
+  getNotificationSettings,
+  defaultEventRules,
+  normalizeNotificationScope,
+  buildNotificationVisibilityWhere,
+};

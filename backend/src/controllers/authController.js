@@ -13,7 +13,8 @@ const { getRequestContext, getClientIp } = require('../middlewares/requestContex
 const LOGIN_ALIASES = {
   admin: ['admin'],
   ict_officer: ['ict_officer', 'ict-officer', 'ict'],
-  college: ['college', 'department_head', 'dept_head', 'department head', 'department'],
+  college: ['college'],
+  department_head: ['department_head', 'dept_head', 'department head', 'department'],
   finance: ['finance'],
   store_manager: ['store_manager', 'store-manager'],
   maintenance: ['maintenance'],
@@ -178,8 +179,12 @@ const login = async (req, res) => {
       fullName: user.fullName,
       role: user.role,
       department: user.department,
+      collegeId: user.collegeId ?? null,
+      departmentId: user.departmentId ?? null,
       phone: user.phone,
       active: user.active,
+      profilePhoto: user.profilePhoto || null,
+      profile_photo: user.profilePhoto || null,
       lastLoginAt: user.lastLoginAt,
       forcePasswordChange: Boolean(user.forcePasswordChange),
     };
@@ -270,9 +275,16 @@ const logout = async (req, res) => {
 };
 
 const genericResetMessage = 'If an eligible account exists, password reset instructions will be sent.';
+const GENERIC_OTP_MESSAGE = 'If this phone number is registered, a verification code has been sent.';
 const RESET_TOKEN_TTL_MINUTES = Math.min(30, Math.max(15, Number(process.env.PASSWORD_RESET_TTL_MINUTES) || 20));
-const RESET_OTP_TTL_MINUTES = Math.min(15, Math.max(5, Number(process.env.PASSWORD_RESET_OTP_TTL_MINUTES) || 10));
+const RESET_OTP_TTL_MINUTES = Math.min(15, Math.max(5, Number(process.env.PASSWORD_RESET_OTP_TTL_MINUTES) || 5));
 const RESET_OTP_MAX_ATTEMPTS = Math.max(3, Number(process.env.PASSWORD_RESET_OTP_MAX_ATTEMPTS) || 5);
+const OTP_REQUEST_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const OTP_REQUEST_RATE_LIMIT_PER_PHONE = 4;
+const OTP_REQUEST_RATE_LIMIT_PER_IP = 8;
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+const otpRequestBuckets = new Map();
+const otpRequestIpBuckets = new Map();
 
 const escapeHtml = (value = '') => String(value)
   .replace(/&/g, '&amp;')
@@ -280,6 +292,32 @@ const escapeHtml = (value = '') => String(value)
   .replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#039;');
+
+const hashValue = (value) => crypto.createHash('sha256').update(String(value)).digest('hex');
+
+const getRateLimitState = (bucket, key, maxRequests, windowMs) => {
+  const now = Date.now();
+  const entries = bucket.get(key) || [];
+  const recent = entries.filter((timestamp) => now - timestamp < windowMs);
+  bucket.set(key, recent);
+  const isBlocked = recent.length >= maxRequests;
+  if (!isBlocked) {
+    recent.push(now);
+    bucket.set(key, recent);
+  }
+  return { isBlocked, remaining: Math.max(0, maxRequests - recent.length), retryAfterMs: windowMs };
+};
+
+const checkForOtpRateLimit = (phoneNumber, ipAddress) => {
+  const normalizedPhone = normalizePhoneNumber(phoneNumber || '');
+  const safeIp = String(ipAddress || 'unknown').trim();
+  const phoneState = getRateLimitState(otpRequestBuckets, normalizedPhone || 'unknown-phone', OTP_REQUEST_RATE_LIMIT_PER_PHONE, OTP_REQUEST_RATE_LIMIT_WINDOW_MS);
+  const ipState = getRateLimitState(otpRequestIpBuckets, safeIp, OTP_REQUEST_RATE_LIMIT_PER_IP, OTP_REQUEST_RATE_LIMIT_WINDOW_MS);
+  return {
+    blocked: phoneState.isBlocked || ipState.isBlocked,
+    reason: phoneState.isBlocked ? 'phone' : ipState.isBlocked ? 'ip' : null,
+  };
+};
 
 const getMailer = () => {
   const validation = validateEmailConfiguration();
@@ -330,6 +368,183 @@ const ensureEligibleResetUser = async (user, accountType = 'email') => {
   return { allowed: true };
 };
 
+const clearOtpState = async (user) => {
+  if (!user) return;
+  await user.update({
+    resetOtpHash: null,
+    resetOtpExpiresAt: null,
+    resetOtpUsedAt: null,
+    resetOtpAttempts: 0,
+  });
+};
+
+const requestForgotPasswordOtp = async (req, res) => {
+  try {
+    const rawPhone = String(req.body.phoneNumber || req.body.phone || req.body.mobile || '').trim();
+    const phone = normalizePhoneNumber(rawPhone);
+    const ipAddress = getClientIp(req) || req.ip || 'unknown';
+
+    if (!phone) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid mobile phone number.' });
+    }
+
+    const rateLimitState = checkForOtpRateLimit(phone, ipAddress);
+    if (rateLimitState.blocked) {
+      return res.status(429).json({ success: false, message: 'Too many OTP requests. Please try again later.' });
+    }
+
+    const user = await User.findOne({ where: { phone } });
+    if (!user || !user.active || (user.lockoutUntil && new Date(user.lockoutUntil) > new Date())) {
+      return res.json({ success: true, message: GENERIC_OTP_MESSAGE });
+    }
+
+    const previousOtp = user.resetOtpExpiresAt && new Date(user.resetOtpExpiresAt) > new Date() ? user.resetOtpHash : null;
+    if (previousOtp) {
+      const lastOtpRequestedAt = user.updatedAt || new Date(Date.now() - OTP_RESEND_COOLDOWN_MS);
+      if (Date.now() - new Date(lastOtpRequestedAt).getTime() < OTP_RESEND_COOLDOWN_MS) {
+        return res.status(429).json({ success: false, message: 'Please wait before requesting a new OTP.' });
+      }
+    }
+
+    const otp = String(crypto.randomInt(100000, 1000000)).padStart(6, '0');
+    const otpHash = hashValue(otp);
+    const otpExpiresAt = new Date(Date.now() + RESET_OTP_TTL_MINUTES * 60 * 1000);
+
+    await user.update({
+      resetOtpHash: otpHash,
+      resetOtpExpiresAt: otpExpiresAt,
+      resetOtpUsedAt: null,
+      resetOtpAttempts: 0,
+      resetTokenHash: null,
+      resetTokenExpiresAt: null,
+      resetTokenUsedAt: null,
+    });
+
+    const smsResult = await sendOtpSms(phone, otp);
+    if (smsResult.status !== 'sent') {
+      await clearOtpState(user);
+      console.error('Password reset OTP SMS delivery failed for phone ending with', phone.slice(-4), 'provider:', process.env.SMS_PROVIDER || 'unconfigured');
+      return res.status(503).json({ success: false, message: 'We could not send the verification code right now. Please try again later.' });
+    }
+
+    return res.json({ success: true, message: GENERIC_OTP_MESSAGE });
+  } catch (error) {
+    console.error('Request password reset OTP failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to process the OTP request.' });
+  }
+};
+
+const verifyForgotPasswordOtp = async (req, res) => {
+  try {
+    const rawPhone = String(req.body.phoneNumber || req.body.phone || req.body.mobile || '').trim();
+    const phone = normalizePhoneNumber(rawPhone);
+    const otp = String(req.body.otp || '').trim();
+
+    if (!phone) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid mobile phone number.' });
+    }
+
+    if (!/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid 6-digit verification code.' });
+    }
+
+    const user = await User.findOne({ where: { phone } });
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired verification code.' });
+    }
+
+    const eligibility = await ensureEligibleResetUser(user, 'phone');
+    if (!eligibility.allowed) {
+      return res.status(403).json({ success: false, message: 'This account cannot complete password reset right now.' });
+    }
+
+    if (!user.resetOtpHash || !user.resetOtpExpiresAt || new Date(user.resetOtpExpiresAt) < new Date()) {
+      await clearOtpState(user);
+      return res.status(400).json({ success: false, message: 'This verification code has expired.' });
+    }
+
+    const enteredHash = hashValue(otp);
+    if (enteredHash !== user.resetOtpHash) {
+      const attempts = Number(user.resetOtpAttempts || 0) + 1;
+      await user.update({ resetOtpAttempts: attempts });
+      if (attempts >= RESET_OTP_MAX_ATTEMPTS) {
+        await clearOtpState(user);
+        return res.status(429).json({ success: false, message: 'Maximum verification attempts reached. Please request a new code.' });
+      }
+      return res.status(400).json({ success: false, message: 'Invalid verification code.' });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashValue(rawToken);
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000);
+
+    await user.update({
+      resetTokenHash: tokenHash,
+      resetTokenExpiresAt: expiresAt,
+      resetTokenUsedAt: null,
+      resetOtpHash: null,
+      resetOtpExpiresAt: null,
+      resetOtpUsedAt: new Date(),
+      resetOtpAttempts: 0,
+    });
+
+    return res.json({ success: true, message: 'Verification successful. Please create a new password.', resetToken: rawToken });
+  } catch (error) {
+    console.error('Password reset OTP verification failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to verify the recovery code.' });
+  }
+};
+
+const resetPasswordWithOtp = async (req, res) => {
+  try {
+    const token = String(req.body.resetToken || req.body.token || '').trim();
+    const password = String(req.body.newPassword || req.body.password || '');
+    const confirmPassword = String(req.body.confirmPassword || req.body.confirmPassword || '');
+
+    if (!token || !password || password !== confirmPassword) {
+      return res.status(400).json({ success: false, message: 'A valid reset token and matching passwords are required.' });
+    }
+
+    const settings = await getSecuritySettings();
+    const passwordError = validatePassword(password, settings);
+    if (passwordError) return res.status(400).json({ success: false, message: passwordError });
+
+    const tokenHash = hashValue(token);
+    const user = await User.findOne({ where: { resetTokenHash: tokenHash, resetTokenUsedAt: null } });
+    if (!user || !user.resetTokenExpiresAt || new Date(user.resetTokenExpiresAt) < new Date()) {
+      return res.status(400).json({ success: false, message: 'This password reset link is invalid or expired.' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const [updatedCount] = await User.update({
+      password: hashedPassword,
+      resetTokenHash: null,
+      resetTokenExpiresAt: null,
+      resetTokenUsedAt: new Date(),
+      resetOtpHash: null,
+      resetOtpExpiresAt: null,
+      resetOtpUsedAt: new Date(),
+      resetOtpAttempts: 0,
+    }, {
+      where: {
+        id: user.id,
+        resetTokenHash: tokenHash,
+        resetTokenUsedAt: null,
+        resetTokenExpiresAt: { [Op.gt]: new Date() },
+      },
+    });
+
+    if (!updatedCount) {
+      return res.status(400).json({ success: false, message: 'This password reset link is invalid or expired.' });
+    }
+
+    return res.json({ success: true, message: 'Password reset successfully.' });
+  } catch (error) {
+    console.error('OTP-based password reset failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to reset password.' });
+  }
+};
+
 const forgotPassword = async (req, res) => {
   try {
     const method = String(req.body.method || 'email').trim().toLowerCase();
@@ -337,40 +552,7 @@ const forgotPassword = async (req, res) => {
     const rawPhone = String(req.body.phone || req.body.mobile || '').trim();
 
     if (method === 'phone') {
-      const phone = normalizePhoneNumber(rawPhone);
-      if (!phone) {
-        return res.status(400).json({ success: false, message: 'Please enter a valid mobile phone number.' });
-      }
-
-      const user = await User.findOne({ where: { phone } });
-      const eligibility = await ensureEligibleResetUser(user, 'phone');
-      if (!user || !eligibility.allowed) {
-        if (!user) return res.json({ success: true, message: genericResetMessage });
-        if (eligibility.reason === 'inactive') return res.status(403).json({ success: false, message: 'Your account is inactive. Please contact the system administrator.' });
-        if (eligibility.reason === 'locked') return res.status(403).json({ success: false, message: 'Your account is locked. Please contact the system administrator.' });
-        return res.status(400).json({ success: false, message: 'This recovery method is unavailable for this account.' });
-      }
-
-      const otp = String(crypto.randomInt(100000, 1000000)).padStart(6, '0');
-      const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
-      const otpExpiresAt = new Date(Date.now() + RESET_OTP_TTL_MINUTES * 60 * 1000);
-      await user.update({
-        resetOtpHash: otpHash,
-        resetOtpExpiresAt: otpExpiresAt,
-        resetOtpUsedAt: null,
-        resetOtpAttempts: 0,
-        resetTokenHash: null,
-        resetTokenExpiresAt: null,
-        resetTokenUsedAt: null,
-      });
-
-      const smsResult = await sendSMS(phone, `Mekdela Amba University: Your password reset code is ${otp}. It expires in ${RESET_OTP_TTL_MINUTES} minutes.`);
-      if (smsResult.status !== 'sent') {
-        await user.update({ resetOtpHash: null, resetOtpExpiresAt: null, resetOtpUsedAt: null, resetOtpAttempts: 0 });
-        return res.status(503).json({ success: false, message: smsResult.reason || 'Password reset SMS service is unavailable.' });
-      }
-
-      return res.json({ success: true, message: genericResetMessage });
+      return requestForgotPasswordOtp(req, res);
     }
 
     if (!isValidEmail(email)) {
@@ -399,7 +581,7 @@ const forgotPassword = async (req, res) => {
     }
 
     const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const tokenHash = hashValue(rawToken);
     const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000);
     const resetUrl = `${getResetFrontendUrl()}/reset-password?token=${encodeURIComponent(rawToken)}`;
     const greetingName = escapeHtml(user.fullName || user.username);
@@ -427,34 +609,30 @@ const forgotPassword = async (req, res) => {
 
 const verifyResetOtp = async (req, res) => {
   try {
-    const { email, phone, otp, method } = req.body;
-    const recoveryMethod = String(method || (email ? 'email' : 'phone')).trim().toLowerCase();
+    const { email, phone, otp, method, phoneNumber } = req.body;
+    const recoveryMethod = String(method || (email ? 'email' : (phoneNumber || phone) ? 'phone' : 'email')).trim().toLowerCase();
     const normalizedEmail = String(email || '').trim().toLowerCase();
-    const normalizedPhone = normalizePhoneNumber(phone || '');
+    const normalizedPhone = normalizePhoneNumber(phoneNumber || phone || '');
     const code = String(otp || '').trim();
+
+    if (recoveryMethod === 'phone') {
+      return verifyForgotPasswordOtp({ ...req, body: { phoneNumber: normalizedPhone || phoneNumber || phone, otp: code } }, res);
+    }
+
+    if (!isValidEmail(normalizedEmail)) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+    }
 
     if (!/^[0-9]{6}$/.test(code)) {
       return res.status(400).json({ success: false, message: 'Please enter a valid verification code.' });
     }
 
-    let user = null;
-    if (recoveryMethod === 'phone') {
-      if (!normalizedPhone) {
-        return res.status(400).json({ success: false, message: 'Please enter a valid mobile phone number.' });
-      }
-      user = await User.findOne({ where: { phone: normalizedPhone } });
-    } else {
-      if (!isValidEmail(normalizedEmail)) {
-        return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
-      }
-      user = await User.findOne({ where: { email: normalizedEmail } });
-    }
-
+    const user = await User.findOne({ where: { email: normalizedEmail } });
     if (!user) {
       return res.status(400).json({ success: false, message: 'Invalid or expired verification code.' });
     }
 
-    const eligibility = await ensureEligibleResetUser(user, recoveryMethod === 'phone' ? 'phone' : 'email');
+    const eligibility = await ensureEligibleResetUser(user, 'email');
     if (!eligibility.allowed) {
       if (eligibility.reason === 'inactive') return res.status(403).json({ success: false, message: 'Your account is inactive. Please contact the system administrator.' });
       if (eligibility.reason === 'locked') return res.status(403).json({ success: false, message: 'Your account is locked. Please contact the system administrator.' });
@@ -462,23 +640,23 @@ const verifyResetOtp = async (req, res) => {
     }
 
     if (!user.resetOtpHash || !user.resetOtpExpiresAt || new Date(user.resetOtpExpiresAt) < new Date()) {
-      await user.update({ resetOtpHash: null, resetOtpExpiresAt: null, resetOtpUsedAt: null, resetOtpAttempts: 0 });
+      await clearOtpState(user);
       return res.status(400).json({ success: false, message: 'This verification code has expired.' });
     }
 
-    const enteredHash = crypto.createHash('sha256').update(code).digest('hex');
+    const enteredHash = hashValue(code);
     if (enteredHash !== user.resetOtpHash) {
       const attempts = Number(user.resetOtpAttempts || 0) + 1;
       await user.update({ resetOtpAttempts: attempts });
       if (attempts >= RESET_OTP_MAX_ATTEMPTS) {
-        await user.update({ resetOtpHash: null, resetOtpExpiresAt: null, resetOtpUsedAt: new Date(), resetOtpAttempts: 0 });
+        await clearOtpState(user);
         return res.status(429).json({ success: false, message: 'Too many verification attempts. Please request a new code.' });
       }
       return res.status(400).json({ success: false, message: 'Invalid verification code.' });
     }
 
     const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const tokenHash = hashValue(rawToken);
     const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000);
 
     await user.update({
@@ -500,13 +678,15 @@ const verifyResetOtp = async (req, res) => {
 
 const resetPassword = async (req, res) => {
   try {
-    const { token, password, confirmPassword } = req.body;
+    const token = String(req.body.token || '').trim();
+    const password = String(req.body.password || '');
+    const confirmPassword = String(req.body.confirmPassword || '');
     if (!token || !password || password !== confirmPassword) {
       return res.status(400).json({ success: false, message: 'A valid token and matching password are required.' });
     }
     const passwordError = validatePassword(password, await getSecuritySettings());
     if (passwordError) return res.status(400).json({ success: false, message: passwordError });
-    const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex');
+    const tokenHash = hashValue(token);
     const user = await User.findOne({ where: { resetTokenHash: tokenHash, resetTokenUsedAt: null } });
     if (!user || user.resetTokenUsedAt || !user.resetTokenExpiresAt || new Date(user.resetTokenExpiresAt) < new Date()) {
       return res.status(400).json({ success: false, message: 'This password reset link is invalid or expired.' });
@@ -546,4 +726,7 @@ module.exports = {
   forgotPassword,
   verifyResetOtp,
   resetPassword,
+  requestForgotPasswordOtp,
+  verifyForgotPasswordOtp,
+  resetPasswordWithOtp,
 };

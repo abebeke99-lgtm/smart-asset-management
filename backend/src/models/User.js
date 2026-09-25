@@ -25,6 +25,12 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING(255),
     defaultValue: '',
   },
+  profilePhoto: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    field: 'profile_photo',
+    defaultValue: null,
+  },
   role: {
     type: DataTypes.ENUM('admin', 'ict_officer', 'college', 'department_head', 'finance', 'store_manager', 'maintenance', 'infrastructure', 'staff', 'student'),
     defaultValue: 'student',

@@ -1,49 +1,491 @@
-.college-assignments-page { color: #0f172a; }
-.college-assignments-heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; margin-bottom: 22px; }
-.college-assignments-heading h1 { margin: 7px 0 5px; font-size: 1.8rem; }
-.college-assignments-heading p { margin: 0; color: #64748b; }
-.college-assignments-eyebrow { display: inline-flex; gap: 7px; align-items: center; color: #2563eb; font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
-.college-assignments-refresh, .college-assignments-clear, .college-assignments-empty button, .college-assignments-error button { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #cbd5e1; background: #fff; color: #0f172a; padding: 9px 13px; border-radius: 6px; cursor: pointer; font-weight: 600; }
-.college-assignments-refresh:disabled { cursor: wait; opacity: .65; }
-.college-assignments-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
-.college-assignments-stat, .college-assignments-toolbar, .college-assignments-table-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; }
-.college-assignments-stat { padding: 15px; border-top: 3px solid #0ea5e9; }
-.college-assignments-stat span { display: block; color: #64748b; font-size: .82rem; }
-.college-assignments-stat strong { display: block; margin-top: 7px; font-size: 1.45rem; }
-.college-assignments-toolbar { display: flex; flex-wrap: wrap; gap: 10px; padding: 13px; margin-bottom: 16px; }
-.college-assignments-toolbar label:not(.college-assignments-search) { flex: 1 1 140px; }
-.college-assignments-toolbar select, .college-assignments-search input { width: 100%; min-height: 38px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #0f172a; padding: 8px 10px; }
-.college-assignments-search { display: flex; align-items: center; gap: 8px; flex: 2 1 260px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 10px; color: #64748b; }
-.college-assignments-search input { border: 0; outline: 0; }
-.college-assignments-table-panel { overflow: hidden; }
-.college-assignments-table-meta { display: flex; justify-content: space-between; align-items: center; padding: 15px 17px; color: #475569; font-size: .9rem; }
-.college-assignments-table-wrap { overflow-x: auto; }
-.college-assignments-table-wrap table { width: 100%; min-width: 980px; border-collapse: collapse; }
-.college-assignments-table-wrap th { background: #f8fafc; color: #475569; font-size: .76rem; text-align: left; text-transform: uppercase; letter-spacing: .04em; }
-.college-assignments-table-wrap th, .college-assignments-table-wrap td { padding: 12px 15px; border-top: 1px solid #e2e8f0; vertical-align: middle; }
-.college-assignments-table-wrap td { font-size: .88rem; }
-.college-assignments-table-wrap td small { display: block; color: #64748b; margin-top: 3px; }
-.college-assignments-badge { display: inline-block; background: #e0f2fe; color: #0369a1; border-radius: 999px; padding: 4px 8px; font-size: .75rem; font-weight: 700; white-space: nowrap; }
-.college-assignments-badge.status-returned, .college-assignments-badge.status-closed { background: #dcfce7; color: #166534; }
-.college-assignments-badge.status-pending { background: #fef3c7; color: #92400e; }
-.college-assignments-badge.status-cancelled { background: #fee2e2; color: #991b1b; }
-.college-assignments-icon-button { display: inline-grid; place-items: center; border: 1px solid #bae6fd; background: #f0f9ff; color: #0369a1; border-radius: 5px; padding: 7px; cursor: pointer; }
-.college-assignments-empty, .college-assignments-state { display: grid; place-items: center; gap: 9px; min-height: 180px; padding: 30px; color: #64748b; text-align: center; }
-.college-assignments-error { color: #b91c1c; }
-.college-assignments-pagination { display: flex; justify-content: center; align-items: center; gap: 15px; padding: 15px; border-top: 1px solid #e2e8f0; color: #475569; font-size: .88rem; }
-.college-assignments-pagination button { border: 1px solid #cbd5e1; background: #fff; border-radius: 5px; padding: 7px 11px; cursor: pointer; }
-.college-assignments-pagination button:disabled { cursor: not-allowed; opacity: .45; }
-.college-assignments-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: rgb(15 23 42 / 45%); }
-.college-assignments-modal { width: min(720px, 100%); max-height: 90vh; overflow: auto; background: #fff; border-radius: 8px; padding: 22px; box-shadow: 0 20px 50px rgb(15 23 42 / 25%); }
-.college-assignments-modal-head { display: flex; justify-content: space-between; gap: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 15px; }
-.college-assignments-modal-head h2 { margin: 6px 0 0; }
-.college-assignments-modal-head button { border: 0; background: transparent; color: #475569; cursor: pointer; }
-.college-assignments-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; padding-top: 18px; }
-.college-assignments-details span, .college-assignments-notes span { display: block; color: #64748b; font-size: .76rem; margin-bottom: 4px; }
-.college-assignments-details strong { font-size: .92rem; overflow-wrap: anywhere; }
-.college-assignments-notes { border-top: 1px solid #e2e8f0; margin-top: 18px; padding-top: 15px; }
-.college-assignments-notes p { margin: 0; white-space: pre-wrap; }
-.college-assignments-spin { animation: college-assignments-spin 1s linear infinite; }
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-@keyframes college-assignments-spin { to { transform: rotate(360deg); } }
-@media (max-width: 560px) { .college-assignments-heading { flex-direction: column; } .college-assignments-details { grid-template-columns: 1fr; } }
+.college-assignments-page {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 24px 20px 40px;
+  color: #0f172a;
+  background: #f8fafc;
+  box-sizing: border-box;
+}
+
+.college-assignments-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.college-assignments-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.college-assignments-title-block h1 {
+  margin: 0;
+  font-size: clamp(2rem, 2vw, 2.5rem);
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+  color: #0f172a;
+}
+
+.college-assignments-title-block p {
+  margin: 0;
+  max-width: 760px;
+  color: #64748b;
+  font-size: 0.96rem;
+}
+
+.college-assignments-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2563eb;
+}
+
+.college-assignments-action-button,
+.college-assignments-clear-button,
+.college-assignments-empty button,
+.college-assignments-state button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 10px;
+  padding: 0 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.college-assignments-action-button:hover,
+.college-assignments-clear-button:hover,
+.college-assignments-empty button:hover,
+.college-assignments-state button:hover,
+.college-assignments-icon-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.college-assignments-action-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.college-assignments-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.college-assignments-metric-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.02);
+}
+
+.college-assignments-metric-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.college-assignments-metric-icon.primary { background: #dbeafe; color: #1d4ed8; }
+.college-assignments-metric-icon.success { background: #dcfce7; color: #15803d; }
+.college-assignments-metric-icon.warning { background: #fef3c7; color: #b45309; }
+.college-assignments-metric-icon.slate { background: #e2e8f0; color: #475569; }
+
+.college-assignments-metric-card span {
+  display: block;
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.college-assignments-metric-card strong {
+  display: block;
+  margin-top: 5px;
+  font-size: clamp(1.5rem, 1.8vw, 2rem);
+  letter-spacing: -0.03em;
+}
+
+.college-assignments-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  margin-bottom: 18px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.02);
+}
+
+.college-assignments-search-field,
+.college-assignments-select-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  flex: 1 1 180px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 0 12px;
+  color: #64748b;
+}
+
+.college-assignments-search-field {
+  flex: 2 1 260px;
+}
+
+.college-assignments-search-field input,
+.college-assignments-select-field select {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #0f172a;
+  font: inherit;
+  outline: none;
+}
+
+.college-assignments-select-field select {
+  appearance: none;
+  cursor: pointer;
+}
+
+.college-assignments-table-panel {
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.03);
+}
+
+.college-assignments-table-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 0.92rem;
+}
+
+.college-assignments-table-wrap {
+  overflow-x: auto;
+}
+
+.college-assignments-table-wrap table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+}
+
+.college-assignments-table-wrap th,
+.college-assignments-table-wrap td {
+  padding: 14px 16px;
+  border-top: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.college-assignments-table-wrap th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.college-assignments-table-wrap td {
+  font-size: 0.92rem;
+  color: #0f172a;
+}
+
+.college-assignments-table-wrap td small {
+  display: block;
+  color: #64748b;
+  margin-top: 3px;
+}
+
+.college-assignments-asset-cell,
+.college-assignments-user-cell,
+.college-assignments-date-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.college-assignments-user-cell span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.college-assignments-date-cell {
+  color: #475569;
+}
+
+.college-assignments-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.college-assignments-badge.status-active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.college-assignments-badge.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.college-assignments-badge.status-returned {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.college-assignments-badge.status-overdue {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.college-assignments-badge.status-cancelled {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.college-assignments-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.college-assignments-empty,
+.college-assignments-state {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  min-height: 220px;
+  padding: 26px;
+  color: #64748b;
+  text-align: center;
+}
+
+.college-assignments-empty strong,
+.college-assignments-state strong {
+  font-size: 1.08rem;
+  color: #0f172a;
+}
+
+.college-assignments-error {
+  color: #b91c1c;
+}
+
+.college-assignments-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px 18px 18px;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.college-assignments-pagination button {
+  min-height: 36px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 8px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.college-assignments-pagination button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.college-assignments-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.college-assignments-modal {
+  width: min(760px, 100%);
+  max-height: 88vh;
+  overflow: auto;
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 30px 60px rgba(15, 23, 42, 0.2);
+  padding: 22px;
+}
+
+.college-assignments-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 14px;
+}
+
+.college-assignments-modal-head h2 {
+  margin: 6px 0 0;
+  font-size: 1.5rem;
+}
+
+.college-assignments-modal-head button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.college-assignments-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
+  padding-top: 18px;
+}
+
+.college-assignments-detail-item span,
+.college-assignments-notes span {
+  display: block;
+  margin-bottom: 5px;
+  color: #64748b;
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.college-assignments-detail-item strong {
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.college-assignments-notes {
+  margin-top: 18px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 14px;
+}
+
+.college-assignments-notes p {
+  margin: 0;
+  color: #0f172a;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.college-assignments-spin {
+  animation: college-assignments-spin 1s linear infinite;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes college-assignments-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 700px) {
+  .college-assignments-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .college-assignments-action-button {
+    width: 100%;
+  }
+
+  .college-assignments-details {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .college-assignments-page {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .college-assignments-toolbar {
+    padding: 10px;
+  }
+
+  .college-assignments-search-field,
+  .college-assignments-select-field {
+    flex-basis: 100%;
+  }
+
+  .college-assignments-table-meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

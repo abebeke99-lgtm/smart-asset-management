@@ -9,7 +9,32 @@ const scopeWhere = (req) => {
   const collegeId = req.user?.collegeId ?? req.user?.college_id;
   return collegeId ? { collegeId: Number(collegeId) } : {};
 };
-const normalize = (item) => ({ ...item.toJSON(), return_number: item.returnNumber, asset_id: item.assetId });
+const normalize = (item) => {
+  const data = item.toJSON();
+  const asset = data.Asset || {};
+  const requester = data.Requester || {};
+  const sourceUser = data.SourceUser || {};
+  return {
+    ...data,
+    return_number: item.returnNumber,
+    asset_id: item.assetId,
+    asset_name: asset.name || '',
+    asset_code: asset.assetCode || '',
+    serial_number: asset.serialNumber || '',
+    asset_category: asset.category || '',
+    asset_status: asset.status || '',
+    asset_condition: asset.condition || '',
+    asset_location: asset.location || '',
+    requester_name: requester.fullName || requester.username || '',
+    source_user_name: sourceUser.fullName || sourceUser.username || '',
+  };
+};
+
+const returnInclude = [
+  { model: Asset, attributes: ['id', 'assetCode', 'name', 'serialNumber', 'category', 'status', 'condition', 'location', 'department', 'collegeId', 'departmentId'] },
+  { model: require('../models').User, as: 'Requester', attributes: ['id', 'username', 'fullName', 'department', 'role'] },
+  { model: require('../models').User, as: 'SourceUser', attributes: ['id', 'username', 'fullName', 'department', 'role'] },
+];
 
 const listReturns = async (req, res, next) => {
   try {
@@ -18,13 +43,14 @@ const listReturns = async (req, res, next) => {
     const where = scopeWhere(req);
     if (req.query.status) where.status = String(req.query.status);
     const search = String(req.query.search || '').trim();
-    const include = [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'serialNumber'], required: Boolean(search), ...(search ? { where: { [Op.or]: [{ assetCode: { [Op.like]: `%${search}%` } }, { name: { [Op.like]: `%${search}%` } }, { serialNumber: { [Op.like]: `%${search}%` } }] } } : {}) }];
+    const include = returnInclude.map((entry) => ({ ...entry }));
+    include[0] = { ...include[0], required: Boolean(search), ...(search ? { where: { [Op.or]: [{ assetCode: { [Op.like]: `%${search}%` } }, { name: { [Op.like]: `%${search}%` } }, { serialNumber: { [Op.like]: `%${search}%` } }] } } : {}) };
     const result = await AssetReturn.findAndCountAll({ where, include, order: [['createdAt', 'DESC']], limit: pageSize, offset: (page - 1) * pageSize, distinct: true });
     const rows = result.rows.map(normalize);
     res.json({ success: true, data: rows, returns: rows, pagination: { page, pageSize, total: result.count, totalPages: Math.ceil(result.count / pageSize) } });
   } catch (error) { next(error); }
 };
-const getReturn = async (req, res, next) => { try { const row = await AssetReturn.findOne({ where: { id: req.params.id, ...scopeWhere(req) } }); if (!row) return res.status(404).json({ success: false, message: 'Return not found in your scope' }); res.json({ success: true, data: normalize(row) }); } catch (error) { next(error); } };
+const getReturn = async (req, res, next) => { try { const row = await AssetReturn.findOne({ where: { id: req.params.id, ...scopeWhere(req) }, include: returnInclude }); if (!row) return res.status(404).json({ success: false, message: 'Return not found in your scope' }); const assignment = await Assignment.findOne({ where: { assetId: row.assetId }, order: [['updatedAt', 'DESC']] }); res.json({ success: true, data: { ...normalize(row), assignment: assignment ? assignment.toJSON() : null } }); } catch (error) { next(error); } };
 
 const createReturn = async (req, res, next) => {
   const transaction = await sequelize.transaction();
@@ -38,6 +64,8 @@ const createReturn = async (req, res, next) => {
     if (['disposed', 'missing'].includes(String(asset.status).toLowerCase())) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Asset cannot be returned in its current state' }); }
     const assignment = await Assignment.findOne({ where: { assetId, status: 'active' }, transaction, lock: transaction.LOCK.UPDATE });
     if (!assignment) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Asset has no active assignment to return' }); }
+    const existing = await AssetReturn.findOne({ where: { assetId, status: { [Op.in]: ['Requested', 'Approved', 'Ready for Return', 'Received'] } }, transaction, lock: transaction.LOCK.UPDATE });
+    if (existing) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'A return request already exists for this asset' }); }
     const row = await AssetReturn.create({ returnNumber: number(), assetId, collegeId: asset.collegeId, departmentId: asset.departmentId, sourceUserId: assignment.assignedTo, requestedBy: req.user.id, reason, condition, notes: String(notes).trim(), status: 'Requested' }, { transaction });
     await AuditLog.create({ userId: req.user.id, action: 'RETURN_CREATED', entity: `return:${row.id}`, details: JSON.stringify({ assetId, beforeStatus: asset.status, afterStatus: asset.status }) }, { transaction });
     await transaction.commit(); res.status(201).json({ success: true, message: 'Return request created', data: normalize(row) });

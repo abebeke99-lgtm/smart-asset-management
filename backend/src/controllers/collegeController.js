@@ -952,6 +952,27 @@ const listCollegeVerification = async (req, res, next) => {
       };
     });
 
+    const assets = sessionRows.flatMap((session) => (session.VerificationItems || []).map((item) => ({
+      id: item.Asset?.id || item.assetId,
+      sessionId: session.id,
+      sessionName: session.name,
+      sessionStatus: session.status,
+      name: item.Asset?.name || '',
+      assetCode: item.Asset?.assetCode || '',
+      serialNumber: item.Asset?.serialNumber || '',
+      rfidTag: item.Asset?.rfidTag || '',
+      category: item.Asset?.category || '',
+      departmentId: item.Asset?.departmentId || null,
+      department: session.Department || null,
+      location: item.Asset?.location || '',
+      assetStatus: item.Asset?.status || '',
+      condition: item.Asset?.condition || '',
+      verificationStatus: item.state,
+      notes: item.notes || '',
+      verificationDate: item.updatedAt || item.createdAt || session.updatedAt || session.createdAt,
+      verifiedBy: session.Starter || null,
+    })));
+
     const allItems = await VerificationItem.findAll({
       include: [
         { model: VerificationSession, where: { collegeId }, required: true, attributes: ['id', 'status'] },
@@ -983,6 +1004,7 @@ const listCollegeVerification = async (req, res, next) => {
         college: { id: collegeId, name: req.organizationScope.college?.collegeName || 'College' },
         summary,
         sessions: sessionRows,
+        assets,
         filters,
         pagination: {
           page,

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Plus, Search, RefreshCw, CheckCircle, XCircle, Clock, CreditCard, Landmark, FileText, CircleDollarSign, ArrowLeftRight, Filter, Eye, Wallet } from "lucide-react";
 import api from "../../services/api";
 
@@ -300,7 +300,7 @@ export default function FinancePayments() {
           </div>
 
           {loading ? (
-            <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}><RefreshCw size={18} className="spinner" style={{ animation: "spin 1s linear infinite", marginRight: 8 }} /> Loading payments...</div>
+            <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}><RefreshCw size={18} className="spinner" style={{ animation: "none", marginRight: 8 }} /> Loading payments...</div>
           ) : payments.length === 0 ? (
             <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}>
               <div style={{ width: 52, height: 52, borderRadius: 14, margin: "0 auto 10px", display: "flex", alignItems: "center", justifyContent: "center", background: "#eff6ff", color: "#2563eb" }}><CreditCard size={22} /></div>
@@ -422,7 +422,7 @@ export default function FinancePayments() {
                 <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end", gap: 10 }}>
                   <button type="button" onClick={() => setShowForm(false)} style={{ minHeight: 42, padding: "0 16px", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer" }}>Cancel</button>
                   <button type="submit" disabled={saving} style={{ minHeight: 42, padding: "0 16px", borderRadius: 10, border: "none", background: "#2563eb", color: "#fff", fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
-                    {saving ? <><RefreshCw size={15} style={{ animation: "spin 1s linear infinite", marginRight: 6 }} />Submitting...</> : "Create Request"}
+                    {saving ? <><RefreshCw size={15} style={{ animation: "none", marginRight: 6 }} />Submitting...</> : "Create Request"}
                   </button>
                 </div>
               </form>
@@ -433,3 +433,4 @@ export default function FinancePayments() {
     </div>
   );
 }
+

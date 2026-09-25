@@ -149,6 +149,22 @@ async function syncDatabase() {
       deleted_at: { type: require('sequelize').DataTypes.DATE, allowNull: true },
     })) await ensureColumn('assets', column, definition);
     await ensureColumn('rfid_logs', 'reader_id', { type: require('sequelize').DataTypes.STRING(80), allowNull: true });
+    for (const [column, definition] of Object.entries({
+      maintenance_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      next_inspection: { type: require('sequelize').DataTypes.DATE, allowNull: true },
+      health_status: { type: require('sequelize').DataTypes.STRING(50), allowNull: true, defaultValue: 'Unknown' },
+      health_score: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      hardware_status: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
+      software_status: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
+      battery_health: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
+      storage_health: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
+      memory_status: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
+      temperature_status: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
+      network_status: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
+      uptime: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
+      last_seen: { type: require('sequelize').DataTypes.DATE, allowNull: true },
+    })) await ensureColumn('maintenance_inspections', column, definition);
+    await sequelize.getQueryInterface().changeColumn('maintenance_inspections', 'maintenance_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
     await ensureColumn('purchase_orders', 'budget_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
     for (const [column, definition] of Object.entries({
       verification_status: { type: require('sequelize').DataTypes.ENUM('Pending', 'Verified', 'Rejected'), allowNull: false, defaultValue: 'Pending' },
@@ -186,8 +202,23 @@ async function syncDatabase() {
 
     await ensureColumn('users', 'college_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
     await ensureColumn('users', 'department_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
+    await ensureColumn('users', 'profile_photo', { type: require('sequelize').DataTypes.STRING(500), allowNull: true, defaultValue: null });
     await ensureColumn('assets', 'college_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
     await ensureColumn('assets', 'department_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
+    for (const [column, definition] of Object.entries({
+      due_date: { type: require('sequelize').DataTypes.DATE, allowNull: true },
+      resolved_by: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      closed_by: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      resolution_summary: { type: require('sequelize').DataTypes.TEXT, allowNull: true },
+      root_cause: { type: require('sequelize').DataTypes.TEXT, allowNull: true },
+      resolution_type: { type: require('sequelize').DataTypes.STRING(80), allowNull: true },
+      reopen_reason: { type: require('sequelize').DataTypes.TEXT, allowNull: true },
+      response_deadline: { type: require('sequelize').DataTypes.DATE, allowNull: true },
+      resolution_deadline: { type: require('sequelize').DataTypes.DATE, allowNull: true },
+      sla_status: { type: require('sequelize').DataTypes.STRING(30), allowNull: true },
+      support_team: { type: require('sequelize').DataTypes.STRING(120), allowNull: true },
+      support_location: { type: require('sequelize').DataTypes.STRING(255), allowNull: true },
+    })) await ensureColumn('service_requests', column, definition);
     await ensureColumn('departments', 'college_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
     await ensureColumn('departments', 'location_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
     await ensureColumn('departments', 'phone', { type: require('sequelize').DataTypes.STRING(50), allowNull: true });

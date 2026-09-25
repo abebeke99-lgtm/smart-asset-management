@@ -123,7 +123,7 @@ router.get('/', requireAuth, async (req, res, next) => {
 // Get single department
 router.get('/:id', requireAuth, async (req, res, next) => {
   try {
-    const dept = await Department.findOne({ where: { ...buildScope(req), id: req.params.id }, include: departmentIncludes });
+    const dept = await Department.findOne({ where: { id: req.params.id, ...buildScope(req) }, include: departmentIncludes });
     if (!dept) return res.status(404).json({ success: false, message: 'Department not found' });
     
     const [userCount, assetCount] = await Promise.all([

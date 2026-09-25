@@ -13,6 +13,7 @@ const MYSQL_PORT = Number(process.env.MYSQL_PORT || 3306);
 const MYSQL_USER = process.env.MYSQL_USER || 'root';
 const MYSQL_PASSWORD = process.env.MYSQL_PASSWORD || '';
 const MYSQL_DATABASE = process.env.MYSQL_DATABASE || 'asset_management_db';
+const SEED_DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD;
 
 const corsOptions = {
   origin: true,
@@ -233,15 +234,18 @@ async function createTables() {
 }
 
 async function seedInitialData() {
+  if (!SEED_DEMO_PASSWORD) {
+    throw new Error('Set SEED_DEMO_PASSWORD before seeding initial users.');
+  }
   const rows = await query('SELECT COUNT(*) as count FROM users');
   const userCount = rows[0].count;
   const demoUsers = [
-    ['admin', 'bekelei123', 'admin', '', 'bekelei906@gmail.com', '', '', '', '', '', true],
-    ['ict_officer', 'bekelei123', 'ict_officer', '', 'bekelei906@gmail.com', '', '', '', '', '', true],
-    ['dept_head', 'bekelei123', 'department_head', '', 'bekelei906@gmail.com', '', '', '', '', '', true],
-    ['store_manager', 'bekelei123', 'store_manager', '', 'bekelei906@gmail.com', '', '', '', '', '', true],
-    ['finance', 'bekelei123', 'finance', '', 'bekelei906@gmail.com', '', '', '', '', '', true],
-    ['maintenance', 'bekelei123', 'maintenance', '', 'bekelei906@gmail.com', '', '', '', '', '', true]
+    ['admin', SEED_DEMO_PASSWORD, 'admin', '', 'bekelei906@gmail.com', '', '', '', '', '', true],
+    ['ict_officer', SEED_DEMO_PASSWORD, 'ict_officer', '', 'bekelei906@gmail.com', '', '', '', '', '', true],
+    ['department_head', SEED_DEMO_PASSWORD, 'department_head', '', 'department@bekelei.com', '', '', '', '', 'Engineering', true],
+    ['store_manager', SEED_DEMO_PASSWORD, 'store_manager', '', 'bekelei906@gmail.com', '', '', '', '', '', true],
+    ['finance', SEED_DEMO_PASSWORD, 'finance', '', 'bekelei906@gmail.com', '', '', '', '', '', true],
+    ['maintenance', SEED_DEMO_PASSWORD, 'maintenance', '', 'bekelei906@gmail.com', '', '', '', '', '', true]
   ];
   if (userCount === 0) {
     await query('INSERT INTO users (username, password, role, fullName, email, phone, fingerprintId, responsibility, universityID, department, active) VALUES ?', [

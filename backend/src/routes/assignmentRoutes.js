@@ -5,7 +5,15 @@ const { createEventNotification } = require('../services/notificationService');
 const { Op } = require('sequelize');
 
 const router = express.Router();
-const canManageAssignments = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager')];
+const canManageAssignments = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'department_head')];
+
+const getDepartmentScopeId = (req) => {
+  if (!req || !req.user) return null;
+  const departmentScope = (req.organizationScope && req.organizationScope.departmentId) || req.user.departmentId || req.user.department_id || req.user.department || null;
+  if (!departmentScope) return null;
+  const numericDepartmentId = Number(departmentScope);
+  return Number.isFinite(numericDepartmentId) && numericDepartmentId > 0 ? numericDepartmentId : null;
+};
 
 const parseAssignmentNotes = (input) => {
   if (!input) return {};
@@ -48,7 +56,7 @@ const assignmentInclude = [
   { model: User, attributes: ['id', 'username', 'fullName', 'email', 'department', 'role', 'active'] },
 ];
 
-router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college'), async (req, res, next) => {
+router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college', 'department_head'), async (req, res, next) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
@@ -60,8 +68,12 @@ router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'
     const category = String(req.query.category || '').trim();
     const sortBy = String(req.query.sortBy || 'createdAt').trim();
     const sortOrder = String(req.query.sortOrder || 'DESC').trim().toUpperCase();
+    const departmentScope = getDepartmentScopeId(req);
 
     const andClauses = [];
+    if (departmentScope && ['department_head'].includes(String(req.user.role || '').toLowerCase())) {
+      andClauses.push({ '$Asset.departmentId$': departmentScope });
+    }
     if (status) {
       andClauses.push({ status });
     }
@@ -141,24 +153,38 @@ router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'
   }
 });
 
-router.get('/history', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college'), async (req, res, next) => {
+router.get('/history', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college', 'department_head'), async (req, res, next) => {
   try {
-    const include = req.user.role === 'college'
+    const departmentScope = getDepartmentScopeId(req);
+    const baseInclude = req.user.role === 'college'
       ? [{ model: Asset, attributes: ['assetCode', 'name', 'department'], where: { department: req.user.department }, required: true }, { model: User, attributes: ['username', 'fullName'] }]
       : assignmentInclude;
+    const include = req.user.role === 'department_head' && departmentScope
+      ? assignmentInclude.map((entry) => entry.model === Asset ? { ...entry, where: { departmentId: departmentScope }, required: true } : entry)
+      : baseInclude;
+
     const assignments = await Assignment.findAll({ include, order: [['createdAt', 'DESC']] });
-    res.json({ success: true, history: assignments.map(toAssignmentResponse) });
+    const scopedAssignments = req.user.role === 'department_head' && departmentScope
+      ? assignments.filter((assignment) => Number(assignment?.Asset?.departmentId || assignment?.Asset?.department_id || 0) === Number(departmentScope))
+      : assignments;
+    res.json({ success: true, history: scopedAssignments.map(toAssignmentResponse) });
   } catch (error) {
     next(error);
   }
 });
 
-router.get('/history/:assetId', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college'), async (req, res, next) => {
+router.get('/history/:assetId', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college', 'department_head'), async (req, res, next) => {
   try {
+    const departmentScope = getDepartmentScopeId(req);
     if (req.user.role === 'college') {
       const asset = await Asset.findByPk(req.params.assetId, { attributes: ['department'] });
       if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
       if (asset.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
+    }
+    if (req.user.role === 'department_head' && departmentScope) {
+      const asset = await Asset.findByPk(req.params.assetId, { attributes: ['departmentId', 'department'] });
+      if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
+      if (Number(asset.departmentId) !== Number(departmentScope)) return res.status(403).json({ success: false, message: 'Department access denied' });
     }
     const assignments = await Assignment.findAll({
       where: { assetId: req.params.assetId },
@@ -204,6 +230,26 @@ router.post('/', ...canManageAssignments, async (req, res, next) => {
     if (!assignee.active) {
       await transaction.rollback();
       return res.status(409).json({ success: false, message: 'Cannot assign an asset to an inactive user' });
+    }
+
+    const departmentScope = getDepartmentScopeId(req);
+    if (String(req.user.role || '').toLowerCase() === 'department_head' && !departmentScope) {
+      await transaction.rollback();
+      return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+    }
+    if (String(req.user.role || '').toLowerCase() === 'department_head') {
+      if (department_id && Number(department_id) !== Number(departmentScope)) {
+        await transaction.rollback();
+        return res.status(403).json({ success: false, message: 'You can only assign assets within your department' });
+      }
+      if (Number(asset.departmentId) !== Number(departmentScope)) {
+        await transaction.rollback();
+        return res.status(403).json({ success: false, message: 'Asset is outside your department scope' });
+      }
+      if (assignee.departmentId && Number(assignee.departmentId) !== Number(departmentScope)) {
+        await transaction.rollback();
+        return res.status(403).json({ success: false, message: 'Recipient is outside your department scope' });
+      }
     }
 
     const userCollegeId = req.user?.collegeId ?? req.user?.college_id;

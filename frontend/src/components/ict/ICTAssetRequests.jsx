@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
+  Ban,
   Building2,
   CalendarDays,
   CheckCircle2,
@@ -16,6 +17,7 @@ import {
   LoaderCircle,
   MapPin,
   MonitorSmartphone,
+  MessageSquare,
   MoreHorizontal,
   PackageCheck,
   RefreshCw,
@@ -109,6 +111,7 @@ export default function ICTAssetRequests() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const [deciding, setDeciding] = useState(false);
 
   const loadRequests = async () => {
     setError("");
@@ -123,10 +126,15 @@ export default function ICTAssetRequests() {
           ? payload.approvals
           : [];
       setRequests(rows.map(normalizeRequest));
+      const normalizedRows = rows.map(normalizeRequest);
       setSummary({
         total: Number.isFinite(Number(payload.total))
           ? Number(payload.total)
           : rows.length,
+        pending: normalizedRows.filter((request) => request.status === "pending").length,
+        approved: normalizedRows.filter((request) => request.status === "approved").length,
+        rejected: normalizedRows.filter((request) => request.status === "rejected").length,
+        cancelled: normalizedRows.filter((request) => request.status === "cancelled").length,
       });
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Unable to load asset requests."));
@@ -200,6 +208,35 @@ export default function ICTAssetRequests() {
     loadRequests();
   };
 
+  const clearFilters = () => {
+    setPage(1);
+    setFilters({ search: "", status: "", priority: "" });
+  };
+
+  const decideRequest = async (request, status) => {
+    const comment = status === "rejected"
+      ? window.prompt("Provide a reason for rejecting this request:")
+      : "";
+    if (status === "rejected" && !comment?.trim()) return;
+    if (status === "approved" && !window.confirm(`Approve ${request.requestNumber}?`)) return;
+
+    setDeciding(true);
+    try {
+      await apiClient.patch(`/api/approvals/${request.id}`, {
+        status,
+        comment: comment?.trim() || "",
+      });
+      toast.success(`Request ${status} successfully.`);
+      setSelected(null);
+      setMenuId(null);
+      await loadRequests();
+    } catch (requestError) {
+      toast.error(getErrorMessage(requestError, "Unable to update the request."));
+    } finally {
+      setDeciding(false);
+    }
+  };
+
   const submitRequest = async (event) => {
     event.preventDefault();
     const quantity = Number(form.quantity);
@@ -234,7 +271,7 @@ export default function ICTAssetRequests() {
     }
   };
 
-  if (!user || user.role !== "ict_officer") return null;
+  if (!user || !["ict_officer", "admin"].includes(user.role)) return null;
 
   return (
     <main className="ict-requests-page">
@@ -280,6 +317,10 @@ export default function ICTAssetRequests() {
             value={summary?.total}
             tone="blue"
           />
+          <SummaryCard icon={Clock3} label="Pending" value={summary?.pending} tone="amber" />
+          <SummaryCard icon={CircleCheck} label="Approved" value={summary?.approved} tone="green" />
+          <SummaryCard icon={CircleX} label="Rejected" value={summary?.rejected} tone="red" />
+          <SummaryCard icon={Ban} label="Cancelled" value={summary?.cancelled} tone="slate" />
         </section>
 
         <section className="ict-requests-toolbar" aria-label="Request filters">
@@ -323,6 +364,11 @@ export default function ICTAssetRequests() {
               ))}
             </select>
           </label>
+          {(filters.search || filters.status || filters.priority) && (
+            <button className="ict-requests-secondary" type="button" onClick={clearFilters}>
+              Clear filters
+            </button>
+          )}
           <Filter size={17} className="ict-requests-filter-icon" />
         </section>
 
@@ -429,6 +475,16 @@ export default function ICTAssetRequests() {
                             >
                               <Eye size={15} /> View details
                             </button>
+                            {user && ["admin", "college", "finance", "store_manager"].includes(user.role) && request.status === "pending" && (
+                              <>
+                                <button type="button" disabled={deciding} onClick={() => decideRequest(request, "approved")}>
+                                  <CircleCheck size={15} /> Approve
+                                </button>
+                                <button type="button" disabled={deciding} onClick={() => decideRequest(request, "rejected")}>
+                                  <CircleX size={15} /> Reject
+                                </button>
+                              </>
+                            )}
                             <span title="Backend workflow does not expose fulfillment for ICT officers">
                               <PackageCheck size={15} /> Fulfillment not
                               available
@@ -768,6 +824,8 @@ function Details({ request, onClose }) {
             title="Asset"
             value={request.asset?.assetCode || "Not linked"}
           />
+          <Detail icon={UserRound} title="Reviewed by" value={display(request.approved_by || request.Reviewer?.fullName)} />
+          <Detail icon={MessageSquare} title="Approval comment" value={display(request.approval_comment || request.comment)} />
         </div>
         <div className="ict-requests-description">
           <strong>Purpose and reason</strong>

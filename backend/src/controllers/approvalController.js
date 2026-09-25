@@ -1,6 +1,6 @@
-const { Approval, Asset, Department, User } = require('../models');
+const { Approval, Asset, Department, User, AuditLog } = require('../models');
 const { Op } = require('sequelize');
-const { createFinanceNotification } = require('../services/notificationService');
+const { createFinanceNotification, createBulkNotification } = require('../services/notificationService');
 
 const normalize = (item) => {
   const data = item.toJSON();
@@ -36,6 +36,7 @@ const createApproval = async (req, res, next) => {
     const authenticatedDepartment = req.user.department_id || req.user.departmentId || (Number.isInteger(Number(req.user.department)) ? Number(req.user.department) : null);
     if (req.user.role === 'college' && department_id && String(department_id) !== String(authenticatedDepartment) && String(department_id) !== String(req.user.department)) return res.status(403).json({ success: false, message: 'Department authorization required' });
     const record = await Approval.create({ type, assetId: asset_id || null, requestedBy: req.user.id, departmentId: authenticatedDepartment || department_id || null, item: item || '', quantity, priority, reason });
+    await AuditLog.create({ userId: req.user.id, action: 'REQUEST_SUBMITTED', entity: `approval:${record.id}`, details: JSON.stringify({ requestId: record.id, type: record.type, departmentId: record.departmentId }) });
     if (String(type).toLowerCase().includes('purchase')) await createFinanceNotification({ event: 'finance_purchase_request_submitted', eventKey: `finance_purchase_request_submitted:${record.id}`, entityId: record.id, senderId: req.user.id, type: 'procurement', title: 'Purchase request awaiting approval', message: `Purchase request REQ-${String(record.id).padStart(6, '0')} requires approval.` });
     res.status(201).json({ success: true, request: normalize(record) });
   } catch (error) { next(error); }
@@ -49,7 +50,25 @@ const decideApproval = async (req, res, next) => {
     const record = await Approval.findByPk(req.params.id, { include });
     if (!record) return res.status(404).json({ success: false, message: 'Approval not found' });
     if (req.user.role === 'college' && record.Department?.name && record.Department.name !== req.user.department) return res.status(403).json({ success: false, message: 'Department authorization required' });
+    if (record.status !== 'pending') return res.status(409).json({ success: false, message: 'Only pending requests can be decided' });
+    if (record.requestedBy === req.user.id) return res.status(403).json({ success: false, message: 'A requester cannot approve their own request' });
+    const comment = String(req.body.comment || req.body.reason || '').trim();
     await record.update({ status, reviewedBy: req.user.id, comment: req.body.comment || req.body.reason || '' });
+    await AuditLog.create({ userId: req.user.id, action: `REQUEST_${status.toUpperCase()}`, entity: `approval:${record.id}`, details: JSON.stringify({ requestId: record.id, beforeStatus: 'pending', afterStatus: status, comment }) });
+    try {
+      await createBulkNotification({
+        recipientType: 'users',
+        userIds: [record.requestedBy],
+        type: 'approval',
+        priority: 'medium',
+        channel: 'in_app',
+        eventKey: `approval:${record.id}:${status}`,
+        title: `Asset request ${status}`,
+        message: `Request REQ-${String(record.id).padStart(6, '0')} was ${status}.${comment ? ` Comment: ${comment}` : ''}`,
+      }, req.user.id);
+    } catch (notificationError) {
+      console.error('Approval notification failed:', notificationError.message);
+    }
     res.json({ success: true, request: normalize(record) });
   } catch (error) { next(error); }
 };

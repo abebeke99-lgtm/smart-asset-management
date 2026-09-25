@@ -907,7 +907,7 @@ const AssetValuation = () => {
             <Loader2
               size={28}
               style={{
-                animation: "spin 1s linear infinite",
+                animation: "none",
               }}
             />
 

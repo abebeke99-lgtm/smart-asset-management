@@ -322,6 +322,7 @@ const FinanceReports = () => {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,
     plugins: {
       legend: {
         position: 'bottom',
@@ -645,7 +646,7 @@ const FinanceReports = () => {
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>📊 {t.reports}</h1>
-          <p style={styles.subtitle}>{t.financialSummary}</p>
+          <p style={styles.subtitle}>{t.financialSummaryShort}</p>
         </div>
         <div style={styles.headerActions}>
           <button style={styles.exportButton} onClick={exportToExcel}>
@@ -1100,7 +1101,7 @@ const FinanceReports = () => {
               </div>
             </div>
             <div style={styles.chartCard}>
-              <h3 style={styles.chartTitle}>{t.financialSummary}</h3>
+              <h3 style={styles.chartTitle}>{t.financialSummaryShort}</h3>
               <div style={{ height: '250px' }}>
                 <Doughnut 
                   data={{
@@ -1254,7 +1255,7 @@ const englishTranslations = {
   
   // Financial
   costComparison: 'Cost Comparison',
-  financialSummary: 'Financial Summary',
+  financialSummaryShort: 'Financial Summary',
   assetList: 'Asset List'
 };
 

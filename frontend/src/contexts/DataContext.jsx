@@ -19,6 +19,12 @@ export const DataProvider = ({ children }) => {
   // API CALL WRAPPER
   // ==========================================
   
+  const parseResponseData = (data) => {
+    if (!data) return null;
+    if (Array.isArray(data)) return data;
+    return data;
+  };
+
   const apiCall = useCallback(async (method, url, data = null, options = {}) => {
     setLoading(true);
     try {
@@ -40,7 +46,8 @@ export const DataProvider = ({ children }) => {
         default:
           throw new Error('Invalid method');
       }
-      return { success: true, data: response.data };
+      const parsedData = parseResponseData(response.data);
+      return { success: true, data: parsedData };
     } catch (error) {
       const message = error.response?.data?.message || 'An error occurred';
       toast.error(message);
@@ -57,7 +64,8 @@ export const DataProvider = ({ children }) => {
   const getAssets = useCallback(async (params = {}) => {
     const result = await apiCall('get', '/api/assets', null, { params });
     if (result.success) {
-      setAssets(result.data.assets || []);
+      const payload = result.data || {};
+      setAssets(payload.assets || payload.data || []);
     }
     return result;
   }, [apiCall]);
@@ -214,7 +222,8 @@ export const DataProvider = ({ children }) => {
   const getCategories = useCallback(async () => {
     const result = await apiCall('get', '/api/categories');
     if (result.success) {
-      setCategories(result.data.categories || []);
+      const payload = result.data || {};
+      setCategories(payload.items || payload.categories || payload.data || []);
     }
     return result;
   }, [apiCall]);
@@ -226,7 +235,8 @@ export const DataProvider = ({ children }) => {
   const getUsers = useCallback(async (params = {}) => {
     const result = await apiCall('get', '/api/users', null, { params });
     if (result.success) {
-      setUsers(result.data.users || []);
+      const payload = result.data || {};
+      setUsers(payload.data || payload.users || []);
     }
     return result;
   }, [apiCall]);

@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, ArrowRight, Building2, CalendarClock, CheckCircle2, ChevronDown, ClipboardList, Clock3, Eye, Filter, LoaderCircle, MoreHorizontal, PackageSearch, Plus, RefreshCw, Search, ShieldCheck, UserCheck, X } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -1392,3 +1392,4 @@ const amharicTranslations = {
 };
 
 export default AdminAssignment;
+

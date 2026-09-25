@@ -1,516 +1,191 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
-import { Target, Eye, Shield, Users, Zap, Package, Search, Wrench, BarChart3, Lock, UserCheck, Database, Route, ClipboardCheck } from 'lucide-react';
+import {
+  Activity,
+  ArrowLeftRight,
+  ArrowRight,
+  BarChart3,
+  Database,
+  MapPin,
+  Package,
+  QrCode,
+  UserRoundCog,
+  Users,
+  WalletCards,
+  Wrench
+} from 'lucide-react';
 
 const AboutUs = () => {
   const { language } = useLanguage();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  const t = language === 'en' ? {
-    pageTitle: 'About Us',
-    pageSubtitle: 'Learn about our mission, vision, and the team behind Mekdela Amba University\'s University Asset Management System',
-    missionTitle: '🎯 Our Mission',
-    missionText: 'To provide a comprehensive, efficient, and transparent asset management system for Mekdela Amba University using modern technologies. We aim to streamline asset tracking, maintenance, and reporting to enhance operational efficiency and accountability.',
-    visionTitle: '👁️ Our Vision',
-    visionText: 'To be a leading provider of integrated asset management solutions that empowers educational institutions to manage their resources effectively, securely, and sustainably.',
-    valuesTitle: '💎 Core Values',
-    innovationTitle: 'Innovation',
-    innovationDesc: 'Constantly improving and adopting new technologies',
-    collaborationTitle: 'Collaboration',
-    collaborationDesc: 'Working together with stakeholders for mutual success',
-    excellenceTitle: 'Excellence',
-    excellenceDesc: 'Delivering high-quality solutions with attention to detail',
-    securityTitle: 'Security',
-    securityDesc: 'Protecting user data and system integrity always',
-    technologyTitle: '🛠️ Technology Stack',
-    teamTitle: '👥 Our Team',
-    teamDesc: 'Dedicated professionals committed to excellence and innovation',
-    leadDeveloper: 'Lead Developer',
-    developmentTeam: 'Development Team',
-    keyFeaturesTitle: 'Why Choose Us?',
-    feature1: 'Centralized Asset Management',
-    feature1Desc: 'All your assets in one secure, accessible platform',
-    feature2: 'Real-time Tracking',
-    feature2Desc: 'Track asset locations and status in real-time',
-    feature3: 'Comprehensive Reporting',
-    feature3Desc: 'Generate detailed reports and analytics',
-    feature4: 'Secure & Compliant',
-    feature4Desc: 'Secure authentication, protected routes, and audit trails',
-    feature5: 'Role-based Access',
-    feature5Desc: 'Granular permissions for different user roles',
-    feature6: 'Mobile Ready',
-    feature6Desc: 'Access the system from any device'
+  const content = language === 'en' ? {
+    eyebrow: 'About the platform',
+    title: 'A clearer way to manage university assets.',
+    intro: 'University Asset Management System is a centralized system for managing university assets throughout their lifecycle.',
+    doesTitle: 'What the system does',
+    doesText: 'The system provides a centralized operational record of what the university owns, where assets are located, who is responsible for them, their current status, movement and history, maintenance information, financial information, and lifecycle status.',
+    capabilitiesTitle: 'Core capabilities',
+    capabilitiesText: 'University teams can use the system to maintain accurate asset records and coordinate responsibility across the asset lifecycle.',
+    technologyTitle: 'Technology and platform highlights',
+    technologyText: 'A web application that connects university teams with structured operational data.',
+    technology: [
+      ['Web application', 'A responsive web interface for university asset operations.', Database],
+      ['Connected services', 'REST APIs connect the interface to operational data.', Activity],
+      ['Structured data', 'Relational database structures support asset records, relationships, history, and reporting.', Package],
+      ['Role-based access', 'Permissions are controlled according to user roles.', UserRoundCog]
+    ],
+    purposeTitle: 'Purpose of the platform',
+    purposeText: 'The University Asset Management System provides university teams with a shared operational record for managing institutional assets, coordinating responsibility, tracking asset movement and condition, maintaining records, and supporting accountable decisions.',
+    ctaTitle: 'See the platform in practice',
+    ctaText: 'Sign in to access the workspace for your role.',
+    cta: 'Go to login',
+    capabilities: [
+      ['Asset management', 'Register, identify, assign, transfer, verify, maintain, and track assets throughout their lifecycle.', Package],
+      ['Inventory', 'Maintain accurate inventory records and monitor asset status and availability.', Database],
+      ['Locations', 'Connect assets with colleges, departments, buildings, rooms, and responsible areas where supported.', MapPin],
+      ['Users & roles', 'Manage users and role-based permissions for controlled access.', Users],
+      ['Maintenance', 'Record maintenance activities, service status, and maintenance history.', Wrench],
+      ['Transfers', 'Track asset movement between responsible units and locations.', ArrowLeftRight],
+      ['RFID / QR tracking', 'Support asset identification and tracking through the existing RFID and QR functionality.', QrCode],
+      ['Financial records', 'Manage asset-related financial information, depreciation, payments, and financial reporting where implemented.', WalletCards],
+      ['Reports & analytics', 'Provide operational reports based on actual system data.', BarChart3]
+    ]
   } : {
-    pageTitle: 'ስለ እኛ',
-    pageSubtitle: 'የመቅደላ አምባ ዩኒቨርሲቲ ስማርት ንብረት አስተዳደር ስርዓት ስለ ተልእኮ ፣ ራዕይ እና ከ‐后ስቀምጠሉት ሰራተኞች ይወቁ',
-    missionTitle: '🎯 ተልእኮ',
-    missionText: 'ለመቅደላ አምባ ዩኒቨርሲቲ ዘመናዊ ቴክኖሎጂዎችን በመጠቀም አጠቃላይ፣ ቅልጅተማ ምግብር እና ግላዊ ንብረት አስተዳደር ስርዓት ማቅረብ። ንብረት ክትትል ፣ ጥገና እና ሪፖርትን ለማቀላጠፍ ዓላማ ያለብን ለክወናዊ ብቃት እና ተሕትሞ.',
-    visionTitle: '👁️ ራዕይ',
-    visionText: 'ትምህርት ተቋማትን ሃብታቸውን በብቃት ፣ ደህንነቱ ተጠብቆ እና በቀጣይነት ለማስተዳደር ኃይል ሰጪ አጠቃላይ ንብረት አስተዳደር መፍትሔዎች ታቅዱ ፊታ ታዳሚ ጣፋጭ ዓስተዋዋቂ ስርዓት ሆን ክብደት ሊይ ታዩት ተግባር ሊውል ይሊይ።',
-    valuesTitle: '💎 ዋና ዋጋዎች',
-    innovationTitle: 'ፈጠራ',
-    innovationDesc: 'ሁልጊዜ ማሻሻል እና አዲስ ቴክኖሎጂዎችን ይቀበሉ',
-    collaborationTitle: 'ትብብር',
-    collaborationDesc: 'ለተጋጣሚ ሰፊ ስኬት ከወገኖች ጋር መስራት',
-    excellenceTitle: 'ብልጽግና',
-    excellenceDesc: 'በከፍተኛ ጥራት ያላቸው መፍትሔዎች ልክ ዝርዝር ይስጥ',
-    securityTitle: 'ደህንነት',
-    securityDesc: 'ተጠቃሚ ውሂብ እና ስርዓተ-ብክነቱ ሁል ጊዜ ይጠበቁ',
-    technologyTitle: '🛠️ ቴክኖሎጂ ረድፍ',
-    teamTitle: '👥 ሰራተኞቻችን',
-    teamDesc: 'ብልጽግና እና ፈጠራ ላይ ምኞት ያላቸው ተወዳዳሪ ሙያተኞች',
-    leadDeveloper: 'ዋና ገንቢ',
-    developmentTeam: 'የልማት ቡድን',
-    keyFeaturesTitle: 'ሙያ ለምን እኛን ይምረጡ?',
-    feature1: 'ማዕከላዊ ንብረት አስተዳደር',
-    feature1Desc: 'ሁሉንም ንብረቶችዎ በአንድ ደህንነቱ ተጠብቆ ሊደረሳ ወደሚችል መድረክ',
-    feature2: 'በእውነት ጊዜ ክትትል',
-    feature2Desc: 'የንብረቶች ቦታ እና ሁኔታ በእውነት ጊዜ ይከታተሉ',
-    feature3: 'ሙሉ ሪፖርትስ',
-    feature3Desc: 'ዝርዝር ሪፖርቶች እና ትንታኔዎች ያዘጋጁ',
-    feature4: 'ደህንነታማ እና ተኳምር',
-    feature4Desc: 'ደህንነቱ የተጠበቀ ማረጋገጫ፣ የተጠበቁ መንገዶች እና የእንቅስቃሴ መዝገቦች',
-    feature5: 'በሚና ላይ የተመሰረተ መዳረሻ',
-    feature5Desc: 'የተለያዩ ተጠቃሚ ሚናዎች ሊስቱ ግብይት',
-    feature6: 'ሞባይል ዝግጅት',
-    feature6Desc: 'ከማንኛውም መሳሪያ ስርዓተን ይድረሱ'
+    eyebrow: 'ስለ መድረኩ',
+    title: 'የዩኒቨርሲቲ ንብረቶችን በግልጽ ለማስተዳደር።',
+    intro: 'የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት የዩኒቨርሲቲ ንብረቶችን በህይወት ዘመናቸው ለማስተዳደር የተማከለ ስርዓት ነው።',
+    doesTitle: 'ስርዓቱ ምን ያደርጋል?',
+    doesText: 'ስርዓቱ ዩኒቨርሲቲው ያለውን ንብረት፣ ያለበትን ቦታ፣ ተጠያቂውን አካል፣ ወቅታዊ ሁኔታውን፣ እንቅስቃሴና ታሪኩን፣ የጥገና እና የገንዘብ መረጃን እና የህይወት ዘመን ሁኔታን የሚያሳይ የተማከለ የስራ መዝገብ ያቀርባል።',
+    capabilitiesTitle: 'ዋና አቅሞች',
+    capabilitiesText: 'መድረኩ የንብረት መረጃን ትክክለኛ እና ጠቃሚ የሚያደርጉ ዕለታዊ ስራዎችን ያገናኛል።',
+    technologyTitle: 'የቴክኖሎጂ እና መድረክ አጠቃላይ እይታ',
+    technologyText: 'የዩኒቨርሲቲ ቡድኖችን ከተዋቀረ የስራ መረጃ ጋር የሚያገናኝ የድር መተግበሪያ።',
+    technology: [
+      ['የድር መተግበሪያ', 'ለዩኒቨርሲቲ ንብረት ስራዎች የሚያገለግል ምላሽ ሰጪ የድር በይነገጽ።', Database],
+      ['የተገናኙ አገልግሎቶች', 'REST API በይነገጹን ከስራ መረጃ ጋር ያገናኛል።', Activity],
+      ['የተዋቀሩ መዝገቦች', 'የግንኙነት ዳታ ጎታ የንብረት ታሪክን እና ሪፖርትን ያጠናክራል።', Package],
+      ['በሚና ላይ የተመሰረተ መዳረሻ', 'ፈቃዶች በተጠቃሚ ሚና መሰረት ይቆጣጠራሉ።', UserRoundCog]
+    ],
+    purposeTitle: 'የመድረኩ ዓላማ',
+    purposeText: 'የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት ተቋማዊ ንብረቶችን ለማስተዳደር፣ ተጠያቂነትን ለማስተባበር፣ የንብረት እንቅስቃሴንና ሁኔታን ለመከታተል፣ መዝገቦችን ለማቆየት እና ተጠያቂ ውሳኔዎችን ለመደገፍ ለዩኒቨርሲቲ ቡድኖች የጋራ የስራ መዝገብ ይሰጣል።',
+    ctaTitle: 'መድረኩን በተግባር ይመልከቱ',
+    ctaText: 'ለሚናዎ የተዘጋጀውን የስራ ቦታ ለመጠቀም ይግቡ።',
+    cta: 'ወደ መግቢያ',
+    capabilities: [
+      ['ንብረት አስተዳደር', 'ንብረቶችን ይመዝግቡ፣ ይለዩ፣ ይመድቡ፣ ያስተላልፉ፣ ያረጋግጡ እና በህይወት ዘመናቸው ይከታተሉ።', Package],
+      ['ኢንቬንተሪ', 'ትክክለኛ የኢንቬንተሪ መዝገቦችን ያቆዩ እና የንብረት ሁኔታን ይከታተሉ።', Database],
+      ['ቦታዎች', 'ንብረቶችን ከኮሌጆች፣ ክፍሎች፣ ህንፃዎች፣ ክፍሎች እና ተጠያቂ አካላት ጋር ያገናኙ።', MapPin],
+      ['ተጠቃሚዎች እና ሚናዎች', 'ተጠቃሚዎችን እና በሚና ላይ የተመሰረቱ ፈቃዶችን ያስተዳድሩ።', Users],
+      ['ጥገና', 'የጥገና ስራዎችን፣ የአገልግሎት ሁኔታን እና የጥገና ታሪክን ይመዝግቡ።', Wrench],
+      ['ማስተላለፍ', 'በተጠያቂ አካላት እና ቦታዎች መካከል የንብረት እንቅስቃሴን ይከታተሉ።', ArrowLeftRight],
+      ['RFID / QR ክትትል', 'አሁን ባለው RFID እና QR ተግባር ንብረቶችን ይለዩ እና ይከታተሉ።', QrCode],
+      ['የገንዘብ መዝገቦች', 'የንብረት የገንዘብ መረጃን፣ ዋጋ ቅነሳን፣ ክፍያዎችን እና ሪፖርትን በተተገበረበት ቦታ ያስተዳድሩ።', WalletCards],
+      ['ሪፖርቶች እና ትንታኔ', 'በትክክለኛ የስርዓት መረጃ ላይ የተመሰረቱ የስራ ሪፖርቶችን ያቅርቡ።', BarChart3]
+    ]
   };
 
-  const values = [
-    { icon: Target, title: t.innovationTitle, desc: t.innovationDesc, color: '#3b82f6' },
-    { icon: Users, title: t.collaborationTitle, desc: t.collaborationDesc, color: '#10b981' },
-    { icon: Zap, title: t.excellenceTitle, desc: t.excellenceDesc, color: '#f59e0b' },
-    { icon: Shield, title: t.securityTitle, desc: t.securityDesc, color: '#ef4444' }
-  ];
-
-  const features = [
-    { title: t.feature1, desc: t.feature1Desc, icon: '📦' },
-    { title: t.feature2, desc: t.feature2Desc, icon: '📡' },
-    { title: t.feature3, desc: t.feature3Desc, icon: '📊' },
-    { title: t.feature4, desc: t.feature4Desc, icon: '🔒' },
-    { title: t.feature5, desc: t.feature5Desc, icon: '👥' },
-    { title: t.feature6, desc: t.feature6Desc, icon: '📱' }
-  ];
-
-  const purposeItems = [
-    { icon: Package, title: 'Better Asset Control', text: 'Centralize asset registration, assignment, and operational records.' },
-    { icon: Search, title: 'Improved Visibility', text: 'See asset status, ownership, inventory, and department information.' },
-    { icon: Wrench, title: 'Efficient Maintenance', text: 'Track maintenance requests, assigned work, status, and history.' },
-    { icon: BarChart3, title: 'Better Decisions', text: 'Use structured reports and financial information for informed decisions.' }
-  ];
-
-  const workflowItems = [
-    { number: '01', icon: Package, title: 'Register Asset', text: 'Create a complete asset record.' },
-    { number: '02', icon: UserCheck, title: 'Assign Asset', text: 'Link assets to people or departments.' },
-    { number: '03', icon: Search, title: 'Track & Monitor', text: 'Follow status, inventory, and activity.' },
-    { number: '04', icon: Wrench, title: 'Maintain & Update', text: 'Manage requests and maintenance history.' },
-    { number: '05', icon: BarChart3, title: 'Report & Analyze', text: 'Review structured reports and insights.' }
-  ];
-
-  const roleItems = [
-    ['👑', 'Admin', 'Manage users, system configuration, and overall administration.'],
-    ['📦', 'Store Manager', 'Manage inventory, assets, assignments, and store operations.'],
-    ['💻', 'ICT Officer', 'Manage technology assets and ICT-related asset operations.'],
-    ['📋', 'College Head', 'Review and manage college assets and approvals.'],
-    ['💰', 'Finance', 'Monitor financial asset information and reporting.'],
-    ['🔧', 'Maintenance', 'Manage maintenance requests, tasks, and asset maintenance history.']
-  ];
-
-  const benefitItems = [
-    ['📈', 'Improved Efficiency', 'Reduce manual asset-management work.'],
-    ['🔐', 'Better Accountability', 'Maintain clear records of asset ownership and activity.'],
-    ['📊', 'Better Reporting', 'Access structured reports and analytics.'],
-    ['🔧', 'Faster Maintenance', 'Track maintenance requests and status.'],
-    ['📍', 'Better Asset Visibility', 'Improve awareness of asset location and status.'],
-    ['👥', 'Department Coordination', 'Support collaboration across university departments.']
-  ];
-
-  const securityItems = [
-    { icon: Lock, title: 'Authentication', text: 'Secure user authentication with JWT-based sessions.' },
-    { icon: Users, title: 'Role-Based Access', text: 'Different dashboards and permissions are assigned by role.' },
-    { icon: ClipboardCheck, title: 'Audit / Activity Tracking', text: 'Authentication and important system activity are recorded in audit logs.' },
-    { icon: Route, title: 'Protected Routes', text: 'Authenticated users access protected system areas through route guards.' }
-  ];
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <main style={{ flex: 1 }}>
-        {/* Hero Section */}
-        <section style={{
-          background: '#0EA5E9',
-          color: 'white',
-          padding: '80px 20px',
-          textAlign: 'center'
-        }}>
-          <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-            <div className="about-hero-icon" aria-hidden="true"><Database size={32} /></div>
-            <h1 style={{
-              fontSize: '2.8rem',
-              fontWeight: 900,
-              marginBottom: '16px'
-            }}>
-              {t.pageTitle}
-            </h1>
-            <p style={{
-              fontSize: '1.2rem',
-              opacity: 0.95
-            }}>
-              {t.pageSubtitle}
-            </p>
+    <main className={`about-page${isDark ? ' about-page-dark' : ''}`}>
+      <section className="about-hero" aria-labelledby="about-title">
+        <div className="about-container about-hero-grid">
+          <div>
+            <span className="about-eyebrow">{content.eyebrow}</span>
+            <h1 id="about-title">{content.title}</h1>
+            <p className="about-lead">{content.intro}</p>
           </div>
-        </section>
+          <div className="about-hero-mark" aria-hidden="true"><Database size={52} strokeWidth={1.5} /></div>
+        </div>
+      </section>
 
-        {/* Mission & Vision */}
-        <section className="about-mission-vision" style={{
-          maxWidth: '1200px',
-          margin: '60px auto',
-          padding: '0 20px',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-          gap: '32px'
-        }}>
-          <div style={{
-            background: isDark ? '#1e293b' : '#ffffff',
-            padding: '40px 32px',
-            borderRadius: '16px',
-            border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`
-          }}>
-            <h2 style={{
-              fontSize: '1.8rem',
-              fontWeight: 800,
-              marginBottom: '16px',
-              color: isDark ? '#f1f5f9' : '#0f172a'
-            }}>
-              {t.missionTitle}
-            </h2>
-            <p style={{
-              color: isDark ? '#cbd5e1' : '#475569',
-              lineHeight: 1.8,
-              fontSize: '1rem'
-            }}>
-              {t.missionText}
-            </p>
-          </div>
+      <section className="about-section" aria-labelledby="about-does-title">
+        <div className="about-container about-purpose-grid">
+          <div className="about-section-heading"><span className="about-eyebrow">01</span><h2 id="about-does-title">{content.doesTitle}</h2></div>
+          <p className="about-purpose-text">{content.doesText}</p>
+        </div>
+      </section>
 
-          <div style={{
-            background: isDark ? '#1e293b' : '#ffffff',
-            padding: '40px 32px',
-            borderRadius: '16px',
-            border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`
-          }}>
-            <h2 style={{
-              fontSize: '1.8rem',
-              fontWeight: 800,
-              marginBottom: '16px',
-              color: isDark ? '#f1f5f9' : '#0f172a'
-            }}>
-              {t.visionTitle}
-            </h2>
-            <p style={{
-              color: isDark ? '#cbd5e1' : '#475569',
-              lineHeight: 1.8,
-              fontSize: '1rem'
-            }}>
-              {t.visionText}
-            </p>
-          </div>
-        </section>
-
-        {/* Core Values */}
-        <section style={{
-          maxWidth: '1200px',
-          margin: '80px auto',
-          padding: '0 20px'
-        }}>
-          <h2 style={{
-            fontSize: '2.2rem',
-            fontWeight: 800,
-            textAlign: 'center',
-            marginBottom: '48px',
-            color: isDark ? '#f1f5f9' : '#0f172a'
-          }}>
-            {t.valuesTitle}
-          </h2>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: '24px'
-          }}>
-            {values.map((value, idx) => {
-              const IconComponent = value.icon;
-              return (
-                <div
-                  key={idx}
-                  style={{
-                    background: isDark ? '#1e293b' : '#ffffff',
-                    padding: '32px 24px',
-                    borderRadius: '16px',
-                    textAlign: 'center',
-                    border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`
-                  }}
-                >
-                  <div style={{
-                    width: '60px',
-                    height: '60px',
-                    borderRadius: '12px',
-                    background: `${value.color}15`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 16px'
-                  }}>
-                    <IconComponent size={32} color={value.color} />
-                  </div>
-                  <h3 style={{
-                    fontSize: '1.2rem',
-                    fontWeight: 700,
-                    marginBottom: '12px',
-                    color: isDark ? '#f1f5f9' : '#0f172a'
-                  }}>
-                    {value.title}
-                  </h3>
-                  <p style={{
-                    color: isDark ? '#cbd5e1' : '#475569',
-                    fontSize: '0.95rem',
-                    lineHeight: 1.6,
-                    margin: 0
-                  }}>
-                    {value.desc}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Why We Built This System */}
-        <section className="about-section about-purpose">
-          <div className="about-section-heading"><span className="about-kicker">Purpose</span><h2>Why We Built This System</h2><p>The University Asset Management System was designed to help university departments manage assets more efficiently, improve accountability, simplify maintenance workflows, and provide better visibility into institutional resources.</p></div>
-          <div className="about-grid about-grid-four">{purposeItems.map(({ icon: Icon, title, text }) => <article className="about-mini-card" key={title}><Icon size={28} aria-hidden="true" /><h3>{title}</h3><p>{text}</p></article>)}</div>
-        </section>
-
-        {/* How It Works */}
-        <section className="about-section">
-          <div className="about-section-heading"><span className="about-kicker">Workflow</span><h2>How It Works</h2><p>A clear path from asset registration to useful reporting.</p></div>
-          <div className="about-workflow">{workflowItems.map(({ number, icon: Icon, title, text }, index) => <article className="about-workflow-step" key={number}><span className="about-step-number">{number}</span><Icon size={28} aria-hidden="true" /><h3>{title}</h3><p>{text}</p>{index < workflowItems.length - 1 && <span className="about-step-arrow" aria-hidden="true">→</span>}</article>)}</div>
-        </section>
-
-        {/* User Roles */}
-        <section className="about-section about-band">
-          <div className="about-section-heading"><span className="about-kicker">People and permissions</span><h2>Built for Every University Department</h2><p>Each role has a focused workspace for the operations it is responsible for.</p></div>
-          <div className="about-grid about-grid-three">{roleItems.map(([icon, title, text]) => <article className="about-role-card" key={title}><span className="about-emoji" aria-hidden="true">{icon}</span><h3>{title}</h3><p>{text}</p></article>)}</div>
-        </section>
-
-        {/* Key Features */}
-        <section style={{
-          maxWidth: '1200px',
-          margin: '80px auto',
-          padding: '0 20px'
-        }}>
-          <h2 style={{
-            fontSize: '2.2rem',
-            fontWeight: 800,
-            textAlign: 'center',
-            marginBottom: '48px',
-            color: isDark ? '#f1f5f9' : '#0f172a'
-          }}>
-            {t.keyFeaturesTitle}
-          </h2>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '24px'
-          }}>
-            {features.map((feature, idx) => (
-              <div
-                key={idx}
-                style={{
-                  background: isDark ? '#1e293b' : '#ffffff',
-                  padding: '28px 24px',
-                  borderRadius: '12px',
-                  border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
-                  animation: `slideUp 0.6s ease ${idx * 0.08}s forwards`,
-                  animationFillMode: 'both',
-                  transition: 'all 0.3s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-4px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
-              >
-                <div style={{ fontSize: '2.4rem', marginBottom: '12px' }}>
-                  {feature.icon}
-                </div>
-                <h3 style={{
-                  fontSize: '1.1rem',
-                  fontWeight: 700,
-                  marginBottom: '8px',
-                  color: isDark ? '#f1f5f9' : '#0f172a'
-                }}>
-                  {feature.title}
-                </h3>
-                <p style={{
-                  color: isDark ? '#cbd5e1' : '#475569',
-                  fontSize: '0.9rem',
-                  lineHeight: 1.6,
-                  margin: 0
-                }}>
-                  {feature.desc}
-                </p>
-              </div>
+      <section className="about-section about-capabilities" aria-labelledby="about-capabilities-title">
+        <div className="about-container">
+          <div className="about-section-heading"><span className="about-eyebrow">02</span><h2 id="about-capabilities-title">{content.capabilitiesTitle}</h2><p>{content.capabilitiesText}</p></div>
+          <div className="about-capability-grid">
+            {content.capabilities.map(([title, text, Icon]) => (
+              <article className="about-capability-card" key={title}>
+                <span className="about-card-icon"><Icon size={22} aria-hidden="true" /></span>
+                <span><strong>{title}</strong><small>{text}</small></span>
+              </article>
             ))}
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* Benefits */}
-        <section className="about-section">
-          <div className="about-section-heading"><span className="about-kicker">Outcomes</span><h2>Benefits for Mekdela Amba University</h2></div>
-          <div className="about-grid about-grid-three">{benefitItems.map(([icon, title, text]) => <article className="about-benefit-card" key={title}><span className="about-emoji" aria-hidden="true">{icon}</span><div><h3>{title}</h3><p>{text}</p></div></article>)}</div>
-        </section>
+      <section className="about-section" aria-labelledby="about-technology-title">
+        <div className="about-container">
+          <div className="about-section-heading"><span className="about-eyebrow">03</span><h2 id="about-technology-title">{content.technologyTitle}</h2><p>{content.technologyText}</p></div>
+          <div className="about-technology-grid">
+            {content.technology.map(([title, text, Icon]) => <article className="about-tech-card" key={title}><Icon size={22} aria-hidden="true" /><div><h3>{title}</h3><p>{text}</p></div></article>)}
+          </div>
+        </div>
+      </section>
 
-        {/* Technology */}
-        <section className="about-section about-tech-band">
-          <div className="about-section-heading"><span className="about-kicker">Implementation</span><h2>Technology Behind the System</h2><p>Technologies verified in the current project implementation.</p></div>
-          <div className="about-tech-list">{[['React', 'Frontend interface'], ['Node.js', 'Backend runtime'], ['Express', 'HTTP API server'], ['REST API', 'Frontend-backend communication'], ['MySQL + Sequelize', 'Relational database and ORM'], ['JWT + Passport', 'Authentication and protected access']].map(([title, text]) => <article key={title}><Database size={22} aria-hidden="true" /><h3>{title}</h3><p>{text}</p></article>)}</div>
-        </section>
+      <section className="about-section about-purpose-band" aria-labelledby="about-purpose-title">
+        <div className="about-container about-purpose-content">
+          <div className="about-section-heading"><span className="about-eyebrow">04</span><h2 id="about-purpose-title">{content.purposeTitle}</h2></div>
+          <p>{content.purposeText}</p>
+        </div>
+      </section>
 
-        {/* Security */}
-        <section className="about-section">
-          <div className="about-section-heading"><span className="about-kicker">Trust and access</span><h2>Security &amp; Access Control</h2></div>
-          <div className="about-grid about-grid-four">{securityItems.map(({ icon: Icon, title, text }) => <article className="about-mini-card" key={title}><Icon size={28} aria-hidden="true" /><h3>{title}</h3><p>{text}</p></article>)}</div>
-        </section>
-
-        {/* System Workflow Visual */}
-        <section className="about-section about-system-flow">
-          <div className="about-section-heading"><span className="about-kicker">System flow</span><h2>From Login to Reporting</h2></div>
-          <div className="about-flow-line">{[['USER', Users], ['LOGIN', Lock], ['ROLE DETECTION', UserCheck], ['ROLE DASHBOARD', Route], ['ASSET OPERATIONS', Package], ['REPORTING', BarChart3]].map(([label, Icon], index) => <React.Fragment key={label}><div className="about-flow-node"><Icon size={22} aria-hidden="true" /><span>{label}</span></div>{index < 5 && <span className="about-flow-arrow" aria-hidden="true">→</span>}</React.Fragment>)}</div>
-        </section>
-
-        {/* CTA Section */}
-        <section style={{
-          maxWidth: '900px',
-          margin: '80px auto',
-          padding: '60px 40px',
-          background: isDark
-            ? 'linear-gradient(135deg, #1e293b, #0f172a)'
-            : 'linear-gradient(135deg, #f0f9ff, #e0f2fe)',
-          borderRadius: '20px',
-          textAlign: 'center',
-          border: `1px solid ${isDark ? '#334155' : '#bae6fd'}`,
-          animation: 'slideUp 0.8s ease 0.3s forwards',
-          animationFillMode: 'both'
-        }}>
-          <h2 style={{
-            fontSize: '2rem',
-            fontWeight: 800,
-            marginBottom: '16px',
-            color: isDark ? '#f1f5f9' : '#0f172a'
-          }}>
-            Ready to Get Started?
-          </h2>
-          
-          <p style={{
-            fontSize: '1.1rem',
-            color: isDark ? '#cbd5e1' : '#475569',
-            marginBottom: '32px'
-          }}>
-            Start using the University Asset Management System to manage university resources more efficiently.
-          </p>
-
-          <Link
-            to="/login"
-            style={{
-              padding: '16px 48px',
-              background: 'linear-gradient(135deg, #2563eb, #1e40af)',
-              color: 'white',
-              textDecoration: 'none',
-              borderRadius: '12px',
-              fontWeight: 700,
-              fontSize: '1.1rem',
-              transition: 'all 0.3s ease',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'inline-block'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-4px)';
-              e.currentTarget.style.boxShadow = '0 20px 40px rgba(37, 99, 235, 0.3)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
-          >
-            Get Started Now
-          </Link>
-        </section>
-      </main>
+      <section className="about-cta" aria-labelledby="about-cta-title">
+        <div className="about-container about-cta-inner">
+          <div><h2 id="about-cta-title">{content.ctaTitle}</h2><p>{content.ctaText}</p></div>
+          <Link className="about-cta-link" to="/login">{content.cta}<ArrowRight size={18} aria-hidden="true" /></Link>
+        </div>
+      </section>
 
       <style>{`
-        .about-section { max-width: 1200px; margin: 80px auto; padding: 0 20px; }
-        .about-hero-icon { display: grid; place-items: center; width: 64px; height: 64px; margin: 0 auto 18px; border: 1px solid rgba(255,255,255,.45); border-radius: 16px; background: rgba(255,255,255,.14); animation: iconFloat 3s ease-in-out infinite; }
-        .about-section-heading { max-width: 820px; margin: 0 auto 40px; text-align: center; }
-        .about-section-heading h2 { margin: 8px 0 14px; color: ${isDark ? '#f1f5f9' : '#0f172a'}; font-size: 2.2rem; font-weight: 800; }
-        .about-section-heading p { color: ${isDark ? '#cbd5e1' : '#475569'}; line-height: 1.75; }
-        .about-kicker { color: #2563eb; font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
-        .about-grid { display: grid; gap: 24px; }
-        .about-grid-four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-        .about-grid-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        .about-mini-card, .about-role-card, .about-benefit-card, .about-tech-list article { padding: 26px 22px; border: 1px solid ${isDark ? '#334155' : '#e2e8f0'}; border-radius: 12px; background: ${isDark ? '#1e293b' : '#fff'}; transition: transform .25s ease, box-shadow .25s ease; }
-        .about-mini-card:hover, .about-role-card:hover, .about-benefit-card:hover, .about-tech-list article:hover { transform: translateY(-6px); box-shadow: 0 16px 30px rgba(15, 23, 42, .12); }
-        .about-mini-card svg { color: #2563eb; margin-bottom: 14px; }
-        .about-mini-card h3, .about-role-card h3, .about-benefit-card h3, .about-tech-list h3 { margin: 0 0 9px; color: ${isDark ? '#f1f5f9' : '#0f172a'}; font-size: 1.05rem; }
-        .about-mini-card p, .about-role-card p, .about-benefit-card p, .about-tech-list p { margin: 0; color: ${isDark ? '#cbd5e1' : '#475569'}; line-height: 1.65; }
-        .about-band, .about-tech-band { max-width: none; padding: 80px max(20px, calc((100% - 1160px) / 2)); background: ${isDark ? '#162338' : '#f8fafc'}; }
-        .about-emoji { display: block; margin-bottom: 14px; font-size: 2rem; }
-        .about-workflow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
-        .about-workflow-step { position: relative; padding: 22px 16px; border-top: 3px solid #2563eb; background: ${isDark ? '#1e293b' : '#fff'}; text-align: center; }
-        .about-workflow-step svg { display: block; margin: 12px auto; color: #2563eb; }
-        .about-step-number { color: #2563eb; font-size: .8rem; font-weight: 800; letter-spacing: .1em; }
-        .about-workflow-step h3 { color: ${isDark ? '#f1f5f9' : '#0f172a'}; font-size: 1rem; }
-        .about-workflow-step p { color: ${isDark ? '#cbd5e1' : '#64748b'}; font-size: .88rem; line-height: 1.5; }
-        .about-step-arrow { position: absolute; top: 50%; right: -18px; z-index: 1; color: #2563eb; font-size: 1.5rem; }
-        .about-benefit-card { display: flex; gap: 15px; align-items: flex-start; }
-        .about-tech-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-        .about-tech-list article { display: grid; grid-template-columns: auto 1fr; column-gap: 12px; }
-        .about-tech-list article svg { grid-row: span 2; color: #2563eb; }
-        .about-flow-line { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
-        .about-flow-node { display: flex; align-items: center; gap: 8px; padding: 13px 15px; border: 1px solid ${isDark ? '#334155' : '#dbe4f0'}; border-radius: 9px; background: ${isDark ? '#1e293b' : '#fff'}; color: ${isDark ? '#f1f5f9' : '#17305f'}; font-size: .78rem; font-weight: 800; }
-        .about-flow-node svg { color: #2563eb; }
-        .about-flow-arrow { color: #2563eb; font-size: 1.4rem; }
-        @media (max-width: 900px) { .about-grid-four, .about-tech-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } .about-grid-three { grid-template-columns: repeat(2, minmax(0, 1fr)); } .about-workflow { grid-template-columns: repeat(2, minmax(0, 1fr)); } .about-step-arrow { display: none; } }
-        @media (max-width: 600px) { .about-section { margin: 56px auto; padding: 0 16px; } .about-section-heading h2 { font-size: 1.75rem; } .about-mission-vision { grid-template-columns: 1fr !important; } .about-mission-vision > div { min-width: 0; } .about-grid-four, .about-grid-three, .about-tech-list, .about-workflow { grid-template-columns: 1fr; } .about-band, .about-tech-band { padding: 56px 16px; } .about-flow-line { flex-direction: column; } .about-flow-arrow { transform: rotate(90deg); } }
-        @media (prefers-reduced-motion: reduce) { .about-mini-card, .about-role-card, .about-benefit-card, .about-tech-list article { transition: none; } }
-        @media (prefers-reduced-motion: reduce) { .about-hero-icon { animation: none; } }
-        @keyframes iconFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          * {
-            animation-duration: 0.01ms !important;
-            transition-duration: 0.01ms !important;
-          }
-        }
+        .about-page { --about-bg: #f5f7f9; --about-surface: #ffffff; --about-muted: #52606d; --about-text: #17212b; --about-border: #d7dee5; --about-accent: #536575; background: var(--about-bg); color: var(--about-text); }
+        .about-page-dark { --about-bg: #0f172a; --about-surface: #111827; --about-muted: #cbd5e1; --about-text: #e2e8f0; --about-border: rgba(148, 163, 184, .2); --about-accent: #93c5fd; }
+        .about-container { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
+        .about-hero { padding: clamp(64px, 9vw, 112px) 0; background: var(--about-surface); border-bottom: 1px solid var(--about-border); }
+        .about-hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 48px; align-items: center; }
+        .about-eyebrow { display: inline-block; margin-bottom: 14px; color: var(--about-accent); font-size: .74rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+        .about-hero h1 { max-width: 760px; margin: 0; font-size: clamp(2.5rem, 6vw, 5rem); line-height: 1.03; letter-spacing: -.045em; }
+        .about-lead { max-width: 690px; margin: 24px 0 0; color: var(--about-muted); font-size: 1.15rem; line-height: 1.75; }
+        .about-hero-mark { display: grid; place-items: center; width: 180px; height: 180px; justify-self: end; border: 1px solid var(--about-border); border-radius: 24px; color: var(--about-accent); background: var(--about-bg); }
+        .about-section { padding: 84px 0; }
+        .about-purpose-grid { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr); gap: 60px; align-items: start; }
+        .about-section-heading { max-width: 700px; }
+        .about-section-heading h2 { margin: 0 0 14px; font-size: clamp(2rem, 4vw, 3rem); line-height: 1.12; letter-spacing: -.035em; }
+        .about-section-heading p, .about-purpose-text { margin: 0; color: var(--about-muted); line-height: 1.75; }
+        .about-purpose-text { padding-top: 30px; font-size: 1.18rem; }
+        .about-capabilities { background: var(--about-surface); border-top: 1px solid var(--about-border); border-bottom: 1px solid var(--about-border); }
+        .about-capability-grid, .about-technology-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 36px; }
+        .about-capability-card { position: relative; display: flex; min-height: 185px; flex-direction: column; gap: 18px; padding: 22px; border: 1px solid var(--about-border); border-radius: 14px; background: var(--about-bg); color: var(--about-text); text-decoration: none; transition: border-color .18s ease, transform .18s ease; }
+        .about-capability-card:hover { border-color: var(--about-accent); transform: translateY(-3px); }
+        .about-card-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 11px; color: var(--about-accent); background: color-mix(in srgb, var(--about-accent) 14%, transparent); }
+        .about-capability-card strong, .about-capability-card small { display: block; }
+        .about-capability-card strong { margin-bottom: 8px; font-size: 1rem; }
+        .about-capability-card small { color: var(--about-muted); font-size: .88rem; line-height: 1.55; }
+        .about-tech-card { display: flex; gap: 14px; padding: 22px; border-top: 2px solid var(--about-accent); background: var(--about-surface); }
+        .about-tech-card > svg { flex: 0 0 auto; color: var(--about-accent); }
+        .about-tech-card h3 { margin: 0 0 8px; font-size: 1rem; }
+        .about-tech-card p { margin: 0; color: var(--about-muted); font-size: .9rem; line-height: 1.55; }
+        .about-purpose-band { padding: 64px 0; background: #e9eef2; }
+        .about-page-dark .about-purpose-band { background: #1e293b; }
+        .about-purpose-content { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr); gap: 60px; align-items: center; }
+        .about-purpose-content p { margin: 0; color: var(--about-muted); font-size: 1.15rem; line-height: 1.75; }
+        .about-cta { padding: 48px 0 84px; }
+        .about-cta-inner { display: flex; align-items: center; justify-content: space-between; gap: 28px; padding: 32px 36px; border: 1px solid var(--about-border); border-radius: 14px; background: var(--about-surface); }
+        .about-cta h2 { margin: 0 0 8px; font-size: 1.55rem; }
+        .about-cta p { margin: 0; color: var(--about-muted); }
+        .about-cta-link { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 13px 18px; border-radius: 8px; background: var(--about-accent); color: #fff; font-weight: 700; text-decoration: none; }
+        @media (max-width: 900px) { .about-hero-grid, .about-purpose-grid, .about-purpose-content { grid-template-columns: 1fr; gap: 24px; } .about-hero-mark { justify-self: start; width: 120px; height: 120px; } .about-capability-grid, .about-technology-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 560px) { .about-container { width: min(100% - 28px, 1120px); } .about-hero { padding: 56px 0 64px; } .about-section { padding: 60px 0; } .about-capability-grid, .about-technology-grid { grid-template-columns: 1fr; } .about-cta-inner { align-items: stretch; flex-direction: column; padding: 26px 22px; } .about-cta-link { justify-content: center; } }
+        @media (prefers-reduced-motion: reduce) { .about-capability-card { transition: none; } }
       `}</style>
-    </div>
+    </main>
   );
 };
 

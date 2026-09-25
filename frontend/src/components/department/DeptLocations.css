@@ -1,0 +1,65 @@
+.department-locations-page {
+  min-height: 100%;
+  padding: clamp(18px, 3vw, 34px);
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.department-locations-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.department-locations-breadcrumb { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 8px; color: #2563eb; font-size: .76rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.department-locations-header h1 { margin: 0; font-size: clamp(1.5rem, 2.4vw, 2rem); }
+.department-locations-header p { margin: 7px 0 0; color: #64748b; }
+.department-location-button, .department-location-view { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #cbd5e1; border-radius: 7px; padding: 9px 13px; background: #fff; color: #0f3d70; font-weight: 750; cursor: pointer; }
+.department-location-button:hover, .department-location-view:hover { border-color: #0ea5e9; color: #0369a1; }
+.department-location-button:focus-visible, .department-location-view:focus-visible, .department-location-icon-button:focus-visible, .department-location-search:focus-within { outline: 3px solid rgba(14, 165, 233, .25); outline-offset: 2px; }
+.department-location-button:disabled { cursor: wait; opacity: .65; }
+.department-location-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.department-location-summary > div { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; align-items: center; padding: 15px 17px; border: 1px solid #e2e8f0; border-radius: 9px; background: #fff; }
+.department-location-summary svg { grid-row: span 2; color: #0ea5e9; }
+.department-location-summary span { color: #64748b; font-size: .8rem; }
+.department-location-summary strong { font-size: 1.25rem; }
+.department-location-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.department-location-search { display: flex; align-items: center; gap: 9px; width: min(100%, 470px); min-height: 42px; padding: 0 12px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #64748b; }
+.department-location-search input { width: 100%; border: 0; outline: 0; color: #0f172a; background: transparent; }
+.department-location-filter { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 11px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #475569; }
+.department-location-filter select { border: 0; outline: 0; color: #0f172a; background: transparent; font: inherit; cursor: pointer; }
+.department-location-count { color: #64748b; font-size: .84rem; font-weight: 700; }
+.department-location-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.department-location-card { display: flex; gap: 14px; min-width: 0; padding: 18px; border: 1px solid #e2e8f0; border-radius: 9px; background: #fff; box-shadow: 0 4px 15px rgba(15, 23, 42, .05); }
+.department-location-card-icon { display: grid; flex: 0 0 44px; place-items: center; width: 44px; height: 44px; border-radius: 8px; background: #e0f2fe; color: #0369a1; }
+.department-location-card-content { min-width: 0; flex: 1; }
+.department-location-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.department-location-card-heading > div { min-width: 0; }
+.department-location-card h2 { margin: 0; overflow-wrap: anywhere; font-size: 1rem; }
+.department-location-card-heading > div > span { display: block; margin-top: 4px; color: #64748b; font-size: .75rem; font-weight: 700; }
+.department-location-status { flex: 0 0 auto; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 999px; color: #475569; background: #f8fafc; font-size: .7rem; font-weight: 800; text-transform: capitalize; }
+.department-location-status-active { border-color: #bbf7d0; color: #166534; background: #f0fdf4; }
+.department-location-status-inactive { border-color: #fecaca; color: #991b1b; background: #fef2f2; }
+.department-location-card p { min-height: 40px; margin: 8px 0 14px; color: #64748b; font-size: .86rem; line-height: 1.5; }
+.department-location-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #475569; font-size: .82rem; font-weight: 700; }
+.department-location-card-footer > span { display: inline-flex; align-items: center; gap: 6px; }
+.department-location-view { padding: 6px 9px; font-size: .8rem; }
+.department-location-state { display: flex; min-height: 180px; align-items: center; justify-content: center; gap: 10px; padding: 24px; border: 1px dashed #cbd5e1; border-radius: 9px; color: #64748b; background: #fff; }
+.department-location-state p { margin: 0; }
+.department-location-error { justify-content: space-between; border-style: solid; border-color: #fecaca; color: #991b1b; background: #fff7f7; }
+.department-location-pagination { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 18px; color: #64748b; font-size: .84rem; font-weight: 700; }
+.department-location-pagination > div { display: inline-flex; gap: 8px; }
+.department-location-pagination button { border: 1px solid #cbd5e1; border-radius: 7px; padding: 8px 11px; background: #fff; color: #0f3d70; font: inherit; cursor: pointer; }
+.department-location-pagination button:hover:not(:disabled) { border-color: #0ea5e9; color: #0369a1; }
+.department-location-pagination button:disabled { cursor: not-allowed; opacity: .5; }
+.department-location-spin { animation: department-location-spin 1s linear infinite; }
+.department-location-modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; background: rgba(15, 23, 42, .58); }
+.department-location-modal { width: min(560px, 100%); border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; box-shadow: 0 24px 70px rgba(15, 23, 42, .25); }
+.department-location-modal header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px; border-bottom: 1px solid #e2e8f0; }
+.department-location-modal h2 { margin: 4px 0 0; font-size: 1.2rem; overflow-wrap: anywhere; }
+.department-location-modal-label { color: #2563eb; font-size: .75rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.department-location-icon-button { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #475569; cursor: pointer; }
+.department-location-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 20px; }
+.department-location-details div { display: grid; gap: 5px; }
+.department-location-details span { color: #64748b; font-size: .77rem; font-weight: 700; text-transform: uppercase; }
+.department-location-details strong { overflow-wrap: anywhere; color: #0f172a; font-size: .92rem; }
+.department-location-description { grid-column: 1 / -1; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@keyframes department-location-spin { to { transform: rotate(360deg); } }
+@media (max-width: 900px) { .department-location-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .department-locations-page { padding: 18px 14px; } .department-locations-header, .department-location-toolbar { align-items: stretch; flex-direction: column; } .department-location-button, .department-location-search, .department-location-filter { width: 100%; } .department-location-filter select { flex: 1; } .department-location-summary { grid-template-columns: 1fr 1fr; } .department-location-details { grid-template-columns: 1fr; } .department-location-description { grid-column: auto; } .department-location-pagination { align-items: stretch; flex-direction: column; } .department-location-pagination > div { justify-content: space-between; } .department-location-pagination button { flex: 1; } }

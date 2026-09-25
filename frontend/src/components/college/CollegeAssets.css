@@ -38,7 +38,7 @@
 .college-assets-details span { display: block; color: #64748b; font-size: .76rem; margin-bottom: 4px; }
 .college-assets-details strong { font-size: .92rem; overflow-wrap: anywhere; }
 .college-assets-modal-loading { display: flex; justify-content: center; gap: 8px; padding: 45px; color: #64748b; }
-.college-assets-spin { animation: college-assets-spin 1s linear infinite; }
+.college-assets-spin {  }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @keyframes college-assets-spin { to { transform: rotate(360deg); } }
 @media (max-width: 900px) { .college-assets-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

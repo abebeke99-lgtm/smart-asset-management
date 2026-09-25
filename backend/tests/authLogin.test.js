@@ -8,17 +8,17 @@ const { resolveLoginAliases, normalizeLoginIdentity, generateToken } = require('
 const { findCollegeScopeForUser } = require('../src/middlewares/organizationScope');
 const { normalizeOrganizationSettings, resolveOrganizationSettings } = require('../src/routes/adminSettingsRoutes');
 
-test('normalizes canonical college role and legacy department assignments', () => {
+test('normalizes canonical college and department-head roles without collapsing them together', () => {
   assert.deepEqual(normalizeLoginIdentity('college'), 'college');
-  assert.deepEqual(normalizeLoginIdentity('Department Head'), 'college');
-  assert.deepEqual(normalizeLoginIdentity('department_head'), 'college');
-  assert.deepEqual(normalizeLoginIdentity('dept_head'), 'college');
+  assert.deepEqual(normalizeLoginIdentity('Department Head'), 'department_head');
+  assert.deepEqual(normalizeLoginIdentity('department_head'), 'department_head');
+  assert.deepEqual(normalizeLoginIdentity('dept_head'), 'department_head');
   assert.deepEqual(normalizeLoginIdentity('ict officer'), 'ict_officer');
   assert.deepEqual(normalizeLoginIdentity('store manager'), 'store_manager');
 });
 
-test('resolves legacy login aliases while preserving the college role', () => {
-  assert.deepEqual(resolveLoginAliases('department'), ['department', 'college', 'department_head', 'dept_head', 'department head']);
+test('resolves legacy login aliases while preserving the department_head role', () => {
+  assert.deepEqual(resolveLoginAliases('department'), ['department', 'department_head', 'dept_head', 'department head']);
   assert.deepEqual(resolveLoginAliases('store manager'), ['store manager', 'store_manager', 'store-manager']);
   assert.deepEqual(resolveLoginAliases('ICT Officer'), ['ict officer', 'ict_officer', 'ict-officer', 'ict']);
 });

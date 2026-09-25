@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { sequelize, Maintenance, Asset, User, Assignment, AuditLog } = require('../models');
+const { sequelize, Maintenance, MaintenanceRepair, MaintenanceHistory, Asset, User, Assignment, AuditLog } = require('../models');
 const { createEventNotification } = require('../services/notificationService');
 
 const managerRoles = ['admin', 'maintenance', 'ict_officer', 'store_manager', 'infrastructure'];
@@ -196,4 +196,95 @@ const assign = (req, res, next) => { req.body.assigned_to = req.body.technician_
 const removeMaintenance = async (req, res, next) => { try { if (!canManage(req)) return res.status(403).json({ success: false, message: 'Maintenance authorization required' }); const item = await Maintenance.findByPk(req.params.id); if (!item) return res.status(404).json({ success: false, message: 'Maintenance request not found' }); if (req.infrastructureScope && !(await Asset.findOne({ where: { id: item.assetId, ...infrastructureAssetWhere } }))) return res.status(403).json({ success: false, message: 'Maintenance record is outside the infrastructure scope' }); await item.destroy(); res.json({ success: true }); } catch (error) { next(error); } };
 const dashboard = async (req, res, next) => { try { const items = await Maintenance.findAll(); const byStatus = items.reduce((acc, item) => { acc[item.status] = (acc[item.status] || 0) + 1; return acc; }, {}); res.json({ success: true, data: { total: items.length, pending: byStatus.pending || 0, active: (byStatus.assigned || 0) + (byStatus['in-progress'] || 0), completed: byStatus.completed || 0, byStatus } }); } catch (error) { next(error); } };
 
-module.exports = { getAllMaintenance, getInfrastructureMaintenance, getInfrastructureMaintenanceAssets, createMaintenance, updateMaintenance, setStatus, approve, reject, start, complete, assign, removeMaintenance, dashboard };
+const repairInclude = [
+  { model: Asset, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'category', 'department', 'location', 'status', 'condition', 'warrantyExpiry'] },
+  { model: User, as: 'Technician', attributes: ['id', 'username', 'fullName'] },
+  { model: MaintenanceRepair, required: false, attributes: ['id', 'diagnosis', 'repairAction', 'partsUsed', 'totalCost', 'completionDate', 'notes'] },
+];
+const repairScope = (req) => req.user.collegeId ? { '$Asset.collegeId$': req.user.collegeId } : {};
+const normalizeRepair = (item) => {
+  const data = item.toJSON();
+  const repair = data.MaintenanceRepairs?.[0] || data.MaintenanceRepair || {};
+  return {
+    ...data,
+    repairId: `REP-${String(data.id).padStart(3, '0')}`,
+    asset: data.Asset,
+    assetTag: data.Asset?.assetCode,
+    serialNumber: data.Asset?.serialNumber,
+    technician: data.Technician?.fullName || data.Technician?.username || '',
+    diagnosis: repair.diagnosis || '',
+    repairAction: repair.repairAction || '',
+    partsReplaced: repair.partsUsed || '',
+    repairCost: Number(repair.totalCost || 0),
+    completionDate: repair.completionDate || (data.status === 'completed' ? data.updatedAt : null),
+    notes: repair.notes || '',
+    status: displayStatus(data.status),
+  };
+};
+
+const getRepairHistory = async (req, res, next) => {
+  try {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+    const where = {};
+    if (req.query.status) where.status = normalizeStatus(req.query.status);
+    if (req.query.priority) where.priority = String(req.query.priority).toLowerCase();
+    if (req.query.search) {
+      const search = String(req.query.search).trim();
+      where[Op.or] = [{ title: { [Op.like]: `%${search}%` } }, { description: { [Op.like]: `%${search}%` } }, { '$Asset.name$': { [Op.like]: `%${search}%` } }, { '$Asset.assetCode$': { [Op.like]: `%${search}%` } }, { '$Technician.fullName$': { [Op.like]: `%${search}%` } }, ...(Number.isInteger(Number(search)) ? [{ id: Number(search) }] : [])];
+    }
+    const { count, rows } = await Maintenance.findAndCountAll({ where: { ...where, ...repairScope(req) }, include: repairInclude, distinct: true, order: [['updatedAt', 'DESC']], limit, offset: (page - 1) * limit });
+    const statsRows = await Maintenance.findAll({ where: { ...where, ...repairScope(req) }, include: [{ model: Asset, attributes: [], required: true }, { model: MaintenanceRepair, required: false, attributes: ['totalCost'] }], attributes: ['status'], raw: true });
+    const stats = statsRows.reduce((result, row) => { const status = normalizeStatus(row.status); result.totalRepairs += 1; result.totalRepairCost += Number(row['MaintenanceRepairs.totalCost'] || 0); if (status === 'completed') result.completedRepairs += 1; if (['assigned', 'in-progress', 'waiting-for-parts', 'testing'].includes(status)) result.activeRepairs += 1; if (status === 'waiting-for-parts') result.awaitingParts += 1; return result; }, { totalRepairs: 0, activeRepairs: 0, completedRepairs: 0, awaitingParts: 0, totalRepairCost: 0 });
+    res.json({ success: true, records: rows.map(normalizeRepair), total: count, page, limit, totalPages: Math.max(1, Math.ceil(count / limit)), stats });
+  } catch (error) { next(error); }
+};
+
+const getRepairDetails = async (req, res, next) => {
+  try {
+    const item = await Maintenance.findOne({ where: { id: req.params.id, ...repairScope(req) }, include: repairInclude });
+    if (!item) return res.status(404).json({ success: false, message: 'Repair record not found' });
+    const history = await MaintenanceHistory.findAll({ where: { maintenanceId: item.id }, order: [['actionDate', 'ASC']] });
+    res.json({ success: true, data: { ...normalizeRepair(item), timeline: history } });
+  } catch (error) { next(error); }
+};
+
+const createRepair = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const { asset_id, problem, diagnosis = '', repair_action = '', parts_replaced = '', technician_id = null, vendor = '', cost = 0, repair_date, completion_date = null, status = 'pending', priority = 'medium', notes = '' } = req.body;
+    if (!asset_id || !String(problem || '').trim()) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Asset and problem are required' }); }
+    const numericCost = Number(cost);
+    if (!Number.isFinite(numericCost) || numericCost < 0) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Repair cost must be a valid non-negative number' }); }
+    if (!['pending', 'approved', 'assigned', 'in-progress', 'waiting-for-parts', 'testing', 'completed', 'cancelled'].includes(normalizeStatus(status))) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Invalid repair status' }); }
+    const asset = await Asset.findOne({ where: { id: asset_id, ...(req.user.collegeId ? { collegeId: req.user.collegeId } : {}) }, transaction });
+    if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found in your college scope' }); }
+    const item = await Maintenance.create({ assetId: asset.id, requestedBy: req.user.id, assignedTo: technician_id || null, title: String(problem).trim().slice(0, 255), description: String(problem).trim(), priority: String(priority).toLowerCase(), status: normalizeStatus(status) }, { transaction });
+    await MaintenanceRepair.create({ maintenanceId: item.id, assetId: asset.id, technicianId: technician_id || null, problemDescription: problem, diagnosis, repairAction: repair_action, partsUsed: parts_replaced, totalCost: numericCost, completionDate: completion_date || null, notes, serviceCost: 0, laborCost: 0, partsCost: 0 }, { transaction });
+    await MaintenanceHistory.create({ assetId: asset.id, maintenanceId: item.id, userId: req.user.id, actionType: 'created', description: 'Repair record created', newStatus: item.status }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'REPAIR_CREATED', entity: `maintenance:${item.id}`, details: JSON.stringify({ assetId: asset.id }) }, { transaction });
+    await transaction.commit();
+    const created = await Maintenance.findOne({ where: { id: item.id }, include: repairInclude });
+    res.status(201).json({ success: true, data: normalizeRepair(created) });
+  } catch (error) { await transaction.rollback(); next(error); }
+};
+
+const updateRepair = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const item = await Maintenance.findOne({ where: { id: req.params.id, ...repairScope(req) }, include: [{ model: MaintenanceRepair, required: false }], transaction, lock: transaction.LOCK.UPDATE });
+    if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Repair record not found' }); }
+    const repair = item.MaintenanceRepairs?.[0];
+    const status = req.body.status ? normalizeStatus(req.body.status) : item.status;
+    if (!['pending', 'approved', 'assigned', 'in-progress', 'waiting-for-parts', 'testing', 'completed', 'cancelled'].includes(status)) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Invalid repair status' }); }
+    await item.update({ description: req.body.problem ?? item.description, title: String(req.body.problem ?? item.title).slice(0, 255), priority: String(req.body.priority ?? item.priority).toLowerCase(), status, assignedTo: req.body.technician_id ?? item.assignedTo }, { transaction });
+    if (repair) await repair.update({ diagnosis: req.body.diagnosis ?? repair.diagnosis, repairAction: req.body.repair_action ?? repair.repairAction, partsUsed: req.body.parts_replaced ?? repair.partsUsed, totalCost: req.body.cost ?? repair.totalCost, completionDate: req.body.completion_date ?? repair.completionDate, notes: req.body.notes ?? repair.notes, technicianId: req.body.technician_id ?? repair.technicianId }, { transaction });
+    await MaintenanceHistory.create({ assetId: item.assetId, maintenanceId: item.id, userId: req.user.id, actionType: 'updated', description: 'Repair record updated', newStatus: status }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'REPAIR_UPDATED', entity: `maintenance:${item.id}`, details: JSON.stringify({ status }) }, { transaction });
+    await transaction.commit();
+    const updated = await Maintenance.findOne({ where: { id: item.id }, include: repairInclude });
+    res.json({ success: true, data: normalizeRepair(updated) });
+  } catch (error) { await transaction.rollback(); next(error); }
+};
+
+module.exports = { getAllMaintenance, getInfrastructureMaintenance, getInfrastructureMaintenanceAssets, createMaintenance, updateMaintenance, setStatus, approve, reject, start, complete, assign, removeMaintenance, dashboard, getRepairHistory, getRepairDetails, createRepair, updateRepair };

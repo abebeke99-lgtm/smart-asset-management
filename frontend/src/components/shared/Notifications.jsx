@@ -1,162 +1,95 @@
-import React, { useState, useEffect } from 'react';
-import { useLanguage } from '../../contexts/UiContext';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertCircle, Bell, CheckCheck, ChevronLeft, ChevronRight, Loader2, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import axios from 'axios';
+import { useLanguage } from '../../contexts/UiContext';
+import { apiClient } from '../../utils/api';
+import './Notifications.css';
+
+const PAGE_SIZE = 20;
+const isRead = (item) => Boolean(item.is_read ?? item.isRead ?? item.read);
+const dateText = (value) => { if (!value) return '-'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString(); };
+const priority = (value) => ['low', 'medium', 'high', 'urgent'].includes(String(value || '').toLowerCase()) ? String(value).toLowerCase() : 'medium';
 
 const Notifications = () => {
-  const { language, theme } = useLanguage();
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const { language } = useLanguage();
+  const [items, setItems] = useState([]);
+  const [summary, setSummary] = useState({ total: 0, unread: 0, read: 0 });
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1 });
+  const [filters, setFilters] = useState({ search: '', read: '', type: '', priority: '' });
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(null);
+  const t = language === 'en' ? en : am;
 
-  const isDark = theme === 'dark';
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const response = await apiClient.get('/api/notifications', { params: { page, limit: PAGE_SIZE, search: filters.search.trim() || undefined, read: filters.read || undefined, type: filters.type || undefined, priority: filters.priority || undefined } });
+      const payload = response?.data || {};
+      const rows = Array.isArray(payload.notifications) ? payload.notifications : Array.isArray(payload.data) ? payload.data : [];
+      setItems(rows);
+      setSummary(payload.summary || { total: Number(payload.total || rows.length), unread: Number(payload.unreadCount || rows.filter((item) => !isRead(item)).length), read: rows.filter(isRead).length });
+      setPagination(payload.pagination || { page, totalPages: 1 });
+    } catch (requestError) {
+      const status = requestError?.response?.status;
+      setError(status === 401 ? t.auth : status === 403 ? t.denied : t.loadError);
+      setItems([]);
+    } finally { setLoading(false); }
+  }, [filters, page, t]);
 
   useEffect(() => {
-    fetchNotifications();
-  }, []);
+    load();
+    const interval = window.setInterval(load, 30000);
+    return () => window.clearInterval(interval);
+  }, [load]);
+  const types = useMemo(() => [...new Set(items.map((item) => item.type).filter(Boolean))].sort(), [items]);
+  const priorities = useMemo(() => [...new Set(items.map((item) => item.priority).filter(Boolean))].sort(), [items]);
+  const filter = (name, value) => { setFilters((current) => ({ ...current, [name]: value })); setPage(1); };
 
-  const fetchNotifications = async () => {
-    setLoading(true);
+  const markRead = async (id) => {
+    setBusy(id);
     try {
-      const response = await axios.get('/api/notifications');
-      setNotifications(response.data.notifications || []);
-      setUnreadCount(response.data.unreadCount ?? (response.data.notifications || []).filter(n => !n.is_read).length);
-    } catch (error) {
-      toast.error('Failed to load notifications');
-    }
-    setLoading(false);
+      const response = await apiClient.patch(`/api/notifications/${id}/read`);
+      setItems((current) => current.map((item) => item.id === id ? { ...item, read: true, is_read: true, isRead: true } : item));
+      setSummary((current) => ({ ...current, unread: response?.data?.unreadCount ?? Math.max(0, current.unread - 1), read: current.read + 1 }));
+    } catch (requestError) { toast.error(requestError?.response?.data?.message || t.markError); } finally { setBusy(null); }
   };
 
-  const handleMarkRead = async (id) => {
+  const markAll = async () => {
+    setBusy('all');
     try {
-      await axios.put(`/api/notifications/${id}/read`);
-      setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
-      setUnreadCount((count) => Math.max(0, count - 1));
-    } catch (error) {
-      toast.error('Failed to mark as read');
-    }
+      const response = await apiClient.patch('/api/notifications/read-all');
+      setItems((current) => current.map((item) => ({ ...item, read: true, is_read: true, isRead: true })));
+      setSummary((current) => ({ ...current, unread: response?.data?.unreadCount ?? 0, read: current.read + current.unread }));
+      toast.success(t.markAllSuccess);
+    } catch (requestError) { toast.error(requestError?.response?.data?.message || t.markAllError); } finally { setBusy(null); }
   };
 
-  const handleMarkAllRead = async () => {
+  const remove = async (id) => {
+    if (!window.confirm(t.confirmDelete)) return;
+    setBusy(id);
     try {
-      await axios.put('/api/notifications/read-all');
-      setNotifications(notifications.map(n => ({ ...n, is_read: true })));
-      setUnreadCount(0);
-      toast.success('All notifications marked as read');
-    } catch (error) {
-      toast.error('Failed to mark all as read');
-    }
+      const removed = items.find((item) => item.id === id);
+      await apiClient.delete(`/api/notifications/${id}`);
+      setItems((current) => current.filter((item) => item.id !== id));
+      setSummary((current) => ({ total: Math.max(0, current.total - 1), unread: Math.max(0, current.unread - (removed && !isRead(removed) ? 1 : 0)), read: Math.max(0, current.read - (removed && isRead(removed) ? 1 : 0)) }));
+      toast.success(t.deleted);
+    } catch (requestError) { toast.error(requestError?.response?.data?.message || t.deleteError); } finally { setBusy(null); }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this notification?')) return;
-    try {
-      await axios.delete(`/api/notifications/${id}`);
-      setNotifications(prev => prev.filter(notification => notification.id !== id));
-      toast.success('Notification deleted');
-    } catch (error) {
-      toast.error('Failed to delete notification');
-    }
-  };
-
-  const getPriorityColor = (priority) => {
-    const colors = { 'Low': '#48bb78', 'Medium': '#4299e1', 'High': '#ed8936', 'Urgent': '#fc8181' };
-    return colors[priority] || '#a0aec0';
-  };
-
-  const getTypeEmoji = (type) => {
-    const emojis = { 'Maintenance': '🔧', 'Assignment': '📋', 'Alert': '🚨', 'Report': '📊', 'System': '⚙️', 'Reminder': '⏰', 'Approval': '✅' };
-    return emojis[type] || '📬';
-  };
-
-  const styles = {
-    container: { padding: '20px' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' },
-    title: { color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1.5rem', fontWeight: 700 },
-    markAllButton: { padding: '8px 16px', background: isDark ? '#2b6cb0' : '#2b6cb0', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' },
-    card: (isRead) => ({
-      background: isRead ? (isDark ? '#141e2d' : '#f7fafc') : (isDark ? '#1e2d45' : '#ffffff'),
-      padding: '16px 20px',
-      borderRadius: '12px',
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      marginBottom: '12px',
-      cursor: 'pointer',
-      transition: 'background 0.15s ease',
-      opacity: isRead ? 0.8 : 1
-    }),
-    cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' },
-    cardTitle: { fontWeight: 600, color: isDark ? '#c8dcf5' : '#1a365d' },
-    cardMessage: { color: isDark ? '#8896b0' : '#4a5568', fontSize: '0.9rem', marginTop: '4px' },
-    cardMeta: { display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '8px', fontSize: '0.8rem', color: isDark ? '#8896b0' : '#4a5568' },
-    unreadDot: { width: '10px', height: '10px', borderRadius: '50%', background: '#4299e1', display: 'inline-block', marginRight: '8px' },
-    emptyState: { textAlign: 'center', padding: '60px 20px', color: isDark ? '#8896b0' : '#4a5568' }
-  };
-
-  return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>🔔 {t.notifications}{unreadCount > 0 && <span style={{ fontSize: '0.8rem', background: '#fc8181', color: 'white', padding: '2px 10px', borderRadius: '20px', marginLeft: '12px' }}>{unreadCount} {t.unread}</span>}</h1>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <select value={filter} onChange={event => setFilter(event.target.value)} aria-label="Filter notifications">
-            <option value="all">All</option><option value="unread">Unread</option><option value="read">Read</option>
-          </select>
-          {unreadCount > 0 && <button style={styles.markAllButton} onClick={handleMarkAllRead}>{t.markAllRead}</button>}
-        </div>
-      </div>
-
-      {loading ? <div style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>⏳ {t.loading}</div> :
-        notifications.length === 0 ? (
-          <div style={styles.emptyState}><div style={{ fontSize: '3rem', marginBottom: '16px' }}>📬</div><h3>{t.noNotifications}</h3><p>{t.noNotificationsDesc}</p></div>
-        ) : (
-            notifications.filter(notification => filter === 'all' || (filter === 'unread' ? !notification.is_read : notification.is_read)).map(notification => (
-            <div key={notification.id} style={styles.card(notification.is_read)} onClick={() => !notification.is_read && handleMarkRead(notification.id)}>
-              <div style={styles.cardHeader}>
-                <div style={{ flex: 1 }}>
-                  <div style={styles.cardTitle}>
-                    {!notification.is_read && <span style={styles.unreadDot} />}
-                    <span>{getTypeEmoji(notification.type)}</span> {notification.title}
-                    <span style={{ marginLeft: '8px', padding: '2px 10px', borderRadius: '12px', fontSize: '0.7rem', background: getPriorityColor(notification.priority) + '20', color: getPriorityColor(notification.priority) }}>{notification.priority}</span>
-                  </div>
-                  <div style={styles.cardMessage}>{notification.message}</div>
-                  <div style={styles.cardMeta}>
-                    <span>{notification.type}</span>
-                    <span>{new Date(notification.created_at).toLocaleString()}</span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  {!notification.is_read && <button style={{ padding: '4px 12px', borderRadius: '4px', border: 'none', background: '#4299e1', color: 'white', cursor: 'pointer', fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); handleMarkRead(notification.id); }}>{t.markRead}</button>}
-                  <button style={{ padding: '4px 12px', borderRadius: '4px', border: '1px solid #fc8181', background: 'transparent', color: '#c53030', cursor: 'pointer', fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); handleDelete(notification.id); }}>Delete</button>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-    </div>
-  );
+  const noFilter = !Object.values(filters).some(Boolean);
+  return <main className="notifications-page" aria-labelledby="notifications-title">
+    <header className="notifications-page__header"><div><div className="notifications-page__eyebrow"><Bell size={16} aria-hidden="true" /> {t.eyebrow}</div><h1 id="notifications-title">{t.title}</h1><p>{t.subtitle}</p></div><button className="notifications-button notifications-button--secondary" type="button" onClick={load} disabled={loading}><RefreshCw size={16} className={loading ? 'notifications-spin' : ''} aria-hidden="true" /> {t.refresh}</button></header>
+    <section className="notifications-summary" aria-label={t.summary}><div><span>{t.total}</span><strong>{summary.total}</strong></div><div><span>{t.unread}</span><strong>{summary.unread}</strong></div><div><span>{t.read}</span><strong>{summary.read}</strong></div></section>
+    <section className="notifications-toolbar" aria-label={t.filters}><label className="notifications-search"><Search size={16} aria-hidden="true" /><span className="sr-only">{t.search}</span><input type="search" value={filters.search} onChange={(event) => filter('search', event.target.value)} placeholder={t.searchPlaceholder} /></label><label><span className="sr-only">{t.status}</span><select value={filters.read} onChange={(event) => filter('read', event.target.value)}><option value="">{t.all}</option><option value="unread">{t.unread}</option><option value="read">{t.read}</option></select></label><label><span className="sr-only">{t.type}</span><select value={filters.type} onChange={(event) => filter('type', event.target.value)}><option value="">{t.allTypes}</option>{types.map((value) => <option key={value} value={value}>{value}</option>)}</select></label><label><span className="sr-only">{t.priority}</span><select value={filters.priority} onChange={(event) => filter('priority', event.target.value)}><option value="">{t.allPriorities}</option>{priorities.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>{summary.unread > 0 && <button className="notifications-button notifications-button--primary" type="button" onClick={markAll} disabled={busy === 'all'}><CheckCheck size={16} aria-hidden="true" /> {t.markAll}</button>}</section>
+    {error && <section className="notifications-state notifications-state--error" role="alert"><AlertCircle size={22} aria-hidden="true" /><span>{error}</span><button className="notifications-button notifications-button--secondary" type="button" onClick={load}>{t.retry}</button></section>}
+    {loading ? <section className="notifications-state"><Loader2 size={22} className="notifications-spin" aria-hidden="true" /><span>{t.loading}</span></section> : !error && items.length === 0 ? <section className="notifications-state"><Bell size={30} aria-hidden="true" /><strong>{noFilter ? t.empty : t.noMatches}</strong><span>{noFilter ? t.emptyHelp : t.noMatchesHelp}</span></section> : !error && <section className="notifications-list" aria-live="polite">{items.map((item) => { const read = isRead(item); const created = item.created_at || item.createdAt; return <article className={`notification-item${read ? ' notification-item--read' : ''}`} key={item.id}><div className={`notification-item__icon notification-item__icon--${priority(item.priority)}`}><Bell size={18} aria-hidden="true" /></div><div className="notification-item__content"><div className="notification-item__heading"><h2>{item.title || t.notification}</h2>{!read && <span className="notification-unread">{t.unread}</span>}</div><p>{item.message || t.noMessage}</p><div className="notification-item__meta"><span>{item.type || t.notification}</span><time dateTime={created || undefined}>{dateText(created)}</time>{item.priority && <span className={`notification-priority notification-priority--${priority(item.priority)}`}>{item.priority}</span>}</div></div><div className="notification-item__actions">{!read && <button className="notifications-icon-button" type="button" title={t.markRead} aria-label={`${t.markRead}: ${item.title || t.notification}`} onClick={() => markRead(item.id)} disabled={busy === item.id}><CheckCheck size={17} aria-hidden="true" /></button>}<button className="notifications-icon-button notifications-icon-button--danger" type="button" title={t.delete} aria-label={`${t.delete}: ${item.title || t.notification}`} onClick={() => remove(item.id)} disabled={busy === item.id}><Trash2 size={17} aria-hidden="true" /></button></div></article>; })}</section>}
+    {!loading && !error && items.length > 0 && <footer className="notifications-pagination"><span>{t.page} {pagination.page || page} {t.of} {pagination.totalPages || 1}</span><div><button className="notifications-icon-button" type="button" title={t.previous} aria-label={t.previous} disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}><ChevronLeft size={18} aria-hidden="true" /></button><button className="notifications-icon-button" type="button" title={t.next} aria-label={t.next} disabled={page >= (pagination.totalPages || 1)} onClick={() => setPage((current) => Math.min(pagination.totalPages || 1, current + 1))}><ChevronRight size={18} aria-hidden="true" /></button></div></footer>}
+  </main>;
 };
 
-const englishTranslations = {
-  notifications: 'Notifications',
-  unread: 'unread',
-  markAllRead: 'Mark All Read',
-  markRead: 'Mark Read',
-  loading: 'Loading...',
-  noNotifications: 'No Notifications',
-  noNotificationsDesc: 'You have no notifications at the moment.'
-};
-
-const amharicTranslations = {
-  notifications: 'ማስታወቂያዎች',
-  unread: 'ያልተነበቡ',
-  markAllRead: 'ሁሉንም እንደተነበበ ምልክት አድርግ',
-  markRead: 'እንደተነበበ ምልክት አድርግ',
-  loading: 'በመጫን ላይ...',
-  noNotifications: 'ምንም ማስታወቂያዎች የሉም',
-  noNotificationsDesc: 'በአሁኑ ሰዓት ምንም ማስታወቂያዎች የሉዎትም።'
-};
+const en = { eyebrow: 'Department workspace', title: 'Notifications', subtitle: 'Stay informed about activity relevant to your department.', refresh: 'Refresh', summary: 'Notification summary', total: 'Total', unread: 'Unread', read: 'Read', filters: 'Filter notifications', search: 'Search notifications', searchPlaceholder: 'Search title, message, or type', status: 'Read status', all: 'All statuses', type: 'Type', allTypes: 'All types', priority: 'Priority', allPriorities: 'All priorities', markAll: 'Mark all as read', retry: 'Retry', loading: 'Loading notifications', empty: 'You are all caught up', emptyHelp: 'There are no notifications available for your department.', noMatches: 'No matching notifications', noMatchesHelp: 'Try changing or clearing your filters.', notification: 'Notification', noMessage: 'No message available.', markRead: 'Mark as read', delete: 'Delete notification', confirmDelete: 'Delete this notification?', markError: 'Unable to mark notification as read.', markAllSuccess: 'All notifications marked as read.', markAllError: 'Unable to mark all notifications as read.', deleted: 'Notification deleted.', deleteError: 'Unable to delete notification.', auth: 'Authentication is required.', denied: 'You do not have permission to view notifications.', loadError: 'Unable to load notifications. Please try again.', page: 'Page', of: 'of', previous: 'Previous page', next: 'Next page' };
+const am = { ...en, eyebrow: 'የዲፓርትመንት የስራ ቦታ', title: 'ማስታወቂያዎች', subtitle: 'ለዲፓርትመንትዎ ጠቃሚ የሆኑ ማስታወቂያዎችን ይከታተሉ።', refresh: 'አድስ', total: 'ጠቅላላ', unread: 'ያልተነበበ', read: 'የተነበበ', markAll: 'ሁሉንም እንደተነበበ አድርግ', retry: 'እንደገና ሞክር', loading: 'ማስታወቂያዎች በመጫን ላይ', empty: 'ሁሉንም ተከታትለዋል', emptyHelp: 'ለዲፓርትመንትዎ ምንም ማስታወቂያ የለም።', page: 'ገጽ', of: 'ከ' };
 
 export default Notifications;
-
-

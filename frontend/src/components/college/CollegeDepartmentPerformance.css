@@ -304,7 +304,7 @@
 }
 
 .college-performance-spin {
-  animation: performance-spin 1s linear infinite;
+  
 }
 
 @keyframes performance-spin {

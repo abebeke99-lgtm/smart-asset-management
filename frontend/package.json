@@ -22,7 +22,7 @@
     "dev": "react-scripts start --host localhost --port 3000",
     "mysql": "node server.mysql.js",
     "build": "react-scripts build",
-    "test": "react-scripts test --watch=false --env=node",
+    "test": "react-scripts test --watch=false",
     "eject": "react-scripts eject"
   },
   "proxy": "http://localhost:5000",
@@ -48,6 +48,7 @@
     "@tailwindcss/forms": "^0.5.11",
     "@tailwindcss/typography": "^0.5.20",
     "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.19"

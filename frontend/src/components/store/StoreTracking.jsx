@@ -264,7 +264,7 @@ const StoreTracking = () => {
     return (
       <div style={{ padding: 24 }}>
         <div style={{ background: isDark ? '#0f172a' : '#fff', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 16, padding: 30, textAlign: 'center' }}>
-          <RefreshCw size={18} style={{ animation: 'spin 1s linear infinite' }} /> {t.loading}
+          <RefreshCw size={18} style={{ animation: 'none' }} /> {t.loading}
         </div>
       </div>
     );

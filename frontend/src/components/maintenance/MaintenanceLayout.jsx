@@ -5,9 +5,9 @@ import './MaintenanceLayout.css';
 const MaintenanceLayout = () => {
   return (
     <div className="maintenance-layout-container">
-      <main className="maintenance-main-content">
+      <div className="maintenance-main-content">
         <Outlet />
-      </main>
+      </div>
     </div>
   );
 };

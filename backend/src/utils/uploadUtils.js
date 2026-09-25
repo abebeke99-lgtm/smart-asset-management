@@ -3,6 +3,8 @@ const path = require('path');
 
 const DEFAULT_UPLOAD_ROOT = process.env.UPLOAD_DIR || './uploads';
 const IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif', 'image/svg+xml'];
+const PROFILE_IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const PROFILE_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'];
 const DOCUMENT_MIME_TYPES = [
   'application/pdf',
   'application/msword',
@@ -59,6 +61,20 @@ const sanitizeFilename = (value = '') => {
   const safeExtension = extension || '';
   const sanitized = `${safeBase}${safeExtension}`;
   return sanitized.replace(/\.{2,}/g, '.').replace(/_\./g, '.').slice(0, 180) || 'file';
+};
+
+const getImageSignature = (buffer = Buffer.alloc(0)) => {
+  if (!buffer || buffer.length < 12) return null;
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47 && buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a) {
+    return 'image/png';
+  }
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 && buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50) {
+    return 'image/webp';
+  }
+  return null;
 };
 
 const getUploadCategoryByMimeType = (mimeType = '') => {
@@ -159,7 +175,7 @@ const validateUploadFile = (file = {}, options = {}) => {
 
 const ensureUploadDirectories = () => {
   const root = path.resolve(process.cwd(), DEFAULT_UPLOAD_ROOT.replace(/^\.\//, ''));
-  const directories = ['images', 'documents', 'files', 'requests', 'assets'];
+  const directories = ['images', 'documents', 'files', 'requests', 'assets', 'profile'];
   for (const directory of directories) {
     fs.mkdirSync(path.join(root, directory), { recursive: true });
   }
@@ -169,7 +185,8 @@ const ensureUploadDirectories = () => {
 const resolveUploadDirectory = (category = 'files') => {
   const root = path.resolve(process.cwd(), DEFAULT_UPLOAD_ROOT.replace(/^\.\//, ''));
   const normalizedCategory = String(category || 'files').toLowerCase();
-  const target = path.join(root, ['images', 'documents', 'files', 'requests', 'assets'].includes(normalizedCategory) ? normalizedCategory : 'files');
+  const validCategories = ['images', 'documents', 'files', 'requests', 'assets', 'profile'];
+  const target = path.join(root, validCategories.includes(normalizedCategory) ? normalizedCategory : 'files');
   fs.mkdirSync(target, { recursive: true });
   return target;
 };
@@ -186,6 +203,76 @@ const buildPublicFileUrl = (filePath = '') => {
 const isSvgSafe = (buffer) => {
   const text = buffer.toString('utf8').toLowerCase();
   return !/(<script|javascript:|onload=|onerror=|on[a-z]+=|<iframe|<foreignobject)/i.test(text);
+};
+
+const validateProfilePhoto = (file = {}, options = {}) => {
+  const originalName = String(file.originalname || file.originalName || file.name || 'profile-photo').trim();
+  const mimeType = normalizeMimeType(file.mimetype || file.mimeType || '');
+  const buffer = Buffer.isBuffer(file.buffer) ? file.buffer : Buffer.alloc(0);
+  const size = Number(file.size || buffer.length || 0);
+  const extension = normalizeFileExtension(originalName);
+  const signature = getImageSignature(buffer);
+
+  if (!PROFILE_IMAGE_MIME_TYPES.includes(mimeType)) {
+    return { valid: false, message: 'Unsupported image type. Please upload a JPG, PNG, or WEBP image.' };
+  }
+
+  if (extension && !PROFILE_IMAGE_EXTENSIONS.includes(extension.toLowerCase())) {
+    return { valid: false, message: 'Unsupported file extension. Please upload a JPG, PNG, or WEBP image.' };
+  }
+
+  if (buffer.length > 0 && signature && signature !== mimeType) {
+    return { valid: false, message: 'Invalid image content. The file does not match the selected image type.' };
+  }
+
+  const maxSize = Number.isFinite(Number(options.maxSize)) ? Number(options.maxSize) : 5 * 1024 * 1024;
+  if (!Number.isFinite(size) || size <= 0) {
+    return { valid: false, message: 'Invalid image content. Please select a valid photo.' };
+  }
+  if (size > maxSize) {
+    return { valid: false, message: `Image is too large. Please choose an image smaller than ${Math.round(maxSize / (1024 * 1024))} MB.` };
+  }
+
+  return { valid: true, mimeType, extension, size };
+};
+
+const saveProfilePhoto = ({ buffer, originalName = '', mimeType = '' }, userId = null) => {
+  if (!buffer || !Buffer.isBuffer(buffer)) {
+    throw new Error('Uploaded file content is missing.');
+  }
+
+  const validation = validateProfilePhoto({
+    originalname: originalName,
+    mimetype: mimeType,
+    size: buffer.length,
+    buffer,
+  }, { maxSize: 5 * 1024 * 1024 });
+
+  if (!validation.valid) {
+    const error = new Error(validation.message);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const extension = normalizeFileExtension(originalName) || (validation.mimeType === 'image/png' ? '.png' : validation.mimeType === 'image/webp' ? '.webp' : '.jpg');
+  const safeUserId = Number.isInteger(Number(userId)) ? Number(userId) : 'user';
+  const formattedName = `user-${safeUserId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const directory = resolveUploadDirectory('profile');
+  const storedName = `${formattedName}${extension}`;
+  const filePath = path.join(directory, storedName);
+  fs.writeFileSync(filePath, buffer);
+
+  const relativePath = path.posix.join('uploads', 'profile', storedName);
+  return {
+    originalName: sanitizeFilename(originalName || 'profile-photo'),
+    filename: storedName,
+    storedName,
+    mimeType: validation.mimeType,
+    size: buffer.length,
+    category: 'profile',
+    filePath: relativePath,
+    url: buildPublicFileUrl(relativePath),
+  };
 };
 
 const saveUploadedFile = ({ buffer, originalName = '', mimeType = '', category = 'files', maxSize = null }, options = {}) => {
@@ -244,9 +331,12 @@ module.exports = {
   sanitizeFilename,
   getUploadCategoryByMimeType,
   validateUploadFile,
+  validateProfilePhoto,
   ensureUploadDirectories,
   resolveUploadDirectory,
   buildPublicFileUrl,
   saveUploadedFile,
+  saveProfilePhoto,
   isSvgSafe,
+  getImageSignature,
 };

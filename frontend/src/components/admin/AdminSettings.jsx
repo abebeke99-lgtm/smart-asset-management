@@ -1,83 +1,30 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
 import { toast } from 'react-toastify';
+import UserAvatar from '../common/UserAvatar';
 
 /* ============================================================
    SETTINGS CATEGORIES
 ============================================================ */
 
 const CATEGORIES = [
-  {
-    id: 'organization',
-    label: '1. Organization & Branding'
-  },
-  {
-    id: 'account',
-    label: '2. Account & Profile'
-  },
-  {
-    id: 'security',
-    label: '3. Security & Authentication'
-  },
-  {
-    id: 'roles',
-    label: '4. Roles & Permissions'
-  },
-  {
-    id: 'notifications',
-    label: '5. Notifications & Alerts'
-  },
-  {
-    id: 'localization',
-    label: '6. Localization'
-  },
-  {
-    id: 'assets',
-    label: '7. Asset Configuration'
-  },
-  {
-    id: 'workflow',
-    label: '8. Workflow & Approval'
-  },
-  {
-    id: 'rfid',
-    label: '9. RFID & Tracking'
-  },
-  {
-    id: 'maintenance',
-    label: '10. Maintenance Configuration'
-  },
-  {
-    id: 'financial',
-    label: '11. Financial Configuration'
-  },
-  {
-    id: 'reports',
-    label: '12. Reports & Data'
-  },
-  {
-    id: 'audit',
-    label: '13. Audit & Compliance'
-  },
-  {
-    id: 'monitoring',
-    label: '14. System Monitoring'
-  },
-  {
-    id: 'integrations',
-    label: '15. Integrations'
-  },
-  {
-    id: 'backup',
-    label: '16. Backup & Recovery'
-  },
-  {
-    id: 'maintenance_sys',
-    label: '17. Data & System Maintenance'
-  }
+  { id: 'organization', label: 'Organization & Branding', icon: '🏢' },
+  { id: 'account', label: 'Account & Profile', icon: '👤' },
+  { id: 'security', label: 'Security & Authentication', icon: '🔐' },
+  { id: 'roles', label: 'Roles & Permissions', icon: '👥' },
+  { id: 'notifications', label: 'Notifications & Alerts', icon: '🔔' },
+  { id: 'localization', label: 'Language & Region', icon: '🌍' },
+  { id: 'assets', label: 'Asset Configuration', icon: '📦' },
+  { id: 'workflow', label: 'Workflow & Approval', icon: '🔄' },
+  { id: 'rfid', label: 'RFID & Tracking', icon: '🏷️' },
+  { id: 'maintenance', label: 'Maintenance Configuration', icon: '🔧' },
+  { id: 'financial', label: 'Financial Configuration', icon: '💰' },
+  { id: 'reports', label: 'Reports & Data', icon: '📊' },
+  { id: 'audit', label: 'Audit & Compliance', icon: '📝' },
+  { id: 'backup', label: 'Backup & Recovery', icon: '💾' },
 ];
 
 /* ============================================================
@@ -209,13 +156,6 @@ const AdminSettings = () => {
 
   const [auditLogs, setAuditLogs] = useState([]);
 
-  const [sysStatus, setSysStatus] = useState({
-    api: 'Checking...',
-    db: 'Checking...',
-    storage: 'Checking...',
-    uptime: 'Checking...'
-  });
-
   const [maintenanceLoading, setMaintenanceLoading] = useState(false);
 
   const isDark = theme === 'dark';
@@ -235,10 +175,6 @@ const AdminSettings = () => {
   useEffect(() => {
     if (activeTab === 'audit') {
       fetchAuditLogs();
-    }
-
-    if (activeTab === 'monitoring') {
-      fetchSystemStatus();
     }
   }, [activeTab]);
 
@@ -291,68 +227,6 @@ const AdminSettings = () => {
         error?.response?.data?.message ||
         'Could not load audit logs'
       );
-    }
-  };
-
-  /* ============================================================
-     SYSTEM MONITORING
-  ============================================================ */
-
-  const fetchSystemStatus = async () => {
-    try {
-      const response = await apiClient.get('/api/admin/system/health');
-
-      const result =
-        response?.data?.data ||
-        response?.data?.status ||
-        response?.data ||
-        {};
-
-      const formatUptime = (seconds) => {
-        const value = Number(seconds);
-
-        if (!Number.isFinite(value)) {
-          return 'Not measured';
-        }
-
-        if (value < 60) return `${value}s`;
-
-        if (value < 3600) {
-          return `${Math.floor(value / 60)}m`;
-        }
-
-        return `${Math.floor(value / 3600)}h ${Math.floor((value % 3600) / 60)}m`;
-      };
-
-      setSysStatus({
-        api: result.api?.status
-          ? `Operational (${result.api?.responseTimeMs ?? 0}ms)`
-          : result.api || 'Not available',
-
-        db:
-          result.database?.status === 'connected'
-            ? 'Connected'
-            : result.database?.status ||
-              result.db ||
-              'Not available',
-
-        storage:
-          result.storage?.status === 'measured'
-            ? `${result.storage.freeSpace} GB free`
-            : result.storage?.status ||
-              'Not measured',
-
-        uptime: formatUptime(result.uptime?.seconds)
-      });
-    } catch (error) {
-      console.error('System health error:', error);
-
-      setSysStatus({
-        api: 'Unavailable',
-        db: 'Unavailable',
-        storage: 'Not measured',
-        uptime: 'Not measured'
-      });
     }
   };
 
@@ -619,6 +493,8 @@ const AdminSettings = () => {
      MAIN UI
   ============================================================ */
 
+  const activeCategory = CATEGORIES.find((category) => category.id === activeTab) || CATEGORIES[0];
+
   return (
     <div
       className={`admin-settings-layout ${
@@ -634,12 +510,7 @@ const AdminSettings = () => {
           min-height: 100vh;
           width: 100%;
           padding: 24px;
-          font-family:
-            Inter,
-            -apple-system,
-            BlinkMacSystemFont,
-            "Segoe UI",
-            sans-serif;
+          font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
 
         .light-mode {
@@ -652,24 +523,54 @@ const AdminSettings = () => {
           color: #f8fafc;
         }
 
+        .settings-shell {
+          display: grid;
+          grid-template-columns: 290px minmax(0, 1fr);
+          gap: 24px;
+          max-width: 1440px;
+          margin: 0 auto;
+          align-items: start;
+        }
+
+        .settings-sidebar {
+          position: sticky;
+          top: 20px;
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 16px;
+          padding: 18px 14px;
+          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+        }
+
+        .dark-mode .settings-sidebar {
+          background: #111827;
+          border-color: #334155;
+        }
+
         .settings-header {
           display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 20px;
-          margin-bottom: 20px;
+          flex-direction: column;
+          gap: 6px;
+          padding: 6px 8px 18px;
+          border-bottom: 1px solid #e2e8f0;
+          margin-bottom: 14px;
+        }
+
+        .dark-mode .settings-header {
+          border-color: #334155;
         }
 
         .settings-header h1 {
           margin: 0;
           font-size: 26px;
           font-weight: 800;
+          line-height: 1.2;
         }
 
         .settings-subtitle {
-          margin-top: 5px;
           color: #64748b;
-          font-size: 13px;
+          font-size: 12px;
+          line-height: 1.5;
         }
 
         .dark-mode .settings-subtitle {
@@ -677,7 +578,7 @@ const AdminSettings = () => {
         }
 
         .admin-status {
-          display: flex;
+          display: inline-flex;
           align-items: center;
           gap: 7px;
           color: #10b981;
@@ -688,64 +589,145 @@ const AdminSettings = () => {
 
         .settings-nav {
           display: flex;
-          overflow-x: auto;
+          flex-direction: column;
           gap: 8px;
-          white-space: nowrap;
-          padding: 10px 0 16px;
-          margin-bottom: 20px;
-          border-bottom: 1px solid #e2e8f0;
-          scrollbar-width: thin;
-        }
-
-        .dark-mode .settings-nav {
-          border-color: #334155;
+          padding: 0 4px;
         }
 
         .nav-item {
-          padding: 10px 15px;
-          border-radius: 8px;
-          border: 1px solid #e2e8f0;
-          background: #ffffff;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          width: 100%;
+          padding: 10px 12px;
+          border-radius: 10px;
+          border: 1px solid transparent;
+          background: transparent;
           cursor: pointer;
-          font-size: 12px;
+          font-size: 13px;
           font-weight: 600;
-          color: #64748b;
+          color: #475569;
+          text-align: left;
           transition: all 0.2s ease;
         }
 
         .dark-mode .nav-item {
-          background: #1e293b;
-          border-color: #334155;
           color: #cbd5e1;
         }
 
         .nav-item:hover {
-          border-color: #3b82f6;
-          color: #2563eb;
+          background: #eff6ff;
+          border-color: #dbeafe;
+          color: #1d4ed8;
+        }
+
+        .dark-mode .nav-item:hover {
+          background: rgba(59, 130, 246, 0.08);
+          border-color: rgba(96, 165, 250, 0.25);
+          color: #bfdbfe;
         }
 
         .nav-item.active {
-          background: #2563eb;
-          color: #ffffff;
-          border-color: #2563eb;
-          box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
+          background: #eff6ff;
+          border-color: #bfdbfe;
+          color: #1d4ed8;
+          box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.05);
+        }
+
+        .dark-mode .nav-item.active {
+          background: rgba(59, 130, 246, 0.12);
+          border-color: rgba(96, 165, 250, 0.35);
+          color: #dbeafe;
+        }
+
+        .nav-icon {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 22px;
+          min-width: 22px;
+          font-size: 14px;
+        }
+
+        .settings-panel {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 18px;
+          padding: 24px;
+          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+          min-height: 620px;
+        }
+
+        .dark-mode .settings-panel {
+          background: #111827;
+          border-color: #334155;
+        }
+
+        .settings-panel-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding-bottom: 16px;
+          margin-bottom: 20px;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        .dark-mode .settings-panel-header {
+          border-color: #334155;
+        }
+
+        .panel-title {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 20px;
+          font-weight: 800;
+          margin: 0;
+        }
+
+        .panel-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 30px;
+          height: 30px;
+          border-radius: 8px;
+          background: #eff6ff;
+          color: #1d4ed8;
+          font-size: 15px;
+        }
+
+        .dark-mode .panel-badge {
+          background: rgba(59, 130, 246, 0.12);
+          color: #bfdbfe;
+        }
+
+        .panel-status {
+          color: #64748b;
+          font-size: 12px;
+          font-weight: 700;
+          border: 1px solid #e2e8f0;
+          border-radius: 999px;
+          background: #f8fafc;
+          padding: 6px 10px;
+        }
+
+        .dark-mode .panel-status {
+          color: #cbd5e1;
+          border-color: #334155;
+          background: rgba(15, 23, 42, 0.6);
+        }
+
+        .panel-body {
+          width: 100%;
         }
 
         .content-area {
           width: 100%;
           max-width: 1200px;
           margin: 0 auto;
-          padding: 26px;
-          background: #ffffff;
-          border-radius: 14px;
-          border: 1px solid #e2e8f0;
-          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
-        }
-
-        .dark-mode .content-area {
-          background: #1e293b;
-          border-color: #334155;
-          box-shadow: none;
+          padding: 0;
         }
 
         .form-section {
@@ -772,8 +754,7 @@ const AdminSettings = () => {
 
         .form-grid {
           display: grid;
-          grid-template-columns:
-            repeat(auto-fit, minmax(280px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
           gap: 18px;
         }
 
@@ -808,16 +789,14 @@ const AdminSettings = () => {
           color: #0f172a;
           font-size: 14px;
           outline: none;
-          transition: border 0.2s ease,
-                      box-shadow 0.2s ease;
+          transition: border 0.2s ease, box-shadow 0.2s ease;
         }
 
         .form-group input:focus,
         .form-group select:focus,
         .form-group textarea:focus {
           border-color: #3b82f6;
-          box-shadow:
-            0 0 0 3px rgba(59, 130, 246, 0.12);
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
         }
 
         .dark-mode .form-group input,
@@ -897,256 +876,56 @@ const AdminSettings = () => {
           gap: 12px;
         }
 
-        .channel-row .toggle-group { flex: 1; }
-        .channel-row.unsupported { justify-content: space-between; padding: 13px 15px; border: 1px dashed #cbd5e1; border-radius: 9px; color: #64748b; }
-        .channel-status { font-size: 12px; font-weight: 700; color: #b45309; white-space: nowrap; }
-        .channel-status.enabled { color: #15803d; }
-
-        .notification-event-table { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 9px; }
-        .notification-event-head, .notification-event-row { min-width: 760px; display: grid; grid-template-columns: minmax(190px, 1.5fr) 70px 70px 70px minmax(190px, 1.5fr) 110px; align-items: center; gap: 12px; padding: 12px 14px; }
-        .notification-event-head { background: #eff6ff; color: #1e3a8a; font-size: 11px; font-weight: 800; text-transform: uppercase; }
-        .notification-event-row { border-top: 1px solid #e2e8f0; font-size: 13px; }
-        .notification-event-row input { width: 18px; height: 18px; accent-color: #2563eb; }
-        .notification-event-row select { padding: 7px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; }
-        .dark-mode .notification-event-table, .dark-mode .notification-event-row { border-color: #334155; }
-        .dark-mode .notification-event-head { background: #172554; color: #bfdbfe; }
-        .dark-mode .notification-event-row select { background: #0f172a; border-color: #475569; color: #f8fafc; }
-
-        .status-grid {
-          display: grid;
-          grid-template-columns:
-            repeat(auto-fit, minmax(200px, 1fr));
-          gap: 18px;
-        }
-
-        .status-card {
-          padding: 22px;
-          border-radius: 10px;
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          text-align: center;
-        }
-
-        .dark-mode .status-card {
-          background: #0f172a;
-          border-color: #334155;
-        }
-
-        .status-label {
-          display: block;
-          font-size: 12px;
-          color: #64748b;
-          font-weight: 700;
-        }
-
-        .status-val {
-          display: block;
-          margin-top: 9px;
-          font-size: 18px;
-          font-weight: 800;
-          color: #10b981;
-        }
-
-        .redirect-box {
-          text-align: center;
-          padding: 55px 25px;
-        }
-
-        .redirect-box .icon {
-          font-size: 50px;
-          margin-bottom: 15px;
-        }
-
-        .redirect-box h2 {
-          margin: 0 0 10px;
-          font-size: 22px;
-        }
-
-        .redirect-box p {
-          max-width: 600px;
-          margin: 0 auto 22px;
-          color: #64748b;
-          font-size: 14px;
-        }
-
-        .dark-mode .redirect-box p {
-          color: #94a3b8;
-        }
-
-        .audit-table-wrapper {
-          width: 100%;
-          overflow-x: auto;
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
-        }
-
-        .dark-mode .audit-table-wrapper {
-          border-color: #334155;
-        }
-
-        .audit-table {
-          width: 100%;
-          border-collapse: collapse;
-          min-width: 700px;
-          font-size: 13px;
-        }
-
-        .audit-table th,
-        .audit-table td {
-          padding: 12px;
-          text-align: left;
-          border-bottom: 1px solid #e2e8f0;
-        }
-
-        .dark-mode .audit-table th,
-        .dark-mode .audit-table td {
-          border-color: #334155;
-        }
-
-        .audit-table th {
-          background: #f8fafc;
-          font-weight: 800;
-        }
-
-        .dark-mode .audit-table th {
-          background: #0f172a;
-        }
-
-        .action-grid {
-          display: grid;
-          grid-template-columns:
-            repeat(auto-fit, minmax(220px, 1fr));
-          gap: 15px;
-        }
-
-        .action-button {
-          min-height: 80px;
-          border-radius: 9px;
-          border: 1px solid #e2e8f0;
-          background: #ffffff;
-          color: #334155;
-          font-weight: 700;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .dark-mode .action-button {
-          background: #0f172a;
-          border-color: #334155;
-          color: #e2e8f0;
-        }
-
-        .action-button:hover:not(:disabled) {
-          border-color: #3b82f6;
-          transform: translateY(-1px);
-        }
-
-        .action-button.danger {
-          color: #dc2626;
-        }
-
-        .empty-state,
-        .loading-state {
-          min-height: 300px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 12px;
-          color: #64748b;
-          font-size: 14px;
-        }
-
-        .spinner {
-          width: 20px;
-          height: 20px;
-          border: 3px solid #dbeafe;
-          border-top-color: #2563eb;
-          border-radius: 50%;
-          animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-          to {
-            transform: rotate(360deg);
-          }
-        }
-
-        @media (max-width: 768px) {
-          .admin-settings-layout {
-            padding: 14px;
-          }
-
-          .settings-header {
-            align-items: flex-start;
-            flex-direction: column;
-          }
-
-          .settings-header h1 {
-            font-size: 21px;
-          }
-
-          .content-area {
-            padding: 18px;
-          }
-
-          .form-grid {
+        @media (max-width: 980px) {
+          .settings-shell {
             grid-template-columns: 1fr;
           }
+
+          .settings-sidebar {
+            position: static;
+          }
+
+          .settings-panel {
+            padding: 18px;
+          }
         }
-      `}</style>
+`}</style>
 
-      {/* ======================================================
-          HEADER
-      ====================================================== */}
-
-      <div className="settings-header">
-        <div>
-          <h1>⚙️ System Settings</h1>
-
-          <div className="settings-subtitle">
-            Configure organization, security, assets,
-            notifications, workflows and system behavior.
+      <div className="settings-shell">
+        <aside className="settings-sidebar">
+          <div className="settings-header">
+            <h1>⚙️ System Settings</h1>
+            <div className="settings-subtitle">Configure system behavior and organization preferences.</div>
+            <div className="admin-status"><span>●</span> Ready</div>
           </div>
-        </div>
 
-        <div className="admin-status" style={{ color: '#64748b' }}>
-          ● System access protected by admin RBAC
-        </div>
+          <nav className="settings-nav" aria-label="Settings navigation">
+            {CATEGORIES.map((category) => (
+              <button
+                key={category.id}
+                type="button"
+                className={`nav-item ${activeTab === category.id ? 'active' : ''}`}
+                onClick={() => setActiveTab(category.id)}
+              >
+                <span className="nav-icon">{category.icon}</span>
+                <span>{category.label}</span>
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+        <main className="settings-panel">
+          <header className="settings-panel-header">
+            <h2 className="panel-title">
+              <span className="panel-badge">{activeCategory.icon}</span>
+              <span>{activeCategory.label}</span>
+            </h2>
+            <span className="panel-status">{loading ? 'Loading' : 'Ready'}</span>
+          </header>
+
+          <div className="panel-body">{renderActiveSetting()}</div>
+        </main>
       </div>
-
-      {/* ======================================================
-          CATEGORY NAVIGATION
-      ====================================================== */}
-
-      <nav
-        className="settings-nav"
-        aria-label="Settings categories"
-      >
-        {CATEGORIES.map((category) => (
-          <button
-            type="button"
-            key={category.id}
-            className={`nav-item ${
-              activeTab === category.id
-                ? 'active'
-                : ''
-            }`}
-            onClick={() =>
-              setActiveTab(category.id)
-            }
-          >
-            {category.label}
-          </button>
-        ))}
-      </nav>
-
-      {/* ======================================================
-          CONTENT
-      ====================================================== */}
-
-      <main className="content-area">
-        {renderActiveSetting()}
-      </main>
     </div>
   );
 };
@@ -1296,57 +1075,131 @@ const OrganizationForm = ({
    ACCOUNT
 ============================================================ */
 
-const AccountProfile = ({ user }) => (
-  <div className="form-section">
-    <h2 className="section-title">
-      👤 Account & Profile
-    </h2>
+export const AccountProfile = ({ user }) => {
+  const { updateUser } = useAuth();
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
 
-    <p className="section-description">
-      Current administrator account information.
-    </p>
+  const handlePhotoUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-    <div className="form-grid">
-      <Field
-        label="Username"
-        value={user?.username}
-        disabled
-      />
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Please choose a PNG, JPG, or WEBP image.');
+      event.target.value = '';
+      return;
+    }
 
-      <Field
-        label="Full Name"
-        value={
-          user?.full_name ||
-          user?.fullName ||
-          user?.name
-        }
-        disabled
-      />
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Profile photo must be 5 MB or smaller.');
+      event.target.value = '';
+      return;
+    }
 
-      <Field
-        label="Email"
-        value={user?.email}
-        disabled
-      />
+    try {
+      setUploading(true);
+      const formData = new FormData();
+      formData.append('photo', file);
+      const response = await apiClient.post('/api/users/profile/photo', formData);
 
-      <Field
-        label="Role"
-        value={user?.role}
-        disabled
-      />
+      const nextUser = response?.data?.user || response?.data?.data || null;
+      if (nextUser) {
+        updateUser(nextUser);
+      }
+      toast.success('Profile photo updated successfully.');
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Unable to update profile photo.');
+    } finally {
+      setUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    try {
+      setUploading(true);
+      const response = await apiClient.delete('/api/users/profile/photo');
+      const nextUser = response?.data?.user || response?.data?.data || null;
+      if (nextUser) {
+        updateUser(nextUser);
+      }
+      toast.success('Profile photo removed.');
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Unable to remove profile photo.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="form-section">
+      <h2 className="section-title">
+        👤 Account & Profile
+      </h2>
+
+      <p className="section-description">
+        Current administrator account information.
+      </p>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginBottom: '24px', flexWrap: 'wrap' }}>
+        <UserAvatar user={user} size="xl" className="profile-photo-preview" />
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button type="button" className="btn-save" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+            {uploading ? 'Uploading...' : 'Upload photo'}
+          </button>
+          {user?.profilePhoto && (
+            <button type="button" className="btn-save" style={{ background: '#e2e8f0', color: '#0f172a' }} onClick={handleRemovePhoto} disabled={uploading}>
+              Remove photo
+            </button>
+          )}
+        </div>
+      </div>
+
+      <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }} onChange={handlePhotoUpload} />
+
+      <div className="form-grid">
+        <Field
+          label="Username"
+          value={user?.username}
+          disabled
+        />
+
+        <Field
+          label="Full Name"
+          value={
+            user?.full_name ||
+            user?.fullName ||
+            user?.name
+          }
+          disabled
+        />
+
+        <Field
+          label="Email"
+          value={user?.email}
+          disabled
+        />
+
+        <Field
+          label="Role"
+          value={user?.role}
+          disabled
+        />
+      </div>
+
+      <p
+        style={{
+          fontSize: '12px',
+          color: '#64748b'
+        }}
+      >
+        Account credentials are managed by the
+        authentication service.
+      </p>
     </div>
-
-    <p
-      style={{
-        fontSize: '12px',
-        color: '#64748b'
-      }}
-    >
-      Account credentials are managed by the
-      authentication service.
-    </p>
-  </div>
-);
+  );
+};
 
 /* ============================================================
    SECURITY
@@ -2445,68 +2298,6 @@ const AuditView = ({
 };
 
 /* ============================================================
-   MONITORING
-============================================================ */
-
-const MonitoringView = ({
-  status,
-  onRefresh
-}) => {
-  return (
-    <div className="form-section">
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '10px'
-        }}
-      >
-        <div>
-          <h2 className="section-title">
-            👁️ System Monitoring
-          </h2>
-
-          <p className="section-description">
-            Monitor API, database and storage health.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          className="nav-item"
-          onClick={onRefresh}
-        >
-          🔄 Refresh
-        </button>
-      </div>
-
-      <div className="status-grid">
-        <StatusCard
-          label="API Status"
-          value={status.api}
-        />
-
-        <StatusCard
-          label="Database"
-          value={status.db}
-        />
-
-        <StatusCard
-          label="Storage"
-          value={status.storage}
-        />
-
-        <StatusCard
-          label="System Uptime"
-          value={status.uptime}
-        />
-      </div>
-    </div>
-  );
-};
-
-/* ============================================================
    SYSTEM MAINTENANCE
 ============================================================ */
 
@@ -2740,25 +2531,6 @@ const SaveButton = ({
   >
     {saving ? 'Saving...' : text}
   </button>
-);
-
-/* ============================================================
-   STATUS CARD
-============================================================ */
-
-const StatusCard = ({
-  label,
-  value
-}) => (
-  <div className="status-card">
-    <span className="status-label">
-      {label}
-    </span>
-
-    <span className="status-val">
-      {value}
-    </span>
-  </div>
 );
 
 /* ============================================================

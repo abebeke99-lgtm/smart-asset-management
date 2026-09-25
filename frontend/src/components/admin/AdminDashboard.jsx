@@ -17,7 +17,7 @@ import {
 } from 'chart.js';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import { toast } from 'react-toastify';
-import { apiClient } from '../../utils/api';
+import { apiClient, getApiErrorMessage } from '../../utils/api';
 import './AdminDashboard.css';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -39,7 +39,6 @@ import {
   Package,
   AlertTriangle,
   CheckCircle,
-  ClipboardCheck,
   XCircle
 } from 'lucide-react';
 
@@ -150,7 +149,6 @@ const AdminDashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [notifications, setNotifications] = useState([]);
   const [backups, setBackups] = useState([]);
-  const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [lastUpdated, setLastUpdated] = useState(null);
   const [apiError, setApiError] = useState('');
   const isDark = theme === 'dark';
@@ -517,7 +515,7 @@ const AdminDashboard = () => {
       // Fetch optional data
       const [notificationsResponse, backupsResponse] = await Promise.allSettled([
         apiClient.get('/api/notifications'),
-        apiClient.get('/api/backups')
+        apiClient.get('/api/admin/backups')
       ]);
 
       if (notificationsResponse.status === 'fulfilled') {
@@ -548,26 +546,20 @@ const AdminDashboard = () => {
       setStats(normalizedStats);
       setLastUpdated(new Date());
     } catch (error) {
-      const message = error?.response?.data?.message || error?.response?.data?.error || error?.message || t.loadError;
+      const message = getApiErrorMessage(error, t.loadError);
       setApiError(message);
       setLoadError(true);
       setStats(DEFAULT_STATS);
-      console.error('Dashboard fetch error:', error);
+      console.error('Dashboard fetch failed:', error.response?.status || error.code || 'unknown');
       toast.error(message);
     } finally {
       setLoading(false);
     }
   }, [t.loadError]);
 
-  // Clock and auto refresh
+  // Load once when the dashboard opens. Refreshes are explicit so the shell stays stable.
   useEffect(() => {
     fetchDashboardData();
-    const clockTimer = window.setInterval(() => setCurrentDateTime(new Date()), 1000);
-    const refreshTimer = window.setInterval(() => fetchDashboardData(), 60000);
-    return () => {
-      window.clearInterval(clockTimer);
-      window.clearInterval(refreshTimer);
-    };
   }, [fetchDashboardData]);
 
   // Colors
@@ -637,20 +629,6 @@ const AdminDashboard = () => {
       }]
     };
   }, [stats.assetByDepartment, t.assetsByDepartment, isDark]);
-
-  const categoryChartData = useMemo(() => {
-    const labels = safeArray(stats.assetByCategory).map(item => item?.label || item?.category || 'Unknown');
-    const values = safeArray(stats.assetByCategory).map(item => safeNumber(item?.value));
-    return {
-      labels: labels.length > 0 ? labels : ['No Data'],
-      datasets: [{
-        label: t.assetsByCategory,
-        data: values.length > 0 ? values : [0],
-        backgroundColor: ['#2864E8', '#48bb78', '#ed8936', '#fc8181', '#805ad5', '#4fd1c5'],
-        borderWidth: 2
-      }]
-    };
-  }, [stats.assetByCategory, t.assetsByCategory]);
 
   const collegeChartData = useMemo(() => {
     const rows = safeArray(stats.assetByCollege).slice(0, 6);
@@ -769,6 +747,12 @@ const AdminDashboard = () => {
   const chartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,
+    animations: {
+      colors: false,
+      x: { duration: 0 },
+      y: { duration: 0 }
+    },
     plugins: {
       legend: { position: 'bottom', labels: { color: isDark ? '#c8dcf5' : '#1a365d', boxWidth: 12, padding: 16 } },
       tooltip: { enabled: true }
@@ -788,16 +772,6 @@ const AdminDashboard = () => {
       if (statusRoutes[status]) navigate(statusRoutes[status]);
     }
   }), [chartOptions, statusChartData.labels, navigate]);
-
-  const departmentChartOptions = useMemo(() => ({
-    ...chartOptions,
-    onClick: (_, elements) => {
-      const item = elements?.[0];
-      if (!item) return;
-      const department = departmentChartData.labels[item.index];
-      if (department) navigate(`/admin/assets?department=${encodeURIComponent(department)}`);
-    }
-  }), [chartOptions, departmentChartData.labels, navigate]);
 
   const lineChartOptions = useMemo(() => ({
     ...chartOptions,
@@ -883,10 +857,10 @@ const AdminDashboard = () => {
   };
 
   // Calculations
-  const maintenanceTotal = safeArray(stats.maintenanceTrend).reduce((total, period) => total + safeNumber(period?.count), 0);
-  const maintenanceCompleted = safeArray(stats.maintenanceTrend).reduce((total, period) => total + safeNumber(period?.completed), 0);
-  const maintenanceCompletion = maintenanceTotal > 0 ? Math.round((maintenanceCompleted / maintenanceTotal) * 100) : 0;
-  const assetUtilization = stats.totalAssets > 0 ? Math.round((stats.assignedAssets / stats.totalAssets) * 100) : 0;
+  const maintenanceTotal = Object.values(stats.maintenanceSummary).reduce((total, value) => total + safeNumber(value), 0);
+  const maintenanceCompletion = maintenanceTotal > 0 ? Math.round((stats.maintenanceSummary.completed / maintenanceTotal) * 100) : null;
+  const assetUtilization = stats.totalAssets > 0 ? Math.round((stats.assignedAssets / stats.totalAssets) * 100) : null;
+  const hasMaintenanceTrendData = safeArray(stats.maintenanceTrend).some((period) => safeNumber(period?.count) > 0);
   const unreadNotifications = safeArray(notifications).filter(n => !n?.is_read && !n?.isRead);
   const latestBackup = safeArray(backups)[0];
 
@@ -936,8 +910,7 @@ const AdminDashboard = () => {
     <div className="admin-dashboard-shell" style={{
       width: '100%',
       background: isDark ? '#0d1117' : '#f0f2f5',
-      color: isDark ? '#e6edf3' : '#1a365d',
-      transition: 'all 0.3s ease'
+      color: isDark ? '#e6edf3' : '#1a365d'
     }}>
       {/* Header */}
       <div className="admin-dashboard-header" style={{
@@ -958,7 +931,7 @@ const AdminDashboard = () => {
             </span>
           </div>
           <p style={{ margin: '4px 0 0 0', color: isDark ? '#8896b0' : '#4a5568' }}>Administration</p>
-          <p style={{ margin: '4px 0 0 0', color: isDark ? '#8896b0' : '#4a5568' }}>{currentDateTime.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })} • Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '—'}</p>
+          <p style={{ margin: '4px 0 0 0', color: isDark ? '#8896b0' : '#4a5568' }}>{lastUpdated ? lastUpdated.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '—'} • Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '—'}</p>
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative' }}>
@@ -996,7 +969,7 @@ const AdminDashboard = () => {
             onClick={fetchDashboardData}
             disabled={loading}
           >
-            <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            <RefreshCw size={16} style={{ animation: 'none' }} />
             {t.refresh}
           </button>
         </div>
@@ -1114,11 +1087,8 @@ const AdminDashboard = () => {
               alignItems: 'center',
               gap: '14px',
               cursor: 'pointer',
-              transition: 'transform 0.2s'
             }}
             onClick={() => navigate(stat.path)}
-            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
           >
             <div style={{
               background: stat.color,
@@ -1257,7 +1227,7 @@ const AdminDashboard = () => {
             {t.maintenanceTrend}
           </h3>
           <div style={{ height: '260px', position: 'relative' }}>
-            {stats.maintenanceTrend.length ? <Line data={trendChartData} options={lineChartOptions} /> : <p style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noData}</p>}
+            {hasMaintenanceTrendData ? <Line data={trendChartData} options={lineChartOptions} /> : <p style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noData}</p>}
           </div>
         </div>
         <div style={{
@@ -1624,7 +1594,7 @@ const AdminDashboard = () => {
             padding: '10px 14px',
             borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
             color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.apiStatus}</span><strong style={{ color: loadError ? '#fc8181' : '#48bb78' }}>{loadError ? t.error : t.healthy}</strong></div>
+          }}><span>Dashboard Load</span><strong style={{ color: loadError ? '#fc8181' : '#48bb78' }}>{loadError ? 'Failed' : 'Success'}</strong></div>
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -1633,7 +1603,7 @@ const AdminDashboard = () => {
             padding: '10px 14px',
             borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
             color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.databaseStatus}</span><strong style={{ color: loadError ? '#fc8181' : '#48bb78' }}>{loadError ? t.unavailable : t.healthy}</strong></div>
+          }}><span>API Connectivity</span><strong style={{ color: loadError ? '#fc8181' : '#48bb78' }}>{loadError ? 'Failed' : 'Connected'}</strong></div>
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -1642,7 +1612,7 @@ const AdminDashboard = () => {
             padding: '10px 14px',
             borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
             color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.assetUtilization}</span><strong>{assetUtilization}%</strong></div>
+          }}><span>{t.assetUtilization}</span><strong>{assetUtilization === null ? t.notAvailable : `${assetUtilization}%`}</strong></div>
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -1651,7 +1621,7 @@ const AdminDashboard = () => {
             padding: '10px 14px',
             borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
             color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.maintenanceCompletion}</span><strong>{maintenanceCompletion}%</strong></div>
+          }}><span>{t.maintenanceCompletion}</span><strong>{maintenanceCompletion === null ? t.notAvailable : `${maintenanceCompletion}%`}</strong></div>
           <div style={{
             display: 'flex',
             alignItems: 'center',

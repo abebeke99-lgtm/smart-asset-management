@@ -2,14 +2,19 @@ const http = require('http');
 
 const API_HOST = 'localhost';
 const API_PORT = 3001;
+const demoPassword = process.env.DEMO_USER_PASSWORD;
+
+if (!demoPassword) {
+  throw new Error('Set DEMO_USER_PASSWORD before running this script.');
+}
 
 const targets = [
-  { role: 'admin', username: 'admin', email: 'bekelei906@gmail.com', password: 'bekelei123' },
-  { role: 'ict_officer', username: 'ict_officer', email: 'bekeaea906@gmail.com', password: 'bekelei123' },
-  { role: 'dept_head', username: 'dept_head', email: 'bekelea906@gmail.com', password: 'bekeled123' },
-  { role: 'finance', username: 'finance', email: 'bekelea906@gmail.com', password: 'bekelef123' },
-  { role: 'store_manager', username: 'store_manager', email: 'bekelea906@gmail.com', password: 'bekeles123' },
-  { role: 'maintenance', username: 'maintenance', email: 'bekelea906@gmail.com', password: 'bekelem123' }
+  { role: 'admin', username: 'admin', email: 'bekelei906@gmail.com' },
+  { role: 'ict_officer', username: 'ict_officer', email: 'bekeaea906@gmail.com' },
+  { role: 'department_head', username: 'department_head', email: 'department@bekelei.com' },
+  { role: 'finance', username: 'finance', email: 'bekelea906@gmail.com' },
+  { role: 'store_manager', username: 'store_manager', email: 'bekelea906@gmail.com' },
+  { role: 'maintenance', username: 'maintenance', email: 'bekelea906@gmail.com' }
 ];
 
 function httpRequest(method, path, body) {
@@ -48,7 +53,7 @@ function httpRequest(method, path, body) {
         console.log(`Updating user by id=${found.id} username=${found.username} email=${found.email}`);
         const updateBody = {
           username: t.username,
-          password: t.password,
+          password: demoPassword,
           role: t.role,
           fullName: '',
           email: t.email || '',
@@ -66,7 +71,7 @@ function httpRequest(method, path, body) {
         console.log(`Creating user username=${t.username} email=${t.email}`);
         const postBody = {
           username: t.username,
-          password: t.password,
+          password: demoPassword,
           role: t.role,
           fullName: '',
           email: t.email || '',

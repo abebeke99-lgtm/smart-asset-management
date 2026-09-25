@@ -4,8 +4,10 @@ import { useLanguage } from '../../contexts/UiContext';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement, PointElement, LineElement, Filler } from 'chart.js';
 import { Doughnut, Pie } from 'react-chartjs-2';
 import { toast } from 'react-toastify';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import apiClient from '../../services/apiClient';
+import { Activity, AlertTriangle, ClipboardList, CircleCheck, DollarSign, LayoutDashboard, LoaderCircle, Package, RefreshCw, Users, Wrench, Zap } from 'lucide-react';
+import './DeptDashboard.css';
 
 ChartJS.register(
   CategoryScale, 
@@ -32,19 +34,28 @@ const DeptDashboard = () => {
     available: 0,
     underMaintenance: 0,
     pendingApprovals: 0,
+    pendingRequestCount: 0,
+    pendingTransfers: 0,
+    pendingReturns: 0,
+    pendingActions: 0,
     staffCount: 0,
+    staffWithAssignedAssets: 0,
+    staffWithoutAssignedAssets: 0,
     totalValue: 0,
     utilizationRate: 0,
     assetByStatus: [],
     assetByCategory: [],
-    recentActivities: [],
-    pendingRequests: [],
-    maintenanceAlerts: [],
-    recentAssignments: [],
-    staffSummary: {}
-  });
-  const [showAlerts, setShowAlerts] = useState(true);
-  const [timeRange, setTimeRange] = useState('week');
+    assetByLocation: [],
+    assetByCondition: [],
+recentActivities: [],
+  pendingRequests: [],
+  maintenanceAlerts: [],
+  recentAssignments: [],
+  staffSummary: {},
+  maintenanceSummary: { open: 0, inProgress: 0, completed: 0, overdue: 0 },
+  verificationSummary: { verifiedAssets: 0, pendingVerification: 0, verificationIssues: 0 }
+});
+const [showAlerts, setShowAlerts] = useState(true);
 
   const isDark = theme === 'dark';
   const t = language === 'en' ? englishTranslations : amharicTranslations;
@@ -57,98 +68,33 @@ const DeptDashboard = () => {
     setLoading(true);
     setLoadError('');
     try {
-      // Get department assets
-      const assetsRes = await axios.get('/api/assets', { 
-        params: { department: user?.department, limit: 500 }
-      });
-      const assets = assetsRes.data?.assets || [];
-
-      // Get maintenance requests for department
-      const maintRes = await axios.get('/api/maintenance', { 
-        params: { department: user?.department, limit: 500 }
-      });
-      const maintenance = maintRes.data?.requests || [];
-
-      // Get department staff
-      const staffRes = await axios.get('/api/users', {
-        params: { department: user?.department }
-      });
-      const staff = staffRes.data?.users || [];
-
-      // Get pending approvals (maintenance requests pending approval)
-      const pendingApprovals = maintenance.filter(m => 
-        m.status === 'Pending Approval'
-      );
-
-      // Calculate stats
-      const byStatus = assets.reduce((acc, a) => {
-        const status = a.status || 'Unknown';
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-      }, {});
-
-      const byCategory = assets.reduce((acc, a) => {
-        const category = a.category_name || 'Other';
-        acc[category] = (acc[category] || 0) + 1;
-        return acc;
-      }, {});
-
-      const inUse = assets.filter(a => a.status === 'In-Use' || a.status === 'Assigned').length;
-      const available = assets.filter(a => a.status === 'Available').length;
-      const underMaintenance = assets.filter(a => a.status === 'Under-Maintenance' || a.status === 'In-Repair').length;
-      
-      const totalValue = assets.reduce((sum, a) => sum + (a.current_value || 0), 0);
-      const utilizationRate = assets.length > 0 ? (inUse / assets.length) * 100 : 0;
-
-      // Maintenance alerts (urgent or critical)
-      const maintenanceAlerts = maintenance.filter(m => 
-        (m.priority === 'Critical' || m.priority === 'High') && 
-        (m.status === 'Pending' || m.status === 'In-Progress')
-      );
-
-      // Recent activities (last 10)
-      const activities = [
-        ...assets.slice(0, 5).map(a => ({
-          type: 'asset',
-          title: `${a.name}`,
-          action: a.status === 'In-Use' ? 'assigned' : a.status === 'Available' ? 'returned' : 'updated',
-          time: a.updated_at || a.created_at,
-          icon: '📦',
-          status: a.status
-        })),
-        ...maintenance.slice(0, 5).map(m => ({
-          type: 'maintenance',
-          title: m.title,
-          action: m.status,
-          time: m.updated_at || m.created_at,
-          icon: '🔧',
-          status: m.status
-        }))
-      ].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 10);
-
-      // Staff summary by role
-      const staffSummary = staff.reduce((acc, s) => {
-        const role = s.role || 'Staff';
-        acc[role] = (acc[role] || 0) + 1;
-        return acc;
-      }, {});
+      const dashboardRes = await apiClient.get('/department/dashboard');
+      const dashboard = dashboardRes.data?.data || dashboardRes.data || {};
 
       setStats({
-        totalAssets: assets.length,
-        inUse,
-        available,
-        underMaintenance,
-        pendingApprovals: pendingApprovals.length,
-        staffCount: staff.length,
-        totalValue,
-        utilizationRate,
-        assetByStatus: Object.entries(byStatus).map(([key, value]) => ({ label: key, value })),
-        assetByCategory: Object.entries(byCategory).map(([key, value]) => ({ label: key, value })),
-        recentActivities: activities,
-        pendingRequests: maintenance.filter(m => m.status === 'Pending'),
-        maintenanceAlerts,
-        recentAssignments: assets.filter(a => a.status === 'In-Use').slice(0, 5),
-        staffSummary
+        totalAssets: Number(dashboard.totalAssets) || 0,
+        inUse: Number(dashboard.assignedAssets) || 0,
+        available: Number(dashboard.availableAssets) || 0,
+        underMaintenance: Number(dashboard.underMaintenance) || 0,
+        pendingRequestCount: Number(dashboard.pendingRequests) || 0,
+        pendingTransfers: Number(dashboard.pendingTransfers) || 0,
+        pendingReturns: Number(dashboard.pendingReturns) || 0,
+        pendingActions: Number(dashboard.pendingActions) || 0,
+        staffCount: Number(dashboard.staffCount) || 0,
+        staffWithAssignedAssets: Number(dashboard.staffWithAssignedAssets) || 0,
+        staffWithoutAssignedAssets: Number(dashboard.staffWithoutAssignedAssets) || 0,
+        totalValue: Number(dashboard.assetValue) || 0,
+        utilizationRate: (Number(dashboard.utilizationRate) || 0) * 100,
+        assetByStatus: Array.isArray(dashboard.assetByStatus) ? dashboard.assetByStatus : [],
+        assetByCategory: Array.isArray(dashboard.assetByCategory) ? dashboard.assetByCategory : [],
+        assetByLocation: Array.isArray(dashboard.assetByLocation) ? dashboard.assetByLocation : [],
+        assetByCondition: Array.isArray(dashboard.assetByCondition) ? dashboard.assetByCondition : [],
+        recentActivities: Array.isArray(dashboard.recentActivities) ? dashboard.recentActivities : [],
+        pendingRequests: Array.isArray(dashboard.pendingRequestItems) ? dashboard.pendingRequestItems : [],
+        maintenanceAlerts: Array.isArray(dashboard.maintenanceAlerts) ? dashboard.maintenanceAlerts : [],
+        recentAssignments: Array.isArray(dashboard.recentAssignments) ? dashboard.recentAssignments : [],
+        maintenanceSummary: dashboard.maintenanceSummary || { open: 0, inProgress: 0, completed: 0, overdue: 0 },
+        verificationSummary: dashboard.verificationSummary || { verifiedAssets: 0, pendingVerification: 0, verificationIssues: 0 },
       });
     } catch (error) {
       toast.error(t.fetchError || 'Failed to load dashboard data');
@@ -158,14 +104,14 @@ const DeptDashboard = () => {
   };
 
   const handleStatClick = (type, filter = {}) => {
-    const baseUrl = '/college';
+    const baseUrl = '/department';
     const routes = {
-      'maintenance': `${baseUrl}/assets?status=Under-Maintenance,In-Repair`,
-      'pendingApprovals': `${baseUrl}/maintenance?status=pending`,
+      'maintenance': `${baseUrl}/maintenance`,
       'inUse': `${baseUrl}/assets?status=In-Use,Assigned`,
       'available': `${baseUrl}/assets?status=Available`,
       'assets': `${baseUrl}/assets`,
-      'staff': `${baseUrl}/staff`
+      'staff': `${baseUrl}/staff`,
+      'requests': `${baseUrl}/requests`
     };
     
     const route = routes[type];
@@ -200,6 +146,18 @@ const DeptDashboard = () => {
     return colors[priority] || '#a0aec0';
   };
 
+  const getActivityIcon = (type) => {
+    const icons = {
+      assignment: ClipboardList,
+      transfer: RefreshCw,
+      return: Package,
+      maintenance: Wrench,
+      verification: CircleCheck,
+    };
+    const Icon = icons[type] || Activity;
+    return <Icon size={18} strokeWidth={1.8} aria-hidden="true" />;
+  };
+
   const chartColors = {
     primary: isDark ? '#63b3ed' : '#2b6cb0',
     success: isDark ? '#68d391' : '#48bb78',
@@ -213,6 +171,7 @@ const DeptDashboard = () => {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,
     plugins: {
       legend: {
         position: 'bottom',
@@ -254,6 +213,28 @@ const DeptDashboard = () => {
       label: 'Assets by Category',
       data: stats.assetByCategory.map(item => item.value),
       backgroundColor: ['#63b3ed', '#68d391', '#f6ad55', '#fc8181', '#b794f4', '#81e6d9'],
+      borderColor: isDark ? '#1e2d45' : '#ffffff',
+      borderWidth: 2
+    }]
+  };
+
+  const locationChartData = {
+    labels: stats.assetByLocation.map(item => item.label),
+    datasets: [{
+      label: 'Assets by Location',
+      data: stats.assetByLocation.map(item => item.value),
+      backgroundColor: ['#319795', '#63b3ed', '#68d391', '#f6ad55', '#fc8181', '#805ad5'],
+      borderColor: isDark ? '#1e2d45' : '#ffffff',
+      borderWidth: 2
+    }]
+  };
+
+  const conditionChartData = {
+    labels: stats.assetByCondition.map(item => item.label),
+    datasets: [{
+      label: 'Assets by Condition',
+      data: stats.assetByCondition.map(item => item.value),
+      backgroundColor: ['#68d391', '#f6ad55', '#fc8181', '#a0aec0', '#63b3ed'],
       borderColor: isDark ? '#1e2d45' : '#ffffff',
       borderWidth: 2
     }]
@@ -422,9 +403,9 @@ const DeptDashboard = () => {
 
   if (loading) {
     return (
-      <div style={styles.container}>
-        <div style={styles.emptyState}>
-          <div style={{ fontSize: '2rem', marginBottom: '12px' }}>⏳</div>
+      <div className="dept-dashboard" style={styles.container}>
+        <div className="dept-dashboard__empty" style={styles.emptyState}>
+          <LoaderCircle size={30} strokeWidth={1.8} aria-hidden="true" />
           <div>{t.loading}</div>
         </div>
       </div>
@@ -433,9 +414,9 @@ const DeptDashboard = () => {
 
   if (loadError) {
     return (
-      <div style={styles.container}>
-        <div style={styles.emptyState}>
-          <div style={{ fontSize: '2rem', marginBottom: '12px' }}>⚠️</div>
+      <div className="dept-dashboard" style={styles.container}>
+        <div className="dept-dashboard__empty" style={styles.emptyState}>
+          <AlertTriangle size={30} strokeWidth={1.8} aria-hidden="true" />
           <div role="alert">{loadError}</div>
           <button type="button" onClick={fetchDashboardData} style={{ marginTop: '16px', padding: '10px 18px', cursor: 'pointer' }}>Retry</button>
         </div>
@@ -446,13 +427,13 @@ const DeptDashboard = () => {
   const isCollegeManagerRole = ['college', 'college_manager', 'college manager'].includes(String(user?.role || '').toLowerCase());
 
   return (
-    <div style={styles.container}>
+    <div className="dept-dashboard" style={styles.container}>
       {/* Header */}
-      <div style={styles.header}>
+      <div className="dept-dashboard__header" style={styles.header}>
         <div>
-          <h1 style={styles.title}>📊 {t.dashboard}</h1>
-          <p style={styles.subtitle}>
-            {t.welcome}, {user?.fullName || user?.username || 'User'} 👋
+          <h1 className="dept-dashboard__title" style={styles.title}><LayoutDashboard size={26} strokeWidth={1.8} aria-hidden="true" /> {t.dashboard}</h1>
+          <p className="dept-dashboard__subtitle" style={styles.subtitle}>
+            {t.welcome}, {user?.fullName || user?.username || 'User'}
             {!isCollegeManagerRole && (
               <span style={{ marginLeft: '12px', fontSize: '0.85rem', color: isDark ? '#8896b0' : '#4a5568' }}>
                 {user?.department || ''}
@@ -460,113 +441,109 @@ const DeptDashboard = () => {
             )}
           </p>
         </div>
-        <div style={styles.headerActions}>
-          <button 
-            style={{
-              ...styles.timeRangeButton,
-              ...(timeRange === 'week' ? styles.activeTimeRange : {})
-            }}
-            onClick={() => setTimeRange('week')}
-          >
-            {t.thisWeek}
-          </button>
-          <button 
-            style={{
-              ...styles.timeRangeButton,
-              ...(timeRange === 'month' ? styles.activeTimeRange : {})
-            }}
-            onClick={() => setTimeRange('month')}
-          >
-            {t.thisMonth}
-          </button>
-          <button 
-            style={{
-              ...styles.timeRangeButton,
-              ...(timeRange === 'year' ? styles.activeTimeRange : {})
-            }}
-            onClick={() => setTimeRange('year')}
-          >
-            {t.thisYear}
-          </button>
-        </div>
+
       </div>
 
       {/* Stats Grid - Clickable */}
-      <div style={styles.statsGrid}>
-        <div style={styles.statCard} onClick={() => handleStatClick('assets')}>
-          <div style={styles.statIcon}>📦</div>
+      <div className="dept-dashboard__stats" style={styles.statsGrid}>
+        <div className="dept-dashboard__stat" style={styles.statCard} onClick={() => handleStatClick('assets')}>
+          <div style={styles.statIcon}><Package size={26} strokeWidth={1.8} aria-hidden="true" /></div>
           <div style={styles.statNumber}>{stats.totalAssets}</div>
           <div style={styles.statLabel}>{t.totalAssets}</div>
         </div>
 
-        <div style={styles.statCard} onClick={() => handleStatClick('inUse')}>
-          <div style={styles.statIcon}>✅</div>
+        <div className="dept-dashboard__stat" style={styles.statCard} onClick={() => handleStatClick('inUse')}>
+          <div style={styles.statIcon}><CircleCheck size={26} strokeWidth={1.8} aria-hidden="true" /></div>
           <div style={{ ...styles.statNumber, color: chartColors.success }}>{stats.inUse}</div>
           <div style={styles.statLabel}>{t.inUse}</div>
           <div style={styles.statTrend}>{stats.utilizationRate.toFixed(1)}% {t.utilization}</div>
         </div>
 
-        <div style={styles.statCard} onClick={() => handleStatClick('available')}>
-          <div style={styles.statIcon}>📋</div>
+        <div className="dept-dashboard__stat" style={styles.statCard} onClick={() => handleStatClick('available')}>
+          <div style={styles.statIcon}><ClipboardList size={26} strokeWidth={1.8} aria-hidden="true" /></div>
           <div style={{ ...styles.statNumber, color: chartColors.primary }}>{stats.available}</div>
           <div style={styles.statLabel}>{t.available}</div>
         </div>
 
-        <div style={styles.statCard} onClick={() => handleStatClick('maintenance')}>
-          <div style={styles.statIcon}>🔧</div>
+        <div className="dept-dashboard__stat" style={styles.statCard} onClick={() => handleStatClick('maintenance')}>
+          <div style={styles.statIcon}><Wrench size={26} strokeWidth={1.8} aria-hidden="true" /></div>
           <div style={{ ...styles.statNumber, color: chartColors.warning }}>{stats.underMaintenance}</div>
           <div style={styles.statLabel}>{t.underMaintenance}</div>
           {stats.maintenanceAlerts.length > 0 && (
             <div style={{ ...styles.statTrend, color: chartColors.danger }}>
-              ⚠️ {stats.maintenanceAlerts.length} {t.criticalAlerts}
+              <AlertTriangle size={14} strokeWidth={1.8} aria-hidden="true" /> {stats.maintenanceAlerts.length} {t.criticalAlerts}
             </div>
           )}
         </div>
 
-        <div style={styles.statCard} onClick={() => handleStatClick('pendingApprovals')}>
-          <div style={styles.statIcon}>⚠️</div>
-          <div style={{ ...styles.statNumber, color: chartColors.warning }}>{stats.pendingApprovals}</div>
-          <div style={styles.statLabel}>{t.pendingApprovals}</div>
-        </div>
-
-        <div style={styles.statCard} onClick={() => handleStatClick('staff')}>
-          <div style={styles.statIcon}>👥</div>
+        <div className="dept-dashboard__stat" style={styles.statCard} onClick={() => handleStatClick('staff')}>
+          <div style={styles.statIcon}><Users size={26} strokeWidth={1.8} aria-hidden="true" /></div>
           <div style={styles.statNumber}>{stats.staffCount}</div>
           <div style={styles.statLabel}>{t.staffCount}</div>
-          <div style={{ marginTop: '4px' }}>
-            {Object.entries(stats.staffSummary || {}).slice(0, 3).map(([role, count]) => (
-              <span key={role} style={styles.staffBadge}>{role}: {count}</span>
-            ))}
-          </div>
         </div>
 
-        <div style={styles.statCard}>
-          <div style={styles.statIcon}>💰</div>
+        <div className="dept-dashboard__stat" style={styles.statCard}>
+          <div style={styles.statIcon}><DollarSign size={26} strokeWidth={1.8} aria-hidden="true" /></div>
           <div style={styles.statNumber}>${stats.totalValue.toLocaleString()}</div>
           <div style={styles.statLabel}>{t.totalValue}</div>
         </div>
       </div>
 
       {/* Charts Row */}
-      <div style={styles.chartsRow}>
-        <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>{t.assetsByStatus}</h3>
+      <div className="dept-dashboard__charts" style={styles.chartsRow}>
+        <div className="dept-dashboard__card" style={styles.chartCard}>
+          <h3 className="dept-dashboard__card-title" style={styles.chartTitle}>{t.assetsByStatus}</h3>
           <div style={{ height: '250px' }}>
             <Doughnut data={statusChartData} options={chartOptions} />
           </div>
         </div>
-        <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>{t.assetsByCategory}</h3>
+        <div className="dept-dashboard__card" style={styles.chartCard}>
+          <h3 className="dept-dashboard__card-title" style={styles.chartTitle}>{t.assetsByCategory}</h3>
           <div style={{ height: '250px' }}>
             <Pie data={categoryChartData} options={chartOptions} />
           </div>
         </div>
+        <div className="dept-dashboard__card" style={styles.chartCard}>
+          <h3 className="dept-dashboard__card-title" style={styles.chartTitle}>{t.assetsByLocation}</h3>
+          <div style={{ height: '250px' }}>
+            <Doughnut data={locationChartData} options={chartOptions} />
+          </div>
+        </div>
+        <div className="dept-dashboard__card" style={styles.chartCard}>
+          <h3 className="dept-dashboard__card-title" style={styles.chartTitle}>{t.assetsByCondition}</h3>
+          <div style={{ height: '250px' }}>
+            <Pie data={conditionChartData} options={chartOptions} />
+          </div>
+        </div>
+      </div>
+
+      <div className="dept-dashboard__stats dept-dashboard__stats--secondary" style={styles.statsGrid}>
+        {[
+          { label: t.pendingRequests, value: stats.pendingRequestCount, type: 'requests' },
+          { label: t.pendingTransfers, value: stats.pendingTransfers },
+          { label: t.pendingReturns, value: stats.pendingReturns },
+          { label: t.pendingActions, value: stats.pendingActions },
+          { label: t.staffWithAssignedAssets, value: stats.staffWithAssignedAssets },
+          { label: t.staffWithoutAssignedAssets, value: stats.staffWithoutAssignedAssets },
+          { label: t.openMaintenance, value: stats.maintenanceSummary.open },
+          { label: t.inProgressMaintenance, value: stats.maintenanceSummary.inProgress },
+          { label: t.completedMaintenance, value: stats.maintenanceSummary.completed },
+          { label: t.overdueMaintenance, value: stats.maintenanceSummary.overdue },
+          { label: t.verifiedAssets, value: stats.verificationSummary.verifiedAssets },
+          { label: t.pendingVerification, value: stats.verificationSummary.pendingVerification },
+          { label: t.verificationIssues, value: stats.verificationSummary.verificationIssues }
+        ].map((item) => (
+          <div className="dept-dashboard__stat" key={item.label} style={styles.statCard} onClick={item.type ? () => handleStatClick(item.type) : undefined}>
+            <div style={styles.statNumber}>{item.value}</div>
+            <div style={styles.statLabel}>{item.label}</div>
+          </div>
+        ))}
       </div>
 
       {/* Maintenance Alerts */}
       {stats.maintenanceAlerts.length > 0 && showAlerts && (
-        <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>🚨 {t.maintenanceAlerts}</h3>
+        <div className="dept-dashboard__card" style={styles.chartCard}>
+          <h3 style={styles.chartTitle}><AlertTriangle size={18} strokeWidth={1.8} aria-hidden="true" /> {t.maintenanceAlerts}</h3>
           {stats.maintenanceAlerts.map((alert, index) => (
             <div key={index} style={styles.alertCard}>
               <div>
@@ -608,15 +585,15 @@ const DeptDashboard = () => {
       )}
 
       {/* Recent Activities */}
-      <div style={styles.activityCard}>
-        <h3 style={styles.chartTitle}>{t.recentActivities}</h3>
+      <div className="dept-dashboard__card" style={styles.activityCard}>
+        <h3 className="dept-dashboard__card-title" style={styles.chartTitle}>{t.recentActivities}</h3>
         {stats.recentActivities.length === 0 ? (
           <p style={styles.emptyState}>{t.noRecentActivities}</p>
         ) : (
           stats.recentActivities.map((activity, index) => (
             <div key={index} style={styles.activityItem}>
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <span style={styles.activityIcon}>{activity.icon}</span>
+                <span style={styles.activityIcon}>{getActivityIcon(activity.type)}</span>
                 <div style={styles.activityText}>
                   <div>{activity.title}</div>
                   <div style={{ fontSize: '0.8rem', color: isDark ? '#8896b0' : '#4a5568' }}>
@@ -643,9 +620,9 @@ const DeptDashboard = () => {
       </div>
 
       {/* Recent Assignments & Pending Requests */}
-      <div style={styles.chartsRow}>
-        <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>{t.recentAssignments}</h3>
+      <div className="dept-dashboard__charts" style={styles.chartsRow}>
+        <div className="dept-dashboard__card" style={styles.chartCard}>
+          <h3 className="dept-dashboard__card-title" style={styles.chartTitle}>{t.recentAssignments}</h3>
           {stats.recentAssignments.length === 0 ? (
             <p style={styles.emptyState}>{t.noRecentAssignments}</p>
           ) : (
@@ -665,8 +642,8 @@ const DeptDashboard = () => {
           )}
         </div>
 
-        <div style={styles.chartCard}>
-          <h3 style={styles.chartTitle}>{t.pendingRequests}</h3>
+        <div className="dept-dashboard__card" style={styles.chartCard}>
+          <h3 className="dept-dashboard__card-title" style={styles.chartTitle}>{t.pendingRequests}</h3>
           {stats.pendingRequests.length === 0 ? (
             <p style={styles.emptyState}>{t.noPendingRequests}</p>
           ) : (
@@ -694,8 +671,8 @@ const DeptDashboard = () => {
       </div>
 
       {/* Quick Actions */}
-      <div style={styles.activityCard}>
-        <h3 style={styles.chartTitle}>⚡ {t.quickActions}</h3>
+      <div className="dept-dashboard__card dept-dashboard__quick-actions" style={styles.activityCard}>
+        <h3 className="dept-dashboard__card-title" style={styles.chartTitle}><Zap size={18} strokeWidth={1.8} aria-hidden="true" /> {t.quickActions}</h3>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <button 
             style={{
@@ -704,7 +681,7 @@ const DeptDashboard = () => {
               color: 'white',
               border: 'none'
             }}
-            onClick={() => navigate('/college/assets')}
+            onClick={() => navigate('/department/assets')}
           >
             {t.viewAllAssets}
           </button>
@@ -715,7 +692,7 @@ const DeptDashboard = () => {
               color: 'white',
               border: 'none'
             }}
-            onClick={() => navigate('/college/maintenance')}
+            onClick={() => navigate('/department/maintenance')}
           >
             {t.newRequest}
           </button>
@@ -726,7 +703,7 @@ const DeptDashboard = () => {
               color: 'white',
               border: 'none'
             }}
-            onClick={() => navigate('/college/staff')}
+            onClick={() => navigate('/department/staff')}
           >
             {t.manageStaff}
           </button>
@@ -737,7 +714,7 @@ const DeptDashboard = () => {
               color: 'white',
               border: 'none'
             }}
-            onClick={() => navigate('/college/reports')}
+            onClick={() => navigate('/department/reports')}
           >
             {t.viewReports}
           </button>
@@ -749,7 +726,7 @@ const DeptDashboard = () => {
 
 // Translations
 const englishTranslations = {
-  dashboard: 'College Dashboard',
+  dashboard: 'Department Head Dashboard',
   welcome: 'Welcome',
   totalAssets: 'Total Assets',
   inUse: 'In Use',
@@ -760,9 +737,11 @@ const englishTranslations = {
   totalValue: 'Total Value',
   assetsByStatus: 'Assets by Status',
   assetsByCategory: 'Assets by Category',
+  assetsByLocation: 'Assets by Location',
+  assetsByCondition: 'Assets by Condition',
   recentActivities: 'Recent Activities',
   noRecentActivities: 'No recent activities',
-  loading: 'Loading...',
+  loading: 'Loading Department Dashboard...',
   utilization: 'Utilization',
   criticalAlerts: 'Critical Alerts',
   maintenanceAlerts: 'Maintenance Alerts',
@@ -770,6 +749,18 @@ const englishTranslations = {
   recentAssignments: 'Recent Assignments',
   noRecentAssignments: 'No recent assignments',
   pendingRequests: 'Pending Requests',
+  pendingTransfers: 'Pending Transfers',
+  pendingReturns: 'Pending Returns',
+  pendingActions: 'Pending Actions',
+  staffWithAssignedAssets: 'Staff with Assigned Assets',
+  staffWithoutAssignedAssets: 'Staff without Assigned Assets',
+  openMaintenance: 'Open Maintenance',
+  inProgressMaintenance: 'In Progress',
+  completedMaintenance: 'Completed Maintenance',
+  overdueMaintenance: 'Overdue Maintenance',
+  verifiedAssets: 'Verified Assets',
+  pendingVerification: 'Pending Verification',
+  verificationIssues: 'Verification Issues',
   noPendingRequests: 'No pending requests',
   assignedTo: 'Assigned To',
   pending: 'Pending',
@@ -781,11 +772,11 @@ const englishTranslations = {
   thisWeek: 'This Week',
   thisMonth: 'This Month',
   thisYear: 'This Year',
-  fetchError: 'Failed to load dashboard data'
+  fetchError: 'Unable to load department dashboard. Please try again.'
 };
 
 const amharicTranslations = {
-  dashboard: 'የክፍል ዳሽቦርድ',
+  dashboard: 'የዲፓርትመንት ኃላፊ ዳሽቦርድ',
   welcome: 'እንኳን ደህና መጡ',
   totalAssets: 'ጠቅላላ ንብረቶች',
   inUse: 'በመጠቀም ላይ',
@@ -798,7 +789,7 @@ const amharicTranslations = {
   assetsByCategory: 'በምድብ የተከፋፈሉ ንብረቶች',
   recentActivities: 'የቅርብ ጊዜ እንቅስቃሴዎች',
   noRecentActivities: 'ምንም የቅርብ ጊዜ እንቅስቃሴዎች የሉም',
-  loading: 'በመጫን ላይ...',
+  loading: 'የዲፓርትመንት ዳሽቦርድ በመጫን ላይ...',
   utilization: 'አጠቃቀም',
   criticalAlerts: 'አስቸኳይ ማስጠንቀቂያዎች',
   maintenanceAlerts: 'የጥገና ማስጠንቀቂያዎች',
@@ -817,7 +808,7 @@ const amharicTranslations = {
   thisWeek: 'የዚህ ሳምንት',
   thisMonth: 'የዚህ ወር',
   thisYear: 'የዚህ ዓመት',
-  fetchError: 'የዳሽቦርድ ውሂብ ማግኘት አልተቻለም'
+  fetchError: 'የዲፓርትመንት ዳሽቦርድ መጫን አልተቻለም። እባክዎ እንደገና ይሞክሩ።'
 };
 
 export default DeptDashboard;
