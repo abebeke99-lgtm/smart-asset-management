@@ -7,7 +7,8 @@ export const PUBLIC_ROUTES = [
   '/forgot-password',
   '/home',
   '/about',
-  '/contact'
+  '/contact',
+  '/help'
 ];
 
 export const ROUTES = {
@@ -18,6 +19,7 @@ export const ROUTES = {
   HOME: '/home',
   ABOUT: '/about',
   CONTACT: '/contact',
+  HELP: '/help',
 
   // Admin Routes
   ADMIN_DASHBOARD: '/admin',

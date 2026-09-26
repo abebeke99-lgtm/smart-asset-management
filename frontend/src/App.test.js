@@ -58,6 +58,7 @@ describe('Public and dashboard route rules', () => {
     expect(isPublicRoute('/home')).toBe(true);
     expect(isPublicRoute('/about')).toBe(true);
     expect(isPublicRoute('/contact')).toBe(true);
+    expect(isPublicRoute('/help')).toBe(true);
     expect(isPublicRoute('/register')).toBe(true);
     expect(isPublicRoute('/forgot-password')).toBe(true);
     expect(isPublicRoute('/reset-password')).toBe(true);
@@ -85,6 +86,7 @@ describe('Public and dashboard route rules', () => {
     expect(shouldShowDashboardSidebar('/home')).toBe(false);
     expect(shouldShowDashboardSidebar('/login')).toBe(false);
     expect(shouldShowDashboardSidebar('/contact')).toBe(false);
+    expect(shouldShowDashboardSidebar('/help')).toBe(false);
   });
 });
 

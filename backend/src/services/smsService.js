@@ -31,6 +31,11 @@ const ensureSmsConfig = () => {
   return { ok: true, ...config };
 };
 
+const isSmsConfigured = () => {
+  const config = ensureSmsConfig();
+  return config.ok && ['twilio', 'africastalking', 'africa_talking'].includes(config.provider);
+};
+
 const smsHeaders = (contentType = 'application/json') => ({
   'Content-Type': contentType,
   Accept: 'application/json',
@@ -142,7 +147,7 @@ const sendSMS = async (phoneNumber, message) => {
   }
 };
 
-const sendOtpSms = async (phoneNumber, otp) => {
+const sendOtpSms = async (phoneNumber, otp, options = {}) => {
   const normalized = normalizePhoneNumber(phoneNumber);
   if (!normalized) return { status: 'failed', reason: 'Invalid or missing phone number' };
 
@@ -151,8 +156,9 @@ const sendOtpSms = async (phoneNumber, otp) => {
     return { status: 'failed', reason: 'Invalid OTP format' };
   }
 
-  const message = `Your verification code is ${otpCode}. It expires in 5 minutes.`;
+  const ttlMinutes = Math.min(60, Math.max(1, Number(options.ttlMinutes) || 5));
+  const message = `Your verification code is ${otpCode}. It expires in ${ttlMinutes} minutes.`;
   return sendSMS(normalized, message);
 };
 
-module.exports = { normalizePhoneNumber, sendSMS, sendOtpSms };
+module.exports = { normalizePhoneNumber, sendSMS, sendOtpSms, isSmsConfigured };

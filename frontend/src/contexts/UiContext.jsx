@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const UiContext = createContext();
+const normalizeLanguage = (language) => language === 'am' ? 'am' : 'en';
 
 export const useLanguage = () => {
   const context = useContext(UiContext);
@@ -27,14 +28,20 @@ export const useTheme = () => {
 
 export const UiProvider = ({ children }) => {
   const [language, setLanguage] = useState(() => {
-    return localStorage.getItem('language') || 'en';
+    return normalizeLanguage(localStorage.getItem('language'));
   });
+  const setSupportedLanguage = (nextLanguage) => {
+    setLanguage((currentLanguage) => normalizeLanguage(
+      typeof nextLanguage === 'function' ? nextLanguage(currentLanguage) : nextLanguage
+    ));
+  };
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('theme') || 'light';
   });
 
   useEffect(() => {
     localStorage.setItem('language', language);
+    document.documentElement.lang = language === 'am' ? 'am' : 'en';
   }, [language]);
 
   useEffect(() => {
@@ -44,7 +51,7 @@ export const UiProvider = ({ children }) => {
 
   const value = {
     language,
-    setLanguage,
+    setLanguage: setSupportedLanguage,
     theme,
     setTheme
   };

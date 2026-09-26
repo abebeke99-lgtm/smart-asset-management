@@ -1,9 +1,9 @@
 export const homepageImages = {
-  hero: '/uploads/images/4-1.jpg',
+  hero: '/images/hero/4-1.jpg',
   slides: [
-    '/uploads/images/4-1.jpg',
-    '/uploads/images/imagegs.jpg',
-    '/uploads/images/imagefs.jpg'
+    '/images/hero/4-1.jpg',
+    '/images/hero/imagegs.jpg',
+    '/images/hero/imagefs.jpg'
   ],
   campus: '/images/university/mekdela-amba-campus.svg',
   assetManagement: '/images/assets/asset-management.svg',

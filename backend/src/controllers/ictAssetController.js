@@ -448,7 +448,7 @@ const getIctDashboard = async (req, res, next) => {
       const [activeAssignmentCount, openSupportTicketCount, openIncidentCount] = await Promise.all([
         Assignment.count({
           distinct: true,
-          col: 'assetId',
+          col: 'asset_id',
           where: { status: 'active' },
           include: [{ model: Asset, where: assetScope, required: true, attributes: [] }],
         }),

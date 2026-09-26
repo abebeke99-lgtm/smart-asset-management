@@ -77,6 +77,21 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
   : [...configuredOrigins, ...localOrigins];
 
 const normalizeOrigin = (value = '') => value.replace(/\/+$/, '');
+const isLocalDevelopmentOrigin = (origin) => {
+  try {
+    const { protocol, hostname, port } = new URL(origin);
+    if (protocol !== 'http:' || !['3000', '3001', '5173'].includes(port)) return false;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+
+    const octets = hostname.split('.').map(Number);
+    if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) return false;
+
+    const [first, second] = octets;
+    return first === 10 || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168);
+  } catch {
+    return false;
+  }
+};
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -86,7 +101,8 @@ app.use(cors({
     }
 
     const normalizedOrigin = normalizeOrigin(origin);
-    const allowed = allowedOrigins.some((allowedOrigin) => normalizeOrigin(allowedOrigin) === normalizedOrigin);
+    const allowed = allowedOrigins.some((allowedOrigin) => normalizeOrigin(allowedOrigin) === normalizedOrigin)
+      || (process.env.NODE_ENV !== 'production' && isLocalDevelopmentOrigin(normalizedOrigin));
 
     if (allowed) {
       callback(null, true);

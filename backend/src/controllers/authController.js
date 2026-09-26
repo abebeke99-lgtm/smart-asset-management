@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const { Op } = require('sequelize');
 const { User, AuditLog, Config } = require('../models');
-const { normalizePhoneNumber, sendSMS } = require('../services/smsService');
+const { normalizePhoneNumber, sendOtpSms, isSmsConfigured } = require('../services/smsService');
 const { validateEmailConfiguration } = require('../services/emailService');
 const { isValidEmail, isValidUsername } = require('../utils/validators');
 const { getJwtSecret } = require('../config/jwt');
@@ -295,7 +295,32 @@ const escapeHtml = (value = '') => String(value)
 
 const hashValue = (value) => crypto.createHash('sha256').update(String(value)).digest('hex');
 
+const safeHashEquals = (left, right) => {
+  const leftBuffer = Buffer.from(String(left || ''), 'utf8');
+  const rightBuffer = Buffer.from(String(right || ''), 'utf8');
+  if (leftBuffer.length !== rightBuffer.length || leftBuffer.length === 0) return false;
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+};
+
+const RATE_LIMIT_PRUNE_INTERVAL_MS = 5 * 60 * 1000;
+const rateLimitPruneState = { lastPrunedAt: 0 };
+
+const pruneRateLimitBuckets = () => {
+  const now = Date.now();
+  if (now - rateLimitPruneState.lastPrunedAt < RATE_LIMIT_PRUNE_INTERVAL_MS) return;
+  rateLimitPruneState.lastPrunedAt = now;
+
+  [otpRequestBuckets, otpRequestIpBuckets].forEach((bucket) => {
+    for (const [key, entries] of bucket.entries()) {
+      const recent = entries.filter((timestamp) => now - timestamp < OTP_REQUEST_RATE_LIMIT_WINDOW_MS);
+      if (recent.length === 0) bucket.delete(key);
+      else bucket.set(key, recent);
+    }
+  });
+};
+
 const getRateLimitState = (bucket, key, maxRequests, windowMs) => {
+  pruneRateLimitBuckets();
   const now = Date.now();
   const entries = bucket.get(key) || [];
   const recent = entries.filter((timestamp) => now - timestamp < windowMs);
@@ -393,6 +418,10 @@ const requestForgotPasswordOtp = async (req, res) => {
       return res.status(429).json({ success: false, message: 'Too many OTP requests. Please try again later.' });
     }
 
+    if (!isSmsConfigured()) {
+      return res.status(503).json({ success: false, message: 'We could not send the verification code right now. Please try again later.' });
+    }
+
     const user = await User.findOne({ where: { phone } });
     if (!user || !user.active || (user.lockoutUntil && new Date(user.lockoutUntil) > new Date())) {
       return res.json({ success: true, message: GENERIC_OTP_MESSAGE });
@@ -420,12 +449,14 @@ const requestForgotPasswordOtp = async (req, res) => {
       resetTokenUsedAt: null,
     });
 
-    const smsResult = await sendOtpSms(phone, otp);
+    const smsResult = await sendOtpSms(phone, otp, { ttlMinutes: RESET_OTP_TTL_MINUTES });
     if (smsResult.status !== 'sent') {
       await clearOtpState(user);
       console.error('Password reset OTP SMS delivery failed for phone ending with', phone.slice(-4), 'provider:', process.env.SMS_PROVIDER || 'unconfigured');
       return res.status(503).json({ success: false, message: 'We could not send the verification code right now. Please try again later.' });
     }
+
+    await recordAuthEvent({ userId: user.id, action: 'PASSWORD_RESET_OTP_REQUESTED', result: 'Success', req });
 
     return res.json({ success: true, message: GENERIC_OTP_MESSAGE });
   } catch (error) {
@@ -464,7 +495,7 @@ const verifyForgotPasswordOtp = async (req, res) => {
     }
 
     const enteredHash = hashValue(otp);
-    if (enteredHash !== user.resetOtpHash) {
+    if (!safeHashEquals(enteredHash, user.resetOtpHash)) {
       const attempts = Number(user.resetOtpAttempts || 0) + 1;
       await user.update({ resetOtpAttempts: attempts });
       if (attempts >= RESET_OTP_MAX_ATTEMPTS) {
@@ -487,6 +518,8 @@ const verifyForgotPasswordOtp = async (req, res) => {
       resetOtpUsedAt: new Date(),
       resetOtpAttempts: 0,
     });
+
+    await recordAuthEvent({ userId: user.id, action: 'PASSWORD_RESET_OTP_VERIFIED', result: 'Success', req });
 
     return res.json({ success: true, message: 'Verification successful. Please create a new password.', resetToken: rawToken });
   } catch (error) {
@@ -515,6 +548,11 @@ const resetPasswordWithOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: 'This password reset link is invalid or expired.' });
     }
 
+    if (!user.active) {
+      await user.update({ resetTokenHash: null, resetTokenExpiresAt: null, resetTokenUsedAt: new Date() });
+      return res.status(403).json({ success: false, message: 'This account cannot complete password reset right now.' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const [updatedCount] = await User.update({
       password: hashedPassword,
@@ -537,6 +575,8 @@ const resetPasswordWithOtp = async (req, res) => {
     if (!updatedCount) {
       return res.status(400).json({ success: false, message: 'This password reset link is invalid or expired.' });
     }
+
+    await recordAuthEvent({ userId: user.id, action: 'PASSWORD_RESET', result: 'Success', req });
 
     return res.json({ success: true, message: 'Password reset successfully.' });
   } catch (error) {
@@ -562,10 +602,7 @@ const forgotPassword = async (req, res) => {
     const user = await User.findOne({ where: { email } });
     const eligibility = await ensureEligibleResetUser(user, 'email');
     if (!user || !eligibility.allowed) {
-      if (!user) return res.json({ success: true, message: genericResetMessage });
-      if (eligibility.reason === 'inactive') return res.status(403).json({ success: false, message: 'Your account is inactive. Please contact the system administrator.' });
-      if (eligibility.reason === 'locked') return res.status(403).json({ success: false, message: 'Your account is locked. Please contact the system administrator.' });
-      return res.status(400).json({ success: false, message: 'This recovery method is unavailable for this account.' });
+      return res.json({ success: true, message: genericResetMessage });
     }
 
     const emailConfiguration = validateEmailConfiguration();
@@ -585,6 +622,7 @@ const forgotPassword = async (req, res) => {
     const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000);
     const resetUrl = `${getResetFrontendUrl()}/reset-password?token=${encodeURIComponent(rawToken)}`;
     const greetingName = escapeHtml(user.fullName || user.username);
+    const safeResetUrl = escapeHtml(resetUrl);
 
     await user.update({ resetTokenHash: tokenHash, resetTokenExpiresAt: expiresAt, resetTokenUsedAt: null, resetOtpHash: null, resetOtpExpiresAt: null, resetOtpUsedAt: null, resetOtpAttempts: 0 });
     try {
@@ -593,12 +631,14 @@ const forgotPassword = async (req, res) => {
         to: user.email,
         subject: 'Reset Your University Asset Management System Password',
         text: `Mekdela Amba University Asset Management System\n\nHello ${user.fullName || user.username},\n\nA password reset was requested for your account.\n\nReset your password here:\n${resetUrl}\n\nThis link expires in ${RESET_TOKEN_TTL_MINUTES} minutes and can only be used once. If you did not request this, you can safely ignore this email.`,
-        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#172033"><div style="background:#0EA5E9;padding:24px;color:#fff"><h1 style="margin:0;font-size:22px">Mekdela Amba University</h1><p style="margin:8px 0 0">University Asset Management System</p></div><div style="padding:28px;border:1px solid #dbe4ef"><h2>Reset Your Password</h2><p>Hello ${greetingName},</p><p>A password reset was requested for your account.</p><p><a href="${resetUrl}" style="display:inline-block;background:#0EA5E9;color:#fff;padding:12px 20px;text-decoration:none;border-radius:8px;font-weight:700">Reset Password</a></p><p>This link expires in ${RESET_TOKEN_TTL_MINUTES} minutes and can only be used once.</p><p>If you did not request this, you can safely ignore this email.</p></div></div>`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#172033"><div style="background:#0EA5E9;padding:24px;color:#fff"><h1 style="margin:0;font-size:22px">Mekdela Amba University</h1><p style="margin:8px 0 0">University Asset Management System</p></div><div style="padding:28px;border:1px solid #dbe4ef"><h2>Reset Your Password</h2><p>Hello ${greetingName},</p><p>A password reset was requested for your account.</p><p><a href="${safeResetUrl}" style="display:inline-block;background:#0EA5E9;color:#fff;padding:12px 20px;text-decoration:none;border-radius:8px;font-weight:700">Reset Password</a></p><p>This link expires in ${RESET_TOKEN_TTL_MINUTES} minutes and can only be used once.</p><p>If you did not request this, you can safely ignore this email.</p></div></div>`,
       });
     } catch (mailError) {
       await user.update({ resetTokenHash: null, resetTokenExpiresAt: null, resetTokenUsedAt: null });
       throw mailError;
     }
+
+    await recordAuthEvent({ userId: user.id, action: 'PASSWORD_RESET_REQUESTED', result: 'Success', req });
 
     return res.json({ success: true, message: genericResetMessage });
   } catch (error) {
@@ -609,67 +649,14 @@ const forgotPassword = async (req, res) => {
 
 const verifyResetOtp = async (req, res) => {
   try {
-    const { email, phone, otp, method, phoneNumber } = req.body;
-    const recoveryMethod = String(method || (email ? 'email' : (phoneNumber || phone) ? 'phone' : 'email')).trim().toLowerCase();
-    const normalizedEmail = String(email || '').trim().toLowerCase();
-    const normalizedPhone = normalizePhoneNumber(phoneNumber || phone || '');
-    const code = String(otp || '').trim();
+    const { phone, method, phoneNumber } = req.body;
+    const recoveryMethod = String(method || (phoneNumber || phone ? 'phone' : 'email')).trim().toLowerCase();
 
-    if (recoveryMethod === 'phone') {
-      return verifyForgotPasswordOtp({ ...req, body: { phoneNumber: normalizedPhone || phoneNumber || phone, otp: code } }, res);
+    if (recoveryMethod !== 'phone') {
+      return res.status(400).json({ success: false, message: 'Code verification is only available for mobile phone recovery. Use the reset link sent to your email address instead.' });
     }
 
-    if (!isValidEmail(normalizedEmail)) {
-      return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
-    }
-
-    if (!/^[0-9]{6}$/.test(code)) {
-      return res.status(400).json({ success: false, message: 'Please enter a valid verification code.' });
-    }
-
-    const user = await User.findOne({ where: { email: normalizedEmail } });
-    if (!user) {
-      return res.status(400).json({ success: false, message: 'Invalid or expired verification code.' });
-    }
-
-    const eligibility = await ensureEligibleResetUser(user, 'email');
-    if (!eligibility.allowed) {
-      if (eligibility.reason === 'inactive') return res.status(403).json({ success: false, message: 'Your account is inactive. Please contact the system administrator.' });
-      if (eligibility.reason === 'locked') return res.status(403).json({ success: false, message: 'Your account is locked. Please contact the system administrator.' });
-      return res.status(400).json({ success: false, message: 'Invalid or expired verification code.' });
-    }
-
-    if (!user.resetOtpHash || !user.resetOtpExpiresAt || new Date(user.resetOtpExpiresAt) < new Date()) {
-      await clearOtpState(user);
-      return res.status(400).json({ success: false, message: 'This verification code has expired.' });
-    }
-
-    const enteredHash = hashValue(code);
-    if (enteredHash !== user.resetOtpHash) {
-      const attempts = Number(user.resetOtpAttempts || 0) + 1;
-      await user.update({ resetOtpAttempts: attempts });
-      if (attempts >= RESET_OTP_MAX_ATTEMPTS) {
-        await clearOtpState(user);
-        return res.status(429).json({ success: false, message: 'Too many verification attempts. Please request a new code.' });
-      }
-      return res.status(400).json({ success: false, message: 'Invalid verification code.' });
-    }
-
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = hashValue(rawToken);
-    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000);
-
-    await user.update({
-      resetTokenHash: tokenHash,
-      resetTokenExpiresAt: expiresAt,
-      resetTokenUsedAt: null,
-      resetOtpHash: null,
-      resetOtpExpiresAt: null,
-      resetOtpUsedAt: new Date(),
-      resetOtpAttempts: 0,
-    });
-
-    return res.json({ success: true, message: 'Verification successful. Please create a new password.', token: rawToken });
+    return verifyForgotPasswordOtp(req, res);
   } catch (error) {
     console.error('OTP verification failed:', error.message);
     return res.status(500).json({ success: false, message: 'Unable to verify the recovery code.' });
@@ -691,12 +678,20 @@ const resetPassword = async (req, res) => {
     if (!user || user.resetTokenUsedAt || !user.resetTokenExpiresAt || new Date(user.resetTokenExpiresAt) < new Date()) {
       return res.status(400).json({ success: false, message: 'This password reset link is invalid or expired.' });
     }
+    if (!user.active) {
+      await user.update({ resetTokenHash: null, resetTokenExpiresAt: null, resetTokenUsedAt: new Date() });
+      return res.status(403).json({ success: false, message: 'This account cannot complete password reset right now.' });
+    }
     const hashedPassword = await bcrypt.hash(password, 10);
     const [updatedCount] = await User.update({
       password: hashedPassword,
       resetTokenHash: null,
       resetTokenExpiresAt: null,
       resetTokenUsedAt: new Date(),
+      resetOtpHash: null,
+      resetOtpExpiresAt: null,
+      resetOtpUsedAt: new Date(),
+      resetOtpAttempts: 0,
     }, {
       where: {
         id: user.id,
@@ -708,6 +703,9 @@ const resetPassword = async (req, res) => {
     if (!updatedCount) {
       return res.status(400).json({ success: false, message: 'This password reset link is invalid or expired.' });
     }
+
+    await recordAuthEvent({ userId: user.id, action: 'PASSWORD_RESET', result: 'Success', req });
+
     return res.json({ success: true, message: 'Your password has been reset successfully.' });
   } catch (error) {
     console.error('Password reset failed:', error.message);

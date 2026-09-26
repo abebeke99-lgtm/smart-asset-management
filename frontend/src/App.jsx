@@ -9,7 +9,7 @@ import './App.css';
 import './admin-design-system.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Archive, ArrowLeftRight, BarChart3, Bell, Building2, Check, ChevronDown, ChevronRight, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, Home as HomeIcon, Info, Languages, LayoutDashboard, LockKeyhole, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, PanelLeft, Phone, Radio, Search, Settings, ShieldCheck, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
+import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, House, Info, Languages, LayoutDashboard, LifeBuoy, LockKeyhole, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, PanelLeft, Phone, Radio, Search, Settings, ShieldCheck, Sparkles, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
@@ -186,7 +186,10 @@ const ForgotPassword = lazy(() => import('./components/public/ForgotPassword'));
 const ResetPassword = lazy(() => import('./components/public/ResetPassword'));
 const Home = lazy(() => import('./components/public/Home'));
 const AboutUs = lazy(() => import('./components/public/AboutUs'));
+const Services = lazy(() => import('./components/public/Services'));
+const Features = lazy(() => import('./components/public/Features'));
 const Contact = lazy(() => import('./components/public/Contact'));
+const Help = lazy(() => import('./components/public/Help'));
 
 // ==========================================
 // CONSTANTS
@@ -201,7 +204,7 @@ export const shouldHideSidebarForPath = (pathname = '') => {
 
 export const isPublicRoute = (pathname = '') => {
   const normalizedPath = String(pathname || '').split('?')[0].split('#')[0].trim();
-  return ['/', '/home', '/about', '/about-us', '/contact', '/register', '/forgot-password', '/reset-password'].includes(normalizedPath)
+  return ['/', '/home', '/about', '/services', '/features', '/about-us', '/contact', '/contac', '/help', '/register', '/forgot-password', '/reset-password'].includes(normalizedPath)
     || normalizedPath.startsWith('/reset-password/');
 };
 
@@ -227,7 +230,7 @@ export const shouldUseStandaloneLoginLayout = (pathname = '') => {
 
 export const shouldShowDashboardSidebar = (pathname = '') => {
   const normalizedPath = String(pathname || '').split('?')[0].split('#')[0].trim();
-  const publicPaths = ['/', '/home', '/about', '/contact', '/login', '/register', '/forgot-password', '/reset-password'];
+  const publicPaths = ['/', '/home', '/about', '/services', '/features', '/contact', '/contac', '/help', '/login', '/register', '/forgot-password', '/reset-password'];
   return normalizedPath !== '' && !publicPaths.includes(normalizedPath) && !normalizedPath.startsWith('/reset-password/');
 };
 
@@ -414,7 +417,11 @@ const translations = {
     systemName: " University Asset Management System",
     home: "Home",
     about: "About Us",
+    services: "Services",
+    features: "Features",
     contact: "Contact",
+    primaryNavigation: "Primary navigation",
+    help: "Help",
     login: "Login",
     logout: "Logout",
     welcome: "Welcome",
@@ -445,28 +452,24 @@ const translations = {
     valuation: "Asset Valuation",
     depreciation: "Depreciation",
     audit: "Audit Trail",
-    footer: "© 2026 Mekdela Amba University | University Asset Management System | All rights reserved.",
-    footerDescription: "A clear, reliable way to manage university assets.",
-    footerNavigation: "Navigation",
+    footerBrandTitle: "University Asset Management System",
+    footerDescription: "Centralized management of university assets, inventory, assignments, transfers, maintenance, verification, and reporting.",
+    footerNavigation: "Quick Links",
+    footerSupport: "Support",
+    footerSecurity: "Security & Accountability",
+    footerSecurityAsset: "Secure Asset Management",
+    footerSecurityRbac: "Role-Based Access Control",
+    footerSecurityAudit: "Audit & Accountability",
     footerUsefulLinks: "Useful links",
     footerCopyright: "All rights reserved.",
     light: "Light",
     dark: "Dark",
     language: "Language",
     companyName: "Mekdela Amba University",
-    address: "tulu awliya, Ethiopia",
-    phone: "+251-986481821",
-    email: "bekelea906@gmail.com",
-    workingHours: "Monday - Friday, 2:30 AM - 11:30 AM",
-    emailValue: "bekelea906@gmail.com",
-    phoneValue: "+251-986481821",
-    addressValue: "tulu awliya, Ethiopia",
-    workingHoursValue: "Monday - Friday, 2:30 AM - 11:30 AM",
     privacyPolicy: "Privacy Policy",
     termsOfService: "Terms of Service",
     cookiePolicy: "Cookie Policy",
     allRightsReserved: "All Rights Reserved",
-    developedBy: "Developed by: Bekele :0986481821",
     staff: "Staff",
     approvals: "Approvals",
     history: "History",
@@ -504,7 +507,11 @@ const translations = {
     systemName: " ዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት",
     home: "መነሻ",
     about: "ስለ እኛ",
+    services: "አገልግሎቶች",
+    features: "ባህሪያት",
     contact: "አግኙን",
+    primaryNavigation: "ዋና አሰሳ",
+    help: "እገዛ",
     login: "ግባ",
     logout: "ውጣ",
     welcome: "እንኳን ደህና መጡ",
@@ -535,28 +542,24 @@ const translations = {
     valuation: "የንብረት ዋጋ ግምት",
     depreciation: "ውድመት",
     audit: "የኦዲት መንገድ",
-    footer: "2026 መቅደላ አምባ ዩኒቨርሲቲ -  ንብረት አስተዳደር ስርዓት | ሁሉም መብቶች ተጠብቀዋል | የተሰራዉ በ: በቀለ :0986481821",
-    footerDescription: "የዩኒቨርሲቲ ንብረቶችን ለማስተዳደር ግልጽና አስተማማኝ መንገድ።",
-    footerNavigation: "አሰሳ",
+    footerBrandTitle: "የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት",
+    footerDescription: "የዩኒቨርሲቲ ንብረት፣ ኢንቬንቶሪ፣ ምደባ፣ ማስተላለፍ፣ ጥገና፣ ማረጋገጫ እና ሪፖርት ማዘጋጀትን የሚያካትት ማዕከላዊ አስተዳደር።",
+    footerNavigation: "ፈጣን አገናኞች",
+    footerSupport: "ድጋፍ",
+    footerSecurity: "ደህንነትና ተጠያቂነት",
+    footerSecurityAsset: "ደህንነቱ የተጠበቀ ንብረት አስተዳደር",
+    footerSecurityRbac: "በሚና ላይ የተመሰረተ መዳረሻ ቁጥጥር",
+    footerSecurityAudit: "ኦዲት እና ተጠያቂነት",
     footerUsefulLinks: "ጠቃሚ አገናኞች",
-    footerCopyright: "መብቱ በሙሉ የተጠበቀ ነው።",
+    footerCopyright: "ሁሉም መብቶች የተጠበቁ ናቸው።",
     light: "ብርሃን",
     dark: "ጨለማ",
     language: "ቋንቋ",
     companyName: "መቅደላ አምባ ዩኒቨርሲቲ",
-    address: "ቱሉ አውሊያ፣ ኢትዮጵያ",
-    phone: "+251-986481821",
-    email: "bekelea906@gmail.com",
-    workingHours: "ሰኞ - አርብ, 2:30 ጠዋት - 11:30 ጠዋት",
-    emailValue: "bekelea906@gmail.com",
-    phoneValue: "+251-986481821",
-    addressValue: "ቱሉ አውሊያ፣ ኢትዮጵያ",
-    workingHoursValue: "ሰኞ - አርብ, 2:30 ጠዋት - 11:30 ጠዋት",
     privacyPolicy: "የግላዊነት ፖሊሲ",
     termsOfService: "የአገልግሎት ውሎች",
     cookiePolicy: "የኩኪ ፖሊሲ",
     allRightsReserved: "ሁሉም መብቶች የተጠበቁ ናቸው",
-    developedBy: "የተሰራዉ በ: በቀለ :0986481821",
     staff: "ሰራተኞች",
     approvals: "ማፅደቆች",
     history: "ታሪክ",
@@ -2295,46 +2298,6 @@ const DashboardLayout = () => (
   </Suspense>
 );
 
-const EthiopianClock = ({ language, theme }) => {
-  const [time, setTime] = useState('');
-
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      const ethiopiaTime = new Date(now.getTime() + (3 * 60 * 60 * 1000));
-      setTime(ethiopiaTime.toLocaleTimeString(language === 'en' ? 'en-US' : 'am-ET', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-      }));
-    };
-
-    updateTime();
-    const timer = setInterval(updateTime, 1000);
-    return () => clearInterval(timer);
-  }, [language]);
-
-  return (
-    <div style={{
-      minWidth: '140px',
-      textAlign: 'right',
-      color: theme.headerText,
-      fontWeight: 700,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '2px',
-      lineHeight: 1.3,
-      fontSize: '0.78rem'
-    }} aria-live="polite">
-      <span style={{ opacity: 0.9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-        {language === 'en' ? 'Ethiopia Time' : 'የኢትዮጵያ ሰዓት'}
-      </span>
-      <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '0.9rem' }}>{time}</span>
-    </div>
-  );
-};
-
 // Admin Layout with Sidebar
 const AdminLayout = () => {
   const { theme } = useTheme();
@@ -2457,7 +2420,7 @@ function AppContent() {
 
   useEffect(() => {
     setMobileNavOpen(false);
-  }, [location.pathname]);
+  }, [location.pathname, location.hash]);
 
   useEffect(() => {
     if (!mobileNavOpen) return undefined;
@@ -2570,7 +2533,7 @@ function AppContent() {
   };
 
   const dashboardRoute = getDashboardRoute(user?.role);
-  const publicPaths = ['/home', '/about', '/contact', '/register', '/forgot-password', '/reset-password'];
+  const publicPaths = ['/home', '/about', '/services', '/features', '/contact', '/contac', '/help', '/register', '/forgot-password', '/reset-password'];
   const requestPublicNavigation = (path, event) => {
     if (user) {
       event?.preventDefault();
@@ -2604,7 +2567,6 @@ function AppContent() {
     return <LoadingFallback />;
   }
 
-  const toggleLanguage = () => setLanguage(prev => prev === 'en' ? 'am' : 'en');
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
   const handleLogoError = () => setLogoError(true);
@@ -2656,17 +2618,27 @@ function AppContent() {
   // HEADER COMPONENT
   // ==========================================
 
-  // Only destinations backed by a real registered route are listed here.
-  // Services / Features / Help are intentionally absent: no such route exists.
+  // Public navigation points to the actual landing-page sections and routes.
   const publicNavLinks = [
-    { to: '/home', label: t.home, icon: HomeIcon },
+    { to: '/home', label: t.home, icon: House },
     { to: '/about', label: t.about, icon: Info },
-    { to: '/contact', label: t.contact, icon: Mail }
+    { to: '/about#services', label: t.services, icon: BriefcaseBusiness },
+    { to: '/about#features', label: t.features, icon: Sparkles },
+    { to: '/help', label: t.help, icon: CircleHelp },
+    { to: '/contac', label: t.contact, icon: Mail }
   ];
 
   const isPublicNavActive = (to) => {
-    if (to === '/home') return location.pathname === '/' || location.pathname === '/home';
-    return location.pathname === to || location.pathname.startsWith(`${to}/`);
+    const [path, hash] = String(to).split('#');
+    const normalizedPath = path || '/';
+    const pathMatches = normalizedPath === '/home'
+      ? location.pathname === '/' || location.pathname === '/home'
+      : normalizedPath === '/'
+        ? location.pathname === '/' || location.pathname === '/home'
+        : location.pathname === normalizedPath || location.pathname.startsWith(`${normalizedPath}/`);
+
+    if (!hash) return pathMatches;
+    return pathMatches && location.hash === `#${hash}`;
   };
 
   const HeaderLink = ({ to, children, icon: Icon, className = '' }) => {
@@ -2677,16 +2649,8 @@ function AppContent() {
         onClick={(event) => requestPublicNavigation(to, event)}
         aria-current={active ? 'page' : undefined}
         className={`public-nav-link${active ? ' is-active' : ''}${className ? ` ${className}` : ''}`}
-        style={{
-          color: !user && (location.pathname === '/' || location.pathname === '/home') ? '#FFFFFF' : currentTheme.headerText,
-          textDecoration: 'none',
-          fontWeight: 700,
-          fontSize: '1.08rem',
-          cursor: 'pointer',
-          letterSpacing: '0.01em'
-        }}
       >
-        {Icon ? <Icon size={17} aria-hidden="true" className="public-nav-link-icon" /> : null}
+        {Icon ? <Icon size={16} strokeWidth={2} aria-hidden="true" className="public-nav-link-icon" /> : null}
         <span>{children}</span>
       </Link>
     );
@@ -2694,173 +2658,86 @@ function AppContent() {
 
   const Header = () => {
     const onHomeRoute = !user && (location.pathname === '/' || location.pathname === '/home');
-    const headerTextColor = onHomeRoute ? '#FFFFFF' : currentTheme.headerText;
 
     const LanguageToggle = ({ variant }) => (
-      <button
-        type="button"
-        onClick={toggleLanguage}
-        aria-label={language === 'en' ? 'Switch to Amharic' : 'Switch to English'}
+      <div
+        role="group"
+        aria-label={t.language}
         className={`public-language-toggle${variant ? ` ${variant}` : ''}`}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '5px',
-          background: '#FFFFFF',
-          border: '1px solid #CBD5E1',
-          padding: '4px 10px',
-          borderRadius: '5px',
-          cursor: 'pointer',
-          color: '#0F172A',
-          fontSize: '0.8rem',
-          fontWeight: 600
-        }}
       >
-        <Languages size={15} aria-hidden="true" />
-        <span>{language === 'en' ? 'አማ' : 'EN'}</span>
-      </button>
+        <Languages size={16} strokeWidth={2} aria-hidden="true" />
+        <button type="button" onClick={() => setLanguage('en')} aria-pressed={language === 'en'} aria-label="English">Eng</button>
+        <span aria-hidden="true">/</span>
+        <button type="button" onClick={() => setLanguage('am')} aria-pressed={language === 'am'} aria-label="አማርኛ">አማ</button>
+      </div>
+    );
+
+    const LoginButton = () => (
+      <Link className="public-login-button" to="/login">
+        <LogIn size={17} strokeWidth={2} aria-hidden="true" />
+        <span>{t.login}</span>
+      </Link>
     );
 
     const ThemeToggle = () => (
       <button
         type="button"
+        className="public-theme-toggle"
         onClick={toggleTheme}
         aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
-        className="public-theme-toggle"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#E2E8F0',
-          border: '1px solid #CBD5E1',
-          padding: '4px 10px',
-          borderRadius: '5px',
-          cursor: 'pointer',
-          color: '#0F172A',
-          fontSize: '0.9rem'
-        }}
+        title={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
       >
-        {theme === 'light' ? <Moon size={16} aria-hidden="true" /> : <Sun size={16} aria-hidden="true" />}
+        {theme === 'light' ? <Moon size={18} aria-hidden="true" /> : <Sun size={18} aria-hidden="true" />}
       </button>
-    );
-
-    const LoginButton = () => (
-      <Link className="public-login-button" to="/login" style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '8px',
-        background: '#ffffff',
-        color: '#17212B',
-        textDecoration: 'none',
-        padding: '10px 18px',
-        borderRadius: 12,
-        fontWeight: 800,
-        fontSize: '1.02rem',
-        minHeight: '48px',
-        boxShadow: '0 4px 10px rgba(23, 43, 61, 0.12)'
-      }}>
-        <LockKeyhole size={18} aria-hidden="true" />
-        <span>{t.login}</span>
-      </Link>
     );
 
     return (
       <header
         className={`app-header public-site-header${onHomeRoute ? ' home-public-header' : ''}${mobileNavOpen ? ' mobile-nav-open' : ''}`}
-        style={{
-          background: onHomeRoute ? 'rgba(15, 23, 42, 0.38)' : '#5e7f95',
-          color: headerTextColor,
-          padding: '0.9rem 2rem',
-          borderBottom: '1px solid rgba(23, 33, 43, 0.08)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '20px',
-          width: '100%',
-          boxSizing: 'border-box',
-          boxShadow: 'none',
-          position: onHomeRoute ? 'absolute' : 'sticky',
-          top: 0,
-          left: 0,
-          zIndex: 50
-        }}
       >
-        <div className="app-header-brand" style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap', flex: '1 1 auto', minWidth: 0 }}>
-          <div style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: '14px',
-            border: '1px solid rgba(255,255,255,0.7)',
-            background: '#ffffff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'hidden',
-            flexShrink: 0,
-            boxShadow: '0 4px 12px rgba(23, 43, 61, 0.12)'
-          }}>
+        <Link
+          className="app-header-brand public-brand-link"
+          to="/home"
+          onClick={(event) => requestPublicNavigation('/home', event)}
+          aria-label={`${organizationProfile.name || t.university} ${t.home}`}
+        >
+          <div className="public-brand-mark">
             {!logoError ? (
               <img
                 src={organizationProfile.logo || UNIVERSITY_LOGO}
                 alt={organizationProfile.name || 'Institution logo'}
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 onError={handleLogoError}
               />
             ) : (
-              <span style={{ fontSize: '1.5rem' }}>🏫</span>
+              <Building2 size={24} aria-hidden="true" />
             )}
           </div>
-          <div style={{ minWidth: 0 }}>
-            <h1 style={{ margin: 0, fontSize: 'clamp(1.1rem, 2.4vw, 2.1rem)', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1.12, color: headerTextColor }}>
-              {organizationProfile.name || t.university}
-            </h1>
-            <p style={{ margin: '6px 0 0', fontSize: '0.9rem', color: onHomeRoute ? 'rgba(255,255,255,0.86)' : 'rgba(23,33,43,0.82)', fontWeight: 600 }}>
-              {t.systemName}
-            </p>
+          <div className="public-brand-copy">
+            <span className="public-brand-university">{organizationProfile.name || t.university}</span>
+            <span className="public-brand-title">{t.footerBrandTitle}</span>
           </div>
-        </div>
+        </Link>
 
-        <div className="app-header-actions public-header-actions" style={{ display: 'flex', gap: '18px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <div className="public-header-desktop-actions" style={{ display: 'flex', gap: '18px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <nav className="public-desktop-nav" aria-label={t.footerNavigation} style={{ display: 'flex', gap: '28px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="app-header-actions public-header-actions">
+          <div className="public-header-desktop-actions">
+            <nav className="public-desktop-nav" aria-label={t.primaryNavigation}>
               {publicNavLinks.map((item) => (
                 <HeaderLink key={item.to} to={item.to} icon={item.icon}>{item.label}</HeaderLink>
               ))}
             </nav>
-
-            <EthiopianClock language={language} theme={currentTheme} />
 
             <LanguageToggle />
             <ThemeToggle />
             <LoginButton />
           </div>
 
-          <button
-            type="button"
-            ref={mobileNavToggleRef}
-            className="public-mobile-nav-toggle"
-            onClick={() => setMobileNavOpen((current) => !current)}
-            aria-expanded={mobileNavOpen}
-            aria-controls="public-mobile-nav"
-            aria-label={mobileNavOpen ? 'Close navigation menu' : 'Open navigation menu'}
-          >
-            {mobileNavOpen ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
-          </button>
         </div>
 
-        <div
+        <nav
           id="public-mobile-nav"
           ref={mobileNavRef}
           className="public-mobile-nav"
-          hidden={!mobileNavOpen}
-          style={{
-            width: '100%',
-            flexBasis: '100%',
-            flexDirection: 'column',
-            gap: '4px',
-            padding: '12px 0 4px'
-          }}
+          aria-label={t.primaryNavigation}
         >
           {publicNavLinks.map((item) => (
             <HeaderLink key={item.to} to={item.to} icon={item.icon} className="public-mobile-nav-link">
@@ -2868,31 +2745,50 @@ function AppContent() {
             </HeaderLink>
           ))}
 
-          <div className="public-mobile-nav-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', paddingTop: '10px', marginTop: '6px', borderTop: '1px solid rgba(23, 33, 43, 0.12)' }}>
+          <div className="public-mobile-nav-actions">
             <LanguageToggle variant="public-mobile-language-toggle" />
             <ThemeToggle />
             <LoginButton />
           </div>
-        </div>
+        </nav>
       </header>
     );
   };
-  const Footer = () => (
-    <footer className={`app-footer${!user ? ' public-site-footer' : ''}`}>
+  const Footer = () => {
+    const contactDetails = [
+      { value: organizationProfile.address, Icon: MapPin },
+      { value: organizationProfile.phone, Icon: Phone },
+      { value: organizationProfile.email, Icon: Mail }
+    ].filter(({ value }) => Boolean(String(value || '').trim()));
+
+    const supportLinks = [
+      { to: '/help', label: t.help, icon: LifeBuoy },
+      { to: '/login', label: t.login, icon: LogIn }
+    ];
+    const footerQuickLinks = publicNavLinks.filter((item) => item.to !== '/help');
+
+    return <footer className={`app-footer${!user ? ' public-site-footer' : ''}`} role="contentinfo">
       <div className="footer-grid">
         <div className="footer-brand">
-          <h2>{organizationProfile.name || t.companyName}</h2>
-          <p>{t.footerDescription}</p>
-          <div className="footer-contact" aria-label="Contact information">
-            <p><MapPin size={15} aria-hidden="true" />{t.addressValue}</p>
-            <p><Phone size={15} aria-hidden="true" />{t.phoneValue}</p>
-            <p><Mail size={15} aria-hidden="true" />{t.emailValue}</p>
+          <div className="footer-brand-header">
+            {organizationProfile.logo && !logoError ? (
+              <img src={organizationProfile.logo || UNIVERSITY_LOGO} alt={organizationProfile.name || t.university} className="footer-brand-logo" onError={handleLogoError} />
+            ) : (
+              <div className="footer-brand-mark" aria-hidden="true">🏫</div>
+            )}
+            <div>
+              <h2>{t.footerBrandTitle}</h2>
+            </div>
           </div>
+          <p>{t.footerDescription}</p>
+          {contactDetails.length > 0 && <div className="footer-contact" aria-label="Contact information">
+            {contactDetails.map(({ value, Icon }) => <p key={`${Icon.displayName || Icon.name}-${value}`}><Icon size={15} aria-hidden="true" />{value}</p>)}
+          </div>}
         </div>
 
         <nav className="footer-section" aria-label={t.footerNavigation}>
-          <h3>Quick Links</h3>
-          {publicNavLinks.map((item) => {
+          <h3>{t.footerNavigation}</h3>
+          {footerQuickLinks.map((item) => {
             const NavIcon = item.icon;
             return (
               <Link
@@ -2906,26 +2802,40 @@ function AppContent() {
               </Link>
             );
           })}
-          <Link className="footer-link" to="/login"><LogIn size={16} aria-hidden="true" />Sign In</Link>
         </nav>
 
-        <div className="footer-controls">
-          <button type="button" onClick={toggleLanguage} aria-label={language === 'en' ? 'Switch to Amharic' : 'Switch to English'}>
-            <Languages size={16} aria-hidden="true" />
-            <span>{language === 'en' ? 'አማ' : 'EN'}</span>
-          </button>
-          <button type="button" onClick={toggleTheme} aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}>
-            {theme === 'light' ? <Moon size={16} aria-hidden="true" /> : <Sun size={16} aria-hidden="true" />}
-          </button>
+        <nav className="footer-section" aria-label={t.footerSupport}>
+          <h3>{t.footerSupport}</h3>
+          {supportLinks.map((item) => (
+            <Link key={item.to} className="footer-link" to={item.to} onClick={(event) => requestPublicNavigation(item.to, event)}>
+              <item.icon size={16} aria-hidden="true" />{item.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="footer-section footer-security" aria-label={t.footerSecurity}>
+          <h3>{t.footerSecurity}</h3>
+          <ul className="footer-security-list">
+            <li><ShieldCheck size={15} aria-hidden="true" />{t.footerSecurityAsset}</li>
+            <li><LockKeyhole size={15} aria-hidden="true" />{t.footerSecurityRbac}</li>
+            <li><Check size={15} aria-hidden="true" />{t.footerSecurityAudit}</li>
+          </ul>
         </div>
+
+        {!user && (
+          <div className="footer-controls">
+            <button type="button" onClick={toggleTheme} aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}>
+              {theme === 'light' ? <Moon size={16} aria-hidden="true" /> : <Sun size={16} aria-hidden="true" />}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="footer-bottom">
-        <span>© {new Date().getFullYear()} {organizationProfile.name || t.companyName}</span>
-        <span>{t.footerCopyright}</span>
+        <span>© {new Date().getFullYear()} {t.footerBrandTitle}. {t.footerCopyright}</span>
       </div>
-    </footer>
-  );
+    </footer>;
+  };
 
   const PublicHeader = () => <Header />;
   const PublicFooter = () => <Footer />;
@@ -2992,15 +2902,26 @@ function AppContent() {
             {unreadNotificationCount > 0 && <span className="dashboard-notification-count">{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</span>}
           </button>
 
-          <button
-            type="button"
-            className="dashboard-language-button"
-            onClick={() => setLanguage((current) => current === 'en' ? 'am' : 'en')}
-            aria-label={language === 'en' ? 'Switch to Amharic' : 'Switch to English'}
-          >
-            <Languages size={16} aria-hidden="true" />
-            <span>{language === 'en' ? 'አማ' : 'EN'}</span>
-          </button>
+          <div role="group" aria-label={t.language} style={{ display: 'inline-flex', alignItems: 'center' }}>
+            <button
+              type="button"
+              className="dashboard-language-button"
+              onClick={() => setLanguage('en')}
+              aria-pressed={language === 'en'}
+              style={{ borderRadius: '7px 0 0 7px', background: language === 'en' ? 'rgba(255, 255, 255, 0.42)' : 'transparent' }}
+            >
+              English
+            </button>
+            <button
+              type="button"
+              className="dashboard-language-button"
+              onClick={() => setLanguage('am')}
+              aria-pressed={language === 'am'}
+              style={{ borderLeft: 0, borderRadius: '0 7px 7px 0', background: language === 'am' ? 'rgba(255, 255, 255, 0.42)' : 'transparent' }}
+            >
+              አማርኛ
+            </button>
+          </div>
 
           <div className="dashboard-profile" ref={notificationMenuRef}>
             <button
@@ -3234,8 +3155,12 @@ function AppContent() {
                 <Route path="/reset-password/:token" element={<ResetPassword />} />
                 <Route path="/home" element={<Home />} />
                 <Route path="/about" element={<AboutUs />} />
+                <Route path="/services" element={<Services />} />
+                <Route path="/features" element={<Features />} />
                 <Route path="/about-us" element={<AboutUs />} />
                 <Route path="/contact" element={<Contact />} />
+                <Route path="/contac" element={<Contact />} />
+                <Route path="/help" element={<Help />} />
                 <Route path="/ict/*" element={<Navigate to="/login" replace />} />
                 <Route path="*" element={<Navigate to={logoutDestinationRef.current || '/login'} replace />} />
               </Routes>
@@ -3577,6 +3502,7 @@ function AppContent() {
           <Route path="/home" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
           <Route path="/about" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
           <Route path="/contact" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
+          <Route path="/help" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
           <Route path="/login" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
 
           <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout /></ProtectedRoute>}>

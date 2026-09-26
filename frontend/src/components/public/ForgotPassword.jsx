@@ -1,353 +1,25 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
 import { toast } from 'react-toastify';
-import { ArrowLeft, CheckCircle2, LockKeyhole, Send, ShieldCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  CircleAlert,
+  CircleCheck,
+  Eye,
+  EyeOff,
+  KeyRound,
+  LoaderCircle,
+  LockKeyhole,
+  Mail,
+  Send,
+  ShieldCheck,
+  Smartphone,
+} from 'lucide-react';
 
-const ForgotPassword = () => {
-  const { language, theme } = useLanguage();
-  const isDark = theme === 'dark';
-  const [method, setMethod] = useState('email');
-  const [identifier, setIdentifier] = useState('');
-  const [otp, setOtp] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [step, setStep] = useState('request');
-  const [resetToken, setResetToken] = useState('');
-  const [resendCountdown, setResendCountdown] = useState(0);
-
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
-
-  useEffect(() => {
-    if (resendCountdown <= 0) return undefined;
-    const timer = setTimeout(() => setResendCountdown((value) => value - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [resendCountdown]);
-
-  const handleEmailRequest = async () => {
-    const trimmed = identifier.trim();
-    if (!isValidEmail(trimmed)) {
-      setError(t.invalidEmail);
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await apiClient.post('/api/auth/forgot-password', {
-        method: 'email',
-        email: trimmed.toLowerCase(),
-      });
-
-      if (!response.data?.success) {
-        throw new Error(response.data?.message || t.errorMessage);
-      }
-
-      setSuccessMessage(response.data.message || t.successMessage);
-      setStep('email-success');
-      toast.success(response.data.message || t.successMessage);
-    } catch (err) {
-      const status = err.response?.status || err.status;
-      const backendMessage = err.response?.data?.message || err.message || '';
-      const message = status === 429
-        ? t.rateLimitError
-        : backendMessage || (status ? t.errorMessage : t.networkError);
-      setError(message);
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePhoneRequest = async (resend = false) => {
-    const normalizedPhone = normalizePhoneNumber(identifier);
-    if (!normalizedPhone) {
-      setError(t.invalidPhone);
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await apiClient.post('/api/auth/forgot-password/request-otp', {
-        phoneNumber: normalizedPhone,
-      });
-
-      if (!response.data?.success) {
-        throw new Error(response.data?.message || t.errorMessage);
-      }
-
-      setSuccessMessage(response.data.message || t.otpSent);
-      setStep('verify');
-      setOtp('');
-      setResendCountdown(resend ? 60 : 60);
-      toast.success(response.data.message || t.otpSent);
-    } catch (err) {
-      const status = err.response?.status || err.status;
-      const backendMessage = err.response?.data?.message || err.message || '';
-      const message = status === 429
-        ? t.rateLimitError
-        : backendMessage || (status ? t.errorMessage : t.networkError);
-      setError(message);
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleOtpVerification = async (event) => {
-    event.preventDefault();
-    const normalizedPhone = normalizePhoneNumber(identifier);
-    if (!normalizedPhone) {
-      setError(t.invalidPhone);
-      return;
-    }
-
-    const otpCode = otp.trim();
-    if (!/^\d{6}$/.test(otpCode)) {
-      setError(t.invalidOtp);
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await apiClient.post('/api/auth/forgot-password/verify-otp', {
-        phoneNumber: normalizedPhone,
-        otp: otpCode,
-      });
-
-      if (!response.data?.success) {
-        throw new Error(response.data?.message || t.otpExpired);
-      }
-
-      setResetToken(response.data.resetToken || '');
-      setStep('reset');
-      setSuccessMessage(response.data.message || t.verifyOtp);
-      toast.success(response.data.message || t.verifyOtp);
-    } catch (err) {
-      const backendMessage = err.response?.data?.message || err.message || '';
-      setError(backendMessage || t.otpExpired);
-      toast.error(backendMessage || t.otpExpired);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePasswordReset = async (event) => {
-    event.preventDefault();
-    setError('');
-
-    if (!resetToken) {
-      setError(t.invalidToken);
-      return;
-    }
-
-    if (password.length < 8 || password !== confirmPassword) {
-      setError(t.passwordMismatch);
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const response = await apiClient.post('/api/auth/forgot-password/reset-password', {
-        resetToken,
-        newPassword: password,
-        confirmPassword,
-      });
-
-      if (!response.data?.success) {
-        throw new Error(response.data?.message || t.errorMessage);
-      }
-
-      setStep('complete');
-      setSuccessMessage(response.data.message || t.passwordResetSuccessfully);
-      toast.success(response.data.message || t.passwordResetSuccessfully);
-    } catch (err) {
-      const backendMessage = err.response?.data?.message || err.message || '';
-      setError(backendMessage || t.errorMessage);
-      toast.error(backendMessage || t.errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    if (method === 'email') {
-      await handleEmailRequest();
-      return;
-    }
-    await handlePhoneRequest(false);
-  };
-
-  const renderRequestForm = () => (
-    <form onSubmit={handleSubmit}>
-      <div style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', margin: '0 0 10px 4px' }}>{t.recoveryMethod}</div>
-      <div className="method-group">
-        <button type="button" className={`method-option ${method === 'email' ? 'active' : ''}`} onClick={() => setMethod('email')}>{t.email}</button>
-        <button type="button" className={`method-option ${method === 'phone' ? 'active' : ''}`} onClick={() => setMethod('phone')}>{t.mobilePhone}</button>
-      </div>
-
-      <label style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', marginLeft: '4px', display: 'block' }}>
-        {method === 'email' ? t.emailAddress.toUpperCase() : t.mobilePhoneNumber.toUpperCase()}
-      </label>
-      <input
-        className="input-field"
-        type={method === 'email' ? 'email' : 'tel'}
-        value={identifier}
-        onChange={(event) => setIdentifier(event.target.value)}
-        placeholder={method === 'email' ? t.emailPlaceholder : t.phonePlaceholder}
-        autoComplete={method === 'email' ? 'email' : 'tel'}
-        disabled={loading}
-      />
-
-      {error && <div className="error-box">{error}</div>}
-
-      <button className="btn-reset" type="submit" disabled={loading}>
-        {loading ? t.sending : (
-          <>
-            <Send size={16} aria-hidden="true" /> {method === 'email' ? t.sendResetLink : t.sendOtp}
-          </>
-        )}
-      </button>
-    </form>
-  );
-
-  const renderOtpForm = () => (
-    <form onSubmit={handleOtpVerification}>
-      <div style={{ textAlign: 'center', marginBottom: '18px' }}>
-        <ShieldCheck size={40} color="#536575" aria-hidden="true" />
-        <h2 style={{ fontSize: '24px', fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a', marginTop: '10px' }}>{t.verificationCode}</h2>
-        <p style={{ color: '#64748b', fontSize: '14px', marginTop: '8px' }}>{t.enterOtp}</p>
-      </div>
-
-      <label style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', marginLeft: '4px', display: 'block' }}>{t.verificationCode.toUpperCase()}</label>
-      <input
-        className="input-field"
-        type="text"
-        value={otp}
-        onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
-        placeholder="123456"
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        disabled={loading}
-      />
-
-      {error && <div className="error-box">{error}</div>}
-
-      <button className="btn-reset" type="submit" disabled={loading}>
-        {loading ? t.sending : <><ShieldCheck size={16} aria-hidden="true" /> {t.verifyOtp}</>}
-      </button>
-
-      <div style={{ marginTop: '18px', textAlign: 'center' }}>
-        <button type="button" className="secondary-btn" disabled={loading || resendCountdown > 0} onClick={() => handlePhoneRequest(true)}>
-          {resendCountdown > 0 ? `${t.resendOtp} in ${resendCountdown}s` : t.resendOtp}
-        </button>
-      </div>
-    </form>
-  );
-
-  const renderResetForm = () => (
-    <form onSubmit={handlePasswordReset}>
-      <div style={{ textAlign: 'center', marginBottom: '18px' }}>
-        <LockKeyhole size={40} color="#536575" aria-hidden="true" />
-        <h2 style={{ fontSize: '24px', fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a', marginTop: '10px' }}>{t.newPassword}</h2>
-      </div>
-
-      <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#64748b', marginLeft: '4px' }}>{t.newPassword.toUpperCase()}</label>
-      <input className="input-field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" disabled={loading} />
-
-      <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#64748b', marginLeft: '4px', marginTop: '16px' }}>{t.confirmPassword.toUpperCase()}</label>
-      <input className="input-field" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="••••••••" disabled={loading} />
-
-      {error && <div className="error-box">{error}</div>}
-
-      <button className="btn-reset" type="submit" disabled={loading}>
-        {loading ? t.sending : <><CheckCircle2 size={16} aria-hidden="true" /> {t.resetPassword}</>}
-      </button>
-    </form>
-  );
-
-  const renderCompleteState = () => (
-    <div className="success-box">
-      <CheckCircle2 className="success-icon" size={50} aria-hidden="true" />
-      <h2 style={{ fontSize: '24px', fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a' }}>{t.passwordResetSuccessfully}</h2>
-      <p style={{ color: '#64748b', marginTop: '10px', lineHeight: '1.6' }}>{successMessage}</p>
-      <button type="button" className="btn-reset" style={{ marginTop: '16px' }} onClick={() => window.location.href = '/login'}>
-        {t.backToLogin}
-      </button>
-    </div>
-  );
-
-  return (
-    <>
-      <style>{`
-        .forgot-root { min-height: 100vh; width: 100%; display: flex; align-items: center; justify-content: center; padding: 20px; position: relative; overflow: hidden; font-family: Inter, system-ui, sans-serif; }
-        .forgot-light { background: #EEF2F5; }
-        .forgot-dark { background: #2C3C49; }
-        .forgot-card { width: 100%; max-width: 480px; background: ${isDark ? '#1E2B34' : '#FFFFFF'}; border: 1px solid #D7DEE5; border-radius: 24px; padding: 32px 28px; box-shadow: 0 20px 40px rgba(23, 33, 43, 0.08); z-index: 1; }
-        .method-group { display: flex; gap: 10px; margin: 16px 0 20px; }
-        .method-option { flex: 1; border: 1px solid #D7DEE5; border-radius: 12px; background: #F5F7F9; color: #17212B; padding: 10px 12px; cursor: pointer; font-weight: 600; }
-        .method-option.active { border-color: #536575; background: #EEF2F5; }
-        .input-field { width: 100%; padding: 14px 16px; border-radius: 12px; border: 2px solid #D7DEE5; background: #F5F7F9; color: #17212B; margin-top: 8px; outline: none; box-sizing: border-box; }
-        .input-field:focus { border-color: #536575; background: #FFFFFF; }
-        .btn-reset { background: #536575; width: 100%; padding: 14px; border-radius: 12px; border: none; color: white; font-weight: 700; cursor: pointer; margin-top: 20px; }
-        .btn-reset:disabled { opacity: 0.6; cursor: not-allowed; }
-        .secondary-btn { background: transparent; border: 1px solid #D7DEE5; color: ${isDark ? '#E2E8F0' : '#334155'}; border-radius: 12px; padding: 10px 12px; width: 100%; font-weight: 600; cursor: pointer; }
-        .secondary-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .error-box { background: rgba(239, 68, 68, 0.08); color: #b91c1c; padding: 12px; border-radius: 10px; font-size: 13px; margin-top: 15px; border: 1px solid rgba(185, 28, 28, 0.2); }
-        .success-box { text-align: center; }
-        .success-icon { font-size: 50px; margin-bottom: 15px; display: block; }
-      `}</style>
-
-      <div className={`forgot-root ${isDark ? 'forgot-dark' : 'forgot-light'}`}>
-        <main className="forgot-card">
-          {step === 'request' && (
-            <>
-              <div style={{ textAlign: 'center', marginBottom: '18px' }}>
-                <LockKeyhole size={40} color="#536575" aria-hidden="true" />
-                <h1 style={{ fontSize: '24px', fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a', marginTop: '10px' }}>{t.forgotPassword}</h1>
-                <p style={{ color: '#64748b', fontSize: '14px', marginTop: '8px', lineHeight: '1.5' }}>{t.instructions}</p>
-              </div>
-              {renderRequestForm()}
-            </>
-          )}
-
-          {step === 'verify' && renderOtpForm()}
-          {step === 'reset' && renderResetForm()}
-          {step === 'email-success' && (
-            <div className="success-box">
-              <CheckCircle2 className="success-icon" size={50} aria-hidden="true" />
-              <h2 style={{ fontSize: '22px', fontWeight: '800', color: isDark ? '#f8fafc' : '#0f172a' }}>{t.emailSent}</h2>
-              <p style={{ color: '#64748b', fontSize: '14px', marginTop: '10px', lineHeight: '1.6' }}>{successMessage}</p>
-              <button type="button" className="btn-reset" style={{ marginTop: '18px' }} onClick={() => window.location.href = '/login'}>
-                {t.backToLogin}
-              </button>
-            </div>
-          )}
-          {step === 'complete' && renderCompleteState()}
-
-          {step !== 'complete' && step !== 'email-success' && (
-            <div style={{ marginTop: '25px', textAlign: 'center', borderTop: '1px solid rgba(100,116,139,0.1)', paddingTop: '20px' }}>
-              <Link to="/login" style={{ color: '#0284C7', fontWeight: 'bold', textDecoration: 'none', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <ArrowLeft size={16} aria-hidden="true" /> {t.backToLogin}
-              </Link>
-            </div>
-          )}
-        </main>
-      </div>
-    </>
-  );
-};
+const PASSWORD_MIN_LENGTH = 8;
+const OTP_RESEND_SECONDS = 60;
 
 const isValidEmail = (value) => {
   if (!value || value.length > 254 || value.includes('..')) return false;
@@ -369,46 +41,678 @@ const normalizePhoneNumber = (value) => {
   return null;
 };
 
+const describePasswordProblem = (value) => {
+  if (value.length < PASSWORD_MIN_LENGTH) return 'tooShort';
+  if (!/[A-Z]/.test(value)) return 'noUppercase';
+  if (!/[a-z]/.test(value)) return 'noLowercase';
+  if (!/\d/.test(value)) return 'noNumber';
+  if (!/[^A-Za-z0-9]/.test(value)) return 'noSpecial';
+  return null;
+};
+
+const extractServerMessage = (error, fallback) => {
+  const status = error?.response?.status;
+  const serverMessage = error?.response?.data?.message;
+  if (serverMessage) return serverMessage;
+  if (status === 429) return fallback.rateLimitError;
+  if (!status) return fallback.networkError;
+  return fallback.errorMessage;
+};
+
+// Errors raised by this screen carry a message that is safe and already localised.
+const userFacingError = (message) => Object.assign(new Error(message), { isUserFacing: true });
+
+const resolveErrorMessage = (error, fallback) => (
+  error?.isUserFacing ? error.message : extractServerMessage(error, fallback)
+);
+
+const ForgotPassword = () => {
+  const { language, theme } = useLanguage();
+  const isDark = theme === 'dark';
+  const navigate = useNavigate();
+
+  const [method, setMethod] = useState('email');
+  const [identifier, setIdentifier] = useState('');
+  const [otp, setOtp] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [step, setStep] = useState('request');
+  const [resetToken, setResetToken] = useState('');
+  const [resendCountdown, setResendCountdown] = useState(0);
+
+  const t = useMemo(() => (language === 'en' ? englishTranslations : amharicTranslations), [language]);
+
+  useEffect(() => {
+    if (resendCountdown <= 0) return undefined;
+    const timer = setTimeout(() => setResendCountdown((value) => value - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCountdown]);
+
+  const runRequest = async (action, work) => {
+    setLoading(true);
+    setPendingAction(action);
+    setError('');
+    try {
+      await work();
+    } finally {
+      setLoading(false);
+      setPendingAction(null);
+    }
+  };
+
+  const handleEmailRequest = () => runRequest('email', async () => {
+    const trimmed = identifier.trim();
+    if (!trimmed) {
+      setError(t.emailRequired);
+      return;
+    }
+    if (!isValidEmail(trimmed)) {
+      setError(t.invalidEmail);
+      return;
+    }
+
+    const response = await apiClient.post('/api/auth/forgot-password', {
+      method: 'email',
+      email: trimmed.toLowerCase(),
+    });
+
+    if (!response.data?.success) {
+      throw userFacingError(response.data?.message || t.errorMessage);
+    }
+
+    setSuccessMessage(response.data.message || t.successMessage);
+    setStep('email-sent');
+    toast.success(response.data.message || t.successMessage);
+  }).catch((err) => {
+    const message = resolveErrorMessage(err, t);
+    setError(message);
+    toast.error(message);
+  });
+
+  const handlePhoneRequest = () => runRequest('otp', async () => {
+    const normalizedPhone = normalizePhoneNumber(identifier);
+    if (!normalizedPhone) {
+      setError(t.invalidPhone);
+      return;
+    }
+
+    const response = await apiClient.post('/api/auth/forgot-password/request-otp', {
+      phoneNumber: normalizedPhone,
+    });
+
+    if (!response.data?.success) {
+      throw userFacingError(response.data?.message || t.errorMessage);
+    }
+
+    setSuccessMessage(response.data.message || t.otpSent);
+    setOtp('');
+    setResendCountdown(OTP_RESEND_SECONDS);
+    setStep('verify');
+    toast.success(response.data.message || t.otpSent);
+  }).catch((err) => {
+    const message = resolveErrorMessage(err, t);
+    setError(message);
+    toast.error(message);
+  });
+
+  const handleOtpVerification = (event) => {
+    event.preventDefault();
+    runRequest('verify', async () => {
+      const normalizedPhone = normalizePhoneNumber(identifier);
+      if (!normalizedPhone) {
+        setError(t.invalidPhone);
+        return;
+      }
+      if (!/^\d{6}$/.test(otp.trim())) {
+        setError(t.invalidOtp);
+        return;
+      }
+
+      const response = await apiClient.post('/api/auth/forgot-password/verify-otp', {
+        phoneNumber: normalizedPhone,
+        otp: otp.trim(),
+      });
+
+      if (!response.data?.success || !response.data.resetToken) {
+        throw userFacingError(response.data?.message || t.otpExpired);
+      }
+
+      setResetToken(response.data.resetToken);
+      setSuccessMessage(response.data.message || t.verifyOtpSuccess);
+      setStep('reset');
+      setError('');
+      toast.success(response.data.message || t.verifyOtpSuccess);
+    }).catch((err) => {
+      const message = resolveErrorMessage(err, t);
+      setError(message);
+      toast.error(message);
+    });
+  };
+
+  const handlePasswordReset = (event) => {
+    event.preventDefault();
+    runRequest('reset', async () => {
+      if (!resetToken) {
+        setError(t.invalidToken);
+        return;
+      }
+      const passwordProblem = describePasswordProblem(password);
+      if (passwordProblem) {
+        setError(t.passwordRequirements[passwordProblem]);
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError(t.passwordMismatch);
+        return;
+      }
+
+      const response = await apiClient.post('/api/auth/forgot-password/reset-password', {
+        resetToken,
+        newPassword: password,
+        confirmPassword,
+      });
+
+      if (!response.data?.success) {
+        throw userFacingError(response.data?.message || t.errorMessage);
+      }
+
+      setSuccessMessage(response.data.message || t.passwordResetSuccessfully);
+      setStep('complete');
+      setError('');
+      toast.success(response.data.message || t.passwordResetSuccessfully);
+    }).catch((err) => {
+      const message = resolveErrorMessage(err, t);
+      setError(message);
+      toast.error(message);
+    });
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    if (method === 'email') {
+      handleEmailRequest();
+      return;
+    }
+    handlePhoneRequest();
+  };
+
+  const isEmailMethod = method === 'email';
+  const goToLogin = () => navigate('/login');
+  const spinner = <LoaderCircle className="spinner" size={17} aria-hidden="true" />;
+
+  const renderError = () => (error ? (
+    <div className="error-box" id="forgot-error" role="alert">
+      <CircleAlert size={17} aria-hidden="true" />
+      <span>{error}</span>
+    </div>
+  ) : null);
+
+  const renderRequestForm = () => (
+    <form onSubmit={handleSubmit} noValidate>
+      <div className="method-group" role="group" aria-label={t.recoveryMethod}>
+        <button
+          type="button"
+          className={`method-option ${isEmailMethod ? 'active' : ''}`}
+          aria-pressed={isEmailMethod}
+          onClick={() => { setMethod('email'); setError(''); }}
+        >
+          <Mail size={16} aria-hidden="true" />
+          <span>{t.email}</span>
+        </button>
+        <button
+          type="button"
+          className={`method-option ${!isEmailMethod ? 'active' : ''}`}
+          aria-pressed={!isEmailMethod}
+          onClick={() => { setMethod('phone'); setError(''); }}
+        >
+          <Smartphone size={16} aria-hidden="true" />
+          <span>{t.mobilePhone}</span>
+        </button>
+      </div>
+
+      <div className="field">
+        <label className="field-label" htmlFor="forgot-identifier">
+          {isEmailMethod ? t.emailAddress : t.mobilePhoneNumber}
+        </label>
+        <div className="field-control">
+          {isEmailMethod
+            ? <Mail size={17} aria-hidden="true" />
+            : <Smartphone size={17} aria-hidden="true" />}
+          <input
+            id="forgot-identifier"
+            className="text-input"
+            type={isEmailMethod ? 'email' : 'tel'}
+            value={identifier}
+            onChange={(event) => setIdentifier(event.target.value)}
+            placeholder={isEmailMethod ? t.emailPlaceholder : t.phonePlaceholder}
+            autoComplete={isEmailMethod ? 'email' : 'tel'}
+            inputMode={isEmailMethod ? 'email' : 'tel'}
+            disabled={loading}
+            aria-describedby={error ? 'forgot-error' : undefined}
+          />
+        </div>
+      </div>
+
+      {renderError()}
+
+      <button className="btn-primary" type="submit" disabled={loading}>
+        {pendingAction === 'email' || pendingAction === 'otp' ? (
+          <>{spinner} <span>{t.sending}</span></>
+        ) : (
+          <><Send size={16} aria-hidden="true" /> <span>{isEmailMethod ? t.sendResetLink : t.sendOtp}</span></>
+        )}
+      </button>
+    </form>
+  );
+
+  const renderOtpForm = () => (
+    <form onSubmit={handleOtpVerification} noValidate>
+      <div className="step-heading">
+        <ShieldCheck size={34} aria-hidden="true" />
+        <h2>{t.verificationCode}</h2>
+        <p>{t.enterOtp}</p>
+      </div>
+
+      <div className="field">
+        <label className="field-label" htmlFor="forgot-otp">{t.verificationCode}</label>
+        <div className="field-control">
+          <KeyRound size={17} aria-hidden="true" />
+          <input
+            id="forgot-otp"
+            className="text-input"
+            type="text"
+            value={otp}
+            onChange={(event) => { setOtp(event.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }}
+            placeholder="123456"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            disabled={loading}
+            aria-describedby={error ? 'forgot-error' : undefined}
+          />
+        </div>
+      </div>
+
+      {renderError()}
+
+      <button className="btn-primary" type="submit" disabled={loading}>
+        {pendingAction === 'verify' ? <>{spinner} <span>{t.verifying}</span></> : <><ShieldCheck size={16} aria-hidden="true" /> <span>{t.verifyOtp}</span></>}
+      </button>
+
+      <button
+        type="button"
+        className="btn-secondary"
+        disabled={loading || resendCountdown > 0}
+        onClick={() => handlePhoneRequest()}
+      >
+        {resendCountdown > 0 ? `${t.resendOtp} (${resendCountdown}s)` : t.resendOtp}
+      </button>
+    </form>
+  );
+
+  const renderResetForm = () => (
+    <form onSubmit={handlePasswordReset} noValidate>
+      <div className="step-heading">
+        <LockKeyhole size={34} aria-hidden="true" />
+        <h2>{t.newPassword}</h2>
+      </div>
+
+      <div className="field">
+        <label className="field-label" htmlFor="forgot-new-password">{t.newPasswordLabel}</label>
+        <div className="field-control">
+          <LockKeyhole size={17} aria-hidden="true" />
+          <input
+            id="forgot-new-password"
+            className="text-input"
+            type={showPassword ? 'text' : 'password'}
+            value={password}
+            onChange={(event) => { setPassword(event.target.value); setError(''); }}
+            placeholder="••••••••"
+            autoComplete="new-password"
+            disabled={loading}
+          />
+          <button
+            type="button"
+            className="password-toggle"
+            aria-label={showPassword ? t.hidePassword : t.showPassword}
+            onClick={() => setShowPassword((value) => !value)}
+          >
+            {showPassword ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
+          </button>
+        </div>
+      </div>
+
+      <div className="field">
+        <label className="field-label" htmlFor="forgot-confirm-password">{t.confirmPassword}</label>
+        <div className="field-control">
+          <LockKeyhole size={17} aria-hidden="true" />
+          <input
+            id="forgot-confirm-password"
+            className="text-input"
+            type={showPassword ? 'text' : 'password'}
+            value={confirmPassword}
+            onChange={(event) => { setConfirmPassword(event.target.value); setError(''); }}
+            placeholder="••••••••"
+            autoComplete="new-password"
+            disabled={loading}
+          />
+        </div>
+      </div>
+
+      <p className="field-hint">{t.passwordHint}</p>
+
+      {renderError()}
+
+      <button className="btn-primary" type="submit" disabled={loading}>
+        {pendingAction === 'reset' ? <>{spinner} <span>{t.updating}</span></> : <><CircleCheck size={16} aria-hidden="true" /> <span>{t.resetPassword}</span></>}
+      </button>
+    </form>
+  );
+
+  const renderTerminalState = ({ title, message, showNewLink }) => (
+    <div className="success-state">
+      <CircleCheck className="success-icon" size={46} aria-hidden="true" />
+      <h2>{title}</h2>
+      <p>{message || successMessage}</p>
+      <button type="button" className="btn-primary" onClick={goToLogin}>
+        <ArrowLeft size={16} aria-hidden="true" />
+        <span>{t.backToLogin}</span>
+      </button>
+      {showNewLink && (
+        <button
+          type="button"
+          className="btn-link"
+          onClick={() => { setStep('request'); setSuccessMessage(''); setError(''); }}
+        >
+          {t.sendAnotherLink}
+        </button>
+      )}
+    </div>
+  );
+
+  const isTerminalStep = step === 'email-sent' || step === 'complete';
+
+  return (
+    <>
+      <style>{`
+        .forgot-page, .forgot-page *, .forgot-page *::before, .forgot-page *::after {
+          animation: none !important;
+          transition: none !important;
+        }
+        .forgot-page {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 32px 20px;
+          font-family: Arial, sans-serif;
+        }
+        .forgot-page.forgot-light { background: #EEF2F5; color: #17212B; }
+        .forgot-page.forgot-dark { background: #2C3C49; color: #F5F7F9; }
+        .forgot-card {
+          width: min(100%, 460px);
+          padding: 32px 28px;
+          border: 1px solid #D7DEE5;
+          border-radius: 18px;
+          background: #FFFFFF;
+          box-shadow: 0 10px 24px rgba(23, 33, 43, 0.06);
+        }
+        .forgot-page.forgot-dark .forgot-card {
+          background: #1E2B34;
+          border-color: #3B4C58;
+        }
+        .forgot-logo {
+          display: block;
+          width: 64px;
+          height: 64px;
+          margin: 0 auto 16px;
+          border-radius: 16px;
+          object-fit: contain;
+          background: #F8FAFC;
+          border: 1px solid #D7DEE5;
+        }
+        .forgot-heading { margin: 0 0 22px; text-align: center; }
+        .forgot-heading h1 { margin: 0; font-size: clamp(1.5rem, 4vw, 1.9rem); line-height: 1.2; color: #17212B; }
+        .forgot-page.forgot-dark .forgot-heading h1 { color: #F5F7F9; }
+        .forgot-heading p { margin: 8px 0 0; color: #64748B; font-size: 0.92rem; line-height: 1.5; }
+        .method-group { display: flex; gap: 10px; margin: 0 0 20px; }
+        .method-option {
+          flex: 1;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          min-height: 44px;
+          padding: 10px 12px;
+          border: 1px solid #D7DEE5;
+          border-radius: 10px;
+          background: #F5F7F9;
+          color: #334155;
+          font-size: 0.88rem;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .method-option.active { border-color: #536575; background: #EEF2F5; color: #17212B; }
+        .method-option:disabled { opacity: 0.6; cursor: not-allowed; }
+        .field { margin-bottom: 16px; }
+        .field-label { display: block; margin-bottom: 8px; color: #334155; font-size: 0.8rem; font-weight: 700; }
+        .forgot-page.forgot-dark .field-label { color: #C8D1D9; }
+        .field-control { position: relative; display: flex; align-items: center; }
+        .field-control > svg { position: absolute; left: 14px; color: #718096; pointer-events: none; }
+        .text-input {
+          width: 100%;
+          height: 48px;
+          padding: 0 14px 0 42px;
+          border: 1px solid #C8D1D9;
+          border-radius: 10px;
+          outline: none;
+          background: #FFFFFF;
+          color: #17212B;
+          font-size: 0.95rem;
+          font-family: inherit;
+          box-sizing: border-box;
+        }
+        .forgot-page.forgot-dark .text-input { background: #25333C; border-color: #465866; color: #F5F7F9; }
+        .text-input::placeholder { color: #94A3B8; }
+        .text-input:focus { border-color: #536575; box-shadow: 0 0 0 3px rgba(83, 101, 117, 0.15); }
+        .text-input:disabled { opacity: 0.7; cursor: not-allowed; }
+        .password-toggle {
+          position: absolute;
+          right: 8px;
+          width: 32px;
+          height: 32px;
+          display: grid;
+          place-items: center;
+          border: 0;
+          border-radius: 8px;
+          background: transparent;
+          color: #718096;
+          cursor: pointer;
+        }
+        .password-toggle:hover { background: #F5F7F9; color: #536575; }
+        .field-hint { margin: -6px 0 16px; color: #64748B; font-size: 0.78rem; line-height: 1.5; }
+        .error-box {
+          display: flex;
+          align-items: flex-start;
+          gap: 9px;
+          margin-bottom: 16px;
+          padding: 12px 13px;
+          border: 1px solid #FECACA;
+          border-radius: 10px;
+          background: #FEF2F2;
+          color: #B91C1C;
+          font-size: 0.82rem;
+        }
+        .error-box > svg { flex: 0 0 auto; margin-top: 1px; }
+        .btn-primary {
+          width: 100%;
+          min-height: 48px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 14px;
+          border: 0;
+          border-radius: 10px;
+          background: #536575;
+          color: #FFFFFF;
+          font-size: 0.95rem;
+          font-weight: 700;
+          font-family: inherit;
+          cursor: pointer;
+        }
+        .btn-primary:hover { background: #435463; }
+        .btn-primary:disabled { opacity: 0.7; cursor: wait; }
+        .btn-secondary {
+          width: 100%;
+          min-height: 44px;
+          margin-top: 12px;
+          padding: 11px 12px;
+          border: 1px solid #D7DEE5;
+          border-radius: 10px;
+          background: transparent;
+          color: #334155;
+          font-size: 0.86rem;
+          font-weight: 700;
+          font-family: inherit;
+          cursor: pointer;
+        }
+        .forgot-page.forgot-dark .btn-secondary { color: #C8D1D9; }
+        .btn-secondary:disabled { opacity: 0.55; cursor: not-allowed; }
+        .btn-link {
+          display: block;
+          margin: 14px auto 0;
+          border: 0;
+          background: transparent;
+          color: #536575;
+          font-size: 0.84rem;
+          font-weight: 700;
+          font-family: inherit;
+          text-decoration: underline;
+          cursor: pointer;
+        }
+        .spinner { animation: forgot-spin 1s linear infinite; }
+        @keyframes forgot-spin { to { transform: rotate(360deg); } }
+        .step-heading { margin-bottom: 20px; text-align: center; color: #536575; }
+        .step-heading h2 { margin: 10px 0 0; font-size: 1.35rem; color: #17212B; }
+        .forgot-page.forgot-dark .step-heading h2 { color: #F5F7F9; }
+        .step-heading p { margin: 8px 0 0; color: #64748B; font-size: 0.88rem; line-height: 1.5; }
+        .success-state { text-align: center; }
+        .success-icon { margin-bottom: 14px; color: #536575; }
+        .success-state h2 { margin: 0; font-size: 1.4rem; color: #17212B; }
+        .forgot-page.forgot-dark .success-state h2 { color: #F5F7F9; }
+        .success-state p { margin: 10px 0 20px; color: #64748B; font-size: 0.9rem; line-height: 1.6; }
+        .forgot-back { margin-top: 24px; padding-top: 18px; border-top: 1px solid #E2E8F0; text-align: center; }
+        .forgot-page.forgot-dark .forgot-back { border-top-color: #3B4C58; }
+        .forgot-back-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          color: #536575;
+          font-size: 0.86rem;
+          font-weight: 700;
+          text-decoration: none;
+        }
+        .forgot-back-link:hover { text-decoration: underline; }
+        @media (max-width: 640px) {
+          .forgot-page { padding: 18px 14px; }
+          .forgot-card { padding: 24px 18px; }
+          .method-group { flex-direction: column; }
+        }
+      `}</style>
+
+      <main className={`forgot-page ${isDark ? 'forgot-dark' : 'forgot-light'}`}>
+        <section className="forgot-card">
+          {step === 'request' && (
+            <>
+              <img className="forgot-logo" src="/assets/mekdela-amba-university-logo.png" alt="" />
+              <div className="forgot-heading">
+                <h1>{t.forgotPassword}</h1>
+                <p>{t.instructions}</p>
+              </div>
+              {renderRequestForm()}
+            </>
+          )}
+
+          {step === 'verify' && renderOtpForm()}
+          {step === 'reset' && renderResetForm()}
+          {step === 'email-sent' && renderTerminalState({ title: t.checkYourEmail, message: '', showNewLink: true })}
+          {step === 'complete' && renderTerminalState({ title: t.passwordResetTitle, message: '', showNewLink: false })}
+
+          {!isTerminalStep && (
+            <div className="forgot-back">
+              <Link to="/login" className="forgot-back-link">
+                <ArrowLeft size={16} aria-hidden="true" />
+                <span>{t.backToLogin}</span>
+              </Link>
+            </div>
+          )}
+        </section>
+      </main>
+    </>
+  );
+};
+
 const englishTranslations = {
   forgotPassword: 'Forgot Password?',
-  instructions: 'Choose the recovery method and we will send the right reset instructions.',
-  recoveryMethod: 'Recovery Method',
+  instructions: 'Choose how you want to recover access and we will send the right instructions.',
+  recoveryMethod: 'Recovery method',
   email: 'Email',
   mobilePhone: 'Mobile Phone',
-  emailAddress: 'Email Address',
-  mobilePhoneNumber: 'Mobile Phone Number',
+  emailAddress: 'Email address',
+  mobilePhoneNumber: 'Mobile phone number',
   emailPlaceholder: 'name@university.edu',
   phonePlaceholder: '+251 9XXXXXXXX',
   sendResetLink: 'Send Reset Link',
-  sendOtp: 'Send OTP',
+  sendOtp: 'Send Verification Code',
   sending: 'Sending...',
+  verifying: 'Verifying...',
+  updating: 'Updating...',
   verificationCode: 'Verification Code',
-  enterOtp: 'Enter the 6-digit code sent to your phone.',
-  verifyOtp: 'Verify OTP',
-  resendOtp: 'Resend OTP',
+  enterOtp: 'Enter the 6-digit code we sent to your phone. It expires shortly.',
+  verifyOtp: 'Verify Code',
+  resendOtp: 'Resend code',
   newPassword: 'Create New Password',
+  newPasswordLabel: 'New password',
   confirmPassword: 'Confirm New Password',
-  resetPassword: 'Reset Password',
-  passwordResetSuccessfully: 'Password reset successfully.',
+  resetPassword: 'Update Password',
+  passwordHint: 'Use at least 8 characters with an uppercase letter, a lowercase letter, a number, and a special character.',
+  passwordResetTitle: 'Password Reset Successfully',
+  passwordResetSuccessfully: 'Your password has been reset. You can now sign in with your new password.',
   invalidOtp: 'Please enter a valid 6-digit verification code.',
-  otpExpired: 'This verification code has expired or is invalid.',
+  otpExpired: 'This verification code has expired or is invalid. Please request a new one.',
   invalidEmail: 'Please enter a valid email address.',
-  invalidPhone: 'Please enter a valid mobile phone number.',
+  emailRequired: 'Please enter your email address.',
+  invalidPhone: 'Please enter a valid Ethiopian mobile number, for example 0912345678.',
   errorMessage: 'Something went wrong. Please try again later.',
-  networkError: 'Unable to connect to the server.',
-  rateLimitError: 'Too many requests. Please try again later.',
-  successMessage: 'Reset link sent successfully.',
-  otpSent: 'Verification code sent successfully.',
-  emailSent: 'Check Your Inbox',
+  networkError: 'Unable to reach the server. Please check your connection and try again.',
+  rateLimitError: 'Too many requests. Please wait a moment and try again.',
+  successMessage: 'Password reset instructions will be sent if the account matches.',
+  otpSent: 'If this phone number is registered, a verification code has been sent.',
+  checkYourEmail: 'Check Your Email',
   verifyOtpSuccess: 'Verification successful. Please create a new password.',
-  passwordMismatch: 'Passwords do not match. Please try again.',
+  passwordMismatch: 'The passwords do not match. Please try again.',
   invalidToken: 'A valid reset token is required.',
+  sendAnotherLink: 'Send to a different email address',
+  showPassword: 'Show password',
+  hidePassword: 'Hide password',
   backToLogin: 'Back to Login',
+  passwordRequirements: {
+    tooShort: 'Use at least 8 characters for the new password.',
+    noUppercase: 'The new password must contain an uppercase letter.',
+    noLowercase: 'The new password must contain a lowercase letter.',
+    noNumber: 'The new password must contain a number.',
+    noSpecial: 'The new password must contain a special character.',
+  },
 };
 
 const amharicTranslations = {
   forgotPassword: 'የይለፍ ቃል ረሱ?',
-  instructions: 'የመልሶ ማግኛ ዘዴን ይምረጡ እና ተገቢውን መመሪያ እንልክልዎታለን።',
+  instructions: 'መግቢያዎን እንደምትን ማግኘት ያለውን ዘዴ ይምረጡ፤ ትክክለኛውን መመሪያ እንልክልዎታለን።',
   recoveryMethod: 'የመልሶ ማግኛ ዘዴ',
   email: 'ኢሜይል',
   mobilePhone: 'ሞባይል',
@@ -416,31 +720,47 @@ const amharicTranslations = {
   mobilePhoneNumber: 'የሞባይል ቁጥር',
   emailPlaceholder: 'name@university.edu',
   phonePlaceholder: '+251 9XXXXXXXX',
-  sendResetLink: 'ሊንክ ላክ',
-  sendOtp: 'ኦቲፒ ላክ',
+  sendResetLink: 'የይለፍ ቃል መልሶ ማግኛ ሊንክ ላክ',
+  sendOtp: 'የማረጋገጫ ኮድ ላክ',
   sending: 'በመላክ ላይ...',
+  verifying: 'በማረጋገጫ ላይ...',
+  updating: 'በማስተካከል ላይ...',
   verificationCode: 'የማረጋገጫ ኮድ',
-  enterOtp: 'ወደ ሞባይልዎ የተላከውን 6-አሃዝ ኮድ ያስገቡ።',
-  verifyOtp: 'ኦቲፒ ያረጋግጡ',
-  resendOtp: 'ኦቲፒ እንደገና ላክ',
+  enterOtp: 'ወደ ሞባይልዎ የተላከውን 6-አሃዝ ኮድ ያስገቡ። ኮዱ በቅርብ ጊዜ ያልበል።',
+  verifyOtp: 'ኮድ ያረጋግጡ',
+  resendOtp: 'ኮድ እንደገና ላክ',
   newPassword: 'አዲስ የይለፍ ቃል ፍጠር',
+  newPasswordLabel: 'አዲስ የይለፍ ቃል',
   confirmPassword: 'የይለፍ ቃል ያረጋግጡ',
-  resetPassword: 'የይለፍ ቃል ቀይር',
-  passwordResetSuccessfully: 'የይለፍ ቃል በተሳካ ሁኔታ ተቀይሯል።',
+  resetPassword: 'የይለፍ ቃል አስተካክል',
+  passwordHint: 'ቢያንስ 8 ቁምፊዎች፣ አቢይ ሆሄ፣ ትንሽ ሆሄ፣ ቁጥር እና ልዩ ምልክት ይጠቀሙ።',
+  passwordResetTitle: 'የይለፍ ቃል በተሳካ ሁኔታ ተቀይሯል',
+  passwordResetSuccessfully: 'የይለፍ ቃልዎ ተቀይሯል። አሁን በአዲሱ የይለፍ ቃልዎ መግባት ይችላሉ።',
   invalidOtp: 'እባክዎ ትክክለኛ 6-አሃዝ የሆነ ኮድ ያስገቡ።',
-  otpExpired: 'ይህ ኮድ ጊዜው አልፎበታል ወይም ልክ አይደለም።',
-  invalidEmail: 'እባክዎ ትክክለኛ ኢሜይል ያስገቡ።',
-  invalidPhone: 'እባክዎ ትክክለኛ የሞባይል ቁጥር ያስገቡ።',
-  errorMessage: 'ችግር ተፈጥሯል። እባክዎ ቆይተው እንደገና ይሞክሩ።',
-  networkError: 'ከአገልጋዩ ጋር መገናኘት አልተቻለም።',
+  otpExpired: 'ይህ ኮድ ጊዜው አልፎበታል ወይም ልክ አይደለም። አዲስ ኮድ ይጠይቁ።',
+  invalidEmail: 'እባክዎ ትክክለኛ ኢሜይል አድራሻ ያስገቡ።',
+  emailRequired: 'እባክዎ የኢሜይል አድራሻዎን ያስገቡ።',
+  invalidPhone: 'እባክዎ ትክክለኛ የኢትዮጵያ ሞባይል ቁጥር ያስገቡ፤ ለምሳሌ 0912345678።',
+  errorMessage: 'ችግር ተከስቷል። እባክዎ ቆይተው እንደገና ይሞክሩ።',
+  networkError: 'ከአገልጋዩ ጋር መገናኘት አልተቻለም። ግንኙነትዎን አረጋግጠው እንደገና ይሞክሩ።',
   rateLimitError: 'በጣም ብዙ ጥያቄዎች ተልከዋል። እባክዎ ቆይተው ይሞክሩ።',
-  successMessage: 'ሊንኩ በተሳካ ሁኔታ ተልኳል።',
-  otpSent: 'የማረጋገጫ ኮድ በተሳካ ሁኔታ ተልኳል።',
-  emailSent: 'ኢሜይልዎን ይፈትሹ',
-  verifyOtpSuccess: 'ማረጋገጫ ተሳካ። አሁን አዲስ የይለፍ ቃል ይፍጠሩ።',
+  successMessage: 'መለያው ከመለያው ጋር ከሚዛመድ ከሆነ የይለፍ ቃል መልሶ ማግኛ መመሪያዎች ይላካሉ።',
+  otpSent: 'ይህ የሞባይል ቁጥር ከተመዘገበ ከሆነ የማረጋገጫ ኮድ ተልኳል።',
+  checkYourEmail: 'ኢሜይልዎን ይፈትሹ',
+  verifyOtpSuccess: 'ማረጋገጫ ተሳክቷል። አሁን አዲስ የይለፍ ቃል ይፍጠሩ።',
   passwordMismatch: 'የይለፍ ቃሎቹ አይመሳሰሉም። እባክዎ እንደገና ይሞክሩ።',
-  invalidToken: 'ትክክለኛ የይለፍ ቃል ቶክን ያስፈልጋል።',
+  invalidToken: 'ትክክለኛ የይለፍ ቃል መቀየሪያ ቶክን ያስፈልጋል።',
+  sendAnotherLink: 'ወደ ሌላ ኢሜይል አድራሻ ላክ',
+  showPassword: 'የይለፍ ቃል አሳይ',
+  hidePassword: 'የይለፍ ቃል ደብቅ',
   backToLogin: 'ወደ መግቢያ ተመለስ',
+  passwordRequirements: {
+    tooShort: 'አዲሱ የይለፍ ቃል ቢያንስ 8 ቁምፊዎች ማለት አለበት።',
+    noUppercase: 'አዲሱ የይለፍ ቃል አቢይ ሆሄ ያለ ፊደል ማስገባት አለበት።',
+    noLowercase: 'አዲሱ የይለፍ ቃል ትንሽ ሆሄ ያለ ፊደል ማስገባት አለበት።',
+    noNumber: 'አዲሱ የይለፍ ቃል ቁጥር ማስገባት አለበት።',
+    noSpecial: 'አዲሱ የይለፍ ቃል ልዩ ምልክት ማስገባት አለበት።',
+  },
 };
 
 export default ForgotPassword;
