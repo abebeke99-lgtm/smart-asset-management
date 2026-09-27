@@ -7,6 +7,9 @@ const routePath = path.join(__dirname, '../src/routes/adminSupportRoutes.js');
 const routeSource = fs.readFileSync(routePath, 'utf8');
 
 test('admin user management exposes a real statistics endpoint', () => {
+  const userRouteSource = fs.readFileSync(path.join(__dirname, '../src/routes/userRoutes.js'), 'utf8');
+  assert.match(userRouteSource, /router\.get\('\/stats', requireAuth, requireRole\('admin'\)/,
+    'expected admin-only /stats route in user router');
   assert.match(routeSource, /router\.get\('\/users\/stats'/, 'expected user stats route');
   assert.match(routeSource, /count\s*\(\s*\{\s*where\s*:\s*\{\s*active\s*:\s*true/,
     'expected active user count query');

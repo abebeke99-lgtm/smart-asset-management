@@ -50,6 +50,7 @@ function StatusBadge({ status }) {
 
 const ICTAssignments = () => {
   const { user } = useAuth();
+  const requestedAssetId = new URLSearchParams(window.location.search).get('assetId');
   const canManage = ['admin', 'ict_officer', 'store_manager'].includes(String(user?.role || '').toLowerCase());
   const [assets, setAssets] = useState([]);
   const [users, setUsers] = useState([]);
@@ -82,7 +83,11 @@ const ICTAssignments = () => {
         axios.get('/api/departments'),
         axios.get('/api/assignments', { params: { page: 1, limit: 500 } }),
       ]);
-      setAssets(assetsResponse.data?.assets || assetsResponse.data?.data || []);
+      const assetRows = assetsResponse.data?.assets || assetsResponse.data?.data || [];
+      setAssets(assetRows);
+      if (requestedAssetId && assetRows.some((item) => String(item.id) === requestedAssetId && String(item.status || '').toLowerCase() === 'available')) {
+        setForm((current) => ({ ...current, asset: requestedAssetId }));
+      }
       setUsers(usersResponse.data?.users || usersResponse.data?.data || []);
       setDepartments(departmentsResponse.data?.departments || departmentsResponse.data?.data || []);
       setAssignments(assignmentsResponse.data?.assignments || assignmentsResponse.data?.data || []);
@@ -92,7 +97,7 @@ const ICTAssignments = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [requestedAssetId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 

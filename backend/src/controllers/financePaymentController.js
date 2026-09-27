@@ -16,9 +16,11 @@ const include = [
 const nameOf = (user) => user?.fullName || user?.username || '';
 const normalize = (record) => {
   const value = record.toJSON ? record.toJSON() : record;
+  const safeValue = { ...value };
+  delete safeValue.bankAccount;
   const invoice = value.InvoiceRecord || {};
   return {
-    ...value,
+    ...safeValue,
     amount: Number(value.amount || 0),
     invoiceNumber: invoice.invoiceNumber || '',
     supplierName: invoice.supplierName || '',
@@ -34,13 +36,31 @@ const listPayments = async (req, res, next) => {
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
     const pageSize = Math.min(100, Math.max(1, Number.parseInt(req.query.pageSize, 10) || 10));
     const search = String(req.query.search || '').trim();
+    const dateFrom = req.query.dateFrom || req.query.date_from || '';
+    const dateTo = req.query.dateTo || req.query.date_to || '';
     const where = {};
     if (search) where[Op.or] = [{ paymentNumber: { [Op.like]: `%${search}%` } }, { referenceNumber: { [Op.like]: `%${search}%` } }];
     if (METHODS.includes(req.query.paymentMethod)) where.paymentMethod = req.query.paymentMethod;
     if (req.query.status) where.status = req.query.status;
-    const result = await Payment.findAndCountAll({ where, include, distinct: true, limit: pageSize, offset: (page - 1) * pageSize, order: [['createdAt', 'DESC']] });
+    if (dateFrom && !/^\d{4}-\d{2}-\d{2}$/.test(String(dateFrom))) return res.status(400).json({ success: false, message: 'dateFrom must use YYYY-MM-DD format' });
+    if (dateTo && !/^\d{4}-\d{2}-\d{2}$/.test(String(dateTo))) return res.status(400).json({ success: false, message: 'dateTo must use YYYY-MM-DD format' });
+    if (dateFrom && dateTo && dateFrom > dateTo) return res.status(400).json({ success: false, message: 'dateFrom cannot be later than dateTo' });
+    if (dateFrom || dateTo) {
+      where.paymentDate = {};
+      if (dateFrom) where.paymentDate[Op.gte] = dateFrom;
+      if (dateTo) where.paymentDate[Op.lte] = dateTo;
+    }
+    const [result, pending, approved, processing, processed, rejected, totalAmount] = await Promise.all([
+      Payment.findAndCountAll({ where, include, distinct: true, limit: pageSize, offset: (page - 1) * pageSize, order: [['createdAt', 'DESC']] }),
+      Payment.count({ where: { ...where, status: 'PENDING_APPROVAL' } }),
+      Payment.count({ where: { ...where, status: 'APPROVED' } }),
+      Payment.count({ where: { ...where, status: 'PROCESSING' } }),
+      Payment.count({ where: { ...where, status: 'COMPLETED' } }),
+      Payment.count({ where: { ...where, status: { [Op.in]: ['REJECTED', 'CANCELLED', 'FAILED'] } } }),
+      Payment.sum('amount', { where }),
+    ]);
     const data = result.rows.map(normalize);
-    return res.json({ success: true, data, summary: { total: result.count, pending: data.filter((row) => row.status === 'PENDING_APPROVAL').length, approved: data.filter((row) => row.status === 'APPROVED').length, processed: data.filter((row) => row.status === 'COMPLETED').length }, pagination: { page, pageSize, total: result.count, totalPages: Math.max(1, Math.ceil(result.count / pageSize)) }, filters: { methods: METHODS, statuses: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING', 'COMPLETED', 'REJECTED', 'CANCELLED', 'FAILED'] } });
+    return res.json({ success: true, data, summary: { total: result.count, pending, approved, processing, processed, rejected, totalAmount: Number(totalAmount || 0) }, pagination: { page, pageSize, total: result.count, totalPages: Math.max(1, Math.ceil(result.count / pageSize)) }, filters: { methods: METHODS, statuses: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING', 'COMPLETED', 'REJECTED', 'CANCELLED', 'FAILED'] } });
   } catch (error) { return next(error); }
 };
 

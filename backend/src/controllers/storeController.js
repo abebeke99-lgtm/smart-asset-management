@@ -3,7 +3,7 @@ const { sequelize, Asset, Inventory, InventoryTransaction, User, Department, Mai
 const { normalizeInventory } = require('./inventoryController');
 
 const storeScope = (req) => {
-  const collegeId = req.user?.collegeId ?? req.user?.college_id;
+  const collegeId = req.organizationScope?.collegeId ?? req.user?.collegeId ?? req.user?.college_id;
   return collegeId ? { collegeId: Number(collegeId) } : {};
 };
 
@@ -91,6 +91,12 @@ const getHistory = async (req, res, next) => {
     const assetWhere = { ...scope };
     const search = String(req.query.search || '').trim();
     const movementWhere = {};
+    const requestedAssetId = req.query.assetId ?? req.query.asset_id;
+    if (requestedAssetId !== undefined) {
+      const assetId = Number(requestedAssetId);
+      if (!Number.isSafeInteger(assetId) || assetId <= 0) return res.status(400).json({ success: false, message: 'A valid asset ID is required' });
+      assetWhere.id = assetId;
+    }
     if (req.query.movementType) movementWhere.movementType = String(req.query.movementType);
     if (req.query.dateFrom || req.query.dateTo) {
       movementWhere.createdAt = {
@@ -387,10 +393,10 @@ const getReceipts = async (req, res, next) => {
     if (req.query.dateFrom || req.query.dateTo) where.createdAt = { ...(req.query.dateFrom ? { [Op.gte]: new Date(req.query.dateFrom) } : {}), ...(req.query.dateTo ? { [Op.lte]: new Date(`${req.query.dateTo}T23:59:59.999Z`) } : {}) };
     const include = [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'category', 'location', 'serialNumber', 'collegeId'], required: true, where: assetWhere }, { model: User, attributes: ['id', 'fullName', 'username'] }];
     const result = await InventoryTransaction.findAndCountAll({ where, include, order: [['createdAt', 'DESC']], limit: pageSize, offset: (page - 1) * pageSize, distinct: true });
-    const rows = result.rows.map((row) => { let details = {}; try { details = JSON.parse(row.notes || '{}'); } catch { details = { notes: row.notes || '' }; } return { id: row.id, receiptNumber: details.reference || `RCV-${String(row.id).padStart(6, '0')}`, date: row.createdAt, asset: row.Asset?.name || 'Inventory Item', assetId: row.assetId, assetCode: row.Asset?.assetCode || '', category: row.Asset?.category || '', quantity: Number(row.quantity || 0), location: row.toLocation || row.Asset?.location || '', supplier: details.supplier || row.Asset?.supplier || '', purchaseOrder: details.purchaseOrder || '', invoice: details.invoice || '', deliveryNote: details.deliveryNote || '', notes: details.notes || '', receivedBy: row.User?.fullName || row.User?.username || 'Store Manager', status: 'Received' }; });
+    const rows = result.rows.map((row) => { let details = {}; try { details = JSON.parse(row.notes || '{}'); } catch { details = { notes: row.notes || '' }; } return { id: row.id, receiptNumber: details.reference || `RCV-${String(row.id).padStart(6, '0')}`, date: details.receivedDate || row.createdAt, asset: row.Asset?.name || 'Inventory Item', assetId: row.assetId, assetCode: row.Asset?.assetCode || '', category: row.Asset?.category || '', quantity: Number(row.quantity || 0), location: row.toLocation || row.Asset?.location || '', condition: details.condition || '', supplier: details.supplier || row.Asset?.supplier || '', purchaseOrder: details.purchaseOrder || '', invoice: details.invoice || '', deliveryNote: details.deliveryNote || '', notes: details.notes || '', receivedBy: row.User?.fullName || row.User?.username || 'Store Manager', status: 'Received' }; });
     const today = dateStart(); const month = new Date(); month.setDate(1); month.setHours(0, 0, 0, 0);
     const [todayQuantity, monthQuantity] = await Promise.all([InventoryTransaction.sum('quantity', { where: { type: 'receive', createdAt: { [Op.gte]: today } }, include }), InventoryTransaction.sum('quantity', { where: { type: 'receive', createdAt: { [Op.gte]: month } }, include })]);
-    return res.json({ success: true, data: { items: rows, total: result.count, summary: { receivedToday: Number(todayQuantity || 0), receivedThisMonth: Number(monthQuantity || 0), pendingInspection: 0 }, pagination: { page, pageSize, total: result.count, totalPages: Math.ceil(result.count / pageSize) } } });
+    return res.json({ success: true, data: { items: rows, total: result.count, summary: { receivedToday: Number(todayQuantity || 0), receivedThisMonth: Number(monthQuantity || 0), pendingInspection: null }, pagination: { page, pageSize, total: result.count, totalPages: Math.ceil(result.count / pageSize) } } });
   } catch (error) { return next(error); }
 };
 

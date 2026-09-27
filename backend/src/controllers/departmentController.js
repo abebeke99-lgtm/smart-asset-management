@@ -10,10 +10,12 @@ const pageValues = (query) => {
 const getDepartmentDashboard = async (req, res, next) => {
   try {
     const { departmentId } = req.organizationScope;
-    const assetWhere = { departmentId };
+    const collegeId = req.organizationScope.collegeId;
+    const departmentScope = { departmentId, ...(collegeId ? { collegeId } : {}) };
+    const assetWhere = departmentScope;
     const [assets, staff, approvals, assignments, transfers, returns, maintenanceRows, verificationSessions, recentMovements] = await Promise.all([
-      Asset.findAll({ where: { departmentId }, attributes: ['status', 'category', 'location', 'condition', 'currentValue'], raw: true }),
-      User.count({ where: { departmentId } }),
+      Asset.findAll({ where: assetWhere, attributes: ['status', 'category', 'location', 'condition', 'currentValue'], raw: true }),
+      User.count({ where: departmentScope }),
       Approval.findAll({ where: { departmentId }, attributes: ['id', 'status', 'type', 'item', 'createdAt'], order: [['createdAt', 'DESC']], limit: 20, raw: true }),
       Assignment.findAll({ where: { status: { [Op.notIn]: ['returned', 'cancelled', 'closed'] } }, include: [{ model: Asset, where: assetWhere, required: true, attributes: [] }], attributes: ['id', 'assignedTo', 'createdAt'], order: [['createdAt', 'DESC']], limit: 20, raw: true }),
       Transfer.findAll({ where: { [Op.or]: [{ sourceDepartmentId: departmentId }, { destinationDepartmentId: departmentId }] }, attributes: ['id', 'status', 'sourceDepartmentId', 'destinationDepartmentId', 'createdAt'], order: [['createdAt', 'DESC']], limit: 20, raw: true }),
@@ -193,6 +195,7 @@ const listDepartmentLocations = async (req, res, next) => {
 const getDepartmentReports = async (req, res, next) => {
   try {
     const departmentId = req.organizationScope.departmentId;
+    const departmentScope = { departmentId, ...(req.organizationScope.collegeId ? { collegeId: req.organizationScope.collegeId } : {}) };
     const reportType = String(req.query.reportType || 'assets').trim().toLowerCase();
     const supportedReports = ['assets', 'utilization', 'maintenance', 'staff', 'approvals'];
     if (!supportedReports.includes(reportType)) {
@@ -225,7 +228,7 @@ const getDepartmentReports = async (req, res, next) => {
     let total;
     let summary = {};
     if (reportType === 'assets' || reportType === 'utilization') {
-      const where = { departmentId, ...dateWhere('purchaseDate') };
+      const where = { ...departmentScope, ...dateWhere('purchaseDate') };
       if (req.query.category) where.category = String(req.query.category);
       if (req.query.location) where.location = String(req.query.location);
       if (req.query.status) where.status = String(req.query.status);
@@ -262,21 +265,21 @@ const getDepartmentReports = async (req, res, next) => {
       const where = { ...dateWhere('createdAt') };
       if (req.query.status) where.status = String(req.query.status);
       if (search) where[Op.or] = [{ title: { [Op.like]: `%${search}%` } }, { description: { [Op.like]: `%${search}%` } }];
-      const result = await Maintenance.findAndCountAll({ where, include: [{ model: Asset, where: { departmentId }, required: true, attributes: ['name', 'assetCode', 'location'] }], order: [['createdAt', 'DESC']], limit, offset });
+      const result = await Maintenance.findAndCountAll({ where, include: [{ model: Asset, where: departmentScope, required: true, attributes: ['name', 'assetCode', 'location'] }], order: [['createdAt', 'DESC']], limit, offset });
       rows = result.rows.map((maintenance) => ({ ...maintenance.toJSON(), request_number: maintenance.id, asset_name: maintenance.Asset?.name, created_at: maintenance.createdAt, completion_date: maintenance.completionDate }));
       total = result.count;
       summary = { totalMaintenance: total };
     } else if (reportType === 'staff') {
-      const where = { departmentId };
+      const where = { ...departmentScope };
       if (search) where[Op.or] = [{ fullName: { [Op.like]: `%${search}%` } }, { username: { [Op.like]: `%${search}%` } }, { email: { [Op.like]: `%${search}%` } }];
       const result = await User.findAndCountAll({ where, attributes: { exclude: ['password'] }, order: [['fullName', 'ASC']], limit, offset });
-      const assignments = await Assignment.findAll({ where: { status: { [Op.notIn]: ['returned', 'cancelled', 'closed'] } }, include: [{ model: Asset, where: { departmentId }, required: true, attributes: [] }], attributes: ['assignedTo'], raw: true });
+      const assignments = await Assignment.findAll({ where: { status: { [Op.notIn]: ['returned', 'cancelled', 'closed'] } }, include: [{ model: Asset, where: departmentScope, required: true, attributes: [] }], attributes: ['assignedTo'], raw: true });
       const assignedCounts = assignments.reduce((counts, assignment) => { counts[assignment.assignedTo] = (counts[assignment.assignedTo] || 0) + 1; return counts; }, {});
       rows = result.rows.map((staff) => ({ ...staff.toJSON(), assigned_assets: assignedCounts[staff.id] || 0 }));
       total = result.count;
       summary = { totalStaff: total, staffWithAssets: rows.filter((staff) => staff.assigned_assets > 0).length };
     } else {
-      const where = { departmentId, ...dateWhere('createdAt') };
+      const where = { ...departmentScope, ...dateWhere('createdAt') };
       if (req.query.status) where.status = String(req.query.status);
       const result = await Approval.findAndCountAll({ where, order: [['createdAt', 'DESC']], limit, offset });
       rows = result.rows.map((approval) => ({ ...approval.toJSON(), request_id: approval.id, created_at: approval.createdAt }));

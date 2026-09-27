@@ -39,19 +39,22 @@ const listFinanceNotifications = async (req, res, next) => {
       message: `Invoice ${invoice.invoiceNumber} from ${invoice.supplierName} is overdue and not fully paid.`,
     })));
 
-    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 100));
+    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 20));
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
     const where = { userId: req.user.id };
     const status = String(req.query.status || '').toLowerCase();
     const type = String(req.query.type || '').trim();
     const priority = String(req.query.priority || '').toLowerCase();
+    const search = String(req.query.search || '').trim();
 
     if (status === 'read') where.read = true;
     if (status === 'unread') where.read = false;
     if (type) where.type = { [Op.like]: `%${type}%` };
     if (priority) where.priority = priority === 'critical' ? { [Op.in]: ['critical', 'urgent'] } : priority === 'normal' ? { [Op.in]: ['normal', 'medium'] } : priority;
+    if (search) where[Op.or] = [{ title: { [Op.like]: `%${search}%` } }, { message: { [Op.like]: `%${search}%` } }, { type: { [Op.like]: `%${search}%` } }];
 
     const [notifications, total, unread, highPriority, critical] = await Promise.all([
-      Notification.findAll({ where, order: [['createdAt', 'DESC']], limit }),
+      Notification.findAll({ where, order: [['createdAt', 'DESC']], limit, offset: (page - 1) * limit }),
       Notification.count({ where }),
       Notification.count({ where: { userId: req.user.id, read: false } }),
       Notification.count({ where: { userId: req.user.id, priority: { [Op.in]: ['high', 'urgent', 'critical'] } } }),
@@ -62,6 +65,7 @@ const listFinanceNotifications = async (req, res, next) => {
       success: true,
       notifications: notifications.map(serialize),
       summary: { total, unread, read: total - unread, highPriority, critical },
+      pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
     });
   } catch (error) {
     return next(error);

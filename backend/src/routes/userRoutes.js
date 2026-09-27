@@ -26,6 +26,38 @@ const profilePhotoUpload = multer({
 });
 
 router.get('/', requireAuth, requireRole('admin', 'college', 'store_manager', 'ict_officer', 'maintenance'), getAllUsers);
+router.get('/stats', requireAuth, requireRole('admin'), async (req, res, next) => {
+  try {
+    const [totalUsers, activeUsers, inactiveUsers, adminUsers] = await Promise.all([
+      User.count(),
+      User.count({ where: { active: true } }),
+      User.count({ where: { active: false } }),
+      User.count({ where: { role: 'admin' } }),
+    ]);
+    const roleCounts = await User.findAll({
+      attributes: ['role', [User.sequelize.fn('COUNT', User.sequelize.col('id')), 'count']],
+      group: ['role'],
+      raw: true,
+    });
+    const normalizedRoleCounts = Object.fromEntries(roleCounts.map((row) => [row.role, Number(row.count || 0)]));
+    return res.json({
+      success: true,
+      data: {
+        total: totalUsers,
+        totalUsers,
+        active: activeUsers,
+        activeUsers,
+        inactive: inactiveUsers,
+        inactiveUsers,
+        admins: adminUsers,
+        adminCount: adminUsers,
+        roleCounts: normalizedRoleCounts,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 router.get('/technicians', requireAuth, requireRole('admin', 'maintenance', 'ict_officer'), getAllUsers);
 router.get('/profile', requireAuth, getCurrentUserProfile);
 router.put('/profile', requireAuth, updateProfile);

@@ -3,6 +3,9 @@ const { Op, fn, col, literal } = require('sequelize');
 const snakeCaseColumn = (field) => String(field).replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 const sqlColumn = (field) => col(snakeCaseColumn(field));
 const sqlQualifiedColumn = (model, field) => col(`${model.name}.${snakeCaseColumn(field)}`);
+// Sequelize does not apply attribute-to-column mapping inside `$association.attribute$` where paths,
+// so those paths must reference the real (snake_cased) database column.
+const joinedColumn = (association, field) => `$${association}.${snakeCaseColumn(field)}$`;
 const { Asset, User, Department, Maintenance, Approval, Transfer, AuditLog, College, AssetReturn, VerificationSession, VerificationItem, Assignment, Category, AssetMovement, RFIDLog } = require('../models');
 
 const collegeScope = (req) => String(req.user?.department || '').trim();
@@ -46,11 +49,11 @@ const listCollegeAssignments = async (req, res, next) => {
     if (search) assignmentWhere[Op.or] = [
       ...(Number.isInteger(Number(search)) ? [{ id: Number(search) }] : []),
       { notes: { [Op.like]: `%${search}%` } },
-      { '$Asset.assetCode$': { [Op.like]: `%${search}%` } },
+      { [joinedColumn('Asset', 'assetCode')]: { [Op.like]: `%${search}%` } },
       { '$Asset.name$': { [Op.like]: `%${search}%` } },
-      { '$Asset.serialNumber$': { [Op.like]: `%${search}%` } },
+      { [joinedColumn('Asset', 'serialNumber')]: { [Op.like]: `%${search}%` } },
       { '$Asset.department$': { [Op.like]: `%${search}%` } },
-      { '$User.fullName$': { [Op.like]: `%${search}%` } },
+      { [joinedColumn('User', 'fullName')]: { [Op.like]: `%${search}%` } },
       { '$User.username$': { [Op.like]: `%${search}%` } },
     ];
     const assetInclude = { model: Asset, where: assetWhere, required: true, attributes: ['id', 'assetCode', 'name', 'category', 'serialNumber', 'department', 'location', 'collegeId', 'departmentId'], include: [{ model: Department, as: 'DepartmentRecord', attributes: ['id', 'name', 'code'], required: false }] };
@@ -135,13 +138,13 @@ const listCollegeMaintenance = async (req, res, next) => {
         { id: Number.isInteger(Number(search)) ? Number(search) : 0 },
         { title: contains },
         { description: contains },
-        { '$Asset.assetCode$': contains },
+        { [joinedColumn('Asset', 'assetCode')]: contains },
         { '$Asset.name$': contains },
-        { '$Asset.serialNumber$': contains },
+        { [joinedColumn('Asset', 'serialNumber')]: contains },
             { '$Asset.department$': contains },
             { '$Asset.DepartmentRecord.name$': contains },
-            { '$Technician.fullName$': contains },
-            { '$Requester.fullName$': contains },
+            { [joinedColumn('Technician', 'fullName')]: contains },
+            { [joinedColumn('Requester', 'fullName')]: contains },
           ];
         }
 
@@ -348,7 +351,7 @@ const getCollegeDashboard = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
     }
 
-    const [college, assets, departments, staff, pendingApprovals, assignmentRows, transferRows, returnRows, maintenanceRows, verificationItems] = await Promise.all([
+    const [college, assets, departments, staff, pendingApprovals, assignmentRows, assignmentCountRows, transferRows, returnRows, maintenanceRows, maintenanceCountRows, verificationItems, verificationCountRows, pendingApprovalCount] = await Promise.all([
       College.findByPk(collegeId),
       Asset.findAll({ where: { collegeId }, order: [['updatedAt', 'DESC']] }),
       Department.findAll({ where: { collegeId }, order: [['name', 'ASC']] }),
@@ -371,6 +374,10 @@ const getCollegeDashboard = async (req, res, next) => {
         order: [['updatedAt', 'DESC']],
         limit: 10,
       }),
+      Assignment.findAll({
+        include: [{ model: Asset, where: { collegeId }, required: true, attributes: ['id'] }],
+        attributes: ['assetId', 'status'],
+      }),
       Transfer.findAll({
         include: [{ model: Asset, where: { collegeId }, required: true, attributes: ['id', 'name', 'assetCode'] }],
         order: [['updatedAt', 'DESC']],
@@ -389,6 +396,10 @@ const getCollegeDashboard = async (req, res, next) => {
         order: [['updatedAt', 'DESC']],
         limit: 10,
       }),
+      Maintenance.findAll({
+        include: [{ model: Asset, where: { collegeId }, required: true, attributes: ['id', 'status'] }],
+        attributes: ['status'],
+      }),
       VerificationItem.findAll({
         include: [
           { model: VerificationSession, where: { collegeId }, required: true, attributes: ['id', 'name', 'status'] },
@@ -396,6 +407,15 @@ const getCollegeDashboard = async (req, res, next) => {
         ],
         order: [['updatedAt', 'DESC']],
         limit: 20,
+      }),
+      VerificationItem.findAll({
+        include: [{ model: VerificationSession, where: { collegeId }, required: true, attributes: ['id'] }],
+        attributes: ['state'],
+      }),
+      Approval.count({
+        where: { status: 'pending' },
+        include: [{ model: Department, where: { collegeId }, required: true, attributes: [] }],
+        distinct: true,
       }),
     ]);
 
@@ -478,15 +498,15 @@ const getCollegeDashboard = async (req, res, next) => {
     }));
 
     const maintenanceSummary = {
-      total: maintenanceRows.length,
-      open: maintenanceRows.filter((record) => ['pending', 'in-progress', 'approved', 'scheduled', 'open'].includes(normalizeStatus(record.status))).length,
-      completed: maintenanceRows.filter((record) => ['completed', 'resolved', 'closed'].includes(normalizeStatus(record.status))).length,
+      total: maintenanceCountRows.length,
+      open: maintenanceCountRows.filter((record) => ['pending', 'in-progress', 'approved', 'scheduled', 'open'].includes(normalizeStatus(record.status))).length,
+      completed: maintenanceCountRows.filter((record) => ['completed', 'resolved', 'closed'].includes(normalizeStatus(record.status))).length,
     };
 
     const verificationSummary = {
-      total: verificationItems.length,
-      pending: verificationItems.filter((item) => ['needs-review', 'needs_review', 'needsreview', 'pending'].includes(normalizeStatus(item.state))).length,
-      verified: verificationItems.filter((item) => normalizeStatus(item.state) === 'verified').length,
+      total: verificationCountRows.length,
+      pending: verificationCountRows.filter((item) => ['needs-review', 'needs_review', 'needsreview', 'pending'].includes(normalizeStatus(item.state))).length,
+      verified: verificationCountRows.filter((item) => normalizeStatus(item.state) === 'verified').length,
     };
 
     const recentActivity = [
@@ -527,7 +547,7 @@ const getCollegeDashboard = async (req, res, next) => {
       })),
     ].sort((left, right) => new Date(right.timestamp || 0) - new Date(left.timestamp || 0)).slice(0, 12);
 
-    const totalAssignedAssets = new Set(assignmentRows.filter((record) => String(record.status || '').toLowerCase() !== 'cancelled').map((record) => Number(record.assetId)).filter(Boolean)).size;
+    const totalAssignedAssets = new Set(assignmentCountRows.filter((record) => String(record.status || '').toLowerCase() !== 'cancelled').map((record) => Number(record.assetId)).filter(Boolean)).size;
     const availableAssets = assets.filter((asset) => ['available', 'ready', 'idle'].includes(normalizeStatus(asset.status))).length;
     const maintenanceAssets = assets.filter((asset) => ['maintenance', 'under-maintenance', 'in-repair', 'repair'].includes(normalizeStatus(asset.status))).length;
     const verificationRequired = verificationItems.filter((item) => ['needs-review', 'needs_review', 'needsreview', 'pending', 'missing', 'wrong-location', 'damaged', 'unidentified'].includes(normalizeStatus(item.state))).length;
@@ -546,7 +566,7 @@ const getCollegeDashboard = async (req, res, next) => {
         maintenanceAssets,
         departments: departments.length,
         staff: staff.length,
-        pendingRequests: pendingRequests.length,
+        pendingRequests: pendingApprovalCount,
         verificationRequired,
       },
       assetStatus,
@@ -907,10 +927,17 @@ const listCollegeVerification = async (req, res, next) => {
     if (departmentId) sessionWhere.departmentId = departmentId;
     if (verificationStatus) sessionWhere.status = verificationStatus;
     if (search) {
+      // Sequelize wraps the main model in a subquery here (hasMany include + limit), so joined
+      // columns cannot be referenced from the top-level where. Resolve them to ids first.
+      const searchLike = { [Op.like]: `%${search}%` };
+      const [departmentMatches, starterMatches] = await Promise.all([
+        Department.findAll({ where: { collegeId, name: searchLike }, attributes: ['id'], raw: true }),
+        User.findAll({ where: { collegeId, fullName: searchLike }, attributes: ['id'], raw: true }),
+      ]);
       sessionWhere[Op.or] = [
-        { name: { [Op.like]: `%${search}%` } },
-        { '$Department.name$': { [Op.like]: `%${search}%` } },
-        { '$Starter.fullName$': { [Op.like]: `%${search}%` } },
+        { name: searchLike },
+        { departmentId: { [Op.in]: departmentMatches.map((row) => row.id) } },
+        { startedBy: { [Op.in]: starterMatches.map((row) => row.id) } },
       ];
     }
 
@@ -1073,7 +1100,7 @@ const listCollegeDepartments = async (req, res, next) => {
       { name: { [Op.like]: `%${search}%` } },
       { code: { [Op.like]: `%${search}%` } },
       { description: { [Op.like]: `%${search}%` } },
-      { '$Head.fullName$': { [Op.like]: `%${search}%` } },
+      { [joinedColumn('Head', 'fullName')]: { [Op.like]: `%${search}%` } },
       { '$Head.username$': { [Op.like]: `%${search}%` } },
     ];
     if (status && ['active', 'inactive'].includes(status)) where.status = status;
@@ -1118,7 +1145,7 @@ const getCollegeDepartmentOverview = async (req, res, next) => {
     if (search) departmentWhere[Op.or] = [
       { name: { [Op.like]: `%${search}%` } },
       { code: { [Op.like]: `%${search}%` } },
-      { '$Head.fullName$': { [Op.like]: `%${search}%` } },
+      { [joinedColumn('Head', 'fullName')]: { [Op.like]: `%${search}%` } },
       { '$Head.username$': { [Op.like]: `%${search}%` } },
     ];
 
@@ -1245,7 +1272,7 @@ const getCollegeDepartmentPerformance = async (req, res, next) => {
       departmentWhere[Op.or] = [
         { name: { [Op.like]: `%${search}%` } },
         { code: { [Op.like]: `%${search}%` } },
-        { '$Head.fullName$': { [Op.like]: `%${search}%` } },
+        { [joinedColumn('Head', 'fullName')]: { [Op.like]: `%${search}%` } },
         { '$Head.username$': { [Op.like]: `%${search}%` } },
       ];
     }
@@ -1745,7 +1772,10 @@ const validateDepartmentPayload = async (req, body, currentId = null) => {
   } else {
     headId = null;
   }
-  return { value: { name, code, description: String(body.description || '').trim(), headId, locationId: body.location_id || body.locationId || null, phone: String(body.phone || '').trim(), email: String(body.email || '').trim(), status: body.status === 'inactive' ? 'inactive' : 'active' } };
+  // Status is only changed when the caller explicitly sends it, so editing a department's
+  // details can never silently reactivate an inactive department. New departments default to active.
+  const status = ['active', 'inactive'].includes(body.status) ? { status: body.status } : (currentId ? {} : { status: 'active' });
+  return { value: { name, code, description: String(body.description || '').trim(), headId, locationId: body.location_id || body.locationId || null, phone: String(body.phone || '').trim(), email: String(body.email || '').trim(), ...status } };
 };
 
 const createCollegeDepartment = async (req, res, next) => {
@@ -1804,10 +1834,10 @@ const getCollegeDepartmentDetails = async (req, res, next) => {
     const department = await Department.findOne({ where: { id: req.params.id, collegeId: req.organizationScope.collegeId }, include: [{ model: User, as: 'Head', attributes: ['id', 'username', 'fullName', 'role'] }] });
     if (!department) return res.status(404).json({ success: false, message: 'Department not found in your college' });
     const [staffCount, assetCount, assetValue, statusRows] = await Promise.all([
-      User.count({ where: { departmentId: department.id } }),
-      Asset.count({ where: { departmentId: department.id } }),
-      Asset.sum('currentValue', { where: { departmentId: department.id } }),
-      Asset.findAll({ where: { departmentId: department.id }, attributes: ['status', [require('sequelize').fn('COUNT', require('sequelize').col('id')), 'count']], group: ['status'], raw: true }),
+      User.count({ where: { collegeId: req.organizationScope.collegeId, departmentId: department.id } }),
+      Asset.count({ where: { collegeId: req.organizationScope.collegeId, departmentId: department.id } }),
+      Asset.sum('currentValue', { where: { collegeId: req.organizationScope.collegeId, departmentId: department.id } }),
+      Asset.findAll({ where: { collegeId: req.organizationScope.collegeId, departmentId: department.id }, attributes: ['status', [require('sequelize').fn('COUNT', require('sequelize').col('id')), 'count']], group: ['status'], raw: true }),
     ]);
     res.json({ success: true, data: { ...department.toJSON(), staffCount, assetCount, assetValue: Number(assetValue || 0), assetStatus: statusRows } });
   } catch (error) { next(error); }
@@ -2001,7 +2031,7 @@ const getCollegeDepartmentReports = async (req, res, next) => {
         { name: { [Op.like]: `%${search}%` } },
         { code: { [Op.like]: `%${search}%` } },
         { description: { [Op.like]: `%${search}%` } },
-        { '$Head.fullName$': { [Op.like]: `%${search}%` } },
+        { [joinedColumn('Head', 'fullName')]: { [Op.like]: `%${search}%` } },
         { '$Head.username$': { [Op.like]: `%${search}%` } },
       ];
     }
@@ -2069,8 +2099,7 @@ const getCollegeDepartmentReports = async (req, res, next) => {
       }),
       Maintenance.findAll({
         include: [{ model: Asset, where: { collegeId, departmentId: { [Op.in]: scopeDepartmentIds } }, required: true, attributes: ['id', 'departmentId'] }],
-        attributes: ['status', [fn('COUNT', col('id')), 'count']],
-        group: ['status'],
+        attributes: ['id', 'status', 'updatedAt'],
         raw: true,
       }),
       VerificationSession.findAll({
@@ -2168,7 +2197,7 @@ const getCollegeDepartmentReports = async (req, res, next) => {
       const transfer = transferSummary.get(departmentId) || { incoming: 0, outgoing: 0, pending: 0, completed: 0 };
       const returns = returnSummary.get(departmentId) || { total: 0, completed: 0, pending: 0 };
       const verification = verificationSummary.get(departmentId) || { total: 0, verified: 0, pending: 0, discrepancies: 0 };
-      const maintenanceRecords = maintenanceRows.filter((row) => Number(row.id ? null : 0) === 0).length;
+      const maintenanceRecords = maintenanceRows.filter((row) => Number(row['Asset.departmentId']) === departmentId).length;
       return {
         id: departmentId,
         department: department.name,
@@ -2237,13 +2266,16 @@ const getCollegeDepartmentReports = async (req, res, next) => {
       };
     });
 
-    const maintenanceDistribution = departmentRows.map((department) => ({
-      department: department.name,
-      maintenanceRecords: 0,
-      open: 0,
-      inProgress: 0,
-      completed: 0,
-    }));
+    const maintenanceDistribution = departmentRows.map((department) => {
+      const records = maintenanceRows.filter((row) => Number(row['Asset.departmentId']) === Number(department.id));
+      return {
+        department: department.name,
+        maintenanceRecords: records.length,
+        open: records.filter((row) => ['pending', 'approved', 'assigned'].includes(String(row.status || '').trim().toLowerCase())).length,
+        inProgress: records.filter((row) => ['in-progress', 'waiting-for-parts', 'testing'].includes(String(row.status || '').trim().toLowerCase())).length,
+        completed: records.filter((row) => ['completed', 'resolved', 'closed'].includes(String(row.status || '').trim().toLowerCase())).length,
+      };
+    });
 
     const verificationDistribution = departmentRows.map((department) => {
       const entry = verificationSummary.get(Number(department.id)) || { total: 0, verified: 0, pending: 0, discrepancies: 0 };
@@ -2499,8 +2531,8 @@ const getCollegeReports = async (req, res, next) => {
       if (search) {
         where[Op.or] = [
           { '$Asset.name$': { [Op.like]: `%${search}%` } },
-          { '$Asset.assetCode$': { [Op.like]: `%${search}%` } },
-          { '$User.fullName$': { [Op.like]: `%${search}%` } },
+          { [joinedColumn('Asset', 'assetCode')]: { [Op.like]: `%${search}%` } },
+          { [joinedColumn('User', 'fullName')]: { [Op.like]: `%${search}%` } },
           { '$User.username$': { [Op.like]: `%${search}%` } },
         ];
       }
@@ -2627,7 +2659,7 @@ const getCollegeReports = async (req, res, next) => {
           { title: { [Op.like]: `%${search}%` } },
           { description: { [Op.like]: `%${search}%` } },
           { '$Asset.name$': { [Op.like]: `%${search}%` } },
-          { '$Asset.assetCode$': { [Op.like]: `%${search}%` } },
+          { [joinedColumn('Asset', 'assetCode')]: { [Op.like]: `%${search}%` } },
         ];
       }
       if (dateFrom || dateTo) {
@@ -2669,9 +2701,19 @@ const getCollegeReports = async (req, res, next) => {
       if (departmentId) where.departmentId = departmentId;
       if (status) where.status = status;
       if (search) {
+        // The main model is wrapped in a subquery here, so resolve the asset match to session ids first.
+        const searchLike = { [Op.like]: `%${search}%` };
+        const assetMatches = await Asset.findAll({
+          where: { collegeId, ...(departmentId ? { departmentId } : {}), [Op.or]: [{ name: searchLike }, { assetCode: searchLike }] },
+          attributes: ['id'],
+          raw: true,
+        });
+        const itemRows = assetMatches.length
+          ? await VerificationItem.findAll({ where: { assetId: { [Op.in]: assetMatches.map((row) => row.id) } }, attributes: ['sessionId'], raw: true })
+          : [];
         where[Op.or] = [
-          { name: { [Op.like]: `%${search}%` } },
-          { '$Asset.name$': { [Op.like]: `%${search}%` } },
+          { name: searchLike },
+          { id: { [Op.in]: itemRows.map((row) => row.sessionId) } },
         ];
       }
       if (dateFrom || dateTo) {
@@ -2715,7 +2757,7 @@ const getCollegeReports = async (req, res, next) => {
         where[Op.or] = [
           { item: { [Op.like]: `%${search}%` } },
           { type: { [Op.like]: `%${search}%` } },
-          { '$Requester.fullName$': { [Op.like]: `%${search}%` } },
+          { [joinedColumn('Requester', 'fullName')]: { [Op.like]: `%${search}%` } },
           { '$Department.name$': { [Op.like]: `%${search}%` } },
         ];
       }

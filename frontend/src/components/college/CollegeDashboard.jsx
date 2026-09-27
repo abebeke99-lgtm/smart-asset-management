@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, BarChart3, Building2, CheckCircle2, ClipboardCheck, ClipboardList, MapPin, Package, RefreshCw, RotateCcw, ShieldCheck, Truck, Users, Wrench } from 'lucide-react';
+import { useLanguage } from '../../contexts/UiContext';
 import apiClient from '../../services/apiClient';
 import './CollegeDashboard.css';
 
@@ -20,8 +21,29 @@ const formatDate = (value) => {
 };
 
 const normalizeLabel = (value = '') => String(value).replace(/[_-]+/g, ' ').trim() || 'Unknown';
+const AMHARIC_COPY = {
+  'College Dashboard': 'የኮሌጅ ዳሽቦርድ',
+  'College Manager Dashboard': 'የኮሌጅ አስተዳዳሪ ዳሽቦርድ', 'College Manager': 'የኮሌጅ አስተዳዳሪ',
+  Loading: 'በመጫን ላይ', 'Collecting the latest college metrics and activity.': 'የኮሌጁ የቅርብ ጊዜ መለኪያዎችንና እንቅስቃሴዎችን በማሰባሰብ ላይ።',
+  'Unable to load college dashboard': 'የኮሌጁን ዳሽቦርድ መጫን አልተቻለም', Retry: 'እንደገና ሞክር', 'No college dashboard data is available.': 'የኮሌጁ ዳሽቦርድ መረጃ የለም።',
+  Assets: 'ንብረቶች', 'Total Assets': 'ጠቅላላ ንብረቶች', 'Assets registered for this college.': 'ለዚህ ኮሌጅ የተመዘገቡ ንብረቶች።', 'Available Assets': 'ያሉ ንብረቶች', 'Currently available and ready for issue.': 'በአሁኑ ጊዜ ያሉና ለማውጣት ዝግጁ የሆኑ።',
+  'Assigned Assets': 'የተመደቡ ንብረቶች', 'Assets currently assigned to users or departments.': 'በአሁኑ ጊዜ ለተጠቃሚዎች ወይም ለዲፓርትመንቶች የተመደቡ ንብረቶች።',
+  'Under Maintenance': 'በጥገና ላይ', 'Assets currently flagged for repair or maintenance.': 'በአሁኑ ጊዜ ለጥገና የተመዘገቡ ንብረቶች።', Departments: 'ዲፓርትመንቶች', 'Departments in this college.': 'በዚህ ኮሌጅ ያሉ ዲፓርትመንቶች።',
+  Staff: 'ሰራተኞች', 'Active staff in this college.': 'በዚህ ኮሌጅ ያሉ ንቁ ሰራተኞች።', 'Pending Requests': 'በመጠባበቅ ላይ ያሉ ጥያቄዎች', 'Requests awaiting approval or action.': 'ማጽደቅን ወይም እርምጃን የሚጠብቁ ጥያቄዎች።',
+  'Verification Required': 'ማረጋገጫ የሚያስፈልጋቸው', 'Assets needing verification review.': 'ማረጋገጫ ግምገማ የሚያስፈልጋቸው ንብረቶች።', 'No code available': 'ኮድ የለም', 'Monitor and manage assets, departments, and operations across your college.': 'በኮሌጅዎ ውስጥ ያሉ ንብረቶችን፣ ዲፓርትመንቶችንና ስራዎችን ይከታተሉ እና ያስተዳድሩ።',
+  'Asset Status Overview': 'የንብረት ሁኔታ አጠቃላይ እይታ', 'Current status distribution for this college.': 'የዚህ ኮሌጅ የአሁኑ የሁኔታ ስርጭት።', 'No asset status data available': 'የንብረት ሁኔታ መረጃ የለም',
+  'Requests Requiring Attention': 'ትኩረት የሚሹ ጥያቄዎች', 'Open requests that need review.': 'ግምገማ የሚያስፈልጋቸው ክፍት ጥያቄዎች።', 'No pending requests': 'በመጠባበቅ ላይ ያሉ ጥያቄዎች የሉም', 'View requests': 'ጥያቄዎችን ይመልከቱ',
+  'Assets by Department': 'በዲፓርትመንት የተከፋፈሉ ንብረቶች', 'Department-level distribution within this college.': 'በዚህ ኮሌጅ ያለው የዲፓርትመንት ስርጭት።', Department: 'ዲፓርትመንት', Available: 'ያሉ', Assigned: 'የተመደቡ', Maintenance: 'ጥገና', Missing: 'የጠፉ', 'No asset distribution data available': 'የንብረት ስርጭት መረጃ የለም',
+  'Recent Assignments': 'የቅርብ ጊዜ ምደባዎች', 'Latest assigned assets in the college.': 'በኮሌጁ የቅርብ ጊዜ የተመደቡ ንብረቶች።', 'No recent assignments': 'የቅርብ ጊዜ ምደባዎች የሉም', 'Recent Transfers': 'የቅርብ ጊዜ ዝውውሮች', 'Latest movement between departments.': 'በዲፓርትመንቶች መካከል የቅርብ ጊዜ እንቅስቃሴ።', 'No recent transfers': 'የቅርብ ጊዜ ዝውውሮች የሉም',
+  'Recent Returns': 'የቅርብ ጊዜ መመለሻዎች', 'Returned assets and status updates.': 'የተመለሱ ንብረቶችና የሁኔታ ማሻሻያዎች።', 'No recent returns': 'የቅርብ ጊዜ መመለሻዎች የሉም', 'Maintenance Overview': 'የጥገና አጠቃላይ እይታ', 'Maintenance activity within the college.': 'በኮሌጁ ውስጥ ያለ የጥገና እንቅስቃሴ።', Total: 'ጠቅላላ', Open: 'ክፍት', Completed: 'ተጠናቋል', 'No maintenance data available': 'የጥገና መረጃ የለም',
+  'Asset Verification': 'የንብረት ማረጋገጫ', 'Verification summary for this college.': 'የዚህ ኮሌጅ የማረጋገጫ ማጠቃለያ።', Pending: 'በመጠባበቅ ላይ', Verified: 'ተረጋግጧል', 'No verification records available': 'የማረጋገጫ መዝገቦች የሉም', 'College Overview': 'የኮሌጅ አጠቃላይ እይታ', 'Authorized college details.': 'የተፈቀደው የኮሌጅ ዝርዝር መረጃ።', College: 'ኮሌጅ', Code: 'ኮድ', Manager: 'አስተዳዳሪ', 'Not available': 'አይገኝም',
+  'Recent Activity': 'የቅርብ ጊዜ እንቅስቃሴ', 'Latest college events and records.': 'የኮሌጁ የቅርብ ጊዜ ክንውኖችና መዝገቦች።', System: 'ስርዓት', 'No recent activity': 'የቅርብ ጊዜ እንቅስቃሴ የለም',
+  'Quick Actions': 'ፈጣን እርምጃዎች', 'Common college workflows.': 'የተለመዱ የኮሌጅ ስራዎች።', 'Manage Assets': 'ንብረቶችን ያስተዳድሩ', 'Asset Requests': 'የንብረት ጥያቄዎች', Assignments: 'ምደባዎች', Transfers: 'ዝውውሮች', Verification: 'ማረጋገጫ', 'Open manage assets': 'ንብረቶችን ይክፈቱ', 'Open departments': 'ዲፓርትመንቶችን ይክፈቱ', 'Open asset requests': 'የንብረት ጥያቄዎችን ይክፈቱ', 'Open assignments': 'ምደባዎችን ይክፈቱ', 'Open transfers': 'ዝውውሮችን ይክፈቱ', 'Open verification': 'ማረጋገጫን ይክፈቱ', Unknown: 'ያልታወቀ', 'In Service': 'በአገልግሎት ላይ', 'In Use': 'በጥቅም ላይ', Reserved: 'ተይዟል', Retired: 'ከአገልግሎት ውጭ', Disposed: 'ተወግዷል', Damaged: 'ተጎድቷል'
+};
 
 const CollegeDashboard = () => {
+  const { language } = useLanguage();
+  const translate = (value) => language === 'am' ? AMHARIC_COPY[value] || value : value;
   const [state, setState] = useState({ loading: true, error: '', data: null });
 
   const loadDashboard = useCallback(async () => {
@@ -31,9 +53,9 @@ const CollegeDashboard = () => {
       setState({ loading: false, error: '', data: response.data?.data || null });
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Unable to load college dashboard';
-      setState({ loading: false, error: message, data: null });
+      setState({ loading: false, error: language === 'am' ? AMHARIC_COPY['Unable to load college dashboard'] : message, data: null });
     }
-  }, []);
+  }, [language]);
 
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
 
@@ -48,7 +70,6 @@ const CollegeDashboard = () => {
   const recentReturns = data.recentReturns || [];
   const maintenance = data.maintenance || {};
   const verification = data.verification || {};
-  const recentActivity = data.recentActivity || [];
 
   const metrics = useMemo(() => [
     ['totalAssets', 'Total Assets', 'Assets registered for this college.', Package, 'blue', '/college/assets'],
@@ -68,9 +89,9 @@ const CollegeDashboard = () => {
       <div className="college-dashboard" aria-live="polite" aria-busy="true">
         <div className="college-dashboard-hero college-dashboard-hero--loading">
           <div>
-            <span className="college-eyebrow">Loading</span>
-            <h1>College Manager Dashboard</h1>
-            <p>Collecting the latest college metrics and activity.</p>
+            <span className="college-eyebrow">{translate('Loading')}</span>
+            <h1>{translate('College Manager Dashboard')}</h1>
+            <p>{translate('Collecting the latest college metrics and activity.')}</p>
           </div>
         </div>
         <div className="college-dashboard-kpis">
@@ -87,30 +108,28 @@ const CollegeDashboard = () => {
   if (state.error) {
     return (
       <div className="college-dashboard-state college-dashboard-state--error" role="alert">
-        <strong>Unable to load college dashboard</strong>
+        <strong>{translate('Unable to load college dashboard')}</strong>
         <span>{state.error}</span>
-        <button type="button" onClick={loadDashboard}>Retry</button>
+        <button type="button" onClick={loadDashboard}>{translate('Retry')}</button>
       </div>
     );
   }
 
   if (!data || !Object.keys(data).length) {
-    return <div className="college-dashboard-state">No college dashboard data is available.</div>;
+    return <div className="college-dashboard-state">{translate('No college dashboard data is available.')}</div>;
   }
 
   return (
     <div className="college-dashboard">
       <div className="college-dashboard-hero">
         <div>
-          <span className="college-eyebrow">College Manager</span>
-          <h1>College Manager</h1>
-          <p>{college.name ? `${college.name}` : 'Monitor and manage assets, departments, and operations across your college.'}</p>
-          <p className="college-hero-subtitle">Monitor and manage assets, departments, and operations across your college.</p>
+          <span className="college-eyebrow">{translate('College Manager')}</span>
+          <h1>{translate('College Dashboard')}</h1>
         </div>
         <div className="college-college-badge">
           <Building2 size={20} />
           <strong>{college.name || 'College'}</strong>
-          <span>{college.code || 'No code available'}</span>
+          <span>{college.code || translate('No code available')}</span>
         </div>
       </div>
 
@@ -120,9 +139,9 @@ const CollegeDashboard = () => {
             <div className={`college-kpi-icon college-kpi-icon--${tone}`}>
               <Icon size={21} aria-hidden="true" />
             </div>
-            <strong className="college-kpi-value">{Number(summary[key] || 0).toLocaleString()}</strong>
-            <span className="college-kpi-label">{label}</span>
-            <small>{description}</small>
+            <strong className="college-kpi-value">{Number(summary[key] || 0).toLocaleString(language === 'am' ? 'am-ET' : undefined)}</strong>
+            <span className="college-kpi-label">{translate(label)}</span>
+            <small>{translate(description)}</small>
           </Link>
         ))}
       </div>
@@ -131,8 +150,8 @@ const CollegeDashboard = () => {
         <section className="college-dashboard-card">
           <div className="college-section-heading">
             <div>
-              <h2>Asset Status Overview</h2>
-              <p>Current status distribution for this college.</p>
+              <h2>{translate('Asset Status Overview')}</h2>
+                <p>{translate('Current status distribution for this college.')}</p>
             </div>
             <BarChart3 size={20} />
           </div>
@@ -141,7 +160,7 @@ const CollegeDashboard = () => {
               {assetStatus.map((item) => (
                 <div className="college-chart-row" key={`${item.label}-${item.value}`}>
                   <div className="college-chart-row-label">
-                    <span>{normalizeLabel(item.label)}</span>
+                    <span>{translate(normalizeLabel(item.label))}</span>
                     <strong>{item.value}</strong>
                   </div>
                   <div className="college-chart-track">
@@ -151,15 +170,15 @@ const CollegeDashboard = () => {
               ))}
             </div>
           ) : (
-            <p className="college-empty-state">No asset status data available</p>
+            <p className="college-empty-state">{translate('No asset status data available')}</p>
           )}
         </section>
 
         <section className="college-dashboard-card">
           <div className="college-section-heading">
             <div>
-              <h2>Requests Requiring Attention</h2>
-              <p>Open requests that need review.</p>
+              <h2>{translate('Requests Requiring Attention')}</h2>
+              <p>{translate('Open requests that need review.')}</p>
             </div>
             <ClipboardList size={20} />
           </div>
@@ -176,10 +195,10 @@ const CollegeDashboard = () => {
               ))}
             </div>
           ) : (
-            <p className="college-empty-state">No pending requests</p>
+            <p className="college-empty-state">{translate('No pending requests')}</p>
           )}
           <Link className="college-primary-link" to="/college/requests">
-            View requests <ArrowRight size={16} />
+            {translate('View requests')} <ArrowRight size={16} />
           </Link>
         </section>
       </div>
@@ -187,8 +206,8 @@ const CollegeDashboard = () => {
       <section className="college-dashboard-card college-table-section">
         <div className="college-section-heading">
           <div>
-            <h2>Assets by Department</h2>
-            <p>Department-level distribution within this college.</p>
+            <h2>{translate('Assets by Department')}</h2>
+            <p>{translate('Department-level distribution within this college.')}</p>
           </div>
           <Building2 size={20} />
         </div>
@@ -197,12 +216,12 @@ const CollegeDashboard = () => {
             <table>
               <thead>
                 <tr>
-                  <th>Department</th>
-                  <th>Assets</th>
-                  <th>Available</th>
-                  <th>Assigned</th>
-                  <th>Maintenance</th>
-                  <th>Missing</th>
+                  <th>{translate('Department')}</th>
+                  <th>{translate('Assets')}</th>
+                  <th>{translate('Available')}</th>
+                  <th>{translate('Assigned')}</th>
+                  <th>{translate('Maintenance')}</th>
+                  <th>{translate('Missing')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -220,7 +239,7 @@ const CollegeDashboard = () => {
             </table>
           </div>
         ) : (
-          <p className="college-empty-state">No asset distribution data available</p>
+          <p className="college-empty-state">{translate('No asset distribution data available')}</p>
         )}
       </section>
 
@@ -228,8 +247,8 @@ const CollegeDashboard = () => {
         <section className="college-dashboard-card">
           <div className="college-section-heading">
             <div>
-              <h2>Recent Assignments</h2>
-              <p>Latest assigned assets in the college.</p>
+              <h2>{translate('Recent Assignments')}</h2>
+              <p>{translate('Latest assigned assets in the college.')}</p>
             </div>
             <ClipboardCheck size={20} />
           </div>
@@ -246,15 +265,15 @@ const CollegeDashboard = () => {
               ))}
             </div>
           ) : (
-            <p className="college-empty-state">No recent assignments</p>
+            <p className="college-empty-state">{translate('No recent assignments')}</p>
           )}
         </section>
 
         <section className="college-dashboard-card">
           <div className="college-section-heading">
             <div>
-              <h2>Recent Transfers</h2>
-              <p>Latest movement between departments.</p>
+              <h2>{translate('Recent Transfers')}</h2>
+              <p>{translate('Latest movement between departments.')}</p>
             </div>
             <Truck size={20} />
           </div>
@@ -271,7 +290,7 @@ const CollegeDashboard = () => {
               ))}
             </div>
           ) : (
-            <p className="college-empty-state">No recent transfers</p>
+            <p className="college-empty-state">{translate('No recent transfers')}</p>
           )}
         </section>
       </div>
@@ -280,8 +299,8 @@ const CollegeDashboard = () => {
         <section className="college-dashboard-card">
           <div className="college-section-heading">
             <div>
-              <h2>Recent Returns</h2>
-              <p>Returned assets and status updates.</p>
+              <h2>{translate('Recent Returns')}</h2>
+              <p>{translate('Returned assets and status updates.')}</p>
             </div>
             <RotateCcw size={20} />
           </div>
@@ -298,26 +317,26 @@ const CollegeDashboard = () => {
               ))}
             </div>
           ) : (
-            <p className="college-empty-state">No recent returns</p>
+            <p className="college-empty-state">{translate('No recent returns')}</p>
           )}
         </section>
 
         <section className="college-dashboard-card">
           <div className="college-section-heading">
             <div>
-              <h2>Maintenance Overview</h2>
-              <p>Maintenance activity within the college.</p>
+              <h2>{translate('Maintenance Overview')}</h2>
+              <p>{translate('Maintenance activity within the college.')}</p>
             </div>
             <Wrench size={20} />
           </div>
           {maintenance && (maintenance.total || maintenance.open || maintenance.completed) ? (
             <div className="college-stats-grid">
-              <div><strong>{maintenance.total || 0}</strong><span>Total</span></div>
-              <div><strong>{maintenance.open || 0}</strong><span>Open</span></div>
-              <div><strong>{maintenance.completed || 0}</strong><span>Completed</span></div>
+              <div><strong>{maintenance.total || 0}</strong><span>{translate('Total')}</span></div>
+              <div><strong>{maintenance.open || 0}</strong><span>{translate('Open')}</span></div>
+              <div><strong>{maintenance.completed || 0}</strong><span>{translate('Completed')}</span></div>
             </div>
           ) : (
-            <p className="college-empty-state">No maintenance data available</p>
+            <p className="college-empty-state">{translate('No maintenance data available')}</p>
           )}
         </section>
       </div>
@@ -326,72 +345,46 @@ const CollegeDashboard = () => {
         <section className="college-dashboard-card">
           <div className="college-section-heading">
             <div>
-              <h2>Asset Verification</h2>
-              <p>Verification summary for this college.</p>
+              <h2>{translate('Asset Verification')}</h2>
+              <p>{translate('Verification summary for this college.')}</p>
             </div>
             <ShieldCheck size={20} />
           </div>
           {verification && (verification.total || verification.pending || verification.verified) ? (
             <div className="college-stats-grid">
-              <div><strong>{verification.total || 0}</strong><span>Total</span></div>
-              <div><strong>{verification.pending || 0}</strong><span>Pending</span></div>
-              <div><strong>{verification.verified || 0}</strong><span>Verified</span></div>
+              <div><strong>{verification.total || 0}</strong><span>{translate('Total')}</span></div>
+              <div><strong>{verification.pending || 0}</strong><span>{translate('Pending')}</span></div>
+              <div><strong>{verification.verified || 0}</strong><span>{translate('Verified')}</span></div>
             </div>
           ) : (
-            <p className="college-empty-state">No verification records available</p>
+            <p className="college-empty-state">{translate('No verification records available')}</p>
           )}
         </section>
 
         <section className="college-dashboard-card">
           <div className="college-section-heading">
             <div>
-              <h2>College Overview</h2>
-              <p>Authorized college details.</p>
+              <h2>{translate('College Overview')}</h2>
+              <p>{translate('Authorized college details.')}</p>
             </div>
             <MapPin size={20} />
           </div>
           <dl className="college-overview-list">
-            <dt>College</dt><dd>{college.name || 'Not available'}</dd>
-            <dt>Code</dt><dd>{college.code || 'Not available'}</dd>
-            <dt>Manager</dt><dd>{college.manager || 'Not available'}</dd>
-            <dt>Departments</dt><dd>{summary.departments ?? 0}</dd>
-            <dt>Staff</dt><dd>{summary.staff ?? 0}</dd>
-            <dt>Assets</dt><dd>{summary.totalAssets ?? 0}</dd>
+            <dt>{translate('College')}</dt><dd>{college.name || translate('Not available')}</dd>
+            <dt>{translate('Code')}</dt><dd>{college.code || translate('Not available')}</dd>
+            <dt>{translate('Manager')}</dt><dd>{college.manager || translate('Not available')}</dd>
+            <dt>{translate('Departments')}</dt><dd>{summary.departments ?? 0}</dd>
+            <dt>{translate('Staff')}</dt><dd>{summary.staff ?? 0}</dd>
+            <dt>{translate('Assets')}</dt><dd>{summary.totalAssets ?? 0}</dd>
           </dl>
         </section>
       </div>
 
-      <section className="college-dashboard-card">
-        <div className="college-section-heading">
-          <div>
-            <h2>Recent Activity</h2>
-            <p>Latest college events and records.</p>
-          </div>
-          <RefreshCw size={20} />
-        </div>
-        {recentActivity.length ? (
-          <div className="college-activity-list">
-            {recentActivity.map((item, index) => (
-              <div className="college-activity-row" key={`${item.type}-${item.timestamp || index}`}>
-                <span className="college-activity-dot" />
-                <div>
-                  <strong>{item.type}</strong>
-                  <p>{item.description}</p>
-                  <small>{item.actor || 'System'} · {formatDate(item.timestamp)}{item.status ? ` · ${item.status}` : ''}</small>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="college-empty-state">No recent activity</p>
-        )}
-      </section>
-
       <section className="college-dashboard-card college-actions-section">
         <div className="college-section-heading">
           <div>
-            <h2>Quick Actions</h2>
-            <p>Common college workflows.</p>
+            <h2>{translate('Quick Actions')}</h2>
+            <p>{translate('Common college workflows.')}</p>
           </div>
           <ArrowRight size={20} />
         </div>
@@ -400,8 +393,8 @@ const CollegeDashboard = () => {
             <Link className="college-action-card" key={to} to={to}>
               <span className="college-action-icon"><Icon size={19} /></span>
               <span className="college-action-copy">
-                <strong>{label}</strong>
-                <small>Open {label.toLowerCase()}</small>
+                <strong>{translate(label)}</strong>
+                <small>{translate(`Open ${label.toLowerCase()}`)}</small>
               </span>
               <ArrowRight className="college-action-arrow" size={18} />
             </Link>

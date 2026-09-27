@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/UiContext';
 import * as XLSX from 'xlsx';
 
 const CONFIG = {
@@ -59,6 +60,14 @@ const getAssetEndpoint = (scope) => {
   if (scope === 'college') return '/api/college/assets';
   if (scope === 'department') return '/api/department/assets';
   return '/api/assets';
+};
+
+const COLLEGE_TRANSFER_COPY = {
+  College: 'ኮሌጅ', Department: 'ዲፓርትመንት', Operations: 'ስራዎች', Transfers: 'ዝውውሮች', 'Asset Transfers': 'የንብረት ዝውውሮች', 'Export Excel': 'Excel ወደ ውጭ ላክ',
+  Total: 'ጠቅላላ', Pending: 'በመጠባበቅ ላይ', pending: 'በመጠባበቅ ላይ', Approved: 'ጸድቋል', approved: 'ጸድቋል', Received: 'ተቀብሏል', received: 'ተቀብሏል', 'Rejected / Cancelled': 'ውድቅ / ተሰርዟል', 'All statuses': 'ሁሉም ሁኔታዎች', Requested: 'ተጠይቋል', requested: 'ተጠይቋል', Ready: 'ዝግጁ', 'In Transit': 'በመጓጓዝ ላይ', Inspected: 'ተመርምሯል', inspected: 'ተመርምሯል', Completed: 'ተጠናቋል', completed: 'ተጠናቋል', Rejected: 'ውድቅ ተደርጓል', rejected: 'ውድቅ ተደርጓል', Cancelled: 'ተሰርዟል', cancelled: 'ተሰርዟል',
+  Refresh: 'አድስ', 'Select real asset': 'እውነተኛ ንብረት ይምረጡ', 'Current Department': 'የአሁኑ ዲፓርትመንት', 'Current Location': 'የአሁኑ ቦታ', 'Asset Status': 'የንብረት ሁኔታ', 'Select destination department': 'መድረሻ ዲፓርትመንት ይምረጡ', 'Destination location': 'የመድረሻ ቦታ', 'Transfer reason / notes': 'የዝውውር ምክንያት / ማስታወሻ', 'Additional notes': 'ተጨማሪ ማስታወሻዎች', Submitting: 'በማስገባት ላይ...', 'Create Transfer': 'ዝውውር ፍጠር', Clear: 'አጽዳ',
+  Asset: 'ንብረት', Status: 'ሁኔታ', 'Current → Destination': 'አሁን ያለበት → መድረሻ', Reason: 'ምክንያት', Date: 'ቀን', Actions: 'እርምጃዎች', Unknown: 'ያልታወቀ', 'No transfer records found.': 'ምንም የዝውውር መዝገብ አልተገኘም።', 'Loading transfer records...': 'የዝውውር መዝገቦችን በመጫን ላይ...', View: 'ይመልከቱ', Approve: 'አጽድቅ', Reject: 'ውድቅ አድርግ', Cancel: 'ሰርዝ', Complete: 'አጠናቅቅ', 'Transfer Details': 'የዝውውር ዝርዝር መረጃ', Close: 'ዝጋ',
+  'Transfer ID': 'የዝውውር መለያ', 'Asset Code': 'የንብረት ኮድ', 'Serial Number': 'ተከታታይ ቁጥር', 'From Department': 'ከዲፓርትመንት', 'From Location': 'ከቦታ', 'To Department': 'ወደ ዲፓርትመንት', 'To Location': 'ወደ ቦታ', 'Requested By': 'የጠየቀው', 'Approved By': 'ያጸደቀው', 'Transfer Date': 'የዝውውር ቀን', 'Requested At': 'የተጠየቀበት', 'Approved At': 'የጸደቀበት', 'Ready At': 'ዝግጁ የሆነበት', 'Dispatched At': 'የተላከበት', 'Received At': 'የተቀበለበት', 'Transfer history': 'የዝውውር ታሪክ', 'to': 'ወደ', 'Transfer created successfully.': 'ዝውውሩ በተሳካ ሁኔታ ተፈጥሯል።', 'Transfer action failed.': 'የዝውውር እርምጃው አልተሳካም።', 'Unable to load transfer details.': 'የዝውውሩን ዝርዝር መጫን አልተቻለም።'
 };
 
 const GenericWorkflowPage = ({ config, scope, status, setStatus, load, rows, assets, form, setForm, saving, submit, error }) => (
@@ -148,6 +157,8 @@ const GenericWorkflowPage = ({ config, scope, status, setStatus, load, rows, ass
 const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
   const config = CONFIG[type] || CONFIG.transfers;
   const { user } = useAuth();
+  const { language } = useLanguage();
+  const translate = (value) => scope === 'college' && language === 'am' ? COLLEGE_TRANSFER_COPY[value] || value : value;
   const role = String(user?.role || '').toLowerCase();
   const isTransferType = type === 'transfers';
 
@@ -206,7 +217,7 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
         setAssets(parseListData(assetsResponse.data));
       }
     } catch (loadError) {
-      setError(loadError.response?.data?.message || `Unable to load ${config.title.toLowerCase()}.`);
+      setError(scope === 'college' && isTransferType && language === 'am' ? 'የዝውውር መዝገቦችን መጫን አልተቻለም።' : loadError.response?.data?.message || `Unable to load ${config.title.toLowerCase()}.`);
     } finally {
       setLoading(false);
     }
@@ -297,8 +308,10 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
     const id = transfer?.id;
     if (!id) return;
 
-    const label = action === 'approve' ? 'Approve' : action === 'reject' ? 'Reject' : action === 'cancel' ? 'Cancel' : 'Complete';
-    const confirmed = window.confirm(`${label} transfer for ${transfer.assetName || 'the selected asset'}?`);
+    const actionLabel = action === 'approve' ? 'Approve' : action === 'reject' ? 'Reject' : action === 'cancel' ? 'Cancel' : 'Complete';
+    const label = translate(actionLabel);
+    const confirmation = scope === 'college' && language === 'am' ? `${label} የ${transfer.assetName || 'የተመረጠውን ንብረት'} ዝውውር?` : `${label} transfer for ${transfer.assetName || 'the selected asset'}?`;
+    const confirmed = window.confirm(confirmation);
     if (!confirmed) return;
 
     setProcessingId(id); setError(''); setSuccessMessage('');
@@ -316,11 +329,11 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
         await apiClient.post(`/api/department/transfers/${id}/cancel`, { reason: 'Cancelled by department head.' });
       }
 
-      setSuccessMessage(`${label} action completed successfully.`);
+      setSuccessMessage(scope === 'college' && language === 'am' ? `${label} በተሳካ ሁኔታ ተጠናቋል።` : `${label} action completed successfully.`);
       setSelectedTransfer(null);
       await load();
     } catch (requestError) {
-      setError(requestError.response?.data?.message || requestError.message || `Unable to ${action} transfer.`);
+      setError(scope === 'college' && language === 'am' ? translate('Transfer action failed.') : requestError.response?.data?.message || requestError.message || `Unable to ${action} transfer.`);
     } finally {
       setProcessingId(null);
     }
@@ -333,29 +346,29 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
       const response = await apiClient.get(`${getTransferListEndpoint(scope, role)}/${transfer.id}`);
       setSelectedTransfer(normalizeTransfer(response.data?.data || response.data));
     } catch (detailError) {
-      setError(detailError.response?.data?.message || 'Unable to load transfer details.');
+      setError(scope === 'college' && language === 'am' ? translate('Unable to load transfer details.') : detailError.response?.data?.message || 'Unable to load transfer details.');
     }
   };
 
   const exportTransfers = () => {
     if (!rows.length) return;
     const worksheet = XLSX.utils.json_to_sheet(rows.map((row) => ({
-      ID: row.id,
-      Asset: row.assetName,
-      'Asset Code': row.assetCode,
-      'Serial Number': row.serialNumber,
-      'From Department': row.fromDepartment,
-      'From Location': row.fromLocation,
-      'To Department': row.toDepartment,
-      'To Location': row.toLocation,
-      'Requested By': row.requestedBy,
-      'Approved By': row.approvedBy,
-      'Transfer Date': row.transferDate,
-      Reason: row.transferReason,
-      Status: row.status,
+      [translate('Transfer ID')]: row.id,
+      [translate('Asset')]: row.assetName,
+      [translate('Asset Code')]: row.assetCode,
+      [translate('Serial Number')]: row.serialNumber,
+      [translate('From Department')]: row.fromDepartment,
+      [translate('From Location')]: row.fromLocation,
+      [translate('To Department')]: row.toDepartment,
+      [translate('To Location')]: row.toLocation,
+      [translate('Requested By')]: row.requestedBy,
+      [translate('Approved By')]: row.approvedBy,
+      [translate('Transfer Date')]: row.transferDate,
+      [translate('Reason')]: row.transferReason,
+      [translate('Status')]: translate(row.status),
     })));
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Transfers');
+    XLSX.utils.book_append_sheet(workbook, worksheet, translate('Transfers'));
     XLSX.writeFile(workbook, 'asset-transfers.xlsx');
   };
 
@@ -382,37 +395,37 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
     <section className="college-workspace-page">
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <div>
-          <div className="college-breadcrumb">{scope === 'college' ? 'College' : 'Department'} / Transfers</div>
-          <h1>Asset Transfers</h1>
+          <div className="college-breadcrumb">{translate(scope === 'college' ? 'College' : 'Department')} / {translate('Transfers')}</div>
+          <h1>{translate('Asset Transfers')}</h1>
         </div>
-        <button type="button" onClick={exportTransfers} disabled={!rows.length || loading}>Export Excel</button>
+        <button type="button" onClick={exportTransfers} disabled={!rows.length || loading}>{translate('Export Excel')}</button>
       </header>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, margin: '16px 0' }}>
-        <div className="college-stat-card"><strong>{statusSummary.total}</strong><span>Total</span></div>
-        <div className="college-stat-card"><strong>{statusSummary.pending}</strong><span>Pending</span></div>
-        <div className="college-stat-card"><strong>{statusSummary.approved}</strong><span>Approved</span></div>
-        <div className="college-stat-card"><strong>{statusSummary.received}</strong><span>Received</span></div>
-        <div className="college-stat-card"><strong>{statusSummary.rejected}</strong><span>Rejected / Cancelled</span></div>
+        <div className="college-stat-card"><strong>{statusSummary.total}</strong><span>{translate('Total')}</span></div>
+        <div className="college-stat-card"><strong>{statusSummary.pending}</strong><span>{translate('Pending')}</span></div>
+        <div className="college-stat-card"><strong>{statusSummary.approved}</strong><span>{translate('Approved')}</span></div>
+        <div className="college-stat-card"><strong>{statusSummary.received}</strong><span>{translate('Received')}</span></div>
+        <div className="college-stat-card"><strong>{statusSummary.rejected}</strong><span>{translate('Rejected / Cancelled')}</span></div>
       </div>
 
       <div className="college-toolbar" style={{ marginBottom: 18 }}>
         <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-          <option value="">All statuses</option>
-          <option value="Requested">Requested</option>
-          <option value="Approved">Approved</option>
-          <option value="Ready">Ready</option>
-          <option value="In Transit">In Transit</option>
-          <option value="Received">Received</option>
-          <option value="Rejected">Rejected</option>
-          <option value="Cancelled">Cancelled</option>
+          <option value="">{translate('All statuses')}</option>
+          <option value="Requested">{translate('Requested')}</option>
+          <option value="Approved">{translate('Approved')}</option>
+          <option value="Ready">{translate('Ready')}</option>
+          <option value="In Transit">{translate('In Transit')}</option>
+          <option value="Received">{translate('Received')}</option>
+          <option value="Rejected">{translate('Rejected')}</option>
+          <option value="Cancelled">{translate('Cancelled')}</option>
         </select>
-        <button type="button" onClick={load}>Refresh</button>
+        <button type="button" onClick={load}>{translate('Refresh')}</button>
       </div>
 
       {scope === 'department' && <form className="college-form" onSubmit={createTransfer} style={{ marginBottom: 24 }}>
         <select required value={form.assetId} onChange={(event) => setForm((previous) => ({ ...previous, assetId: event.target.value }))}>
-          <option value="">Select real asset</option>
+          <option value="">{translate('Select real asset')}</option>
           {assets.map((asset) => (
             <option key={asset.id} value={asset.id}>{asset.name} ({asset.assetCode || asset.id})</option>
           ))}
@@ -420,27 +433,27 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
 
         {selectedAsset && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, background: '#f8fafc', padding: 12, borderRadius: 10 }}>
-            <div><strong>Current Department</strong><div>{selectedAsset.department || '—'}</div></div>
-            <div><strong>Current Location</strong><div>{selectedAsset.location || '—'}</div></div>
-            <div><strong>Asset Status</strong><div>{selectedAsset.status || '—'}</div></div>
+            <div><strong>{translate('Current Department')}</strong><div>{selectedAsset.department || '—'}</div></div>
+            <div><strong>{translate('Current Location')}</strong><div>{selectedAsset.location || '—'}</div></div>
+            <div><strong>{translate('Asset Status')}</strong><div>{translate(selectedAsset.status) || '—'}</div></div>
           </div>
         )}
 
         <select required value={form.destinationDepartmentId} onChange={(event) => setForm((previous) => ({ ...previous, destinationDepartmentId: event.target.value }))}>
-          <option value="">Select destination department</option>
+          <option value="">{translate('Select destination department')}</option>
           {departments.map((department) => (
             <option key={department.id} value={department.id}>{department.name || department.departmentName}</option>
           ))}
         </select>
 
-        <input required placeholder="Destination location" value={form.newLocation} onChange={(event) => setForm((previous) => ({ ...previous, newLocation: event.target.value }))} />
+        <input required placeholder={translate('Destination location')} value={form.newLocation} onChange={(event) => setForm((previous) => ({ ...previous, newLocation: event.target.value }))} />
         <input type="date" value={form.transferDate} onChange={(event) => setForm((previous) => ({ ...previous, transferDate: event.target.value }))} />
-        <textarea required rows="3" placeholder="Transfer reason / notes" value={form.transferReason} onChange={(event) => setForm((previous) => ({ ...previous, transferReason: event.target.value }))} />
-        <textarea rows="2" placeholder="Additional notes" value={form.notes} onChange={(event) => setForm((previous) => ({ ...previous, notes: event.target.value }))} />
+        <textarea required rows="3" placeholder={translate('Transfer reason / notes')} value={form.transferReason} onChange={(event) => setForm((previous) => ({ ...previous, transferReason: event.target.value }))} />
+        <textarea rows="2" placeholder={translate('Additional notes')} value={form.notes} onChange={(event) => setForm((previous) => ({ ...previous, notes: event.target.value }))} />
 
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <button type="submit" disabled={saving}>{saving ? 'Submitting...' : 'Create Transfer'}</button>
-          <button type="button" className="secondary" onClick={() => setForm({ assetId: '', destinationDepartmentId: '', newLocation: '', transferReason: '', transferDate: new Date().toISOString().slice(0, 10), notes: '' })}>Clear</button>
+          <button type="submit" disabled={saving}>{saving ? translate('Submitting') : translate('Create Transfer')}</button>
+          <button type="button" className="secondary" onClick={() => setForm({ assetId: '', destinationDepartmentId: '', newLocation: '', transferReason: '', transferDate: new Date().toISOString().slice(0, 10), notes: '' })}>{translate('Clear')}</button>
         </div>
       </form>}
 
@@ -448,29 +461,29 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
       {successMessage && <div className="success-banner" style={{ marginBottom: 12 }}>{successMessage}</div>}
 
       {loading ? (
-        <div>Loading transfer records...</div>
+        <div>{translate('Loading transfer records...')}</div>
       ) : rows.length === 0 ? (
-        <div className="empty-state">No transfer records found.</div>
+        <div className="empty-state">{translate('No transfer records found.')}</div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table className="college-table">
             <thead>
               <tr>
-                <th>Asset</th>
-                <th>Status</th>
-                <th>Current → Destination</th>
-                <th>Reason</th>
-                <th>Date</th>
-                <th>Actions</th>
+                <th>{translate('Asset')}</th>
+                <th>{translate('Status')}</th>
+                <th>{translate('Current → Destination')}</th>
+                <th>{translate('Reason')}</th>
+                <th>{translate('Date')}</th>
+                <th>{translate('Actions')}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id}>
-                  <td>{row.assetName || 'Unknown'}</td>
+                  <td>{row.assetName || translate('Unknown')}</td>
                   <td>
                     <span style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px', borderRadius: 999, background: row.status === 'Approved' ? '#10b981' : row.status === 'Rejected' ? '#ef4444' : row.status === 'Cancelled' ? '#94a3b8' : row.status === 'Completed' ? '#22c55e' : '#f59e0b', color: '#fff', fontSize: 11, fontWeight: 700 }}>
-                      {row.status || 'Pending'}
+                      {translate(row.status || 'Pending')}
                     </span>
                   </td>
                   <td>
@@ -481,12 +494,12 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
                   <td>{row.transferDate ? new Date(row.transferDate).toLocaleDateString() : '—'}</td>
                   <td>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      <button type="button" onClick={() => openTransferDetails(row)} disabled={processingId === row.id}>View</button>
+                      <button type="button" onClick={() => openTransferDetails(row)} disabled={processingId === row.id}>{translate('View')}</button>
                       {scope === 'college' && row.status === 'Requested' && (
-                        <button type="button" onClick={() => handleAction(row, 'approve')} disabled={processingId === row.id}>Approve</button>
+                        <button type="button" onClick={() => handleAction(row, 'approve')} disabled={processingId === row.id}>{translate('Approve')}</button>
                       )}
                       {scope === 'college' && row.status === 'Requested' && (
-                        <button type="button" onClick={() => handleAction(row, 'reject')} disabled={processingId === row.id}>Reject</button>
+                        <button type="button" onClick={() => handleAction(row, 'reject')} disabled={processingId === row.id}>{translate('Reject')}</button>
                       )}
                       {scope === 'department' && role === 'department_head' && ['Requested', 'Approved'].includes(row.status) && (
                         <button type="button" onClick={() => handleAction(row, 'cancel')} disabled={processingId === row.id}>Cancel</button>
@@ -502,32 +515,32 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
 
       {selectedTransfer && (
         <div role="dialog" aria-modal="true" style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ width: 'min(760px, 92vw)', background: '#fff', borderRadius: 16, padding: 24, boxShadow: '0 14px 32px rgba(0,0,0,0.15)' }}>
+          <div style={{ width: 'min(760px, 92vw)', ...(scope === 'college' ? { maxHeight: '90vh', overflowY: 'auto' } : {}), background: '#fff', borderRadius: 16, padding: 24, boxShadow: '0 14px 32px rgba(0,0,0,0.15)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0 }}>Transfer Details</h3>
-              <button type="button" onClick={() => setSelectedTransfer(null)}>Close</button>
+              <h3 style={{ margin: 0 }}>{translate('Transfer Details')}</h3>
+              <button type="button" onClick={() => setSelectedTransfer(null)}>{translate('Close')}</button>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-              <div><strong>Transfer ID</strong><div>{selectedTransfer.id}</div></div>
-              <div><strong>Asset</strong><div>{selectedTransfer.assetName || '—'}</div></div>
-              <div><strong>Asset Code</strong><div>{selectedTransfer.assetCode || '—'}</div></div>
-              <div><strong>Serial Number</strong><div>{selectedTransfer.serialNumber || '—'}</div></div>
-              <div><strong>From Department</strong><div>{selectedTransfer.fromDepartment || '—'}</div></div>
-              <div><strong>From Location</strong><div>{selectedTransfer.fromLocation || '—'}</div></div>
-              <div><strong>To Department</strong><div>{selectedTransfer.toDepartment || '—'}</div></div>
-              <div><strong>To Location</strong><div>{selectedTransfer.toLocation || '—'}</div></div>
-              <div><strong>Requested By</strong><div>{selectedTransfer.requestedBy || '—'}</div></div>
-              <div><strong>Approved By</strong><div>{selectedTransfer.approvedBy || '—'}</div></div>
-              <div><strong>Transfer Date</strong><div>{selectedTransfer.transferDate ? new Date(selectedTransfer.transferDate).toLocaleDateString() : '—'}</div></div>
-              <div><strong>Status</strong><div>{selectedTransfer.status || '—'}</div></div>
-              <div style={{ gridColumn: '1 / -1' }}><strong>Reason</strong><div>{selectedTransfer.transferReason || '—'}</div></div>
-              <div><strong>Requested At</strong><div>{selectedTransfer.requestedAt ? new Date(selectedTransfer.requestedAt).toLocaleString() : '—'}</div></div>
-              <div><strong>Approved At</strong><div>{selectedTransfer.approvalDate ? new Date(selectedTransfer.approvalDate).toLocaleString() : '—'}</div></div>
-              <div><strong>Ready At</strong><div>{selectedTransfer.readyAt ? new Date(selectedTransfer.readyAt).toLocaleString() : '—'}</div></div>
-              <div><strong>Dispatched At</strong><div>{selectedTransfer.dispatchedAt ? new Date(selectedTransfer.dispatchedAt).toLocaleString() : '—'}</div></div>
-              <div><strong>Received At</strong><div>{selectedTransfer.receivedAt ? new Date(selectedTransfer.receivedAt).toLocaleString() : '—'}</div></div>
-              <div style={{ gridColumn: '1 / -1' }}><strong>Transfer history</strong><div>{(selectedTransfer.history || []).map((historyItem) => <div key={historyItem.id}>{historyItem.transfer_number || historyItem.id}: {historyItem.status} ({historyItem.sourceDepartment || historyItem.source_department || '—'} to {historyItem.destinationDepartment || historyItem.destination_department || '—'})</div>)}</div></div>
+              <div><strong>{translate('Transfer ID')}</strong><div>{selectedTransfer.id}</div></div>
+              <div><strong>{translate('Asset')}</strong><div>{selectedTransfer.assetName || '—'}</div></div>
+              <div><strong>{translate('Asset Code')}</strong><div>{selectedTransfer.assetCode || '—'}</div></div>
+              <div><strong>{translate('Serial Number')}</strong><div>{selectedTransfer.serialNumber || '—'}</div></div>
+              <div><strong>{translate('From Department')}</strong><div>{selectedTransfer.fromDepartment || '—'}</div></div>
+              <div><strong>{translate('From Location')}</strong><div>{selectedTransfer.fromLocation || '—'}</div></div>
+              <div><strong>{translate('To Department')}</strong><div>{selectedTransfer.toDepartment || '—'}</div></div>
+              <div><strong>{translate('To Location')}</strong><div>{selectedTransfer.toLocation || '—'}</div></div>
+              <div><strong>{translate('Requested By')}</strong><div>{selectedTransfer.requestedBy || '—'}</div></div>
+              <div><strong>{translate('Approved By')}</strong><div>{selectedTransfer.approvedBy || '—'}</div></div>
+              <div><strong>{translate('Transfer Date')}</strong><div>{selectedTransfer.transferDate ? new Date(selectedTransfer.transferDate).toLocaleDateString(language === 'am' && scope === 'college' ? 'am-ET' : undefined) : '—'}</div></div>
+              <div><strong>{translate('Status')}</strong><div>{translate(selectedTransfer.status || '—')}</div></div>
+              <div style={{ gridColumn: '1 / -1' }}><strong>{translate('Reason')}</strong><div>{selectedTransfer.transferReason || '—'}</div></div>
+              <div><strong>{translate('Requested At')}</strong><div>{selectedTransfer.requestedAt ? new Date(selectedTransfer.requestedAt).toLocaleString() : '—'}</div></div>
+              <div><strong>{translate('Approved At')}</strong><div>{selectedTransfer.approvalDate ? new Date(selectedTransfer.approvalDate).toLocaleString() : '—'}</div></div>
+              <div><strong>{translate('Ready At')}</strong><div>{selectedTransfer.readyAt ? new Date(selectedTransfer.readyAt).toLocaleString() : '—'}</div></div>
+              <div><strong>{translate('Dispatched At')}</strong><div>{selectedTransfer.dispatchedAt ? new Date(selectedTransfer.dispatchedAt).toLocaleString() : '—'}</div></div>
+              <div><strong>{translate('Received At')}</strong><div>{selectedTransfer.receivedAt ? new Date(selectedTransfer.receivedAt).toLocaleString() : '—'}</div></div>
+              <div style={{ gridColumn: '1 / -1' }}><strong>{translate('Transfer history')}</strong><div>{(selectedTransfer.history || []).map((historyItem) => <div key={historyItem.id}>{historyItem.transfer_number || historyItem.id}: {translate(historyItem.status)} ({historyItem.sourceDepartment || historyItem.source_department || '—'} {translate('to')} {historyItem.destinationDepartment || historyItem.destination_department || '—'})</div>)}</div></div>
             </div>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import {
   TrendingUp,
   AlertCircle,
@@ -9,7 +10,7 @@ import {
   Package,
   FlaskConical,
 } from 'lucide-react';
-import { getMaintenance, getMaintenanceDashboard, getAssets } from '../../services/maintenanceApi';
+import { getMaintenance, getMaintenanceDashboard } from '../../services/maintenanceApi';
 import './MaintDashboard.css';
 
 const MaintDashboard = () => {
@@ -23,25 +24,24 @@ const MaintDashboard = () => {
     active: 0,
     completed: 0,
     byStatus: {},
+    assetsUnderMaintenance: 0,
+    totalAssets: 0,
   });
-  const [assetsUnderMaintenance, setAssetsUnderMaintenance] = useState([]);
-  const [totalAssets, setTotalAssets] = useState(0);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let mounted = true;
+    setLoading(true);
+    setError('');
     (async () => {
       try {
-        const [dash, list, under] = await Promise.all([
-          getMaintenanceDashboard(),
-          getMaintenance({ limit: 100 }),
-          getAssets({ status: 'under-maintenance', limit: 1000 }),
+        const [dash, list] = await Promise.all([
+          getMaintenanceDashboard(period),
+          getMaintenance({ limit: 100, period }),
         ]);
-        const all = await getAssets({ limit: 1000 }).catch(() => []);
         if (!mounted) return;
-        setDashboardData({ total: dash.total || 0, pending: dash.pending || 0, active: dash.active || 0, completed: dash.completed || 0, byStatus: dash.byStatus || {} });
+        setDashboardData({ ...dash, total: dash.total || 0, pending: dash.pending || 0, active: dash.active || 0, completed: dash.completed || 0, byStatus: dash.byStatus || {} });
         setItems(list);
-        setAssetsUnderMaintenance(under);
-        setTotalAssets(all.length);
       } catch (err) {
         if (mounted) setError(err && err.message ? err.message : 'Failed to load dashboard data');
       } finally {
@@ -49,7 +49,7 @@ const MaintDashboard = () => {
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [period, reloadKey]);
 
   const overdueCount = useMemo(() => {
     const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
@@ -130,10 +130,10 @@ const MaintDashboard = () => {
     },
     {
       title: 'Assets Under Maintenance',
-      value: assetsUnderMaintenance.length,
+      value: dashboardData.assetsUnderMaintenance,
       icon: TrendingUp,
       color: 'purple',
-      trend: totalAssets ? `${Math.round((assetsUnderMaintenance.length / (totalAssets || 1)) * 100)}% of assets` : '0%',
+      trend: dashboardData.totalAssets ? `${Math.round((dashboardData.assetsUnderMaintenance / dashboardData.totalAssets) * 100)}% of assets` : '0%',
     },
     {
       title: 'Waiting on Parts',
@@ -234,7 +234,7 @@ const MaintDashboard = () => {
   }, [items]);
 
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#4a5568' }}>Loading dashboard…</div>;
-  if (error) return <div style={{ padding: '40px', textAlign: 'center', color: '#991b1b' }}>Failed to load dashboard: {error}</div>;
+  if (error) return <div role="alert" style={{ padding: '40px', textAlign: 'center', color: '#991b1b' }}>Failed to load dashboard: {error}<br /><button type="button" onClick={() => setReloadKey((value) => value + 1)}>Retry</button></div>;
 
   return (
     <div className="dashboard-container">
@@ -362,9 +362,9 @@ const MaintDashboard = () => {
           <div className="activity-card">
             <div className="activity-header">
               <h3 className="activity-title">Recent Maintenance Requests</h3>
-              <a href="/maintenance/requests" className="view-all-link">
+              <Link to="/maintenance/requests" className="view-all-link">
                 View All →
-              </a>
+              </Link>
             </div>
             <div className="table-container">
               <table className="activity-table">
@@ -407,9 +407,9 @@ const MaintDashboard = () => {
           <div className="activity-card">
             <div className="activity-header">
               <h3 className="activity-title">Recent Work Orders</h3>
-              <a href="/maintenance/work-orders" className="view-all-link">
+              <Link to="/maintenance/work-orders" className="view-all-link">
                 View All →
-              </a>
+              </Link>
             </div>
             <div className="table-container">
               <table className="activity-table">

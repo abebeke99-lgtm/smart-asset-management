@@ -21,6 +21,7 @@ const STATUS_LABELS = {
 const emptyForm = {
   paymentNumber: "",
   invoiceId: "",
+  paymentDate: "",
   amount: "",
   paymentMethod: "BANK_TRANSFER",
   referenceNumber: "",
@@ -81,6 +82,9 @@ export default function FinancePayments() {
   const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [summary, setSummary] = useState({ total: 0, pending: 0, approved: 0, processed: 0, rejected: 0, totalAmount: 0 });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [pagination, setPagination] = useState({ total: 0, page: 1, pageSize: 10, totalPages: 1 });
@@ -104,10 +108,13 @@ export default function FinancePayments() {
       const params = { page, pageSize };
       if (search.trim()) params.search = search.trim();
       if (status) params.status = status;
+      if (dateFrom) params.dateFrom = dateFrom;
+      if (dateTo) params.dateTo = dateTo;
       const response = await api.get("/finance/payments", { params });
       const payloadRows = Array.isArray(response?.data?.data) ? response.data.data : [];
       const rows = payloadRows.map(normalizePayment);
       setPayments(rows);
+      setSummary(response?.data?.summary || { total: 0, pending: 0, approved: 0, processed: 0, rejected: 0, totalAmount: 0 });
       const total = Number(response?.data?.pagination?.total ?? payloadRows.length ?? 0);
       setPagination({
         total: Number.isFinite(total) ? total : rows.length,
@@ -124,7 +131,7 @@ export default function FinancePayments() {
   };
 
   useEffect(() => { loadInvoices(); }, []);
-  useEffect(() => { loadPayments(); }, [page, pageSize, status]);
+  useEffect(() => { loadPayments(); }, [page, pageSize, status, dateFrom, dateTo]);
   useEffect(() => {
     const timer = setTimeout(() => {
       if (page !== 1) setPage(1);
@@ -134,13 +141,8 @@ export default function FinancePayments() {
   }, [search]);
 
   const stats = useMemo(() => {
-    const total = payments.length;
-    const pending = payments.filter((item) => ["PENDING_APPROVAL", "APPROVED", "PROCESSING"].includes(String(item.status))).length;
-    const completed = payments.filter((item) => ["COMPLETED"].includes(String(item.status))).length;
-    const rejected = payments.filter((item) => ["REJECTED", "CANCELLED", "FAILED"].includes(String(item.status))).length;
-    const totalAmount = payments.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    return { total, pending, completed, rejected, totalAmount };
-  }, [payments]);
+    return { total: summary.total, pending: summary.pending + summary.approved + summary.processing, completed: summary.processed, rejected: summary.rejected, totalAmount: summary.totalAmount };
+  }, [summary]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -156,12 +158,16 @@ export default function FinancePayments() {
       const amount = Number(form.amount || 0);
       if (!form.invoiceId) throw new Error("Please select an invoice.");
       if (!Number.isFinite(amount) || amount <= 0) throw new Error("Payment amount must be greater than zero.");
+      if (!form.paymentNumber.trim()) throw new Error("Payment number is required.");
+      if (!form.referenceNumber.trim()) throw new Error("Reference number is required.");
+      if (!form.paymentDate) throw new Error("Payment date is required.");
       const payload = {
-        paymentNumber: form.paymentNumber || `PAY-${Date.now()}`,
+        paymentNumber: form.paymentNumber.trim(),
+        paymentDate: form.paymentDate,
         invoiceId: Number(form.invoiceId),
         amount,
         paymentMethod: form.paymentMethod,
-        referenceNumber: form.referenceNumber || `REF-${Date.now()}`,
+        referenceNumber: form.referenceNumber.trim(),
         bankName: form.bankName || "",
         bankAccount: form.bankAccount || "",
         notes: form.notes || "",
@@ -259,7 +265,7 @@ export default function FinancePayments() {
         </div>
 
         <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 15, padding: 16, marginBottom: 18 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(200px, 1.4fr) 180px 160px auto", gap: 10, alignItems: "end" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, alignItems: "end" }}>
             <div>
               <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 6 }}>Search</label>
               <div style={{ position: "relative" }}>
@@ -289,7 +295,9 @@ export default function FinancePayments() {
                 <option value={100}>100</option>
               </select>
             </div>
-            <button type="button" onClick={() => { setSearch(""); setStatus(""); setPage(1); }} style={{ minHeight: 42, borderRadius: 9, border: "1px solid #dbe3ed", background: "#fff", fontWeight: 700, cursor: "pointer" }}><Filter size={15} style={{ verticalAlign: "middle", marginRight: 6 }} />Clear</button>
+            <div><label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 6 }}>From</label><input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} style={{ width: "100%", minHeight: 42, borderRadius: 9, border: "1px solid #dbe3ed", padding: "0 10px" }} /></div>
+            <div><label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 6 }}>To</label><input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} style={{ width: "100%", minHeight: 42, borderRadius: 9, border: "1px solid #dbe3ed", padding: "0 10px" }} /></div>
+            <button type="button" onClick={() => { setSearch(""); setStatus(""); setDateFrom(""); setDateTo(""); setPage(1); }} style={{ minHeight: 42, borderRadius: 9, border: "1px solid #dbe3ed", background: "#fff", fontWeight: 700, cursor: "pointer" }}><Filter size={15} style={{ verticalAlign: "middle", marginRight: 6 }} />Clear</button>
           </div>
         </div>
 
@@ -378,8 +386,9 @@ export default function FinancePayments() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
                   <div>
                     <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 6 }}>Payment Number</label>
-                    <input name="paymentNumber" value={form.paymentNumber} onChange={handleChange} placeholder="PAY-2026-0001" style={{ width: "100%", minHeight: 42, borderRadius: 9, border: "1px solid #dbe3ed", padding: "0 12px", outline: "none" }} />
+                    <input required name="paymentNumber" value={form.paymentNumber} onChange={handleChange} placeholder="Payment number" style={{ width: "100%", minHeight: 42, borderRadius: 9, border: "1px solid #dbe3ed", padding: "0 12px", outline: "none" }} />
                   </div>
+                  <div><label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 6 }}>Payment Date</label><input required type="date" name="paymentDate" value={form.paymentDate} onChange={handleChange} style={{ width: "100%", minHeight: 42, borderRadius: 9, border: "1px solid #dbe3ed", padding: "0 12px" }} /></div>
                   <div>
                     <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 6 }}>Invoice</label>
                     <select name="invoiceId" value={form.invoiceId} onChange={handleChange} style={{ width: "100%", minHeight: 42, borderRadius: 9, border: "1px solid #dbe3ed", padding: "0 10px", outline: "none" }}>
@@ -403,7 +412,7 @@ export default function FinancePayments() {
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 6 }}>Reference Number</label>
-                    <input name="referenceNumber" value={form.referenceNumber} onChange={handleChange} placeholder="TRX-001" style={{ width: "100%", minHeight: 42, borderRadius: 9, border: "1px solid #dbe3ed", padding: "0 12px", outline: "none" }} />
+                    <input required name="referenceNumber" value={form.referenceNumber} onChange={handleChange} placeholder="Bank or payment reference" style={{ width: "100%", minHeight: 42, borderRadius: 9, border: "1px solid #dbe3ed", padding: "0 12px", outline: "none" }} />
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 6 }}>Bank Name</label>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
 import axios from 'axios';
@@ -26,7 +26,9 @@ const FinanceDepreciation = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [depreciationMethod, setDepreciationMethod] = useState('straight-line');
+  const [periodRecords, setPeriodRecords] = useState([]);
+  const [calculation, setCalculation] = useState(null);
+  const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7));
   const [filters, setFilters] = useState({
     department: '',
     category: '',
@@ -34,71 +36,67 @@ const FinanceDepreciation = () => {
     ageRange: ''
   });
 
-  // Form state for manual adjustment
-  const [formData, setFormData] = useState({
-    annual_depreciation: 0,
-    accumulated_depreciation: 0,
-    book_value: 0,
-    adjustment_notes: '',
-    adjustment_date: ''
-  });
-
   // Depreciation schedule
   const [schedule, setSchedule] = useState([]);
   const [showSchedule, setShowSchedule] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   const isDark = theme === 'dark';
   const t = language === 'en' ? englishTranslations : amharicTranslations;
+  const displayMoney = (value) => value === null || value === undefined ? t.notAvailable : Number(value).toLocaleString();
 
   useEffect(() => {
     fetchAssets();
   }, []);
 
   useEffect(() => {
-    if (selectedAsset) {
-      generateDepreciationSchedule(selectedAsset);
-    }
-  }, [selectedAsset, depreciationMethod]);
+    if (selectedAsset) generateDepreciationSchedule(selectedAsset);
+  }, [selectedAsset]);
 
   const fetchAssets = async () => {
     setLoading(true);
     try {
-      let assetData = [];
-      try {
-        const response = await axios.get('/api/finance/depreciation');
-        assetData = response.data.rows || response.data.data || response.data.assets || [];
-      } catch (financeError) {
-        const fallback = await axios.get('/api/assets', {
-          params: { limit: 1000, include_financial: true },
-        });
-        assetData = fallback.data.assets || fallback.data.data || [];
-      }
+      const response = await axios.get('/api/finance/depreciation');
+      const assetData = response.data.rows || response.data.data || response.data.assets || [];
+      setPeriodRecords((response.data.records || []).filter((record) => record.status === 'POSTED'));
 
       const normalized = assetData.map((asset) => {
+        const purchaseCost = asset.acquisition_value ?? asset.purchase_cost ?? asset.purchaseCost ?? asset.purchasePrice ?? null;
+        const currentBookValue = asset.current_book_value ?? asset.currentValue ?? null;
+        const accumulatedDepreciation = asset.accumulated_depreciation ?? asset.accumulatedDepreciation ?? null;
+        const residualValue = asset.residual_value ?? asset.residualValue ?? null;
+        const latestAmount = asset.latestRecord?.depreciationAmount ?? null;
+        const purchaseDate = asset.purchase_date ?? asset.purchaseDate ?? null;
+        const yearsSincePurchase = purchaseDate ? Math.max(0, (Date.now() - new Date(purchaseDate).getTime()) / (1000 * 60 * 60 * 24 * 365)) : null;
+        const hasValues = currentBookValue !== null && residualValue !== null;
         const normalizedAsset = {
           ...asset,
           id: asset.id ?? asset.assetId ?? asset.asset_id,
           asset_tag: asset.asset_tag ?? asset.assetTag ?? asset.assetCode ?? asset.asset_code,
           name: asset.name ?? asset.asset_name ?? asset.assetName,
-          purchase_cost: Number(asset.purchase_cost ?? asset.purchaseCost ?? asset.purchase_price ?? asset.acquisition_value ?? asset.acquisitionValue ?? 0),
-          purchase_date: asset.purchase_date ?? asset.purchaseDate,
-          residual_value: Number(asset.residual_value ?? asset.residualValue ?? 0),
-          useful_life: Number(asset.useful_life ?? asset.usefulLife ?? 0),
-          depreciation_method: asset.depreciation_method ?? asset.depreciationMethod ?? 'straight-line',
+          purchase_cost: purchaseCost === null ? null : Number(purchaseCost),
+          purchase_date: purchaseDate,
+          current_book_value: currentBookValue === null ? null : Number(currentBookValue),
+          residual_value: residualValue === null ? null : Number(residualValue),
+          useful_life: asset.useful_life ?? asset.usefulLife ?? null,
+          depreciation_method: asset.depreciation_method ?? asset.depreciationMethod ?? null,
           department_name: asset.department_name ?? asset.departmentName ?? asset.department ?? '',
           category_name: asset.category_name ?? asset.categoryName ?? asset.category ?? '',
-          status: asset.status || 'Available',
+          status: asset.status || 'NOT_CONFIGURED',
+          depreciation: {
+            annualDepreciation: latestAmount === null ? null : Number(latestAmount),
+            accumulatedDepreciation: accumulatedDepreciation === null ? null : Number(accumulatedDepreciation),
+            bookValue: currentBookValue === null ? null : Number(currentBookValue),
+            depreciationPercentage: purchaseCost > 0 && accumulatedDepreciation !== null ? (Number(accumulatedDepreciation) / Number(purchaseCost)) * 100 : null,
+            isFullyDepreciated: hasValues ? Number(currentBookValue) <= Number(residualValue) : null,
+            yearsSincePurchase: yearsSincePurchase === null ? null : yearsSincePurchase.toFixed(1),
+            yearsRemaining: null,
+          },
         };
-
-        const yearlyDep = calculateDepreciation(normalizedAsset);
-        return {
-          ...normalizedAsset,
-          depreciation: yearlyDep,
-        };
+        return normalizedAsset;
       });
 
       setAssets(normalized);
+      return normalized;
     } catch (error) {
       toast.error(error.response?.data?.message || t.fetchError || 'Failed to load assets');
       setAssets([]);
@@ -106,161 +104,46 @@ const FinanceDepreciation = () => {
     setLoading(false);
   };
 
-  const calculateDepreciation = (asset) => {
-    const purchaseCost = asset.purchase_cost || 0;
-    const residualValue = asset.residual_value || (purchaseCost * 0.1);
-    const usefulLife = asset.useful_life || 5;
-    const purchaseDate = asset.purchase_date ? new Date(asset.purchase_date) : new Date();
-    const method = asset.depreciation_method || 'straight-line';
-    
-    const yearsSincePurchase = Math.max(0, (Date.now() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24 * 365));
-    
-    let annualDepreciation = 0;
-    let accumulatedDepreciation = 0;
-    let bookValue = 0;
-
-    switch (method) {
-      case 'straight-line':
-        annualDepreciation = (purchaseCost - residualValue) / usefulLife;
-        accumulatedDepreciation = Math.min(annualDepreciation * yearsSincePurchase, purchaseCost - residualValue);
-        bookValue = Math.max(purchaseCost - accumulatedDepreciation, residualValue);
-        break;
-      
-      case 'reducing-balance':
-        const rate = 1 - Math.pow(residualValue / purchaseCost, 1 / usefulLife);
-        annualDepreciation = (purchaseCost - residualValue) * rate;
-        // Simplified calculation
-        accumulatedDepreciation = purchaseCost * (1 - Math.pow(1 - rate, yearsSincePurchase));
-        bookValue = Math.max(purchaseCost - accumulatedDepreciation, residualValue);
-        break;
-      
-      case 'declining-balance':
-        const decliningRate = 2 / usefulLife;
-        // Simplified calculation
-        accumulatedDepreciation = purchaseCost * (1 - Math.pow(1 - decliningRate, yearsSincePurchase));
-        bookValue = Math.max(purchaseCost - accumulatedDepreciation, residualValue);
-        annualDepreciation = (purchaseCost - accumulatedDepreciation) * decliningRate;
-        break;
-      
-      default:
-        // Use existing values or manual
-        annualDepreciation = asset.annual_depreciation || 0;
-        accumulatedDepreciation = asset.accumulated_depreciation || 0;
-        bookValue = asset.book_value || purchaseCost;
+  const generateDepreciationSchedule = async (asset) => {
+    try {
+      const response = await axios.get(`/api/finance/depreciation/${asset.id}`);
+      const history = response.data.data?.history || [];
+      setSchedule(history.map((record) => ({
+        period: record.period,
+        startValue: Number(record.openingBookValue),
+        annualDepreciation: Number(record.depreciationAmount),
+        accumulatedDepreciation: Number(record.accumulatedDepreciation),
+        bookValue: Number(record.closingBookValue),
+        status: record.status,
+        isFullyDepreciated: Number(record.closingBookValue) <= Number(record.residualValue),
+      })));
+    } catch (error) {
+      toast.error(error.response?.data?.message || t.fetchError);
+      setSchedule([]);
     }
-
-    const isFullyDepreciated = bookValue <= residualValue || 
-                              yearsSincePurchase >= usefulLife;
-
-    return {
-      annualDepreciation: Math.round(annualDepreciation),
-      accumulatedDepreciation: Math.round(accumulatedDepreciation),
-      bookValue: Math.round(bookValue),
-      depreciationPercentage: purchaseCost > 0 ? ((accumulatedDepreciation / purchaseCost) * 100).toFixed(1) : 0,
-      isFullyDepreciated,
-      yearsRemaining: Math.max(0, usefulLife - yearsSincePurchase).toFixed(1),
-      yearsSincePurchase: yearsSincePurchase.toFixed(1),
-      method,
-      purchaseCost,
-      residualValue,
-      usefulLife
-    };
-  };
-
-  const generateDepreciationSchedule = (asset) => {
-    const scheduleData = [];
-    const purchaseCost = asset.purchase_cost || 0;
-    const residualValue = asset.residual_value || (purchaseCost * 0.1);
-    const usefulLife = asset.useful_life || 5;
-    const purchaseDate = asset.purchase_date ? new Date(asset.purchase_date) : new Date();
-    
-    let bookValue = purchaseCost;
-    let accumulatedDep = 0;
-
-    for (let year = 0; year <= usefulLife; year++) {
-      const currentDate = new Date(purchaseDate);
-      currentDate.setFullYear(currentDate.getFullYear() + year);
-      
-      let annualDep = 0;
-      if (year < usefulLife) {
-        switch (depreciationMethod) {
-          case 'straight-line':
-            annualDep = (purchaseCost - residualValue) / usefulLife;
-            break;
-          case 'reducing-balance':
-            const rate = 1 - Math.pow(residualValue / purchaseCost, 1 / usefulLife);
-            annualDep = bookValue * rate;
-            break;
-          case 'declining-balance':
-            const decliningRate = 2 / usefulLife;
-            annualDep = bookValue * decliningRate;
-            break;
-          default:
-            annualDep = (purchaseCost - residualValue) / usefulLife;
-        }
-      }
-
-      const depForYear = Math.min(annualDep, bookValue - residualValue);
-      accumulatedDep += depForYear;
-      bookValue = Math.max(residualValue, purchaseCost - accumulatedDep);
-      
-      scheduleData.push({
-        year: currentDate.getFullYear(),
-        period: `Year ${year + 1}`,
-        startValue: year === 0 ? purchaseCost : scheduleData[year - 1]?.bookValue || purchaseCost,
-        annualDepreciation: Math.round(annualDep),
-        accumulatedDepreciation: Math.round(Math.min(accumulatedDep, purchaseCost - residualValue)),
-        bookValue: Math.round(bookValue),
-        isFullyDepreciated: bookValue <= residualValue || year >= usefulLife - 1
-      });
-    }
-
-    setSchedule(scheduleData);
   };
 
   const handleRecalculate = async (asset) => {
-    const newDep = calculateDepreciation(asset);
     try {
-      await axios.put(`/api/finance/depreciation/${asset.id}`, {
-        purchase_cost: newDep.purchaseCost,
-        residual_value: newDep.residualValue,
-        useful_life: newDep.usefulLife,
-        depreciation_method: depreciationMethod,
-        accumulated_depreciation: newDep.accumulatedDepreciation,
-        current_value: newDep.bookValue,
-        type: 'depreciation',
-        notes: `Recalculated using ${depreciationMethod}`
-      });
-      setAssets(prev => prev.map(item => item.id === asset.id ? { ...item, current_value: newDep.bookValue, depreciation: newDep } : item));
-      toast.success(t.recalcSuccess || 'Depreciation recalculated');
+      const response = await axios.post('/api/finance/depreciation/calculate', { assetId: asset.id, period });
+      setCalculation(response.data.data);
     } catch (error) {
       toast.error(error.response?.data?.message || t.adjustmentError || 'Failed to recalculate depreciation');
     }
   };
 
-  const handleManualAdjustment = async () => {
-    if (!selectedAsset) return;
-    
+  const handlePostDepreciation = async () => {
+    if (!selectedAsset || !calculation || !window.confirm(t.postConfirmation)) return;
     try {
-      const updatedAsset = {
-        ...selectedAsset,
-        annual_depreciation: formData.annual_depreciation,
-        accumulated_depreciation: formData.accumulated_depreciation,
-        book_value: formData.book_value,
-        depreciation_notes: formData.adjustment_notes,
-        depreciation_adjustment_date: formData.adjustment_date
-      };
-      
-      await axios.put(`/api/finance/depreciation/${selectedAsset.id}`, updatedAsset);
-      
-      setAssets(prev => prev.map(a => 
-        a.id === selectedAsset.id ? { ...a, ...updatedAsset, depreciation: calculateDepreciation(updatedAsset) } : a
-      ));
-      
-      toast.success(t.adjustmentSuccess || 'Depreciation adjusted successfully');
-      setShowModal(false);
+      await axios.post('/api/finance/depreciation/post', { assetId: selectedAsset.id, period });
+      setCalculation(null);
+      const updatedAssets = await fetchAssets();
+      const updatedAsset = updatedAssets.find((asset) => asset.id === selectedAsset.id) || selectedAsset;
+      setSelectedAsset(updatedAsset);
+      await generateDepreciationSchedule(updatedAsset);
+      toast.success(t.recalcSuccess);
     } catch (error) {
-      toast.error(t.adjustmentError || 'Failed to adjust depreciation');
+      toast.error(error.response?.data?.message || t.adjustmentError);
     }
   };
 
@@ -270,17 +153,18 @@ const FinanceDepreciation = () => {
       'Asset Name': asset.name,
       'Department': asset.department_name || '',
       'Category': asset.category_name || '',
-      'Purchase Cost': asset.purchase_cost || 0,
-      'Residual Value': asset.residual_value || 0,
-      'Useful Life (Years)': asset.useful_life || 0,
-      'Depreciation Method': asset.depreciation_method || 'Straight-line',
-      'Annual Depreciation': asset.depreciation?.annualDepreciation || 0,
-      'Accumulated Depreciation': asset.depreciation?.accumulatedDepreciation || 0,
-      'Book Value': asset.depreciation?.bookValue || 0,
-      'Depreciation %': asset.depreciation?.depreciationPercentage || 0,
-      'Years Since Purchase': asset.depreciation?.yearsSincePurchase || 0,
-      'Years Remaining': asset.depreciation?.yearsRemaining || 0,
-      'Fully Depreciated': asset.depreciation?.isFullyDepreciated ? 'Yes' : 'No',
+      'Purchase Cost': asset.purchase_cost,
+      'Residual Value': asset.residual_value,
+      'Useful Life (Years)': asset.useful_life,
+      'Depreciation Method': asset.depreciation_method,
+      'Latest Period': asset.latestRecord?.period || '',
+      'Latest Period Depreciation': asset.depreciation?.annualDepreciation,
+      'Accumulated Depreciation': asset.depreciation?.accumulatedDepreciation,
+      'Book Value': asset.depreciation?.bookValue,
+      'Depreciation %': asset.depreciation?.depreciationPercentage,
+      'Years Since Purchase': asset.depreciation?.yearsSincePurchase,
+      'Years Remaining': asset.depreciation?.yearsRemaining,
+      'Fully Depreciated': asset.depreciation?.isFullyDepreciated === null ? '' : asset.depreciation?.isFullyDepreciated ? 'Yes' : 'No',
       'Status': asset.status || '',
       'Purchase Date': asset.purchase_date ? new Date(asset.purchase_date).toLocaleDateString() : ''
     }));
@@ -290,11 +174,6 @@ const FinanceDepreciation = () => {
     XLSX.utils.book_append_sheet(wb, ws, 'Depreciation');
     XLSX.writeFile(wb, 'depreciation_report.xlsx');
     toast.success(t.exportSuccess || 'Data exported successfully');
-  };
-
-  const closeFinancialYear = async () => {
-    // In real app, this would close the financial year and move depreciation forward
-    toast.info(t.closeYearInfo || 'Financial year closing would be processed here');
   };
 
   // Filtered assets
@@ -331,9 +210,13 @@ const FinanceDepreciation = () => {
 
   // Summary statistics
   const summary = useMemo(() => {
-    const totalCost = assets.reduce((sum, a) => sum + (a.purchase_cost || 0), 0);
-    const totalBookValue = assets.reduce((sum, a) => sum + (a.depreciation?.bookValue || 0), 0);
-    const totalDepreciation = assets.reduce((sum, a) => sum + (a.depreciation?.accumulatedDepreciation || 0), 0);
+    const sumKnownValues = (values) => {
+      const known = values.filter((value) => value !== null && value !== undefined && Number.isFinite(Number(value)));
+      return known.length === values.length && known.length ? known.reduce((sum, value) => sum + Number(value), 0) : null;
+    };
+    const totalCost = sumKnownValues(assets.map((asset) => asset.purchase_cost));
+    const totalBookValue = sumKnownValues(assets.map((asset) => asset.depreciation?.bookValue));
+    const totalDepreciation = sumKnownValues(assets.map((asset) => asset.depreciation?.accumulatedDepreciation));
     const fullyDepreciated = assets.filter(a => a.depreciation?.isFullyDepreciated).length;
     
     return {
@@ -342,7 +225,7 @@ const FinanceDepreciation = () => {
       totalDepreciation,
       fullyDepreciated,
       totalAssets: assets.length,
-      avgDepreciationRate: totalCost > 0 ? (totalDepreciation / totalCost) * 100 : 0
+      avgDepreciationRate: totalCost > 0 && totalDepreciation !== null ? (totalDepreciation / totalCost) * 100 : null
     };
   }, [assets]);
 
@@ -353,14 +236,14 @@ const FinanceDepreciation = () => {
       datasets: [
         {
           label: t.purchaseCost,
-          data: filteredAssets.slice(0, 15).map(a => a.purchase_cost || 0),
+          data: filteredAssets.slice(0, 15).map(a => a.purchase_cost),
           backgroundColor: isDark ? 'rgba(99, 179, 237, 0.8)' : 'rgba(43, 108, 176, 0.8)',
           borderColor: isDark ? '#63b3ed' : '#2b6cb0',
           borderWidth: 1
         },
         {
           label: t.bookValue,
-          data: filteredAssets.slice(0, 15).map(a => a.depreciation?.bookValue || 0),
+          data: filteredAssets.slice(0, 15).map(a => a.depreciation?.bookValue),
           backgroundColor: isDark ? 'rgba(104, 211, 145, 0.8)' : 'rgba(56, 161, 105, 0.8)',
           borderColor: isDark ? '#68d391' : '#38a169',
           borderWidth: 1
@@ -373,7 +256,9 @@ const FinanceDepreciation = () => {
         label: t.depreciationByCategory,
         data: [...new Set(assets.map(a => a.category_name).filter(Boolean))].map(cat => {
           const catAssets = assets.filter(a => a.category_name === cat);
-          return catAssets.reduce((sum, a) => sum + (a.depreciation?.accumulatedDepreciation || 0), 0);
+          return catAssets.every((asset) => asset.depreciation?.accumulatedDepreciation !== null && asset.depreciation?.accumulatedDepreciation !== undefined)
+            ? catAssets.reduce((sum, asset) => sum + asset.depreciation.accumulatedDepreciation, 0)
+            : null;
         }),
         backgroundColor: ['#63b3ed', '#68d391', '#f6ad55', '#fc8181', '#b794f4', '#81e6d9'],
         borderColor: isDark ? '#1e2d45' : '#ffffff',
@@ -381,21 +266,10 @@ const FinanceDepreciation = () => {
       }]
     },
     depreciationTrend: {
-      labels: Array.from({ length: 10 }, (_, i) => {
-        const date = new Date();
-        date.setFullYear(date.getFullYear() - i);
-        return date.getFullYear();
-      }).reverse(),
+      labels: [...new Set(periodRecords.map((record) => record.period))].sort(),
       datasets: [{
-        label: t.annualDepreciation,
-        data: Array.from({ length: 10 }, (_, i) => {
-          const year = new Date().getFullYear() - i;
-          const yearAssets = assets.filter(a => {
-            const purchaseYear = a.purchase_date ? new Date(a.purchase_date).getFullYear() : 0;
-            return purchaseYear <= year;
-          });
-          return yearAssets.reduce((sum, a) => sum + (a.depreciation?.annualDepreciation || 0), 0);
-        }).reverse(),
+        label: t.periodDepreciation,
+        data: [...new Set(periodRecords.map((record) => record.period))].sort().map((recordPeriod) => periodRecords.filter((record) => record.period === recordPeriod).reduce((sum, record) => sum + Number(record.depreciationAmount || 0), 0)),
         borderColor: isDark ? '#63b3ed' : '#2b6cb0',
         backgroundColor: isDark ? 'rgba(99, 179, 237, 0.1)' : 'rgba(43, 108, 176, 0.1)',
         fill: true,
@@ -869,9 +743,6 @@ const FinanceDepreciation = () => {
           <button style={styles.exportButton} onClick={exportToExcel}>
             📥 {t.exportExcel}
           </button>
-          <button style={styles.closeButton} onClick={closeFinancialYear}>
-            📅 {t.closeFinancialYear}
-          </button>
         </div>
       </div>
 
@@ -882,18 +753,18 @@ const FinanceDepreciation = () => {
           <div style={styles.statLabel}>{t.totalAssets}</div>
         </div>
         <div style={styles.statCard}>
-          <div style={styles.statNumber}>${summary.totalCost.toLocaleString()}</div>
+          <div style={styles.statNumber}>{displayMoney(summary.totalCost)}</div>
           <div style={styles.statLabel}>{t.totalPurchaseCost}</div>
         </div>
         <div style={styles.statCard}>
           <div style={{ ...styles.statNumber, color: '#48bb78' }}>
-            ${summary.totalBookValue.toLocaleString()}
+            {displayMoney(summary.totalBookValue)}
           </div>
           <div style={styles.statLabel}>{t.totalBookValue}</div>
         </div>
         <div style={styles.statCard}>
           <div style={{ ...styles.statNumber, color: '#fc8181' }}>
-            ${summary.totalDepreciation.toLocaleString()}
+            {displayMoney(summary.totalDepreciation)}
           </div>
           <div style={styles.statLabel}>{t.totalDepreciation}</div>
         </div>
@@ -904,7 +775,7 @@ const FinanceDepreciation = () => {
           <div style={styles.statLabel}>{t.fullyDepreciated}</div>
         </div>
         <div style={styles.statCard}>
-          <div style={styles.statNumber}>{summary.avgDepreciationRate.toFixed(1)}%</div>
+          <div style={styles.statNumber}>{summary.avgDepreciationRate === null ? t.notAvailable : `${summary.avgDepreciationRate.toFixed(1)}%`}</div>
           <div style={styles.statLabel}>{t.avgDepreciationRate}</div>
         </div>
       </div>
@@ -980,15 +851,6 @@ const FinanceDepreciation = () => {
           />
           {t.showFullyDepreciated}
         </label>
-        <select
-          style={styles.filterSelect}
-          value={depreciationMethod}
-          onChange={(e) => setDepreciationMethod(e.target.value)}
-        >
-          <option value="straight-line">{t.straightLine}</option>
-          <option value="reducing-balance">{t.reducingBalance}</option>
-          <option value="declining-balance">{t.decliningBalance}</option>
-        </select>
       </div>
 
       {/* Assets Table */}
@@ -999,7 +861,7 @@ const FinanceDepreciation = () => {
               <th style={styles.th}>{t.assetTag}</th>
               <th style={styles.th}>{t.name}</th>
               <th style={styles.th}>{t.purchaseCost}</th>
-              <th style={styles.th}>{t.annualDepreciation}</th>
+              <th style={styles.th}>{t.periodDepreciation}</th>
               <th style={styles.th}>{t.accumulatedDepreciation}</th>
               <th style={styles.th}>{t.bookValue}</th>
               <th style={styles.th}>{t.depreciationPct}</th>
@@ -1030,11 +892,11 @@ const FinanceDepreciation = () => {
                     <span style={styles.assetTag}>{asset.asset_tag}</span>
                   </td>
                   <td style={styles.td}>{asset.name}</td>
-                  <td style={styles.td}>${(asset.purchase_cost || 0).toLocaleString()}</td>
-                  <td style={styles.td}>${(asset.depreciation?.annualDepreciation || 0).toLocaleString()}</td>
-                  <td style={styles.td}>${(asset.depreciation?.accumulatedDepreciation || 0).toLocaleString()}</td>
+                  <td style={styles.td}>{displayMoney(asset.purchase_cost)}</td>
+                  <td style={styles.td}>{displayMoney(asset.depreciation?.annualDepreciation)}</td>
+                  <td style={styles.td}>{displayMoney(asset.depreciation?.accumulatedDepreciation)}</td>
                   <td style={styles.td}>
-                    <strong>${(asset.depreciation?.bookValue || 0).toLocaleString()}</strong>
+                    <strong>{displayMoney(asset.depreciation?.bookValue)}</strong>
                     <div style={styles.depreciationBar}>
                       <div style={{
                         ...styles.depreciationBarFill,
@@ -1044,9 +906,9 @@ const FinanceDepreciation = () => {
                       }} />
                     </div>
                   </td>
-                  <td style={styles.td}>{asset.depreciation?.depreciationPercentage || 0}%</td>
+                  <td style={styles.td}>{asset.depreciation?.depreciationPercentage === null ? t.notAvailable : `${asset.depreciation?.depreciationPercentage}%`}</td>
                   <td style={styles.td}>
-                    {asset.depreciation?.yearsSincePurchase || 0} {t.years}
+                    {asset.depreciation?.yearsSincePurchase ?? t.notAvailable} {asset.depreciation?.yearsSincePurchase === null ? '' : t.years}
                     {asset.depreciation?.isFullyDepreciated && (
                       <span style={{ color: '#fc8181', marginLeft: '6px' }}>🔴</span>
                     )}
@@ -1098,12 +960,6 @@ const FinanceDepreciation = () => {
               >
                 {t.depreciationSchedule}
               </button>
-              <button 
-                style={styles.modalTab}
-                onClick={() => setShowSchedule(!showSchedule)}
-              >
-                {t.manualAdjustment}
-              </button>
             </div>
 
             {/* Depreciation Details */}
@@ -1111,50 +967,50 @@ const FinanceDepreciation = () => {
               <div style={styles.infoGrid}>
                 <div style={styles.infoItem}>
                   <div style={styles.infoLabel}>{t.purchaseCost}</div>
-                  <div style={styles.infoValue}>${(selectedAsset.purchase_cost || 0).toLocaleString()}</div>
+                  <div style={styles.infoValue}>{displayMoney(selectedAsset.purchase_cost)}</div>
                 </div>
                 <div style={styles.infoItem}>
                   <div style={styles.infoLabel}>{t.residualValue}</div>
-                  <div style={styles.infoValue}>${(selectedAsset.residual_value || 0).toLocaleString()}</div>
+                  <div style={styles.infoValue}>{displayMoney(selectedAsset.residual_value)}</div>
                 </div>
                 <div style={styles.infoItem}>
                   <div style={styles.infoLabel}>{t.usefulLife}</div>
-                  <div style={styles.infoValue}>{selectedAsset.useful_life || 0} {t.years}</div>
+                  <div style={styles.infoValue}>{selectedAsset.useful_life ?? t.notAvailable}{selectedAsset.useful_life === null ? '' : ` ${t.years}`}</div>
                 </div>
                 <div style={styles.infoItem}>
                   <div style={styles.infoLabel}>{t.depreciationMethod}</div>
                   <div style={styles.infoValue}>{selectedAsset.depreciation_method || 'Straight-line'}</div>
                 </div>
                 <div style={styles.infoItem}>
-                  <div style={styles.infoLabel}>{t.annualDepreciation}</div>
-                  <div style={styles.infoValue}>${(selectedAsset.depreciation?.annualDepreciation || 0).toLocaleString()}</div>
+                  <div style={styles.infoLabel}>{t.periodDepreciation}</div>
+                  <div style={styles.infoValue}>{displayMoney(selectedAsset.depreciation?.annualDepreciation)}</div>
                 </div>
                 <div style={styles.infoItem}>
                   <div style={styles.infoLabel}>{t.accumulatedDepreciation}</div>
-                  <div style={styles.infoValue}>${(selectedAsset.depreciation?.accumulatedDepreciation || 0).toLocaleString()}</div>
+                  <div style={styles.infoValue}>{displayMoney(selectedAsset.depreciation?.accumulatedDepreciation)}</div>
                 </div>
                 <div style={styles.infoItem}>
                   <div style={styles.infoLabel}>{t.bookValue}</div>
                   <div style={{ ...styles.infoValue, color: '#48bb78' }}>
-                    ${(selectedAsset.depreciation?.bookValue || 0).toLocaleString()}
+                    {displayMoney(selectedAsset.depreciation?.bookValue)}
                   </div>
                 </div>
                 <div style={styles.infoItem}>
                   <div style={styles.infoLabel}>{t.yearsSincePurchase}</div>
-                  <div style={styles.infoValue}>{selectedAsset.depreciation?.yearsSincePurchase || 0} {t.years}</div>
+                  <div style={styles.infoValue}>{selectedAsset.depreciation?.yearsSincePurchase ?? t.notAvailable}{selectedAsset.depreciation?.yearsSincePurchase === null ? '' : ` ${t.years}`}</div>
                 </div>
                 <div style={styles.infoItem}>
                   <div style={styles.infoLabel}>{t.yearsRemaining}</div>
-                  <div style={styles.infoValue}>{selectedAsset.depreciation?.yearsRemaining || 0} {t.years}</div>
+                  <div style={styles.infoValue}>{selectedAsset.depreciation?.yearsRemaining ?? t.notAvailable}{selectedAsset.depreciation?.yearsRemaining === null ? '' : ` ${t.years}`}</div>
                 </div>
                 <div style={styles.infoItem}>
                   <div style={styles.infoLabel}>{t.depreciationPct}</div>
-                  <div style={styles.infoValue}>{selectedAsset.depreciation?.depreciationPercentage || 0}%</div>
+                  <div style={styles.infoValue}>{selectedAsset.depreciation?.depreciationPercentage === null ? t.notAvailable : `${selectedAsset.depreciation?.depreciationPercentage}%`}</div>
                 </div>
                 <div style={styles.infoItem}>
                   <div style={styles.infoLabel}>{t.status}</div>
                   <div style={styles.infoValue}>
-                    {selectedAsset.depreciation?.isFullyDepreciated ? 
+                    {selectedAsset.depreciation?.isFullyDepreciated === null ? t.notAvailable : selectedAsset.depreciation?.isFullyDepreciated ?
                       <span style={{ color: '#fc8181' }}>🔴 {t.fullyDepreciated}</span> : 
                       <span style={{ color: '#48bb78' }}>🟢 {t.active}</span>
                     }
@@ -1169,26 +1025,18 @@ const FinanceDepreciation = () => {
               </div>
 
               <div style={styles.modalActions}>
-                <button style={styles.buttonSecondary} onClick={() => {
-                  handleRecalculate(selectedAsset);
-                }}>
+                <label>{t.period}<input type="month" value={period} onChange={(event) => { setPeriod(event.target.value); setCalculation(null); }} /></label>
+                <button style={styles.buttonSecondary} onClick={() => handleRecalculate(selectedAsset)}>
                   🔄 {t.recalculate}
                 </button>
-                <button style={styles.buttonWarning} onClick={() => {
-                  setFormData({
-                    annual_depreciation: selectedAsset.depreciation?.annualDepreciation || 0,
-                    accumulated_depreciation: selectedAsset.depreciation?.accumulatedDepreciation || 0,
-                    book_value: selectedAsset.depreciation?.bookValue || 0,
-                    adjustment_notes: '',
-                    adjustment_date: new Date().toISOString().split('T')[0]
-                  });
-                }}>
-                  ✏️ {t.manualAdjustment}
-                </button>
+                {calculation && <button style={styles.buttonSuccess} onClick={handlePostDepreciation}>
+                  {t.postDepreciation}
+                </button>}
                 <button style={styles.buttonSuccess} onClick={() => setShowSchedule(!showSchedule)}>
                   📅 {t.viewSchedule}
                 </button>
               </div>
+              {calculation && <p role="status">{calculation.period}: {t.depreciationAmount} {Number(calculation.depreciationAmount).toLocaleString()} · {t.bookValue} {Number(calculation.closingBookValue).toLocaleString()}</p>}
             </div>
 
             {/* Depreciation Schedule */}
@@ -1246,7 +1094,13 @@ const FinanceDepreciation = () => {
 // Translations
 const englishTranslations = {
   depreciation: 'Depreciation View',
-  depreciationDesc: 'Track asset value loss over time with multiple depreciation methods',
+  depreciationDesc: 'Review recorded depreciation and calculate the configured method by period',
+  notAvailable: 'Not available',
+  period: 'Period',
+  periodDepreciation: 'Period Dep.',
+  depreciationAmount: 'Depreciation amount',
+  postDepreciation: 'Post depreciation',
+  postConfirmation: 'Post this depreciation period? This action updates the asset book value and creates an audit record.',
   totalAssets: 'Total Assets',
   totalPurchaseCost: 'Total Purchase Cost',
   totalBookValue: 'Total Book Value',
@@ -1306,7 +1160,13 @@ const englishTranslations = {
 
 const amharicTranslations = {
   depreciation: 'የእሴት መቀነስ እይታ',
-  depreciationDesc: 'በብዙ የእሴት መቀነስ ዘዴዎች የንብረት እሴት መቀነስን በጊዜ ሂደት ይከታተሉ',
+  depreciationDesc: 'የተመዘገበውን የእሴት ቅናሽ ይመልከቱ እና በጊዜ ክፍል የተዋቀረውን ዘዴ ያስሉ',
+  notAvailable: 'አይገኝም',
+  period: 'የጊዜ ክፍል',
+  periodDepreciation: 'የጊዜ ክፍል ቅናሽ',
+  depreciationAmount: 'የቅናሽ መጠን',
+  postDepreciation: 'ቅናሹን መዝግብ',
+  postConfirmation: 'ይህን የቅናሽ ጊዜ ክፍል ይመዝግቡ? ይህ እርምጃ የንብረቱን የመጽሐፍ ዋጋ ያዘምናል እና የኦዲት መዝገብ ይፈጥራል።',
   totalAssets: 'ጠቅላላ ንብረቶች',
   totalPurchaseCost: 'ጠቅላላ የግዢ ዋጋ',
   totalBookValue: 'ጠቅላላ የመጽሐፍ ዋጋ',

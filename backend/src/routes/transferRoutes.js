@@ -2,10 +2,14 @@ const express = require('express');
 const { sequelize, Transfer, Asset, Assignment, User, Department, AuditLog } = require('../models');
 const { Op } = require('sequelize');
 const { requireAuth, requireRole } = require('../middlewares/auth');
+const { resolveCollegeScope } = require('../middlewares/organizationScope');
 
 const router = express.Router();
 const canManageTransfers = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager')];
 const canRequestTransfers = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college')];
+const resolveIctTransferScope = (req, res, next) => req.user.role === 'ict_officer'
+  ? resolveCollegeScope(req, res, next)
+  : next();
 
 const generateTransferNumber = () => {
   const year = new Date().getFullYear();
@@ -187,7 +191,7 @@ router.get('/:id', requireAuth, requireRole('admin', 'ict_officer', 'store_manag
 });
 
 // Create transfer
-router.post('/', ...canRequestTransfers, async (req, res, next) => {
+router.post('/', ...canRequestTransfers, resolveIctTransferScope, async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
     const assetId = Number(req.body.assetId ?? req.body.asset_id);
@@ -225,6 +229,10 @@ router.post('/', ...canRequestTransfers, async (req, res, next) => {
       await transaction.rollback();
       return res.status(403).json({ success: false, message: 'Department access denied' });
     }
+    if (req.user.role === 'ict_officer' && Number(asset.collegeId) !== Number(req.organizationScope.collegeId)) {
+      await transaction.rollback();
+      return res.status(403).json({ success: false, message: 'Asset is outside your organization scope' });
+    }
 
     const blockedStatus = getTransferBlockedStatus(asset);
     if (blockedStatus) {
@@ -236,6 +244,10 @@ router.post('/', ...canRequestTransfers, async (req, res, next) => {
     if (!destination) {
       await transaction.rollback();
       return res.status(400).json({ success: false, message: 'Destination department not found' });
+    }
+    if (req.user.role === 'ict_officer' && Number(destination.collegeId) !== Number(req.organizationScope.collegeId)) {
+      await transaction.rollback();
+      return res.status(403).json({ success: false, message: 'Destination department is outside your organization scope' });
     }
     if (String(asset.department || '').trim() === destination.name && String(asset.location || '').trim() === String(newLocation).trim()) {
       await transaction.rollback();

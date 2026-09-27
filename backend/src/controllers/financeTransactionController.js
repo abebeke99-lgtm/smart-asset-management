@@ -1,3 +1,15 @@
+const listFinanceTransactions = async (req, res) => {
+  if (!['admin', 'finance'].includes(req.user.role)) {
+    return res.status(403).json({ success: false, message: 'Finance authorization required' });
+  }
+
+  return res.status(501).json({
+    success: false,
+    message: 'Financial transactions are unavailable: this system has no persisted financial transaction model or CRUD API.',
+  });
+};
+
+module.exports = { listFinanceTransactions };
 const { Asset, FinancialRecord, PurchaseOrder, PurchaseOrderItem, Department } = require('../models');
 
 const financeRoles = ['admin', 'finance'];
@@ -30,7 +42,7 @@ const toTransaction = (row) => ({
   notes: row.notes || '',
 });
 
-const listFinanceTransactions = async (req, res, next) => {
+const listFinanceTransactionsLegacy = async (req, res, next) => {
   try {
     if (!ensureFinance(req, res)) return;
 

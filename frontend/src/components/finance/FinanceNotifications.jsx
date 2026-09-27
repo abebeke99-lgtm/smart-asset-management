@@ -425,6 +425,13 @@ export default function FinanceNotifications() {
         const params =
           new URLSearchParams();
 
+        params.set("page", String(page));
+        params.set("limit", String(PAGE_SIZE));
+
+        if (search.trim()) {
+          params.set("search", search.trim());
+        }
+
         if (filters.status) {
           params.set(
             "status",
@@ -471,7 +478,6 @@ export default function FinanceNotifications() {
           )
         );
 
-        setPage(1);
       } catch (err) {
         setNotifications([]);
 
@@ -490,11 +496,12 @@ export default function FinanceNotifications() {
         setLoading(false);
       }
     },
-    [filters]
+    [filters, page, search]
   );
 
   useEffect(() => {
-    loadNotifications();
+    const timer = setTimeout(loadNotifications, 250);
+    return () => clearTimeout(timer);
   }, [loadNotifications]);
 
   const filteredNotifications =
@@ -524,25 +531,10 @@ export default function FinanceNotifications() {
 
   const totalPages = Math.max(
     1,
-    Math.ceil(
-      filteredNotifications.length /
-        PAGE_SIZE
-    )
+    Math.ceil(stats.total / PAGE_SIZE)
   );
 
-  const paginatedNotifications =
-    useMemo(() => {
-      const start =
-        (page - 1) * PAGE_SIZE;
-
-      return filteredNotifications.slice(
-        start,
-        start + PAGE_SIZE
-      );
-    }, [
-      filteredNotifications,
-      page,
-    ]);
+  const paginatedNotifications = filteredNotifications;
 
   useEffect(() => {
     if (page > totalPages) {
@@ -1896,10 +1888,10 @@ export default function FinanceNotifications() {
                   to{" "}
                   {Math.min(
                     page * PAGE_SIZE,
-                    filteredNotifications.length
+                    stats.total
                   )}{" "}
                   of{" "}
-                  {filteredNotifications.length}{" "}
+                  {stats.total}{" "}
                   notifications
                 </span>
 

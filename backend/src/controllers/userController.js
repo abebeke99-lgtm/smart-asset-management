@@ -3,6 +3,7 @@ const path = require('path');
 const { Op } = require('sequelize');
 const { User, Department, AuditLog } = require('../models');
 const bcrypt = require('bcryptjs');
+const { findCollegeScopeForUser } = require('../middlewares/organizationScope');
 const { saveProfilePhoto, validateProfilePhoto, buildPublicFileUrl } = require('../utils/uploadUtils');
 
 const roles = ['admin', 'ict_officer', 'college', 'finance', 'store_manager', 'maintenance', 'infrastructure', 'staff', 'student'];
@@ -33,6 +34,7 @@ const getAllUsers = async (req, res) => {
     const where = {};
     if (req.user.role === 'college' && req.query.department && req.query.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
     if (req.user.role === 'college') where.department = req.user.department;
+    if (req.user.role === 'store_manager') where.collegeId = Number(req.organizationScope?.collegeId ?? req.user.collegeId ?? req.user.college_id);
     else if (req.query.department) where.department = req.query.department;
     if (req.query.role) where.role = req.query.role;
     if (req.query.active !== undefined) where.active = req.query.active === 'true';
@@ -55,6 +57,10 @@ const getUserById = async (req, res) => {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     if (req.user.role === 'college' && user.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
+    if (req.user.role === 'store_manager') {
+      const scope = await findCollegeScopeForUser(req.user);
+      if (!scope?.collegeId || Number(user.collegeId) !== Number(scope.collegeId)) return res.status(404).json({ success: false, message: 'User not found' });
+    }
     res.json({ success: true, message: 'User retrieved successfully', data: safeUser(user) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

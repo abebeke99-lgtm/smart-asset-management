@@ -30,6 +30,14 @@ const normalize = (item) => {
 };
 const normalizeStatus = (status) => String(status || '').trim().toLowerCase().replace(/\s+/g, '-');
 const displayStatus = (status) => ({ 'pending': 'Pending', 'approved': 'Approved', 'assigned': 'Assigned', 'in-progress': 'In Progress', 'waiting-for-parts': 'Waiting for Parts', 'testing': 'Testing', 'completed': 'Completed', 'rejected': 'Rejected', 'cancelled': 'Cancelled' }[status] || status);
+const periodStart = (period) => {
+  const days = { today: 1, '7days': 7, '30days': 30, '90days': 90 }[period];
+  if (!days) return null;
+  const start = new Date();
+  start.setDate(start.getDate() - days);
+  start.setHours(0, 0, 0, 0);
+  return start;
+};
 const allowedTransitions = {
   pending: ['approved', 'rejected', 'cancelled'],
   approved: ['assigned', 'rejected', 'cancelled'],
@@ -48,8 +56,11 @@ const getAllMaintenance = async (req, res, next) => {
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
     const where = {}; 
     const assetWhere = req.infrastructureScope ? infrastructureAssetWhere : undefined;
+    const createdAfter = periodStart(String(req.query.period || '').toLowerCase());
+    if (createdAfter) where.createdAt = { [Op.gte]: createdAfter };
     if (req.query.status) where.status = normalizeStatus(req.query.status); 
     if (req.query.priority) where.priority = String(req.query.priority).trim().toLowerCase();
+    if (req.query.department) where['$Asset.department$'] = String(req.query.department).trim();
     if (req.query.search) {
       const search = String(req.query.search).trim();
       if (search) where[Op.or] = [
@@ -93,6 +104,51 @@ const getInfrastructureMaintenanceAssets = async (req, res, next) => {
   } catch (error) { return next(error); }
 };
 
+const getMaintenanceHistory = async (req, res, next) => {
+  try {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+    const where = {};
+    const assetWhere = req.user.role === 'college'
+      ? { department: req.user.department }
+      : (req.user.collegeId ? { collegeId: req.user.collegeId } : undefined);
+    if (req.query.action) where.actionType = String(req.query.action).trim().toLowerCase();
+    if (req.query.status) where.newStatus = normalizeStatus(req.query.status);
+    const search = String(req.query.search || '').trim();
+    if (search) where[Op.or] = [
+      { description: { [Op.like]: `%${search}%` } },
+      { actionType: { [Op.like]: `%${search}%` } },
+      { '$Asset.name$': { [Op.like]: `%${search}%` } },
+      { '$Asset.assetCode$': { [Op.like]: `%${search}%` } },
+      { '$User.fullName$': { [Op.like]: `%${search}%` } },
+      ...(Number.isInteger(Number(search)) ? [{ id: Number(search) }, { maintenanceId: Number(search) }] : []),
+    ];
+    const { count, rows } = await MaintenanceHistory.findAndCountAll({
+      where,
+      include: [
+        { model: Asset, attributes: ['id', 'name', 'assetCode', 'department', 'collegeId'], ...(assetWhere ? { where: assetWhere, required: true } : {}) },
+        { model: User, attributes: ['id', 'username', 'fullName'] },
+        { model: Maintenance, attributes: ['id', 'title', 'status'], required: false },
+      ],
+      order: [['actionDate', 'DESC'], ['id', 'DESC']],
+      limit,
+      offset: (page - 1) * limit,
+      distinct: true,
+    });
+    res.json({
+      success: true,
+      data: rows.map((item) => ({
+        ...item.toJSON(),
+        assetName: item.Asset?.name || '',
+        assetTag: item.Asset?.assetCode || '',
+        actorName: item.User?.fullName || item.User?.username || 'System',
+        maintenanceTitle: item.Maintenance?.title || '',
+      })),
+      pagination: { page, limit, total: count, pages: Math.max(1, Math.ceil(count / limit)) },
+    });
+  } catch (error) { next(error); }
+};
+
 const createMaintenance = async (req, res, next) => {
   try { 
     const { asset_id, title, problem, description, priority = 'medium', requested_date, preferred_repair_date } = req.body;
@@ -112,6 +168,7 @@ const createMaintenance = async (req, res, next) => {
     const duplicate = await Maintenance.findOne({ where: { assetId: asset_id, requestedBy: req.user.id, status: { [Op.in]: ['pending', 'approved', 'assigned', 'in-progress'] } } });
     if (duplicate) return res.status(409).json({ success: false, message: 'An open maintenance request already exists for this asset' });
     const item = await Maintenance.create({ assetId: asset_id, requestedBy: req.user.id, title: requestTitle, description: requestDescription, priority: normalizedPriority });
+    await MaintenanceHistory.create({ assetId: asset.id, maintenanceId: item.id, userId: req.user.id, actionType: 'created', actionDate: new Date(), newStatus: item.status, description: 'Maintenance request created', details: { requestId: item.id } });
     const technicians = await User.findAll({ where: { active: true, role: 'maintenance' }, attributes: ['id'] });
     try {
       await createEventNotification({ event: 'maintenance_created', eventKey: `maintenance_created:${item.id}`, entityId: item.id, userIds: technicians.map((user) => user.id), senderId: req.user.id, assetId: asset.id, type: 'maintenance', title: 'Maintenance request created', message: `Maintenance request ${item.id} was created for ${asset.name || asset.assetCode}.` });
@@ -145,6 +202,19 @@ const updateMaintenance = async (req, res, next) => {
       updates.status = nextStatus;
     }
     await item.update(updates);
+    await MaintenanceHistory.create({
+      assetId: item.assetId,
+      maintenanceId: item.id,
+      userId: req.user.id,
+      actionType: updates.status && updates.status !== previousStatus ? 'status_changed' : 'updated',
+      actionDate: new Date(),
+      previousStatus,
+      newStatus: updates.status || previousStatus,
+      description: updates.status && updates.status !== previousStatus
+        ? `Maintenance status changed from ${displayStatus(previousStatus)} to ${displayStatus(updates.status)}`
+        : 'Maintenance request updated',
+      details: { requestId: item.id },
+    });
     if (updates.status && updates.status !== previousStatus) await AuditLog.create({ userId: req.user.id, action: 'MAINTENANCE_STATUS_CHANGED', entity: `maintenance:${item.id}`, details: JSON.stringify({ requestId: item.id, assetId: item.assetId, previousStatus: displayStatus(previousStatus), newStatus: displayStatus(updates.status), comment: req.body.comment || req.body.notes || '' }) });
     if (updates.status && updates.status !== previousStatus) {
       try { await createEventNotification({ event: 'maintenance_status_changed', eventKey: `maintenance_status_changed:${item.id}:${updates.status}`, entityId: item.id, userIds: [item.requestedBy, item.assignedTo].filter(Boolean), senderId: req.user.id, assetId: item.assetId, type: 'maintenance', title: `Maintenance ${displayStatus(updates.status)}`, message: `Maintenance request ${item.id} is now ${displayStatus(updates.status)}.` }); } catch (notificationError) { console.error('Maintenance status notification failed:', notificationError.message); }
@@ -180,6 +250,7 @@ const setStatus = async (req, res, next) => {
       await asset.update({ status: activeAssignment ? 'assigned' : 'available' }, { transaction });
     }
     await AuditLog.create({ userId: req.user.id, action: 'MAINTENANCE_STATUS_CHANGED', entity: `maintenance:${item.id}`, details: JSON.stringify({ requestId: item.id, assetId: item.assetId, previousStatus: displayStatus(previousStatus), newStatus: displayStatus(status), comment: req.body.comment || req.body.reason || req.body.notes || '', completion: status === 'completed' ? { resolution: req.body.resolution || '', partsUsed: req.body.parts_used || '' } : undefined }) }, { transaction });
+    await MaintenanceHistory.create({ assetId: asset.id, maintenanceId: item.id, userId: req.user.id, actionType: status === 'completed' ? 'completed' : 'status_changed', actionDate: new Date(), previousStatus, newStatus: status, description: req.body.comment || req.body.reason || req.body.notes || `Maintenance status changed from ${displayStatus(previousStatus)} to ${displayStatus(status)}`, details: { requestId: item.id } }, { transaction });
     await transaction.commit();
     try { await createEventNotification({ event: 'maintenance_status_changed', eventKey: `maintenance_status_changed:${item.id}:${status}`, entityId: item.id, userIds: [item.requestedBy, item.assignedTo].filter(Boolean), senderId: req.user.id, assetId: item.assetId, type: 'maintenance', title: `Maintenance ${displayStatus(status)}`, message: `Maintenance request ${item.id} is now ${displayStatus(status)}.` }); } catch (notificationError) { console.error('Maintenance status notification failed:', notificationError.message); }
     res.json({ success: true, data: normalize(item) });
@@ -194,12 +265,53 @@ const start = (req, res, next) => { req.body.status = 'in-progress'; return setS
 const complete = (req, res, next) => { req.body.status = 'completed'; return setStatus(req, res, next); };
 const assign = (req, res, next) => { req.body.assigned_to = req.body.technician_id || req.body.assigned_to; req.body.status = 'assigned'; return updateMaintenance(req, res, next); };
 const removeMaintenance = async (req, res, next) => { try { if (!canManage(req)) return res.status(403).json({ success: false, message: 'Maintenance authorization required' }); const item = await Maintenance.findByPk(req.params.id); if (!item) return res.status(404).json({ success: false, message: 'Maintenance request not found' }); if (req.infrastructureScope && !(await Asset.findOne({ where: { id: item.assetId, ...infrastructureAssetWhere } }))) return res.status(403).json({ success: false, message: 'Maintenance record is outside the infrastructure scope' }); await item.destroy(); res.json({ success: true }); } catch (error) { next(error); } };
-const dashboard = async (req, res, next) => { try { const items = await Maintenance.findAll(); const byStatus = items.reduce((acc, item) => { acc[item.status] = (acc[item.status] || 0) + 1; return acc; }, {}); res.json({ success: true, data: { total: items.length, pending: byStatus.pending || 0, active: (byStatus.assigned || 0) + (byStatus['in-progress'] || 0), completed: byStatus.completed || 0, byStatus } }); } catch (error) { next(error); } };
+const dashboard = async (req, res, next) => {
+  try {
+    const createdAfter = periodStart(String(req.query.period || '').toLowerCase());
+    const where = createdAfter ? { createdAt: { [Op.gte]: createdAfter } } : {};
+    const assetScope = req.user.role === 'college' ? { department: req.user.department } : undefined;
+    const [items, assets] = await Promise.all([
+      Maintenance.findAll({
+        attributes: ['status'],
+        where,
+        include: [{ model: Asset, attributes: [], ...(assetScope ? { where: assetScope, required: true } : {}) }],
+        raw: true,
+      }),
+      Asset.findAll({ where: assetScope, attributes: ['condition', 'status'], raw: true }),
+    ]);
+    const byStatus = items.reduce((acc, item) => {
+      const status = normalizeStatus(item.status);
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+    const countAssetField = (field) => assets.reduce((acc, asset) => {
+      const value = String(asset[field] || 'Unspecified').trim();
+      acc[value] = (acc[value] || 0) + 1;
+      return acc;
+    }, {});
+    const assetStatus = countAssetField('status');
+    const assetCondition = countAssetField('condition');
+    res.json({
+      success: true,
+      data: {
+        total: items.length,
+        pending: byStatus.pending || 0,
+        active: (byStatus.assigned || 0) + (byStatus['in-progress'] || 0),
+        completed: byStatus.completed || 0,
+        byStatus,
+        totalAssets: assets.length,
+        assetsUnderMaintenance: assets.filter((asset) => ['under-maintenance', 'under maintenance', 'in_maintenance'].includes(String(asset.status || '').toLowerCase())).length,
+        assetStatus,
+        assetCondition,
+      },
+    });
+  } catch (error) { next(error); }
+};
 
 const repairInclude = [
   { model: Asset, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'category', 'department', 'location', 'status', 'condition', 'warrantyExpiry'] },
   { model: User, as: 'Technician', attributes: ['id', 'username', 'fullName'] },
-  { model: MaintenanceRepair, required: false, attributes: ['id', 'diagnosis', 'repairAction', 'partsUsed', 'totalCost', 'completionDate', 'notes'] },
+  { model: MaintenanceRepair, required: true, attributes: ['id', 'diagnosis', 'repairAction', 'partsUsed', 'totalCost', 'completionDate', 'notes'] },
 ];
 const repairScope = (req) => req.user.collegeId ? { '$Asset.collegeId$': req.user.collegeId } : {};
 const normalizeRepair = (item) => {
@@ -227,14 +339,17 @@ const getRepairHistory = async (req, res, next) => {
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
     const where = {};
+    const createdAfter = periodStart(String(req.query.period || '').toLowerCase());
+    const repairWhere = createdAfter ? { createdAt: { [Op.gte]: createdAfter } } : {};
     if (req.query.status) where.status = normalizeStatus(req.query.status);
     if (req.query.priority) where.priority = String(req.query.priority).toLowerCase();
     if (req.query.search) {
       const search = String(req.query.search).trim();
       where[Op.or] = [{ title: { [Op.like]: `%${search}%` } }, { description: { [Op.like]: `%${search}%` } }, { '$Asset.name$': { [Op.like]: `%${search}%` } }, { '$Asset.assetCode$': { [Op.like]: `%${search}%` } }, { '$Technician.fullName$': { [Op.like]: `%${search}%` } }, ...(Number.isInteger(Number(search)) ? [{ id: Number(search) }] : [])];
     }
-    const { count, rows } = await Maintenance.findAndCountAll({ where: { ...where, ...repairScope(req) }, include: repairInclude, distinct: true, order: [['updatedAt', 'DESC']], limit, offset: (page - 1) * limit });
-    const statsRows = await Maintenance.findAll({ where: { ...where, ...repairScope(req) }, include: [{ model: Asset, attributes: [], required: true }, { model: MaintenanceRepair, required: false, attributes: ['totalCost'] }], attributes: ['status'], raw: true });
+    const scopedRepairInclude = repairInclude.map((item) => item.model === MaintenanceRepair ? { ...item, where: repairWhere } : item);
+    const { count, rows } = await Maintenance.findAndCountAll({ where: { ...where, ...repairScope(req) }, include: scopedRepairInclude, distinct: true, order: [['updatedAt', 'DESC']], limit, offset: (page - 1) * limit });
+    const statsRows = await Maintenance.findAll({ where: { ...where, ...repairScope(req) }, include: [{ model: Asset, attributes: [], required: true }, { model: MaintenanceRepair, required: true, attributes: ['totalCost'], where: repairWhere }], attributes: ['status'], raw: true });
     const stats = statsRows.reduce((result, row) => { const status = normalizeStatus(row.status); result.totalRepairs += 1; result.totalRepairCost += Number(row['MaintenanceRepairs.totalCost'] || 0); if (status === 'completed') result.completedRepairs += 1; if (['assigned', 'in-progress', 'waiting-for-parts', 'testing'].includes(status)) result.activeRepairs += 1; if (status === 'waiting-for-parts') result.awaitingParts += 1; return result; }, { totalRepairs: 0, activeRepairs: 0, completedRepairs: 0, awaitingParts: 0, totalRepairCost: 0 });
     res.json({ success: true, records: rows.map(normalizeRepair), total: count, page, limit, totalPages: Math.max(1, Math.ceil(count / limit)), stats });
   } catch (error) { next(error); }
@@ -287,4 +402,4 @@ const updateRepair = async (req, res, next) => {
   } catch (error) { await transaction.rollback(); next(error); }
 };
 
-module.exports = { getAllMaintenance, getInfrastructureMaintenance, getInfrastructureMaintenanceAssets, createMaintenance, updateMaintenance, setStatus, approve, reject, start, complete, assign, removeMaintenance, dashboard, getRepairHistory, getRepairDetails, createRepair, updateRepair };
+module.exports = { getAllMaintenance, getInfrastructureMaintenance, getInfrastructureMaintenanceAssets, getMaintenanceHistory, createMaintenance, updateMaintenance, setStatus, approve, reject, start, complete, assign, removeMaintenance, dashboard, getRepairHistory, getRepairDetails, createRepair, updateRepair };

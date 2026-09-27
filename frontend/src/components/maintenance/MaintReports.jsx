@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../../contexts/UiContext';
-import { getMaintenance, getMaintenanceDashboard, getTechnicians, getInventory } from '../../services/maintenanceApi';
+import { getMaintenance, getMaintenanceDashboard, getRepairHistory, getTechnicians } from '../../services/maintenanceApi';
 
 const MaintReports = () => {
   const [reportType, setReportType] = useState('summary');
   const [dashboard, setDashboard] = useState({});
   const [maintenance, setMaintenance] = useState([]);
+  const [repairReport, setRepairReport] = useState({ records: [], stats: {} });
   const [technicians, setTechnicians] = useState([]);
-  const [inventory, setInventory] = useState([]);
+  const [period, setPeriod] = useState('');
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -19,23 +21,23 @@ const MaintReports = () => {
   useEffect(() => {
     (async () => {
       try {
-        const [dash, list, techList, inv] = await Promise.all([
-          getMaintenanceDashboard(),
-          getMaintenance({ limit: 300 }),
+        const [dash, list, repairs, techList] = await Promise.all([
+          getMaintenanceDashboard(period),
+          getMaintenance({ limit: 100, period, search: search.trim() || undefined }),
+          getRepairHistory({ limit: 100, period, search: search.trim() || undefined }),
           getTechnicians(),
-          getInventory(),
         ]);
         setDashboard(dash);
         setMaintenance(list);
+        setRepairReport({ records: repairs.records || [], stats: repairs.stats || {} });
         setTechnicians(techList);
-        setInventory(inv);
       } catch (err) {
         setError(err && err.message ? err.message : 'Failed to load reports data');
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [period, search]);
 
   const reports = useMemo(() => {
     const now = Date.now();
@@ -43,28 +45,32 @@ const MaintReports = () => {
     const overdue = maintenance.filter((m) => m.statusRaw !== 'completed' && m.statusRaw !== 'rejected' && now - (new Date(m.updated || m.created || now)).getTime() > staleMs).length;
     const byStatus = dashboard.byStatus || {};
     const total = dashboard.total ?? maintenance.length;
-    const topName = technicians[0] ? (technicians[0].fullName || technicians[0].username) : '';
+    const repairStats = repairReport.stats || {};
+    const repairCount = Number(repairStats.totalRepairs || repairReport.records.length || 0);
+    const totalRepairCost = Number(repairStats.totalRepairCost || 0);
+    const topTechnician = technicians
+      .map((technician) => ({ name: technician.fullName || technician.username, tasks: maintenance.filter((item) => item.technician === (technician.fullName || technician.username)).length }))
+      .sort((left, right) => right.tasks - left.tasks)[0];
     return {
       summary: {
         total,
         completed: byStatus.completed ?? maintenance.filter((m) => m.statusRaw === 'completed').length,
         pending: byStatus.pending ?? maintenance.filter((m) => m.statusRaw === 'pending' || m.statusRaw === 'approved').length,
         overdue,
-        avgCost: 0,
+        avgCost: repairCount ? (totalRepairCost / repairCount).toFixed(2) : 'Not available',
+        assetCondition: dashboard.assetCondition || {},
+        assetStatus: dashboard.assetStatus || {},
       },
       workOrders: {
-        count: total,
-        completed: byStatus.completed ?? 0,
-        inProgress: (byStatus['in-progress'] ?? 0) + (byStatus['waiting-for-parts'] ?? 0) + (byStatus.testing ?? 0),
-        pending: byStatus.pending ?? 0,
+        supported: false,
       },
-      repairs: { count: maintenance.filter((m) => ['in-progress', 'waiting-for-parts', 'testing', 'completed'].includes(m.statusRaw)).length, cost: 0, avgTime: 0 },
-      preventive: { scheduled: maintenance.filter((m) => m.statusRaw === 'approved' || m.statusRaw === 'pending').length, completed: byStatus.completed ?? 0, upcoming: maintenance.filter((m) => m.statusRaw === 'approved').length },
-      technicians: { top: topName || 'No technicians', tasks: topName ? maintenance.filter((m) => m.technician === topName).length : 0, rating: 0 },
-      spareParts: { issued: inventory.reduce((sum, p) => sum + (Number(p.damaged_quantity) || 0) + (Number(p.issued_quantity) || 0), 0), reserved: inventory.reduce((sum, p) => sum + (Number(p.reserved_quantity) || 0), 0), lowStock: inventory.filter((p) => p.is_low_stock || p.stock_status === 'Low Stock' || p.stock_status === 'Out of Stock').length },
-      downtime: { total: 0, avgPerAsset: 0 },
+      repairs: { count: repairCount, cost: totalRepairCost.toFixed(2) },
+      preventive: { supported: false },
+      technicians: { top: topTechnician?.name || 'No assigned technicians', tasks: topTechnician?.tasks || 0, rating: 'Not available' },
+      spareParts: { supported: false },
+      downtime: { supported: false },
     };
-  }, [dashboard, maintenance, technicians, inventory]);
+  }, [dashboard, maintenance, repairReport, technicians]);
 
   const exportCSV = () => {
     const rows = maintenance.map((m) => ({
@@ -113,6 +119,17 @@ const MaintReports = () => {
         <button onClick={exportCSV} style={{ padding: '10px 20px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>📥 Export CSV</button>
       </div>
 
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px' }}>
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search maintenance or repairs..." style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${cardBorder}`, minWidth: '240px' }} />
+        <select value={period} onChange={(event) => setPeriod(event.target.value)} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${cardBorder}` }}>
+          <option value="">All time</option>
+          <option value="today">Today</option>
+          <option value="7days">Last 7 days</option>
+          <option value="30days">Last 30 days</option>
+          <option value="90days">Last 90 days</option>
+        </select>
+      </div>
+
       {error && <div style={{ padding: '12px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem' }}>Error: {error}</div>}
 
       {/* Report Type Selector */}
@@ -133,32 +150,29 @@ const MaintReports = () => {
           {statCard(reports.summary.completed, 'Completed', `${reports.summary.total ? ((reports.summary.completed / reports.summary.total) * 100).toFixed(0) : 0}%`, '#10b981')}
           {statCard(reports.summary.pending, 'Pending', `${reports.summary.total ? ((reports.summary.pending / reports.summary.total) * 100).toFixed(0) : 0}%`, '#fbbf24')}
           {statCard(reports.summary.overdue, 'Overdue', `${reports.summary.total ? ((reports.summary.overdue / reports.summary.total) * 100).toFixed(0) : 0}%`, '#ef4444')}
-          {statCard(`$${reports.summary.avgCost}`, 'Avg Cost', 'No cost data tracked yet', '#06b6d4')}
+          {statCard(reports.summary.avgCost === 'Not available' ? reports.summary.avgCost : `$${reports.summary.avgCost}`, 'Avg Repair Cost', reports.summary.avgCost === 'Not available' ? 'No persisted repair costs in this period' : 'From repair records', '#06b6d4')}
+          {statCard(Object.keys(reports.summary.assetCondition).length ? Object.entries(reports.summary.assetCondition).map(([condition, count]) => `${condition}: ${count}`).join(', ') : 'No asset records', 'Asset Condition', 'From persisted Asset.condition', '#8b5cf6')}
+          {statCard(Object.keys(reports.summary.assetStatus).length ? Object.entries(reports.summary.assetStatus).map(([status, count]) => `${status}: ${count}`).join(', ') : 'No asset records', 'Asset Status', 'From persisted Asset.status', '#0f766e')}
         </div>
       )}
 
       {reportType === 'workOrders' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-          {statCard(reports.workOrders.count, 'Total Work Orders', 'All Time')}
-          {statCard(reports.workOrders.completed, 'Completed', 'Work orders done', '#10b981')}
-          {statCard(reports.workOrders.inProgress, 'In Progress', 'Works ongoing', '#2864E8')}
-          {statCard(reports.workOrders.pending, 'Pending', 'Awaiting approval/start', '#fbbf24')}
+          {statCard('Not available', 'Work Orders', 'No Maintenance-owned persisted work-order API', '#64748b')}
         </div>
       )}
 
       {reportType === 'repairs' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
           {statCard(reports.repairs.count, 'Total Repairs', 'In progress & completed', '#2864E8')}
-          {statCard(`$${reports.repairs.cost}`, 'Total Cost', 'No cost data tracked yet', '#06b6d4')}
-          {statCard(`${reports.repairs.avgTime}h`, 'Avg Repair Time', 'No time tracking available', '#fbbf24')}
+          {statCard(`$${reports.repairs.cost}`, 'Total Cost', 'From persisted repair records', '#06b6d4')}
+          {statCard('Not available', 'Avg Repair Time', 'No persisted repair duration source', '#fbbf24')}
         </div>
       )}
 
       {reportType === 'preventive' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-          {statCard(reports.preventive.scheduled, 'Scheduled', 'Approved/pending work', '#2864E8')}
-          {statCard(reports.preventive.completed, 'Completed', 'All completed work', '#10b981')}
-          {statCard(reports.preventive.upcoming, 'Upcoming', 'Approved, not started', '#fbbf24')}
+          {statCard('Not available', 'Preventive Schedules', 'No Maintenance-owned persisted schedule source', '#64748b')}
         </div>
       )}
 
@@ -166,23 +180,19 @@ const MaintReports = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
           {statCard(technicians.length, 'Active Technicians', 'Users in maintenance role', '#2864E8')}
           {statCard(reports.technicians.top, 'Top Performer', `${reports.technicians.tasks} assigned tasks`, '#10b981')}
-          {statCard(`${reports.technicians.rating}`, 'Avg Rating', 'No rating data tracked', '#fbbf24')}
+          {statCard(reports.technicians.rating, 'Avg Rating', 'No persisted rating data', '#fbbf24')}
         </div>
       )}
 
       {reportType === 'spareParts' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-          {statCard(inventory.length, 'Tracked Parts', 'From store inventory', '#2864E8')}
-          {statCard(reports.spareParts.issued, 'Issued', 'Damaged/issued quantities', '#fbbf24')}
-          {statCard(reports.spareParts.reserved, 'Reserved', 'Reserved quantities', '#06b6d4')}
-          {statCard(reports.spareParts.lowStock, 'Low/Out of Stock', 'Needs restock', '#ef4444')}
+          {statCard('Not available', 'Spare Parts', 'No Maintenance-scoped parts report source', '#64748b')}
         </div>
       )}
 
       {reportType === 'downtime' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-          {statCard(`${reports.downtime.total}h`, 'Total Downtime', 'No downtime tracking available', '#ef4444')}
-          {statCard(`${reports.downtime.avgPerAsset}h`, 'Avg Per Asset', 'No downtime tracking available', '#fbbf24')}
+          {statCard('Not available', 'Downtime', 'No persisted downtime tracking source', '#64748b')}
         </div>
       )}
     </div>

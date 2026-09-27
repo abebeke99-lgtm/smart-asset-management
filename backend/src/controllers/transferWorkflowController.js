@@ -11,7 +11,18 @@ const transitions = {
   Received: [], Rejected: [], Cancelled: [],
 };
 const number = () => `TR-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
-const scopeWhere = (req) => !req.organizationScope ? {} : req.organizationScope.departmentId ? { [Op.or]: [{ sourceDepartmentId: req.organizationScope.departmentId }, { destinationDepartmentId: req.organizationScope.departmentId }] } : { [Op.or]: [{ sourceCollegeId: req.organizationScope.collegeId }, { destinationCollegeId: req.organizationScope.collegeId }] };
+const scopeWhere = (req) => {
+  if (!req.organizationScope) return {};
+  if (req.organizationScope.departmentId) {
+    return {
+      [Op.and]: [
+        { [Op.or]: [{ sourceDepartmentId: req.organizationScope.departmentId }, { destinationDepartmentId: req.organizationScope.departmentId }] },
+        ...(req.organizationScope.collegeId ? [{ [Op.or]: [{ sourceCollegeId: req.organizationScope.collegeId }, { destinationCollegeId: req.organizationScope.collegeId }] }] : []),
+      ],
+    };
+  }
+  return { [Op.or]: [{ sourceCollegeId: req.organizationScope.collegeId }, { destinationCollegeId: req.organizationScope.collegeId }] };
+};
 const normalize = (item) => {
   const data = item.toJSON();
   const asset = item.Asset || {};
@@ -72,7 +83,9 @@ const createTransfer = async (req, res, next) => {
   try {
     const { asset_id: assetId, destination_department_id: destinationDepartmentId, destination_location: destinationLocation, reason } = req.body;
     if (!assetId || !destinationDepartmentId || !String(destinationLocation || '').trim() || !String(reason || '').trim()) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Asset, destination department, destination location, and reason are required' }); }
-    const assetWhere = req.organizationScope.departmentId ? { id: assetId, departmentId: req.organizationScope.departmentId } : { id: assetId, collegeId: req.organizationScope.collegeId };
+    const assetWhere = req.organizationScope.departmentId
+      ? { id: assetId, departmentId: req.organizationScope.departmentId, ...(req.organizationScope.collegeId ? { collegeId: req.organizationScope.collegeId } : {}) }
+      : { id: assetId, collegeId: req.organizationScope.collegeId };
     const asset = await Asset.findOne({ where: assetWhere, transaction, lock: transaction.LOCK.UPDATE });
     if (!asset) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Asset is outside your organization scope' }); }
     if (['disposed', 'missing', 'under-maintenance', 'in-maintenance'].includes(String(asset.status).toLowerCase())) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Asset is not eligible for transfer' }); }

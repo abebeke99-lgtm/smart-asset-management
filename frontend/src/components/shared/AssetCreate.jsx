@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import { QRCodeCanvas } from 'qrcode.react';
+import apiClient from '../../services/apiClient';
 
 const AssetCreate = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isIctCreate = location.pathname.startsWith('/ict/assets/create');
   const { language, theme } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [departments, setDepartments] = useState([]);
@@ -37,18 +40,24 @@ const AssetCreate = () => {
   useEffect(() => {
     const fetchOptions = async () => {
       try {
-        const [deptsRes, catsRes] = await Promise.all([
-          axios.get('/api/departments'),
-          axios.get('/api/categories')
-        ]);
-        setDepartments(deptsRes.data.departments || []);
-        setCategories(catsRes.data.categories || []);
+        if (isIctCreate) {
+          const { data } = await apiClient.get('/api/ict/assets/options');
+          setDepartments(Array.isArray(data?.departments) ? data.departments : []);
+          setCategories(Array.isArray(data?.categories) ? data.categories : []);
+        } else {
+          const [deptsRes, catsRes] = await Promise.all([
+            axios.get('/api/departments'),
+            axios.get('/api/categories')
+          ]);
+          setDepartments(deptsRes.data.departments || []);
+          setCategories(catsRes.data.categories || []);
+        }
       } catch (error) {
         toast.error('Failed to load options');
       }
     };
     fetchOptions();
-  }, []);
+  }, [isIctCreate]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -57,7 +66,7 @@ const AssetCreate = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const assetId = String(formData.asset_id || '').trim();
-    if (!assetId) {
+    if (!assetId && !isIctCreate) {
       toast.error(t.assetIdRequired);
       return;
     }
@@ -69,7 +78,9 @@ const AssetCreate = () => {
         status: 'Available',
         purchase_cost: Number(formData.purchase_cost || 0)
       };
-      const response = await axios.post('/api/assets', payload);
+      const response = isIctCreate
+        ? await apiClient.post('/api/ict/assets', payload)
+        : await axios.post('/api/assets', payload);
       const savedAsset = response.data?.data || response.data?.asset || response.data;
       const savedCode = savedAsset?.assetCode || savedAsset?.asset_tag || savedAsset?.asset_id || '';
       const savedDigitalId = savedAsset?.digitalId || savedAsset?.digital_id || '';
@@ -80,7 +91,7 @@ const AssetCreate = () => {
       toast.success(t.assetCreated);
       setGeneratedQR(savedCode);
       setCreatedDigitalId(savedDigitalId);
-      setTimeout(() => navigate('/admin/assets'), 2000);
+      setTimeout(() => navigate(isIctCreate ? '/ict/assets' : '/admin/assets'), 2000);
     } catch (error) {
       toast.error(error.response?.data?.message || t.createError);
     } finally {
@@ -110,7 +121,7 @@ const AssetCreate = () => {
         <p style={styles.subtitle}>{t.createAssetDesc}</p>
         <form onSubmit={handleSubmit}>
           <div style={styles.grid}>
-            <div><label style={styles.label}>{t.assetId} *</label><input type="text" name="asset_id" style={styles.input} value={formData.asset_id} onChange={handleChange} required placeholder="AST-000123" /></div>
+            <div><label style={styles.label}>{t.assetId}{!isIctCreate && ' *'}</label><input type="text" name="asset_id" style={styles.input} value={formData.asset_id} onChange={handleChange} required={!isIctCreate} placeholder={isIctCreate ? 'Leave blank to generate' : 'AST-000123'} /></div>
             <div><label style={styles.label}>{t.name} *</label><input type="text" name="name" style={styles.input} value={formData.name} onChange={handleChange} required /></div>
             <div><label style={styles.label}>{t.serialNumber}</label><input type="text" name="serial_number" style={styles.input} value={formData.serial_number} onChange={handleChange} /></div>
             <div><label style={styles.label}>{t.category} *</label><select name="category_id" style={styles.select} value={formData.category_id} onChange={handleChange} required><option value="">{t.selectCategory}</option>{categories.map(cat => (<option key={cat.id} value={cat.id}>{cat.name}</option>))}</select></div>

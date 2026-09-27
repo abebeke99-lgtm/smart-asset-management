@@ -3,30 +3,37 @@ const { getDashboard, getHistory, getInventory, getLowStock, getAvailableAssets,
 const { createStockAdjustment, createReceipt } = require('../controllers/inventoryController');
 const verification = require('../controllers/verificationController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
+const College = require('../models/College');
 
 const router = express.Router();
 
-const ensureStoreScope = (req, res, next) => {
+const ensureStoreScope = async (req, res, next) => {
   if (!req.user) return res.status(401).json({ success: false, message: 'Authentication required' });
-  const collegeId = Number(req.user.collegeId ?? req.user.college_id ?? 1);
-  req.organizationScope = {
-    collegeId,
-    college: { id: collegeId, name: 'Store College' },
-    departmentId: null,
-    department: null,
-  };
-  return next();
+  try {
+    const assignedCollegeId = req.user.collegeId ?? req.user.college_id;
+    let collegeId = Number(assignedCollegeId);
+    if (assignedCollegeId === undefined || assignedCollegeId === null || assignedCollegeId === '') {
+      const colleges = await College.findAll({ attributes: ['id'], order: [['id', 'ASC']], limit: 2 });
+      if (colleges.length !== 1) return res.status(403).json({ success: false, message: 'Store Manager college scope is not configured' });
+      collegeId = Number(colleges[0].id);
+    }
+    if (!Number.isSafeInteger(collegeId) || collegeId <= 0) return res.status(403).json({ success: false, message: 'Store Manager college scope is not configured' });
+    req.organizationScope = { collegeId, college: { id: collegeId }, departmentId: null, department: null };
+    return next();
+  } catch (error) {
+    return next(error);
+  }
 };
 
 router.get('/dashboard', requireAuth, requireRole('store_manager'), getDashboard);
-router.get('/history', requireAuth, requireRole('store_manager'), getHistory);
-router.get('/inventory', requireAuth, requireRole('store_manager'), getInventory);
-router.get('/available-assets', requireAuth, requireRole('store_manager'), getAvailableAssets);
+router.get('/history', requireAuth, requireRole('store_manager'), ensureStoreScope, getHistory);
+router.get('/inventory', requireAuth, requireRole('store_manager'), ensureStoreScope, getInventory);
+router.get('/available-assets', requireAuth, requireRole('store_manager'), ensureStoreScope, getAvailableAssets);
 router.get('/low-stock', requireAuth, requireRole('store_manager'), getLowStock);
 router.get('/stock-adjustments', requireAuth, requireRole('store_manager'), getStockAdjustments);
 router.post('/stock-adjustments', requireAuth, requireRole('store_manager'), createStockAdjustment);
-router.get('/receive', requireAuth, requireRole('store_manager'), getReceipts);
-router.post('/receive', requireAuth, requireRole('store_manager'), createReceipt);
+router.get('/receive', requireAuth, requireRole('store_manager'), ensureStoreScope, getReceipts);
+router.post('/receive', requireAuth, requireRole('store_manager'), ensureStoreScope, createReceipt);
 router.get('/verification', requireAuth, requireRole('store_manager'), ensureStoreScope, verification.listSessions);
 router.post('/verification', requireAuth, requireRole('store_manager'), ensureStoreScope, verification.createSession);
 router.get('/verification/:id', requireAuth, requireRole('store_manager'), ensureStoreScope, verification.getSession);

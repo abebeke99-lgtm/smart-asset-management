@@ -1,4 +1,4 @@
-const { sequelize, Asset, FinancialRecord, DepreciationRecord, CapitalizationRecord, AuditLog, User, Department, PurchaseOrder, Invoice, Payment, InventoryTransaction, Budget, FiscalYear, FundSource, College } = require('../models');
+const { sequelize, Asset, FinancialRecord, DepreciationRecord, CapitalizationRecord, AuditLog, User, Department, PurchaseOrder, Invoice, Payment, Budget, FiscalYear, FundSource, College } = require('../models');
 const { Op } = require('sequelize');
 const { summarizeBudget, cents } = require('../services/budgetService');
 const depreciationService = require('../services/depreciationService');
@@ -97,15 +97,15 @@ const buildValuationFilters = async () => {
 const getFinanceDashboardFilters = async (req, res, next) => {
   try {
     if (!ensureFinance(req, res)) return;
-    const [departments, categories, statuses, years] = await Promise.all([
+    const [departments, categories, statuses, assets] = await Promise.all([
       Department.findAll({ attributes: ['id', 'name'], order: [['name', 'ASC']] }),
       Asset.findAll({ attributes: ['category'], group: ['category'], order: [['category', 'ASC']], raw: true }),
       Asset.findAll({ attributes: ['status'], group: ['status'], order: [['status', 'ASC']], raw: true }),
-      DepreciationRecord.findAll({ attributes: ['period'], where: { status: 'POSTED' }, group: ['period'], order: [['period', 'ASC']], raw: true }),
+      Asset.findAll({ attributes: ['purchaseDate'], where: { purchaseDate: { [Op.ne]: null } }, raw: true }),
     ]);
 
-    const financialYears = [...new Set(years
-      .map((row) => row.purchaseDate ? new Date(row.purchaseDate).getFullYear() : null)
+    const financialYears = [...new Set(assets
+      .map((asset) => asset.purchaseDate ? new Date(asset.purchaseDate).getFullYear() : null)
       .filter((value) => Number.isInteger(value) && value > 2000))]
       .sort((a, b) => b - a)
       .map((year) => ({ value: String(year), label: String(year) }));
@@ -184,9 +184,23 @@ const getFinanceDashboard = async (req, res, next) => {
       order: [['purchaseDate', 'DESC'], ['id', 'DESC']],
     });
 
+    const assetIds = assets.map((asset) => asset.id);
+    const [depreciationRecords, financialRecords] = assetIds.length ? await Promise.all([
+      DepreciationRecord.findAll({ where: { assetId: { [Op.in]: assetIds }, status: 'POSTED' }, order: [['period', 'DESC'], ['id', 'DESC']] }),
+      FinancialRecord.findAll({ where: { assetId: { [Op.in]: assetIds } }, order: [['createdAt', 'DESC'], ['id', 'DESC']] }),
+    ]) : [[], []];
+    const latestDepreciationByAsset = new Map();
+    depreciationRecords.forEach((record) => { if (!latestDepreciationByAsset.has(record.assetId)) latestDepreciationByAsset.set(record.assetId, record); });
+    const latestFinancialByAsset = new Map();
+    financialRecords.forEach((record) => { if (!latestFinancialByAsset.has(record.assetId)) latestFinancialByAsset.set(record.assetId, record); });
+
     const totalAssetCost = assets.reduce((sum, asset) => sum + money(asset.purchasePrice), 0);
     const currentBookValue = assets.reduce((sum, asset) => sum + money(asset.currentValue), 0);
-    const accumulatedDepreciation = assets.reduce((sum, asset) => sum + Math.max(0, money(asset.purchasePrice) - money(asset.currentValue)), 0);
+    const accumulatedDepreciation = assets.reduce((sum, asset) => {
+      const storedDepreciation = latestDepreciationByAsset.get(asset.id)?.accumulatedDepreciation
+        ?? latestFinancialByAsset.get(asset.id)?.depreciationAmount;
+      return sum + money(storedDepreciation);
+    }, 0);
     const activeAssets = assets.filter((asset) => !['disposed', 'inactive', 'retired'].includes(normalizeStatus(asset.status))).length;
     const assetsUnderMaintenance = assets.filter((asset) => ['under-maintenance', 'in-maintenance', 'maintenance'].includes(normalizeStatus(asset.status))).length;
     const disposedAssets = assets.filter((asset) => ['disposed', 'retired'].includes(normalizeStatus(asset.status))).length;
@@ -243,18 +257,22 @@ const listValuation = async (req, res, next) => {
     const department = req.query.department || req.query.departmentId || '';
     const category = req.query.category || '';
     const status = req.query.status || '';
+    const condition = req.query.condition || '';
     const valuationStatus = String(req.query.valuationStatus || req.query.valuation_status || '').trim();
     const dateFrom = req.query.dateFrom || req.query.date_from || '';
     const dateTo = req.query.dateTo || req.query.date_to || '';
     const page = Math.max(1, parseInt(req.query.page || '1', 10));
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
-    const sort = req.query.sort || 'id';
+    const requestedSort = String(req.query.sort || 'assetCode');
+    const sortableFields = ['assetCode', 'name', 'category', 'status', 'condition', 'purchaseDate', 'purchasePrice', 'currentValue', 'createdAt', 'id'];
+    const sort = requestedSort === 'assetTag' ? 'assetCode' : sortableFields.includes(requestedSort) ? requestedSort : 'assetCode';
     const direction = String(req.query.direction || 'ASC').toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
 
     const where = {};
     if (department) where.departmentId = Number(department);
     if (category) where.category = category;
     if (status) where.status = status;
+    if (condition) where.condition = condition;
     if (dateFrom || dateTo) {
       where.purchaseDate = {};
       if (dateFrom) where.purchaseDate[Op.gte] = new Date(`${dateFrom}T00:00:00.000Z`);
@@ -298,7 +316,7 @@ const listValuation = async (req, res, next) => {
     const startIndex = (currentPage - 1) * limit;
     const paginatedAssets = filteredAssets.slice(startIndex, startIndex + limit).map(normalizeAsset);
     const filters = await buildValuationFilters();
-    const summary = getValuationSummary(paginatedAssets);
+    const summary = getValuationSummary(filteredAssets.map(normalizeAsset));
 
     res.json({
       success: true,
@@ -366,13 +384,15 @@ const updateValuation = async (req, res, next) => {
   try {
     const asset = await Asset.findByPk(req.params.id, { transaction: tx, lock: tx.LOCK.UPDATE });
     if (!asset) { await tx.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
-    const purchaseCost = Number(req.body.purchase_cost ?? asset.purchasePrice ?? 0);
-    const additionalCosts = Number(req.body.additional_costs ?? 0);
-    const residualValue = Number(req.body.residual_value ?? 0);
-    const usefulLife = Number(req.body.useful_life ?? 5);
-    const accumulatedDepreciation = Number(req.body.accumulated_depreciation ?? 0);
+    const previousRecord = await FinancialRecord.findOne({ where: { assetId: asset.id }, order: [['createdAt', 'DESC'], ['id', 'DESC']], transaction: tx });
+    const purchaseCost = Number(req.body.purchase_cost ?? previousRecord?.purchaseCost ?? asset.purchasePrice ?? 0);
+    const additionalCosts = Number(req.body.additional_costs ?? previousRecord?.additionalCosts ?? 0);
+    const residualValue = Number(req.body.residual_value ?? previousRecord?.residualValue ?? 0);
+    const usefulLife = Number(req.body.useful_life ?? previousRecord?.usefulLife ?? 5);
+    const accumulatedDepreciation = Number(req.body.accumulated_depreciation ?? previousRecord?.depreciationAmount ?? 0);
     const currentValue = Number(req.body.book_value ?? req.body.current_value ?? asset.currentValue ?? purchaseCost);
-    const method = String(req.body.depreciation_method || 'straight-line').toLowerCase();
+    const method = String(req.body.depreciation_method || previousRecord?.depreciationMethod || 'straight-line').toLowerCase();
+    const recordType = req.body.type || (req.body.accumulated_depreciation !== undefined ? 'depreciation' : previousRecord ? 'revaluation' : 'valuation');
     if (![purchaseCost, additionalCosts, residualValue, usefulLife, accumulatedDepreciation, currentValue].every(Number.isFinite)) { await tx.rollback(); return res.status(400).json({ success: false, message: 'Financial values must be valid numbers' }); }
     if (purchaseCost < 0 || additionalCosts < 0 || residualValue < 0 || accumulatedDepreciation < 0 || currentValue < 0) { await tx.rollback(); return res.status(400).json({ success: false, message: 'Financial values cannot be negative' }); }
     if (usefulLife <= 0 || !Number.isInteger(usefulLife)) { await tx.rollback(); return res.status(400).json({ success: false, message: 'Useful life must be a positive whole number' }); }
@@ -380,9 +400,10 @@ const updateValuation = async (req, res, next) => {
     if (accumulatedDepreciation > purchaseCost + additionalCosts - residualValue) { await tx.rollback(); return res.status(400).json({ success: false, message: 'Accumulated depreciation is too high' }); }
     if (currentValue < residualValue || currentValue > purchaseCost + additionalCosts) { await tx.rollback(); return res.status(400).json({ success: false, message: 'Book value must remain between residual value and total acquisition cost' }); }
     if (!['straight-line', 'declining-balance', 'reducing-balance'].includes(method)) { await tx.rollback(); return res.status(400).json({ success: false, message: 'Invalid depreciation method' }); }
+    if (!['valuation', 'revaluation', 'cost_addition', 'depreciation'].includes(recordType)) { await tx.rollback(); return res.status(400).json({ success: false, message: 'Invalid financial record type' }); }
     const previous = { purchaseCost: Number(asset.purchasePrice || 0), currentValue: Number(asset.currentValue || 0) };
     await asset.update({ purchasePrice: purchaseCost, currentValue }, { transaction: tx });
-    const record = await FinancialRecord.create({ assetId: asset.id, recordedBy: req.user.id, type: req.body.type || (req.body.accumulated_depreciation !== undefined ? 'depreciation' : 'valuation'), purchaseCost, additionalCosts, residualValue, usefulLife, depreciationMethod: method, depreciationAmount: accumulatedDepreciation, currentValue, notes: req.body.notes || req.body.depreciation_notes || '' }, { transaction: tx });
+    const record = await FinancialRecord.create({ assetId: asset.id, recordedBy: req.user.id, type: recordType, purchaseCost, additionalCosts, residualValue, usefulLife, depreciationMethod: method, depreciationAmount: accumulatedDepreciation, currentValue, notes: req.body.notes || req.body.depreciation_notes || '' }, { transaction: tx });
     await AuditLog.create({ userId: req.user.id, action: req.body.accumulated_depreciation !== undefined ? 'DEPRECIATION_RECALCULATED' : 'VALUATION_CHANGE', entity: `asset:${asset.id}`, details: JSON.stringify({ previous, next: { purchaseCost, currentValue, residualValue, usefulLife, accumulatedDepreciation, method }, recordId: record.id, reason: req.body.reason || req.body.notes || '' }) }, { transaction: tx });
     await tx.commit();
     asset.latestFinancialRecord = record;
@@ -472,22 +493,24 @@ const dateWhere = (field, filters) => {
 const amount = (value) => Number(value || 0);
 const reportYear = (value) => value ? String(new Date(value).getFullYear()) : '';
 
-const buildFinanceReportSummary = ({ assets, purchaseOrders, invoices, payments, transactions }) => ({
+const buildFinanceReportSummary = ({ assets, purchaseOrders, invoices, payments, accumulatedDepreciation = 0 }) => ({
   totalAssets: assets.length,
   acquisitionCost: assets.reduce((sum, row) => sum + amount(row.purchasePrice), 0),
   currentBookValue: assets.reduce((sum, row) => sum + amount(row.currentValue), 0),
-  accumulatedDepreciation: assets.reduce((sum, row) => sum + Math.max(0, amount(row.purchasePrice) - amount(row.currentValue)), 0),
+  accumulatedDepreciation,
   capitalAdditions: purchaseOrders.reduce((sum, row) => sum + amount(row.totalAmount), 0),
   purchases: purchaseOrders.reduce((sum, row) => sum + amount(row.totalAmount), 0),
   payments: payments.reduce((sum, row) => sum + amount(row.amount), 0),
-  transactions: transactions.reduce((sum, row) => sum + amount(row.quantity), 0),
-  procurementRecords: purchaseOrders.length, invoiceRecords: invoices.length, paymentRecords: payments.length, transactionRecords: transactions.length,
+  procurementRecords: purchaseOrders.length, invoiceRecords: invoices.length, paymentRecords: payments.length,
 });
 
 const listFinanceReports = async (req, res, next) => {
   try {
     if (!ensureFinance(req, res)) return;
     const filters = buildFinanceReportFilters(req.query);
+    if (filters.reportType === 'transactions') {
+      return res.status(501).json({ success: false, message: 'Financial transaction reports are unavailable: this system has no persisted financial transaction model.' });
+    }
     const assetWhere = { ...dateWhere('purchaseDate', filters) };
     if (filters.department) assetWhere.departmentId = Number(filters.department);
     if (filters.category) assetWhere.category = filters.category;
@@ -495,26 +518,41 @@ const listFinanceReports = async (req, res, next) => {
     const orderWhere = { ...dateWhere('orderDate', filters) };
     const invoiceWhere = { ...dateWhere('invoiceDate', filters) };
     const paymentWhere = { ...dateWhere('paymentDate', filters) };
-    const transactionWhere = { ...dateWhere('createdAt', filters) };
-    if (filters.department) { orderWhere.departmentId = Number(filters.department); invoiceWhere.departmentId = Number(filters.department); transactionWhere.departmentId = Number(filters.department); }
+    if (filters.department) { orderWhere.departmentId = Number(filters.department); invoiceWhere.departmentId = Number(filters.department); }
     if (filters.status) { orderWhere.status = filters.status; invoiceWhere.status = filters.status; paymentWhere.status = filters.status; }
-    const [assets, purchaseOrders, invoices, payments, transactions] = await Promise.all([
+    const [assets, purchaseOrders, invoices, payments] = await Promise.all([
       Asset.findAll({ where: assetWhere, include: [{ model: Department, as: 'DepartmentRecord', attributes: ['name'], required: false }], order: [['purchaseDate', 'DESC'], ['id', 'DESC']] }),
       PurchaseOrder.findAll({ where: orderWhere, include: [{ model: Department, as: 'DepartmentRecord', attributes: ['name'], required: false }], order: [['orderDate', 'DESC'], ['id', 'DESC']] }),
       Invoice.findAll({ where: invoiceWhere, include: [{ model: Department, as: 'DepartmentRecord', attributes: ['name'], required: false }], order: [['invoiceDate', 'DESC'], ['id', 'DESC']] }),
       Payment.findAll({ where: paymentWhere, order: [['paymentDate', 'DESC'], ['id', 'DESC']] }),
-      InventoryTransaction.findAll({ where: transactionWhere, order: [['createdAt', 'DESC'], ['id', 'DESC']] }),
     ]);
-    const assetRows = assets.map((asset) => { const department = asset.DepartmentRecord?.name || asset.department || 'Unassigned'; const purchaseCost = amount(asset.purchasePrice); const currentValue = amount(asset.currentValue); return { id: `asset-${asset.id}`, report_number: `AST-${asset.id}`, report_type: 'asset', report_date: asset.purchaseDate || asset.createdAt, financial_year: reportYear(asset.purchaseDate || asset.createdAt), department, category: asset.category || 'Uncategorized', status: asset.status || 'Active', total_assets: 1, acquisition_cost: purchaseCost, current_book_value: currentValue, accumulated_depreciation: Math.max(0, purchaseCost - currentValue), notes: asset.notes || '' }; });
+    const assetIds = assets.map((asset) => asset.id);
+    const [depreciationRecords, financialRecords] = assetIds.length ? await Promise.all([
+      DepreciationRecord.findAll({ where: { assetId: { [Op.in]: assetIds }, status: 'POSTED' }, order: [['period', 'DESC'], ['id', 'DESC']] }),
+      FinancialRecord.findAll({ where: { assetId: { [Op.in]: assetIds } }, order: [['createdAt', 'DESC'], ['id', 'DESC']] }),
+    ]) : [[], []];
+    const latestDepreciationByAsset = new Map();
+    depreciationRecords.forEach((record) => { if (!latestDepreciationByAsset.has(record.assetId)) latestDepreciationByAsset.set(record.assetId, record); });
+    const latestFinancialByAsset = new Map();
+    financialRecords.forEach((record) => { if (!latestFinancialByAsset.has(record.assetId)) latestFinancialByAsset.set(record.assetId, record); });
+    const storedDepreciationByAsset = new Map(assets.map((asset) => [asset.id, latestDepreciationByAsset.get(asset.id)?.accumulatedDepreciation ?? latestFinancialByAsset.get(asset.id)?.depreciationAmount ?? null]));
+    const accumulatedDepreciation = [...storedDepreciationByAsset.values()].reduce((sum, value) => sum + amount(value), 0);
+    const assetRows = assets.map((asset) => { const department = asset.DepartmentRecord?.name || asset.department || 'Unassigned'; const purchaseCost = amount(asset.purchasePrice); const currentValue = amount(asset.currentValue); return { id: `asset-${asset.id}`, report_number: `AST-${asset.id}`, report_type: 'asset', report_date: asset.purchaseDate || asset.createdAt, financial_year: reportYear(asset.purchaseDate || asset.createdAt), department, category: asset.category || 'Uncategorized', status: asset.status || 'Active', total_assets: 1, acquisition_cost: purchaseCost, current_book_value: currentValue, accumulated_depreciation: storedDepreciationByAsset.get(asset.id), notes: asset.notes || '' }; });
     const orderRows = purchaseOrders.map((order) => ({ id: `po-${order.id}`, report_number: order.poNumber, report_type: 'procurement', report_date: order.orderDate, financial_year: reportYear(order.orderDate), department: order.DepartmentRecord?.name || 'Unassigned', category: 'Procurement', status: order.status, purchases: amount(order.totalAmount), capital_additions: amount(order.totalAmount), notes: order.supplierName }));
     const invoiceRows = invoices.map((invoice) => ({ id: `invoice-${invoice.id}`, report_number: invoice.invoiceNumber, report_type: 'invoice', report_date: invoice.invoiceDate, financial_year: reportYear(invoice.invoiceDate), department: invoice.DepartmentRecord?.name || 'Unassigned', category: 'Invoice', status: invoice.status, purchases: amount(invoice.totalAmount), payments: amount(invoice.paidAmount), notes: invoice.supplierName }));
     const paymentRows = payments.map((payment) => ({ id: `payment-${payment.id}`, report_number: payment.paymentNumber, report_type: 'payment', report_date: payment.paymentDate, financial_year: reportYear(payment.paymentDate), department: 'Unassigned', category: 'Payment', status: payment.status, payments: amount(payment.amount), notes: payment.referenceNumber }));
-    const transactionRows = transactions.map((transaction) => ({ id: `transaction-${transaction.id}`, report_number: `TX-${transaction.id}`, report_type: 'transaction', report_date: transaction.createdAt, financial_year: reportYear(transaction.createdAt), department: 'Unassigned', category: transaction.type, status: transaction.type, transactions: amount(transaction.quantity), notes: transaction.reason || transaction.notes || '' }));
-    const allRows = filters.reportType === 'asset' || filters.reportType === 'valuation' ? assetRows : filters.reportType === 'procurement' ? orderRows : filters.reportType === 'payments' ? paymentRows : filters.reportType === 'transactions' ? transactionRows : [...assetRows, ...orderRows, ...invoiceRows, ...paymentRows, ...transactionRows];
+    const allRows = filters.reportType === 'asset' || filters.reportType === 'valuation' ? assetRows : filters.reportType === 'procurement' ? orderRows : filters.reportType === 'payments' ? paymentRows : [...assetRows, ...orderRows, ...invoiceRows, ...paymentRows];
     const search = String(req.query.search || '').trim().toLowerCase();
     const searchedRows = search ? allRows.filter((row) => Object.values(row).some((value) => String(value ?? '').toLowerCase().includes(search))) : allRows;
     const page = Math.max(1, Number(req.query.page) || 1); const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
-    const summary = buildFinanceReportSummary({ assets, purchaseOrders, invoices, payments, transactions });
+    const summarySources = filters.reportType === 'asset' || filters.reportType === 'valuation'
+      ? { assets, purchaseOrders: [], invoices: [], payments: [] }
+      : filters.reportType === 'procurement'
+        ? { assets: [], purchaseOrders, invoices: [], payments: [] }
+        : filters.reportType === 'payments'
+          ? { assets: [], purchaseOrders: [], invoices: [], payments }
+          : { assets, purchaseOrders, invoices, payments };
+    const summary = buildFinanceReportSummary({ ...summarySources, accumulatedDepreciation: filters.reportType === 'asset' || filters.reportType === 'valuation' || filters.reportType === 'comprehensive' ? accumulatedDepreciation : 0 });
     if (String(req.query.export).toLowerCase() === 'csv') { const columns = ['report_number', 'report_type', 'report_date', 'financial_year', 'department', 'category', 'status', 'acquisition_cost', 'current_book_value', 'purchases', 'payments', 'transactions']; const csv = [columns.join(','), ...searchedRows.map((row) => columns.map((column) => JSON.stringify(row[column] ?? '')).join(','))].join('\n'); res.type('text/csv').set('Content-Disposition', 'attachment; filename="financial-reports.csv"').send(csv); return; }
     res.json({ success: true, data: searchedRows.slice((page - 1) * limit, page * limit), summary, pagination: { page, limit, total: searchedRows.length, pages: Math.ceil(searchedRows.length / limit) }, departments: [...new Set(allRows.map((row) => row.department).filter(Boolean))], categories: [...new Set(allRows.map((row) => row.category).filter(Boolean))], financialYears: [...new Set(allRows.map((row) => row.financial_year).filter(Boolean))] });
   } catch (error) {
@@ -526,7 +564,10 @@ const listFinanceReports = async (req, res, next) => {
 const generateFinanceReport = async (req, res, next) => {
   try {
     if (!ensureFinance(req, res)) return;
-    buildFinanceReportFilters(req.body || {});
+    const filters = buildFinanceReportFilters(req.body || {});
+    if (filters.reportType === 'transactions') {
+      return res.status(501).json({ success: false, message: 'Financial transaction reports are unavailable: this system has no persisted financial transaction model.' });
+    }
     return res.status(200).json({ success: true, message: 'Financial report generated from current database transactions.', generatedAt: new Date().toISOString() });
   } catch (error) {
     next(error);

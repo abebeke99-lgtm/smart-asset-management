@@ -91,7 +91,7 @@ const createUserStore = (user) => ({
   },
 });
 
-const withStubs = async ({ user, onFetch, onSendMail }, run) => {
+const withStubs = async ({ user, onFetch, onSendMail, onCreateTransport }, run) => {
   const originalFindOne = User.findOne;
   const originalUpdate = User.update;
   const originalConfigFindByPk = Config.findByPk;
@@ -109,9 +109,12 @@ const withStubs = async ({ user, onFetch, onSendMail }, run) => {
     status: 200,
     text: async () => JSON.stringify({ SMSMessageData: { Recipients: [{ status: 'Success', messageId: 'smoke-1' }] } }),
   }));
-  nodemailer.createTransport = () => ({
-    sendMail: onSendMail || (async () => ({ messageId: 'mail-1' })),
-  });
+  nodemailer.createTransport = (options) => {
+    if (onCreateTransport) onCreateTransport(options);
+    return {
+      sendMail: onSendMail || (async () => ({ messageId: 'mail-1' })),
+    };
+  };
 
   try {
     return await run();
@@ -619,4 +622,128 @@ test('the emailed reset link points at the configured frontend and carries no se
   assert.equal(parsed.pathname, '/reset-password');
   assert.deepEqual([...parsed.searchParams.keys()], ['token'], 'only the token may appear in the link');
   assert.ok(!delivered.text.includes('password_hash'), 'no internal field may be exposed');
+});
+
+const SMTP_ENV_KEYS = ['SMTP_CONNECTION_TIMEOUT_MS', 'SMTP_GREETING_TIMEOUT_MS', 'SMTP_SOCKET_TIMEOUT_MS', 'SMTP_DNS_TIMEOUT_MS', 'SMTP_HARD_TIMEOUT_MS', 'FRONTEND_URL'];
+
+const withSmtpEnvironment = (overrides) => {
+  const previous = Object.fromEntries(SMTP_ENV_KEYS.map((key) => [key, process.env[key]]));
+  Object.entries(overrides).forEach(([key, value]) => {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = String(value);
+  });
+  return () => {
+    SMTP_ENV_KEYS.forEach((key) => {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    });
+  };
+};
+
+const requestEmailReset = (response, email = 'student@university.edu') => authController.forgotPassword(
+  { body: { email }, headers: {}, ip: '127.0.0.1' },
+  response,
+);
+
+test('the SMTP transport is created with connection, greeting and socket timeouts', async () => {
+  const user = createUser();
+  let transportOptions = null;
+
+  await withStubs({
+    user,
+    onCreateTransport: (options) => { transportOptions = options; },
+  }, async () => {
+    const response = createResponse();
+    await requestEmailReset(response);
+    assert.equal(response.statusCode, 200);
+  });
+
+  assert.ok(transportOptions, 'a transport must be created');
+  assert.ok(transportOptions.connectionTimeout > 0, 'connectionTimeout must be bounded');
+  assert.ok(transportOptions.greetingTimeout > 0, 'greetingTimeout must be bounded');
+  assert.ok(transportOptions.socketTimeout > 0, 'socketTimeout must be bounded');
+  assert.ok(transportOptions.dnsTimeout > 0, 'dnsTimeout must be bounded');
+});
+
+test('an SMTP send that never settles is abandoned instead of hanging the request', async () => {
+  const restoreEnvironment = withSmtpEnvironment({ SMTP_HARD_TIMEOUT_MS: 60 });
+  const user = createUser();
+
+  try {
+    await withStubs({ user, onSendMail: () => new Promise(() => {}) }, async () => {
+      const response = createResponse();
+      await requestEmailReset(response);
+
+      assert.equal(response.statusCode, 503);
+      assert.equal(response.body.success, false);
+    });
+  } finally {
+    restoreEnvironment();
+  }
+
+  assert.equal(user.resetTokenHash, null, 'a timed out delivery must not leave a usable token');
+  assert.equal(user.resetTokenExpiresAt, null);
+  assert.ok(user.resetTokenUsedAt, 'the abandoned token must be marked as consumed');
+});
+
+test('a rejected SMTP send rolls the reset token back', async () => {
+  const user = createUser();
+
+  await withStubs({
+    user,
+    onSendMail: async () => { throw new Error('535 authentication failed'); },
+  }, async () => {
+    const response = createResponse();
+    await requestEmailReset(response);
+
+    assert.equal(response.statusCode, 503);
+    assert.equal(response.body.success, false);
+  });
+
+  assert.equal(user.resetTokenHash, null, 'a failed delivery must invalidate the token');
+  assert.equal(user.resetTokenExpiresAt, null);
+  assert.ok(user.resetTokenUsedAt, 'the rolled back token must be marked as consumed');
+});
+
+test('a rolled back token cannot be used to reset the password', async () => {
+  const restoreEnvironment = withSmtpEnvironment({ SMTP_HARD_TIMEOUT_MS: 60 });
+  const user = createUser();
+  let capturedToken = null;
+
+  try {
+    await withStubs({
+      user,
+      onSendMail: async (options) => {
+        const link = options.html.match(/href="([^"]+)"/)[1].replace(/&amp;/g, '&');
+        capturedToken = new URL(link).searchParams.get('token');
+        throw new Error('SMTP unavailable');
+      },
+    }, async () => {
+      await requestEmailReset(createResponse());
+    });
+  } finally {
+    restoreEnvironment();
+  }
+
+  assert.ok(capturedToken, 'the link must have been built before the failure');
+
+  const store = createUserStore(user);
+  const originalFindOne = User.findOne;
+  const originalUpdate = User.update;
+  User.findOne = store.findOne;
+  User.update = store.update;
+
+  try {
+    const response = createResponse();
+    await authController.resetPassword(
+      { body: { token: capturedToken, password: 'Str0ng!Pass', confirmPassword: 'Str0ng!Pass' }, headers: {}, ip: '127.0.0.1' },
+      response,
+    );
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(user.password, 'stored-hash-placeholder', 'the password must be untouched');
+  } finally {
+    User.findOne = originalFindOne;
+    User.update = originalUpdate;
+  }
 });

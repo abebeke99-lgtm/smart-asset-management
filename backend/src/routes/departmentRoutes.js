@@ -3,6 +3,7 @@ const router = express.Router();
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const { Department, User, Asset, AuditLog, College, Location } = require('../models');
 const { Op } = require('sequelize');
+const { resolveCollegeScope } = require('../middlewares/organizationScope');
 
 const requireAdmin = [requireAuth, requireRole('admin')];
 
@@ -19,7 +20,7 @@ const buildScope = (req) => {
   const collegeId = organizationScope.collegeId || req.user?.collegeId;
   const departmentId = organizationScope.departmentId || req.user?.departmentId;
 
-  if (role === 'college' && collegeId) scope.collegeId = collegeId;
+  if (['college', 'store_manager'].includes(role) && collegeId) scope.collegeId = collegeId;
   if (role === 'department_head' && departmentId) scope.id = departmentId;
   return scope;
 };
@@ -87,7 +88,7 @@ router.get('/stats', requireAuth, async (req, res, next) => {
 });
 
 // Get all departments
-router.get('/', requireAuth, async (req, res, next) => {
+router.get('/', requireAuth, (req, res, next) => req.user.role === 'store_manager' ? resolveCollegeScope(req, res, next) : next(), async (req, res, next) => {
   try {
     const { search = '', page = '1', limit = '25' } = req.query;
     const currentPage = Math.max(1, Number.parseInt(page, 10) || 1);

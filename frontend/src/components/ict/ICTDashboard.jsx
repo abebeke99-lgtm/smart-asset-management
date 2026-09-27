@@ -1,22 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Bell, CheckCircle2, ClipboardList, Headphones, History, Package, RefreshCw, ShieldCheck, UserCheck, Wrench, Activity } from "lucide-react";
+import { Link } from "react-router-dom";
+import { AlertCircle, Bell, CheckCircle2, ClipboardList, Database, Headphones, History, Package, RefreshCw, ShieldCheck, UserCheck, Wrench, Activity } from "lucide-react";
 import { Bar, Doughnut } from "react-chartjs-2";
 import { ArcElement, BarElement, CategoryScale, Chart as ChartJS, Legend, LinearScale, Tooltip } from "chart.js";
 import apiClient from "../../services/apiClient";
 import "./ICTDashboard.css";
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Legend, Tooltip);
-
-const safeNumber = (value) => Number(value || 0);
-
-const getNestedArray = (payload, keys) => {
-  if (Array.isArray(payload)) return payload;
-  for (const key of keys) {
-    if (Array.isArray(payload?.[key])) return payload[key];
-  }
-  if (Array.isArray(payload?.data)) return payload.data;
-  return [];
-};
 
 const toDate = (value) => {
   if (!value) return null;
@@ -29,7 +19,7 @@ const formatDateTime = (value) => {
   return date ? date.toLocaleString() : "—";
 };
 
-const iconForActivity = { package: Package, "user-check": UserCheck, wrench: Wrench };
+const iconForActivity = { package: Package, "user-check": UserCheck, wrench: Wrench, history: History, activity: Activity };
 const displayLabel = (value) => String(value || "Unspecified").replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 const LoadingState = () => (
@@ -70,37 +60,16 @@ export default function ICTDashboard() {
 
     try {
       const response = await apiClient.get("/api/ict/dashboard");
-      const payload = response.data?.dashboard || response.data || {};
-      const maintenance = getNestedArray(payload.maintenance, ["maintenance", "data"]);
-      const requests = getNestedArray(payload.requests, ["requests", "data"]);
-      const rfidDevices = getNestedArray(payload.rfidDevices, ["devices", "data"]);
-      const assetSummary = payload.summary || payload.stats || {};
-      const maintenanceSummary = payload.maintenanceSummary || {};
-      const healthData = payload.health || { success: true, database: "connected" };
-      const apiStatus = healthData.success === false ? "Unavailable" : "Operational";
-      const databaseStatus = healthData.database === "connected" ? "Operational" : healthData.database === "unavailable" ? "Unavailable" : "Checking...";
-      const rfidStatus = payload.rfidStatus || (rfidDevices.length > 0 ? "Operational" : "Not configured");
-
-      setDashboard({
-        assetSummary,
-        totalAssets: safeNumber(assetSummary.total),
-        maintenance,
-        maintenanceSummary,
-        requests,
-        assetStatus: getNestedArray(payload.assetStatus, ["assetStatus"]),
-        assetCategories: getNestedArray(payload.assetCategories, ["assetCategories"]),
-        recentActivities: getNestedArray(payload.recentActivities, ["recentActivities"]),
-        notifications: getNestedArray(payload.notifications, ["notifications"]),
-        supportTickets: getNestedArray(payload.supportTickets, ["supportTickets"]),
-        incidents: getNestedArray(payload.incidents, ["incidents"]),
-        health: {
-          api: apiStatus,
-          database: databaseStatus,
-          rfid: rfidStatus,
-        },
-      });
+      const payload = response.data?.dashboard;
+      const requiredCounts = ["totalAssets", "assignedAssets", "availableAssets", "maintenanceAssets", "repairAssets", "pendingRequests", "openIncidents", "supportTickets", "expiringLicenses"];
+      const requiredArrays = ["assetStatus", "assetCategories", "recentActivity", "notifications", "requests"];
+      if (response.data?.success !== true || !payload) throw new Error(response.data?.message || "The dashboard response is incomplete.");
+      if (requiredCounts.some((key) => !Number.isFinite(Number(payload[key]))) || requiredArrays.some((key) => !Array.isArray(payload[key])) || !payload.operationalOverview || !payload.databaseStatus?.status) {
+        throw new Error("The dashboard response is incomplete. Please retry or contact support.");
+      }
+      setDashboard(payload);
     } catch (requestError) {
-      setError(requestError?.response?.data?.message || "Unable to load dashboard data. Please try again.");
+      setError(requestError?.response?.data?.message || requestError?.message || "Unable to load dashboard data. Please try again.");
       setDashboard(null);
     } finally {
       setLoading(false);
@@ -124,23 +93,23 @@ export default function ICTDashboard() {
 
   const metricCards = useMemo(() => {
     if (!dashboard) return [];
-    const summary = dashboard.assetSummary;
     return [
       { label: "Total ICT Assets", value: dashboard.totalAssets, tone: "blue", icon: Package },
-      { label: "Assigned Assets", value: summary.assigned || 0, tone: "green", icon: UserCheck },
-      { label: "Available Assets", value: summary.available || 0, tone: "cyan", icon: CheckCircle2 },
-      { label: "Maintenance", value: summary.maintenance || 0, tone: "amber", icon: Wrench },
-      { label: "Repair Assets", value: summary.repair || 0, tone: "red", icon: AlertCircle },
-      { label: "Pending Requests", value: summary.pendingRequests || 0, tone: "blue", icon: Activity },
-      { label: "Open Incidents", value: summary.openIncidents || 0, tone: "red", icon: AlertCircle },
-      { label: "Support Tickets", value: summary.openSupportTickets || 0, tone: "amber", icon: Headphones },
-      { label: "Expiring Licenses", value: summary.expiringLicenses || 0, tone: "amber", icon: ShieldCheck },
+      { label: "Assigned Assets", value: dashboard.assignedAssets, tone: "green", icon: UserCheck },
+      { label: "Available Assets", value: dashboard.availableAssets, tone: "cyan", icon: CheckCircle2 },
+      { label: "Maintenance", value: dashboard.maintenanceAssets, tone: "amber", icon: Wrench },
+      { label: "Repair Assets", value: dashboard.repairAssets, tone: "red", icon: AlertCircle },
+      { label: "Pending Requests", value: dashboard.pendingRequests, tone: "blue", icon: Activity },
+      { label: "Open Incidents", value: dashboard.openIncidents, tone: "red", icon: AlertCircle },
+      { label: "Support Tickets", value: dashboard.supportTickets, tone: "amber", icon: Headphones },
+      { label: "Expiring Licenses", value: dashboard.expiringLicenses, tone: "amber", icon: ShieldCheck },
     ];
   }, [dashboard]);
 
   const statusChart = useMemo(() => ({ labels: dashboard?.assetStatus.map((entry) => displayLabel(entry.label)) || [], datasets: [{ data: dashboard?.assetStatus.map((entry) => entry.count) || [], backgroundColor: ["#0f766e", "#2563eb", "#d97706", "#dc2626", "#64748b"], borderWidth: 0 }] }), [dashboard]);
   const categoryChart = useMemo(() => ({ labels: dashboard?.assetCategories.map((entry) => displayLabel(entry.label)) || [], datasets: [{ label: "Assets", data: dashboard?.assetCategories.map((entry) => entry.count) || [], backgroundColor: "#2563eb", borderRadius: 4 }] }), [dashboard]);
   const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } };
+  const hasData = dashboard && (metricCards.some(({ value }) => Number(value) > 0) || dashboard.recentActivity.length > 0 || dashboard.notifications.length > 0 || dashboard.requests.length > 0);
 
   if (loading) return <LoadingState />;
   if (error || !dashboard) return <ErrorState message={error || "Unable to load dashboard data. Please try again."} onRetry={loadDashboard} />;
@@ -154,6 +123,8 @@ export default function ICTDashboard() {
         </div>
         <button type="button" className="ict-primary-button" onClick={loadDashboard} disabled={loading}><RefreshCw size={15} /> Refresh</button>
       </header>
+
+      {!hasData && <div className="ict-empty-message" role="status">No data available.</div>}
 
       <section className="ict-summary-grid" aria-label="ICT dashboard overview">
         {metricCards.map(({ label, value, icon: Icon, tone }) => (
@@ -193,9 +164,9 @@ export default function ICTDashboard() {
             <h2>Recent Activity</h2>
             <History size={18} />
           </div>
-          {dashboard.recentActivities.length ? (
+          {dashboard.recentActivity.length ? (
             <ul className="ict-activity-list">
-              {dashboard.recentActivities.map((item) => {
+              {dashboard.recentActivity.map((item) => {
                 const Icon = iconForActivity[item.icon] || Package;
                 return (
                   <li key={item.id} className="ict-activity-item">
@@ -210,7 +181,7 @@ export default function ICTDashboard() {
               })}
             </ul>
           ) : (
-            <div className="ict-empty-message">No recent activity</div>
+            <div className="ict-empty-message">No recent activity.</div>
           )}
         </article>
 
@@ -223,19 +194,19 @@ export default function ICTDashboard() {
       <section className="ict-panels-grid">
         <article className="ict-panel">
           <div className="ict-panel-header"><h2>Requests</h2><ClipboardList size={18} /></div>
-          {dashboard.requests.length ? <div className="ict-table-wrap"><table className="ict-table"><thead><tr><th>Request</th><th>Item</th><th>Priority</th><th>Status</th></tr></thead><tbody>{dashboard.requests.slice(0, 6).map((request) => <tr key={request.id}><td>{request.id || "-"}</td><td>{request.item || request.type || "Asset request"}</td><td>{displayLabel(request.priority)}</td><td>{displayLabel(request.status)}</td></tr>)}</tbody></table></div> : <div className="ict-empty-message">No pending requests.</div>}
+          {dashboard.requests.length ? <div className="ict-table-wrap"><table className="ict-table"><thead><tr><th>Request</th><th>Requester</th><th>Department</th><th>Type / Item</th><th>Date</th><th>Status</th><th>Action</th></tr></thead><tbody>{dashboard.requests.slice(0, 6).map((request) => <tr key={request.id}><td>{request.requestId || "-"}</td><td>{request.requester}</td><td>{request.department}</td><td>{request.item || request.type}</td><td>{formatDateTime(request.createdAt)}</td><td>{displayLabel(request.status)}</td><td><Link to="/ict/asset-requests" aria-label={`Review request ${request.requestId}`}>Review</Link></td></tr>)}</tbody></table></div> : <div className="ict-empty-message">No pending requests.</div>}
         </article>
         <article className="ict-panel">
-          <div className="ict-panel-header"><h2>Operational Overview</h2><ShieldCheck size={18} /></div>
+          <div className="ict-panel-header"><h2>Operational Overview</h2><Database size={18} /></div>
           <div className="ict-health-list">
             <div className="ict-health-row">
-              <span>Open incidents</span><strong>{dashboard.assetSummary.openIncidents || 0}</strong>
+              <span>Open incidents</span><strong>{dashboard.operationalOverview.openIncidents}</strong>
             </div>
             <div className="ict-health-row">
-              <span>Upcoming maintenance</span><strong>{dashboard.assetSummary.upcomingMaintenance || 0}</strong>
+              <span>Upcoming maintenance</span><strong>{dashboard.operationalOverview.upcomingMaintenance}</strong>
             </div>
             <div className="ict-health-row">
-              <span>Database</span><strong className={dashboard.health.database === "Operational" ? "healthy" : "warning"}>{dashboard.health.database}</strong>
+              <span>Database</span><strong className={dashboard.databaseStatus.status === "connected" ? "healthy" : "warning"}>{displayLabel(dashboard.databaseStatus.status)}</strong>
             </div>
           </div>
         </article>

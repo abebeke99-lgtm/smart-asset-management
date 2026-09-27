@@ -44,6 +44,7 @@ const cleaningRoutes = require('./routes/cleaningRoutes');
 const softwareLicenseRoutes = require('./routes/softwareLicenseRoutes');
 const technicalSupportRoutes = require('./routes/technicalSupportRoutes');
 const incidentRoutes = require('./routes/incidentRoutes');
+const contactRoutes = require('./routes/contactRoutes');
 const backupService = require('./services/backupService');
 const { requestMetricsMiddleware } = require('./middlewares/requestMetrics');
 const { requestContextMiddleware } = require('./middlewares/requestContext');
@@ -188,6 +189,7 @@ app.use('/api/cleaning', cleaningRoutes);
 app.use('/api/software-licenses', softwareLicenseRoutes);
 app.use('/api/technical-support', technicalSupportRoutes);
 app.use('/api/incidents', incidentRoutes);
+app.use('/api/contact', contactRoutes);
 
 app.use('/api', (req, res) => {
   res.status(404).json({ success: false, message: 'API endpoint not found' });

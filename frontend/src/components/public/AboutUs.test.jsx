@@ -10,16 +10,17 @@ jest.mock('../../contexts/UiContext', () => ({
   useTheme: () => ({ theme: 'light' })
 }));
 
-describe('About page public navigation targets', () => {
+describe('About page', () => {
   beforeEach(() => {
     mockLanguage = 'en';
     HTMLElement.prototype.scrollIntoView = jest.fn();
   });
 
   it.each([
-      ['services', 'Core Benefits'],
-      ['features', 'What the System Supports']
-  ])('scrolls to the existing %s section', async (sectionId, heading) => {
+    ['services', 'University Asset Management System'],
+    ['features', 'Why a centralized system matters'],
+    ['lifecycle', 'University asset lifecycle']
+  ])('supports the existing %s page anchor', async (sectionId, heading) => {
     render(
       <MemoryRouter initialEntries={[`/about#${sectionId}`]}>
         <Routes>
@@ -33,32 +34,7 @@ describe('About page public navigation targets', () => {
     await waitFor(() => expect(section.scrollIntoView).toHaveBeenCalledWith({ block: 'start' }));
   });
 
-  it('shows one card for each verified feature and the supported roles', () => {
-    render(
-      <MemoryRouter>
-        <AboutUs />
-      </MemoryRouter>
-    );
-
-    expect(screen.getByRole('heading', { name: 'Asset Lifecycle' })).toBeInTheDocument();
-    expect(screen.getByRole('list').children).toHaveLength(8);
-    expect(screen.getByRole('heading', { name: 'Supported Roles' })).toBeInTheDocument();
-    expect(screen.getByText('Department Head')).toBeInTheDocument();
-    expect(screen.getByText('College Manager')).toBeInTheDocument();
-    const featureCards = [...document.querySelectorAll('#features .about-feature-card')];
-    const featureNames = featureCards.map((card) => card.querySelector('.about-service-copy strong')?.textContent);
-    expect(featureCards).toHaveLength(15);
-    expect(new Set(featureNames).size).toBe(featureNames.length);
-    expect(screen.getByText('Asset Registration')).toBeInTheDocument();
-    expect(screen.getByText('Disposal', { selector: '.about-service-copy strong' })).toBeInTheDocument();
-    expect(screen.getByText('RFID / QR', { selector: '.about-service-copy strong' })).toBeInTheDocument();
-    expect(screen.getByText('Audit Logs', { selector: '.about-service-copy strong' })).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'Core Benefits' })).toBeInTheDocument();
-      expect(screen.getByText('Centralized Asset Management')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /^View service:/ })).not.toBeInTheDocument();
-  });
-
-  it('renders the documented About page content and active route heading', () => {
+  it('renders the institutional purpose, vision, mission, governance, and lifecycle', () => {
     render(
       <MemoryRouter initialEntries={['/about']}>
         <Routes>
@@ -67,18 +43,20 @@ describe('About page public navigation targets', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('heading', { name: 'About Us' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Mekdela Amba University' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'University Asset Management System' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'About the System' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Our Purpose' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Asset Lifecycle' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'What the System Supports' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Supported Roles' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'What the System Supports' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Vision' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Mission' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Principles of asset governance' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Why a centralized system matters' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'University asset lifecycle' })).toBeInTheDocument();
+    expect(document.querySelectorAll('#lifecycle li')).toHaveLength(9);
+    expect(document.querySelector('.about-page main')).toBeNull();
+    expect(screen.getByText('Financial Records')).toBeInTheDocument();
+    expect(screen.getByText(/not a required linear sequence/i)).toBeInTheDocument();
   });
 
-  it('renders Amharic content when the existing language context switches language', () => {
+  it('renders the existing Amharic language selection', () => {
     mockLanguage = 'am';
 
     render(
@@ -87,10 +65,10 @@ describe('About page public navigation targets', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('heading', { name: 'ስለ ስርዓቱ' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'የሚደገፉ ሚናዎች' })).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'ዋና ጥቅሞች' })).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'ስርዓቱ የሚደገፈው ነገር' })).toBeInTheDocument();
-    expect(screen.getByText('የንብረት ምዝገባ')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'ራዕይ' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'ተልዕኮ' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'የንብረት አስተዳደር መርሆዎች' })).toBeInTheDocument();
+    expect(screen.getByText('የገንዘብ መዝገቦች')).toBeInTheDocument();
   });
 });

@@ -3,9 +3,18 @@ const { sequelize, Assignment, Asset, User, Department, Inventory, InventoryTran
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const { createEventNotification } = require('../services/notificationService');
 const { Op } = require('sequelize');
+const { resolveCollegeScope, resolveDepartmentScope } = require('../middlewares/organizationScope');
 
 const router = express.Router();
 const canManageAssignments = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'department_head')];
+const resolveIctAssignmentScope = (req, res, next) => req.user.role === 'ict_officer'
+  ? resolveCollegeScope(req, res, next)
+  : next();
+const resolveAssignmentOrganizationScope = (req, res, next) => ['ict_officer', 'store_manager'].includes(req.user.role)
+  ? resolveCollegeScope(req, res, next)
+  : req.user.role === 'department_head'
+    ? resolveDepartmentScope(req, res, next)
+  : next();
 
 const getDepartmentScopeId = (req) => {
   if (!req || !req.user) return null;
@@ -56,7 +65,24 @@ const assignmentInclude = [
   { model: User, attributes: ['id', 'username', 'fullName', 'email', 'department', 'role', 'active'] },
 ];
 
-router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college', 'department_head'), async (req, res, next) => {
+const getAssignmentInclude = (req) => {
+  if (['ict_officer', 'store_manager'].includes(req.user?.role)) {
+    return assignmentInclude.map((entry) => entry.model === Asset ? { ...entry, where: { collegeId: req.organizationScope.collegeId }, required: true } : entry);
+  }
+  if (req.user?.role === 'department_head') {
+    return assignmentInclude.map((entry) => entry.model === Asset ? {
+      ...entry,
+      where: {
+        departmentId: req.organizationScope.departmentId,
+        ...(req.organizationScope.collegeId ? { collegeId: req.organizationScope.collegeId } : {}),
+      },
+      required: true,
+    } : entry);
+  }
+  return assignmentInclude;
+};
+
+router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college', 'department_head'), resolveAssignmentOrganizationScope, async (req, res, next) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
@@ -122,7 +148,7 @@ router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'
 
     const { count, rows } = await Assignment.findAndCountAll({
       where,
-      include: assignmentInclude,
+      include: getAssignmentInclude(req),
       limit,
       offset,
       order: [[orderField, sortOrder === 'ASC' ? 'ASC' : 'DESC']],
@@ -153,12 +179,12 @@ router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'
   }
 });
 
-router.get('/history', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college', 'department_head'), async (req, res, next) => {
+router.get('/history', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college', 'department_head'), resolveAssignmentOrganizationScope, async (req, res, next) => {
   try {
     const departmentScope = getDepartmentScopeId(req);
     const baseInclude = req.user.role === 'college'
       ? [{ model: Asset, attributes: ['assetCode', 'name', 'department'], where: { department: req.user.department }, required: true }, { model: User, attributes: ['username', 'fullName'] }]
-      : assignmentInclude;
+      : getAssignmentInclude(req);
     const include = req.user.role === 'department_head' && departmentScope
       ? assignmentInclude.map((entry) => entry.model === Asset ? { ...entry, where: { departmentId: departmentScope }, required: true } : entry)
       : baseInclude;
@@ -173,7 +199,7 @@ router.get('/history', requireAuth, requireRole('admin', 'ict_officer', 'store_m
   }
 });
 
-router.get('/history/:assetId', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college', 'department_head'), async (req, res, next) => {
+router.get('/history/:assetId', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college', 'department_head'), resolveAssignmentOrganizationScope, async (req, res, next) => {
   try {
     const departmentScope = getDepartmentScopeId(req);
     if (req.user.role === 'college') {
@@ -188,7 +214,7 @@ router.get('/history/:assetId', requireAuth, requireRole('admin', 'ict_officer',
     }
     const assignments = await Assignment.findAll({
       where: { assetId: req.params.assetId },
-      include: assignmentInclude,
+      include: getAssignmentInclude(req),
       order: [['createdAt', 'DESC']],
     });
     res.json({ success: true, history: assignments.map(toAssignmentResponse) });
@@ -197,7 +223,7 @@ router.get('/history/:assetId', requireAuth, requireRole('admin', 'ict_officer',
   }
 });
 
-router.post('/', ...canManageAssignments, async (req, res, next) => {
+router.post('/', ...canManageAssignments, resolveAssignmentOrganizationScope, async (req, res, next) => {
   const { asset_id, assigned_to, notes, remarks, department_id, location, assigned_date, expected_return_date, condition_at_assignment, purpose } = req.body;
   const assetId = Number(asset_id);
   const userId = Number(assigned_to);
@@ -252,12 +278,14 @@ router.post('/', ...canManageAssignments, async (req, res, next) => {
       }
     }
 
-    const userCollegeId = req.user?.collegeId ?? req.user?.college_id;
+    const userCollegeId = ['ict_officer', 'store_manager'].includes(req.user?.role)
+      ? req.organizationScope.collegeId
+      : req.user?.collegeId ?? req.user?.college_id;
     if (userCollegeId && Number(asset.collegeId) !== Number(userCollegeId)) {
       await transaction.rollback();
       return res.status(403).json({ success: false, message: 'Asset is outside your organization scope' });
     }
-    if (userCollegeId && assignee.collegeId && Number(assignee.collegeId) !== Number(userCollegeId)) {
+    if (userCollegeId && (req.user?.role === 'store_manager' ? Number(assignee.collegeId) !== Number(userCollegeId) : assignee.collegeId && Number(assignee.collegeId) !== Number(userCollegeId))) {
       await transaction.rollback();
       return res.status(403).json({ success: false, message: 'Recipient is outside your organization scope' });
     }
@@ -267,7 +295,7 @@ router.post('/', ...canManageAssignments, async (req, res, next) => {
         await transaction.rollback();
         return res.status(404).json({ success: false, message: 'Department not found' });
       }
-      if (userCollegeId && department.collegeId && Number(department.collegeId) !== Number(userCollegeId)) {
+      if (userCollegeId && (req.user?.role === 'store_manager' ? Number(department.collegeId) !== Number(userCollegeId) : department.collegeId && Number(department.collegeId) !== Number(userCollegeId))) {
         await transaction.rollback();
         return res.status(403).json({ success: false, message: 'Department is outside your organization scope' });
       }
@@ -357,7 +385,7 @@ router.post('/', ...canManageAssignments, async (req, res, next) => {
   }
 });
 
-router.post('/:id/return', ...canManageAssignments, async (req, res, next) => {
+router.post('/:id/return', ...canManageAssignments, resolveIctAssignmentScope, async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
     const assignment = await Assignment.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
@@ -375,6 +403,10 @@ router.post('/:id/return', ...canManageAssignments, async (req, res, next) => {
       await transaction.rollback();
       return res.status(404).json({ success: false, message: 'Asset not found' });
     }
+    if (req.user.role === 'ict_officer' && Number(asset.collegeId) !== Number(req.organizationScope.collegeId)) {
+      await transaction.rollback();
+      return res.status(403).json({ success: false, message: 'Asset is outside your organization scope' });
+    }
     await assignment.update({ status: 'returned' }, { transaction });
     await inventory.update({ availableQuantity: inventory.availableQuantity + 1 }, { transaction });
     await asset.update({ status: 'available' }, { transaction });
@@ -390,7 +422,7 @@ router.post('/:id/return', ...canManageAssignments, async (req, res, next) => {
   }
 });
 
-router.post('/:id/transfer', ...canManageAssignments, async (req, res, next) => {
+router.post('/:id/transfer', ...canManageAssignments, resolveIctAssignmentScope, async (req, res, next) => {
   try {
     const newUserId = Number(req.body.new_user_id || req.body.newUserId);
     if (!Number.isInteger(newUserId) || newUserId <= 0) return res.status(400).json({ success: false, message: 'A valid assignee ID is required' });
@@ -399,6 +431,12 @@ router.post('/:id/transfer', ...canManageAssignments, async (req, res, next) => 
       order: [['createdAt', 'DESC']],
     });
     if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
+    if (req.user.role === 'ict_officer') {
+      const asset = await Asset.findByPk(assignment.assetId, { attributes: ['collegeId'] });
+      if (!asset || Number(asset.collegeId) !== Number(req.organizationScope.collegeId)) {
+        return res.status(403).json({ success: false, message: 'Asset is outside your organization scope' });
+      }
+    }
     const assignee = await User.findByPk(newUserId);
     if (!assignee) return res.status(404).json({ success: false, message: 'User not found' });
     if (!assignee.active) return res.status(409).json({ success: false, message: 'Cannot transfer an assignment to an inactive user' });

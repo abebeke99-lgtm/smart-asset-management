@@ -38,7 +38,9 @@ const getInventory = async (req, res, next) => {
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
     const pageSize = Math.min(100, Math.max(1, Number.parseInt(req.query.pageSize || req.query.limit, 10) || 20));
     const where = {};
-    const assetWhere = {};
+    const assetWhere = req.user?.role === 'ict_officer' && req.organizationScope?.collegeId
+      ? { collegeId: Number(req.organizationScope.collegeId) }
+      : {};
     const search = String(req.query.search || '').trim();
     const stockLevel = String(req.query.stockLevel || '').toLowerCase();
     if (req.query.location) where.location = String(req.query.location);
@@ -87,7 +89,7 @@ const getInventory = async (req, res, next) => {
 const getTransactions = async (req, res, next) => {
   try {
     const where = {};
-    const userCollegeId = req.user?.collegeId ?? req.user?.college_id;
+    const userCollegeId = req.organizationScope?.collegeId ?? req.user?.collegeId ?? req.user?.college_id;
     const assetWhere = userCollegeId ? { collegeId: Number(userCollegeId) } : {};
     if (req.query.type) where.type = req.query.type;
     if (req.query.asset_id) where.assetId = req.query.asset_id;
@@ -182,7 +184,11 @@ const createTransaction = async (req, res, next) => {
     if (userCollegeId && Number(item.Asset?.collegeId) !== Number(userCollegeId)) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Inventory item is outside your organization scope' }); }
     const previous = { quantity: item.quantity, availableQuantity: item.availableQuantity, reservedQuantity: item.reservedQuantity, damagedQuantity: item.damagedQuantity, location: item.location };
     const next = { quantity: item.quantity, availableQuantity: item.availableQuantity, damagedQuantity: item.damagedQuantity, location: to_location || item.location };
-    if (type === 'receive') { next.quantity += amount; next.availableQuantity += amount; }
+    if (type === 'receive') {
+      next.quantity += amount;
+      if (req.body.condition === 'Damaged') next.damagedQuantity += amount;
+      else next.availableQuantity += amount;
+    }
     if (type === 'issue') { if (item.availableQuantity < amount) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Insufficient available stock' }); } next.availableQuantity -= amount; }
     if (type === 'return') next.availableQuantity += amount;
     if (type === 'damage') { if (item.availableQuantity < amount) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Insufficient available stock' }); } next.availableQuantity -= amount; next.damagedQuantity += amount; }
@@ -193,7 +199,7 @@ const createTransaction = async (req, res, next) => {
       if (next.quantity < 0 || next.availableQuantity < 0) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Insufficient stock for this adjustment' }); }
     }
     const adjustmentDetails = type === 'adjustment' ? { adjustmentType, previousQuantity: previous.quantity, adjustmentQuantity: amount, newQuantity: next.quantity, reference: req.body.reference || '', notes: notes || '' } : null;
-    const receiptDetails = type === 'receive' ? { reference: req.body.reference || '', supplier: req.body.supplier || '', purchaseOrder: req.body.purchase_order || '', invoice: req.body.invoice || '', deliveryNote: req.body.delivery_note || '', notes: notes || '' } : null;
+    const receiptDetails = type === 'receive' ? { reference: req.body.reference || '', supplier: req.body.supplier || '', purchaseOrder: req.body.purchase_order || '', invoice: req.body.invoice || '', deliveryNote: req.body.delivery_note || '', receivedDate: req.body.received_date || null, condition: req.body.condition || '', notes: notes || '' } : null;
     const transactionNotes = adjustmentDetails ? JSON.stringify(adjustmentDetails) : receiptDetails ? JSON.stringify(receiptDetails) : notes || '';
     await item.update(next, { transaction });
     const record = await InventoryTransaction.create({ inventoryId: item.id, assetId: asset_id, userId: req.user.id, departmentId: department_id || null, type, quantity: amount, fromLocation: from_location || '', toLocation: to_location || '', reason: reason || '', notes: transactionNotes }, { transaction });
@@ -220,8 +226,19 @@ const createStockAdjustment = async (req, res, next) => {
 
 const createReceipt = async (req, res, next) => {
   const quantity = Number(req.body.quantity);
+  const assetId = Number(req.body.asset_id);
+  const location = String(req.body.to_location || '').trim();
+  const condition = String(req.body.condition || 'Good');
+  const receivedDate = String(req.body.received_date || '');
+  const parsedReceivedDate = receivedDate ? new Date(`${receivedDate}T00:00:00.000Z`) : null;
   if (!String(req.body.reference || '').trim()) return res.status(400).json({ success: false, message: 'A receiving reference is required' });
+  if (!Number.isSafeInteger(assetId) || assetId <= 0) return res.status(400).json({ success: false, message: 'A valid inventory item is required' });
   if (!Number.isSafeInteger(quantity) || quantity <= 0) return res.status(400).json({ success: false, message: 'A positive receiving quantity is required' });
+  if (!location) return res.status(400).json({ success: false, message: 'A receiving location is required' });
+  if (!['Good', 'Fair', 'Damaged'].includes(condition)) return res.status(400).json({ success: false, message: 'A valid received condition is required' });
+  if (receivedDate && (!/^\d{4}-\d{2}-\d{2}$/.test(receivedDate) || Number.isNaN(parsedReceivedDate.getTime()) || parsedReceivedDate.toISOString().slice(0, 10) !== receivedDate)) return res.status(400).json({ success: false, message: 'A valid received date is required' });
+  req.body.asset_id = assetId;
+  req.body.to_location = location;
   req.body.type = 'receive';
   return createTransaction(req, res, next);
 };

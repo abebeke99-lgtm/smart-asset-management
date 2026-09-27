@@ -6,9 +6,17 @@ export const capPriority = (p) => cap(String(p || "").toLowerCase());
 export const dateOnly = (iso) => (iso ? String(iso).slice(0, 10) : null);
 
 export const getMaintenance = async (params = {}) => {
+  const result = await getMaintenancePage(params);
+  return result.items;
+};
+
+export const getMaintenancePage = async (params = {}) => {
   const res = await apiClient.get("/maintenance", { params });
   const body = res.data || {};
-  return (body.data || body.requests || []).map(normalizeItem);
+  return {
+    items: (body.data || body.requests || []).map(normalizeItem),
+    pagination: body.pagination || { page: 1, limit: 10, total: body.total || 0, pages: 1 },
+  };
 };
 
 export const getRepairHistory = async (params = {}) => {
@@ -31,9 +39,15 @@ export const updateRepair = async (id, payload) => {
   return res.data?.data;
 };
 
-export const getMaintenanceDashboard = async () => {
-  const res = await apiClient.get("/maintenance/dashboard");
+export const getMaintenanceDashboard = async (period) => {
+  const res = await apiClient.get("/maintenance/dashboard", { params: period ? { period } : {} });
   return (res.data || {}).data || {};
+};
+
+export const getMaintenanceHistory = async (params = {}) => {
+  const res = await apiClient.get('/maintenance/history', { params });
+  const body = res.data || {};
+  return { items: body.data || [], pagination: body.pagination || {} };
 };
 
 export const createMaintenance = async (payload) => {
@@ -57,9 +71,17 @@ export const removeMaintenance = async (id) => {
 };
 
 export const getAssets = async (params = {}) => {
+  const result = await getAssetsPage(params);
+  return result.items;
+};
+
+export const getAssetsPage = async (params = {}) => {
   const res = await apiClient.get("/assets", { params });
   const body = res.data || {};
-  return body.assets || body.data || [];
+  return {
+    items: body.assets || body.data || [],
+    pagination: body.pagination || { page: 1, limit: 10, total: body.total || 0, pages: 1 },
+  };
 };
 
 export const getTechnicians = async () => {

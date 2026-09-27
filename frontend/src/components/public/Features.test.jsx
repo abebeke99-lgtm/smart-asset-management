@@ -9,7 +9,7 @@ jest.mock('../../contexts/UiContext', () => ({
 }));
 
 describe('Features page', () => {
-  it('renders the documented public features page content and route sections', () => {
+  it('renders the requested public feature set and bilingual page structure', () => {
     render(
       <MemoryRouter initialEntries={['/features']}>
         <Routes>
@@ -18,16 +18,22 @@ describe('Features page', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('heading', { name: 'Mekdela Amba University' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'University Asset Management System' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'FEATURES' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Core Benefits' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'System Capabilities' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Connected Asset Management' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Role-Based Access' })).toBeInTheDocument();
-    expect(screen.getByText('Centralized Asset Management')).toBeInTheDocument();
-    expect(screen.getByText('Asset Registration')).toBeInTheDocument();
-    expect(screen.getByText('Authentication & RBAC')).toBeInTheDocument();
-    expect(screen.getByText(/Available actions and workflows depend on the asset and the user's assigned role/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Features' })).toBeInTheDocument();
+    expect(screen.getByText('Powerful digital capabilities for secure, transparent, and efficient university asset management.')).toBeInTheDocument();
+    expect(screen.getByText('Asset Management')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Real-time Asset Tracking' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Inventory Control' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'RFID / QR' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Role-Based Access Control' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Asset Lifecycle Management' }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Maintenance Management' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Transfer Management' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Financial Records' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Reports & Analytics' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Audit Logs' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Notifications' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'English ↔ አማርኛ' }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Secure Authentication' })).toBeInTheDocument();
+    expect(screen.getByText(/Role-based access and authenticated workflows are controlled by the system/i)).toBeInTheDocument();
   });
 });

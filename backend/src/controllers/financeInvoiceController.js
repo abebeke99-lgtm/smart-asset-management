@@ -42,8 +42,10 @@ const paymentUserInclude = (as) => ({ model: User, as, attributes: ['id', 'usern
 
 const normalizePayment = (record) => {
   const value = record.toJSON ? record.toJSON() : record;
+  const safeValue = { ...value };
+  delete safeValue.bankAccount;
   return {
-    ...value,
+    ...safeValue,
     id: value.id,
     amount: number(value.amount),
     paymentDate: value.paymentDate || value.createdAt || null,

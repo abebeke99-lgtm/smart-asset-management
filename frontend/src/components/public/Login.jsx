@@ -43,8 +43,8 @@ const Login = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError(null);
-    if (!username.trim()) { setError('Email or username is required.'); return; }
-    if (!password) { setError('Password is required.'); return; }
+    if (!username.trim()) { setError(t.usernameRequired); return; }
+    if (!password) { setError(t.passwordRequired); return; }
     setLoading(true);
     try {
       const result = await login(username.trim(), password);
@@ -132,7 +132,7 @@ const Login = () => {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          margin-bottom: 18px;
+          margin: 22px auto 0;
           color: #536575;
           font-size: 0.9rem;
           font-weight: 700;
@@ -250,18 +250,18 @@ const Login = () => {
       <main className="login-page">
         <section className="login-panel">
           <main className="login-card">
-            <Link to="/home" className="login-back-link" aria-label={t.backToHomepage}>{t.backToHomepage}</Link>
             <img className="login-logo" src="/assets/mekdela-amba-university-logo.png" alt="Mekdela Amba University logo" />
-            <div className="login-heading"><h2>{t.title}</h2><p>Sign in to access the system</p></div>
-            <div className="login-status"><span className={`status-dot ${backendStatus === 'online' ? 'status-online' : backendStatus === 'offline' ? 'status-offline' : ''}`} /><Activity size={15} aria-hidden="true" /> System {backendStatus}</div>
+            <div className="login-heading"><h2>{t.title}</h2><p>{t.subtitle}</p></div>
+            <div className="login-status"><span className={`status-dot ${backendStatus === 'online' ? 'status-online' : backendStatus === 'offline' ? 'status-offline' : ''}`} /><Activity size={15} aria-hidden="true" /> {t.systemStatus}: {t[backendStatus]}</div>
             {error && <div className="login-error" role="alert"><ShieldCheck size={17} aria-hidden="true" /> <span>{error}</span></div>}
             <form onSubmit={handleLogin}>
-              <div className="login-field"><label htmlFor="login-username">Username or Email</label><div className="login-input"><Mail size={18} aria-hidden="true" /><input id="login-username" type="text" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={t.usernamePlaceholder} disabled={loading} /></div></div>
-              <div className="login-field"><label htmlFor="login-password">Password</label><div className="login-input"><LockKeyhole size={18} aria-hidden="true" /><input id="login-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t.passwordPlaceholder} disabled={loading} /><button className="password-toggle" type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}</button></div></div>
+              <div className="login-field"><label htmlFor="login-username">{t.usernameLabel}</label><div className="login-input"><Mail size={18} aria-hidden="true" /><input id="login-username" type="text" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={t.usernamePlaceholder} disabled={loading} /></div></div>
+              <div className="login-field"><label htmlFor="login-password">{t.passwordLabel}</label><div className="login-input"><LockKeyhole size={18} aria-hidden="true" /><input id="login-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t.passwordPlaceholder} disabled={loading} /><button className="password-toggle" type="button" aria-label={showPassword ? t.hidePassword : t.showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}</button></div></div>
               <Link to="/forgot-password" className="forgot-link">{t.forgotPassword}</Link>
-              <button type="submit" className="login-submit" disabled={loading}>{loading ? 'Signing in...' : <><span>{t.signIn}</span><ArrowRight size={17} aria-hidden="true" /></>}</button>
+              <button type="submit" className="login-submit" disabled={loading}>{loading ? t.signingIn : <><span>{t.signIn}</span><ArrowRight size={17} aria-hidden="true" /></>}</button>
             </form>
             <div className="login-signup"><span>{t.noAccount}</span> <Link to="/register">{t.signUp}</Link></div>
+            <Link to="/home" className="login-back-link" aria-label={t.backToHomepage}>{t.backToHomepage}</Link>
           </main>
         </section>
       </main>
@@ -272,6 +272,17 @@ const Login = () => {
 const englishTranslations = {
   title: 'Welcome Back',
   subtitle: 'Sign in to access inventory and assets',
+  usernameLabel: 'Username or Email',
+  passwordLabel: 'Password',
+  usernameRequired: 'Email or username is required.',
+  passwordRequired: 'Password is required.',
+  signingIn: 'Signing in...',
+  systemStatus: 'System',
+  checking: 'checking',
+  online: 'online',
+  offline: 'offline',
+  showPassword: 'Show password',
+  hidePassword: 'Hide password',
   usernamePlaceholder: 'Username or Email',
   passwordPlaceholder: 'Password',
   signIn: 'Sign In',
@@ -284,6 +295,17 @@ const englishTranslations = {
 const amharicTranslations = {
   title: 'እንኳን ደህና መመለሱ',
   subtitle: 'ወደ ስርዓቱ ለመግባት መለያዎን ያስገቡ',
+  usernameLabel: 'የተጠቃሚ ስም ወይም ኢሜይል',
+  passwordLabel: 'የይለፍ ቃል',
+  usernameRequired: 'ኢሜይል ወይም የተጠቃሚ ስም ያስፈልጋል።',
+  passwordRequired: 'የይለፍ ቃል ያስፈልጋል።',
+  signingIn: 'በመግባት ላይ...',
+  systemStatus: 'ስርዓት',
+  checking: 'በመፈተሽ ላይ',
+  online: 'ከመስመር ላይ',
+  offline: 'ከመስመር ውጭ',
+  showPassword: 'የይለፍ ቃል አሳይ',
+  hidePassword: 'የይለፍ ቃል ደብቅ',
   usernamePlaceholder: 'የተጠቃሚ ስም',
   passwordPlaceholder: 'የይለፍ ቃል',
   signIn: 'ግባ',

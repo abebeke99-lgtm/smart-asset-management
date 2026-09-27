@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../../contexts/UiContext';
-import { getMaintenance, createMaintenance, updateMaintenance, setMaintenanceStatus, removeMaintenance, getAssets } from '../../services/maintenanceApi';
+import { getMaintenancePage, createMaintenance, updateMaintenance, setMaintenanceStatus, removeMaintenance, getAssets } from '../../services/maintenanceApi';
 
 const MaintRequests = () => {
   const [requests, setRequests] = useState([]);
@@ -16,6 +16,8 @@ const MaintRequests = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, pages: 1 });
+  const [saving, setSaving] = useState(false);
   const itemsPerPage = 5;
 
   const { theme } = useTheme();
@@ -23,39 +25,42 @@ const MaintRequests = () => {
   const cardBg = isDark ? '#1e293b' : '#ffffff';
   const cardBorder = isDark ? '#334155' : '#d9e2f2';
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
+    setLoading(true);
     try {
-      const [list, assetList] = await Promise.all([getMaintenance({ limit: 100 }), getAssets({ limit: 1000 })]);
-      setRequests(list);
-      setAssets(assetList);
+      const result = await getMaintenancePage({
+        page: currentPage,
+        limit: itemsPerPage,
+        search: search.trim() || undefined,
+        priority: priorityFilter === 'all' ? undefined : priorityFilter.toLowerCase(),
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        department: departmentFilter === 'all' ? undefined : departmentFilter,
+      });
+      setRequests(result.items);
+      setPagination(result.pagination);
       setError('');
     } catch (err) {
       setError(err && err.message ? err.message : 'Failed to load maintenance requests');
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPage, departmentFilter, priorityFilter, search, statusFilter]);
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => { loadAll(); }, [loadAll]);
 
-  const filteredRequests = useMemo(() => {
-    return requests.filter(req => {
-      const matchesSearch = search === '' || req.asset.toLowerCase().includes(search.toLowerCase()) || req.problem.toLowerCase().includes(search.toLowerCase()) || req.refId.toLowerCase().includes(search.toLowerCase());
-      const matchesPriority = priorityFilter === 'all' || req.priority === priorityFilter;
-      const matchesStatus = statusFilter === 'all' || req.status === statusFilter;
-      const matchesDept = departmentFilter === 'all' || req.department === departmentFilter;
-      return matchesSearch && matchesPriority && matchesStatus && matchesDept;
-    });
-  }, [requests, search, priorityFilter, statusFilter, departmentFilter]);
+  useEffect(() => {
+    getAssets({ limit: 1000 }).then(setAssets).catch((err) => setError(err?.message || 'Failed to load assets'));
+  }, []);
 
-  const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
-  const paginatedRequests = filteredRequests.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPages = pagination.pages || 1;
+  const paginatedRequests = requests;
 
   const handleSubmit = async () => {
-    if (!formData.asset || !formData.problem) return;
+    if (!formData.asset || !formData.problem.trim()) { setMessage('Select an asset and enter a problem description.'); return; }
     const asset = assets.find(a => String(a.id) === String(formData.asset)) || assets.find(a => String(a.name || '').toLowerCase() === String(formData.asset).toLowerCase());
     if (!asset) { setMessage('Please select a valid asset'); return; }
     setMessage('');
+    setSaving(true);
     try {
       if (editingId) {
         await updateMaintenance(editingId, { description: formData.problem, priority: formData.priority.toLowerCase() });
@@ -63,12 +68,15 @@ const MaintRequests = () => {
         await createMaintenance({ asset_id: asset.id, title: formData.problem, description: formData.problem, priority: formData.priority.toLowerCase() });
       }
       setEditingId(null);
-      await loadAll();
+      setFormData({ asset: '', problem: '', priority: 'Medium' });
+      setShowForm(false);
+      setCurrentPage(1);
+      setMessage(editingId ? 'Maintenance request updated.' : 'Maintenance request created.');
     } catch (err) {
       setMessage(err && err.response && err.response.data && err.response.data.message ? err.response.data.message : (err.message || 'Request failed'));
+    } finally {
+      setSaving(false);
     }
-    setFormData({ asset: '', problem: '', priority: 'Medium' });
-    setShowForm(false);
   };
 
   const handleEdit = (req) => {
@@ -78,9 +86,11 @@ const MaintRequests = () => {
   };
 
   const handleDelete = async (id) => {
+    if (!window.confirm('Delete this maintenance request? This action cannot be undone.')) return;
     try {
       await removeMaintenance(id);
       await loadAll();
+      setMessage('Maintenance request deleted.');
     } catch (err) {
       setMessage(err && err.response && err.response.data && err.response.data.message ? err.response.data.message : (err.message || 'Delete failed'));
     }
@@ -168,13 +178,13 @@ const MaintRequests = () => {
           </select>
           <select value={departmentFilter} onChange={(e) => { setDepartmentFilter(e.target.value); setCurrentPage(1); }} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${cardBorder}` }}>
             <option value="all">All Departments</option>
-            {[...new Set(requests.map(r => r.department).filter(Boolean))].map(d => <option key={d} value={d}>{d}</option>)}
+            {[...new Set(assets.map((asset) => asset.department).filter(Boolean))].sort().map(d => <option key={d} value={d}>{d}</option>)}
           </select>
         </div>
       </div>
 
       {/* Table */}
-      <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', overflow: 'hidden', marginBottom: '16px' }}>
+      <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '8px', overflowX: 'auto', marginBottom: '16px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ backgroundColor: isDark ? '#334155' : '#f0f5ff', borderBottom: `1px solid ${cardBorder}` }}>
@@ -214,27 +224,22 @@ const MaintRequests = () => {
                 </td>
               </tr>
             ))}
+            {paginatedRequests.length === 0 && <tr><td colSpan="7" style={{ padding: '24px', textAlign: 'center' }}>No maintenance requests match these filters.</td></tr>}
           </tbody>
         </table>
       </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
           <button onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1} style={{ padding: '8px 12px', backgroundColor: currentPage === 1 ? '#cbd5e1' : '#2864E8', color: 'white', border: 'none', borderRadius: '6px', cursor: currentPage === 1 ? 'default' : 'pointer' }}>← Previous</button>
-          <div style={{ display: 'flex', gap: '4px' }}>
-            {Array.from({length: totalPages}, (_, i) => i + 1).map(page => (
-              <button key={page} onClick={() => setCurrentPage(page)} style={{ padding: '8px 12px', backgroundColor: currentPage === page ? '#2864E8' : cardBg, color: currentPage === page ? 'white' : 'inherit', border: `1px solid ${cardBorder}`, borderRadius: '6px', cursor: 'pointer', fontWeight: currentPage === page ? '600' : '400' }}>
-                {page}
-              </button>
-            ))}
-          </div>
+          <span aria-live="polite">Page {currentPage} of {totalPages}</span>
           <button onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} style={{ padding: '8px 12px', backgroundColor: currentPage === totalPages ? '#cbd5e1' : '#2864E8', color: 'white', border: 'none', borderRadius: '6px', cursor: currentPage === totalPages ? 'default' : 'pointer' }}>Next →</button>
         </div>
       )}
 
       <div style={{ marginTop: '24px', padding: '12px', backgroundColor: 'rgba(100, 150, 255, 0.1)', borderRadius: '8px', fontSize: '0.9rem' }}>
-        Showing {paginatedRequests.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, filteredRequests.length)} of {filteredRequests.length} requests
+        Showing {pagination.total === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, pagination.total)} of {pagination.total} requests
       </div>
     </div>
   );

@@ -72,7 +72,12 @@ const securityIcons = [KeyRound, ShieldCheck, FileClock];
 const additionalText = {
   en: {
     benefitsTitle: 'Why Departments Choose This System',
-    benefits: ['Centralized asset records', 'Clear responsibility and accountability', 'Coordination across departments', 'Operational and financial reporting'],
+    benefits: [
+      { title: 'Centralized Asset Records', description: 'Manage accurate university asset information in one centralized platform.' },
+      { title: 'Clear Responsibility and Accountability', description: 'Track who is responsible for each asset and maintain clear accountability.' },
+      { title: 'Coordination Across Departments', description: 'Support efficient coordination between departments, colleges, stores, ICT, finance, and maintenance.' },
+      { title: 'Operational and Financial Reporting', description: 'Provide organized information for operational and financial decision-making.' }
+    ],
     workflowTitle: 'How the System Works',
     workflow: ['Register', 'Receive', 'Assign', 'Transfer', 'Verify', 'Maintain', 'Return / Dispose'],
     viewWorkflow: 'View the full asset lifecycle',
@@ -93,7 +98,12 @@ const additionalText = {
   },
   am: {
     benefitsTitle: 'ክፍሎች ይህን ስርዓት ለምን ይመርጣሉ?',
-    benefits: ['ማዕከላዊ የንብረት መዝገቦች', 'ግልጽ ኃላፊነትና ተጠያቂነት', 'በክፍሎች መካከል ቅንጅት', 'የስራና የፋይናንስ ሪፖርት'],
+    benefits: [
+      { title: 'ማዕከላዊ የንብረት መዝገቦች', description: 'ትክክለኛ የዩኒቨርሲቲ ንብረት መረጃን በአንድ ማዕከላዊ መድረክ ያስተዳድሩ።' },
+      { title: 'ግልጽ ኃላፊነትና ተጠያቂነት', description: 'ለእያንዳንዱ ንብረት ተጠያቂውን ይከታተሉ እና ግልጽ ተጠያቂነትን ያስጠብቁ።' },
+      { title: 'በክፍሎች መካከል ቅንጅት', description: 'በክፍሎች፣ በኮሌጆች፣ በመጋዘኖች፣ በአይሲቲ፣ በፋይናንስ እና በጥገና መካከል ውጤታማ ቅንጅትን ይደግፉ።' },
+      { title: 'የስራና የፋይናንስ ሪፖርት', description: 'ለአስተዳደራዊና ለፋይናንስ ውሳኔ አሰጣጥ የተደራጀ መረጃ ያቅርቡ።' }
+    ],
     workflowTitle: 'ስርዓቱ እንዴት ይሰራል?',
     workflow: ['መመዝገብ', 'መቀበል', 'መመደብ', 'ማስተላለፍ', 'ማረጋገጥ', 'ጥገና', 'መመለስ / ማስወገድ'],
     viewWorkflow: 'ሙሉውን የንብረት የሕይወት ዑደት ይመልከቱ',
@@ -193,7 +203,7 @@ const Home = () => {
         <div className="uam-card-grid uam-benefit-grid">
           {additional.benefits.map((benefit, index) => {
             const Icon = benefitIcons[index];
-            return <article className="uam-card uam-benefit" key={benefit}><span className="uam-card-icon"><Icon size={21} aria-hidden="true" /></span><h3>{benefit}</h3></article>;
+            return <article className="uam-card uam-benefit" key={benefit.title}><span className="uam-card-icon"><Icon size={21} aria-hidden="true" /></span><h3>{benefit.title}</h3><p>{benefit.description}</p></article>;
           })}
         </div>
       </div>
@@ -459,6 +469,7 @@ const Home = () => {
       .uam-benefit-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .uam-benefit { border-radius: 6px; box-shadow: none; }
       .uam-benefit h3 { margin: 0; font-size: 1rem; line-height: 1.5; }
+      .uam-benefit p { margin: 10px 0 0; color: #40566f; line-height: 1.6; }
       .uam-card-icon { flex: 0 0 auto; border-radius: 6px; }
       .uam-workflow-list { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; margin: 0 0 26px; padding: 0; list-style: none; }
       .uam-workflow-step { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 12px; border-left: 2px solid #bfdbfe; padding: 4px 0 4px 12px; }

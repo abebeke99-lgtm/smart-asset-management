@@ -1,42 +1,157 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Contact from './Contact';
 import { UiProvider } from '../../contexts/UiContext';
+import { apiClient } from '../../utils/api';
 
-const renderContact = () => render(
-  <MemoryRouter>
-    <UiProvider>
-      <Contact />
-    </UiProvider>
-  </MemoryRouter>
-);
+jest.mock('../../utils/api', () => ({ apiClient: { get: jest.fn(), post: jest.fn() } }));
+
+const renderContact = async () => {
+  const view = render(
+    <MemoryRouter>
+      <UiProvider>
+        <Contact />
+      </UiProvider>
+    </MemoryRouter>
+  );
+  await waitFor(() => expect(screen.queryByText(/Loading contact details|የግንኙነት መረጃ በመጫን/)).not.toBeInTheDocument());
+  return view;
+};
 
 describe('Contact', () => {
-  beforeEach(() => localStorage.clear());
-
-  it('shows the configured university contact status without a public form or fake details', () => {
-    renderContact();
-
-    expect(screen.getByRole('heading', { name: /Contact & Support/i })).toBeInTheDocument();
-    expect(screen.getByText(/Official contact channels are shown only when configured by the university/i)).toBeInTheDocument();
-    expect(screen.getByText('Not yet configured')).toBeInTheDocument();
-    expect(screen.getByText('Unavailable')).toBeInTheDocument();
-    expect(screen.queryByRole('form')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/name/i)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /send|submit/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /View Help/i })).toHaveAttribute('href', '/help');
-    expect(screen.getByRole('link', { name: /Back to Home/i })).toHaveAttribute('href', '/');
+  beforeEach(() => {
+    localStorage.clear();
+    apiClient.get.mockReset().mockResolvedValue({ data: { success: true, data: {} } });
+    apiClient.post.mockReset();
   });
 
-  it('renders the contact content in Amharic using the shared language setting', () => {
-    localStorage.setItem('language', 'am');
-    renderContact();
+  const fillForm = () => {
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Test User' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.org' } });
+    fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Asset assistance' } });
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'Please help me with this asset record.' } });
+  };
 
-    expect(screen.getByRole('heading', { name: /ግንኙነትና ድጋፍ/i })).toBeInTheDocument();
-    expect(screen.getByText(/ይፋዊ የግንኙነት መንገዶች በዩኒቨርሲቲው ሲዋቀሩ ብቻ ይታያሉ/i)).toBeInTheDocument();
-    expect(screen.getByText('አልተዋቀረም')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /ወደ እገዛ/i })).toHaveAttribute('href', '/help');
+  it('shows verified university information and a labeled public message form', async () => {
+    await renderContact();
+
+    expect(screen.getByRole('heading', { name: 'Contact' })).toBeInTheDocument();
+    expect(screen.getAllByText('Mekdela Amba University')).toHaveLength(2);
+    expect(screen.getByText('Official contact details have not been configured.')).toBeInTheDocument();
+    expect(screen.getByRole('form')).toBeInTheDocument();
+    expect(screen.getByLabelText('Name')).toBeRequired();
+    expect(screen.getByLabelText('Email')).toHaveAttribute('type', 'email');
+    expect(screen.getByRole('button', { name: /Send message/i })).toBeInTheDocument();
+  });
+
+  it('loads configured university contact details from the public API', async () => {
+    apiClient.get.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: { email: 'support@university.edu', phone: '+251 11 234 5678', address: 'Mekdela Amba' },
+      },
+    });
+    await renderContact();
+
+    expect(await screen.findByText(/support@university\.edu/)).toBeInTheDocument();
+    expect(screen.getByText(/\+251 11 234 5678/)).toBeInTheDocument();
+    expect(screen.getByText(/Address: Mekdela Amba/)).toBeInTheDocument();
+    expect(apiClient.get).toHaveBeenCalledWith('/contact/details');
+  });
+
+  it('renders headings, labels, placeholders, and validation in Amharic from the shared language setting', async () => {
+    localStorage.setItem('language', 'am');
+    await renderContact();
+
+    expect(screen.getByRole('heading', { name: 'ያግኙን' })).toBeInTheDocument();
+    expect(screen.getByLabelText('ስም')).toHaveAttribute('placeholder', 'ስምዎ');
+    expect(screen.getByLabelText('ኢሜይል')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'መልዕክት ይላኩ' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'መልዕክት ይላኩ' }));
+    expect(screen.getByText('ስምዎን ያስገቡ (ከ2 እስከ 100 ቁምፊዎች)።')).toBeInTheDocument();
+  });
+
+  it('translates confirmed success and delivery error states into Amharic', async () => {
+    localStorage.setItem('language', 'am');
+    apiClient.post.mockResolvedValueOnce({ data: { success: true, delivery: 'sent' } });
+    await renderContact();
+    fireEvent.change(screen.getByLabelText('ስም'), { target: { value: 'Test User' } });
+    fireEvent.change(screen.getByLabelText('ኢሜይል'), { target: { value: 'user@example.org' } });
+    fireEvent.change(screen.getByLabelText('ርዕስ'), { target: { value: 'Asset help' } });
+    fireEvent.change(screen.getByLabelText('መልዕክት'), { target: { value: 'Please help me with this asset record.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'መልዕክት ይላኩ' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('መልዕክትዎ በተሳካ ሁኔታ ተልኳል።');
+
+    apiClient.post.mockRejectedValueOnce({ response: { status: 503 } });
+    fireEvent.change(screen.getByLabelText('ስም'), { target: { value: 'Test User' } });
+    fireEvent.change(screen.getByLabelText('ኢሜይል'), { target: { value: 'user@example.org' } });
+    fireEvent.change(screen.getByLabelText('ርዕስ'), { target: { value: 'Asset help' } });
+    fireEvent.change(screen.getByLabelText('መልዕክት'), { target: { value: 'Please help me with this asset record.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'መልዕክት ይላኩ' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('የመልዕክት መላኪያ አልተዋቀረም። ቆይተው እንደገና ይሞክሩ።');
+  });
+
+  it('validates email and message length before requesting the API', async () => {
+    await renderContact();
+    fillForm();
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'not-an-email' } });
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'x'.repeat(5001) } });
+    fireEvent.click(screen.getByRole('button', { name: /Send message/i }));
+
+    expect(screen.getByText('Enter a valid email address.')).toBeInTheDocument();
+    expect(screen.getByText('Your message must be between 20 and 5,000 characters.')).toBeInTheDocument();
+    expect(apiClient.post).not.toHaveBeenCalled();
+  });
+
+  it('clears the form only after the API confirms email delivery', async () => {
+    apiClient.post.mockResolvedValue({ data: { success: true, delivery: 'sent' } });
+    await renderContact();
+    fillForm();
+    fireEvent.click(screen.getByRole('button', { name: /Send message/i }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Your message has been submitted successfully.');
+    expect(screen.getByLabelText('Name')).toHaveValue('');
+    expect(apiClient.post).toHaveBeenCalledWith('/contact', {
+      name: 'Test User',
+      email: 'user@example.org',
+      subject: 'Asset assistance',
+      message: 'Please help me with this asset record.'
+    });
+  });
+
+  it('keeps entered values and hides technical details when delivery fails', async () => {
+    apiClient.post.mockRejectedValue({ response: { status: 502, data: { message: 'SMTP credentials rejected' } } });
+    await renderContact();
+    fillForm();
+    fireEvent.click(screen.getByRole('button', { name: /Send message/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your message could not be delivered. Your entries have been kept.');
+    expect(screen.getByLabelText('Name')).toHaveValue('Test User');
+    expect(screen.queryByText(/SMTP credentials rejected/i)).not.toBeInTheDocument();
+  });
+
+  it('shows a clear network error and preserves form values', async () => {
+    apiClient.post.mockRejectedValue({ code: 'ERR_NETWORK' });
+    await renderContact();
+    fillForm();
+    fireEvent.click(screen.getByRole('button', { name: /Send message/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The service could not be reached. Check your connection and try again.');
+    expect(screen.getByLabelText('Email')).toHaveValue('user@example.org');
+  });
+
+  it('shows timeout and server validation errors without clearing entered values', async () => {
+    apiClient.post.mockRejectedValueOnce({ response: { status: 400, data: { errors: { email: 'Invalid email' } } } });
+    await renderContact();
+    fillForm();
+    fireEvent.click(screen.getByRole('button', { name: /Send message/i }));
+    expect(await screen.findByText('Enter a valid email address.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Please review the highlighted fields and try again.');
+    expect(screen.getByLabelText('Name')).toHaveValue('Test User');
+
+    apiClient.post.mockRejectedValueOnce({ response: { status: 504 } });
+    fireEvent.click(screen.getByRole('button', { name: /Send message/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Message delivery timed out. Your message was not confirmed; please try again.');
   });
 });

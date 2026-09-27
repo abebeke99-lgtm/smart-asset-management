@@ -19,12 +19,19 @@ const ICTEquipment = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterCondition, setFilterCondition] = useState('all');
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize] = useState(20);
   const [currentPage, setCurrentPage] = useState(1);
+  const [error, setError] = useState('');
 
   // Stats
   const [stats, setStats] = useState({
     total: 0,
+    available: 0,
+    assigned: 0,
+    maintenance: 0,
+    repair: 0,
+    missing: 0,
+    retired: 0,
     byType: {},
     byStatus: {},
     byCondition: {}
@@ -143,52 +150,52 @@ const ICTEquipment = () => {
   // Fetch equipment
   const fetchEquipment = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const response = await apiClient.get('/api/ict/equipment', {
-        params: { page: currentPage, limit: pageSize, search: searchQuery, type: equipmentType === 'all' ? '' : equipmentType, status: filterStatus === 'all' ? '' : filterStatus, condition: filterCondition === 'all' ? '' : filterCondition }
+        params: {
+          page: currentPage,
+          limit: pageSize,
+          search: searchQuery,
+          type: equipmentType === 'all' ? '' : equipmentType,
+          status: filterStatus === 'all' ? '' : filterStatus,
+          condition: filterCondition === 'all' ? '' : filterCondition,
+        }
       });
 
-      let assets = response.data?.equipment || [];
-      if (!Array.isArray(assets)) assets = [];
+      const apiPayload = response.data || {};
+      const assets = Array.isArray(apiPayload.equipment || apiPayload.data) ? (apiPayload.equipment || apiPayload.data) : [];
+      const summary = apiPayload.summary || { total: 0, available: 0, assigned: 0, maintenance: 0, repair: 0, missing: 0, retired: 0 };
 
       setAllAssets(assets);
-      setStats(response.data?.summary || { total: 0, byType: {}, byStatus: {}, byCondition: {} });
       setFilteredAssets(assets);
-      setCurrentPage(response.data?.pagination?.page || currentPage);
+      setStats({
+        total: Number(summary.total ?? assets.length ?? 0),
+        available: Number(summary.available ?? 0),
+        assigned: Number(summary.assigned ?? 0),
+        maintenance: Number(summary.maintenance ?? 0),
+        repair: Number(summary.repair ?? 0),
+        missing: Number(summary.missing ?? 0),
+        retired: Number(summary.retired ?? 0),
+        byType: summary.byType || {},
+        byStatus: summary.byStatus || {},
+        byCondition: summary.byCondition || {},
+      });
+      setCurrentPage(Number(apiPayload.pagination?.page || currentPage));
     } catch (error) {
       console.error('Failed to load ICT equipment:', error);
-      toast.error('Failed to load equipment');
+      const message = error?.response?.data?.message || 'Failed to load equipment';
+      setError(message);
+      toast.error(message);
       setAllAssets([]);
       setFilteredAssets([]);
+      setStats({ total: 0, available: 0, assigned: 0, maintenance: 0, repair: 0, missing: 0, retired: 0, byType: {}, byStatus: {}, byCondition: {} });
     } finally {
       setLoading(false);
     }
   }, [currentPage, pageSize, searchQuery, equipmentType, filterStatus, filterCondition]);
 
   // Calculate statistics
-  const calculateStats = (assets) => {
-    const byType = {};
-    const byStatus = {};
-    const byCondition = {};
-
-    assets.forEach(a => {
-      const category = a.category_name || 'Other';
-      const status = a.status || 'Unknown';
-      const condition = a.condition || 'Unknown';
-
-      byType[category] = (byType[category] || 0) + 1;
-      byStatus[status] = (byStatus[status] || 0) + 1;
-      byCondition[condition] = (byCondition[condition] || 0) + 1;
-    });
-
-    setStats({
-      total: assets.length,
-      byType,
-      byStatus,
-      byCondition
-    });
-  };
-
   const exportToExcel = () => {
     if (filteredAssets.length === 0) {
       toast.warning('No data to export');
@@ -457,10 +464,16 @@ const ICTEquipment = () => {
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
           <p>{t.loading}</p>
         </div>
+      ) : error ? (
+        <div style={styles.emptyState}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+          <p>{error}</p>
+        </div>
       ) : paginatedAssets.length === 0 ? (
         <div style={styles.emptyState}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>💻</div>
-          <p>{t.noEquipment}</p>
+          <p>No IT equipment found for your authorized scope.</p>
+          <button style={{ ...styles.button, ...styles.primaryButton, marginTop: '16px' }} onClick={() => navigate('/ict/assets/create')}>Add Equipment</button>
         </div>
       ) : (
         <>

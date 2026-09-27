@@ -77,7 +77,7 @@ router.get('/stats', requireAuth, async (req, res, next) => {
         });
         return counts.filter((row) => Number(row.count) > 0).length;
       }),
-      Asset.sum('id', { where: { location: { [Op.not]: null } } }),
+      Asset.count({ where: { location: { [Op.not]: null } } }),
     ]);
 
     const summary = {

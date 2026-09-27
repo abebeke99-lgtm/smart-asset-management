@@ -1,17 +1,7 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import {
-  AlertCircle,
-  ArrowRight,
-  Building2,
-  Info,
-  Mail,
-  MessageSquareText,
-  ShieldCheck,
-  UserRoundCog,
-  Users
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Building2, Info, Mail, MessageSquareText, Send } from 'lucide-react';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
+import { apiClient } from '../../utils/api';
 
 const ContactHero = ({ eyebrow, title, subtitle, supportingText }) => (
   <section className="contact-hero" aria-labelledby="contact-title">
@@ -20,19 +10,8 @@ const ContactHero = ({ eyebrow, title, subtitle, supportingText }) => (
         <p className="contact-eyebrow">{eyebrow}</p>
         <h1 id="contact-title">{title}</h1>
         <p className="contact-hero-subtitle">{subtitle}</p>
+        <p className="contact-supporting-text">{supportingText}</p>
       </div>
-      <div className="contact-hero-card" aria-label="Contact and support summary">
-        <div className="contact-hero-card-icon" aria-hidden="true">
-          <MessageSquareText size={28} />
-        </div>
-        <div>
-          <p className="contact-hero-card-label">Contact &amp; Support</p>
-          <strong>University Asset Management System</strong>
-        </div>
-      </div>
-    </div>
-    <div className="contact-shell">
-      <p className="contact-supporting-text">{supportingText}</p>
     </div>
   </section>
 );
@@ -50,106 +29,186 @@ const ContactInfoCard = ({ icon: Icon, label, value, tag }) => (
   </article>
 );
 
-const ContactStatus = ({ icon: Icon, title, description }) => (
-  <aside className="contact-status-card" aria-live="polite">
-    <div className="contact-status-icon" aria-hidden="true"><Icon size={22} /></div>
-    <div>
-      <h3>{title}</h3>
-      <p>{description}</p>
-    </div>
-  </aside>
-);
-
-const SupportCard = ({ icon: Icon, title, description, actionLabel, to, actionVisible = false }) => (
-  <article className="contact-support-card">
-    <div className="contact-support-icon" aria-hidden="true"><Icon size={22} /></div>
-    <h3>{title}</h3>
-    <p>{description}</p>
-    {actionVisible ? (
-      <Link className="contact-support-link" to={to}>
-        {actionLabel}
-        <ArrowRight size={16} aria-hidden="true" />
-      </Link>
-    ) : null}
-  </article>
-);
-
-const ContactActions = ({ primaryLabel, primaryTo, secondaryLabel, secondaryTo }) => (
-  <div className="contact-actions" aria-label="Contact actions">
-    <Link className="contact-primary-action" to={primaryTo}>{primaryLabel}</Link>
-    <Link className="contact-secondary-action" to={secondaryTo}>{secondaryLabel}</Link>
-  </div>
-);
+const initialForm = { name: '', email: '', subject: '', message: '' };
 
 const Contact = () => {
   const { language } = useLanguage();
   const { theme } = useTheme();
+  const [form, setForm] = useState(initialForm);
+  const [errors, setErrors] = useState({});
+  const [notice, setNotice] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [contactDetails, setContactDetails] = useState({});
+  const [contactDetailsStatus, setContactDetailsStatus] = useState('loading');
   const isDark = theme === 'dark';
+
+  useEffect(() => {
+    let isCurrent = true;
+    apiClient.get('/contact/details')
+      .then((response) => {
+        if (!isCurrent) return;
+        if (response.data?.success && response.data.data) {
+          setContactDetails(response.data.data);
+          setContactDetailsStatus('loaded');
+        } else {
+          setContactDetailsStatus('unavailable');
+        }
+      })
+      .catch(() => {
+        if (isCurrent) setContactDetailsStatus('unavailable');
+      });
+
+    return () => { isCurrent = false; };
+  }, []);
 
   const content = language === 'en' ? {
     eyebrow: 'Mekdela Amba University',
-    title: 'Contact & Support',
+    title: 'Contact',
     subtitle: 'University Asset Management System',
-    supportingText: 'Connect with the appropriate support channel for assistance with the University Asset Management System.',
-    sectionHeading: 'Contact and Support',
-    intro: 'Official contact channels are shown only when configured by the university.',
+    supportingText: 'Send a message to the system administration team.',
     infoHeading: 'Contact Information',
-    institution: 'Institution',
+    institution: 'University',
     institutionValue: 'Mekdela Amba University',
-    system: 'System',
+    system: 'System administration',
     systemValue: 'University Asset Management System',
-    details: 'Contact Details',
-    detailsValue: 'Not yet configured',
-    submission: 'Public Message Submission',
-    submissionValue: 'Unavailable',
-    statusTitle: 'Contact Status',
-    statusOne: 'Official contact details have not been configured.',
-    statusTwo: 'Public message submission is unavailable.',
-    alternativeTitle: 'Alternative Support',
-    alternativeIntro: 'If you need immediate assistance:',
-    supportCards: [
-      { title: 'System Administrator', description: 'Contact your system administrator for assistance with system access and application-related issues.', icon: ShieldCheck, actionVisible: false },
-      { title: 'Department Head / College Manager', description: 'Reach out to your department head or college manager for assistance with department or college asset responsibilities.', icon: Users, actionVisible: false },
-      { title: 'Help & Guidance', description: 'Consult the Help section for role-specific guidance.', icon: Info, actionVisible: false }
-    ],
-    assistanceTitle: 'Need Assistance?',
-    assistanceText: 'Use the Help section for role-specific guidance, or contact your system administrator, department head, or college manager.',
-    helpButton: 'View Help',
-    helpTo: '/help',
-    homeButton: 'Back to Home',
-    homeTo: '/'
+    details: 'University email and phone',
+    detailsValue: 'Official contact details have not been configured.',
+    detailsLoading: 'Loading contact details…',
+    detailsUnavailable: 'Contact details are currently unavailable.',
+    phone: 'Phone',
+    address: 'Address',
+    website: 'Website',
+    formHeading: 'Send a message',
+    formIntro: 'Messages are sent to system administration when email delivery is configured.',
+    name: 'Name',
+    email: 'Email',
+    subject: 'Subject',
+    message: 'Message',
+    namePlaceholder: 'Your name',
+    emailPlaceholder: 'you@example.com',
+    subjectPlaceholder: 'What is your message about?',
+    messagePlaceholder: 'Write your message (20 to 5,000 characters)',
+    submit: 'Send message',
+    submitting: 'Sending…',
+    requiredName: 'Enter your name (2 to 100 characters).',
+    invalidEmail: 'Enter a valid email address.',
+    requiredSubject: 'Enter a subject (3 to 150 characters).',
+    invalidMessage: 'Your message must be between 20 and 5,000 characters.',
+    validationFailed: 'Please review the highlighted fields and try again.',
+    success: 'Your message has been submitted successfully.',
+    unavailable: 'Message delivery is not configured. Please try again later.',
+    timeout: 'Message delivery timed out. Your message was not confirmed; please try again.',
+    rateLimited: 'Too many messages were sent. Please try again later.',
+    sendFailed: 'Your message could not be delivered. Your entries have been kept.',
+    networkError: 'The service could not be reached. Check your connection and try again.'
   } : {
     eyebrow: 'መቅደላ አምባ ዩኒቨርሲቲ',
-    title: 'ግንኙነትና ድጋፍ',
+    title: 'ያግኙን',
     subtitle: 'የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት',
-    supportingText: 'ለዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት እገዛ ለማግኘት ተገቢውን የድጋፍ ሰንጠረዥ ያግኙ።',
-    sectionHeading: 'ግንኙነትና ድጋፍ',
-    intro: 'ይፋዊ የግንኙነት መንገዶች በዩኒቨርሲቲው ሲዋቀሩ ብቻ ይታያሉ።',
+    supportingText: 'ለስርዓቱ አስተዳደር ቡድን መልዕክት ይላኩ።',
     infoHeading: 'የግንኙነት መረጃ',
-    institution: 'ተቋም',
+    institution: 'ዩኒቨርሲቲ',
     institutionValue: 'መቅደላ አምባ ዩኒቨርሲቲ',
-    system: 'ስርዓት',
+    system: 'የስርዓት አስተዳደር',
     systemValue: 'የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት',
-    details: 'የግንኙነት ዝርዝሮች',
-    detailsValue: 'አልተዋቀረም',
-    submission: 'የህዝብ መልእክት ላኪያ',
-    submissionValue: 'አይገኝም',
-    statusTitle: 'የግንኙነት ሁኔታ',
-    statusOne: 'የኦፊሴላዊ የግንኙነት ዝርዝሮች አልተዋቀረም።',
-    statusTwo: 'የህዝብ መልእክት ላኪያ አይገኝም።',
-    alternativeTitle: 'ተለዋጭ ድጋፍ',
-    alternativeIntro: 'ፈጣኑን እገዛ ከፈለጉ:',
-    supportCards: [
-      { title: 'የስርዓት አስተዳደር', description: 'ስርዓት መግቢያ እና የመተግበሪያ ችግሮችን ለመፍታት የስርዓት አስተዳደሩን ያነጋግሩ።', icon: ShieldCheck, actionVisible: false },
-      { title: 'የክፍል ሃላፊ / የኮሌጅ አስተዳደር', description: 'የክፍል ወይም የኮሌጅ የንብረት ኃላፊነቶችን ለመቋቋም ወደ ክፍል ሃላፊዎ ወይም የኮሌጅ አስተዳደሩ ያነጋግሩ።', icon: Users, actionVisible: false },
-      { title: 'እገዛና መመሪያ', description: 'ለሚና የተወሰነ መመሪያ እገዛን ይመልከቱ።', icon: Info, actionVisible: false }
-    ],
-    assistanceTitle: 'እገዛ ያስፈልጋል?',
-    assistanceText: 'ለሚና የተወሰነ መመሪያ እገዛን ይጠቀሙ ወይም የስርዓት አስተዳደር፣ የክፍል ሃላፊ ወይም የኮሌጅ አስተዳደር ያነጋግሩ።',
-    helpButton: 'ወደ እገዛ',
-    helpTo: '/help',
-    homeButton: 'ወደ መነሻ ገጽ',
-    homeTo: '/'
+    details: 'የዩኒቨርሲቲ ኢሜይልና ስልክ',
+    detailsValue: 'ይፋዊ የግንኙነት ዝርዝሮች አልተዋቀሩም።',
+    detailsLoading: 'የግንኙነት መረጃ በመጫን ላይ…',
+    detailsUnavailable: 'የግንኙነት መረጃ በአሁኑ ጊዜ አይገኝም።',
+    phone: 'ስልክ',
+    address: 'አድራሻ',
+    website: 'ድረ-ገጽ',
+    formHeading: 'መልዕክት ይላኩ',
+    formIntro: 'የኢሜይል አገልግሎቱ ሲዋቀር መልዕክቶች ለስርዓቱ አስተዳደር ይላካሉ።',
+    name: 'ስም',
+    email: 'ኢሜይል',
+    subject: 'ርዕስ',
+    message: 'መልዕክት',
+    namePlaceholder: 'ስምዎ',
+    emailPlaceholder: 'you@example.com',
+    subjectPlaceholder: 'መልዕክትዎ ስለ ምንድን ነው?',
+    messagePlaceholder: 'መልዕክትዎን ይጻፉ (ከ20 እስከ 5,000 ቁምፊዎች)',
+    submit: 'መልዕክት ይላኩ',
+    submitting: 'በመላክ ላይ…',
+    requiredName: 'ስምዎን ያስገቡ (ከ2 እስከ 100 ቁምፊዎች)።',
+    invalidEmail: 'ትክክለኛ የኢሜይል አድራሻ ያስገቡ።',
+    requiredSubject: 'ርዕስ ያስገቡ (ከ3 እስከ 150 ቁምፊዎች)።',
+    invalidMessage: 'መልዕክትዎ ከ20 እስከ 5,000 ቁምፊዎች መሆን አለበት።',
+    validationFailed: 'እባክዎ ምልክት የተደረገባቸውን መስኮች ያስተካክሉና እንደገና ይሞክሩ።',
+    success: 'መልዕክትዎ በተሳካ ሁኔታ ተልኳል።',
+    unavailable: 'የመልዕክት መላኪያ አልተዋቀረም። ቆይተው እንደገና ይሞክሩ።',
+    timeout: 'የመልዕክት መላኪያው ጊዜ አልፎታል። መልዕክትዎ እንደተላከ አልተረጋገጠም፤ እባክዎ እንደገና ይሞክሩ።',
+    rateLimited: 'ብዙ መልዕክቶች ተልከዋል። ቆይተው እንደገና ይሞክሩ።',
+    sendFailed: 'መልዕክትዎ መላክ አልተቻለም። ያስገቡት መረጃ ተጠብቋል።',
+    networkError: 'አገልግሎቱን ማግኘት አልተቻለም። ግንኙነትዎን ያረጋግጡና እንደገና ይሞክሩ።'
+  };
+
+  const configuredDetails = [
+    contactDetails.email && `${content.email}: ${contactDetails.email}`,
+    contactDetails.phone && `${content.phone}: ${contactDetails.phone}`,
+    contactDetails.address && `${content.address}: ${contactDetails.address}`,
+    contactDetails.website && `${content.website}: ${contactDetails.website}`,
+  ].filter(Boolean);
+  const detailsValue = configuredDetails.length
+    ? configuredDetails.join(' · ')
+    : contactDetailsStatus === 'loading'
+      ? content.detailsLoading
+      : contactDetailsStatus === 'unavailable'
+        ? content.detailsUnavailable
+        : content.detailsValue;
+
+  const validateForm = () => {
+    const nextErrors = {};
+    if (form.name.trim().length < 2 || form.name.trim().length > 100) nextErrors.name = content.requiredName;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) nextErrors.email = content.invalidEmail;
+    if (form.subject.trim().length < 3 || form.subject.trim().length > 150) nextErrors.subject = content.requiredSubject;
+    if (form.message.trim().length < 20 || form.message.trim().length > 5000) nextErrors.message = content.invalidMessage;
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setNotice(null);
+    if (!validateForm()) return;
+
+    setIsSubmitting(true);
+    try {
+      const response = await apiClient.post('/contact', form);
+      if (response.data?.success === true && response.data?.delivery === 'sent') {
+        setForm(initialForm);
+        setErrors({});
+        setNotice({ type: 'success', message: content.success });
+      } else {
+        setNotice({ type: 'error', message: content.sendFailed });
+      }
+    } catch (error) {
+      const status = error.response?.status;
+      if (status === 400) {
+        const serverErrors = error.response?.data?.errors || {};
+        const localizedErrors = {
+          ...(serverErrors.name ? { name: content.requiredName } : {}),
+          ...(serverErrors.email ? { email: content.invalidEmail } : {}),
+          ...(serverErrors.subject ? { subject: content.requiredSubject } : {}),
+          ...(serverErrors.message ? { message: content.invalidMessage } : {}),
+        };
+        setErrors((current) => ({ ...current, ...localizedErrors }));
+      }
+      const message = status === 429 ? content.rateLimited
+        : status === 503 ? content.unavailable
+          : status === 504 || error.code === 'ECONNABORTED' ? content.timeout
+            : status === 400 ? content.validationFailed
+            : !error.response ? content.networkError : content.sendFailed;
+      setNotice({ type: 'error', message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const updateField = (field, value) => {
+    setForm((current) => ({ ...current, [field]: value }));
+    setErrors((current) => ({ ...current, [field]: undefined }));
+    setNotice(null);
   };
 
   return (
@@ -161,14 +220,6 @@ const Contact = () => {
         supportingText={content.supportingText}
       />
 
-      <section className="contact-shell contact-section" aria-labelledby="contact-support-heading">
-        <div className="contact-heading-row">
-          <p className="contact-section-kicker"><Info size={16} aria-hidden="true" /> {content.sectionHeading}</p>
-          <h2 id="contact-support-heading">{content.infoHeading}</h2>
-          <p className="contact-intro">{content.intro}</p>
-        </div>
-      </section>
-
       <section className="contact-shell contact-section" aria-labelledby="contact-information-title">
         <div className="contact-heading-row">
           <p className="contact-section-kicker"><Building2 size={16} aria-hidden="true" /> {content.infoHeading}</p>
@@ -177,54 +228,45 @@ const Contact = () => {
         <div className="contact-info-grid">
           <ContactInfoCard icon={Building2} label={content.institution} value={content.institutionValue} />
           <ContactInfoCard icon={MessageSquareText} label={content.system} value={content.systemValue} />
-          <ContactInfoCard icon={Mail} label={content.details} value={content.detailsValue} />
-          <ContactInfoCard icon={AlertCircle} label={content.submission} value={content.submissionValue} />
+          <ContactInfoCard icon={Mail} label={content.details} value={detailsValue} />
         </div>
       </section>
 
-      <section className="contact-shell contact-section" aria-labelledby="contact-status-title">
+      <section className="contact-shell contact-section contact-form-section" aria-labelledby="contact-form-title">
         <div className="contact-heading-row">
-          <p className="contact-section-kicker"><Info size={16} aria-hidden="true" /> {content.statusTitle}</p>
-          <h2 id="contact-status-title">{content.statusTitle}</h2>
+          <p className="contact-section-kicker"><Info size={16} aria-hidden="true" /> {content.formHeading}</p>
+          <h2 id="contact-form-title">{content.formHeading}</h2>
+          <p className="contact-intro">{content.formIntro}</p>
         </div>
-        <ContactStatus icon={Info} title={content.statusOne} description={content.statusTwo} />
-      </section>
-
-      <section className="contact-shell contact-section" aria-labelledby="contact-support-title">
-        <div className="contact-heading-row">
-          <p className="contact-section-kicker"><Users size={16} aria-hidden="true" /> {content.alternativeTitle}</p>
-          <h2 id="contact-support-title">{content.alternativeTitle}</h2>
-          <p className="contact-intro">{content.alternativeIntro}</p>
-        </div>
-        <div className="contact-support-grid">
-          {content.supportCards.map((card) => (
-            <SupportCard
-              key={card.title}
-              icon={card.icon}
-              title={card.title}
-              description={card.description}
-              actionLabel={card.actionLabel}
-              to={card.to}
-              actionVisible={card.actionVisible}
-            />
-          ))}
-        </div>
-      </section>
-
-      <section className="contact-shell contact-section contact-assistance" aria-labelledby="contact-assistance-title">
-        <div className="contact-assistance-card">
-          <div>
-            <p className="contact-section-kicker"><UserRoundCog size={16} aria-hidden="true" /> {content.assistanceTitle}</p>
-            <h2 id="contact-assistance-title">{content.assistanceTitle}</h2>
-            <p>{content.assistanceText}</p>
+        <form className="contact-form" aria-labelledby="contact-form-title" noValidate onSubmit={handleSubmit}>
+          {notice ? <p className={`contact-form-notice contact-form-notice-${notice.type}`} role={notice.type === 'error' ? 'alert' : 'status'}>{notice.message}</p> : null}
+          <div className="contact-form-grid">
+            <div className="contact-field">
+              <label htmlFor="contact-name">{content.name}</label>
+              <input id="contact-name" name="name" autoComplete="name" required maxLength={100} value={form.name} onChange={(event) => updateField('name', event.target.value)} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? 'contact-name-error' : undefined} placeholder={content.namePlaceholder} />
+              {errors.name ? <p id="contact-name-error" className="contact-field-error">{errors.name}</p> : null}
+            </div>
+            <div className="contact-field">
+              <label htmlFor="contact-email">{content.email}</label>
+              <input id="contact-email" name="email" type="email" autoComplete="email" required maxLength={254} value={form.email} onChange={(event) => updateField('email', event.target.value)} aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? 'contact-email-error' : undefined} placeholder={content.emailPlaceholder} />
+              {errors.email ? <p id="contact-email-error" className="contact-field-error">{errors.email}</p> : null}
+            </div>
+            <div className="contact-field contact-field-wide">
+              <label htmlFor="contact-subject">{content.subject}</label>
+              <input id="contact-subject" name="subject" required maxLength={150} value={form.subject} onChange={(event) => updateField('subject', event.target.value)} aria-invalid={Boolean(errors.subject)} aria-describedby={errors.subject ? 'contact-subject-error' : undefined} placeholder={content.subjectPlaceholder} />
+              {errors.subject ? <p id="contact-subject-error" className="contact-field-error">{errors.subject}</p> : null}
+            </div>
+            <div className="contact-field contact-field-wide">
+              <label htmlFor="contact-message">{content.message}</label>
+              <textarea id="contact-message" name="message" required minLength={20} maxLength={5000} rows={7} value={form.message} onChange={(event) => updateField('message', event.target.value)} aria-invalid={Boolean(errors.message)} aria-describedby={errors.message ? 'contact-message-error' : undefined} placeholder={content.messagePlaceholder} />
+              {errors.message ? <p id="contact-message-error" className="contact-field-error">{errors.message}</p> : null}
+            </div>
           </div>
-          <ContactActions
-            primaryLabel={content.helpButton}
-            primaryTo={content.helpTo}
-            secondaryLabel={content.homeButton}
-            secondaryTo={content.homeTo}
-          />
-        </div>
+          <button className="contact-submit" type="submit" disabled={isSubmitting}>
+            <Send size={17} aria-hidden="true" />
+            {isSubmitting ? content.submitting : content.submit}
+          </button>
+        </form>
       </section>
 
       <style>{`
@@ -383,7 +425,10 @@ const Contact = () => {
           line-height: 1.7;
         }
 
-        .contact-info-grid,
+        .contact-info-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
         .contact-support-grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -439,6 +484,89 @@ const Contact = () => {
           font-weight: 700;
           line-height: 1.6;
         }
+
+        .contact-form-section { padding-bottom: 72px; }
+
+        .contact-form {
+          max-width: 780px;
+          padding: 24px;
+          border: 1px solid var(--contact-border);
+          border-radius: 8px;
+          background: var(--contact-card);
+          box-shadow: var(--contact-shadow);
+        }
+
+        .contact-form-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 20px 18px;
+        }
+
+        .contact-field { min-width: 0; }
+        .contact-field-wide { grid-column: 1 / -1; }
+
+        .contact-field label {
+          display: block;
+          margin-bottom: 7px;
+          color: var(--contact-text);
+          font-size: 0.94rem;
+          font-weight: 700;
+        }
+
+        .contact-field input,
+        .contact-field textarea {
+          display: block;
+          width: 100%;
+          min-width: 0;
+          padding: 11px 12px;
+          border: 1px solid var(--contact-border);
+          border-radius: 6px;
+          background: var(--contact-card);
+          color: var(--contact-text);
+          font: inherit;
+          line-height: 1.5;
+        }
+
+        .contact-field textarea { resize: vertical; }
+        .contact-field input::placeholder,
+        .contact-field textarea::placeholder { color: var(--contact-muted); opacity: 1; }
+        .contact-field [aria-invalid="true"] { border-color: #b42318; }
+
+        .contact-field-error {
+          margin: 6px 0 0;
+          color: #b42318;
+          font-size: 0.88rem;
+        }
+
+        .contact-form-notice {
+          margin: 0 0 20px;
+          padding: 12px 14px;
+          border: 1px solid var(--contact-border);
+          border-radius: 6px;
+          line-height: 1.5;
+        }
+
+        .contact-form-notice-success { color: #176b3a; background: #edf8f0; }
+        .contact-form-notice-error { color: #9b1c1c; background: #fff1f0; }
+
+        .contact-submit {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 9px;
+          min-height: 46px;
+          margin-top: 20px;
+          padding: 0 18px;
+          border: 0;
+          border-radius: 6px;
+          background: var(--contact-primary);
+          color: #fff;
+          font: inherit;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .contact-submit:disabled { cursor: wait; opacity: 0.7; }
 
         .contact-info-tag {
           display: inline-block;
@@ -570,10 +698,11 @@ const Contact = () => {
         }
 
         @media (max-width: 860px) {
-          .contact-info-grid,
           .contact-support-grid {
             grid-template-columns: 1fr;
           }
+
+          .contact-info-grid { grid-template-columns: 1fr; }
 
           .contact-hero-inner {
             grid-template-columns: 1fr;
@@ -602,6 +731,9 @@ const Contact = () => {
           .contact-section {
             padding-top: 44px;
           }
+
+          .contact-form { padding: 18px; }
+          .contact-form-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
 
           .contact-status-card {
             padding: 18px 18px;

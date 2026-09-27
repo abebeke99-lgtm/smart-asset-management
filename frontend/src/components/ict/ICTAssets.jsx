@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -16,7 +16,7 @@ import {
   MoreHorizontal,
   Package,
   Pencil,
-  PlusCircle,
+  Plus,
   RefreshCw,
   ScanLine,
   Search,
@@ -50,6 +50,17 @@ const normalize = (value) =>
   String(value || "")
     .toLowerCase()
     .replace(/[_ ]/g, "-");
+const apiErrorMessage = (error) => {
+  const status = error.response?.status;
+  if (status === 401) return "Session expired. Please sign in again.";
+  if (status === 403) return "You do not have permission to view ICT assets.";
+  if (status === 404) return "The ICT assets endpoint was not found.";
+  if (status === 409) return "The ICT asset request conflicts with existing data.";
+  if (status === 422) return "The ICT asset request failed validation.";
+  if (status >= 500) return "The server could not load ICT assets.";
+  if (!error.response) return "The backend is unavailable. Check the connection and try again.";
+  return error.response.data?.message || "Unable to load ICT assets.";
+};
 
 const statusClass = (status) => {
   const normalized = normalize(status);
@@ -70,10 +81,9 @@ const statusClass = (status) => {
 const ICTAssets = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canEdit = ["admin", "ict_officer", "store_manager"].includes(
+  const canEdit = ["admin", "ict_officer"].includes(
     String(user?.role || "").toLowerCase(),
   );
-  const canDelete = String(user?.role || "").toLowerCase() === "admin";
   const [assets, setAssets] = useState([]);
   const [filters, setFilters] = useState(emptyFilters);
   const [statusTab, setStatusTab] = useState("all");
@@ -96,55 +106,48 @@ const ICTAssets = () => {
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [openMenu, setOpenMenu] = useState(null);
+  const [verifying, setVerifying] = useState(null);
+  const [verificationForm, setVerificationForm] = useState({ state: "", notes: "" });
+  const [transferTarget, setTransferTarget] = useState(null);
+  const [transferForm, setTransferForm] = useState({ departmentId: "", location: "", reason: "" });
 
   const requestParams = useMemo(
     () =>
       Object.fromEntries(
         Object.entries({
           ...filters,
+          statusTab: statusTab === "all" ? "" : statusTab,
           page: pagination.page,
           limit: pagination.limit,
         }).filter(([, value]) => value !== ""),
       ),
-    [filters, pagination.page, pagination.limit],
+    [filters, pagination.page, pagination.limit, statusTab],
   );
 
-  const visibleAssets = useMemo(() => {
-    if (statusTab === "all") return assets;
-    return assets.filter((asset) => {
-      const normalized = normalize(asset.status || "");
-      if (statusTab === "assigned") return normalized === "assigned" || normalized === "in-use";
-      if (statusTab === "available") return normalized === "available";
-      if (statusTab === "maintenance") return normalized.includes("maintenance");
-      if (statusTab === "missing") return normalized === "missing" || normalized === "lost";
-      return true;
-    });
-  }, [assets, statusTab]);
+  const visibleAssets = assets;
+  const hasActiveFilters = statusTab !== "all" || [
+    filters.search,
+    filters.category,
+    filters.status,
+    filters.condition,
+    filters.department,
+    filters.location,
+    filters.assignmentStatus,
+  ].some(Boolean);
 
   const summaryCards = useMemo(() => {
-    const currentSummary = summary || {};
-    const total = Number(currentSummary.total ?? assets.length ?? 0);
-    const assigned = Number(currentSummary.assigned ?? assets.filter((asset) => {
-      const normalized = normalize(asset.status || "");
-      return normalized === "assigned" || normalized === "in-use";
-    }).length ?? 0);
-    const available = Number(currentSummary.available ?? assets.filter((asset) => normalize(asset.status || "") === "available").length ?? 0);
-    const maintenance = Number(currentSummary.maintenance ?? assets.filter((asset) => normalize(asset.status || "").includes("maintenance")).length ?? 0);
-    const missing = Number(currentSummary.missing ?? assets.filter((asset) => {
-      const normalized = normalize(asset.status || "");
-      return normalized === "missing" || normalized === "lost";
-    }).length ?? 0);
+    const value = (key) => summary ? Number(summary[key]) : "—";
 
     return [
-      { label: "Total Assets", value: total, icon: Package, tone: "blue" },
-      { label: "Assigned", value: assigned, icon: UserCheck, tone: "green" },
-      { label: "Available", value: available, icon: CheckCircle2, tone: "teal" },
-      { label: "Maintenance", value: maintenance, icon: Wrench, tone: "amber" },
-      { label: "Missing", value: missing, icon: AlertTriangle, tone: "red" },
+      { label: "Total Assets", value: value("total"), icon: Package, tone: "blue" },
+      { label: "Assigned", value: value("assigned"), icon: UserCheck, tone: "green" },
+      { label: "Available", value: value("available"), icon: CheckCircle2, tone: "teal" },
+      { label: "Maintenance", value: value("maintenance"), icon: Wrench, tone: "amber" },
+      { label: "Missing", value: value("missing"), icon: AlertTriangle, tone: "red" },
     ];
-  }, [assets, summary]);
+  }, [summary]);
 
-  const loadAssets = async (signal) => {
+  const loadAssets = useCallback(async (signal) => {
     setLoading(true);
     setError("");
     try {
@@ -152,26 +155,41 @@ const ICTAssets = () => {
         params: requestParams,
         signal,
       });
+      const summaryFields = ["total", "assigned", "available", "maintenance", "missing"];
+      const pageCount = data?.pagination?.totalPages ?? data?.pagination?.pages;
+      if (
+        data?.success !== true ||
+        !Array.isArray(data.assets) ||
+        !Number.isFinite(Number(data.total)) ||
+        !data.summary ||
+        !summaryFields.every((field) => Number.isFinite(Number(data.summary[field]))) ||
+        !Number.isFinite(Number(data.pagination?.page)) ||
+        !Number.isFinite(Number(data.pagination?.limit)) ||
+        !Number.isFinite(Number(pageCount))
+      ) {
+        throw new Error("The ICT assets API returned an invalid response.");
+      }
       setAssets(Array.isArray(data?.assets) ? data.assets : []);
-      setSummary(data?.summary || { total: 0 });
+      setSummary(data.summary);
       setPagination((current) => ({
         ...current,
         ...(data?.pagination || {}),
-        total: Number(data?.total || 0),
+        total: Number(data.pagination.total ?? data.total),
+        pages: Number(pageCount),
       }));
     } catch (requestError) {
       if (requestError.code === "ERR_CANCELED") return;
-      const message =
-        requestError.response?.data?.message ||
-        (requestError.response?.status === 403
-          ? "You do not have access to ICT assets in this organization."
-          : "Unable to load ICT assets.");
+      const message = requestError.response
+        ? apiErrorMessage(requestError)
+        : requestError instanceof Error
+          ? requestError.message
+          : apiErrorMessage(requestError);
       setError(message);
       toast.error(message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [requestParams]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -183,7 +201,7 @@ const ICTAssets = () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [requestParams]);
+  }, [filters.search, loadAssets, requestParams]);
 
   useEffect(() => {
     apiClient
@@ -208,7 +226,14 @@ const ICTAssets = () => {
     setOpenMenu(null);
     try {
       const { data } = await apiClient.get(`/api/ict/assets/${asset.id}`);
-      setSelected(data?.asset ? data : null);
+      setSelected(data?.asset ? {
+        ...data.asset,
+        maintenance: data.maintenance || [],
+        history: data.history || [],
+        assignmentHistory: data.assignmentHistory || [],
+        transfers: data.transfers || [],
+        verification: data.verification || [],
+      } : null);
     } catch (requestError) {
       toast.error(
         requestError.response?.data?.message || "Unable to load asset details.",
@@ -248,12 +273,96 @@ const ICTAssets = () => {
     }
   };
 
-  const deleteAsset = async (asset) => {
-    if (!canDelete || !window.confirm(`Dispose ${asset.name || "this asset"}?`)) return;
+  const returnAsset = async (asset) => {
+    if (!canEdit || !asset.assignmentId) return;
+    if (!window.confirm(`Confirm return of ${asset.name || "this asset"}?`)) return;
     setOpenMenu(null);
     try {
-      await apiClient.delete(`/api/assets/${asset.id}`);
-      toast.success("Asset disposed successfully.");
+      await apiClient.post(`/api/assignments/${asset.assignmentId}/return`, {
+        notes: "Returned from ICT asset register",
+      });
+      toast.success("Asset returned successfully.");
+      await loadAssets();
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || "Unable to return this asset.");
+    }
+  };
+
+  const requestMaintenance = async (asset) => {
+    if (!canEdit) return;
+    const description = window.prompt(`Describe the maintenance needed for ${asset.name || "this asset"}.`);
+    if (description === null || !description.trim()) return;
+    setOpenMenu(null);
+    try {
+      await apiClient.post(`/api/ict/assets/${asset.id}/maintenance`, {
+        title: `ICT maintenance: ${asset.name || asset.assetCode || asset.id}`,
+        description: description.trim(),
+        priority: "medium",
+      });
+      toast.success("Maintenance request created.");
+      await loadAssets();
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || "Unable to create maintenance request.");
+    }
+  };
+
+  const submitVerification = async (event) => {
+    event.preventDefault();
+    if (!verifying || !verificationForm.state) return;
+    setSaving(true);
+    try {
+      const sessionResponse = await apiClient.post("/api/ict/verification", {
+        name: `Asset verification ${verifying.assetCode || verifying.id} ${new Date().toISOString()}`,
+        department_id: verifying.departmentId || undefined,
+      });
+      const sessionId = sessionResponse.data?.data?.id;
+      if (!sessionId) throw new Error("Verification session was not returned by the server.");
+      await apiClient.post(`/api/ict/verification/${sessionId}/items`, {
+        asset_id: verifying.id,
+        state: verificationForm.state,
+        notes: verificationForm.notes.trim(),
+      });
+      await apiClient.post(`/api/ict/verification/${sessionId}/submit`);
+      await apiClient.post(`/api/ict/verification/${sessionId}/finalize`);
+      toast.success("Asset verification recorded.");
+      setVerifying(null);
+      setVerificationForm({ state: "", notes: "" });
+      await loadAssets();
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || requestError.message || "Unable to record verification.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitTransfer = async (event) => {
+    event.preventDefault();
+    if (!transferTarget || !transferForm.departmentId || !transferForm.location.trim() || !transferForm.reason.trim()) return;
+    setSaving(true);
+    try {
+      await apiClient.post("/api/transfers", {
+        asset_id: transferTarget.id,
+        destination_department_id: Number(transferForm.departmentId),
+        new_location: transferForm.location.trim(),
+        transfer_reason: transferForm.reason.trim(),
+      });
+      toast.success("Transfer request created.");
+      setTransferTarget(null);
+      setTransferForm({ departmentId: "", location: "", reason: "" });
+      await loadAssets();
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || "Unable to create transfer request.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteAsset = async (asset) => {
+    if (!canEdit || !window.confirm(`Retire ${asset.name || "this asset"}?`)) return;
+    setOpenMenu(null);
+    try {
+      await apiClient.patch(`/api/ict/equipment/${asset.id}/retire`, { reason: "Retired from ICT asset register" });
+      toast.success("Asset retired successfully.");
       await loadAssets();
     } catch (requestError) {
       toast.error(
@@ -264,21 +373,39 @@ const ICTAssets = () => {
     }
   };
 
-  const exportCsv = () => {
-    if (!assets.length) {
+  const exportCsv = async () => {
+    if (!pagination.total) {
       toast.info("There are no equipment records to export.");
       return;
     }
-    const columns = ["name", "assetTag", "category", "manufacturer", "model", "serialNumber", "department", "location", "assignedTo", "condition", "status"];
+    const columns = ["assetCode", "name", "category", "serialNumber", "manufacturer", "model", "department", "location", "assignedTo", "condition", "status", "purchaseDate", "purchasePrice", "updatedAt"];
     const escape = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
-    const rows = assets.map((asset) => columns.map((column) => escape(asset[column])).join(","));
-    const csv = [columns.map(escape).join(","), ...rows].join("\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "ict-equipment.csv";
-    link.click();
-    URL.revokeObjectURL(url);
+    try {
+      const exportAssets = [];
+      let page = 1;
+      let pageCount = 1;
+      while (page <= pageCount) {
+        const { data } = await apiClient.get("/api/ict/assets", {
+          params: { ...requestParams, page, limit: 100 },
+        });
+        pageCount = Number(data?.pagination?.totalPages ?? data?.pagination?.pages);
+        if (data?.success !== true || !Array.isArray(data.assets) || !Number.isFinite(pageCount)) {
+          throw new Error("The ICT assets API returned an invalid export response.");
+        }
+        exportAssets.push(...data.assets);
+        page += 1;
+      }
+      const rows = exportAssets.map((asset) => columns.map((column) => escape(asset[column])).join(","));
+      const csv = [columns.map(escape).join(","), ...rows].join("\n");
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "ict-assets.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || "Unable to export ICT assets.");
+    }
   };
 
   if (!user || !["ict_officer", "admin"].includes(user.role)) return null;
@@ -309,12 +436,11 @@ const ICTAssets = () => {
           <button className="quiet-button" onClick={exportCsv} disabled={loading || !assets.length}>
             <Download size={16} /> Export
           </button>
-          {canEdit && <button
-            className="primary-button"
-            onClick={() => navigate("/ict/assets/create")}
-          >
-            <PlusCircle size={17} /> Create Asset
-          </button>}
+          {canEdit && (
+            <button className="primary-button" onClick={() => navigate("/ict/assets/create")}>
+              <Plus size={16} /> Add ICT Asset
+            </button>
+          )}
         </div>
       </header>
 
@@ -342,7 +468,7 @@ const ICTAssets = () => {
             <input
               value={filters.search}
               onChange={(event) => updateFilter("search", event.target.value)}
-              placeholder="Search asset ID, name, serial, barcode, custodian..."
+              placeholder="Search asset ID, tag, name, serial, brand, model..."
               aria-label="Search ICT assets"
             />
           </label>
@@ -411,6 +537,8 @@ const ICTAssets = () => {
             <option value="category">Sort: category</option>
             <option value="department">Sort: department</option>
             <option value="location">Sort: location</option>
+            <option value="purchaseDate">Sort: purchase date</option>
+            <option value="cost">Sort: cost</option>
             <option value="status">Sort: status</option>
           </select>
           <select
@@ -452,8 +580,13 @@ const ICTAssets = () => {
           <button
             key={tab.value}
             type="button"
+            role="tab"
+            aria-selected={statusTab === tab.value}
             className={`asset-tab${statusTab === tab.value ? " active" : ""}`}
-            onClick={() => setStatusTab(tab.value)}
+            onClick={() => {
+              setStatusTab(tab.value);
+              setPagination((current) => ({ ...current, page: 1 }));
+            }}
           >
             {tab.label}
           </button>
@@ -505,6 +638,12 @@ const ICTAssets = () => {
                     </td>
                   </tr>
                 ))
+              ) : error && !assets.length ? (
+                <tr>
+                  <td colSpan="10" className="empty-cell">
+                    The asset register could not be loaded.
+                  </td>
+                </tr>
               ) : visibleAssets.length > 0 ? (
                 visibleAssets.map((asset) => (
                   <tr key={asset.id}>
@@ -515,9 +654,9 @@ const ICTAssets = () => {
                       >
                         <strong>{valueOrDash(asset.name)}</strong>
                         <span>
-                          {valueOrDash(asset.assetTag || asset.assetCode)}
+                          ID: {valueOrDash(asset.id)}
                         </span>
-                        <small>SN: {valueOrDash(asset.serialNumber)}</small>
+                        <span>Tag: {valueOrDash(asset.assetTag || asset.assetCode)}</span>
                       </button>
                     </td>
                     <td>{valueOrDash(asset.category)}</td>
@@ -571,7 +710,7 @@ const ICTAssets = () => {
                           </button>
                           <button
                             disabled={!canEdit}
-                            onClick={() => navigate("/ict/assets/assign")}
+                            onClick={() => navigate(`/ict/assignments?assetId=${asset.id}`)}
                           >
                             <UserCheck size={15} /> Assign
                           </button>
@@ -580,32 +719,48 @@ const ICTAssets = () => {
                           </button>
                           <button
                             disabled={!canEdit}
-                            onClick={() => updateStatus(asset, "maintenance")}
+                            onClick={() => requestMaintenance(asset)}
                           >
-                            <Wrench size={15} /> Send to maintenance
+                            <Wrench size={15} /> Request maintenance
                           </button>
-                          {asset.status !== "lost" && <button
+                          {asset.assignedTo && asset.assignmentId && <button
+                            disabled={!canEdit}
+                            onClick={() => returnAsset(asset)}
+                          >
+                            <Package size={15} /> Return asset
+                          </button>}
+                          <button
+                            disabled={!canEdit}
+                            onClick={() => {
+                              setOpenMenu(null);
+                              setVerificationForm({ state: "", notes: "" });
+                              setVerifying(asset);
+                            }}
+                          >
+                            <CheckCircle2 size={15} /> Verify asset
+                          </button>
+                          {normalize(asset.status) !== "lost" && <button
                             disabled={!canEdit}
                             onClick={() => updateStatus(asset, "lost")}
                           >
                             <MapPinOff size={15} /> Mark lost
                           </button>}
-                          {canDelete && <button onClick={() => deleteAsset(asset)}>
-                            <Trash2 size={15} /> Dispose
+                          {canEdit && <button onClick={() => deleteAsset(asset)}>
+                            <Trash2 size={15} /> Retire asset
                           </button>}
                           <button
-                            onClick={() =>
-                              navigate(`/ict/asset-history?assetId=${asset.id}`)
-                            }
+                            onClick={() => navigate(`/ict/asset-history?assetId=${asset.id}`)}
                           >
                             <History size={15} /> View history
                           </button>
                           <button onClick={() => navigate("/ict/rfid")}>
                             <ScanLine size={15} /> RFID / QR
                           </button>
-                          <button
-                            onClick={() => navigate("/ict/assets/assign")}
-                          >
+                          <button disabled={!canEdit} onClick={() => {
+                            setOpenMenu(null);
+                            setTransferForm({ departmentId: "", location: "", reason: "" });
+                            setTransferTarget(asset);
+                          }}>
                             <ArrowRightLeft size={15} /> Transfer
                           </button>
                         </div>
@@ -621,18 +776,10 @@ const ICTAssets = () => {
                     </div>
                     <strong>No ICT assets found</strong>
                     <span>
-                      {Object.values(filters).some(Boolean)
+                      {hasActiveFilters
                         ? "Try changing your filters or search terms."
-                        : "Create a new asset to begin the register."}
+                        : "No ICT assets are available in your authorized scope."}
                     </span>
-                    {!Object.values(filters).some(Boolean) && (
-                      <button
-                        className="primary-button"
-                        onClick={() => navigate("/ict/assets/create")}
-                      >
-                        <PlusCircle size={16} /> Create Asset
-                      </button>
-                    )}
                   </td>
                 </tr>
               )}
@@ -674,9 +821,7 @@ const ICTAssets = () => {
             >
               <ChevronLeft size={17} />
             </button>
-            <span>
-              Page {pagination.page} of {Math.max(1, pagination.pages || 1)}
-            </span>
+            <span>Page {pagination.page} of {pagination.pages}</span>
             <button
               className="icon-button"
               disabled={pagination.page >= pagination.pages || loading}
@@ -724,6 +869,8 @@ const ICTAssets = () => {
             </div>
             <div className="detail-grid">
               {[
+                ["Asset ID", selected.id],
+                ["Asset tag", selected.assetTag || selected.assetCode],
                 ["Category", selected.category],
                 ["Manufacturer", selected.manufacturer],
                 ["Model", selected.model],
@@ -736,6 +883,8 @@ const ICTAssets = () => {
                 ["Purchase date", formatDate(selected.purchaseDate)],
                 ["Warranty expiry", formatDate(selected.warrantyExpiry)],
                 ["Created", formatDate(selected.createdAt)],
+                ["Purchase cost", selected.purchasePrice == null ? "—" : selected.purchasePrice],
+                ["Supplier", selected.supplier],
               ].map(([label, value]) => (
                 <div key={label}>
                   <dt>{label}</dt>
@@ -770,6 +919,27 @@ const ICTAssets = () => {
             ) : (
               <p className="muted">No audit history.</p>
             )}
+            <h3>Assignment history</h3>
+            {selected.assignmentHistory?.length ? selected.assignmentHistory.map((item) => (
+              <p className="history-item" key={`assignment-${item.id}`}>
+                {item.status === "returned" ? "Asset returned" : "Asset assigned"}
+                <span>{item.User?.fullName || item.User?.username || "Assignment"} · {formatDate(item.updatedAt || item.createdAt)}</span>
+              </p>
+            )) : <p className="muted">No assignment records.</p>}
+            <h3>Transfer history</h3>
+            {selected.transfers?.length ? selected.transfers.map((item) => (
+              <p className="history-item" key={`transfer-${item.id}`}>
+                {valueOrDash(item.status)}: {valueOrDash(item.destinationDepartment)}
+                <span>{valueOrDash(item.newLocation)} · {formatDate(item.createdAt)}</span>
+              </p>
+            )) : <p className="muted">No transfer records.</p>}
+            <h3>Verification history</h3>
+            {selected.verification?.length ? selected.verification.map((item) => (
+              <p className="history-item" key={`verification-${item.id}`}>
+                {valueOrDash(item.state)}
+                <span>{valueOrDash(item.notes)} · {formatDate(item.updatedAt || item.createdAt)}</span>
+              </p>
+            )) : <p className="muted">No verification records.</p>}
           </div>
         </div>
       )}
@@ -799,6 +969,14 @@ const ICTAssets = () => {
               </button>
             </div>
             <label>
+              Asset code
+              <input
+                required
+                value={editing.assetCode || ""}
+                onChange={(event) => setEditing({ ...editing, assetCode: event.target.value })}
+              />
+            </label>
+            <label>
               Asset name
               <input
                 required
@@ -807,6 +985,31 @@ const ICTAssets = () => {
                   setEditing({ ...editing, name: event.target.value })
                 }
               />
+            </label>
+            <label>
+              Serial number
+              <input
+                value={editing.serialNumber || ""}
+                onChange={(event) => setEditing({ ...editing, serialNumber: event.target.value })}
+              />
+            </label>
+            <label>
+              Category
+              <select
+                value={editing.category || ""}
+                onChange={(event) => setEditing({ ...editing, category: event.target.value })}
+              >
+                {options.categories.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}
+              </select>
+            </label>
+            <label>
+              Department
+              <select
+                value={editing.department || ""}
+                onChange={(event) => setEditing({ ...editing, department: event.target.value })}
+              >
+                {options.departments.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}
+              </select>
             </label>
             <label>
               Status
@@ -848,6 +1051,22 @@ const ICTAssets = () => {
               />
             </label>
             <label>
+              Manufacturer
+              <input value={editing.manufacturer || ""} onChange={(event) => setEditing({ ...editing, manufacturer: event.target.value })} />
+            </label>
+            <label>
+              Model
+              <input value={editing.model || ""} onChange={(event) => setEditing({ ...editing, model: event.target.value })} />
+            </label>
+            <label>
+              Purchase date
+              <input type="date" value={editing.purchaseDate ? String(editing.purchaseDate).slice(0, 10) : ""} onChange={(event) => setEditing({ ...editing, purchaseDate: event.target.value })} />
+            </label>
+            <label>
+              Purchase cost
+              <input type="number" min="0" step="0.01" value={editing.purchasePrice ?? ""} onChange={(event) => setEditing({ ...editing, purchasePrice: event.target.value })} />
+            </label>
+            <label>
               Description
               <textarea
                 value={editing.description || ""}
@@ -871,6 +1090,65 @@ const ICTAssets = () => {
               >
                 {saving ? "Saving..." : "Save changes"}
               </button>
+            </div>
+          </form>
+        </div>
+      )}
+      {verifying && (
+        <div className="modal-backdrop" role="presentation" onClick={() => !saving && setVerifying(null)}>
+          <form className="modal edit-modal" onSubmit={submitVerification} onClick={(event) => event.stopPropagation()}>
+            <div className="modal-title">
+              <div><p className="eyebrow">ASSET VERIFICATION</p><h2>{verifying.name}</h2></div>
+              <button type="button" className="icon-button" onClick={() => setVerifying(null)} aria-label="Close verification"><X size={19} /></button>
+            </div>
+            <label>
+              Verification result
+              <select required value={verificationForm.state} onChange={(event) => setVerificationForm({ ...verificationForm, state: event.target.value })}>
+                <option value="">Select a result</option>
+                <option value="verified">Verified</option>
+                <option value="missing">Missing</option>
+                <option value="wrong_location">Wrong location</option>
+                <option value="damaged">Damaged</option>
+                <option value="unidentified">Unidentified</option>
+                <option value="needs_review">Needs review</option>
+              </select>
+            </label>
+            <label>
+              Notes
+              <textarea value={verificationForm.notes} onChange={(event) => setVerificationForm({ ...verificationForm, notes: event.target.value })} maxLength="1000" />
+            </label>
+            <div className="modal-actions">
+              <button type="button" className="quiet-button" onClick={() => setVerifying(null)} disabled={saving}>Cancel</button>
+              <button type="submit" className="primary-button" disabled={saving || !verificationForm.state}>{saving ? "Recording..." : "Record verification"}</button>
+            </div>
+          </form>
+        </div>
+      )}
+      {transferTarget && (
+        <div className="modal-backdrop" role="presentation" onClick={() => !saving && setTransferTarget(null)}>
+          <form className="modal edit-modal" onSubmit={submitTransfer} onClick={(event) => event.stopPropagation()}>
+            <div className="modal-title">
+              <div><p className="eyebrow">ASSET TRANSFER</p><h2>{transferTarget.name}</h2></div>
+              <button type="button" className="icon-button" onClick={() => setTransferTarget(null)} aria-label="Close transfer"><X size={19} /></button>
+            </div>
+            <label>
+              Destination department
+              <select required value={transferForm.departmentId} onChange={(event) => setTransferForm({ ...transferForm, departmentId: event.target.value })}>
+                <option value="">Select department</option>
+                {options.departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+            </label>
+            <label>
+              Destination location
+              <input required value={transferForm.location} onChange={(event) => setTransferForm({ ...transferForm, location: event.target.value })} />
+            </label>
+            <label>
+              Transfer reason
+              <textarea required value={transferForm.reason} onChange={(event) => setTransferForm({ ...transferForm, reason: event.target.value })} maxLength="1000" />
+            </label>
+            <div className="modal-actions">
+              <button type="button" className="quiet-button" onClick={() => setTransferTarget(null)} disabled={saving}>Cancel</button>
+              <button type="submit" className="primary-button" disabled={saving}>{saving ? "Submitting..." : "Submit transfer request"}</button>
             </div>
           </form>
         </div>

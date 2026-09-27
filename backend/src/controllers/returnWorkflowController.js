@@ -45,16 +45,22 @@ const createReturn = async (req, res, next) => {
 };
 
 const processStoreReturn = async (req, res, next) => {
+  const assetId = Number(req.body.asset_id);
+  const condition = String(req.body.condition || 'Good').trim();
+  const reason = String(req.body.reason || 'End of Assignment').trim();
+  const location = String(req.body.location || '').trim();
+  const notes = String(req.body.notes || '').trim();
+  const validConditions = ['Good', 'Fair', 'Damaged', 'Heavily damaged', 'Missing parts', 'Non-functional'];
+  const validReasons = ['End of Assignment', 'Replacement', 'Damage', 'Maintenance', 'Employee Transfer', 'Employee Separation', 'Department Transfer', 'Temporary Return', 'Inventory Verification', 'Other'];
+  if (!Number.isInteger(assetId) || assetId <= 0 || !location) return res.status(400).json({ success: false, message: 'A valid assigned asset and return location are required' });
+  if (!validConditions.includes(condition)) return res.status(400).json({ success: false, message: 'A valid returned asset condition is required' });
+  if (!validReasons.includes(reason)) return res.status(400).json({ success: false, message: 'A valid return reason is required' });
+  if (['Damage', 'Other'].includes(reason) && notes.length < 5) return res.status(400).json({ success: false, message: 'Additional explanation is required for this return reason' });
   const transaction = await sequelize.transaction();
   try {
-    const assetId = Number(req.body.asset_id);
-    const condition = String(req.body.condition || 'Good').trim();
-    const reason = String(req.body.reason || 'End of Assignment').trim();
-    const location = String(req.body.location || '').trim();
-    const notes = String(req.body.notes || '').trim();
-    if (!Number.isInteger(assetId) || assetId <= 0 || !location) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'A valid assigned asset and return location are required' }); }
-    const collegeId = req.user?.collegeId ?? req.user?.college_id;
-    const asset = await Asset.findOne({ where: { id: assetId, ...(collegeId ? { collegeId: Number(collegeId) } : {}) }, transaction, lock: transaction.LOCK.UPDATE });
+    const collegeId = req.organizationScope?.collegeId ?? req.user?.collegeId ?? req.user?.college_id;
+    if (!Number.isSafeInteger(Number(collegeId)) || Number(collegeId) <= 0) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Store Manager college scope is not configured' }); }
+    const asset = await Asset.findOne({ where: { id: assetId, collegeId: Number(collegeId) }, transaction, lock: transaction.LOCK.UPDATE });
     if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found in your store scope' }); }
     const assignment = await Assignment.findOne({ where: { assetId, status: 'active' }, transaction, lock: transaction.LOCK.UPDATE });
     if (!assignment) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'This asset is not currently assigned or has already been returned' }); }

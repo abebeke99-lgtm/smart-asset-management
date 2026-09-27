@@ -5,9 +5,11 @@ const controller = require('../controllers/ictAssetController');
 const reportController = require('../controllers/ictReportController');
 const deviceHealthController = require('../controllers/deviceHealthController');
 const { getIctAssetAnalytics } = require('../services/ictAnalyticsService');
+const verification = require('../controllers/verificationController');
 
 const router = express.Router();
 const scopedIctAccess = [requireAuth, requireRole('admin', 'ict_officer'), (req, res, next) => req.user.role === 'admin' ? next() : resolveCollegeScope(req, res, next)];
+const scopedIctVerificationAccess = [requireAuth, requireRole('ict_officer'), resolveCollegeScope];
 
 router.get('/dashboard', ...scopedIctAccess, controller.getIctDashboard);
 router.get('/reports/export', ...scopedIctAccess, reportController.exportIctReport);
@@ -23,6 +25,12 @@ router.get('/analytics', ...scopedIctAccess, async (req, res, next) => {
 	}
 });
 router.get('/options', ...scopedIctAccess, controller.getIctOptions);
+router.get('/verification', ...scopedIctVerificationAccess, verification.listSessions);
+router.post('/verification', ...scopedIctVerificationAccess, verification.createSession);
+router.get('/verification/:id', ...scopedIctVerificationAccess, verification.getSession);
+router.post('/verification/:id/items', ...scopedIctVerificationAccess, verification.addItem);
+router.post('/verification/:id/submit', ...scopedIctVerificationAccess, verification.submitSession);
+router.post('/verification/:id/finalize', ...scopedIctVerificationAccess, verification.finalizeSession);
 router.get('/tracking', ...scopedIctAccess, controller.listIctTracking);
 router.get('/tracking/scan/:identifier', ...scopedIctAccess, controller.scanIctTracking);
 router.get('/tracking/:id', ...scopedIctAccess, controller.getIctTracking);
@@ -34,8 +42,14 @@ router.post('/device-health', ...scopedIctAccess, deviceHealthController.createI
 router.get('/network', ...scopedIctAccess, controller.listNetworkEquipment);
 router.get('/network/:id', ...scopedIctAccess, controller.getNetworkEquipment);
 router.get('/equipment', ...scopedIctAccess, controller.listIctEquipment);
+router.get('/equipment/:id', ...scopedIctAccess, controller.getIctAsset);
+router.post('/equipment', ...scopedIctAccess, controller.createIctAsset);
+router.put('/equipment/:id', ...scopedIctAccess, controller.updateIctAsset);
+router.patch('/equipment/:id/retire', ...scopedIctAccess, controller.retireIctAsset);
 router.get('/assets', ...scopedIctAccess, controller.listIctAssets);
+router.post('/assets', ...scopedIctAccess, controller.createIctAsset);
 router.get('/assets/options', ...scopedIctAccess, controller.getIctOptions);
+router.post('/assets/:id/maintenance', ...scopedIctAccess, controller.createIctMaintenanceRequest);
 router.get('/assets/:id', ...scopedIctAccess, controller.getIctAsset);
 router.patch('/assets/:id', ...scopedIctAccess, controller.updateIctAsset);
 router.get('/asset-history', ...scopedIctAccess, controller.listIctAssetHistory);

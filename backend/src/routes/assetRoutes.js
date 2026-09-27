@@ -19,12 +19,22 @@ const {
   endCustody,
 } = require('../controllers/assetExtendedController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
+const { resolveDepartmentScope } = require('../middlewares/organizationScope');
 const { Assignment, Maintenance, Transfer, RFIDLog, AuditLog, User, Department } = require('../models');
 const { Op } = require('sequelize');
 
 const router = express.Router();
 
 const assetManagerRoles = ['admin', 'ict_officer', 'store_manager'];
+const resolveDepartmentHeadAssetScope = (req, res, next) => req.user.role === 'department_head'
+	? resolveDepartmentScope(req, res, next)
+	: next();
+const verifyDepartmentHeadAsset = async (req, res, next) => {
+	if (req.user.role !== 'department_head') return next();
+	const asset = await require('../models').Asset.findOne({ where: { id: req.params.id, departmentId: req.organizationScope.departmentId, ...(req.organizationScope.collegeId ? { collegeId: req.organizationScope.collegeId } : {}) } });
+	if (!asset) return res.status(403).json({ success: false, message: 'Asset is outside your department scope' });
+	return next();
+};
 
 router.get('/', requireAuth, getAllAssets);
 router.get('/next-id', requireAuth, getNextAssetId);
@@ -109,14 +119,14 @@ router.delete('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer', 'sto
 		res.json({ success: true, asset: asset.toJSON() });
 	} catch (error) { next(error); }
 });
-router.get('/:id', requireAuth, getAssetById);
-router.get('/:id/assignments', requireAuth, async (req, res, next) => {
+router.get('/:id', requireAuth, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, getAssetById);
+router.get('/:id/assignments', requireAuth, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, async (req, res, next) => {
 	try {
 		const history = await Assignment.findAll({ where: { assetId: req.params.id }, order: [['createdAt', 'DESC']] });
 		res.json({ success: true, history });
 	} catch (error) { next(error); }
 });
-router.get('/:id/maintenance', requireAuth, async (req, res, next) => {
+router.get('/:id/maintenance', requireAuth, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, async (req, res, next) => {
 	try {
 		const history = await Maintenance.findAll({ where: { assetId: req.params.id }, order: [['createdAt', 'DESC']] });
 		res.json({ success: true, history });

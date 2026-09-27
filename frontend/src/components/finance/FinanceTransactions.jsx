@@ -12,7 +12,6 @@ import {
   DollarSign,
   Eye,
   Filter,
-  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -1073,21 +1072,6 @@ export default function FinanceTransactions() {
 
     popup.document.write(`
       <!DOCTYPE html>
-      <html>
-      <head>
-        <title>
-          Transaction ${
-            transaction.transactionNumber ||
-            ""
-          }
-        </title>
-
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            padding: 40px;
-            color: #111827;
-          }
 
           .header {
             display: flex;
@@ -3753,21 +3737,6 @@ export default function FinanceTransactions() {
                 </button>
 
                 <button
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    setShowDetails(
-                      false
-                    );
-                    openEdit(
-                      selectedTransaction
-                    );
-                  }}
-                >
-                  <Pencil size={15} />
-                  Edit
-                </button>
-
-                <button
                   className="btn btn-primary"
                   onClick={() =>
                     setShowDetails(
@@ -3878,16 +3847,10 @@ export default function FinanceTransactions() {
 
                 <button
                   className="btn btn-danger"
-                  onClick={
-                    deleteTransaction
-                  }
-                  disabled={
-                    processingId ===
-                    deleteTarget.id
-                  }
+                  onClick={deleteTransaction}
+                  disabled={processingId === deleteTarget.id}
                 >
-                  {processingId ===
-                  deleteTarget.id ? (
+                  {processingId === deleteTarget.id ? (
                     <RefreshCw
                       size={15}
                       className="spinner"

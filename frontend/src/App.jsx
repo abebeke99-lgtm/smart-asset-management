@@ -33,6 +33,7 @@ import { DataProvider } from './contexts/DataContext';
 import { getDepartmentLabel } from './utils/department';
 import { apiClient } from './utils/api';
 import UserAvatar from './components/common/UserAvatar';
+import Footer from './components/common/Footer';
 import StoreTracking from './components/store/StoreTracking';
 
 // ==========================================
@@ -90,6 +91,7 @@ const DeptProfile = lazy(() => import('./components/department/DeptProfile'));
 const DeptStaff = lazy(() => import('./components/department/DeptStaff'));
 const DeptNotifications = lazy(() => import('./components/department/DeptNotifications'));
 const DeptAssetHistory = lazy(() => import('./components/department/DeptAssetHistory'));
+const DeptVerification = lazy(() => import('./components/department/DeptVerification'));
 
 // Store Components
 const StoreDashboard = lazy(() => import('./components/store/StoreDashboard'));
@@ -121,6 +123,7 @@ const FinanceTransactions = lazy(() => import('./components/finance/FinanceTrans
 const FinanceSuppliers = lazy(() => import('./components/finance/FinanceSuppliers'));
 const FinanceValuation = lazy(() => import('./components/finance/FinanceValuation'));
 const FinanceReports = lazy(() => import('./components/finance/FinanceReports'));
+const FinanceFinancialReports = lazy(() => import('./components/finance/FinanceFinancialReports'));
 const FinanceDepreciation = lazy(() => import('./components/finance/FinanceDepreciation'));
 const FinanceDepreciationReports = lazy(() => import('./components/finance/FinanceDepreciationReports'));
 const Capitalization = lazy(() => import('./components/finance/Capitalization'));
@@ -269,6 +272,10 @@ export const normalizeRole = (role) => {
   };
   return aliases[value] || value.replace(/\s+/g, '_');
 };
+
+// Removes leading decoration such as an emoji or bullet from a label. Only non-letter,
+// non-digit characters count as decoration, so non-Latin scripts (e.g. Amharic) are preserved.
+const stripLeadingDecoration = (value) => String(value == null ? '' : value).replace(/^[^\p{L}\p{N}]+\s*/u, '').trim();
 
 const getDashboardRoute = (role) => {
   const roleMap = {
@@ -455,7 +462,20 @@ const translations = {
     footerBrandTitle: "University Asset Management System",
     footerDescription: "Centralized management of university assets, inventory, assignments, transfers, maintenance, verification, and reporting.",
     footerNavigation: "Quick Links",
+    footerLabel: "University Asset Management System footer",
+    footerSystem: "System",
     footerSupport: "Support",
+    footerHelpCenter: "Help Center",
+    footerFaq: "FAQ",
+    footerContactSupport: "Contact Support",
+    footerLegal: "Legal",
+    footerLegalUnavailable: "Legal pages are not configured",
+    footerTermsOfUse: "Terms of Use",
+    footerContactDetails: "University contact details",
+    footerAssetManagement: "Asset Management",
+    footerQrRfid: "QR / RFID",
+    languageEnglish: "Switch language to English",
+    languageAmharic: "Switch language to Amharic",
     footerSecurity: "Security & Accountability",
     footerSecurityAsset: "Secure Asset Management",
     footerSecurityRbac: "Role-Based Access Control",
@@ -545,7 +565,20 @@ const translations = {
     footerBrandTitle: "የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት",
     footerDescription: "የዩኒቨርሲቲ ንብረት፣ ኢንቬንቶሪ፣ ምደባ፣ ማስተላለፍ፣ ጥገና፣ ማረጋገጫ እና ሪፖርት ማዘጋጀትን የሚያካትት ማዕከላዊ አስተዳደር።",
     footerNavigation: "ፈጣን አገናኞች",
+    footerLabel: "የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት ግርጌ",
+    footerSystem: "ስርዓት",
     footerSupport: "ድጋፍ",
+    footerHelpCenter: "የእገዛ ማዕከል",
+    footerFaq: "ተደጋጋሚ ጥያቄዎች",
+    footerContactSupport: "ድጋፍን ያግኙ",
+    footerLegal: "ሕጋዊ",
+    footerLegalUnavailable: "የሕግ ገጾች አልተዋቀሩም",
+    footerTermsOfUse: "የአጠቃቀም ውሎች",
+    footerContactDetails: "የዩኒቨርሲቲ የመገኛ መረጃ",
+    footerAssetManagement: "የንብረት አስተዳደር",
+    footerQrRfid: "QR / RFID",
+    languageEnglish: "ቋንቋን ወደ እንግሊዝኛ ቀይር",
+    languageAmharic: "ቋንቋን ወደ አማርኛ ቀይር",
     footerSecurity: "ደህንነትና ተጠያቂነት",
     footerSecurityAsset: "ደህንነቱ የተጠበቀ ንብረት አስተዳደር",
     footerSecurityRbac: "በሚና ላይ የተመሰረተ መዳረሻ ቁጥጥር",
@@ -2362,6 +2395,11 @@ function AppContent() {
   const mobileNavToggleRef = useRef(null);
 
   const t = translations[language] || translations.en;
+  const collegeNavigationCopy = language === 'am' ? {
+    'COLLEGE MANAGER': 'የኮሌጅ አስተዳዳሪ', OVERVIEW: 'አጠቃላይ እይታ', 'COLLEGE MANAGEMENT': 'የኮሌጅ አስተዳደር', 'ASSET MANAGEMENT': 'የንብረት አስተዳደር', OPERATIONS: 'ስራዎች', 'REPORTS & ANALYTICS': 'ሪፖርቶች እና ትንታኔዎች', SYSTEM: 'ስርዓት',
+    Dashboard: 'ዳሽቦርድ', 'College Profile': 'የኮሌጅ መገለጫ', 'College Staff': 'የኮሌጅ ሰራተኞች', Locations: 'ቦታዎች', Departments: 'ዲፓርትመንቶች', 'All College Assets': 'ሁሉም የኮሌጅ ንብረቶች', Inventory: 'ኢንቬንቶሪ', 'Asset Requests': 'የንብረት ጥያቄዎች', Approvals: 'ማጽደቆች', Assignments: 'ምደባዎች', Transfers: 'ዝውውሮች', Returns: 'መመለሻዎች', 'Maintenance Oversight': 'የጥገና ክትትል', 'RFID / QR Tracking': 'RFID / QR ክትትል', 'Asset Verification': 'የንብረት ማረጋገጫ', 'College Reports': 'የኮሌጅ ሪፖርቶች', 'College Analytics': 'የኮሌጅ ትንታኔዎች', Notifications: 'ማስታወቂያዎች', 'College Manager': 'የኮሌጅ አስተዳዳሪ', Online: 'በመስመር ላይ', 'Close navigation menu': 'የአሰሳ ምናሌን ዝጋ'
+  } : {};
+  const translateCollegeNavigation = (value) => language === 'am' ? collegeNavigationCopy[value] || value : value;
 
   const getRoleDisplay = (role) => {
     const normalizedRole = normalizeRole(role);
@@ -2622,10 +2660,10 @@ function AppContent() {
   const publicNavLinks = [
     { to: '/home', label: t.home, icon: House },
     { to: '/about', label: t.about, icon: Info },
-    { to: '/about#services', label: t.services, icon: BriefcaseBusiness },
-    { to: '/about#features', label: t.features, icon: Sparkles },
+    { to: '/services', label: t.services, icon: BriefcaseBusiness },
+    { to: '/features', label: t.features, icon: Sparkles },
     { to: '/help', label: t.help, icon: CircleHelp },
-    { to: '/contac', label: t.contact, icon: Mail }
+    { to: '/contact', label: t.contact, icon: Mail }
   ];
 
   const isPublicNavActive = (to) => {
@@ -2641,7 +2679,7 @@ function AppContent() {
     return pathMatches && location.hash === `#${hash}`;
   };
 
-  const HeaderLink = ({ to, children, icon: Icon, className = '' }) => {
+  const HeaderLink = ({ to, children, className = '' }) => {
     const active = isPublicNavActive(to);
     return (
       <Link
@@ -2650,7 +2688,6 @@ function AppContent() {
         aria-current={active ? 'page' : undefined}
         className={`public-nav-link${active ? ' is-active' : ''}${className ? ` ${className}` : ''}`}
       >
-        {Icon ? <Icon size={16} strokeWidth={2} aria-hidden="true" className="public-nav-link-icon" /> : null}
         <span>{children}</span>
       </Link>
     );
@@ -2722,7 +2759,7 @@ function AppContent() {
           <div className="public-header-desktop-actions">
             <nav className="public-desktop-nav" aria-label={t.primaryNavigation}>
               {publicNavLinks.map((item) => (
-                <HeaderLink key={item.to} to={item.to} icon={item.icon}>{item.label}</HeaderLink>
+                <HeaderLink key={item.to} to={item.to}>{item.label}</HeaderLink>
               ))}
             </nav>
 
@@ -2740,7 +2777,7 @@ function AppContent() {
           aria-label={t.primaryNavigation}
         >
           {publicNavLinks.map((item) => (
-            <HeaderLink key={item.to} to={item.to} icon={item.icon} className="public-mobile-nav-link">
+            <HeaderLink key={item.to} to={item.to} className="public-mobile-nav-link">
               {item.label}
             </HeaderLink>
           ))}
@@ -2754,91 +2791,7 @@ function AppContent() {
       </header>
     );
   };
-  const Footer = () => {
-    const contactDetails = [
-      { value: organizationProfile.address, Icon: MapPin },
-      { value: organizationProfile.phone, Icon: Phone },
-      { value: organizationProfile.email, Icon: Mail }
-    ].filter(({ value }) => Boolean(String(value || '').trim()));
-
-    const supportLinks = [
-      { to: '/help', label: t.help, icon: LifeBuoy },
-      { to: '/login', label: t.login, icon: LogIn }
-    ];
-    const footerQuickLinks = publicNavLinks.filter((item) => item.to !== '/help');
-
-    return <footer className={`app-footer${!user ? ' public-site-footer' : ''}`} role="contentinfo">
-      <div className="footer-grid">
-        <div className="footer-brand">
-          <div className="footer-brand-header">
-            {organizationProfile.logo && !logoError ? (
-              <img src={organizationProfile.logo || UNIVERSITY_LOGO} alt={organizationProfile.name || t.university} className="footer-brand-logo" onError={handleLogoError} />
-            ) : (
-              <div className="footer-brand-mark" aria-hidden="true">🏫</div>
-            )}
-            <div>
-              <h2>{t.footerBrandTitle}</h2>
-            </div>
-          </div>
-          <p>{t.footerDescription}</p>
-          {contactDetails.length > 0 && <div className="footer-contact" aria-label="Contact information">
-            {contactDetails.map(({ value, Icon }) => <p key={`${Icon.displayName || Icon.name}-${value}`}><Icon size={15} aria-hidden="true" />{value}</p>)}
-          </div>}
-        </div>
-
-        <nav className="footer-section" aria-label={t.footerNavigation}>
-          <h3>{t.footerNavigation}</h3>
-          {footerQuickLinks.map((item) => {
-            const NavIcon = item.icon;
-            return (
-              <Link
-                key={item.to}
-                className="footer-link"
-                to={item.to}
-                aria-current={isPublicNavActive(item.to) ? 'page' : undefined}
-                onClick={(event) => requestPublicNavigation(item.to, event)}
-              >
-                <NavIcon size={16} aria-hidden="true" />{item.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <nav className="footer-section" aria-label={t.footerSupport}>
-          <h3>{t.footerSupport}</h3>
-          {supportLinks.map((item) => (
-            <Link key={item.to} className="footer-link" to={item.to} onClick={(event) => requestPublicNavigation(item.to, event)}>
-              <item.icon size={16} aria-hidden="true" />{item.label}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="footer-section footer-security" aria-label={t.footerSecurity}>
-          <h3>{t.footerSecurity}</h3>
-          <ul className="footer-security-list">
-            <li><ShieldCheck size={15} aria-hidden="true" />{t.footerSecurityAsset}</li>
-            <li><LockKeyhole size={15} aria-hidden="true" />{t.footerSecurityRbac}</li>
-            <li><Check size={15} aria-hidden="true" />{t.footerSecurityAudit}</li>
-          </ul>
-        </div>
-
-        {!user && (
-          <div className="footer-controls">
-            <button type="button" onClick={toggleTheme} aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}>
-              {theme === 'light' ? <Moon size={16} aria-hidden="true" /> : <Sun size={16} aria-hidden="true" />}
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className="footer-bottom">
-        <span>© {new Date().getFullYear()} {t.footerBrandTitle}. {t.footerCopyright}</span>
-      </div>
-    </footer>;
-  };
-
   const PublicHeader = () => <Header />;
-  const PublicFooter = () => <Footer />;
 
   const PublicLayout = ({ children }) => {
     const isHomeRoute = location.pathname === '/' || location.pathname === '/home';
@@ -2849,7 +2802,13 @@ function AppContent() {
         <main className="public-main" style={{ backgroundColor: currentTheme.mainBg }}>
           {children}
         </main>
-        <PublicFooter />
+        <Footer
+          t={t}
+          language={language}
+          setLanguage={setLanguage}
+          organization={organizationProfile}
+          onPublicNavigation={requestPublicNavigation}
+        />
         <ToastContainer position="top-right" autoClose={3000} />
       </div>
     );
@@ -2860,7 +2819,7 @@ function AppContent() {
       .slice()
       .sort((left, right) => right.path.length - left.path.length)
       .find((item) => item.path === currentActiveSidebar);
-    const pageTitle = String(activeItem?.label || t.dashboard).replace(/^[^\w]+\s*/, '');
+    const pageTitle = stripLeadingDecoration(activeItem?.label || t.dashboard);
     const notificationPath = sidebarItems.find((item) => item.path.endsWith('/notifications'))?.path || getDashboardRoute(user?.role);
     const settingsPath = sidebarItems.find((item) => item.path.endsWith('/settings'))?.path;
     const toggleSidebar = () => {
@@ -2959,7 +2918,7 @@ function AppContent() {
       <DashboardHeader />
       {showDashboardSidebar && (
         <>
-          {sidebarOpen && <button className="sidebar-backdrop is-visible" type="button" onClick={() => setSidebarOpen(false)} aria-label="Close navigation menu" />}
+          {sidebarOpen && <button className="sidebar-backdrop is-visible" type="button" onClick={() => setSidebarOpen(false)} aria-label={showCollegeNavigation ? translateCollegeNavigation('Close navigation menu') : 'Close navigation menu'} />}
         </>
       )}
       <div className={`authenticated-shell${isStoreManager ? ' store-manager-body' : ''}`} style={hideSidebar || !showDashboardSidebar ? { display: 'block' } : undefined}>
@@ -2972,30 +2931,30 @@ function AppContent() {
             minHeight: 0
           }}>
             <div className="admin-sidebar-profile">
-              <button className="sidebar-close" type="button" onClick={() => setSidebarOpen(false)} aria-label="Close navigation menu"><X size={18} /></button>
+              <button className="sidebar-close" type="button" onClick={() => setSidebarOpen(false)} aria-label={showCollegeNavigation ? translateCollegeNavigation('Close navigation menu') : 'Close navigation menu'}><X size={18} /></button>
               <UserAvatar user={user} size="lg" className="sidebar-avatar" />
               <div className="sidebar-user-name">{user.fullName || user.username || 'Admin'}</div>
-              <div className="sidebar-role">{getRoleDisplay(sidebarRole).label}</div>
+              <div className="sidebar-role">{translateCollegeNavigation(getRoleDisplay(sidebarRole).label)}</div>
               <div className="sidebar-organization">{user.department ? getDepartmentLabel(user.department) : 'Administration'}</div>
-              <div className="sidebar-status"><span /> Online</div>
+              <div className="sidebar-status"><span /> {translateCollegeNavigation('Online')}</div>
             </div>
 
             <nav className="admin-sidebar-nav" aria-label="Application navigation">
-              {showCollegeNavigation && <div className="sidebar-subsection-label">COLLEGE MANAGER</div>}
+              {showCollegeNavigation && <div className="sidebar-subsection-label">{translateCollegeNavigation('COLLEGE MANAGER')}</div>}
               {showCollegeNavigation && (
                 <>
-                  <div className="sidebar-subsection-label">OVERVIEW</div>
-                  {collegeOverviewItems.map((item) => renderSidebarLink(item, true))}
-                  <div className="sidebar-subsection-label">COLLEGE MANAGEMENT</div>
-                  {collegeManagementItems.map((item) => renderSidebarLink(item, true))}
-                  <div className="sidebar-subsection-label">ASSET MANAGEMENT</div>
-                  {collegeAssetItems.map((item) => renderSidebarLink(item, true))}
-                  <div className="sidebar-subsection-label">OPERATIONS</div>
-                  {collegeOperationsItems.map((item) => renderSidebarLink(item, true))}
-                  <div className="sidebar-subsection-label">REPORTS & ANALYTICS</div>
-                  {collegeAnalyticsItems.map((item) => renderSidebarLink(item, true))}
-                  <div className="sidebar-subsection-label">SYSTEM</div>
-                  {collegeSystemItems.map((item) => renderSidebarLink(item, true))}
+                  <div className="sidebar-subsection-label">{translateCollegeNavigation('OVERVIEW')}</div>
+                  {collegeOverviewItems.map((item) => renderSidebarLink(item, true, true))}
+                  <div className="sidebar-subsection-label">{translateCollegeNavigation('COLLEGE MANAGEMENT')}</div>
+                  {collegeManagementItems.map((item) => renderSidebarLink(item, true, true))}
+                  <div className="sidebar-subsection-label">{translateCollegeNavigation('ASSET MANAGEMENT')}</div>
+                  {collegeAssetItems.map((item) => renderSidebarLink(item, true, true))}
+                  <div className="sidebar-subsection-label">{translateCollegeNavigation('OPERATIONS')}</div>
+                  {collegeOperationsItems.map((item) => renderSidebarLink(item, true, true))}
+                  <div className="sidebar-subsection-label">{translateCollegeNavigation('REPORTS & ANALYTICS')}</div>
+                  {collegeAnalyticsItems.map((item) => renderSidebarLink(item, true, true))}
+                  <div className="sidebar-subsection-label">{translateCollegeNavigation('SYSTEM')}</div>
+                  {collegeSystemItems.map((item) => renderSidebarLink(item, true, true))}
                 </>
               )}
               {showDepartmentsNavigation && renderCollapsibleSection(
@@ -3098,7 +3057,7 @@ function AppContent() {
             </nav>
 
             <div className="admin-sidebar-footer">
-              <div className="sidebar-account"><UserAvatar user={user} size="sm" className="sidebar-account-avatar" /><div><strong>{user.username || 'Admin'}</strong><span>System Administrator</span></div></div>
+              <div className="sidebar-account"><UserAvatar user={user} size="sm" className="sidebar-account-avatar" /><div><strong>{user.username || 'Admin'}</strong><span>{translateCollegeNavigation(getRoleDisplay(sidebarRole).label)}</span></div></div>
               <button className="sidebar-logout" type="button" onClick={handleLogout}><LogOut size={16} aria-hidden="true" /><span>{t.logout}</span></button>
             </div>
           </aside>
@@ -3142,7 +3101,16 @@ function AppContent() {
     return (
       <>
         {isLoginRoute ? (
-          <Login />
+          <>
+            <Login />
+            <Footer
+              t={t}
+              language={language}
+              setLanguage={setLanguage}
+              organization={organizationProfile}
+              onPublicNavigation={requestPublicNavigation}
+            />
+          </>
         ) : (
           <PublicLayout>
             <Suspense fallback={<LoadingFallback />}>
@@ -3453,9 +3421,10 @@ function AppContent() {
     return FileText;
   };
 
-  const renderSidebarLink = (item, nested = false) => {
+  const renderSidebarLink = (item, nested = false, collegeNavigation = false) => {
     const isActive = item.path === currentActiveSidebar;
     const Icon = getNavigationIcon(item);
+    const itemLabel = collegeNavigation ? translateCollegeNavigation(item.label) : item.label;
     return (
       <Link
         key={item.path}
@@ -3463,11 +3432,11 @@ function AppContent() {
         className={`admin-nav-link${isActive ? ' is-active' : ''}`}
         aria-current={isActive ? 'page' : undefined}
         onClick={() => setSidebarOpen(false)}
-        title={sidebarCollapsed ? item.label.replace(/^[^\w]+\s*/, '') : undefined}
+        title={sidebarCollapsed ? stripLeadingDecoration(itemLabel) : undefined}
         style={nested ? { paddingLeft: '34px', fontSize: '0.86rem' } : undefined}
       >
         <Icon size={17} strokeWidth={1.9} aria-hidden="true" />
-        <span>{item.label.replace(/^[^\w]+\s*/, '')}</span>
+        <span>{stripLeadingDecoration(itemLabel)}</span>
       </Link>
     );
   };
@@ -3729,7 +3698,7 @@ function AppContent() {
             <Route path="maintenance-requests" element={<DepartmentMaintenance />} />
             <Route path="movement" element={<Navigate to="/department/history" replace />} />
             <Route path="utilization" element={<DeptUtilization />} />
-            <Route path="verification" element={<DeptAssets />} />
+            <Route path="verification" element={<DeptVerification />} />
             <Route path="reports" element={<DeptReports />} />
             <Route path="notifications" element={<DeptNotifications />} />
             <Route path="history" element={<DeptAssetHistory />} />
@@ -3752,7 +3721,7 @@ function AppContent() {
             <Route path="depreciation" element={<FinanceDepreciation />} />
             <Route path="capitalization" element={<Capitalization />} />
             <Route path="disposal-financial-records" element={<DisposalFinancialRecords />} />
-            <Route path="financial-reports" element={<FinanceReports />} />
+            <Route path="financial-reports" element={<FinanceFinancialReports />} />
             <Route path="budget-reports" element={<FinanceBudgetReports />} />
             <Route path="depreciation-reports" element={<FinanceDepreciationReports />} />
             <Route path="asset-value-reports" element={<FinanceAssetValueReports />} />

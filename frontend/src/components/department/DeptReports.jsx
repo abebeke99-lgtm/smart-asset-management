@@ -58,10 +58,6 @@ const DeptReports = () => {
   const isDark = theme === 'dark';
   const t = language === 'en' ? englishTranslations : amharicTranslations;
 
-  useEffect(() => {
-    fetchReports();
-  }, [fetchReports]);
-
   const fetchReports = useCallback(async () => {
     setLoading(true);
     try {
@@ -98,6 +94,10 @@ const DeptReports = () => {
     }
     setLoading(false);
   }, [filters.dateFrom, filters.dateTo, filters.category, filters.employee, filters.location, filters.assetStatus, filters.requestStatus, filters.maintenanceStatus, t]);
+
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
 
   const calculateSummary = (assets, maintenance, staff, approvals) => {
     const totalAssets = assets.length;

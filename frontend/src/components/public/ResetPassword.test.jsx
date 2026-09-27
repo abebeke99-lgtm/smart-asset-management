@@ -51,6 +51,7 @@ describe('ResetPassword', () => {
     expect(screen.getByRole('heading', { name: 'Create New Password' })).toBeInTheDocument();
     expect(screen.getByLabelText('New password')).toBeInTheDocument();
     expect(screen.getByLabelText('Confirm new password')).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 
   it('also reads the reset token from the path form of the link', async () => {
@@ -194,6 +195,12 @@ describe('ResetPassword', () => {
     const backLinks = screen.getAllByRole('link', { name: /Back to Login/ });
     expect(backLinks).toHaveLength(1);
     expect(backLinks[0]).toHaveAttribute('href', '/login');
+  });
+
+  it('links back to the homepage', () => {
+    renderPage();
+
+    expect(screen.getByRole('link', { name: /Back to Homepage/ })).toHaveAttribute('href', '/home');
   });
 
   it('renders the Amharic interface from the shared language context', () => {

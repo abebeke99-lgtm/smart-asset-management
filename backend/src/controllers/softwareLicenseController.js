@@ -10,6 +10,7 @@ const {
   SoftwareLicenseAssignment,
   User,
 } = require('../models');
+const { calculateSoftwareLicenseStatus: calculateStatus } = require('../utils/softwareLicenseStatus');
 
 const LICENSE_TYPES = ['Per User', 'Per Device', 'Subscription', 'Perpetual', 'Volume', 'Enterprise', 'Trial'];
 const RENEWAL_TYPES = ['auto', 'manual', 'not_renewable'];
@@ -29,17 +30,6 @@ const scopeWhere = (req) => {
   return { collegeId: req.organizationScope.collegeId };
 };
 const canViewKey = (req) => req.user.role === 'admin' && String(req.query.includeKey || '') === 'true';
-
-const calculateStatus = (license, requestedStatus) => {
-  if (['Suspended', 'Cancelled'].includes(requestedStatus || license.status)) return requestedStatus || license.status;
-  if (!license.expiryDate) return 'Active';
-  const expiry = new Date(`${license.expiryDate}T23:59:59.999Z`);
-  const now = new Date(`${today()}T00:00:00.000Z`);
-  const days = Math.ceil((expiry.getTime() - now.getTime()) / 86400000);
-  if (days < 0) return 'Expired';
-  if (days <= 7) return 'Expiring Soon';
-  return 'Active';
-};
 
 const maskKey = (value) => {
   const key = String(value || '');

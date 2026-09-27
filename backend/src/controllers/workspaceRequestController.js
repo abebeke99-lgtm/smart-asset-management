@@ -1,13 +1,19 @@
 const { sequelize, Approval, Asset, Department, User, AuditLog } = require('../models');
 const { Op } = require('sequelize');
 
+// Sequelize does not apply attribute-to-column mapping inside `$association.attribute$` where paths,
+// so those paths must reference the real (snake_cased) database column.
+const joinedColumn = (association, field) => `$${association}.${String(field).replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)}$`;
+
 const include = [
   { model: Asset, attributes: ['id', 'assetCode', 'name', 'departmentId', 'collegeId'] },
-  { model: Department, attributes: ['id', 'name', 'code', 'collegeId'] },
+  { model: Department, attributes: ['id', 'name', 'code', 'collegeId'], required: true },
   { model: User, as: 'Requester', attributes: ['id', 'username', 'fullName', 'role', 'departmentId'] },
 ];
 const normalize = (record) => ({ ...record.toJSON(), requestNumber: `REQ-${String(record.id).padStart(6, '0')}`, requester: record.Requester?.fullName || record.Requester?.username || null });
-const scopedWhere = (req) => req.organizationScope.departmentId ? { departmentId: req.organizationScope.departmentId } : { '$Department.collegeId$': req.organizationScope.collegeId };
+const scopedWhere = (req) => req.organizationScope.departmentId
+  ? { departmentId: req.organizationScope.departmentId, ...(req.organizationScope.collegeId ? { [joinedColumn('Department', 'collegeId')]: req.organizationScope.collegeId } : {}) }
+  : { [joinedColumn('Department', 'collegeId')]: req.organizationScope.collegeId };
 const isCollegeScope = (req) => Boolean(req.organizationScope.collegeId && !req.organizationScope.departmentId);
 
 const collegeApprovalScope = async (req) => {
@@ -89,11 +95,11 @@ const listCollegeDepartmentRequests = async (req, res, next) => {
           ...(Number.isInteger(idValue) ? [{ id: idValue }] : []),
           { item: { [Op.like]: normalizedSearch } },
           { reason: { [Op.like]: normalizedSearch } },
-          { '$Requester.fullName$': { [Op.like]: normalizedSearch } },
+          { [joinedColumn('Requester', 'fullName')]: { [Op.like]: normalizedSearch } },
           { '$Requester.username$': { [Op.like]: normalizedSearch } },
           { '$Department.name$': { [Op.like]: normalizedSearch } },
           { '$Asset.name$': { [Op.like]: normalizedSearch } },
-          { '$Asset.assetCode$': { [Op.like]: normalizedSearch } },
+          { [joinedColumn('Asset', 'assetCode')]: { [Op.like]: normalizedSearch } },
         ],
       });
     }
@@ -179,11 +185,11 @@ const listCollegeRequests = async (req, res, next) => {
     if (search) where[Op.and].push({ [Op.or]: [
       { item: { [Op.like]: `%${search}%` } },
       { reason: { [Op.like]: `%${search}%` } },
-      { '$Requester.fullName$': { [Op.like]: `%${search}%` } },
+      { [joinedColumn('Requester', 'fullName')]: { [Op.like]: `%${search}%` } },
       { '$Requester.username$': { [Op.like]: `%${search}%` } },
       { '$Department.name$': { [Op.like]: `%${search}%` } },
       { '$Asset.name$': { [Op.like]: `%${search}%` } },
-      { '$Asset.assetCode$': { [Op.like]: `%${search}%` } },
+      { [joinedColumn('Asset', 'assetCode')]: { [Op.like]: `%${search}%` } },
       ...(Number.isInteger(Number(search)) ? [{ id: Number(search) }] : []),
     ] });
     const allowedSorts = { requestId: 'id', createdAt: 'createdAt', updatedAt: 'updatedAt', status: 'status', priority: 'priority' };
@@ -236,7 +242,7 @@ const createRequest = async (req, res, next) => {
     if (!['new_asset', 'asset_issue', 'replacement', 'transfer', 'return', 'maintenance', 'other'].includes(String(type || '').toLowerCase())) return res.status(400).json({ success: false, message: 'Invalid request type' });
     if (!String(reason || '').trim() || !Number.isInteger(Number(quantity)) || Number(quantity) < 1) return res.status(400).json({ success: false, message: 'Reason and positive quantity are required' });
     const asset = assetId ? await Asset.findByPk(assetId) : null;
-    if (assetId && (!asset || asset.departmentId !== req.organizationScope.departmentId)) return res.status(403).json({ success: false, message: 'Asset is outside your department scope' });
+    if (assetId && (!asset || asset.departmentId !== req.organizationScope.departmentId || (req.organizationScope.collegeId && asset.collegeId !== req.organizationScope.collegeId))) return res.status(403).json({ success: false, message: 'Asset is outside your department scope' });
     const record = await Approval.create({ type: String(type).toLowerCase(), assetId: asset?.id || null, requestedBy: req.user.id, departmentId: req.organizationScope.departmentId, item: String(item || '').trim(), quantity: Number(quantity), priority: String(priority || 'medium').toLowerCase(), reason: String(reason).trim(), comment: JSON.stringify({ estimatedValue: Number(estimatedValue) || 0 }), status: 'pending' });
     await AuditLog.create({ userId: req.user.id, action: 'REQUEST_SUBMITTED', entity: `approval:${record.id}`, details: JSON.stringify({ requestId: record.id, departmentId: record.departmentId, type: record.type }) });
     const populated = await Approval.findByPk(record.id, { include });

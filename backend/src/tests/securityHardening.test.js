@@ -43,6 +43,13 @@ test('inventory stock write routes require an authorized role', () => {
   assert.doesNotMatch(source, /router\.post\('\/:assetId\/movement', requireAuth,/);
 });
 
+test('inventory reads are restricted and ICT requests resolve college scope', () => {
+  const source = read('../routes/inventoryRoutes.js');
+  assert.match(source, /const inventoryReadAccess = \[requireAuth, requireRole\('admin', 'store_manager', 'ict_officer'\)/);
+  assert.match(source, /req\.user\.role === 'ict_officer' \? resolveCollegeScope/);
+  assert.match(read('../controllers/inventoryController.js'), /req\.user\?\.role === 'ict_officer' && req\.organizationScope\?\.collegeId/);
+});
+
 test('admin user create/update handlers validate role and email', () => {
   const source = read('../routes/adminSupportRoutes.js');
   assert.match(source, /const allowedRoles = \['admin', 'ict_officer', 'store_manager', 'college', 'finance', 'maintenance', 'department_head', 'student', 'staff'\]/);

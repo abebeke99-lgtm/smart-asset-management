@@ -1,11 +1,10 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const { Op } = require('sequelize');
 const { User, AuditLog, Config } = require('../models');
 const { normalizePhoneNumber, sendOtpSms, isSmsConfigured } = require('../services/smsService');
-const { validateEmailConfiguration } = require('../services/emailService');
+const { validateEmailConfiguration, sendPasswordResetEmail } = require('../services/emailService');
 const { isValidEmail, isValidUsername } = require('../utils/validators');
 const { getJwtSecret } = require('../config/jwt');
 const { getRequestContext, getClientIp } = require('../middlewares/requestContext');
@@ -286,13 +285,6 @@ const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
 const otpRequestBuckets = new Map();
 const otpRequestIpBuckets = new Map();
 
-const escapeHtml = (value = '') => String(value)
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#039;');
-
 const hashValue = (value) => crypto.createHash('sha256').update(String(value)).digest('hex');
 
 const safeHashEquals = (left, right) => {
@@ -341,20 +333,6 @@ const checkForOtpRateLimit = (phoneNumber, ipAddress) => {
   return {
     blocked: phoneState.isBlocked || ipState.isBlocked,
     reason: phoneState.isBlocked ? 'phone' : ipState.isBlocked ? 'ip' : null,
-  };
-};
-
-const getMailer = () => {
-  const validation = validateEmailConfiguration();
-  if (!validation.valid) return null;
-  return {
-    transporter: nodemailer.createTransport({
-      host: validation.config.host,
-      port: Number(validation.config.port),
-      secure: Number(validation.config.port) === 465,
-      auth: { user: validation.config.user, pass: validation.config.password },
-    }),
-    from: validation.config.from,
   };
 };
 
@@ -607,13 +585,7 @@ const forgotPassword = async (req, res) => {
 
     const emailConfiguration = validateEmailConfiguration();
     if (!emailConfiguration.valid) {
-      console.error('Forgot password error:\nEmail service configuration missing');
-      return res.status(503).json({ success: false, message: 'Password reset email service is not configured.' });
-    }
-
-    const mailer = getMailer();
-    if (!mailer) {
-      console.error('Forgot password error:\nEmail service configuration missing');
+      console.error('Forgot password error: email service configuration missing');
       return res.status(503).json({ success: false, message: 'Password reset email service is not configured.' });
     }
 
@@ -621,21 +593,29 @@ const forgotPassword = async (req, res) => {
     const tokenHash = hashValue(rawToken);
     const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000);
     const resetUrl = `${getResetFrontendUrl()}/reset-password?token=${encodeURIComponent(rawToken)}`;
-    const greetingName = escapeHtml(user.fullName || user.username);
-    const safeResetUrl = escapeHtml(resetUrl);
 
     await user.update({ resetTokenHash: tokenHash, resetTokenExpiresAt: expiresAt, resetTokenUsedAt: null, resetOtpHash: null, resetOtpExpiresAt: null, resetOtpUsedAt: null, resetOtpAttempts: 0 });
-    try {
-      await mailer.transporter.sendMail({
-        from: mailer.from,
-        to: user.email,
-        subject: 'Reset Your University Asset Management System Password',
-        text: `Mekdela Amba University Asset Management System\n\nHello ${user.fullName || user.username},\n\nA password reset was requested for your account.\n\nReset your password here:\n${resetUrl}\n\nThis link expires in ${RESET_TOKEN_TTL_MINUTES} minutes and can only be used once. If you did not request this, you can safely ignore this email.`,
-        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#172033"><div style="background:#0EA5E9;padding:24px;color:#fff"><h1 style="margin:0;font-size:22px">Mekdela Amba University</h1><p style="margin:8px 0 0">University Asset Management System</p></div><div style="padding:28px;border:1px solid #dbe4ef"><h2>Reset Your Password</h2><p>Hello ${greetingName},</p><p>A password reset was requested for your account.</p><p><a href="${safeResetUrl}" style="display:inline-block;background:#0EA5E9;color:#fff;padding:12px 20px;text-decoration:none;border-radius:8px;font-weight:700">Reset Password</a></p><p>This link expires in ${RESET_TOKEN_TTL_MINUTES} minutes and can only be used once.</p><p>If you did not request this, you can safely ignore this email.</p></div></div>`,
-      });
-    } catch (mailError) {
-      await user.update({ resetTokenHash: null, resetTokenExpiresAt: null, resetTokenUsedAt: null });
-      throw mailError;
+
+    // Any delivery failure, including a timeout, must not leave a usable token behind.
+    const rollbackResetToken = async () => {
+      try {
+        await user.update({ resetTokenHash: null, resetTokenExpiresAt: null, resetTokenUsedAt: new Date() });
+      } catch (rollbackError) {
+        console.error('Failed to roll back password reset token:', rollbackError.message);
+      }
+    };
+
+    const mailResult = await sendPasswordResetEmail({
+      to: user.email,
+      fullName: user.fullName || user.username,
+      resetUrl,
+      ttlMinutes: RESET_TOKEN_TTL_MINUTES,
+    });
+
+    if (mailResult.status !== 'sent') {
+      await rollbackResetToken();
+      console.error('Forgot password error: reset email not delivered -', mailResult.reason);
+      return res.status(503).json({ success: false, message: 'Unable to process the password reset request.' });
     }
 
     await recordAuthEvent({ userId: user.id, action: 'PASSWORD_RESET_REQUESTED', result: 'Success', req });

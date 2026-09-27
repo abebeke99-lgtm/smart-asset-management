@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLanguage } from '../../contexts/UiContext';
 import CollegeDashboard from './CollegeDashboard';
 import DeptDashboard from '../department/DeptDashboard';
 import DeptStaff from '../department/DeptStaff';
@@ -27,25 +28,43 @@ import CollegeNotifications from './CollegeNotifications';
 import CollegeReports from './CollegeReports';
 import CollegeAssetAnalytics from './CollegeAssetAnalytics';
 
-const CollegeSectionWrapper = ({ title, subtitle, children }) => (
-  <div className="college-section-wrapper">
-    <div className="college-section-header">
-      <h2>{title}</h2>
-      <div>{subtitle}</div>
+const SECTION_COPY = {
+  'College Dashboard': 'የኮሌጅ ዳሽቦርድ',
+  'College-level asset, assignment, maintenance and approval overview.': 'የኮሌጅ ንብረት፣ ምደባ፣ ጥገና እና ማጽደቅ አጠቃላይ እይታ።',
+  'Asset Verification': 'የንብረት ማረጋገጫ',
+  'Physical verification, discrepancies, inspection results and audit trail for the authorized college.': 'ለተፈቀደው ኮሌጅ አካላዊ ማረጋገጫ፣ ልዩነቶች፣ የምርመራ ውጤቶች እና የኦዲት ታሪክ።',
+  'College Reports': 'የኮሌጅ ሪፖርቶች',
+  'College-scoped operational reports for assets, assignments, maintenance, transfers, verification and requests.': 'በኮሌጅ ወሰን ያሉ የንብረት፣ ምደባ፣ ጥገና፣ ዝውውር፣ ማረጋገጫ እና ጥያቄ ሪፖርቶች።',
+  Notifications: 'ማስታወቂያዎች',
+  'Approval, request, transfer, maintenance and college activity alerts.': 'የማጽደቅ፣ ጥያቄ፣ ዝውውር፣ ጥገና እና የኮሌጅ እንቅስቃሴ ማሳወቂያዎች።'
+};
+
+const CollegeSectionWrapper = ({ title, subtitle, children }) => {
+  const { language } = useLanguage();
+  const translate = (value) => language === 'am' ? SECTION_COPY[value] || value : value;
+
+  return (
+    <div className="college-section-wrapper">
+      {(title || subtitle) && (
+        <div className="college-section-header">
+          {title && <h2>{translate(title)}</h2>}
+          {subtitle && <div>{translate(subtitle)}</div>}
+        </div>
+      )}
+      {children}
     </div>
-    {children}
-  </div>
-);
+  );
+};
 
 const CollegeManagerPages = ({ section = 'dashboard' }) => {
   const sectionMap = {
     dashboard: (
-      <CollegeSectionWrapper title="College Dashboard" subtitle="College-level asset, assignment, maintenance and approval overview.">
+      <CollegeSectionWrapper title="College Dashboard">
         <CollegeDashboard />
       </CollegeSectionWrapper>
     ),
     profile: (
-      <CollegeSectionWrapper title="College Profile" subtitle="View, maintain and monitor the authorized college profile and operational statistics.">
+      <CollegeSectionWrapper>
         <CollegeProfile />
       </CollegeSectionWrapper>
     ),

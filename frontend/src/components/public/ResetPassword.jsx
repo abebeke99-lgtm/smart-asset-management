@@ -112,7 +112,6 @@ const ResetPassword = () => {
       <div className={`reset-page ${isDark ? 'reset-dark' : 'reset-light'}`}>
         <style>{resetStyles(isDark)}</style>
         <main className="reset-card">
-          <img className="reset-logo" src="/assets/mekdela-amba-university-logo.png" alt="" />
           <div className="success-state">
             <CircleCheck className="success-icon" size={46} aria-hidden="true" />
             <h1>{t.successTitle}</h1>
@@ -122,6 +121,10 @@ const ResetPassword = () => {
               <span>{t.login}</span>
             </button>
           </div>
+          <Link to="/home" className="home-link">
+            <ArrowLeft size={16} aria-hidden="true" />
+            <span>{t.backToHomepage}</span>
+          </Link>
         </main>
       </div>
     );
@@ -132,7 +135,6 @@ const ResetPassword = () => {
       <div className={`reset-page ${isDark ? 'reset-dark' : 'reset-light'}`}>
         <style>{resetStyles(isDark)}</style>
         <main className="reset-card">
-          <img className="reset-logo" src="/assets/mekdela-amba-university-logo.png" alt="" />
           <div className="invalid-state">
             <CircleAlert className="invalid-icon" size={44} aria-hidden="true" />
             <h1>{t.invalidLinkTitle}</h1>
@@ -142,6 +144,10 @@ const ResetPassword = () => {
               <Link to="/login" className="btn-secondary">{t.login}</Link>
             </div>
           </div>
+          <Link to="/home" className="home-link">
+            <ArrowLeft size={16} aria-hidden="true" />
+            <span>{t.backToHomepage}</span>
+          </Link>
         </main>
       </div>
     );
@@ -151,7 +157,6 @@ const ResetPassword = () => {
     <div className={`reset-page ${isDark ? 'reset-dark' : 'reset-light'}`}>
       <style>{resetStyles(isDark)}</style>
       <main className="reset-card">
-        <img className="reset-logo" src="/assets/mekdela-amba-university-logo.png" alt="" />
         <div className="reset-heading">
           <LockKeyhole size={32} aria-hidden="true" />
           <h1>{t.title}</h1>
@@ -220,6 +225,10 @@ const ResetPassword = () => {
             <span>{t.backToLogin}</span>
           </Link>
         </div>
+        <Link to="/home" className="home-link">
+          <ArrowLeft size={16} aria-hidden="true" />
+          <span>{t.backToHomepage}</span>
+        </Link>
       </main>
     </div>
   );
@@ -365,6 +374,27 @@ const resetStyles = (isDark) => `
   .invalid-actions { display: flex; flex-direction: column; gap: 10px; }
   .reset-back { margin-top: 24px; padding-top: 18px; border-top: 1px solid #E2E8F0; text-align: center; }
   .reset-page.reset-dark .reset-back { border-top-color: #3B4C58; }
+  .home-link {
+    position: fixed;
+    z-index: 5;
+    right: 14px;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    max-width: calc(100vw - 28px);
+    padding: 10px 14px;
+    border: 1px solid #D7DEE5;
+    border-radius: 999px;
+    background: #FFFFFF;
+    color: #536575;
+    font-size: 0.86rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .home-link:hover { text-decoration: underline; }
+  .reset-page.reset-dark .home-link { border-color: #3B4C58; background: #1E2B34; color: #C8D1D9; }
   .back-link {
     display: inline-flex;
     align-items: center;
@@ -401,6 +431,7 @@ const translations = {
     success: 'Your password has been reset. You can now sign in with your new password.',
     login: 'Go to Login',
     backToLogin: 'Back to Login',
+    backToHomepage: 'Back to Homepage',
     error: 'This password reset link is invalid or expired.',
     invalidToken: 'A valid reset token is required.',
     invalidLinkTitle: 'Invalid Reset Link',
@@ -430,6 +461,7 @@ const translations = {
     success: 'የይለፍ ቃልዎ ተቀይሯል። አሁን በአዲሱ የይለፍ ቃልዎ መግባት ይችላሉ።',
     login: 'ወደ መግቢያ ይሂዱ',
     backToLogin: 'ወደ መግቢያ ተመለስ',
+    backToHomepage: 'ወደ መነሻ ገጽ ተመለስ',
     error: 'ይህ የይለፍ ቃል መቀየሪያ ሊንክ ልክ ያልሆነ ወይም ጊዜው ካለፈበት ነው።',
     invalidToken: 'ትክክለኛ የይለፍ ቃል መቀየሪያ ቶክን ያስፈልጋል።',
     invalidLinkTitle: 'ልክ ያልሆነ ሊንክ',
