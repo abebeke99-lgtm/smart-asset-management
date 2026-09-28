@@ -22,6 +22,7 @@ const { requireAuth, requireRole } = require('../middlewares/auth');
 const { resolveDepartmentScope } = require('../middlewares/organizationScope');
 const { Assignment, Maintenance, Transfer, RFIDLog, AuditLog, User, Department } = require('../models');
 const { Op } = require('sequelize');
+const { createAuditLog } = require('../services/auditLogService');
 
 const router = express.Router();
 
@@ -70,7 +71,7 @@ router.post('/:id/assign', requireAuth, requireRole('admin', 'ict_officer'), asy
 		const previousValue = asset.toJSON();
 		const assignment = await Assignment.create({ assetId: asset.id, assignedTo: assignee.id, assignedBy: req.user.id, status: 'active', notes: JSON.stringify({ department: req.body.department_id || '', location: req.body.location || '', reason: req.body.reason || '' }) }, { transaction });
 		await asset.update({ status: 'in-use', department: req.body.department_id || asset.department, location: req.body.location || asset.location }, { transaction });
-		await AuditLog.create({ userId: req.user.id, action: 'ASSIGN_ASSET', entity: `asset:${asset.id}`, details: JSON.stringify({ assetId: asset.id, previousValue, newValue: asset.toJSON(), assignmentId: assignment.id, assignedTo: assignee.id }) }, { transaction });
+		await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'ASSIGN_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, oldValue: previousValue, newValue: { asset: asset.toJSON(), assignment: assignment.toJSON() }, details: { assetId: asset.id, assignmentId: assignment.id, assignedTo: assignee.id }, transaction });
 		await transaction.commit();
 		res.status(201).json({ success: true, assignment, asset: asset.toJSON() });
 	} catch (error) { await transaction.rollback(); next(error); }
@@ -87,7 +88,7 @@ router.post('/:id/transfer', requireAuth, requireRole('admin', 'ict_officer'), a
 		const previousValue = asset.toJSON();
 		const transfer = await Transfer.create({ assetId: asset.id, sourceDepartment: asset.department || '', destinationDepartment: department.name, currentLocation: asset.location || '', newLocation: destinationLocation, transferReason: req.body.reason || 'Administrative transfer', status: 'Completed', createdBy: req.user.id, approvedBy: req.user.id, approvalDate: new Date() });
 		await asset.update({ department: department.name, location: destinationLocation });
-		await AuditLog.create({ userId: req.user.id, action: 'TRANSFER_ASSET', entity: `asset:${asset.id}`, details: JSON.stringify({ assetId: asset.id, previousValue, newValue: asset.toJSON(), transferId: transfer.id }) });
+		await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'TRANSFER_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, oldValue: previousValue, newValue: { asset: asset.toJSON(), transfer: transfer.toJSON() }, details: { assetId: asset.id, transferId: transfer.id } });
 		res.json({ success: true, transfer, asset: asset.toJSON() });
 	} catch (error) { next(error); }
 });

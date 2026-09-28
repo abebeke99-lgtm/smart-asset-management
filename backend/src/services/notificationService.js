@@ -1,7 +1,8 @@
 const { Op } = require('sequelize');
-const { sequelize, Notification, NotificationDelivery, User, AuditLog, Config } = require('../models');
+const { sequelize, Notification, NotificationDelivery, User, Config } = require('../models');
 const { sendNotificationEmail, validateEmailConfiguration } = require('./emailService');
 const { sendSMS } = require('./smsService');
+const { createAuditLog } = require('./auditLogService');
 
 const allowedTypes = new Set(['system', 'maintenance', 'assignment', 'transfer', 'missing_asset', 'warranty', 'rfid', 'security', 'alert', 'report', 'reminder', 'approval', 'inventory', 'procurement', 'financial', 'verification', 'disposal', 'custom']);
 const allowedPriorities = new Set(['low', 'medium', 'high', 'urgent']);
@@ -152,7 +153,7 @@ const deliver = async (notification, recipient, channels, transaction) => {
   return results;
 };
 
-const createBulkNotification = async (payload, senderId) => {
+const createBulkNotification = async (payload, senderId, senderRole = null) => {
   if (!payload.title || !payload.message) throw Object.assign(new Error('Notification title and message are required'), { statusCode: 400 });
   const channels = normalizeChannels(payload.channels || payload.channel);
   if (!channels.length) throw Object.assign(new Error('At least one valid delivery channel is required'), { statusCode: 400 });
@@ -169,7 +170,17 @@ const createBulkNotification = async (payload, senderId) => {
       created.push({ notification, recipient, deliveries });
     }
     await transaction.commit();
-    await AuditLog.create({ userId: senderId, action: recipients.length > 1 ? 'BULK_NOTIFICATION_SENT' : 'NOTIFICATION_CREATED', entity: `notification:${created[0].notification.id}`, details: JSON.stringify({ recipientCount: recipients.length, channels, type: payload.type, priority: payload.priority, status }) });
+    const sender = senderRole || !senderId ? null : await User.findByPk(senderId, { attributes: ['id', 'role'] });
+    await createAuditLog({
+      userId: senderId,
+      role: senderRole || sender?.role,
+      action: 'CREATE_NOTIFICATION',
+      entity: `notification:${created[0].notification.id}`,
+      entityId: created[0].notification.id,
+      oldValue: null,
+      newValue: { title: created[0].notification.title, type: created[0].notification.type, priority: created[0].notification.priority, status },
+      details: { recipientCount: recipients.length, channels, legacyAction: recipients.length > 1 ? 'BULK_NOTIFICATION_SENT' : 'NOTIFICATION_CREATED' },
+    });
     return { notifications: created.map((item) => item.notification), recipientCount: recipients.length, channels, status };
   } catch (error) {
     await transaction.rollback();

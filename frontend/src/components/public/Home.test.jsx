@@ -66,7 +66,6 @@ describe('Home', () => {
     const quickLinks = within(footerContent.getByRole('navigation', { name: 'Quick Links' }));
     expect(quickLinks.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/home');
     expect(quickLinks.getByRole('link', { name: 'About Us' })).toHaveAttribute('href', '/about');
-    expect(quickLinks.getByRole('link', { name: 'Features' })).toHaveAttribute('href', '/features');
     expect(quickLinks.getByRole('link', { name: 'Help' })).toHaveAttribute('href', '/help');
     expect(quickLinks.getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '/contact');
 

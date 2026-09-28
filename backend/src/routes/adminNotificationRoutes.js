@@ -83,7 +83,7 @@ router.get('/notifications', ...requireAdmin, async (req, res, next) => {
 
 router.post('/notifications/bulk', ...requireAdmin, async (req, res, next) => {
   try {
-    const result = await createBulkNotification(req.body, req.user.id);
+    const result = await createBulkNotification(req.body, req.user.id, req.user.role);
     return res.status(201).json({ success: true, data: { ...result, notifications: result.notifications.map(serialize) } });
   } catch (error) { return sendError(res, next, error); }
 });
@@ -91,7 +91,7 @@ router.post('/notifications/bulk', ...requireAdmin, async (req, res, next) => {
 router.post('/notifications', ...requireAdmin, async (req, res, next) => {
   try {
     const payload = { ...req.body, recipientType: req.body.recipientType || 'users', userIds: req.body.userIds || [req.body.userId || req.body.recipient_id] };
-    const result = await createBulkNotification(payload, req.user.id);
+    const result = await createBulkNotification(payload, req.user.id, req.user.role);
     return res.status(201).json({ success: true, data: serialize(result.notifications[0]), notification: serialize(result.notifications[0]), delivery: result });
   } catch (error) { return sendError(res, next, error); }
 });

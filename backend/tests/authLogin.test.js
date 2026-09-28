@@ -5,8 +5,24 @@ const path = require('node:path');
 const jwt = require('jsonwebtoken');
 
 const { resolveLoginAliases, normalizeLoginIdentity, generateToken } = require('../src/controllers/authController');
+const { resolveDemoPassword } = require('../src/config/seed');
 const { findCollegeScopeForUser } = require('../src/middlewares/organizationScope');
 const { normalizeOrganizationSettings, resolveOrganizationSettings } = require('../src/routes/adminSettingsRoutes');
+
+test('uses the project default demo password for the seeded admin account', () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousSeedPassword = process.env.SEED_DEMO_PASSWORD;
+
+  process.env.NODE_ENV = 'development';
+  delete process.env.SEED_DEMO_PASSWORD;
+
+  try {
+    assert.equal(resolveDemoPassword(), 'bekelei123');
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousNodeEnv;
+    if (previousSeedPassword === undefined) delete process.env.SEED_DEMO_PASSWORD; else process.env.SEED_DEMO_PASSWORD = previousSeedPassword;
+  }
+});
 
 test('normalizes canonical college and department-head roles without collapsing them together', () => {
   assert.deepEqual(normalizeLoginIdentity('college'), 'college');

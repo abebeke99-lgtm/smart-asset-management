@@ -3,6 +3,7 @@ const { sequelize, Transfer, Asset, Assignment, User, Department, AuditLog } = r
 const { Op } = require('sequelize');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const { resolveCollegeScope } = require('../middlewares/organizationScope');
+const { createAuditLog } = require('../services/auditLogService');
 
 const router = express.Router();
 const canManageTransfers = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager')];
@@ -285,7 +286,17 @@ router.post('/', ...canRequestTransfers, resolveIctTransferScope, async (req, re
       requestedAt: new Date(),
     }, { transaction });
 
-    await AuditLog.create({ userId: req.user.id, action: 'CREATE_TRANSFER', entity: `transfer:${transfer.id}`, details: JSON.stringify({ transferId: transfer.id, transferNumber, assetId: asset.id, destinationDepartment: destination.name, destinationLocation: newLocation }) }, { transaction });
+    await createAuditLog({
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'TRANSFER_ASSET',
+      entity: `transfer:${transfer.id}`,
+      entityId: transfer.id,
+      oldValue: { department: asset.department || '', location: asset.location || '' },
+      newValue: { department: destination.name, location: newLocation, status: transfer.status },
+      details: { transferId: transfer.id, transferNumber, assetId: asset.id, destinationDepartment: destination.name, destinationLocation: newLocation, legacyAction: 'CREATE_TRANSFER' },
+      transaction,
+    });
     await transaction.commit();
     const populatedTransfer = await Transfer.findByPk(transfer.id, { include: transferInclude });
     res.status(201).json({ success: true, data: toTransferResponse(populatedTransfer), message: 'Transfer created successfully' });
@@ -362,7 +373,17 @@ router.patch('/:id', ...canManageTransfers, async (req, res, next) => {
           try { notes = JSON.parse(assignment.notes || '{}'); } catch (error) { notes = {}; }
           await assignment.update({ notes: JSON.stringify({ ...notes, department: transfer.destinationDepartment, location: transfer.newLocation }) }, { transaction });
         }
-        await AuditLog.create({ userId: req.user.id, action: 'COMPLETE_TRANSFER', entity: `asset:${asset.id}`, details: JSON.stringify({ transferId: transfer.id, destinationDepartment: transfer.destinationDepartment, destinationLocation: transfer.newLocation }) }, { transaction });
+        await createAuditLog({
+          userId: req.user.id,
+          role: req.user.role,
+          action: 'TRANSFER_ASSET',
+          entity: `asset:${asset.id}`,
+          entityId: asset.id,
+          oldValue: { department: asset._previousDataValues.department, location: asset._previousDataValues.location },
+          newValue: { department: asset.department, location: asset.location, status: transfer.status },
+          details: { transferId: transfer.id, destinationDepartment: transfer.destinationDepartment, destinationLocation: transfer.newLocation, legacyAction: 'COMPLETE_TRANSFER' },
+          transaction,
+        });
       }
     }
 

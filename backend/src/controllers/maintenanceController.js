@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const { sequelize, Maintenance, MaintenanceRepair, MaintenanceHistory, Asset, User, Assignment, AuditLog } = require('../models');
 const { createEventNotification } = require('../services/notificationService');
+const { createAuditLog } = require('../services/auditLogService');
 
 const managerRoles = ['admin', 'maintenance', 'ict_officer', 'store_manager', 'infrastructure'];
 const canManage = (req) => managerRoles.includes(req.user.role);
@@ -169,6 +170,16 @@ const createMaintenance = async (req, res, next) => {
     if (duplicate) return res.status(409).json({ success: false, message: 'An open maintenance request already exists for this asset' });
     const item = await Maintenance.create({ assetId: asset_id, requestedBy: req.user.id, title: requestTitle, description: requestDescription, priority: normalizedPriority });
     await MaintenanceHistory.create({ assetId: asset.id, maintenanceId: item.id, userId: req.user.id, actionType: 'created', actionDate: new Date(), newStatus: item.status, description: 'Maintenance request created', details: { requestId: item.id } });
+    await createAuditLog({
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'CREATE_MAINTENANCE',
+      entity: `maintenance:${item.id}`,
+      entityId: item.id,
+      oldValue: null,
+      newValue: item.toJSON(),
+      details: { assetId: asset.id },
+    });
     const technicians = await User.findAll({ where: { active: true, role: 'maintenance' }, attributes: ['id'] });
     try {
       await createEventNotification({ event: 'maintenance_created', eventKey: `maintenance_created:${item.id}`, entityId: item.id, userIds: technicians.map((user) => user.id), senderId: req.user.id, assetId: asset.id, type: 'maintenance', title: 'Maintenance request created', message: `Maintenance request ${item.id} was created for ${asset.name || asset.assetCode}.` });
@@ -183,6 +194,7 @@ const updateMaintenance = async (req, res, next) => {
     const item = await Maintenance.findByPk(req.params.id);
     if (!item) return res.status(404).json({ success: false, message: 'Maintenance request not found' });
     if (req.infrastructureScope && !(await Asset.findOne({ where: { id: item.assetId, ...infrastructureAssetWhere } }))) return res.status(403).json({ success: false, message: 'Maintenance record is outside the infrastructure scope' });
+    const previousValue = item.toJSON();
     const previousStatus = item.status;
     const updates = {
       title: req.body.title ?? item.title,
@@ -215,7 +227,16 @@ const updateMaintenance = async (req, res, next) => {
         : 'Maintenance request updated',
       details: { requestId: item.id },
     });
-    if (updates.status && updates.status !== previousStatus) await AuditLog.create({ userId: req.user.id, action: 'MAINTENANCE_STATUS_CHANGED', entity: `maintenance:${item.id}`, details: JSON.stringify({ requestId: item.id, assetId: item.assetId, previousStatus: displayStatus(previousStatus), newStatus: displayStatus(updates.status), comment: req.body.comment || req.body.notes || '' }) });
+    await createAuditLog({
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'UPDATE_MAINTENANCE',
+      entity: `maintenance:${item.id}`,
+      entityId: item.id,
+      oldValue: previousValue,
+      newValue: item.toJSON(),
+      details: { assetId: item.assetId, previousStatus: displayStatus(previousStatus) },
+    });
     if (updates.status && updates.status !== previousStatus) {
       try { await createEventNotification({ event: 'maintenance_status_changed', eventKey: `maintenance_status_changed:${item.id}:${updates.status}`, entityId: item.id, userIds: [item.requestedBy, item.assignedTo].filter(Boolean), senderId: req.user.id, assetId: item.assetId, type: 'maintenance', title: `Maintenance ${displayStatus(updates.status)}`, message: `Maintenance request ${item.id} is now ${displayStatus(updates.status)}.` }); } catch (notificationError) { console.error('Maintenance status notification failed:', notificationError.message); }
     }
@@ -239,6 +260,7 @@ const setStatus = async (req, res, next) => {
     }
     const asset = await Asset.findByPk(item.assetId, { transaction, lock: transaction.LOCK.UPDATE });
     if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
+    const previousValue = item.toJSON();
     const previousStatus = item.status;
     await item.update({ status }, { transaction });
     if (status === 'in-progress') {
@@ -249,7 +271,17 @@ const setStatus = async (req, res, next) => {
       const activeAssignment = await Assignment.findOne({ where: { assetId: asset.id, status: 'active' }, transaction });
       await asset.update({ status: activeAssignment ? 'assigned' : 'available' }, { transaction });
     }
-    await AuditLog.create({ userId: req.user.id, action: 'MAINTENANCE_STATUS_CHANGED', entity: `maintenance:${item.id}`, details: JSON.stringify({ requestId: item.id, assetId: item.assetId, previousStatus: displayStatus(previousStatus), newStatus: displayStatus(status), comment: req.body.comment || req.body.reason || req.body.notes || '', completion: status === 'completed' ? { resolution: req.body.resolution || '', partsUsed: req.body.parts_used || '' } : undefined }) }, { transaction });
+    await createAuditLog({
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'UPDATE_MAINTENANCE',
+      entity: `maintenance:${item.id}`,
+      entityId: item.id,
+      oldValue: previousValue,
+      newValue: item.toJSON(),
+      details: { assetId: item.assetId, previousStatus: displayStatus(previousStatus), newStatus: displayStatus(status), comment: req.body.comment || req.body.reason || req.body.notes || '' },
+      transaction,
+    });
     await MaintenanceHistory.create({ assetId: asset.id, maintenanceId: item.id, userId: req.user.id, actionType: status === 'completed' ? 'completed' : 'status_changed', actionDate: new Date(), previousStatus, newStatus: status, description: req.body.comment || req.body.reason || req.body.notes || `Maintenance status changed from ${displayStatus(previousStatus)} to ${displayStatus(status)}`, details: { requestId: item.id } }, { transaction });
     await transaction.commit();
     try { await createEventNotification({ event: 'maintenance_status_changed', eventKey: `maintenance_status_changed:${item.id}:${status}`, entityId: item.id, userIds: [item.requestedBy, item.assignedTo].filter(Boolean), senderId: req.user.id, assetId: item.assetId, type: 'maintenance', title: `Maintenance ${displayStatus(status)}`, message: `Maintenance request ${item.id} is now ${displayStatus(status)}.` }); } catch (notificationError) { console.error('Maintenance status notification failed:', notificationError.message); }

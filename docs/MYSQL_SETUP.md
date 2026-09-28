@@ -29,20 +29,21 @@ Or if using XAMPP phpMyAdmin:
 
 ### Step 2: Update .env File (if needed)
 
-Edit `/backend/.env`:
+Copy `backend/.env.example` to `backend/.env`, then configure it:
 
 ```env
 PORT=5000
-JWT_SECRET=smart_asset_secret_key_2026
+JWT_SECRET=<generate-a-unique-secret>
 DB_HOST=localhost
 DB_PORT=3306
 DB_NAME=smart_asset_db
 DB_USER=root
-DB_PASSWORD=          # Leave empty if no MySQL password (default XAMPP)
+DB_PASSWORD=
 CLIENT_URL=http://localhost:3000
-DB_SYNC_FORCE=false   # Set to true only once to force recreate tables
 NODE_ENV=development
 ```
+
+Generate `JWT_SECRET` with a cryptographically secure random value. Never use a sample or committed secret. For local development, `JWT_DEV_SECRET` may be set to a separate stable value if tokens and MFA settings must remain valid across restarts.
 
 **For XAMPP:**
 - `DB_USER=root`
@@ -84,10 +85,11 @@ npm start
 Database connection established successfully.
 Syncing database models...
 ✓ Database synchronized successfully
-✓ Default admin user created (username: admin, password: Admin@123)
-✓ Categories seeded
+Database initialization completed.
 Server running on port 5000
 ```
+
+The backend creates missing tables without dropping or recreating existing tables. Demo accounts are not created by default. To seed them in development, set `SEED_DEMO_DATA=true` and provide `SEED_DEMO_PASSWORD` in the backend environment.
 
 ### Step 5: Verify Database Sync
 
@@ -122,13 +124,6 @@ You should see:
 | `rfidlogs` | RFID scanning logs |
 | `notifications` | System notifications |
 | `auditlogs` | Audit trail for all actions |
-
-### Default Admin Account
-
-**Username:** `admin`
-**Password:** `Admin@123`
-
-> ⚠️ **Change this password immediately** in production!
 
 ### API Endpoints
 
@@ -177,12 +172,12 @@ GET  /reports             - Generate reports
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PORT` | Server port | 5000 |
-| `JWT_SECRET` | JWT signing secret | smart_asset_secret_key_2026 |
+| `JWT_SECRET` | JWT signing secret (required in production) | generated development secret |
+| `JWT_DEV_SECRET` | Optional stable local development secret | unset |
 | `DB_HOST` | MySQL host | localhost |
 | `DB_PORT` | MySQL port | 3306 |
 | `DB_NAME` | Database name | smart_asset_db |
 | `DB_USER` | MySQL username | root |
 | `DB_PASSWORD` | MySQL password | (empty) |
 | `CLIENT_URL` | Frontend URL for CORS | http://localhost:3000 |
-| `DB_SYNC_FORCE` | Force recreate tables | false |
 | `NODE_ENV` | Environment | development |

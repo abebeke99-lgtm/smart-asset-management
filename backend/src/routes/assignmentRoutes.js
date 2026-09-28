@@ -4,6 +4,7 @@ const { requireAuth, requireRole } = require('../middlewares/auth');
 const { createEventNotification } = require('../services/notificationService');
 const { Op } = require('sequelize');
 const { resolveCollegeScope, resolveDepartmentScope } = require('../middlewares/organizationScope');
+const { createAuditLog } = require('../services/auditLogService');
 
 const router = express.Router();
 const canManageAssignments = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'department_head')];
@@ -352,14 +353,18 @@ router.post('/', ...canManageAssignments, resolveAssignmentOrganizationScope, as
       notes: notes || remarks || '',
     }, { transaction });
 
-    await AuditLog.create({
+    await createAuditLog({
       userId: isAssignedTo,
+      role: req.user.role,
       action: 'ASSIGN_ASSET',
       entity: `asset:${assetId}`,
-      details: JSON.stringify({
+      entityId: assetId,
+      oldValue: { status: currentStatus, assignment: null },
+      newValue: { status: 'assigned', assignment: assignment.toJSON() },
+      details: {
         assignmentId: assignment.id,
         assetId,
-        previousStatus: asset.status,
+        previousStatus: currentStatus,
         newStatus: 'assigned',
         assignedTo: userId,
         departmentId: department_id || null,
@@ -368,8 +373,9 @@ router.post('/', ...canManageAssignments, resolveAssignmentOrganizationScope, as
         expectedReturnDate: expected_return_date || null,
         condition: condition_at_assignment || asset.condition || 'Good',
         notes: notes || remarks || '',
-      }),
-    }, { transaction });
+      },
+      transaction,
+    });
 
     await transaction.commit();
     try {

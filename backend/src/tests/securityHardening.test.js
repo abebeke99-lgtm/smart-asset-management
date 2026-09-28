@@ -5,6 +5,29 @@ const path = require('node:path');
 
 const read = (file) => fs.readFileSync(path.join(__dirname, file), 'utf8');
 
+test('canonical administrator API mount requires JWT authentication and admin role', () => {
+  const appSource = read('../app.js');
+  assert.match(appSource, /app\.use\(['"]\/api\/admin['"],\s*requireAuth,\s*requireRole\(['"]admin['"]\),\s*adminSupportRoutes\)/);
+  assert.match(appSource, /app\.use\(['"]\/api\/admin\/users['"],\s*requireAuth,\s*requireRole\(['"]admin['"]\),\s*userRoutes\)/);
+  assert.match(appSource, /app\.use\(['"]\/api['"],\s*adminSupportRoutes\)/, 'legacy shared API aliases remain available with their route-specific scopes');
+});
+
+test('backup restore hides internal exception details in production responses', () => {
+  const source = read('../routes/adminSupportRoutes.js');
+  assert.match(source, /res\.status\(400\)\.json\(\{ success: false, message: 'Backup restore failed\.' \}\)/);
+  assert.match(source, /console\.error\('Backup restore failed:', error\)/, 'technical details remain server-side only');
+  assert.doesNotMatch(source, /RESTORE_FAILED[\s\S]{0,180}error: error\.message/);
+});
+
+test('maintenance create and update audit entries retain actor role and old/new values', () => {
+  const source = read('../controllers/maintenanceController.js');
+  assert.match(source, /action: 'CREATE_MAINTENANCE'[\s\S]*?createAuditLog\(\{/);
+  assert.match(source, /action: 'UPDATE_MAINTENANCE'[\s\S]*?createAuditLog\(\{/);
+  assert.match(source, /role: req\.user\.role/);
+  assert.match(source, /oldValue: null[\s\S]*?newValue: item\.toJSON\(\)/);
+  assert.match(source, /oldValue: previousValue[\s\S]*?newValue: item\.toJSON\(\)/);
+});
+
 test('public registration restricts role selection to unprivileged roles', () => {
   const authSource = read('../controllers/authController.js');
   assert.match(authSource, /publicRoles = \['student', 'staff'\]/);
@@ -68,4 +91,10 @@ test('assignment transfer validates the new assignee id', () => {
   const source = read('../routes/assignmentRoutes.js');
   assert.match(source, /Number\(req\.body\.new_user_id \|\| req\.body\.newUserId\)/);
   assert.match(source, /Cannot transfer an assignment to an inactive user/);
+});
+
+test('backend error middleware never serializes internal 500 details to clients', () => {
+  const source = read('../app.js');
+  assert.match(source, /message:\s*status >= 500 \|\| process\.env\.NODE_ENV === 'production' \? 'Internal server error'/);
+  assert.match(source, /status < 500 && err\.errors/);
 });

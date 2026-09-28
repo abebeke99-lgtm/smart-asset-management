@@ -7,8 +7,13 @@ const Department = require('../models/Department');
 function resolveDemoPassword() {
   const configured = String(process.env.SEED_DEMO_PASSWORD || process.env.DEMO_USER_PASSWORD || '').trim();
   if (configured) return configured;
+
+  if (process.env.NODE_ENV !== 'production') {
+    return 'bekelei123';
+  }
+
   throw new Error(
-    'Seeding demo accounts requires SEED_DEMO_PASSWORD (or DEMO_USER_PASSWORD) to be configured. Set it in the backend environment file.'
+    'Seeding demo accounts requires SEED_DEMO_PASSWORD (or DEMO_USER_PASSWORD) to be configured in production. Set it in the backend environment file.'
   );
 }
 
@@ -214,6 +219,8 @@ async function ensureDemoUser(userData) {
     department: userData.department,
     phone: userData.phone,
     active: userData.active,
+    failedLoginAttempts: 0,
+    lockoutUntil: null,
   });
 
   if (userData.role === 'college') {
@@ -236,7 +243,7 @@ async function ensureDemoUser(userData) {
     : storedPassword === userData.password;
   if (!passwordMatches) {
     const hashedPassword = await bcrypt.hash(userData.password, 10);
-    await existingUser.update({ password: hashedPassword });
+    await existingUser.update({ password: hashedPassword, failedLoginAttempts: 0, lockoutUntil: null });
   }
 
   if (needsRoleUpdate || needsRename) {
@@ -273,4 +280,4 @@ async function seedDatabase() {
   }
 }
 
-module.exports = { seedDatabase, DEMO_USERS };
+module.exports = { seedDatabase, DEMO_USERS, resolveDemoPassword };

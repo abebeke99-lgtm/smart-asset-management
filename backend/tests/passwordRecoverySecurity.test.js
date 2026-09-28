@@ -98,6 +98,15 @@ const withStubs = async ({ user, onFetch, onSendMail, onCreateTransport }, run) 
   const originalAuditCreate = AuditLog.create;
   const originalFetch = global.fetch;
   const originalCreateTransport = nodemailer.createTransport;
+  const emailEnvironment = {
+    EMAIL_HOST: 'smtp.example.edu',
+    EMAIL_PORT: '587',
+    EMAIL_USER: 'test@example.edu',
+    EMAIL_PASSWORD: 'test-password',
+    EMAIL_FROM: 'no-reply@example.edu',
+  };
+  const previousEmailEnvironment = Object.fromEntries(Object.keys(emailEnvironment).map((key) => [key, process.env[key]]));
+  Object.assign(process.env, emailEnvironment);
 
   const store = createUserStore(user);
   User.findOne = store.findOne;
@@ -125,6 +134,10 @@ const withStubs = async ({ user, onFetch, onSendMail, onCreateTransport }, run) 
     AuditLog.create = originalAuditCreate;
     global.fetch = originalFetch;
     nodemailer.createTransport = originalCreateTransport;
+    Object.entries(previousEmailEnvironment).forEach(([key, value]) => {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    });
   }
 };
 

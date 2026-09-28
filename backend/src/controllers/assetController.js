@@ -1,6 +1,7 @@
 const { sequelize, Asset, Inventory, Assignment, Transfer, Maintenance, RFIDLog, AuditLog, User, Department } = require('../models');
 const { Op } = require('sequelize');
 const { nextDigitalId, buildAssetCodeFromConfig } = require('./assetExtendedController');
+const { createAuditLog } = require('../services/auditLogService');
 
 const serializeAsset = (asset, assignment = null) => {
   const data = asset.toJSON ? asset.toJSON() : asset;
@@ -68,7 +69,8 @@ const getAllAssets = async (req, res) => {
     const serialized = rows.map(asset => serializeAsset(asset, assignments.find(assignment => assignment.assetId === asset.id)));
     res.json({ success: true, data: serialized, assets: serialized, total: count, summary: { total: summaryRows.length, ...summary }, pagination: { page, limit, total: count, pages: Math.ceil(count / limit) } });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Asset list request failed:', error);
+    res.status(500).json({ success: false, message: 'Unable to load assets.' });
   }
 };
 
@@ -80,7 +82,8 @@ const getAssetById = async (req, res) => {
     const assignment = await Assignment.findOne({ where: { assetId: asset.id, status: 'active' }, include: [{ model: User, attributes: ['username', 'fullName'] }] });
     res.json({ success: true, data: serializeAsset(asset, assignment), asset: serializeAsset(asset, assignment) });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Asset detail request failed:', error);
+    res.status(500).json({ success: false, message: 'Unable to load asset.' });
   }
 };
 
@@ -150,12 +153,13 @@ const createAsset = async (req, res) => {
       departmentId: req.body.departmentId || null,
       location: req.body.location || '',
     }, { transaction });
-    await AuditLog.create({ userId: req.user.id, action: 'CREATE_ASSET', entity: `asset:${asset.id}`, details: JSON.stringify({ assetId: asset.id, newValue: asset.toJSON() }) }, { transaction });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CREATE_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, newValue: asset.toJSON(), details: { assetId: asset.id }, transaction });
     await transaction.commit();
     res.status(201).json({ success: true, data: asset });
   } catch (error) {
     await transaction.rollback();
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Asset creation failed:', error);
+    res.status(500).json({ success: false, message: 'Unable to create asset.' });
   }
 };
 
@@ -190,10 +194,11 @@ const updateAsset = async (req, res) => {
       }
     }
     await asset.update(updates);
-    await AuditLog.create({ userId: req.user.id, action: 'UPDATE_ASSET', entity: `asset:${asset.id}`, details: JSON.stringify({ assetId: asset.id, previousValue, newValue: asset.toJSON() }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, oldValue: previousValue, newValue: asset.toJSON(), details: { assetId: asset.id } });
     res.json({ success: true, data: serializeAsset(asset) });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Asset update failed:', error);
+    res.status(500).json({ success: false, message: 'Unable to update asset.' });
   }
 };
 
@@ -213,7 +218,8 @@ const deleteAsset = async (req, res, next) => {
   } catch (error) {
     await transaction.rollback();
     if (next) return next(error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error('Asset deletion failed:', error);
+    res.status(500).json({ success: false, message: 'Unable to delete asset.' });
   }
 };
 

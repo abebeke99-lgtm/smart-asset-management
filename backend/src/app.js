@@ -48,6 +48,7 @@ const contactRoutes = require('./routes/contactRoutes');
 const backupService = require('./services/backupService');
 const { requestMetricsMiddleware } = require('./middlewares/requestMetrics');
 const { requestContextMiddleware } = require('./middlewares/requestContext');
+const { requireAuth, requireRole } = require('./middlewares/auth');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -150,7 +151,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/uploads', express.static(uploadRoot, { index: false, dotfiles: 'ignore' }));
 app.use('/api/users', userRoutes);
-app.use('/api/admin/users', userRoutes);
+app.use('/api/admin/users', requireAuth, requireRole('admin'), userRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/ict/software-licenses', softwareLicenseRoutes);
 app.use('/api/ict', ictAssetRoutes);
@@ -174,10 +175,11 @@ app.use('/api/admin', analyticsRoutes);
 app.use('/api/admin', adminNotificationRoutes);
 app.use('/api/admin', adminSettingsRoutes);
 app.use('/api/admin', adminRoleRoutes);
+app.use('/api/admin/inventory', requireAuth, requireRole('admin'), chemicalRoutes);
 app.use('/api/admin/monitoring', systemMonitoringRoutes);
 app.use('/api/admin/system-monitoring', systemMonitoringRoutes);
 // Canonical administrator namespace. Legacy /api routes remain available for compatibility.
-app.use('/api/admin', adminSupportRoutes);
+app.use('/api/admin', requireAuth, requireRole('admin'), adminSupportRoutes);
 app.use('/api', notificationRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/support', supportRoutes);
@@ -200,14 +202,36 @@ app.use((err, req, res, next) => {
   const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
   res.status(status).json({
     success: false,
-    message: process.env.NODE_ENV === 'production' ? 'Internal server error' : (err.message || 'Internal server error'),
-    ...(err.errors ? { errors: err.errors } : {}),
+    message: status >= 500 || process.env.NODE_ENV === 'production' ? 'Internal server error' : (err.message || 'Request failed'),
+    ...(status < 500 && err.errors ? { errors: err.errors } : {}),
   });
 });
 
 async function startServer() {
   ensureUploadDirectories();
   const retryDelays = [5000, 10000, 20000, 30000, 60000];
+  for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
+    if (await testConnection() && await syncDatabase()) {
+      if (process.env.NODE_ENV !== 'production') {
+        if (process.env.SEED_DEMO_DATA === 'true' || process.env.SEED_DEMO_DATA === undefined) {
+          await seedDatabase();
+        }
+      }
+      backupService.startAutomaticBackupScheduler();
+      databaseReady = true;
+      console.log('Database initialization completed.');
+      break;
+    }
+
+    if (attempt === retryDelays.length) {
+      throw new Error('Database initialization failed after retry limit. Verify DB_HOST, DB_PORT, credentials, SSL, and provider firewall settings.');
+    }
+
+    const delay = retryDelays[attempt];
+    console.error(`Database unavailable. Retrying in ${delay / 1000} seconds (attempt ${attempt + 1}/${retryDelays.length}).`);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+
   await new Promise((resolve, reject) => {
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
@@ -215,25 +239,6 @@ async function startServer() {
     });
     server.once('error', reject);
   });
-
-  for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
-    if (await testConnection() && await syncDatabase()) {
-      if (process.env.NODE_ENV !== 'production' && process.env.SEED_DEMO_DATA === 'true') await seedDatabase();
-      backupService.startAutomaticBackupScheduler();
-      databaseReady = true;
-      console.log('Database initialization completed.');
-      return;
-    }
-
-    if (attempt === retryDelays.length) {
-      console.error('Database initialization failed after retry limit. Verify Render DB_HOST, DB_PORT, credentials, SSL, and provider firewall settings.');
-      return;
-    }
-
-    const delay = retryDelays[attempt];
-    console.error(`Database unavailable. Retrying in ${delay / 1000} seconds (attempt ${attempt + 1}/${retryDelays.length}).`);
-    await new Promise((resolve) => setTimeout(resolve, delay));
-  }
 }
 
 if (require.main === module) {

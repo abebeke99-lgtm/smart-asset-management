@@ -35,8 +35,9 @@ export const ROUTES = {
   ADMIN_ANALYTICS_SYSTEM: '/admin/analytics/system',
   ADMIN_REPORTS: '/admin/reports',
   ADMIN_USERS: '/admin/users',
-  ADMIN_ROLES: '/admin/users/roles',
-  ADMIN_PERMISSIONS: '/admin/users/permissions',
+  ADMIN_ROLES: '/admin/roles-permissions',
+  ADMIN_PERMISSIONS: '/admin/roles-permissions',
+  ADMIN_AUDIT_LOGS: '/admin/audit-logs',
   ADMIN_COLLEGES: '/admin/colleges',
   ADMIN_SETTINGS: '/admin/settings',
   ADMIN_NOTIFICATIONS: '/admin/notifications',
@@ -44,6 +45,7 @@ export const ROUTES = {
   ADMIN_DEPARTMENTS: '/admin/departments',
   ADMIN_LOCATIONS: '/admin/locations',
   ADMIN_MONITORING: '/admin/monitoring',
+  ADMIN_INVENTORY_QUARANTINE: '/admin/inventory/quarantine',
 
   // ICT Officer Routes
   ICT_DASHBOARD: '/ict/dashboard',
@@ -197,7 +199,8 @@ export const getRoutesByRole = (role) => {
       ROUTES.ADMIN_NOTIFICATIONS,
       ROUTES.ADMIN_AUDIT_LOGS,
       ROUTES.ADMIN_BACKUP,
-      ROUTES.ADMIN_MONITORING
+      ROUTES.ADMIN_MONITORING,
+      ROUTES.ADMIN_INVENTORY_QUARANTINE
     ],
     ict_officer: [
       ROUTES.ICT_DASHBOARD,

@@ -1,0 +1,37 @@
+.admin-quarantine-page {
+  --quarantine-ink: #15324b;
+  --quarantine-accent: #b45309;
+}
+
+.admin-quarantine-page .admin-page-title { color: var(--quarantine-ink); }
+.admin-quarantine-page .admin-page-subtitle { max-width: 680px; }
+.quarantine-refresh,
+.quarantine-release-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; }
+.quarantine-summary { display: flex; align-items: center; gap: 12px; width: fit-content; min-width: 220px; margin-bottom: 18px; padding: 14px 18px; border: 1px solid #fed7aa; border-radius: 8px; background: #fff7ed; color: #9a3412; }
+.quarantine-summary div { display: grid; gap: 2px; }
+.quarantine-summary strong { font-size: 1.2rem; line-height: 1.2; }
+.quarantine-summary span { color: #7c2d12; font-size: 0.82rem; }
+.quarantine-toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.quarantine-search { display: flex; align-items: center; gap: 9px; width: min(100%, 440px); min-height: 40px; padding: 0 12px; border: 1px solid var(--admin-border); border-radius: 7px; background: var(--admin-surface); color: var(--admin-muted); }
+.quarantine-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--admin-text); font: inherit; }
+.quarantine-table-scroll { min-height: 150px; }
+.quarantine-table { min-width: 860px; }
+.quarantine-table th:last-child,
+.quarantine-table td:last-child { text-align: right; }
+.quarantine-table td { vertical-align: middle; }
+.quarantine-table td strong,
+.quarantine-table td small { display: block; }
+.quarantine-table td small { margin-top: 4px; color: var(--admin-muted); font-size: 0.78rem; }
+.quarantine-table .quarantine-reason { max-width: 260px; white-space: normal; }
+.quarantine-release-button { border: 1px solid #fed7aa; border-radius: 6px; padding: 0 12px; background: #fff7ed; color: #9a3412; font: inherit; font-size: 0.84rem; font-weight: 700; cursor: pointer; }
+.quarantine-release-button:hover:not(:disabled) { background: #ffedd5; }
+.quarantine-release-button:disabled,
+.quarantine-refresh:disabled { cursor: wait; opacity: 0.65; }
+
+@media (max-width: 680px) {
+  .admin-quarantine-page .admin-page-header { align-items: stretch; }
+  .quarantine-refresh { align-self: flex-start; }
+  .quarantine-toolbar { justify-content: stretch; }
+  .quarantine-search { width: 100%; }
+  .admin-quarantine-page .admin-pagination { justify-content: space-between; flex-wrap: wrap; }
+}

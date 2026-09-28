@@ -211,6 +211,12 @@ body {
   border-radius: 7px;
 }
 
+.dashboard-menu-logo {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
 .dashboard-menu-button:hover,
 .dashboard-icon-button:hover,
 .dashboard-language-button:hover,
@@ -321,18 +327,6 @@ body {
   width: 80px;
   height: 80px;
   font-size: 28px;
-}
-
-.dashboard-profile-avatar {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  color: #17212B;
-  background: #fff;
-  border-radius: 50%;
-  font-size: 12px;
-  flex-shrink: 0;
 }
 
 .dashboard-profile-name {
@@ -1440,19 +1434,6 @@ body.dark .admin-sidebar-profile {
   background: var(--primary-blue);
 }
 
-.sidebar-avatar {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  margin: 0 auto 10px;
-  border-radius: 50%;
-  background: rgba(255,255,255,.2);
-  border: 2px solid rgba(255,255,255,.65);
-  font-size: 20px;
-  font-weight: 700;
-}
-
 .profile-photo-preview {
   border: 3px solid rgba(91, 125, 184, 0.18);
   box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
@@ -1602,24 +1583,6 @@ body.dark .admin-sidebar-footer {
 
 body.dark .sidebar-account {
   color: #0f172a;
-}
-
-.sidebar-account-avatar {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  color: #2864E8;
-  background: var(--surface);
-  font-size: 12px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-body.dark .sidebar-account-avatar {
-  color: #2864E8;
-  background: #ffffff;
 }
 
 .sidebar-account strong {

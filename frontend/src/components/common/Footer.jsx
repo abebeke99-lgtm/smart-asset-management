@@ -5,7 +5,6 @@ import { BarChart3, Building2, ClipboardList, FileText, Languages, LifeBuoy, Loc
 const publicLinks = [
   { to: '/home', key: 'home' },
   { to: '/about', key: 'about' },
-  { to: '/features', key: 'features' },
   { to: '/help', key: 'help' },
   { to: '/contact', key: 'contact' }
 ];
@@ -17,9 +16,9 @@ const roleSystemLinks = {
   department_head: ['/department/assets', '/department/inventory', '/department/verification', '/department/maintenance', '/department/reports'],
   staff: ['/department/assets', '/department/inventory', '/department/verification', '/department/maintenance', '/department/history'],
   store_manager: ['/store/available-assets', '/store/inventory', '/store/tracking', '/store/maintenance', '/store/reports/inventory'],
-  maintenance: ['/maintenance/assets-under-maintenance', '/maintenance/spare-parts', '/features', '/maintenance', '/maintenance/reports'],
+  maintenance: ['/maintenance/assets-under-maintenance', '/maintenance/spare-parts', '/maintenance', '/maintenance', '/maintenance/reports'],
   infrastructure: ['/infrastructure/assets', '/infrastructure/inventory', '/infrastructure/tracking', '/infrastructure/maintenance', '/infrastructure/reports'],
-  finance: ['/finance/valuation', '/services', '/features', '/services', '/finance/financial-reports']
+  finance: ['/finance/valuation', '/services', '/services', '/services', '/finance/financial-reports']
 };
 
 const systemItems = [
@@ -32,7 +31,7 @@ const systemItems = [
 
 const Footer = ({ t, language, setLanguage, organization, role, onPublicNavigation }) => {
   const { pathname } = useLocation();
-  const systemDestinations = roleSystemLinks[role] || ['/services', '/services', '/features', '/services', '/features'];
+  const systemDestinations = roleSystemLinks[role] || ['/services', '/services', '/services', '/services', '/services'];
   const organizationName = organization?.institutionName || organization?.name || t.university;
   const year = new Date().getFullYear();
 

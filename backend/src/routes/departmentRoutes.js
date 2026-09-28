@@ -4,6 +4,7 @@ const { requireAuth, requireRole } = require('../middlewares/auth');
 const { Department, User, Asset, AuditLog, College, Location } = require('../models');
 const { Op } = require('sequelize');
 const { resolveCollegeScope } = require('../middlewares/organizationScope');
+const { createAuditLog } = require('../services/auditLogService');
 
 const requireAdmin = [requireAuth, requireRole('admin')];
 
@@ -186,12 +187,7 @@ router.post('/', ...requireAdmin, async (req, res, next) => {
       status,
     });
     
-    await AuditLog.create({
-      userId: req.user.id,
-      action: 'CREATE_DEPARTMENT',
-      entity: `department:${dept.id}`,
-      details: JSON.stringify({ name: dept.name, code: dept.code, description: dept.description })
-    });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CREATE_DEPARTMENT', entity: `department:${dept.id}`, entityId: dept.id, newValue: dept.toJSON(), details: { name: dept.name, code: dept.code } });
     
     res.status(201).json({ success: true, data: dept.toJSON() });
   } catch (error) {
@@ -247,12 +243,7 @@ router.put('/:id', ...requireAdmin, async (req, res, next) => {
     
     await dept.update(updates);
     
-    await AuditLog.create({
-      userId: req.user.id,
-      action: 'UPDATE_DEPARTMENT',
-      entity: `department:${dept.id}`,
-      details: JSON.stringify({ previousValue, newValue: dept.toJSON() })
-    });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_DEPARTMENT', entity: `department:${dept.id}`, entityId: dept.id, oldValue: previousValue, newValue: dept.toJSON() });
     
     res.json({ success: true, data: dept.toJSON() });
   } catch (error) {

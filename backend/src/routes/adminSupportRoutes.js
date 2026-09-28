@@ -9,10 +9,12 @@ const { Op } = require('sequelize');
 const speakeasy = require('speakeasy');
 const maintenanceController = require('../controllers/maintenanceController');
 const backupService = require('../services/backupService');
+const { getJwtSecret } = require('../config/jwt');
+const { createAuditLog } = require('../services/auditLogService');
 
 const router = express.Router();
 const requireAdmin = [requireAuth, requireRole('admin')];
-const mfaCipherKey = crypto.createHash('sha256').update(process.env.JWT_SECRET || 'smart_asset_secret_key_2026').digest();
+const mfaCipherKey = crypto.createHash('sha256').update(getJwtSecret()).digest();
 const encryptMfaSecret = (secret) => {
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv('aes-256-gcm', mfaCipherKey, iv);
@@ -210,9 +212,9 @@ router.post('/users', ...requireAdmin, async (req, res, next) => {
     if (!username || !fullName) return res.status(400).json({ success: false, message: 'Username and full name are required' });
     if (!allowedRoles.includes(role)) return res.status(422).json({ success: false, message: 'Invalid user role' });
     if (email && !isValidEmail(email)) return res.status(422).json({ success: false, message: 'Valid email is required' });
-    const password = String(req.body.password || 'Password123!').trim();
+    const password = String(req.body.password || 'bekelei123').trim();
     const user = await User.create({ username, email, fullName, phone, role, department: String(req.body.department || ''), collegeId: req.body.collegeId || null, departmentId: req.body.departmentId || null, active: req.body.active !== false, password: await bcrypt.hash(password, 10), forcePasswordChange: Boolean(req.body.forcePasswordChange || req.body.force_password_change || false) });
-    await AuditLog.create({ userId: req.user.id, action: 'USER_CREATED', entity: `user:${user.id}`, details: JSON.stringify({ username, role, collegeId: user.collegeId, departmentId: user.departmentId }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CREATE_USER', entity: `user:${user.id}`, entityId: user.id, newValue: normalizeUser(user), details: { username, role, collegeId: user.collegeId, departmentId: user.departmentId, legacyAction: 'USER_CREATED' } });
     return res.status(201).json({ success: true, data: normalizeUser(user), user: normalizeUser(user) });
   } catch (error) { next(error); }
 });
@@ -222,6 +224,7 @@ router.put('/users/:id', ...requireAdmin, async (req, res, next) => {
     const { isValidEmail } = require('../utils/validators');
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    const previousValue = normalizeUser(user);
     const allowedRoles = ['admin', 'ict_officer', 'store_manager', 'college', 'finance', 'maintenance', 'department_head', 'student', 'staff'];
     const nextRole = String(req.body.role || user.role || 'staff').trim().toLowerCase();
     if (!allowedRoles.includes(nextRole)) return res.status(422).json({ success: false, message: 'Invalid user role' });
@@ -236,7 +239,8 @@ router.put('/users/:id', ...requireAdmin, async (req, res, next) => {
     user.departmentId = req.body.departmentId ?? user.departmentId ?? null;
     user.active = req.body.active ?? user.active;
     await user.save();
-    await AuditLog.create({ userId: req.user.id, action: 'USER_UPDATED', entity: `user:${user.id}`, details: JSON.stringify({ username: user.username, role: user.role }) });
+    const roleChanged = previousValue.role !== user.role;
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: roleChanged ? 'CHANGE_ROLE' : 'UPDATE_USER', entity: `user:${user.id}`, entityId: user.id, oldValue: previousValue, newValue: normalizeUser(user), details: { username: user.username, legacyAction: 'USER_UPDATED' } });
     return res.json({ success: true, data: normalizeUser(user), user: normalizeUser(user) });
   } catch (error) { next(error); }
 });
@@ -245,10 +249,11 @@ router.patch('/users/:id/status', ...requireAdmin, async (req, res, next) => {
   try {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    const previousValue = normalizeUser(user);
     const nextState = String(req.body.status || req.body.active || 'active').toLowerCase();
     user.active = nextState === 'active' || nextState === 'true' || nextState === 'enabled';
     await user.save();
-    await AuditLog.create({ userId: req.user.id, action: user.active ? 'USER_ACTIVATED' : 'USER_DEACTIVATED', entity: `user:${user.id}`, details: JSON.stringify({ active: user.active }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_USER', entity: `user:${user.id}`, entityId: user.id, oldValue: previousValue, newValue: normalizeUser(user), details: { operation: user.active ? 'activate' : 'deactivate', legacyAction: user.active ? 'USER_ACTIVATED' : 'USER_DEACTIVATED' } });
     return res.json({ success: true, data: normalizeUser(user), user: normalizeUser(user) });
   } catch (error) { next(error); }
 });
@@ -257,9 +262,10 @@ router.post('/users/:id/lock', ...requireAdmin, async (req, res, next) => {
   try {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    const previousValue = normalizeUser(user);
     user.active = false;
     await user.save();
-    await AuditLog.create({ userId: req.user.id, action: 'USER_LOCKED', entity: `user:${user.id}`, details: JSON.stringify({ username: user.username }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_USER', entity: `user:${user.id}`, entityId: user.id, oldValue: previousValue, newValue: normalizeUser(user), details: { operation: 'lock', legacyAction: 'USER_LOCKED' } });
     return res.json({ success: true, data: normalizeUser(user), user: normalizeUser(user) });
   } catch (error) { next(error); }
 });
@@ -268,9 +274,10 @@ router.post('/users/:id/unlock', ...requireAdmin, async (req, res, next) => {
   try {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    const previousValue = normalizeUser(user);
     user.active = true;
     await user.save();
-    await AuditLog.create({ userId: req.user.id, action: 'USER_UNLOCKED', entity: `user:${user.id}`, details: JSON.stringify({ username: user.username }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_USER', entity: `user:${user.id}`, entityId: user.id, oldValue: previousValue, newValue: normalizeUser(user), details: { operation: 'unlock', legacyAction: 'USER_UNLOCKED' } });
     return res.json({ success: true, data: normalizeUser(user), user: normalizeUser(user) });
   } catch (error) { next(error); }
 });
@@ -279,10 +286,11 @@ router.post('/users/:id/reset-password', ...requireAdmin, async (req, res, next)
   try {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    const previousValue = normalizeUser(user);
     user.forcePasswordChange = true;
-    user.password = await bcrypt.hash(String(req.body.password || 'Password123!'), 10);
+    user.password = await bcrypt.hash(String(req.body.password || 'bekelei123'), 10);
     await user.save();
-    await AuditLog.create({ userId: req.user.id, action: 'PASSWORD_RESET', entity: `user:${user.id}`, details: JSON.stringify({ username: user.username }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_USER', entity: `user:${user.id}`, entityId: user.id, oldValue: previousValue, newValue: normalizeUser(user), details: { operation: 'password_reset', legacyAction: 'PASSWORD_RESET' } });
     return res.json({ success: true, data: normalizeUser(user), user: normalizeUser(user) });
   } catch (error) { next(error); }
 });
@@ -474,7 +482,7 @@ router.post('/colleges', ...requireAdmin, async (req, res, next) => {
     const managerValidation = await validateCollegeManager(payload.managerId);
     if (managerValidation.error) return res.status(400).json({ success: false, message: managerValidation.error });
     const college = await College.create(payload);
-    await AuditLog.create({ userId: req.user.id, action: 'COLLEGE_CREATED', entity: `college:${college.id}`, details: JSON.stringify({ collegeCode: college.collegeCode, collegeName: college.collegeName, managerId: college.managerId }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CREATE_COLLEGE', entity: `college:${college.id}`, entityId: college.id, newValue: college.toJSON(), details: { legacyAction: 'COLLEGE_CREATED' } });
     if (college.managerId) await AuditLog.create({ userId: req.user.id, action: 'COLLEGE_MANAGER_ASSIGNED', entity: `college:${college.id}`, details: JSON.stringify({ managerId: college.managerId }) });
     const data = await serializeCollege(college);
     return res.status(201).json({ success: true, data, college: data });
@@ -485,6 +493,7 @@ router.put('/colleges/:id', ...requireAdmin, async (req, res, next) => {
   try {
     const college = await College.findByPk(req.params.id);
     if (!college) return res.status(404).json({ success: false, message: 'College not found' });
+    const previousValue = college.toJSON();
     const payload = collegePayload(req.body, college.toJSON());
     if (!payload.collegeCode || !payload.collegeName) return res.status(400).json({ success: false, message: 'College code and name are required' });
     if (!['active', 'inactive'].includes(payload.status)) return res.status(400).json({ success: false, message: 'Status must be active or inactive' });
@@ -493,7 +502,7 @@ router.put('/colleges/:id', ...requireAdmin, async (req, res, next) => {
     if (managerValidation.error) return res.status(400).json({ success: false, message: managerValidation.error });
     const previousManagerId = college.managerId;
     await college.update(payload);
-    await AuditLog.create({ userId: req.user.id, action: 'COLLEGE_UPDATED', entity: `college:${college.id}`, details: JSON.stringify({ before: { collegeCode: college.collegeCode, collegeName: college.collegeName, managerId: previousManagerId }, after: payload }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_COLLEGE', entity: `college:${college.id}`, entityId: college.id, oldValue: previousValue, newValue: college.toJSON(), details: { legacyAction: 'COLLEGE_UPDATED' } });
     if (previousManagerId !== college.managerId) await AuditLog.create({ userId: req.user.id, action: college.managerId ? 'COLLEGE_MANAGER_ASSIGNED' : 'COLLEGE_MANAGER_CHANGED', entity: `college:${college.id}`, details: JSON.stringify({ previousManagerId, managerId: college.managerId }) });
     const data = await serializeCollege(college);
     return res.json({ success: true, data, college: data });
@@ -504,11 +513,12 @@ router.patch('/colleges/:id/status', ...requireAdmin, async (req, res, next) => 
   try {
     const college = await College.findByPk(req.params.id);
     if (!college) return res.status(404).json({ success: false, message: 'College not found' });
+    const previousValue = college.toJSON();
     const status = String(req.body.status || '').toLowerCase();
     if (!['active', 'inactive'].includes(status)) return res.status(400).json({ success: false, message: 'Status must be active or inactive' });
     const previousStatus = college.status;
     await college.update({ status });
-    await AuditLog.create({ userId: req.user.id, action: status === 'active' ? 'COLLEGE_ACTIVATED' : 'COLLEGE_DEACTIVATED', entity: `college:${college.id}`, details: JSON.stringify({ previousStatus, status }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_COLLEGE', entity: `college:${college.id}`, entityId: college.id, oldValue: previousValue, newValue: college.toJSON(), details: { legacyAction: status === 'active' ? 'COLLEGE_ACTIVATED' : 'COLLEGE_DEACTIVATED' } });
     const data = await serializeCollege(college);
     return res.json({ success: true, data, college: data });
   } catch (error) { next(error); }
@@ -949,7 +959,7 @@ router.post('/disposals', ...disposalAccess, async (req, res, next) => {
       disposalCost: 0,
     });
 
-    await AuditLog.create({ userId: req.user.id, action: 'DISPOSAL_REQUEST_CREATED', entity: `disposal:${request.id}`, details: JSON.stringify({ disposalNumber, assetId: asset.id, status: 'Requested', type, condition, reason }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'DISPOSE_ASSET', entity: `disposal:${request.id}`, entityId: request.id, oldValue: null, newValue: request.toJSON(), details: { assetId: asset.id, operation: 'request', legacyAction: 'DISPOSAL_REQUEST_CREATED' } });
     return res.status(201).json({ success: true, data: normalizeDisposalRequest(request), disposal: normalizeDisposalRequest(request) });
   } catch (error) {
     next(error);
@@ -960,10 +970,11 @@ router.post('/disposals/:id/review', ...disposalAccess, async (req, res, next) =
   try {
     const request = await DisposalRequest.findByPk(req.params.id);
     if (!request) return res.status(404).json({ success: false, message: 'Disposal request not found' });
+    const previousValue = request.toJSON();
     request.reviewedBy = req.user.id;
     request.status = 'Under Review';
     await request.save();
-    await AuditLog.create({ userId: req.user.id, action: 'DISPOSAL_REVIEW_STARTED', entity: `disposal:${request.id}`, details: JSON.stringify({ disposalNumber: request.disposalNumber, oldStatus: 'Requested', newStatus: 'Under Review' }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'DISPOSE_ASSET', entity: `disposal:${request.id}`, entityId: request.id, oldValue: previousValue, newValue: request.toJSON(), details: { operation: 'review', legacyAction: 'DISPOSAL_REVIEW_STARTED' } });
     return res.json({ success: true, data: normalizeDisposalRequest(request) });
   } catch (error) {
     next(error);
@@ -975,10 +986,11 @@ router.post('/disposals/:id/approve', ...disposalAccess, async (req, res, next) 
     const request = await DisposalRequest.findByPk(req.params.id);
     if (!request) return res.status(404).json({ success: false, message: 'Disposal request not found' });
     if (String(request.requestedBy) === String(req.user.id)) return res.status(409).json({ success: false, message: 'Self-approval is not allowed' });
+    const previousValue = request.toJSON();
     request.approvedBy = req.user.id;
     request.status = 'Approved';
     await request.save();
-    await AuditLog.create({ userId: req.user.id, action: 'DISPOSAL_APPROVED', entity: `disposal:${request.id}`, details: JSON.stringify({ disposalNumber: request.disposalNumber, assetId: request.assetId, oldStatus: request.status, newStatus: 'Approved' }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'DISPOSE_ASSET', entity: `disposal:${request.id}`, entityId: request.id, oldValue: previousValue, newValue: request.toJSON(), details: { operation: 'approve', legacyAction: 'DISPOSAL_APPROVED' } });
     return res.json({ success: true, data: normalizeDisposalRequest(request) });
   } catch (error) {
     next(error);
@@ -991,10 +1003,11 @@ router.post('/disposals/:id/reject', ...disposalAccess, async (req, res, next) =
     if (!reason) return res.status(400).json({ success: false, message: 'Rejection reason is required' });
     const request = await DisposalRequest.findByPk(req.params.id);
     if (!request) return res.status(404).json({ success: false, message: 'Disposal request not found' });
+    const previousValue = request.toJSON();
     request.status = 'Rejected';
     request.rejectionReason = reason;
     await request.save();
-    await AuditLog.create({ userId: req.user.id, action: 'DISPOSAL_REJECTED', entity: `disposal:${request.id}`, details: JSON.stringify({ disposalNumber: request.disposalNumber, assetId: request.assetId, reason }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'DISPOSE_ASSET', entity: `disposal:${request.id}`, entityId: request.id, oldValue: previousValue, newValue: request.toJSON(), details: { operation: 'reject', reason, legacyAction: 'DISPOSAL_REJECTED' } });
     return res.json({ success: true, data: normalizeDisposalRequest(request) });
   } catch (error) {
     next(error);
@@ -1005,11 +1018,12 @@ router.post('/disposals/:id/schedule', ...disposalAccess, async (req, res, next)
   try {
     const request = await DisposalRequest.findByPk(req.params.id);
     if (!request) return res.status(404).json({ success: false, message: 'Disposal request not found' });
+    const previousValue = request.toJSON();
     request.status = 'Scheduled';
     request.scheduledDate = req.body.scheduledDate ? new Date(req.body.scheduledDate) : new Date();
     request.notes = String(req.body.notes || request.notes || '');
     await request.save();
-    await AuditLog.create({ userId: req.user.id, action: 'DISPOSAL_SCHEDULED', entity: `disposal:${request.id}`, details: JSON.stringify({ disposalNumber: request.disposalNumber, assetId: request.assetId, scheduledDate: request.scheduledDate }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'DISPOSE_ASSET', entity: `disposal:${request.id}`, entityId: request.id, oldValue: previousValue, newValue: request.toJSON(), details: { operation: 'schedule', legacyAction: 'DISPOSAL_SCHEDULED' } });
     return res.json({ success: true, data: normalizeDisposalRequest(request) });
   } catch (error) {
     next(error);
@@ -1022,11 +1036,12 @@ router.post('/disposals/:id/retire', ...disposalAccess, async (req, res, next) =
     if (!request) return res.status(404).json({ success: false, message: 'Disposal request not found' });
     const asset = await Asset.findByPk(request.assetId);
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
+    const previousValue = { asset: asset.toJSON(), disposal: request.toJSON() };
     request.status = 'Retired';
     await request.save();
     asset.status = 'retired';
     await asset.save();
-    await AuditLog.create({ userId: req.user.id, action: 'ASSET_RETIRED', entity: `asset:${asset.id}`, details: JSON.stringify({ disposalNumber: request.disposalNumber, assetId: asset.id, status: 'Retired' }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'DISPOSE_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, oldValue: previousValue, newValue: { asset: asset.toJSON(), disposal: request.toJSON() }, details: { disposalId: request.id, disposalNumber: request.disposalNumber, operation: 'retire', legacyAction: 'ASSET_RETIRED' } });
     return res.json({ success: true, data: normalizeDisposalRequest(request) });
   } catch (error) {
     next(error);
@@ -1039,13 +1054,14 @@ router.post('/disposals/:id/execute', ...disposalAccess, async (req, res, next) 
     if (!request) return res.status(404).json({ success: false, message: 'Disposal request not found' });
     const asset = await Asset.findByPk(request.assetId);
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
+    const previousValue = { asset: asset.toJSON(), disposal: request.toJSON() };
     request.status = 'Disposed';
     request.executedBy = req.user.id;
     request.completedDate = new Date();
     await request.save();
     asset.status = 'disposed';
     await asset.save();
-    await AuditLog.create({ userId: req.user.id, action: 'ASSET_DISPOSED', entity: `asset:${asset.id}`, details: JSON.stringify({ disposalNumber: request.disposalNumber, assetId: asset.id, status: 'Disposed' }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'DISPOSE_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, oldValue: previousValue, newValue: { asset: asset.toJSON(), disposal: request.toJSON() }, details: { disposalId: request.id, disposalNumber: request.disposalNumber, operation: 'dispose', legacyAction: 'ASSET_DISPOSED' } });
     return res.json({ success: true, data: normalizeDisposalRequest(request) });
   } catch (error) {
     next(error);
@@ -1058,10 +1074,11 @@ router.post('/disposals/:id/cancel', ...disposalAccess, async (req, res, next) =
     if (!reason) return res.status(400).json({ success: false, message: 'Cancellation reason is required' });
     const request = await DisposalRequest.findByPk(req.params.id);
     if (!request) return res.status(404).json({ success: false, message: 'Disposal request not found' });
+    const previousValue = request.toJSON();
     request.status = 'Cancelled';
     request.cancellationReason = reason;
     await request.save();
-    await AuditLog.create({ userId: req.user.id, action: 'DISPOSAL_CANCELLED', entity: `disposal:${request.id}`, details: JSON.stringify({ disposalNumber: request.disposalNumber, assetId: request.assetId, reason }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'DISPOSE_ASSET', entity: `disposal:${request.id}`, entityId: request.id, oldValue: previousValue, newValue: request.toJSON(), details: { operation: 'cancel', reason, legacyAction: 'DISPOSAL_CANCELLED' } });
     return res.json({ success: true, data: normalizeDisposalRequest(request) });
   } catch (error) {
     next(error);
@@ -1091,7 +1108,7 @@ router.post('/departments', ...requireAdmin, async (req, res, next) => {
     const validation = await validateDepartment(req.body);
     if (validation.error) return res.status(400).json({ success: false, message: validation.error });
     const department = await Department.create(validation.value);
-    await AuditLog.create({ userId: req.user.id, action: 'DEPARTMENT_CREATED', entity: `department:${department.id}`, details: JSON.stringify({ name: department.name, code: department.code }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CREATE_DEPARTMENT', entity: `department:${department.id}`, entityId: department.id, newValue: department.toJSON(), details: { name: department.name, code: department.code, legacyAction: 'DEPARTMENT_CREATED' } });
     res.status(201).json({ success: true, data: await normalizeDepartment(department) });
   } catch (error) { next(error); }
 });
@@ -1104,7 +1121,7 @@ router.put('/departments/:id', ...requireAdmin, async (req, res, next) => {
     if (validation.error) return res.status(400).json({ success: false, message: validation.error });
     const previous = department.toJSON();
     await department.update(validation.value);
-    await AuditLog.create({ userId: req.user.id, action: 'DEPARTMENT_UPDATED', entity: `department:${department.id}`, details: JSON.stringify({ previous: { name: previous.name, code: previous.code, headId: previous.headId }, next: { name: department.name, code: department.code, headId: department.headId } }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_DEPARTMENT', entity: `department:${department.id}`, entityId: department.id, oldValue: previous, newValue: department.toJSON(), details: { legacyAction: 'DEPARTMENT_UPDATED' } });
     res.json({ success: true, data: await normalizeDepartment(department) });
   } catch (error) { next(error); }
 });
@@ -1710,12 +1727,7 @@ router.post('/backups', ...requireAdmin, async (req, res, next) => {
   try {
     const createdBy = req.user?.username || req.user?.fullName || 'System';
     const backup = await backupService.createManualBackup({ createdBy, type: 'Manual', source: 'database' });
-    await AuditLog.create({
-      userId: req.user.id,
-      action: 'BACKUP_CREATED',
-      entity: `backup:${backup.filename}`,
-      details: JSON.stringify({ filename: backup.filename, size: backup.size, checksum: backup.checksum, status: backup.status, type: backup.type }),
-    });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'BACKUP_OPERATION', entity: `backup:${backup.filename}`, entityId: backup.filename, oldValue: null, newValue: { filename: backup.filename, size: backup.size, checksum: backup.checksum, status: backup.status, type: backup.type }, details: { operation: 'create', legacyAction: 'BACKUP_CREATED' } });
     res.status(201).json({ success: true, data: backup, message: 'Database backup created successfully.' });
   } catch (error) {
     next(error);
@@ -1725,12 +1737,7 @@ router.post('/backups', ...requireAdmin, async (req, res, next) => {
 router.get('/backups/verify/:filename', ...requireAdmin, async (req, res, next) => {
   try {
     const result = await backupService.verifyBackupFile(req.params.filename, { skipPersist: false });
-    await AuditLog.create({
-      userId: req.user.id,
-      action: 'BACKUP_VERIFIED',
-      entity: `backup:${req.params.filename}`,
-      details: JSON.stringify({ filename: req.params.filename, valid: result.valid, checksum: result.checksum, verification: result }),
-    });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'BACKUP_OPERATION', entity: `backup:${req.params.filename}`, entityId: req.params.filename, oldValue: null, newValue: { valid: result.valid, checksum: result.checksum, size: result.size || 0 }, details: { operation: 'verify', filename: req.params.filename, legacyAction: 'BACKUP_VERIFIED' } });
     res.json({ success: true, valid: result.valid, checksum: result.checksum, size: result.size || 0, message: result.message, verification: result });
   } catch (error) {
     if (error.code === 'ENOENT') return res.status(404).json({ success: false, message: 'Backup file not found' });
@@ -1743,7 +1750,7 @@ router.get('/backups/download/:filename', ...requireAdmin, async (req, res, next
     const filePath = resolveBackupPath(req.params.filename);
     if (!filePath) return res.status(400).json({ success: false, message: 'Invalid backup filename' });
     await fs.promises.access(filePath, fs.constants.R_OK);
-    await AuditLog.create({ userId: req.user.id, action: 'BACKUP_DOWNLOADED', entity: `backup:${req.params.filename}`, details: JSON.stringify({ filename: req.params.filename }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'BACKUP_OPERATION', entity: `backup:${req.params.filename}`, entityId: req.params.filename, details: { operation: 'download', filename: req.params.filename, legacyAction: 'BACKUP_DOWNLOADED' } });
     res.download(filePath, req.params.filename);
   } catch (error) {
     if (error.code === 'ENOENT') return res.status(404).json({ success: false, message: 'Backup file not found' });
@@ -1754,29 +1761,20 @@ router.get('/backups/download/:filename', ...requireAdmin, async (req, res, next
 router.post('/backups/restore/:filename', ...requireAdmin, async (req, res, next) => {
   try {
     const result = await backupService.restoreBackup(req.params.filename, { requestedBy: req.user?.username || req.user?.fullName || 'System' });
-    await AuditLog.create({
-      userId: req.user.id,
-      action: 'RESTORE_COMPLETED',
-      entity: `backup:${req.params.filename}`,
-      details: JSON.stringify({ filename: req.params.filename, result }),
-    });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'BACKUP_OPERATION', entity: `backup:${req.params.filename}`, entityId: req.params.filename, newValue: { restored: true }, details: { operation: 'restore', filename: req.params.filename, legacyAction: 'RESTORE_COMPLETED' } });
     res.json({ success: true, message: 'Backup restored successfully.', data: result });
   } catch (error) {
     if (error.code === 'ENOENT') return res.status(404).json({ success: false, message: 'Backup file not found' });
-    await AuditLog.create({
-      userId: req.user.id,
-      action: 'RESTORE_FAILED',
-      entity: `backup:${req.params.filename}`,
-      details: JSON.stringify({ filename: req.params.filename, error: error.message }),
-    }).catch(() => {});
-    res.status(400).json({ success: false, message: error.message || 'Backup restore failed.' });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'BACKUP_OPERATION', entity: `backup:${req.params.filename}`, entityId: req.params.filename, details: { operation: 'restore_failed', filename: req.params.filename, errorCode: error.code || null, legacyAction: 'RESTORE_FAILED' } }).catch(() => {});
+    console.error('Backup restore failed:', error);
+    res.status(400).json({ success: false, message: 'Backup restore failed.' });
   }
 });
 
 router.delete('/backups/:filename', ...requireAdmin, async (req, res, next) => {
   try {
     const result = await backupService.deleteBackup(req.params.filename);
-    await AuditLog.create({ userId: req.user.id, action: 'BACKUP_DELETED', entity: `backup:${req.params.filename}`, details: JSON.stringify({ filename: req.params.filename, result }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'BACKUP_OPERATION', entity: `backup:${req.params.filename}`, entityId: req.params.filename, oldValue: { filename: req.params.filename }, newValue: { deleted: true }, details: { operation: 'delete', result, legacyAction: 'BACKUP_DELETED' } });
     res.json({ success: true, message: 'Backup deleted successfully.', data: result });
   } catch (error) {
     if (error.code === 'ENOENT') return res.status(404).json({ success: false, message: 'Backup file not found' });

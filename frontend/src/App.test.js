@@ -9,6 +9,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Login from './components/public/Login';
+import fs from 'fs';
+import path from 'path';
 
 jest.mock('axios', () => ({
   __esModule: true,
@@ -87,6 +89,46 @@ describe('Public and dashboard route rules', () => {
     expect(shouldShowDashboardSidebar('/login')).toBe(false);
     expect(shouldShowDashboardSidebar('/contact')).toBe(false);
     expect(shouldShowDashboardSidebar('/help')).toBe(false);
+  });
+});
+
+describe('Administrator route wiring', () => {
+  const appSource = fs.readFileSync(path.resolve(__dirname, 'App.jsx'), 'utf8');
+  const documentedRoutes = [
+    ['/admin', '', 'AdminDashboard'],
+    ['/admin/assets', 'assets', 'AdminAssets'],
+    ['/admin/assets/categories', 'assets/categories', 'AdminAssetCategories'],
+    ['/admin/assets/assign', 'assets/assign', 'AdminAssignment'],
+    ['/admin/assets/transfer', 'assets/transfer', 'AdminTransfer'],
+    ['/admin/assets/disposal', 'assets/disposal', 'AdminAssetDisposal'],
+    ['/admin/maintenance', 'maintenance', 'AdminMaintenance'],
+    ['/admin/rfid', 'rfid', 'AdminRFIDTracking'],
+    ['/admin/users', 'users', 'AdminUserManagement'],
+    ['/admin/roles-permissions', 'roles-permissions', 'AdminRolesPermissions'],
+    ['/admin/colleges', 'colleges', 'AdminCollegeManagement'],
+    ['/admin/departments', 'departments', 'AdminDepartmentManagement'],
+    ['/admin/locations', 'locations', 'AdminAssetLocations'],
+    ['/admin/reports', 'reports', 'AdminReports'],
+    ['/admin/reports/analytics', 'reports/analytics', 'AdminAnalyticsCenter'],
+    ['/admin/analytics/system', 'analytics/system', 'AdminAnalyticsCenter'],
+    ['/admin/audit-logs', 'audit-logs', 'AdminAuditLogs'],
+    ['/admin/settings', 'settings', 'AdminSettings'],
+    ['/admin/notifications', 'notifications', 'AdminNotifications'],
+    ['/admin/backup', 'backup', 'AdminBackup'],
+    ['/admin/monitoring', 'monitoring', 'SystemMonitoring'],
+    ['/admin/inventory/quarantine', 'inventory/quarantine', 'AdminChemicalQuarantine'],
+  ];
+
+  it('registers all documented paths in the sidebar and renders their owning page under admin RBAC', () => {
+    expect(appSource).toContain('<Route path="/admin" element={<ProtectedRoute allowedRoles={[\'admin\']}><AdminLayout /></ProtectedRoute>}>');
+    for (const [route, nestedPath, component] of documentedRoutes) {
+      expect(appSource).toContain(`path: '${route}'`);
+      if (nestedPath) {
+        expect(appSource).toContain(`<Route path="${nestedPath}" element={<${component}`);
+      } else {
+        expect(appSource).toContain('<Route index element={<AdminDashboard />} />');
+      }
+    }
   });
 });
 

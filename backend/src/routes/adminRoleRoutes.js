@@ -1,6 +1,7 @@
 const express = require('express');
 const { Config, User, AuditLog } = require('../models');
 const { requireAuth, requireRole } = require('../middlewares/auth');
+const { createAuditLog } = require('../services/auditLogService');
 
 const router = express.Router();
 const requireAdmin = [requireAuth, requireRole('admin')];
@@ -303,12 +304,7 @@ router.post('/roles', ...requireAdmin, async (req, res, next) => {
     await writeRoleRegistry(nextRegistry);
     await writeRoleStatusMap(nextStatuses);
 
-    await AuditLog.create({
-      userId: req.user.id,
-      action: 'ROLE_CREATED',
-      entity: `role:${payload.name}`,
-      details: JSON.stringify({ role: payload.name, description: payload.description, status: payload.status }),
-    });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CHANGE_ROLE', entity: `role:${payload.name}`, entityId: payload.name, oldValue: null, newValue: { name: payload.name, description: payload.description, status: payload.status }, details: { operation: 'create', legacyAction: 'ROLE_CREATED' } });
 
     const role = await getRoleRecord(payload.name);
     return res.status(201).json({ success: true, data: role, role });
@@ -346,12 +342,7 @@ router.put('/roles/:role', ...requireAdmin, async (req, res, next) => {
     await writeRoleRegistry(nextRegistry);
     await writeRoleStatusMap(nextStatuses);
 
-    await AuditLog.create({
-      userId: req.user.id,
-      action: 'ROLE_UPDATED',
-      entity: `role:${normalizedRole}`,
-      details: JSON.stringify({ role: normalizedRole, previous: previousRole, next: { description: payload.description, status: payload.status } }),
-    });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CHANGE_ROLE', entity: `role:${normalizedRole}`, entityId: normalizedRole, oldValue: previousRole, newValue: nextRegistry[normalizedRole], details: { operation: 'update', legacyAction: 'ROLE_UPDATED' } });
 
     const role = await getRoleRecord(normalizedRole);
     return res.json({ success: true, data: role, role });
@@ -376,12 +367,7 @@ router.patch('/roles/:role/status', ...requireAdmin, async (req, res, next) => {
     await writeRoleRegistry(nextRegistry);
     await writeRoleStatusMap(nextStatuses);
 
-    await AuditLog.create({
-      userId: req.user.id,
-      action: nextStatus === 'active' ? 'ROLE_ACTIVATED' : 'ROLE_DEACTIVATED',
-      entity: `role:${normalizedRole}`,
-      details: JSON.stringify({ role: normalizedRole, previousStatus, nextStatus }),
-    });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CHANGE_ROLE', entity: `role:${normalizedRole}`, entityId: normalizedRole, oldValue: { status: previousStatus }, newValue: { status: nextStatus }, details: { operation: 'status', legacyAction: nextStatus === 'active' ? 'ROLE_ACTIVATED' : 'ROLE_DEACTIVATED' } });
 
     const role = await getRoleRecord(normalizedRole);
     return res.json({ success: true, data: role, role });
@@ -414,12 +400,7 @@ router.delete('/roles/:role', ...requireAdmin, async (req, res, next) => {
       await writeRoleStatusMap(nextStatuses);
     }
 
-    await AuditLog.create({
-      userId: req.user.id,
-      action: 'ROLE_DELETED',
-      entity: `role:${normalizedRole}`,
-      details: JSON.stringify({ role: normalizedRole, userCount }),
-    });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CHANGE_ROLE', entity: `role:${normalizedRole}`, entityId: normalizedRole, oldValue: roleMeta, newValue: null, details: { operation: 'delete', userCount, legacyAction: 'ROLE_DELETED' } });
 
     return res.json({ success: true, message: 'Role deleted successfully.' });
   } catch (error) { next(error); }
@@ -450,12 +431,7 @@ router.put('/roles/:role/permissions', ...requireAdmin, async (req, res, next) =
       await record.update({ value: JSON.stringify(next) });
     }
 
-    await AuditLog.create({
-      userId: req.user.id,
-      action: 'ROLE_PERMISSIONS_UPDATED',
-      entity: `role:${role}`,
-      details: JSON.stringify({ role, previous: previous[role] || [], next: permissions }),
-    });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CHANGE_PERMISSION', entity: `role:${role}`, entityId: role, oldValue: previous[role] || [], newValue: permissions, details: { role, legacyAction: 'ROLE_PERMISSIONS_UPDATED' } });
 
     return res.json({ success: true, data: { role, permissions }, permissions });
   } catch (error) { next(error); }

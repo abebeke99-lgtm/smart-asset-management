@@ -16,6 +16,7 @@ const {
   AuditLog,
 } = require('../models');
 const { createBulkNotification } = require('../services/notificationService');
+const { createAuditLog } = require('../services/auditLogService');
 
 const ALLOWED_UNITS = ['L', 'mL', 'g', 'mg', 'kg', 'UNITS'];
 const ALLOWED_STATES = ['solid', 'liquid', 'gas', 'mixed'];
@@ -249,7 +250,17 @@ const updateChemical = async (req, res, next) => {
     if (req.body.buildingId !== undefined) updates.buildingId = req.body.buildingId || null;
     if (req.body.roomId !== undefined) updates.roomId = req.body.roomId || null;
     await chemical.update(updates);
-    await AuditLog.create({ userId: req.user.id, action: 'UPDATE_CHEMICAL', entity: `chemical:${chemical.id}`, details: JSON.stringify({ previousValue, newValue: chemical.toJSON() }) });
+    const quarantineChanged = req.body.remove_quarantine === true || req.body.quarantine === true;
+    await createAuditLog({
+      userId: req.user.id,
+      role: req.user.role,
+      action: quarantineChanged ? 'QUARANTINE_OPERATION' : 'UPDATE_CHEMICAL',
+      entity: `chemical:${chemical.id}`,
+      entityId: chemical.id,
+      oldValue: previousValue,
+      newValue: chemical.toJSON(),
+      details: { chemicalId: chemical.id, operation: req.body.remove_quarantine === true ? 'release' : req.body.quarantine === true ? 'quarantine' : 'update' },
+    });
     res.json({ success: true, data: serializeChemical(chemical) });
   } catch (error) { next(error); }
 };
@@ -435,8 +446,18 @@ const quarantineChemical = async (req, res, next) => {
   try {
     const chemical = await Chemical.findByPk(req.params.id);
     if (!chemical) return res.status(404).json({ success: false, message: 'Chemical not found' });
+    const previousValue = chemical.toJSON();
     await chemical.update({ quarantine: true, quarantineReason: req.body.quarantineReason || req.body.reason || 'Quarantined by user' });
-    await AuditLog.create({ userId: req.user.id, action: 'CHEMICAL_QUARANTINED', entity: `chemical:${chemical.id}`, details: JSON.stringify({ chemicalId: chemical.id, reason: req.body.quarantineReason || req.body.reason || '' }) });
+    await createAuditLog({
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'QUARANTINE_OPERATION',
+      entity: `chemical:${chemical.id}`,
+      entityId: chemical.id,
+      oldValue: previousValue,
+      newValue: chemical.toJSON(),
+      details: { chemicalId: chemical.id, operation: 'quarantine', reason: chemical.quarantineReason },
+    });
     res.json({ success: true, data: serializeChemical(chemical) });
   } catch (error) { next(error); }
 };
@@ -445,7 +466,17 @@ const listQuarantine = async (req, res, next) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 20));
-    const { count, rows } = await Chemical.findAndCountAll({ where: { quarantine: true }, order: [['updatedAt', 'DESC']], limit, offset: (page - 1) * limit });
+    const where = { quarantine: true };
+    const search = String(req.query.search || '').trim();
+    if (search) {
+      where[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { chemicalCode: { [Op.like]: `%${search}%` } },
+        { casNumber: { [Op.like]: `%${search}%` } },
+        { quarantineReason: { [Op.like]: `%${search}%` } },
+      ];
+    }
+    const { count, rows } = await Chemical.findAndCountAll({ where, order: [['updatedAt', 'DESC']], limit, offset: (page - 1) * limit });
     const data = rows.map(serializeChemical);
     res.json({ success: true, data, chemicals: data, total: count, pagination: { page, limit, total: count, pages: Math.max(1, Math.ceil(count / limit)) } });
   } catch (error) { next(error); }

@@ -9,7 +9,7 @@ import './App.css';
 import './admin-design-system.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, House, Info, Languages, LayoutDashboard, LifeBuoy, LockKeyhole, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, PanelLeft, Phone, Radio, Search, Settings, ShieldCheck, Sparkles, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
+import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, House, Info, Languages, LayoutDashboard, LifeBuoy, LockKeyhole, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, Phone, Radio, Search, Settings, ShieldCheck, Sparkles, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
@@ -32,7 +32,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
 import { getDepartmentLabel } from './utils/department';
 import { apiClient } from './utils/api';
-import UserAvatar from './components/common/UserAvatar';
 import Footer from './components/common/Footer';
 import StoreTracking from './components/store/StoreTracking';
 
@@ -48,6 +47,7 @@ const AdminTransfer = lazy(() => import('./components/admin/AdminTransfer'));
 const AdminMaintenance = lazy(() => import('./components/admin/AdminMaintenance'));
 const AdminRFIDTracking = lazy(() => import('./components/admin/AdminRFIDTracking'));
 const AdminReports = lazy(() => import('./components/admin/AdminReports'));
+const AdminAuditLogs = lazy(() => import('./components/admin/AdminAuditLogs'));
 const AdminUserManagement = lazy(() => import('./components/admin/AdminUserManagement'));
 const AdminRolesPermissions = lazy(() => import('./components/admin/AdminRolesPermissions'));
 const AdminSettings = lazy(() => import('./components/admin/AdminSettings'));
@@ -59,6 +59,7 @@ const AdminDepartmentManagement = lazy(() => import('./components/admin/AdminDep
 const AdminCollegeManagement = lazy(() => import('./components/admin/AdminCollegeManagement'));
 const AdminCollegeDetails = lazy(() => import('./components/admin/AdminCollegeDetails'));
 const AdminAnalyticsCenter = lazy(() => import('./components/admin/AdminAnalyticsCenter'));
+const AdminChemicalQuarantine = lazy(() => import('./components/admin/AdminChemicalQuarantine'));
 
 // ICT Components
 const ICTDashboard = lazy(() => import('./components/ict/ICTDashboard'));
@@ -190,7 +191,6 @@ const ResetPassword = lazy(() => import('./components/public/ResetPassword'));
 const Home = lazy(() => import('./components/public/Home'));
 const AboutUs = lazy(() => import('./components/public/AboutUs'));
 const Services = lazy(() => import('./components/public/Services'));
-const Features = lazy(() => import('./components/public/Features'));
 const Contact = lazy(() => import('./components/public/Contact'));
 const Help = lazy(() => import('./components/public/Help'));
 
@@ -207,7 +207,7 @@ export const shouldHideSidebarForPath = (pathname = '') => {
 
 export const isPublicRoute = (pathname = '') => {
   const normalizedPath = String(pathname || '').split('?')[0].split('#')[0].trim();
-  return ['/', '/home', '/about', '/services', '/features', '/about-us', '/contact', '/contac', '/help', '/register', '/forgot-password', '/reset-password'].includes(normalizedPath)
+  return ['/', '/home', '/about', '/services', '/about-us', '/contact', '/contac', '/help', '/register', '/forgot-password', '/reset-password'].includes(normalizedPath)
     || normalizedPath.startsWith('/reset-password/');
 };
 
@@ -233,7 +233,7 @@ export const shouldUseStandaloneLoginLayout = (pathname = '') => {
 
 export const shouldShowDashboardSidebar = (pathname = '') => {
   const normalizedPath = String(pathname || '').split('?')[0].split('#')[0].trim();
-  const publicPaths = ['/', '/home', '/about', '/services', '/features', '/contact', '/contac', '/help', '/login', '/register', '/forgot-password', '/reset-password'];
+  const publicPaths = ['/', '/home', '/about', '/services', '/contact', '/contac', '/help', '/login', '/register', '/forgot-password', '/reset-password'];
   return normalizedPath !== '' && !publicPaths.includes(normalizedPath) && !normalizedPath.startsWith('/reset-password/');
 };
 
@@ -2571,7 +2571,7 @@ function AppContent() {
   };
 
   const dashboardRoute = getDashboardRoute(user?.role);
-  const publicPaths = ['/home', '/about', '/services', '/features', '/contact', '/contac', '/help', '/register', '/forgot-password', '/reset-password'];
+  const publicPaths = ['/home', '/about', '/services', '/contact', '/contac', '/help', '/register', '/forgot-password', '/reset-password'];
   const requestPublicNavigation = (path, event) => {
     if (user) {
       event?.preventDefault();
@@ -2661,7 +2661,6 @@ function AppContent() {
     { to: '/home', label: t.home, icon: House },
     { to: '/about', label: t.about, icon: Info },
     { to: '/services', label: t.services, icon: BriefcaseBusiness },
-    { to: '/features', label: t.features, icon: Sparkles },
     { to: '/help', label: t.help, icon: CircleHelp },
     { to: '/contact', label: t.contact, icon: Mail }
   ];
@@ -2815,13 +2814,7 @@ function AppContent() {
   };
 
   const DashboardHeader = () => {
-    const activeItem = navigationItems
-      .slice()
-      .sort((left, right) => right.path.length - left.path.length)
-      .find((item) => item.path === currentActiveSidebar);
-    const pageTitle = stripLeadingDecoration(activeItem?.label || t.dashboard);
     const notificationPath = sidebarItems.find((item) => item.path.endsWith('/notifications'))?.path || getDashboardRoute(user?.role);
-    const settingsPath = sidebarItems.find((item) => item.path.endsWith('/settings'))?.path;
     const toggleSidebar = () => {
       if (window.innerWidth <= 900) {
         setSidebarOpen(true);
@@ -2841,12 +2834,8 @@ function AppContent() {
             aria-expanded={!sidebarCollapsed}
             title={sidebarCollapsed ? 'Expand navigation menu' : 'Collapse navigation menu'}
           >
-            <PanelLeft size={19} aria-hidden="true" />
+            <img className="dashboard-menu-logo" src={UNIVERSITY_LOGO} alt="" aria-hidden="true" />
           </button>
-          <div className="dashboard-heading">
-            <span className="dashboard-heading-context">Dashboard</span>
-            <h1>{pageTitle}</h1>
-          </div>
         </div>
 
         <div className="dashboard-header-actions">
@@ -2866,19 +2855,21 @@ function AppContent() {
               type="button"
               className="dashboard-language-button"
               onClick={() => setLanguage('en')}
+              aria-label="English"
               aria-pressed={language === 'en'}
               style={{ borderRadius: '7px 0 0 7px', background: language === 'en' ? 'rgba(255, 255, 255, 0.42)' : 'transparent' }}
             >
-              English
+              EN
             </button>
             <button
               type="button"
               className="dashboard-language-button"
               onClick={() => setLanguage('am')}
+              aria-label="Amharic"
               aria-pressed={language === 'am'}
               style={{ borderLeft: 0, borderRadius: '0 7px 7px 0', background: language === 'am' ? 'rgba(255, 255, 255, 0.42)' : 'transparent' }}
             >
-              አማርኛ
+              AM
             </button>
           </div>
 
@@ -2891,17 +2882,11 @@ function AppContent() {
               aria-haspopup="menu"
               aria-label="Open user menu"
             >
-              <UserAvatar user={user} size="sm" className="dashboard-profile-avatar" />
               <span className="dashboard-profile-name">{user.fullName || user.username || 'User'}</span>
               <ChevronDown size={16} aria-hidden="true" />
             </button>
             {profileMenuOpen && (
               <div className="dashboard-profile-menu" role="menu">
-                {settingsPath && (
-                  <Link to={settingsPath} role="menuitem" onClick={() => setProfileMenuOpen(false)}>
-                    <Settings size={15} aria-hidden="true" /> Settings
-                  </Link>
-                )}
                 <button type="button" role="menuitem" onClick={handleLogout}>
                   <LogOut size={15} aria-hidden="true" /> {t.logout}
                 </button>
@@ -2930,14 +2915,7 @@ function AppContent() {
             flexDirection: 'column',
             minHeight: 0
           }}>
-            <div className="admin-sidebar-profile">
-              <button className="sidebar-close" type="button" onClick={() => setSidebarOpen(false)} aria-label={showCollegeNavigation ? translateCollegeNavigation('Close navigation menu') : 'Close navigation menu'}><X size={18} /></button>
-              <UserAvatar user={user} size="lg" className="sidebar-avatar" />
-              <div className="sidebar-user-name">{user.fullName || user.username || 'Admin'}</div>
-              <div className="sidebar-role">{translateCollegeNavigation(getRoleDisplay(sidebarRole).label)}</div>
-              <div className="sidebar-organization">{user.department ? getDepartmentLabel(user.department) : 'Administration'}</div>
-              <div className="sidebar-status"><span /> {translateCollegeNavigation('Online')}</div>
-            </div>
+            <button className="sidebar-close" type="button" onClick={() => setSidebarOpen(false)} aria-label={showCollegeNavigation ? translateCollegeNavigation('Close navigation menu') : 'Close navigation menu'}><X size={18} /></button>
 
             <nav className="admin-sidebar-nav" aria-label="Application navigation">
               {showCollegeNavigation && <div className="sidebar-subsection-label">{translateCollegeNavigation('COLLEGE MANAGER')}</div>}
@@ -3056,10 +3034,6 @@ function AppContent() {
               })}
             </nav>
 
-            <div className="admin-sidebar-footer">
-              <div className="sidebar-account"><UserAvatar user={user} size="sm" className="sidebar-account-avatar" /><div><strong>{user.username || 'Admin'}</strong><span>{translateCollegeNavigation(getRoleDisplay(sidebarRole).label)}</span></div></div>
-              <button className="sidebar-logout" type="button" onClick={handleLogout}><LogOut size={16} aria-hidden="true" /><span>{t.logout}</span></button>
-            </div>
           </aside>
         )}
 
@@ -3124,7 +3098,6 @@ function AppContent() {
                 <Route path="/home" element={<Home />} />
                 <Route path="/about" element={<AboutUs />} />
                 <Route path="/services" element={<Services />} />
-                <Route path="/features" element={<Features />} />
                 <Route path="/about-us" element={<AboutUs />} />
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/contac" element={<Contact />} />
@@ -3163,10 +3136,12 @@ function AppContent() {
         { path: '/admin/reports', label: 'Reports & Analytics', icon: BarChart3, group: 'Analytics' },
         { path: '/admin/reports/analytics', label: 'Asset Analytics', icon: BarChart3, group: 'Analytics' },
         { path: '/admin/analytics/system', label: 'System Analytics', icon: BarChart3, group: 'Analytics' },
+        { path: '/admin/audit-logs', label: 'Audit Logs', icon: FileText, group: 'Analytics' },
         { path: '/admin/settings', label: t.settings, icon: Settings, group: 'System' },
         { path: '/admin/notifications', label: t.notifications, icon: Bell, group: 'System' },
         { path: '/admin/backup', label: t.backup, icon: DatabaseBackup, group: 'System' },
-        { path: '/admin/monitoring', label: 'System Monitoring', icon: BarChart3, group: 'System' }
+        { path: '/admin/monitoring', label: 'System Monitoring', icon: BarChart3, group: 'System' },
+        { path: '/admin/inventory/quarantine', label: 'Chemical Quarantine', icon: ShieldCheck, group: 'System' }
       ],
       'ict_officer': [
         { path: '/ict/dashboard', label: 'Dashboard Overview', icon: LayoutDashboard, section: 'IT ASSET MANAGEMENT' },
@@ -3555,6 +3530,7 @@ function AppContent() {
             <Route path="monitoring" element={<SystemMonitoring />} />
             <Route path="analytics/system" element={<AdminAnalyticsCenter system />} />
             <Route path="analytics/assets" element={<AdminAnalyticsCenter />} />
+            <Route path="audit-logs" element={<AdminAuditLogs />} />
             
             {/* User Management */}
             <Route path="users" element={<AdminUserManagement />} />
@@ -3602,6 +3578,7 @@ function AppContent() {
             <Route path="settings" element={<AdminSettings />} />
             <Route path="settings/system-monitoring" element={<SystemMonitoring />} />
             <Route path="system-monitoring" element={<SystemMonitoring />} />
+            <Route path="inventory/quarantine" element={<AdminChemicalQuarantine />} />
             
             {/* Backup */}
             <Route path="backup" element={<AdminBackup />} />

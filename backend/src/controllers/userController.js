@@ -5,6 +5,7 @@ const { User, Department, AuditLog } = require('../models');
 const bcrypt = require('bcryptjs');
 const { findCollegeScopeForUser } = require('../middlewares/organizationScope');
 const { saveProfilePhoto, validateProfilePhoto, buildPublicFileUrl } = require('../utils/uploadUtils');
+const { createAuditLog } = require('../services/auditLogService');
 
 const roles = ['admin', 'ict_officer', 'college', 'finance', 'store_manager', 'maintenance', 'infrastructure', 'staff', 'student'];
 const safeUser = (user) => {
@@ -48,7 +49,8 @@ const getAllUsers = async (req, res) => {
     const safeUsers = users.map(safeUser);
     res.json({ success: true, message: 'Users retrieved successfully', data: safeUsers, users: safeUsers, total: count, roles, pagination: { page, limit, total: count, pages: Math.ceil(count / limit) } });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('User list request failed:', error);
+    res.status(500).json({ success: false, message: 'Unable to load users.' });
   }
 };
 
@@ -63,7 +65,8 @@ const getUserById = async (req, res) => {
     }
     res.json({ success: true, message: 'User retrieved successfully', data: safeUser(user) });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('User detail request failed:', error);
+    res.status(500).json({ success: false, message: 'Unable to load user.' });
   }
 };
 
@@ -84,10 +87,11 @@ const createUser = async (req, res) => {
       active: req.body.active ?? is_active ?? true,
       password: await bcrypt.hash(req.body.password, 10),
     });
-    await AuditLog.create({ userId: req.user.id, action: 'CREATE_USER', entity: `user:${user.id}`, details: JSON.stringify({ userId: user.id, username: user.username, role: user.role }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CREATE_USER', entity: `user:${user.id}`, entityId: user.id, newValue: safeUser(user), details: { username: user.username } });
     res.status(201).json({ success: true, data: safeUser(user) });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('User creation failed:', error);
+    res.status(500).json({ success: false, message: 'Unable to create user.' });
   }
 };
 
@@ -118,11 +122,12 @@ const updateUser = async (req, res) => {
     }
     const before = safeUser(user);
     await user.update(updates);
-    const action = updates.active !== undefined && updates.active !== before.active ? (updates.active ? 'ACTIVATE_USER' : 'DEACTIVATE_USER') : 'UPDATE_USER';
-    await AuditLog.create({ userId: req.user.id, action, entity: `user:${user.id}`, details: JSON.stringify({ before: { role: before.role, department: before.department, active: before.active }, after: { role: user.role, department: user.department, active: user.active } }) });
+    const roleChanged = before.role !== user.role;
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: roleChanged ? 'CHANGE_ROLE' : 'UPDATE_USER', entity: `user:${user.id}`, entityId: user.id, oldValue: before, newValue: safeUser(user), details: { operation: updates.active !== undefined && updates.active !== before.active ? (updates.active ? 'activate' : 'deactivate') : 'update' } });
     res.json({ success: true, message: 'User updated successfully', data: safeUser(user) });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('User update failed:', error);
+    res.status(500).json({ success: false, message: 'Unable to update user.' });
   }
 };
 
@@ -134,7 +139,8 @@ const deleteUser = async (req, res) => {
     await AuditLog.create({ userId: req.user.id, action: 'DELETE_USER', entity: `user:${user.id}`, details: JSON.stringify({ userId: user.id, username: user.username }) });
     res.json({ success: true, message: 'User deleted' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('User deletion failed:', error);
+    res.status(500).json({ success: false, message: 'Unable to delete user.' });
   }
 };
 
@@ -144,7 +150,8 @@ const getCurrentUserProfile = async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     return res.json({ success: true, data: safeUser(user) });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    console.error('User profile request failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to load profile.' });
   }
 };
 
@@ -162,7 +169,7 @@ const updateProfile = async (req, res) => {
     await user.update(updates);
     await AuditLog.create({ userId: user.id, action: 'PROFILE_UPDATED', entity: `user:${user.id}`, details: JSON.stringify({ fields: Object.keys(updates) }) });
     res.json({ success: true, user: safeUser(user) });
-  } catch (error) { res.status(500).json({ success: false, message: error.message }); }
+  } catch (error) { console.error('Profile update failed:', error); res.status(500).json({ success: false, message: 'Unable to update profile.' }); }
 };
 
 const getServerPhotoPath = (profilePhoto) => {
@@ -207,7 +214,8 @@ const updateCurrentUserProfilePhoto = async (req, res) => {
     await AuditLog.create({ userId: user.id, action: 'PROFILE_PHOTO_UPDATED', entity: `user:${user.id}`, details: JSON.stringify({ profilePhoto: saved.filePath }) });
     return res.json({ success: true, message: 'Profile photo updated successfully.', user: safeUser(refreshedUser), data: safeUser(refreshedUser) });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message || 'Unable to update profile photo. Please try again.' });
+    console.error('Profile photo update failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to update profile photo. Please try again.' });
   }
 };
 
@@ -232,7 +240,8 @@ const removeCurrentUserProfilePhoto = async (req, res) => {
     await AuditLog.create({ userId: user.id, action: 'PROFILE_PHOTO_REMOVED', entity: `user:${user.id}`, details: JSON.stringify({ profilePhoto: null }) });
     return res.json({ success: true, message: 'Profile photo removed.', user: safeUser(refreshedUser), data: safeUser(refreshedUser) });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message || 'Unable to remove profile photo. Please try again.' });
+    console.error('Profile photo removal failed:', error);
+    return res.status(500).json({ success: false, message: 'Unable to remove profile photo. Please try again.' });
   }
 };
 

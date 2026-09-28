@@ -7,6 +7,7 @@ const sqlQualifiedColumn = (model, field) => col(`${model.name}.${snakeCaseColum
 // so those paths must reference the real (snake_cased) database column.
 const joinedColumn = (association, field) => `$${association}.${snakeCaseColumn(field)}$`;
 const { Asset, User, Department, Maintenance, Approval, Transfer, AuditLog, College, AssetReturn, VerificationSession, VerificationItem, Assignment, Category, AssetMovement, RFIDLog } = require('../models');
+const { createAuditLog } = require('../services/auditLogService');
 
 const collegeScope = (req) => String(req.user?.department || '').trim();
 const normalizeStatus = (value) => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -1161,7 +1162,7 @@ const getCollegeDepartmentOverview = async (req, res, next) => {
       Asset.findAll({ where: departmentScope, attributes: ['departmentId', 'status', 'currentValue', [fn('COUNT', col('id')), 'count']], group: ['departmentId', 'status', 'currentValue'], raw: true }),
       College.findByPk(collegeId, { attributes: ['id', 'collegeName', 'collegeCode'] }),
       departmentIds.length ? AuditLog.findAll({
-        where: { entity: { [Op.in]: departmentIds.map((id) => `department:${id}`) }, action: { [Op.in]: ['DEPARTMENT_CREATED', 'DEPARTMENT_UPDATED', 'DEPARTMENT_ACTIVATED', 'DEPARTMENT_DEACTIVATED', 'DEPARTMENT_DELETED'] } },
+        where: { entity: { [Op.in]: departmentIds.map((id) => `department:${id}`) }, action: { [Op.in]: ['CREATE_DEPARTMENT', 'UPDATE_DEPARTMENT', 'DEPARTMENT_CREATED', 'DEPARTMENT_UPDATED', 'DEPARTMENT_ACTIVATED', 'DEPARTMENT_DEACTIVATED', 'DEPARTMENT_DELETED'] } },
         include: [{ model: User, attributes: ['id', 'fullName', 'username'], required: false }],
         order: [['createdAt', 'DESC']],
         limit: 10,
@@ -1783,7 +1784,7 @@ const createCollegeDepartment = async (req, res, next) => {
     const validation = await validateDepartmentPayload(req, req.body);
     if (validation.error) return res.status(400).json({ success: false, message: validation.error, errors: [validation.error] });
     const department = await Department.create({ ...validation.value, collegeId: req.organizationScope.collegeId });
-    await AuditLog.create({ userId: req.user.id, action: 'DEPARTMENT_CREATED', entity: `department:${department.id}`, details: JSON.stringify({ after: department.toJSON() }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CREATE_DEPARTMENT', entity: `department:${department.id}`, entityId: department.id, newValue: department.toJSON(), details: { legacyAction: 'DEPARTMENT_CREATED' } });
     res.status(201).json({ success: true, message: 'Department created successfully', data: department });
   } catch (error) { next(error); }
 };
@@ -1796,7 +1797,7 @@ const updateCollegeDepartment = async (req, res, next) => {
     if (validation.error) return res.status(400).json({ success: false, message: validation.error, errors: [validation.error] });
     const before = department.toJSON();
     await department.update({ ...validation.value, collegeId: department.collegeId });
-    await AuditLog.create({ userId: req.user.id, action: 'DEPARTMENT_UPDATED', entity: `department:${department.id}`, details: JSON.stringify({ before, after: department.toJSON() }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_DEPARTMENT', entity: `department:${department.id}`, entityId: department.id, oldValue: before, newValue: department.toJSON(), details: { legacyAction: 'DEPARTMENT_UPDATED' } });
     res.json({ success: true, message: 'Department updated successfully', data: department });
   } catch (error) { next(error); }
 };
@@ -1806,9 +1807,9 @@ const updateCollegeDepartmentStatus = async (req, res, next) => {
     const department = await getScopedDepartment(req, req.params.id);
     if (!department) return res.status(404).json({ success: false, message: 'Department not found in your college' });
     if (!['active', 'inactive'].includes(req.body.status)) return res.status(400).json({ success: false, message: 'Status must be active or inactive' });
-    const before = department.status;
+    const before = department.toJSON();
     await department.update({ status: req.body.status });
-    await AuditLog.create({ userId: req.user.id, action: req.body.status === 'active' ? 'DEPARTMENT_ACTIVATED' : 'DEPARTMENT_DEACTIVATED', entity: `department:${department.id}`, details: JSON.stringify({ before, after: department.status }) });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_DEPARTMENT', entity: `department:${department.id}`, entityId: department.id, oldValue: before, newValue: department.toJSON(), details: { legacyAction: req.body.status === 'active' ? 'DEPARTMENT_ACTIVATED' : 'DEPARTMENT_DEACTIVATED' } });
     res.json({ success: true, message: 'Department status updated successfully', data: department });
   } catch (error) { next(error); }
 };

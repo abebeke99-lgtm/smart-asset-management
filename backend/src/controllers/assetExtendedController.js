@@ -19,6 +19,7 @@ const {
   RFIDLog,
   Config,
 } = require('../models');
+const { createAuditLog } = require('../services/auditLogService');
 
 const ALLOWED_DOC_TYPES = ['application/pdf', 'application/msword', 'image/jpeg', 'image/png'];
 const MAX_DOC_SIZE = 10 * 1024 * 1024;
@@ -389,7 +390,7 @@ const createAssetCustody = async (req, res, next) => {
       status: 'active',
       notes: req.body.notes || '',
     }, { transaction });
-    await item_updateAsset(asset, { status: 'in-use' }, req.user.id, transaction);
+    await item_updateAsset(asset, { status: 'in-use' }, req.user.id, req.user.role, transaction);
     await AuditLog.create({ userId: req.user.id, action: 'CREATE_ASSET_CUSTODY', entity: `asset:${asset.id}`, details: JSON.stringify({ custodyId: custody.id, custodianId }) }, { transaction });
     await transaction.commit();
     res.status(201).json({ success: true, data: custody });
@@ -409,10 +410,10 @@ const endCustody = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-async function item_updateAsset(asset, updates, userId, transaction) {
+async function item_updateAsset(asset, updates, userId, role, transaction) {
   const previousValue = asset.toJSON();
   await asset.update(updates, { transaction: transaction || undefined });
-  await AuditLog.create({ userId, action: 'UPDATE_ASSET', entity: `asset:${asset.id}`, details: JSON.stringify({ assetId: asset.id, previousValue, newValue: asset.toJSON() }) }, { transaction: transaction || undefined });
+  await createAuditLog({ userId, role, action: 'UPDATE_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, oldValue: previousValue, newValue: asset.toJSON(), details: { assetId: asset.id }, transaction });
 }
 
 const bulkImportAssets = async (req, res, next) => {
