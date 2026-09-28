@@ -60,6 +60,7 @@ const normalizeUser = (userData) => {
 };
 
 const isExpiredToken = (token) => {
+  if (!token) return true;
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
     return !payload.exp || payload.exp * 1000 <= Date.now();
@@ -84,7 +85,6 @@ export const AuthProvider = ({ children }) => {
     const onUnauthorized = () => {
       localStorage.removeItem('user');
       localStorage.removeItem('token');
-      localStorage.removeItem('authToken');
       delete axios.defaults.headers.common.Authorization;
       if (window.location.pathname !== '/login') {
         window.location.assign('/login');
@@ -171,7 +171,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     let mounted = true;
     const restoreSession = async () => {
-      const token = sanitizeAuthToken(localStorage.getItem('token') || localStorage.getItem('authToken'));
+      const token = sanitizeAuthToken(localStorage.getItem('token'));
       const storedUser = localStorage.getItem('user');
 
       if (!token || !storedUser || isExpiredToken(token)) {
@@ -186,7 +186,6 @@ export const AuthProvider = ({ children }) => {
         const currentUser = response.data?.data || response.data?.user;
         if (!currentUser) throw new Error('Invalid session response');
         localStorage.setItem('token', token);
-        localStorage.removeItem('authToken');
         localStorage.setItem('user', JSON.stringify(normalizeUser(currentUser)));
         if (mounted) setUser(normalizeUser(currentUser));
       } catch (error) {
