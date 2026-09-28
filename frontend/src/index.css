@@ -15,9 +15,15 @@
 
 body {
   margin: 0;
-  font-family: 'Inter', Arial, sans-serif;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:lang(am) {
+  font-family: 'Noto Sans Ethiopic', Nyala, 'Abyssinica SIL', Ebrima, sans-serif;
+  line-height: 1.65;
 }
 
 code {

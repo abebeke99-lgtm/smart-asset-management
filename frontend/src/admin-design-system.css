@@ -194,24 +194,24 @@
 }
 
 .admin-sidebar {
-  background: var(--primary-blue) !important;
-  border-right-color: #243247 !important;
+  background: var(--color-sidebar) !important;
+  border-right-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 .admin-sidebar-profile {
-  background: var(--primary-blue) !important;
+  background: var(--color-sidebar) !important;
 }
 
 .admin-nav-link {
   margin: 3px 10px;
   border-radius: 10px !important;
-  color: #0f172a !important;
+  color: #F8FAFC !important;
 }
 
 .admin-nav-link:hover,
 .admin-nav-link.is-active {
-  background: var(--primary-blue-hover) !important;
-  color: #0f172a !important;
+  background: var(--color-sidebar-active) !important;
+  color: #FFFFFF !important;
 }
 
 .admin-sidebar-nav {
@@ -231,7 +231,7 @@
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: #0f172a;
+  color: #F8FAFC;
   font-size: 0.76rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -240,7 +240,7 @@
 }
 
 .sidebar-section-toggle:hover {
-  background: var(--primary-blue-hover);
+  background: var(--color-sidebar-hover);
 }
 
 .sidebar-section-children {
@@ -256,7 +256,7 @@
 
 .sidebar-subsection-label {
   padding: 8px 14px 3px 34px;
-  color: #0f172a;
+  color: #94A3B8;
   font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;

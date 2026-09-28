@@ -3,6 +3,21 @@ import { useLanguage, useTheme } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
 import { apiClient, apiBase } from '../../utils/api';
 
+const getCategoryForLog = (log) => {
+  const action = String(log?.action || log?.event || 'Unknown').toLowerCase();
+  const module = String(log?.module || log?.moduleName || 'Unknown').toLowerCase();
+
+  if (action.includes('login') || action.includes('logout') || action.includes('password') || module.includes('authentication')) return 'login';
+  if (action.includes('asset') || module.includes('asset') || action.includes('rfid') || module.includes('rfid')) return 'asset';
+  if (action.includes('assignment') || action.includes('assign') || module.includes('assignment')) return 'assignment';
+  if (action.includes('transfer') || module.includes('transfer')) return 'transfer';
+  if (action.includes('maintenance') || module.includes('maintenance')) return 'maintenance';
+  if (action.includes('user') || action.includes('role') || action.includes('permission') || module.includes('user')) return 'user';
+  if (action.includes('setting') || module.includes('setting')) return 'settings';
+  if (action.includes('unauthorized') || action.includes('authentication') || action.includes('suspicious') || module.includes('security')) return 'security';
+  return 'all';
+};
+
 /**
  * AdminAuditLogs
  *
@@ -412,63 +427,8 @@ const AdminAuditLogs = () => {
     return '📋';
   };
 
-  const getActionColor = (action = '') => {
-    const normalized = action.toLowerCase();
-
-    if (
-      normalized.includes('delete') ||
-      normalized.includes('failed') ||
-      normalized.includes('unauthorized') ||
-      normalized.includes('suspicious') ||
-      normalized.includes('reject')
-    ) {
-      return {
-        background: c.dangerSoft,
-        color: c.danger
-      };
-    }
-
-    if (
-      normalized.includes('create') ||
-      normalized.includes('login') ||
-      normalized.includes('approve') ||
-      normalized.includes('complete')
-    ) {
-      return {
-        background: c.successSoft,
-        color: c.success
-      };
-    }
-
-    if (
-      normalized.includes('update') ||
-      normalized.includes('change') ||
-      normalized.includes('password')
-    ) {
-      return {
-        background: c.warningSoft,
-        color: c.warning
-      };
-    }
-
-    if (
-      normalized.includes('transfer') ||
-      normalized.includes('assign')
-    ) {
-      return {
-        background: c.purpleSoft,
-        color: c.purple
-      };
-    }
-
-    return {
-      background: c.accentSoft,
-      color: c.accent
-    };
-  };
-
-  const getStatusStyle = (status = '') => {
-    const normalized = String(status).toLowerCase();
+  const getActionColor = (status = '') => {
+    const normalized = status.toLowerCase();
 
     if (
       normalized === 'success' ||
@@ -512,6 +472,73 @@ const AdminAuditLogs = () => {
     };
   };
 
+  const getStatusStyle = (status = '') => {
+    const normalized = String(status || '').trim().toLowerCase();
+
+    if (
+      normalized === 'success' ||
+      normalized === 'successful' ||
+      normalized === 'completed' ||
+      normalized === 'approved' ||
+      normalized === 'ok' ||
+      normalized === 'active' ||
+      normalized === 'enabled'
+    ) {
+      return {
+        background: c.successSoft,
+        color: c.success,
+        borderRadius: '999px',
+        padding: '4px 8px',
+        fontWeight: 700,
+        display: 'inline-block'
+      };
+    }
+
+    if (
+      normalized === 'failed' ||
+      normalized === 'failure' ||
+      normalized === 'error' ||
+      normalized === 'rejected' ||
+      normalized === 'denied' ||
+      normalized === 'inactive' ||
+      normalized === 'disabled'
+    ) {
+      return {
+        background: c.dangerSoft,
+        color: c.danger,
+        borderRadius: '999px',
+        padding: '4px 8px',
+        fontWeight: 700,
+        display: 'inline-block'
+      };
+    }
+
+    if (
+      normalized === 'pending' ||
+      normalized === 'waiting' ||
+      normalized === 'warning' ||
+      normalized === 'review'
+    ) {
+      return {
+        background: c.warningSoft,
+        color: c.warning,
+        borderRadius: '999px',
+        padding: '4px 8px',
+        fontWeight: 700,
+        display: 'inline-block'
+      };
+    }
+
+    return {
+      background: c.accentSoft,
+      color: c.accent,
+      borderRadius: '999px',
+      padding: '4px 8px',
+      fontWeight: 700,
+      display: 'inline-block'
+    };
+  };
+
   const formatDate = (value) => {
     if (!value) return '—';
 
@@ -522,78 +549,6 @@ const AdminAuditLogs = () => {
     }
 
     return date.toLocaleString();
-  };
-
-  const getCategoryForLog = (log) => {
-    const action = getAction(log).toLowerCase();
-    const module = getModule(log).toLowerCase();
-
-    if (
-      action.includes('login') ||
-      action.includes('logout') ||
-      action.includes('password') ||
-      module.includes('authentication')
-    ) {
-      return 'login';
-    }
-
-    if (
-      action.includes('asset') ||
-      module.includes('asset') ||
-      action.includes('rfid') ||
-      module.includes('rfid')
-    ) {
-      return 'asset';
-    }
-
-    if (
-      action.includes('assignment') ||
-      action.includes('assign') ||
-      module.includes('assignment')
-    ) {
-      return 'assignment';
-    }
-
-    if (
-      action.includes('transfer') ||
-      module.includes('transfer')
-    ) {
-      return 'transfer';
-    }
-
-    if (
-      action.includes('maintenance') ||
-      module.includes('maintenance')
-    ) {
-      return 'maintenance';
-    }
-
-    if (
-      action.includes('user') ||
-      action.includes('role') ||
-      action.includes('permission') ||
-      module.includes('user')
-    ) {
-      return 'user';
-    }
-
-    if (
-      action.includes('setting') ||
-      module.includes('setting')
-    ) {
-      return 'settings';
-    }
-
-    if (
-      action.includes('unauthorized') ||
-      action.includes('authentication') ||
-      action.includes('suspicious') ||
-      module.includes('security')
-    ) {
-      return 'security';
-    }
-
-    return 'all';
   };
 
   // ============================================================

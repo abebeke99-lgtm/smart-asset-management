@@ -22,10 +22,13 @@ describe('UiProvider language', () => {
     act(() => result.current.setLanguage('am'));
     expect(result.current.language).toBe('am');
     expect(localStorage.getItem('language')).toBe('am');
+    expect(document.documentElement.lang).toBe('am');
+    expect(document.documentElement.dir).toBe('ltr');
 
     act(() => result.current.setLanguage('en'));
     expect(result.current.language).toBe('en');
     expect(localStorage.getItem('language')).toBe('en');
+    expect(document.documentElement.lang).toBe('en');
 
     act(() => result.current.setLanguage('fr'));
     expect(result.current.language).toBe('en');

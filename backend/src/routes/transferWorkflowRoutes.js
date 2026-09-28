@@ -11,6 +11,10 @@ college.get('/department/transfers', ...requireDepartmentHead, resolveDepartment
 college.post('/department/transfers', ...requireDepartmentHead, resolveDepartmentScope, workflow.createTransfer);
 college.get('/department/transfers/:id', ...requireDepartmentHead, resolveDepartmentScope, workflow.getTransfer);
 college.post('/department/transfers/:id/cancel', ...requireDepartmentHead, resolveDepartmentScope, workflow.cancelTransfer);
+college.get('/department-head/transfers', ...requireDepartmentHead, resolveDepartmentScope, workflow.listTransfers);
+college.post('/department-head/transfers', ...requireDepartmentHead, resolveDepartmentScope, workflow.createTransfer);
+college.get('/department-head/transfers/:id', ...requireDepartmentHead, resolveDepartmentScope, workflow.getTransfer);
+college.post('/department-head/transfers/:id/cancel', ...requireDepartmentHead, resolveDepartmentScope, workflow.cancelTransfer);
 college.get('/store/transfers', require('../middlewares/auth').requireAuth, require('../middlewares/auth').requireRole('store_manager'), resolveCollegeScope, workflow.listTransfers);
 college.post('/store/transfers/:id/ready', require('../middlewares/auth').requireAuth, require('../middlewares/auth').requireRole('store_manager'), resolveCollegeScope, workflow.readyTransfer);
 college.post('/store/transfers/:id/dispatch', require('../middlewares/auth').requireAuth, require('../middlewares/auth').requireRole('store_manager'), resolveCollegeScope, workflow.dispatchTransfer);

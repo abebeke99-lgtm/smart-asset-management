@@ -1,6 +1,33 @@
 const { Op, fn, col } = require('sequelize');
-const { sequelize, Approval, Asset, Assignment, AuditLog, Category, Department, Incident, IncidentHistory, Maintenance, MaintenanceHistory, Notification, PreventiveMaintenance, RFIDLog, RfidDevice, RequestStatusHistory, ServiceRequest, SoftwareLicense, User } = require('../models');
+const fs = require('fs');
+const path = require('path');
+const { sequelize, Approval, Asset, Assignment, AuditLog, Category, Department, Incident, IncidentHistory, Maintenance, MaintenanceHistory, Notification, PreventiveMaintenance, RFIDLog, RfidDevice, RequestStatusHistory, ServiceRequest, SoftwareLicense, Transfer, User, AssetDocument } = require('../models');
 const { equipmentTerms, networkTerms, equipmentPredicate, networkPredicate } = require('../utils/ictAssetFilters');
+
+const ALLOWED_DOC_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const MAX_DOC_SIZE = 10 * 1024 * 1024;
+const uploadRoot = process.env.UPLOAD_DIR || path.join(__dirname, '..', '..', 'uploads');
+
+const saveIctDocument = ({ fileName = '', mimeType = '', data = '' }, subdir) => {
+  const mime = String(mimeType || '').split(';')[0].trim();
+  if (!ALLOWED_DOC_TYPES.includes(mime)) {
+    const error = new Error(`Unsupported file type: ${mime || 'unknown'}. Allowed: PDF, JPG, PNG, WEBP.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  const buffer = Buffer.from(data, 'base64');
+  if (!buffer.length || buffer.length > MAX_DOC_SIZE) {
+    const error = new Error('File is empty or exceeds the 10 MB limit');
+    error.statusCode = 400;
+    throw error;
+  }
+  const ext = String(fileName).split('.').pop() || (mime === 'application/pdf' ? 'pdf' : mime.split('/')[1] || 'bin');
+  const storedName = `${Date.now()}-${String(Math.floor(Math.random() * 100000)).padStart(5, '0')}.${ext}`;
+  const dir = path.join(uploadRoot, subdir);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, storedName), buffer);
+  return { originalName: String(fileName || storedName), storedName, mimeType: mime, fileSize: buffer.length, filePath: path.posix.join('uploads', subdir, storedName) };
+};
 
 const scopeWhere = (req) => req.user.role === 'admin' ? {} : { collegeId: req.organizationScope.collegeId };
 
@@ -989,4 +1016,183 @@ const getIctAssetHistoryByAsset = async (req, res, next) => {
   }
 };
 
-module.exports = { listIctAssets, listIctEquipment, listNetworkEquipment, getNetworkEquipment, getIctAsset, retireIctAsset, createIctMaintenanceRequest, createIctAsset, updateIctAsset, getIctOptions, getIctDashboard, listIctTracking, getIctTracking, scanIctTracking, assignIctRfid, unassignIctRfid, listIctAssetHistory, getIctAssetHistoryRecord, getIctAssetHistoryByAsset };
+const globalIctSearch = async (req, res, next) => {
+  try {
+    const search = String(req.query.search || req.query.q || '').trim();
+    if (!search) return res.json({ success: true, data: { assets: [], tickets: [], incidents: [], maintenance: [], users: [], locations: [] } });
+    const like = { [Op.like]: `%${search}%` };
+    const assetWhere = { ...ictAssetWhere(req), [Op.or]: [{ name: like }, { assetCode: like }, { serialNumber: like }, { digitalId: like }, { rfidTag: like }] };
+    const orgScope = req.user.role === 'admin' ? {} : { collegeId: req.organizationScope.collegeId };
+    const [assets, tickets, incidents, maintenance, users, locations] = await Promise.all([
+      Asset.findAll({ where: assetWhere, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'category', 'status', 'condition', 'location', 'department'], limit: 10 }),
+      ServiceRequest.findAll({ where: { ...orgScope, requestType: 'support', [Op.or]: [{ title: like }, { requestCode: like }, { description: like }] }, attributes: ['id', 'requestCode', 'title', 'status', 'priority', 'createdAt'], limit: 10 }),
+      Incident.findAll({ where: { ...orgScope, [Op.or]: [{ title: like }, { incidentNumber: like }, { description: like }] }, attributes: ['id', 'incidentNumber', 'title', 'status', 'priority', 'createdAt'], limit: 10 }),
+      Maintenance.findAll({ where: { [Op.or]: [{ description: like }, { assetId: { [Op.in]: (await Asset.findAll({ where: assetWhere, attributes: ['id'], raw: true })).map((a) => a.id) } }] }, attributes: ['id', 'assetId', 'type', 'status', 'description', 'createdAt'], limit: 10 }),
+      req.user.role === 'admin' ? User.findAll({ where: { [Op.or]: [{ username: like }, { fullName: like }, { email: like }] }, attributes: ['id', 'username', 'fullName', 'email', 'role'], limit: 10 }) : [],
+      req.user.role === 'admin' ? Location.findAll({ where: { [Op.or]: [{ name: like }, { type: like }] }, attributes: ['id', 'name', 'type'], limit: 10 }) : [],
+    ]);
+    return res.json({ success: true, data: { assets, tickets, incidents, maintenance, users, locations } });
+  } catch (error) { next(error); }
+};
+
+const listIctPreventiveMaintenance = async (req, res, next) => {
+  try {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
+    const assetWhere = ictAssetWhere(req);
+    const assetIds = (await Asset.findAll({ where: assetWhere, attributes: ['id'], raw: true })).map((a) => a.id);
+    if (!assetIds.length) return res.json({ success: true, data: [], pagination: { page, limit, total: 0, totalPages: 0 } });
+    const where = { assetId: { [Op.in]: assetIds } };
+    if (req.query.status) where.status = String(req.query.status).trim();
+    const { count, rows } = await PreventiveMaintenance.findAndCountAll({ where, include: [{ model: Asset, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'category'] }], order: [['scheduleDate', 'ASC']], limit, offset: (page - 1) * limit });
+    return res.json({ success: true, data: rows, pagination: { page, limit, total: count, totalPages: Math.max(1, Math.ceil(count / limit)) } });
+  } catch (error) { next(error); }
+};
+
+const createIctPreventiveMaintenance = async (req, res, next) => {
+  try {
+    const asset = await Asset.findOne({ where: { id: req.body.assetId, ...ictAssetWhere(req) } });
+    if (!asset) return res.status(404).json({ success: false, message: 'ICT asset not found' });
+    const scheduleDate = new Date(req.body.scheduleDate);
+    if (Number.isNaN(scheduleDate.getTime())) return res.status(422).json({ success: false, message: 'Valid schedule date is required' });
+    const record = await PreventiveMaintenance.create({ assetId: asset.id, type: req.body.type || 'inspection', status: 'scheduled', description: req.body.description || '', scheduleDate, nextScheduleDate: req.body.nextScheduleDate || null, createdBy: req.user.id });
+    await AuditLog.create({ userId: req.user.id, action: 'ICT_PREVENTIVE_MAINTENANCE_CREATED', entity: `asset:${asset.id}`, details: JSON.stringify({ maintenanceId: record.id, type: record.type, scheduleDate }) });
+    return res.status(201).json({ success: true, data: record });
+  } catch (error) { next(error); }
+};
+
+const assignIctAsset = async (req, res, next) => {
+  try {
+    const asset = await Asset.findOne({ where: { id: req.params.id, ...ictAssetWhere(req) } });
+    if (!asset) return res.status(404).json({ success: false, message: 'ICT asset not found' });
+    const assigneeId = Number(req.body.assignedTo || req.body.userId);
+    if (!Number.isInteger(assigneeId) || assigneeId < 1) return res.status(422).json({ success: false, message: 'Valid assignee user ID is required' });
+    const assignee = await User.findOne({ where: { id: assigneeId, active: true } });
+    if (!assignee) return res.status(422).json({ success: false, message: 'Assignee not found or inactive' });
+    if (['under-maintenance', 'lost', 'retired', 'assigned', 'disposed'].includes(String(asset.status).toLowerCase())) {
+      return res.status(409).json({ success: false, message: `Asset cannot be assigned while its status is "${asset.status}"` });
+    }
+    const existing = await Assignment.findOne({ where: { assetId: asset.id, status: 'active' } });
+    if (existing) return res.status(409).json({ success: false, message: 'Asset is already assigned to another user' });
+    const assignment = await Assignment.create({ assetId: asset.id, assignedTo: assigneeId, assignedBy: req.user.id, status: 'active', assignmentDate: new Date(), notes: req.body.notes || '' });
+    await asset.update({ status: 'assigned' });
+    await AuditLog.create({ userId: req.user.id, action: 'ICT_ASSET_ASSIGNED', entity: `asset:${asset.id}`, details: JSON.stringify({ assignmentId: assignment.id, assignedTo: assigneeId }) });
+    try {
+      await Notification.create({ userId: assigneeId, title: 'Asset Assigned', message: `You have been assigned ${asset.name} (${asset.assetCode || asset.id})`, type: 'assignment', priority: 'medium', entityType: 'asset', entityId: asset.id, actionUrl: `/ict/assets` });
+    } catch (notificationError) { console.error('Assignment notification failed:', notificationError.message); }
+    return res.status(201).json({ success: true, data: assignment });
+  } catch (error) { next(error); }
+};
+
+const transferIctAsset = async (req, res, next) => {
+  try {
+    const asset = await Asset.findOne({ where: { id: req.params.id, ...ictAssetWhere(req) } });
+    if (!asset) return res.status(404).json({ success: false, message: 'ICT asset not found' });
+    const toDepartmentId = Number(req.body.toDepartmentId || req.body.departmentId);
+    if (!Number.isInteger(toDepartmentId) || toDepartmentId < 1) return res.status(422).json({ success: false, message: 'Valid destination department is required' });
+    const department = await Department.findOne({ where: { id: toDepartmentId } });
+    if (!department) return res.status(422).json({ success: false, message: 'Destination department not found' });
+    if (['under-maintenance', 'lost', 'retired'].includes(String(asset.status).toLowerCase())) {
+      return res.status(409).json({ success: false, message: `Asset cannot be transferred while its status is "${asset.status}"` });
+    }
+    const activeTransfer = await Transfer.findOne({ where: { assetId: asset.id, status: { [Op.in]: ['Pending', 'Approved', 'In Progress'] } } });
+    if (activeTransfer) return res.status(409).json({ success: false, message: 'Asset already has an active transfer in progress' });
+    const transfer = await Transfer.create({
+      assetId: asset.id,
+      sourceDepartment: asset.department,
+      destinationDepartment: department.name,
+      sourceDepartmentId: asset.departmentId,
+      destinationDepartmentId: department.id,
+      currentLocation: asset.location || '',
+      newLocation: req.body.newLocation || asset.location || '',
+      transferReason: req.body.reason || req.body.transferReason || 'ICT asset transfer',
+      status: 'Pending',
+      requestedBy: req.user.id,
+      createdBy: req.user.id,
+    });
+    await AuditLog.create({ userId: req.user.id, action: 'ICT_TRANSFER_REQUESTED', entity: `asset:${asset.id}`, details: JSON.stringify({ transferId: transfer.id, fromDepartment: asset.department, toDepartment: department.name }) });
+    return res.status(201).json({ success: true, data: transfer, message: 'Transfer request created. Pending approval.' });
+  } catch (error) { next(error); }
+};
+
+const listIctAssetDocuments = async (req, res, next) => {
+  try {
+    const asset = await Asset.findOne({ where: { id: req.params.id, ...ictAssetWhere(req) } });
+    if (!asset) return res.status(404).json({ success: false, message: 'ICT asset not found' });
+    const documents = await AssetDocument.findAll({ where: { assetId: asset.id, status: 'active' }, order: [['createdAt', 'DESC']] });
+    return res.json({ success: true, data: documents });
+  } catch (error) { next(error); }
+};
+
+const uploadIctAssetDocument = async (req, res, next) => {
+  try {
+    const asset = await Asset.findOne({ where: { id: req.params.id, ...ictAssetWhere(req) } });
+    if (!asset) return res.status(404).json({ success: false, message: 'ICT asset not found' });
+    const saved = saveIctDocument(req.body, 'assets');
+    const document = await AssetDocument.create({
+      assetId: asset.id,
+      documentType: req.body.documentType || req.body.document_type || 'other',
+      originalName: saved.originalName,
+      storedName: saved.storedName,
+      mimeType: saved.mimeType,
+      fileSize: saved.fileSize,
+      filePath: saved.filePath,
+      description: req.body.description || '',
+      uploadedBy: req.user.id,
+    });
+    await AuditLog.create({ userId: req.user.id, action: 'ICT_DOCUMENT_UPLOADED', entity: `asset:${asset.id}`, details: JSON.stringify({ documentId: document.id, documentType: document.documentType, originalName: saved.originalName }) });
+    return res.status(201).json({ success: true, data: document });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+    return next(error);
+  }
+};
+
+const deleteIctAssetDocument = async (req, res, next) => {
+  try {
+    const asset = await Asset.findOne({ where: { id: req.params.id, ...ictAssetWhere(req) } });
+    if (!asset) return res.status(404).json({ success: false, message: 'ICT asset not found' });
+    const document = await AssetDocument.findOne({ where: { id: req.params.documentId, assetId: asset.id } });
+    if (!document) return res.status(404).json({ success: false, message: 'Document not found' });
+    await document.update({ status: 'removed' });
+    await AuditLog.create({ userId: req.user.id, action: 'ICT_DOCUMENT_REMOVED', entity: `asset:${asset.id}`, details: JSON.stringify({ documentId: document.id }) });
+    return res.json({ success: true, message: 'Document removed' });
+  } catch (error) { next(error); }
+};
+
+const getIctWarrantyInfo = async (req, res, next) => {
+  try {
+    const asset = await Asset.findOne({ where: { id: req.params.id, ...ictAssetWhere(req) } });
+    if (!asset) return res.status(404).json({ success: false, message: 'ICT asset not found' });
+    const warrantyStatus = !asset.warrantyExpiry ? 'no_warranty' : new Date(asset.warrantyExpiry) < new Date() ? 'expired' : 'active';
+    const daysUntilExpiry = asset.warrantyExpiry ? Math.ceil((new Date(asset.warrantyExpiry) - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+    const documents = await AssetDocument.findAll({ where: { assetId: asset.id, status: 'active', documentType: 'warranty' }, order: [['createdAt', 'DESC']] });
+    return res.json({ success: true, data: { assetId: asset.id, assetName: asset.name, assetCode: asset.assetCode, warrantyExpiry: asset.warrantyExpiry, warrantyStatus, daysUntilExpiry, warrantyDocuments: documents } });
+  } catch (error) { next(error); }
+};
+
+const listIctWarranties = async (req, res, next) => {
+  try {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
+    const assetWhere = { ...ictAssetWhere(req), warrantyExpiry: { [Op.not]: null } };
+    if (req.query.status) {
+      const status = String(req.query.status).toLowerCase();
+      if (status === 'expired') assetWhere.warrantyExpiry[Op.lt] = new Date();
+      else if (status === 'active') assetWhere.warrantyExpiry[Op.gte] = new Date();
+      else if (status === 'expiring') {
+        const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        assetWhere.warrantyExpiry[Op.and] = [{ [Op.gte]: new Date() }, { [Op.lte]: thirtyDaysFromNow }];
+      }
+    }
+    const { count, rows } = await Asset.findAndCountAll({ where: assetWhere, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'category', 'status', 'department', 'location', 'warrantyExpiry', 'purchaseDate', 'purchasePrice', 'supplier', 'manufacturer', 'model'], order: [['warrantyExpiry', 'ASC']], limit, offset: (page - 1) * limit });
+    const data = rows.map((asset) => {
+      const data = asset.toJSON ? asset.toJSON() : asset;
+      const daysUntilExpiry = data.warrantyExpiry ? Math.ceil((new Date(data.warrantyExpiry) - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+      return { ...data, warrantyStatus: !data.warrantyExpiry ? 'no_warranty' : new Date(data.warrantyExpiry) < new Date() ? 'expired' : 'active', daysUntilExpiry };
+    });
+    return res.json({ success: true, data, pagination: { page, limit, total: count, totalPages: Math.max(1, Math.ceil(count / limit)) } });
+  } catch (error) { next(error); }
+};
+
+module.exports = { listIctAssets, listIctEquipment, listNetworkEquipment, getNetworkEquipment, getIctAsset, retireIctAsset, createIctMaintenanceRequest, createIctAsset, updateIctAsset, getIctOptions, getIctDashboard, listIctTracking, getIctTracking, scanIctTracking, assignIctRfid, unassignIctRfid, listIctAssetHistory, getIctAssetHistoryRecord, getIctAssetHistoryByAsset, globalIctSearch, listIctPreventiveMaintenance, createIctPreventiveMaintenance, assignIctAsset, transferIctAsset, listIctAssetDocuments, uploadIctAssetDocument, deleteIctAssetDocument, getIctWarrantyInfo, listIctWarranties };

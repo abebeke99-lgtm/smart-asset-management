@@ -13,7 +13,7 @@ const roleSystemLinks = {
   admin: ['/admin/assets', '/admin/inventory/overview', '/admin/rfid/qr', '/admin/maintenance', '/admin/reports'],
   ict_officer: ['/ict/assets', '/ict/inventory', '/ict/tracking', '/ict/maintenance', '/ict/reports'],
   college: ['/college/assets', '/college/inventory', '/college/rfid', '/college/maintenance', '/college/reports'],
-  department_head: ['/department/assets', '/department/inventory', '/department/verification', '/department/maintenance', '/department/reports'],
+  department_head: ['/department-head/assets', '/department-head/inventory', '/department-head/verification', '/department-head/maintenance', '/department-head/reports'],
   staff: ['/department/assets', '/department/inventory', '/department/verification', '/department/maintenance', '/department/history'],
   store_manager: ['/store/available-assets', '/store/inventory', '/store/tracking', '/store/maintenance', '/store/reports/inventory'],
   maintenance: ['/maintenance/assets-under-maintenance', '/maintenance/spare-parts', '/maintenance', '/maintenance', '/maintenance/reports'],

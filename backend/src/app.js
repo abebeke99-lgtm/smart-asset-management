@@ -168,6 +168,7 @@ app.use('/api/finance', financeRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/college', collegeRoutes);
 app.use('/api/department', departmentWorkspaceRoutes);
+app.use('/api/department-head', departmentWorkspaceRoutes);
 app.use('/api', transferWorkflowRoutes);
 app.use('/api', returnWorkflowRoutes);
 app.use('/api/infrastructure', infrastructureRoutes);

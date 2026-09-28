@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "start": "node scripts/start-backend.js",
-    "dev": "node --watch backend/src/app.js"
+    "start": "node scripts/start-all.js",
+    "dev": "node scripts/start-all.js --dev"
   }
 }

@@ -1,0 +1,43 @@
+.ict-warranty-page { display: flex; justify-content: center; padding: 24px; min-height: calc(100vh - var(--header-height, 64px)); }
+.ict-warranty-shell { width: 100%; max-width: 1200px; background: var(--card-bg, #fff); border: 1px solid var(--card-border, #e2e8f0); border-radius: 12px; padding: 28px; }
+.warranty-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; gap: 16px; }
+.warranty-title { display: flex; gap: 14px; align-items: flex-start; }
+.warranty-mark { width: 44px; height: 44px; border-radius: 10px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.warranty-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #2563eb; margin: 0 0 2px; }
+.warranty-title h1 { font-size: 22px; font-weight: 700; color: #1e293b; margin: 0; }
+.warranty-title p { font-size: 13px; color: #64748b; margin: 4px 0 0; }
+.warranty-actions { display: flex; gap: 10px; }
+.warranty-button { display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: all 0.2s; }
+.warranty-button.secondary { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+.warranty-button.secondary:hover { background: #e2e8f0; }
+.warranty-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+.warranty-stat { padding: 16px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 4px; }
+.warranty-stat span { font-size: 12px; color: #64748b; font-weight: 600; }
+.warranty-stat strong { font-size: 24px; color: #1e293b; }
+.warranty-stat.active strong { color: #16a34a; }
+.warranty-stat.expiring strong { color: #d97706; }
+.warranty-stat.expired strong { color: #dc2626; }
+.warranty-toolbar { display: flex; gap: 12px; margin-bottom: 16px; }
+.warranty-search { display: flex; align-items: center; gap: 8px; flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; }
+.warranty-search input { flex: 1; border: none; background: transparent; outline: none; font-size: 14px; color: #1e293b; }
+.warranty-filter { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; color: #475569; background: #fff; }
+.warranty-table-wrap { overflow-x: auto; }
+.warranty-table { width: 100%; border-collapse: collapse; }
+.warranty-table th { text-align: left; padding: 12px 14px; font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid #e2e8f0; }
+.warranty-table td { padding: 12px 14px; font-size: 13px; color: #1e293b; border-bottom: 1px solid #f1f5f9; }
+.warranty-table td strong { display: block; }
+.warranty-table td small { color: #94a3b8; font-size: 12px; }
+.warranty-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.warranty-active { background: #dcfce7; color: #16a34a; }
+.warranty-expiring { background: #fef3c7; color: #d97706; }
+.warranty-expired { background: #fee2e2; color: #dc2626; }
+.warranty-none { background: #f1f5f9; color: #64748b; }
+.warranty-empty { text-align: center; padding: 60px 20px; color: #94a3b8; }
+.warranty-empty h2 { font-size: 18px; color: #64748b; margin: 12px 0 4px; }
+.warranty-empty p { font-size: 14px; margin: 0; }
+.warranty-loading { text-align: center; padding: 40px; color: #94a3b8; }
+.warranty-pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid #f1f5f9; font-size: 13px; color: #64748b; }
+.warranty-pagination div { display: flex; align-items: center; gap: 10px; }
+.warranty-pagination button { width: 32px; height: 32px; border: 1px solid #e2e8f0; background: #fff; border-radius: 6px; cursor: pointer; font-size: 14px; color: #475569; }
+.warranty-pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+.warranty-pagination button:not(:disabled):hover { background: #f1f5f9; }

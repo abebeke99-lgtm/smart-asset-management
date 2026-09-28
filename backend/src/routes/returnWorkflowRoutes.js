@@ -11,6 +11,10 @@ router.get('/department/returns', ...requireDepartmentHead, resolveDepartmentSco
 router.post('/department/returns', ...requireDepartmentHead, resolveDepartmentScope, workflow.createReturn);
 router.get('/department/returns/:id', ...requireDepartmentHead, resolveDepartmentScope, workflow.getReturn);
 router.post('/department/returns/:id/cancel', ...requireDepartmentHead, resolveDepartmentScope, workflow.cancelReturn);
+router.get('/department-head/returns', ...requireDepartmentHead, resolveDepartmentScope, workflow.listReturns);
+router.post('/department-head/returns', ...requireDepartmentHead, resolveDepartmentScope, workflow.createReturn);
+router.get('/department-head/returns/:id', ...requireDepartmentHead, resolveDepartmentScope, workflow.getReturn);
+router.post('/department-head/returns/:id/cancel', ...requireDepartmentHead, resolveDepartmentScope, workflow.cancelReturn);
 router.get('/store/returns', auth.requireAuth, auth.requireRole('store_manager'), resolveCollegeScope, workflow.listReturns);
 router.post('/store/returns', auth.requireAuth, auth.requireRole('store_manager'), resolveCollegeScope, workflow.processStoreReturn);
 router.post('/store/returns/:id/receive', auth.requireAuth, auth.requireRole('store_manager'), resolveCollegeScope, workflow.receiveReturn);

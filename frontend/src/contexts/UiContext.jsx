@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { translateMessage } from '../i18n/messages';
 
 const UiContext = createContext();
 const normalizeLanguage = (language) => language === 'am' ? 'am' : 'en';
@@ -12,6 +13,15 @@ export const useLanguage = () => {
     language: context.language, 
     setLanguage: context.setLanguage, 
     theme: context.theme 
+  };
+};
+
+export const useTranslation = () => {
+  const context = useContext(UiContext);
+  const language = normalizeLanguage(context?.language);
+  return {
+    language,
+    t: (key, fallback) => translateMessage(language, key, fallback)
   };
 };
 
@@ -42,11 +52,13 @@ export const UiProvider = ({ children }) => {
   useEffect(() => {
     localStorage.setItem('language', language);
     document.documentElement.lang = language === 'am' ? 'am' : 'en';
+    document.documentElement.dir = 'ltr';
   }, [language]);
 
   useEffect(() => {
     localStorage.setItem('theme', theme);
-    document.body.style.backgroundColor = theme === 'dark' ? '#0d1b2a' : '#f7fafc';
+    document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
+    document.body.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
   const value = {

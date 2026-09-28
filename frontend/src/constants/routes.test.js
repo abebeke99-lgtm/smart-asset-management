@@ -46,3 +46,16 @@ describe('Store Manager route configuration', () => {
     );
   });
 });
+
+describe('ICT Officer route configuration', () => {
+  test('uses the canonical support and asset-history routes required by the module specification', () => {
+    const routes = getRoutesByRole('ict_officer');
+
+    expect(ROUTES.ICT_SUPPORT).toBe('/ict/support');
+    expect(ROUTES.ICT_ASSET_HISTORY).toBe('/ict/asset-history');
+    expect(routes).toContain('/ict/support');
+    expect(routes).toContain('/ict/asset-history');
+    expect(routes).not.toContain('/ict/technical-support');
+    expect(routes).not.toContain('/ict/assets/history');
+  });
+});
