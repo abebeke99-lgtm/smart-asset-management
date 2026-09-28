@@ -11,7 +11,13 @@ jest.mock('../utils/api', () => ({
   apiClient: {
     post: jest.fn(),
     delete: jest.fn(),
+    get: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
   },
+  apiBase: () => 'http://localhost:5000',
+  getApiErrorMessage: (error, fallback) => fallback || 'Error',
+  resolveAssetUrl: (value) => value || '',
 }));
 
 jest.mock('react-toastify', () => ({

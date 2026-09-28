@@ -112,7 +112,7 @@ import FinanceValuation from './components/finance/FinanceValuation';
 import FinanceDepreciation from './components/finance/FinanceDepreciation';
 import Capitalization from './components/finance/Capitalization';
 import DisposalFinancialRecords from './components/finance/DisposalFinancialRecords';
-import FinanceFinancialReports from './components/finance/FinanceFinancialReports';
+const FinanceFinancialReports = lazy(() => import('./components/finance/FinanceFinancialReports'));
 import FinanceBudgetReports from './components/finance/FinanceBudgetReports';
 import FinanceDepreciationReports from './components/finance/FinanceDepreciationReports';
 import FinanceAssetValueReports from './components/finance/FinanceAssetValueReports';

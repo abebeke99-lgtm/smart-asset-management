@@ -3,21 +3,34 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import MaintReports from './MaintReports';
 import MaintWorkOrders from './MaintWorkOrders';
 import MaintPreventive from './MaintPreventive';
-import { getMaintenance, getMaintenanceDashboard, getRepairHistory, getTechnicians } from '../../services/maintenanceApi';
+import { getMaintenance, getMaintenanceDashboard, getMaintenanceCalendar, getRepairHistory, getTechnicians } from '../../services/maintenanceApi';
+import apiClient from '../../services/apiClient';
 
 jest.mock('../../contexts/UiContext', () => ({ useTheme: () => ({ theme: 'light' }) }));
 jest.mock('../../services/maintenanceApi', () => ({
   getMaintenance: jest.fn(),
   getMaintenanceDashboard: jest.fn(),
+  getMaintenanceCalendar: jest.fn(),
   getRepairHistory: jest.fn(),
   getTechnicians: jest.fn(),
   getInventory: jest.fn(),
   getAssets: jest.fn(),
 }));
+jest.mock('../../services/apiClient', () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
 
 beforeEach(() => {
   getMaintenance.mockResolvedValue([]);
   getMaintenanceDashboard.mockResolvedValue({});
+  getMaintenanceCalendar.mockResolvedValue({ items: [] });
   getRepairHistory.mockResolvedValue({ records: [], stats: {} });
   getTechnicians.mockResolvedValue([]);
   jest.requireMock('../../services/maintenanceApi').getInventory.mockResolvedValue([]);
@@ -33,15 +46,21 @@ test('selected report period is sent to the persisted repair history API', async
 });
 
 test('maintenance work orders are rendered from real maintenance records', async () => {
-  getMaintenance.mockResolvedValue([
-    { id: 1, asset: 'Laptop A', title: 'Keyboard replacement', priority: 'High', status: 'In Progress', statusRaw: 'in-progress', assigned_to_name: 'Jane Doe', created: '2026-09-28T00:00:00Z' },
-    { id: 2, asset: 'Projector B', title: 'Lamp check', priority: 'Medium', status: 'Testing', statusRaw: 'testing', assigned_to_name: 'John Smith', created: '2026-09-27T00:00:00Z' },
-  ]);
+  apiClient.get.mockResolvedValue({
+    data: {
+      data: [
+        { id: 1, assetName: 'Laptop A', title: 'Keyboard replacement', priority: 'High', status: 'In Progress', statusRaw: 'in-progress', technician: 'Jane Doe', createdAt: '2026-09-28T00:00:00Z' },
+        { id: 2, assetName: 'Projector B', title: 'Lamp check', priority: 'Medium', status: 'Testing', statusRaw: 'testing', technician: 'John Smith', createdAt: '2026-09-27T00:00:00Z' },
+      ],
+      summary: { total: 2, open: 1, inProgress: 1, onHold: 0, completed: 0, overdue: 0 },
+      pagination: { page: 1, pages: 1, total: 2, limit: 10 },
+    },
+  });
 
   render(<MaintWorkOrders />);
 
   expect(await screen.findByText('Work Orders')).toBeInTheDocument();
-  expect(screen.getByText('Keyboard replacement')).toBeInTheDocument();
+  expect(await screen.findByText('Laptop A')).toBeInTheDocument();
   expect(screen.getByText('Projector B')).toBeInTheDocument();
   expect(screen.queryByText(/No Maintenance-owned persisted/i)).not.toBeInTheDocument();
 });
@@ -55,7 +74,7 @@ test('preventive maintenance is derived from actual maintenance records and not 
   render(<MaintPreventive />);
 
   expect(await screen.findByText('Preventive Maintenance')).toBeInTheDocument();
+  expect(await screen.findByText('Generator')).toBeInTheDocument();
   expect(screen.getAllByText('Upcoming').length).toBeGreaterThan(0);
-  expect(screen.getByText('Generator')).toBeInTheDocument();
   expect(screen.queryByText(/There is no Maintenance-owned persisted/i)).not.toBeInTheDocument();
 });

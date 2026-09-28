@@ -16,10 +16,7 @@ import {
   Trash2,
   FileText,
 } from "lucide-react";
-import { apiBase } from "../../utils/api";
-
-const API_URL =
-  `${apiBase()}/api`;
+import { apiClient } from "../../utils/api";
 
 export default function DisposalFinancialRecords() {
   const [records, setRecords] = useState([]);
@@ -447,9 +444,9 @@ export default function DisposalFinancialRecords() {
 
     try {
       const result = await Promise.allSettled([
-        request(`${API_URL}/finance/disposal-financial-records`),
-        request(`${API_URL}/finance/disposal-financial-records/candidates`),
-        request(`${API_URL}/departments`),
+        request('/finance/disposal-financial-records'),
+        request('/finance/disposal-financial-records/candidates'),
+        request('/departments'),
       ]);
 
       if (result[0].status === "fulfilled") {
@@ -685,7 +682,7 @@ export default function DisposalFinancialRecords() {
     try {
       if (editing && selectedRecord) {
         await request(
-          `${API_URL}/finance/disposal-financial-records/${getId(
+          `/finance/disposal-financial-records/${getId(
             selectedRecord
           )}`,
           {
@@ -699,7 +696,7 @@ export default function DisposalFinancialRecords() {
         );
       } else {
         await request(
-          `${API_URL}/finance/disposal-financial-records`,
+          '/finance/disposal-financial-records',
           {
             method: "POST",
             body: JSON.stringify(payload),
