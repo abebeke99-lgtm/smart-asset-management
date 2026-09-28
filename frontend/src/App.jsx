@@ -36,6 +36,147 @@ import { apiClient } from './utils/api';
 import Footer from './components/common/Footer';
 import StoreTracking from './components/store/StoreTracking';
 
+import Home from './components/public/Home';
+import AboutUs from './components/public/AboutUs';
+import Services from './components/public/Services';
+import Contact from './components/public/Contact';
+import Help from './components/public/Help';
+import Register from './components/public/Register';
+import ForgotPassword from './components/public/ForgotPassword';
+import ResetPassword from './components/public/ResetPassword';
+
+import AssetCreate from './components/shared/AssetCreate';
+import AssetDetails from './components/shared/AssetDetails';
+
+import AdminUserManagement from './components/admin/AdminUserManagement';
+import AdminReports from './components/admin/AdminReports';
+import AdminSettings from './components/admin/AdminSettings';
+import AdminNotificationDetails from './components/admin/AdminNotificationDetails';
+import AdminNotifications from './components/admin/AdminNotifications';
+import AdminBackup from './components/admin/AdminBackup';
+import AdminRolesPermissions from './components/admin/AdminRolesPermissions';
+import AdminDepartmentManagement from './components/admin/AdminDepartmentManagement';
+import AdminAnalyticsCenter from './components/admin/AdminAnalyticsCenter';
+import AdminAuditLogs from './components/admin/AdminAuditLogs';
+import AdminChemicalQuarantine from './components/admin/AdminChemicalQuarantine';
+import SystemMonitoring from './components/admin/SystemMonitoring';
+import AdminCollegeManagement from './components/admin/AdminCollegeManagement';
+import AdminCollegeDetails from './components/admin/AdminCollegeDetails';
+
+import ICTDashboard from './components/ict/ICTDashboard';
+import ICTAssets from './components/ict/ICTAssets';
+import ICTAssignments from './components/ict/ICTAssignments';
+import ICTMaintenance from './components/ict/ICTMaintenance';
+import ICTRepairHistory from './components/ict/ICTRepairHistory';
+import ICTDeviceHealth from './components/ict/ICTDeviceHealth';
+import ICTRFIDTracking from './components/ict/ICTRFIDTracking';
+import ICTAssetHistory from './components/ict/ICTAssetHistory';
+import ICTReports from './components/ict/ICTReports';
+import ICTAssetAnalytics from './components/ict/ICTAssetAnalytics';
+import ICTInventory from './components/ict/ICTInventory';
+import ICTAssetRequests from './components/ict/ICTAssetRequests';
+import ICTEquipment from './components/ict/ICTEquipment';
+import ICTNetwork from './components/ict/ICTNetwork';
+import ICTSoftwareLicenses from './components/ict/ICTSoftwareLicenses';
+import ICTTechnicalSupport from './components/ict/ICTTechnicalSupport';
+import ICTIncidents from './components/ict/ICTIncidents';
+import ICTNotifications from './components/ict/ICTNotifications';
+import ICTDocuments from './components/ict/ICTDocuments';
+import ICTWarranty from './components/ict/ICTWarranty';
+import ICTPhotoEvidence from './components/ict/ICTPhotoEvidence';
+import ICTGlobalSearch from './components/ict/ICTGlobalSearch';
+
+import DeptDashboard from './components/department/DeptDashboard';
+import DeptProfile from './components/department/DeptProfile';
+import DeptStaff from './components/department/DeptStaff';
+import DeptLocations from './components/department/DeptLocations';
+import DeptAssets from './components/department/DeptAssets';
+import DeptReports from './components/department/DeptReports';
+import DeptApprovals from './components/department/DeptApprovals';
+import DeptUtilization from './components/department/DeptUtilization';
+import DeptVerification from './components/department/DeptVerification';
+import DeptNotifications from './components/department/DeptNotifications';
+import DeptAssetHistory from './components/department/DeptAssetHistory';
+
+import FinanceDashboard from './components/finance/FinanceDashboard';
+import FinancePurchaseRequests from './components/finance/FinancePurchaseRequests';
+import FinancePurchaseOrders from './components/finance/FinancePurchaseOrders';
+import FinanceSuppliers from './components/finance/FinanceSuppliers';
+import FinancePurchaseHistory from './components/finance/FinancePurchaseHistory';
+import FinanceInvoices from './components/finance/FinanceInvoices';
+import FinancePayments from './components/finance/FinancePayments';
+import FinanceTransactions from './components/finance/FinanceTransactions';
+import FinanceReports from './components/finance/FinanceReports';
+import FinanceBudgetManagement from './components/finance/FinanceBudgetManagement';
+import FinanceValuation from './components/finance/FinanceValuation';
+import FinanceDepreciation from './components/finance/FinanceDepreciation';
+import Capitalization from './components/finance/Capitalization';
+import DisposalFinancialRecords from './components/finance/DisposalFinancialRecords';
+import FinanceFinancialReports from './components/finance/FinanceFinancialReports';
+import FinanceBudgetReports from './components/finance/FinanceBudgetReports';
+import FinanceDepreciationReports from './components/finance/FinanceDepreciationReports';
+import FinanceAssetValueReports from './components/finance/FinanceAssetValueReports';
+import FinanceNotifications from './components/finance/FinanceNotifications';
+
+import StoreDashboard from './components/store/StoreDashboard';
+import StoreInventory from './components/store/StoreInventory';
+import StoreAssets from './components/store/StoreAssets';
+import StoreLowStock from './components/store/StoreLowStock';
+import StoreAdjustments from './components/store/StoreAdjustments';
+import StoreReceivePage from './components/store/StoreReceivePage';
+import StoreIssuePage from './components/store/StoreIssuePage';
+import StoreReturnsPage from './components/store/StoreReturnsPage';
+import StoreTransfers from './components/store/StoreTransfers';
+import StoreAssetRequests from './components/store/StoreAssetRequests';
+import StoreHistory from './components/store/StoreHistory';
+import StoreMaintenance from './components/store/StoreMaintenance';
+import StoreWarranty from './components/store/StoreWarranty';
+import StoreReports from './components/store/StoreReports';
+import StoreNotifications from './components/store/StoreNotifications';
+
+import MaintDashboard from './components/maintenance/MaintDashboard';
+import MaintRequests from './components/maintenance/MaintRequests';
+import MaintAssetInspection from './components/maintenance/MaintAssetInspection';
+import MaintWorkOrders from './components/maintenance/MaintWorkOrders';
+import MaintRepairs from './components/maintenance/MaintRepairs';
+import MaintPreventive from './components/maintenance/MaintPreventive';
+import MaintTechnicians from './components/maintenance/MaintTechnicians';
+import MaintSpareParts from './components/maintenance/MaintSpareParts';
+import MaintAssetsUnderMaintenance from './components/maintenance/MaintAssetsUnderMaintenance';
+import MaintTestingQuality from './components/maintenance/MaintTestingQuality';
+import MaintAssigned from './components/maintenance/MaintAssigned';
+import MaintNotifications from './components/maintenance/MaintNotifications';
+import MaintHistory from './components/maintenance/MaintHistory';
+import MaintReports from './components/maintenance/MaintReports';
+
+import InfrastructureLayout from './components/infrastructure/InfrastructureLayout';
+import InfrastructureDashboard from './components/infrastructure/InfrastructureDashboard';
+import InfrastructureAssets from './components/infrastructure/InfrastructureAssets';
+import RegisterInfrastructureAsset from './components/infrastructure/RegisterInfrastructureAsset';
+import InfrastructureInventory from './components/infrastructure/InfrastructureInventory';
+import InfrastructureAssignment from './components/infrastructure/InfrastructureAssignment';
+import InfrastructureVerification from './components/infrastructure/InfrastructureVerification';
+import InfrastructureBuildings from './components/infrastructure/InfrastructureBuildings';
+import InfrastructureElectrical from './components/infrastructure/InfrastructureElectrical';
+import InfrastructureGenerators from './components/infrastructure/InfrastructureGenerators';
+import InfrastructureTransformers from './components/infrastructure/InfrastructureTransformers';
+import InfrastructureUPS from './components/infrastructure/InfrastructureUPS';
+import InfrastructureSolar from './components/infrastructure/InfrastructureSolar';
+import InfrastructureWater from './components/infrastructure/InfrastructureWater';
+import InfrastructureRoads from './components/infrastructure/InfrastructureRoads';
+import InfrastructureMaintenance from './components/infrastructure/InfrastructureMaintenance';
+import InfrastructureWorkOrders from './components/infrastructure/InfrastructureWorkOrders';
+import InfrastructurePreventive from './components/infrastructure/InfrastructurePreventive';
+import InfrastructureSpareParts from './components/infrastructure/InfrastructureSpareParts';
+import InfrastructureEnergy from './components/infrastructure/InfrastructureEnergy';
+import InfrastructureFuel from './components/infrastructure/InfrastructureFuel';
+import InfrastructureInspection from './components/infrastructure/InfrastructureInspection';
+import InfrastructureTracking from './components/infrastructure/InfrastructureTracking';
+import InfrastructureRequests from './components/infrastructure/InfrastructureRequests';
+import InfrastructureReports from './components/infrastructure/InfrastructureReports';
+import InfrastructureDocuments from './components/infrastructure/InfrastructureDocuments';
+import InfrastructureNotifications from './components/infrastructure/InfrastructureNotifications';
+
 // ==========================================
 // LAZY LOAD ALL COMPONENTS
 // ==========================================
@@ -47,8 +188,10 @@ const AdminAssignment = lazy(() => import('./components/admin/AdminAssignment'))
 const AdminTransfer = lazy(() => import('./components/admin/AdminTransfer'));
 const AdminMaintenance = lazy(() => import('./components/admin/AdminMaintenance'));
 const AdminRFIDTracking = lazy(() => import('./components/admin/AdminRFIDTracking'));
+
 export const normalizeRole = (role) => {
   if (!role) return 'user';
+
   const value = String(role).trim().toLowerCase();
   const aliases = {
     admin: 'admin',
@@ -57,6 +200,9 @@ export const normalizeRole = (role) => {
     ict_officer: 'ict_officer',
     'ict-officer': 'ict_officer',
     college: 'college',
+    'college manager': 'college',
+    college_manager: 'college',
+    'college-manager': 'college',
     'department head': 'department_head',
     department_head: 'department_head',
     'department-head': 'department_head',
@@ -68,18 +214,19 @@ export const normalizeRole = (role) => {
     'store manager': 'store_manager',
     store_manager: 'store_manager',
     'store-manager': 'store_manager',
-    'maintenance': 'maintenance',
-    'maint': 'maintenance',
-    'infrastructure': 'infrastructure',
+    maintenance: 'maintenance',
+    maint: 'maintenance',
+    infrastructure: 'infrastructure',
     'infrastructure director': 'infrastructure',
     'infrastructure directorate': 'infrastructure',
     infrastructure_directorate: 'infrastructure',
     'infrastructure-directorate': 'infrastructure',
-    'infra': 'infrastructure',
-    'staff': 'staff',
-    'student': 'student',
-    'user': 'user'
+    infra: 'infrastructure',
+    staff: 'staff',
+    student: 'student',
+    user: 'user'
   };
+
   return aliases[value] || value.replace(/\s+/g, '_');
 };
 
@@ -233,218 +380,43 @@ class ChunkErrorBoundary extends React.Component {
   }
 }
 
+const UNIVERSITY_LOGO = '/assets/mekdela-amba-university-logo.png';
+
+export const isPublicRoute = (path = '') => {
+  const normalized = String(path || '/').trim();
+  if (!normalized || normalized === '/') return true;
+  if (normalized === '/home') return true;
+  if (['/about', '/services', '/contact', '/contac', '/help', '/register', '/forgot-password'].includes(normalized)) return true;
+  if (/^\/reset-password(?:\/.*)?$/.test(normalized)) return true;
+  return false;
+};
+
+export const shouldUseStandaloneLoginLayout = (path = '') => String(path || '').trim() === '/login';
+
+export const isDashboardRoute = (path = '') => {
+  const normalized = String(path || '').trim();
+  return normalized === '/dashboard' || /^\/dashboard(?:\/.*)?$/.test(normalized);
+};
+
+export const shouldHideSidebarForPath = (path = '') => {
+  const normalized = String(path || '').trim();
+  return /\/assets\/create(?:\/|$)/.test(normalized);
+};
+
+export const shouldShowDashboardSidebar = (path = '') => {
+  const normalized = String(path || '').trim();
+  if (!normalized || isPublicRoute(normalized) || shouldUseStandaloneLoginLayout(normalized)) return false;
+  return (
+    normalized === '/dashboard'
+    || /^\/dashboard(?:\/.*)?$/.test(normalized)
+    || /^\/(admin|ict|college|department|department-head|finance|store|maintenance|infrastructure)(?:\/.*)?$/.test(normalized)
+  );
+};
+
 // ==========================================
 // TRANSLATIONS
 // ==========================================
 
-const translations = {
-  en: {
-    university: "Mekdela Amba University",
-    systemName: " University Asset Management System",
-    home: "Home",
-    about: "About Us",
-    services: "Services",
-    features: "Features",
-    contact: "Contact",
-    primaryNavigation: "Primary navigation",
-    help: "Help",
-    login: "Login",
-    logout: "Logout",
-    welcome: "Welcome",
-    welcomeBack: "Welcome Back",
-    signIn: "Sign In",
-    register: "Register",
-    forgotPassword: "Forgot Password?",
-    rememberMe: "Remember Me",
-    noAccount: "Don't have an account?",
-    signUp: "Sign Up",
-    adminDashboard: "Admin Dashboard",
-    ictDashboard: "ICT Officer Dashboard",
-    departmentDashboard: "College Dashboard",
-    financeDashboard: "Finance Dashboard",
-    storeDashboard: "Store Manager Dashboard",
-    maintenanceDashboard: "Maintenance Dashboard",
-    dashboard: "Dashboard",
-    assets: "Assets",
-    allAssets: "All Assets",
-    createAsset: "Create Asset",
-    maintenance: "Maintenance",
-    reports: "Reports",
-    rfidTracking: "RFID Tracking",
-    users: "User Management",
-    settings: "Settings",
-    assignments: "Assignments",
-    inventory: "Inventory",
-    valuation: "Asset Valuation",
-    depreciation: "Depreciation",
-    audit: "Audit Trail",
-    footerBrandTitle: "University Asset Management System",
-    footerDescription: "Centralized management of university assets, inventory, assignments, transfers, maintenance, verification, and reporting.",
-    footerNavigation: "Quick Links",
-    footerLabel: "University Asset Management System footer",
-    footerSystem: "System",
-    footerSupport: "Support",
-    footerHelpCenter: "Help Center",
-    footerFaq: "FAQ",
-    footerContactSupport: "Contact Support",
-    footerLegal: "Legal",
-    footerLegalUnavailable: "Legal pages are not configured",
-    footerTermsOfUse: "Terms of Use",
-    footerContactDetails: "University contact details",
-    footerAssetManagement: "Asset Management",
-    footerQrRfid: "QR / RFID",
-    languageEnglish: "Switch language to English",
-    languageAmharic: "Switch language to Amharic",
-    footerSecurity: "Security & Accountability",
-    footerSecurityAsset: "Secure Asset Management",
-    footerSecurityRbac: "Role-Based Access Control",
-    footerSecurityAudit: "Audit & Accountability",
-    footerUsefulLinks: "Useful links",
-    footerCopyright: "All rights reserved.",
-    light: "Light",
-    dark: "Dark",
-    language: "Language",
-    companyName: "Mekdela Amba University",
-    privacyPolicy: "Privacy Policy",
-    termsOfService: "Terms of Service",
-    cookiePolicy: "Cookie Policy",
-    allRightsReserved: "All Rights Reserved",
-    staff: "Staff",
-    approvals: "Approvals",
-    history: "History",
-    requests: "Requests",
-    assigned: "Assigned Tasks",
-    financial: "Financial",
-    store: "Store",
-    notifications: "Notifications",
-    backup: "Backup",
-    departmentManagement: "Department Management",
-    infrastructureDashboard: "Infrastructure Dashboard",
-    infrastructure: "Infrastructure",
-    infrastructureAssets: "Infrastructure Assets",
-    buildings: "Buildings & Facilities",
-    electricalSystems: "Electrical Systems",
-    generators: "Generators",
-    transformers: "Transformers",
-    ups: "UPS / Inverters",
-    solar: "Solar Energy",
-    waterSystems: "Water Systems",
-    roads: "Roads & Drainage",
-    facilityMaintenance: "Facility Maintenance",
-    workOrders: "Work Orders",
-    preventiveMaintenance: "Preventive Maintenance",
-    spareParts: "Spare Parts",
-    energyManagement: "Energy Management",
-    fuelManagement: "Fuel Management",
-    inspection: "Inspection & Condition",
-    tracking: "RFID / QR Tracking",
-    documents: "Documents",
-    auditHistory: "Audit & History"
-  },
-  am: {
-    university: "መቅደላ አምባ ዩኒቨርሲቲ",
-    systemName: " ዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት",
-    home: "መነሻ",
-    about: "ስለ እኛ",
-    services: "አገልግሎቶች",
-    features: "ባህሪያት",
-    contact: "አግኙን",
-    primaryNavigation: "ዋና አሰሳ",
-    help: "እገዛ",
-    login: "ግባ",
-    logout: "ውጣ",
-    welcome: "እንኳን ደህና መጡ",
-    welcomeBack: "እንኳን በደህና ተመለሱ",
-    signIn: "ግባ",
-    register: "ይመዝገቡ",
-    forgotPassword: "የይለፍ ቃል ረሱ?",
-    rememberMe: "አስታውሰኝ",
-    noAccount: "መለያ የለዎትም?",
-    signUp: "ይመዝገቡ",
-    adminDashboard: "የአስተዳዳሪ ዳሽቦርድ",
-    ictDashboard: "የICT መኮንን ዳሽቦርድ",
-    departmentDashboard: "የክፍል ኃላፊ ዳሽቦርድ",
-    financeDashboard: "የፋይናንስ ዳሽቦርድ",
-    storeDashboard: "የመደብር አስተዳዳሪ ዳሽቦርድ",
-    maintenanceDashboard: "የጥገና ቡድን ዳሽቦርድ",
-    dashboard: "ዳሽቦርድ",
-    assets: "ንብረቶች",
-    allAssets: "ሁሉም ንብረቶች",
-    createAsset: "አዲስ ንብረት ፍጠር",
-    maintenance: "ጥገና",
-    reports: "ሪፖርቶች",
-    rfidTracking: "RFID ክትትል",
-    users: "ተጠቃሚዎች",
-    settings: "ቅንብሮች",
-    assignments: "ምደባዎች",
-    inventory: "ኢንቬንቶሪ",
-    valuation: "የንብረት ዋጋ ግምት",
-    depreciation: "ውድመት",
-    audit: "የኦዲት መንገድ",
-    footerBrandTitle: "የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት",
-    footerDescription: "የዩኒቨርሲቲ ንብረት፣ ኢንቬንቶሪ፣ ምደባ፣ ማስተላለፍ፣ ጥገና፣ ማረጋገጫ እና ሪፖርት ማዘጋጀትን የሚያካትት ማዕከላዊ አስተዳደር።",
-    footerNavigation: "ፈጣን አገናኞች",
-    footerLabel: "የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት ግርጌ",
-    footerSystem: "ስርዓት",
-    footerSupport: "ድጋፍ",
-    footerHelpCenter: "የእገዛ ማዕከል",
-    footerFaq: "ተደጋጋሚ ጥያቄዎች",
-    footerContactSupport: "ድጋፍን ያግኙ",
-    footerLegal: "ሕጋዊ",
-    footerLegalUnavailable: "የሕግ ገጾች አልተዋቀሩም",
-    footerTermsOfUse: "የአጠቃቀም ውሎች",
-    footerContactDetails: "የዩኒቨርሲቲ የመገኛ መረጃ",
-    footerAssetManagement: "የንብረት አስተዳደር",
-    footerQrRfid: "QR / RFID",
-    languageEnglish: "ቋንቋን ወደ እንግሊዝኛ ቀይር",
-    languageAmharic: "ቋንቋን ወደ አማርኛ ቀይር",
-    footerSecurity: "ደህንነትና ተጠያቂነት",
-    footerSecurityAsset: "ደህንነቱ የተጠበቀ ንብረት አስተዳደር",
-    footerSecurityRbac: "በሚና ላይ የተመሰረተ መዳረሻ ቁጥጥር",
-    footerSecurityAudit: "ኦዲት እና ተጠያቂነት",
-    footerUsefulLinks: "ጠቃሚ አገናኞች",
-    footerCopyright: "ሁሉም መብቶች የተጠበቁ ናቸው።",
-    light: "ብርሃን",
-    dark: "ጨለማ",
-    language: "ቋንቋ",
-    companyName: "መቅደላ አምባ ዩኒቨርሲቲ",
-    privacyPolicy: "የግላዊነት ፖሊሲ",
-    termsOfService: "የአገልግሎት ውሎች",
-    cookiePolicy: "የኩኪ ፖሊሲ",
-    allRightsReserved: "ሁሉም መብቶች የተጠበቁ ናቸው",
-    staff: "ሰራተኞች",
-    approvals: "ማፅደቆች",
-    history: "ታሪክ",
-    requests: "ጥያቄዎች",
-    assigned: "የተመደቡ ስራዎች",
-    financial: "ፋይናንስ",
-    store: "መደብር",
-    notifications: "ማስታወቂያዎች",
-    backup: "ምትኬ",
-    departmentManagement: "ክፍል አስተዳደር",
-    infrastructureDashboard: "የመሠረተ ልማት ዳሽቦርድ",
-    infrastructure: "መሠረተ ልማት",
-    infrastructureAssets: "መሠረተ ልማት ንብረቶች",
-    buildings: "ሕንጻዎች ও ተቋማት",
-    electricalSystems: "ኤሌክትሪክ ስርዓቶች",
-    generators: "ጄነሬተሮች",
-    transformers: "ትራንስፎርመሮች",
-    ups: "UPS / ኢንቬርተሮች",
-    solar: "ሥር የሰላጭ ኃይል",
-    waterSystems: "ውሃ ስርዓቶች",
-    roads: "መንገዶች እና ፍሳሽ",
-    facilityMaintenance: "የተቋም ጥገና",
-    workOrders: "የሥራ ትዕዛዞች",
-    preventiveMaintenance: "ተ防止ታዊ ጥገና",
-    spareParts: "ተተክ ስፍራዎች",
-    energyManagement: "ኃይል ማሻሻያ",
-    fuelManagement: "ነዳጅ አሪፍ",
-    inspection: "ምርመራ እና ሁኔታ",
-    tracking: "RFID / QR ክትትል",
-    documents: "ሰነዶች",
-    auditHistory: "ኦዲት እና ታሪክ"
-  }
-};
 
 // ==========================================
 // LOADING COMPONENT
@@ -2213,7 +2185,7 @@ function AppContent() {
   const mobileNavRef = useRef(null);
   const mobileNavToggleRef = useRef(null);
 
-  const t = translations[language] || translations.en;
+  const t = getShellTranslations(language);
   const collegeNavigationCopy = language === 'am' ? {
     'COLLEGE MANAGER': 'የኮሌጅ አስተዳዳሪ', OVERVIEW: 'አጠቃላይ እይታ', 'COLLEGE MANAGEMENT': 'የኮሌጅ አስተዳደር', 'ASSET MANAGEMENT': 'የንብረት አስተዳደር', OPERATIONS: 'ስራዎች', 'REPORTS & ANALYTICS': 'ሪፖርቶች እና ትንታኔዎች', SYSTEM: 'ስርዓት',
     Dashboard: 'ዳሽቦርድ', 'College Profile': 'የኮሌጅ መገለጫ', 'College Staff': 'የኮሌጅ ሰራተኞች', Locations: 'ቦታዎች', Departments: 'ዲፓርትመንቶች', 'All College Assets': 'ሁሉም የኮሌጅ ንብረቶች', Inventory: 'ኢንቬንቶሪ', 'Asset Requests': 'የንብረት ጥያቄዎች', Approvals: 'ማጽደቆች', Assignments: 'ምደባዎች', Transfers: 'ዝውውሮች', Returns: 'መመለሻዎች', 'Maintenance Oversight': 'የጥገና ክትትል', 'RFID / QR Tracking': 'RFID / QR ክትትል', 'Asset Verification': 'የንብረት ማረጋገጫ', 'College Reports': 'የኮሌጅ ሪፖርቶች', 'College Analytics': 'የኮሌጅ ትንታኔዎች', Notifications: 'ማስታወቂያዎች', 'College Manager': 'የኮሌጅ አስተዳዳሪ', Online: 'በመስመር ላይ', 'Close navigation menu': 'የአሰሳ ምናሌን ዝጋ'

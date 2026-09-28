@@ -100,24 +100,100 @@ const AssetCreate = () => {
   };
 
   const styles = {
-    container: { maxWidth: '900px', margin: '0 auto', padding: '20px' },
-    card: { background: isDark ? '#1e2d45' : '#ffffff', padding: '30px', borderRadius: '12px', border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)' },
-    title: { color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1.5rem', fontWeight: 700, marginBottom: '8px' },
-    subtitle: { color: isDark ? '#8896b0' : '#4a5568', marginBottom: '24px' },
-    grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' },
+    container: {
+      maxWidth: '930px',
+      margin: '0 auto',
+      padding: '36px 20px 20px',
+      background: isDark ? '#0f172a' : '#f3f5f7'
+    },
+    card: {
+      background: isDark ? '#1e2d45' : '#ffffff',
+      padding: '30px 34px 28px',
+      borderRadius: '14px',
+      border: `1px solid ${isDark ? '#32465f' : '#dfe6ee'}`,
+      boxShadow: isDark ? '0 4px 16px rgba(15, 23, 42, 0.35)' : '0 4px 12px rgba(15, 23, 42, 0.06)',
+      minHeight: '760px'
+    },
+    titleRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      marginBottom: '8px'
+    },
+    titleIcon: {
+      width: '22px',
+      height: '22px',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#7c4dff',
+      fontSize: '1.6rem',
+      lineHeight: 1
+    },
+    title: { color: isDark ? '#c8dcf5' : '#4a4f8c', fontSize: '1.95rem', fontWeight: 700, margin: 0 },
+    subtitle: { color: isDark ? '#8896b0' : '#697687', marginBottom: '22px', fontSize: '0.96rem' },
+    grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px 16px' },
     fullWidth: { gridColumn: '1 / -1' },
-    label: { display: 'block', marginBottom: '6px', color: isDark ? '#c8dcf5' : '#2d3748', fontWeight: 600, fontSize: '0.9rem' },
-    input: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#f7fafc', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', marginBottom: '4px' },
-    select: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#f7fafc', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', marginBottom: '4px', cursor: 'pointer' },
-    textarea: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#f7fafc', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', minHeight: '80px', resize: 'vertical', marginBottom: '4px' },
-    button: { padding: '14px 32px', background: 'linear-gradient(135deg, #1a365d, #2b6cb0)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1rem', fontWeight: 700, cursor: 'pointer', transition: 'transform 0.15s ease', marginTop: '16px', width: '100%' },
+    label: { display: 'block', marginBottom: '7px', color: isDark ? '#c8dcf5' : '#2d3748', fontWeight: 600, fontSize: '0.92rem' },
+    input: {
+      width: '100%',
+      padding: '11px 12px',
+      borderRadius: '7px',
+      border: `1px solid ${isDark ? '#32465f' : '#d9e0ea'}`,
+      background: isDark ? '#0d1b2a' : '#f8fafc',
+      color: isDark ? '#c8dcf5' : '#1a365d',
+      fontSize: '0.95rem',
+      marginBottom: '4px',
+      boxSizing: 'border-box'
+    },
+    select: {
+      width: '100%',
+      padding: '11px 12px',
+      borderRadius: '7px',
+      border: `1px solid ${isDark ? '#32465f' : '#d9e0ea'}`,
+      background: isDark ? '#0d1b2a' : '#f8fafc',
+      color: isDark ? '#c8dcf5' : '#1a365d',
+      fontSize: '0.95rem',
+      marginBottom: '4px',
+      cursor: 'pointer',
+      boxSizing: 'border-box'
+    },
+    textarea: {
+      width: '100%',
+      padding: '11px 12px',
+      borderRadius: '7px',
+      border: `1px solid ${isDark ? '#32465f' : '#d9e0ea'}`,
+      background: isDark ? '#0d1b2a' : '#f8fafc',
+      color: isDark ? '#c8dcf5' : '#1a365d',
+      fontSize: '0.95rem',
+      minHeight: '88px',
+      resize: 'vertical',
+      marginBottom: '4px',
+      boxSizing: 'border-box'
+    },
+    button: {
+      padding: '14px 32px',
+      background: 'linear-gradient(135deg, #102d5a, #123d78)',
+      color: 'white',
+      border: 'none',
+      borderRadius: '8px',
+      fontSize: '1.05rem',
+      fontWeight: 700,
+      cursor: 'pointer',
+      transition: 'transform 0.15s ease',
+      marginTop: '18px',
+      width: '100%'
+    },
     qrContainer: { display: 'flex', justifyContent: 'center', padding: '20px', background: 'white', borderRadius: '8px', marginTop: '16px' }
   };
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1 style={styles.title}>➕ {t.createAsset}</h1>
+        <div style={styles.titleRow}>
+          <span style={styles.titleIcon}>＋</span>
+          <h1 style={styles.title}>{t.createAsset}</h1>
+        </div>
         <p style={styles.subtitle}>{t.createAssetDesc}</p>
         <form onSubmit={handleSubmit}>
           <div style={styles.grid}>

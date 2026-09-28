@@ -151,6 +151,26 @@ export const messages = {
       termsOfService: 'Terms of Service',
       cookiePolicy: 'Cookie Policy',
       allRightsReserved: 'All Rights Reserved'
+    },
+    shell: {
+      accessDenied: 'Access denied',
+      accessDeniedMessage: 'You do not have permission to access this section.',
+      returnToDashboard: 'Return to your dashboard',
+      loading: 'Loading...',
+      loadingError: 'Loading Error',
+      loadingErrorMessage: 'A component failed to load. Please reload the page to continue.',
+      reloadPage: 'Reload Page',
+      expandNavigation: 'Expand navigation menu',
+      collapseNavigation: 'Collapse navigation menu',
+      openNotifications: 'Open notifications',
+      notifications: 'Notifications',
+      closeNavigationMenu: 'Close navigation menu',
+      openUserMenu: 'Open user menu',
+      user: 'User',
+      cancel: 'Cancel',
+      logoutNow: 'Logout Now',
+      signedInWarningTitle: 'You are currently logged in.',
+      signedInWarningMessage: 'Please logout first before accessing this public page.'
     }
   },
   am: {
@@ -305,6 +325,26 @@ export const messages = {
       termsOfService: 'የአገልግሎት ውሎች',
       cookiePolicy: 'የኩኪ ፖሊሲ',
       allRightsReserved: 'ሁሉም መብቶች የተጠበቁ ናቸው'
+    },
+    shell: {
+      accessDenied: 'መድረሻ ተከልክሏል',
+      accessDeniedMessage: 'ይህን ክፍል ለመድረስ ፈቃድ የሎትም።',
+      returnToDashboard: 'ወደ ዳሽቦርድ ተመለስ',
+      loading: 'በመጫን ላይ...',
+      loadingError: 'የመጫኛ ስህተት',
+      loadingErrorMessage: 'አንድ ክፍል መጫን አልተቻለም። እባክዎን ገጹን እንደገና ያስጀምሩ።',
+      reloadPage: 'ገጹን እንደገና ያስጀምሩ',
+      expandNavigation: 'የአሰሳ ምናሌን ዘርግተው አሳይ',
+      collapseNavigation: 'የአሰሳ ምናሌን ዝጋ',
+      openNotifications: 'ማሳወቂያዎችን ክፈት',
+      notifications: 'ማስታወቂያዎች',
+      closeNavigationMenu: 'የአሰሳ ምናሌን ዝጋ',
+      openUserMenu: 'የተጠቃሚ ምናሌን ክፈት',
+      user: 'ተጠቃሚ',
+      cancel: 'ሰርዝ',
+      logoutNow: 'አሁን ውጣ',
+      signedInWarningTitle: 'አሁን ገብተዋል።',
+      signedInWarningMessage: 'ይህን የህዝብ ገጽ ለመድረስ በመጀመሪያ ውጣ።'
     }
   }
 };
@@ -318,7 +358,8 @@ export const getShellTranslations = (language) => {
     ...locale.dashboard,
     ...locale.footer,
     ...locale.appearance,
-    ...locale.legal
+    ...locale.legal,
+    ...locale.shell
   };
 };
 
