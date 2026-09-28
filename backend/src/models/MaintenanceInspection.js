@@ -3,11 +3,17 @@ const { sequelize } = require('../config/database');
 
 const MaintenanceInspection = sequelize.define('MaintenanceInspection', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  inspectionNumber: { type: DataTypes.STRING(40), allowNull: true },
   maintenanceId: { type: DataTypes.INTEGER, allowNull: true },
+  workOrderId: { type: DataTypes.INTEGER, allowNull: true },
   assetId: { type: DataTypes.INTEGER, allowNull: false },
   inspectorId: { type: DataTypes.INTEGER, allowNull: false },
+  createdBy: { type: DataTypes.INTEGER, allowNull: true },
   inspectionDate: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   nextInspection: { type: DataTypes.DATE, allowNull: true },
+  inspectionType: { type: DataTypes.STRING(80), allowNull: true, defaultValue: 'Routine Inspection' },
+  priority: { type: DataTypes.STRING(30), allowNull: true, defaultValue: 'medium' },
+  followUpRequired: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   currentCondition: { type: DataTypes.STRING(100), defaultValue: 'Unknown' }, // Good, Fair, Poor, Critical
   healthStatus: { type: DataTypes.STRING(50), defaultValue: 'Unknown' },
   healthScore: { type: DataTypes.INTEGER, allowNull: true },
@@ -32,6 +38,7 @@ const MaintenanceInspection = sequelize.define('MaintenanceInspection', {
 }, {
   tableName: 'maintenance_inspections',
   timestamps: true,
+  paranoid: true,
 });
 
 module.exports = MaintenanceInspection;

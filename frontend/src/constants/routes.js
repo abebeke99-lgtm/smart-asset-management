@@ -140,7 +140,6 @@ export const ROUTES = {
   MAINT_QUALITY_CONTROL: '/maintenance/quality-control',
   MAINT_ASSIGNED: '/maintenance/assigned-tasks',
   MAINT_HISTORY: '/maintenance/history',
-  MAINT_COST_ANALYSIS: '/maintenance/cost-analysis',
   MAINT_REPORTS: '/maintenance/reports',
   MAINT_NOTIFICATIONS: '/maintenance/notifications',
 
@@ -311,7 +310,6 @@ export const getRoutesByRole = (role) => {
       ROUTES.MAINT_QUALITY_CONTROL,
       ROUTES.MAINT_ASSIGNED,
       ROUTES.MAINT_HISTORY,
-      ROUTES.MAINT_COST_ANALYSIS,
       ROUTES.MAINT_REPORTS,
       ROUTES.MAINT_NOTIFICATIONS
     ],

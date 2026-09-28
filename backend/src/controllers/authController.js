@@ -707,4 +707,6 @@ module.exports = {
   requestForgotPasswordOtp,
   verifyForgotPasswordOtp,
   resetPasswordWithOtp,
+  getSecuritySettings,
+  validatePassword,
 };

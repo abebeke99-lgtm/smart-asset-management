@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   TrendingUp,
@@ -9,24 +9,16 @@ import {
   Calendar,
   Package,
   FlaskConical,
+  RefreshCw,
 } from 'lucide-react';
-import { getMaintenance, getMaintenanceDashboard } from '../../services/maintenanceApi';
+import { getMaintenanceDashboard } from '../../services/maintenanceApi';
 import './MaintDashboard.css';
 
 const MaintDashboard = () => {
   const [period, setPeriod] = useState('30days');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [items, setItems] = useState([]);
-  const [dashboardData, setDashboardData] = useState({
-    total: 0,
-    pending: 0,
-    active: 0,
-    completed: 0,
-    byStatus: {},
-    assetsUnderMaintenance: 0,
-    totalAssets: 0,
-  });
+  const [dashboardData, setDashboardData] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -35,15 +27,11 @@ const MaintDashboard = () => {
     setError('');
     (async () => {
       try {
-        const [dash, list] = await Promise.all([
-          getMaintenanceDashboard(period),
-          getMaintenance({ limit: 100, period }),
-        ]);
+        const dash = await getMaintenanceDashboard(period);
         if (!mounted) return;
-        setDashboardData({ ...dash, total: dash.total || 0, pending: dash.pending || 0, active: dash.active || 0, completed: dash.completed || 0, byStatus: dash.byStatus || {} });
-        setItems(list);
+        setDashboardData(dash);
       } catch (err) {
-        if (mounted) setError(err && err.message ? err.message : 'Failed to load dashboard data');
+        if (mounted) setError('Unable to load maintenance dashboard data. Please check the server connection.');
       } finally {
         if (mounted) setLoading(false);
       }
@@ -51,100 +39,85 @@ const MaintDashboard = () => {
     return () => { mounted = false; };
   }, [period, reloadKey]);
 
-  const overdueCount = useMemo(() => {
-    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
-    return items.filter((it) => {
-      const stale = new Date(it.created || it.updated).getTime() < cutoff;
-      return stale && !['completed', 'rejected', 'cancelled'].includes(it.statusRaw);
-    }).length;
-  }, [items]);
-
-  const criticalAlerts = useMemo(() => items.filter((it) => it.priority === 'Critical' && !['completed', 'rejected', 'cancelled'].includes(it.statusRaw)).length, [items]);
-
-  const countByStatus = useCallback((status) => items.filter((it) => it.statusRaw === status).length, [items]);
-
-  const efficiency = useMemo(() => {
-    if (!dashboardData.total) return 0;
-    return Math.round((dashboardData.completed / dashboardData.total) * 100);
-  }, [dashboardData]);
-
-  const nextPreventive = useMemo(() => {
-    const upcoming = items.find((it) => it.statusRaw === 'pending' || it.statusRaw === 'approved');
-    return upcoming && upcoming.created ? String(upcoming.created).slice(0, 10) : '—';
-  }, [items]);
-
-  const recentRequests = useMemo(() => items.slice(0, 4).map((r) => ({
-    id: r.refId,
-    asset: r.asset,
-    status: r.status,
-    priority: r.priority,
-    dueDate: r.updated ? String(r.updated).slice(0, 10) : '—',
-  })), [items]);
-
-  const recentWorkOrders = useMemo(() => items
-    .filter((r) => r.technician && ['assigned', 'in-progress', 'testing', 'waiting-for-parts', 'completed'].includes(r.statusRaw))
-    .slice(0, 3)
-    .map((r) => ({
-      id: r.woId,
-      asset: r.asset,
-      technician: r.technician,
-      status: r.status,
-      assignedDate: r.created ? String(r.created).slice(0, 10) : '—',
-    })), [items]);
+  const summary = dashboardData?.summary || {};
+  const recentRequests = dashboardData?.recentRequests || [];
+  const recentWorkOrders = dashboardData?.recentWorkOrders || [];
+  const technicianWorkload = dashboardData?.technicianWorkload || [];
+  const statusBreakdown = dashboardData?.statusDistribution || [];
+  const monthlyTrend = dashboardData?.monthlyTrend || [];
+  const phaseStats = dashboardData?.workPhases || { completedJobs: 0, waitingForParts: 0, testing: 0 };
+  const nextScheduled = dashboardData?.nextScheduledMaintenance;
+  const nextPreventive = nextScheduled
+    ? `${nextScheduled.asset} · ${nextScheduled.maintenanceType} · ${String(nextScheduled.scheduledDate).slice(0, 10)}`
+    : 'No upcoming maintenance';
+  const formatDate = (value) => value ? String(value).slice(0, 10) : '—';
+  const statusColors = {
+    pending: '#f59e0b', approved: '#0ea5e9', assigned: '#6366f1',
+    'in-progress': '#3b82f6', 'waiting-for-parts': '#f97316', testing: '#a855f7',
+    completed: '#10b981', rejected: '#ef4444', cancelled: '#64748b',
+  };
+  const statusTotal = statusBreakdown.reduce((total, row) => total + row.count, 0);
+  const trendMax = Math.max(1, ...monthlyTrend.flatMap((row) => [row.requests, row.completed]));
+  const phases = [
+    { label: 'Completed Jobs', value: phaseStats.completedJobs },
+    { label: 'Waiting for Parts', value: phaseStats.waitingForParts },
+    { label: 'Testing', value: phaseStats.testing },
+  ];
+  const phaseMax = Math.max(1, ...phases.map((phase) => phase.value));
 
   const kpiCards = [
     {
       title: 'Total Maintenance Requests',
-      value: dashboardData.total,
+      value: summary.totalRequests,
       icon: AlertCircle,
       color: 'blue',
-      trend: `${items.length} loaded`,
+      trend: 'Selected period',
     },
     {
       title: 'Pending Requests',
-      value: dashboardData.pending,
+      value: summary.pendingRequests,
       icon: Clock,
       color: 'orange',
-      trend: dashboardData.total ? `${Math.round((dashboardData.pending / (dashboardData.total || 1)) * 100)}% of total` : '0%',
+      trend: summary.totalRequests ? `${Math.round((summary.pendingRequests / summary.totalRequests) * 100)}% of total` : 'No requests',
     },
     {
       title: 'In Progress',
-      value: dashboardData.active,
+      value: summary.inProgress,
       icon: BarChart3,
       color: 'cyan',
-      trend: dashboardData.total ? `${Math.round((dashboardData.active / (dashboardData.total || 1)) * 100)}% of total` : '0%',
+      trend: summary.totalRequests ? `${Math.round((summary.inProgress / summary.totalRequests) * 100)}% of total` : 'No requests',
     },
     {
       title: 'Completed Repairs',
-      value: dashboardData.completed,
+      value: summary.completedRepairs,
       icon: CheckCircle,
       color: 'green',
-      trend: dashboardData.total ? `${Math.round((dashboardData.completed / (dashboardData.total || 1)) * 100)}% of total` : '0%',
+      trend: summary.totalRequests ? `${Math.round((summary.completedRepairs / summary.totalRequests) * 100)}% of total` : 'No requests',
     },
     {
       title: 'Overdue Work Orders',
-      value: overdueCount,
+      value: summary.overdueWorkOrders,
       icon: AlertCircle,
       color: 'red',
-      trend: '14+ days open',
+      trend: 'Past due',
     },
     {
       title: 'Assets Under Maintenance',
-      value: dashboardData.assetsUnderMaintenance,
+      value: summary.assetsUnderMaintenance,
       icon: TrendingUp,
       color: 'purple',
-      trend: dashboardData.totalAssets ? `${Math.round((dashboardData.assetsUnderMaintenance / dashboardData.totalAssets) * 100)}% of assets` : '0%',
+      trend: 'Current asset status',
     },
     {
       title: 'Waiting on Parts',
-      value: countByStatus('waiting-for-parts'),
+      value: summary.waitingForParts,
       icon: Package,
       color: 'indigo',
       trend: 'requests awaiting spare parts',
     },
     {
       title: 'In Testing',
-      value: countByStatus('testing'),
+      value: summary.inTesting,
       icon: FlaskConical,
       color: 'pink',
       trend: 'requests in testing/verification',
@@ -185,63 +158,15 @@ const MaintDashboard = () => {
     return classMap[color] || '';
   };
 
-  const statusBreakdown = useMemo(() => {
-    const total = dashboardData.total || 1;
-    const rows = [
-      { label: `Pending (${Math.round((dashboardData.pending / total) * 100)}%)`, value: dashboardData.pending, color: '#f59e0b' },
-      { label: `In Progress (${Math.round((dashboardData.active / total) * 100)}%)`, value: dashboardData.active, color: '#3b82f6' },
-      { label: `Completed (${Math.round((dashboardData.completed / total) * 100)}%)`, value: dashboardData.completed, color: '#10b981' },
-      { label: `Overdue (${Math.round((overdueCount / total) * 100)}%)`, value: overdueCount, color: '#ef4444' },
-    ];
-    return rows.filter((r) => r.value > 0).length ? rows.filter((r) => r.value > 0) : [{ label: 'No maintenance records', value: 0, color: '#cbd5e1' }];
-  }, [dashboardData, overdueCount]);
-
-  const statusPercent = (value) => `${Math.max(4, Math.round((value / (dashboardData.total || 1)) * 100))}%`;
-
-  const monthlyTrend = useMemo(() => {
-    const buckets = {};
-    items.forEach((it) => {
-      const month = it.created ? String(it.created).slice(0, 7) : null;
-      if (!month) return;
-      buckets[month] = (buckets[month] || 0) + 1;
-    });
-    const sorted = Object.keys(buckets).sort();
-    const max = Math.max(1, ...sorted.map((m) => buckets[m]));
-    return sorted.slice(-7).map((m) => ({ label: m.slice(5), value: buckets[m], height: Math.max(10, Math.round((buckets[m] / max) * 80)) }));
-  }, [items]);
-
-  const phaseStats = useMemo(() => {
-    const count = (status) => items.filter((it) => it.statusRaw === status).length;
-    const completed = dashboardData.completed;
-    const waiting = count('waiting-for-parts');
-    const testing = count('testing');
-    const max = Math.max(1, completed, waiting, testing);
-    return [
-      { label: 'Completed Jobs', value: completed, percent: Math.round((completed / max) * 100) },
-      { label: 'Waiting for Parts', value: waiting, percent: Math.round((waiting / max) * 100) },
-      { label: 'Testing', value: testing, percent: Math.round((testing / max) * 100) },
-    ];
-  }, [items, dashboardData]);
-
-  const technicianWorkload = useMemo(() => {
-    const counts = {};
-    items.forEach((it) => {
-      if (!it.technician) return;
-      counts[it.technician] = (counts[it.technician] || 0) + 1;
-    });
-    const max = Math.max(1, ...Object.values(counts));
-    return Object.keys(counts).map((name) => ({ name, workload: Math.round((counts[name] / max) * 100) }));
-  }, [items]);
-
-  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#4a5568' }}>Loading dashboard…</div>;
-  if (error) return <div role="alert" style={{ padding: '40px', textAlign: 'center', color: '#991b1b' }}>Failed to load dashboard: {error}<br /><button type="button" onClick={() => setReloadKey((value) => value + 1)}>Retry</button></div>;
+  if (loading) return <div className="dashboard-state" role="status">Loading maintenance dashboard…</div>;
+  if (error) return <div className="dashboard-state dashboard-error" role="alert">{error}<button type="button" onClick={() => setReloadKey((value) => value + 1)}>Retry</button></div>;
 
   return (
     <div className="dashboard-container">
       {/* Header Section */}
       <div className="maintenance-dashboard-header">
         <div className="header-content">
-          <h1 className="dashboard-title">🏢 Maintenance Management Dashboard</h1>
+          <h1 className="dashboard-title">Maintenance Management Dashboard</h1>
           <p className="dashboard-subtitle">
             University Asset Management System - Real-time Maintenance Operations
           </p>
@@ -249,18 +174,29 @@ const MaintDashboard = () => {
 
         <div className="header-controls">
           <div className="period-selector">
-            {['Today', '7 Days', '30 Days', '90 Days'].map((label, idx) => (
+            {[
+              ['Today', 'today'],
+              ['7 Days', '7days'],
+              ['30 Days', '30days'],
+              ['90 Days', '90days'],
+            ].map(([label, value]) => (
               <button
-                key={label}
-                className={`period-btn ${period === ['today', '7days', '30days', '90days'][idx] ? 'active' : ''}`}
-                onClick={() => setPeriod(['today', '7days', '30days', '90days'][idx])}
+                key={value}
+                className={`period-btn ${period === value ? 'active' : ''}`}
+                onClick={() => setPeriod(value)}
+                aria-pressed={period === value}
               >
                 {label}
               </button>
             ))}
           </div>
+          <button className="dashboard-refresh" type="button" onClick={() => setReloadKey((value) => value + 1)} aria-label="Refresh dashboard" title="Refresh dashboard">
+            <RefreshCw size={17} />
+          </button>
         </div>
       </div>
+
+      {!summary.hasRecords && <div className="dashboard-empty">No maintenance records</div>}
 
       {/* KPI Cards Grid */}
       <section className="kpi-section">
@@ -295,13 +231,19 @@ const MaintDashboard = () => {
           <div className="chart-card">
             <h3 className="chart-title">Maintenance Status Distribution</h3>
             <div className="chart-placeholder">
-              <div className="status-bar">
-                {statusBreakdown.map((seg) => (
-                  <div className="status-segment" style={{ width: statusPercent(seg.value), backgroundColor: seg.color }} key={seg.label}>
-                    <span>{seg.label}</span>
-                  </div>
-                ))}
-              </div>
+              {statusBreakdown.length === 0 ? <div className="chart-empty">No maintenance records</div> : (
+                <div className="status-bar">
+                  {statusBreakdown.map((segment) => (
+                    <div
+                      className="status-segment"
+                      style={{ width: `${Math.round((segment.count / statusTotal) * 100)}%`, backgroundColor: statusColors[segment.status] || '#06b6d4' }}
+                      key={segment.status}
+                    >
+                      <span>{segment.label} ({segment.count})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -309,28 +251,36 @@ const MaintDashboard = () => {
           <div className="chart-card">
             <h3 className="chart-title">Monthly Maintenance Trend</h3>
             <div className="chart-placeholder trend-chart">
-              <div className="trend-bars">
-                {monthlyTrend.map((bucket) => (
-                  <div key={bucket.label} className="trend-bar-item">
-                    <div className="bar" style={{ height: `${bucket.height}%` }}></div>
-                    <span className="bar-label">{bucket.label}</span>
+              {monthlyTrend.length === 0 ? <div className="chart-empty">No maintenance records</div> : (
+                <>
+                  <div className="trend-legend"><span>Requests</span><span>Completed</span></div>
+                  <div className="trend-bars">
+                    {monthlyTrend.map((bucket) => (
+                      <div key={bucket.period} className="trend-bar-item">
+                        <div className="trend-bar-pair">
+                          <div className="bar" title={`${bucket.requests} requests`} style={{ height: `${(bucket.requests / trendMax) * 100}%` }}></div>
+                          <div className="bar completed-bar" title={`${bucket.completed} completed`} style={{ height: `${(bucket.completed / trendMax) * 100}%` }}></div>
+                        </div>
+                        <span className="bar-label">{bucket.period.slice(5)}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </>
+              )}
             </div>
           </div>
 
-          {/* Cost Analysis */}
+          {/* Repair Work Phase Breakdown */}
           <div className="chart-card">
             <h3 className="chart-title">Repair Work Phase Breakdown</h3>
             <div className="cost-breakdown">
-              {phaseStats.map((p) => (
-                <div className="cost-item" key={p.label}>
-                  <div className="cost-label">{p.label}</div>
+              {phases.map((phase) => (
+                <div className="cost-item" key={phase.label}>
+                  <div className="cost-label">{phase.label}</div>
                   <div className="cost-bar">
-                    <div className="cost-fill" style={{ width: `${p.percent}%` }}></div>
+                    <div className="cost-fill" style={{ width: `${(phase.value / phaseMax) * 100}%` }}></div>
                   </div>
-                  <div className="cost-value">{p.value}</div>
+                  <div className="cost-value">{phase.value}</div>
                 </div>
               ))}
             </div>
@@ -339,18 +289,21 @@ const MaintDashboard = () => {
           {/* Technician Workload */}
           <div className="chart-card">
             <h3 className="chart-title">Technician Workload</h3>
-            <div className="workload-list">
-              {technicianWorkload.length === 0 && <div className="workload-item"><div className="tech-name">No assignments yet</div></div>}
-              {technicianWorkload.map((tech, idx) => (
-                <div key={idx} className="workload-item">
-                  <div className="tech-name">{tech.name}</div>
-                  <div className="workload-bar">
-                    <div className="workload-fill" style={{ width: `${tech.workload}%` }}></div>
-                  </div>
-                  <div className="workload-percent">{tech.workload}%</div>
-                </div>
-              ))}
-            </div>
+            {technicianWorkload.length === 0 ? <div className="chart-empty">No assignments yet</div> : (
+              <div className="table-container">
+                <table className="activity-table workload-table">
+                  <thead><tr><th>Technician</th><th>Assigned</th><th>In Progress</th><th>Completed</th></tr></thead>
+                  <tbody>{technicianWorkload.map((technician) => (
+                    <tr key={technician.technicianId} className="table-row">
+                      <td className="tech-cell">{technician.name}</td>
+                      <td>{technician.assigned}</td>
+                      <td>{technician.inProgress}</td>
+                      <td>{technician.completed}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -380,7 +333,7 @@ const MaintDashboard = () => {
                 <tbody>
                   {recentRequests.map((req) => (
                     <tr key={req.id} className="table-row">
-                      <td className="id-cell">{req.id}</td>
+                      <td className="id-cell">{req.requestId}</td>
                       <td className="asset-cell">{req.asset}</td>
                       <td>
                         <span
@@ -395,9 +348,10 @@ const MaintDashboard = () => {
                           {req.priority}
                         </span>
                       </td>
-                      <td className="date-cell">{req.dueDate}</td>
+                      <td className="date-cell">{formatDate(req.dueDate)}</td>
                     </tr>
                   ))}
+                  {recentRequests.length === 0 && <tr><td colSpan="5" className="table-empty">No maintenance records</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -425,7 +379,7 @@ const MaintDashboard = () => {
                 <tbody>
                   {recentWorkOrders.map((wo) => (
                     <tr key={wo.id} className="table-row">
-                      <td className="id-cell">{wo.id}</td>
+                      <td className="id-cell">{wo.workOrderNumber}</td>
                       <td className="asset-cell">{wo.asset}</td>
                       <td className="tech-cell">{wo.technician}</td>
                       <td>
@@ -436,9 +390,10 @@ const MaintDashboard = () => {
                           {wo.status}
                         </span>
                       </td>
-                      <td className="date-cell">{wo.assignedDate}</td>
+                      <td className="date-cell">{formatDate(wo.assignedDate)}</td>
                     </tr>
                   ))}
+                  {recentWorkOrders.length === 0 && <tr><td colSpan="5" className="table-empty">No work orders found</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -459,21 +414,21 @@ const MaintDashboard = () => {
           <AlertCircle size={20} />
           <div>
             <div className="stat-label">Critical Alerts</div>
-            <div className="stat-value">{criticalAlerts} Active</div>
+            <div className="stat-value">{summary.criticalAlerts} Active</div>
           </div>
         </div>
         <div className="stat-box">
           <CheckCircle size={20} />
           <div>
             <div className="stat-label">Technician Efficiency</div>
-            <div className="stat-value">{efficiency}%</div>
+            <div className="stat-value">{summary.technicianEfficiency === null ? 'Insufficient data' : `${summary.technicianEfficiency}%`}</div>
           </div>
         </div>
         <div className="stat-box">
           <TrendingUp size={20} />
           <div>
             <div className="stat-label">Assigned Staff</div>
-            <div className="stat-value">{technicianWorkload.length}</div>
+            <div className="stat-value">{summary.assignedStaff}</div>
           </div>
         </div>
       </section>

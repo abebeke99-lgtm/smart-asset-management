@@ -150,8 +150,15 @@ async function syncDatabase() {
     })) await ensureColumn('assets', column, definition);
     await ensureColumn('rfid_logs', 'reader_id', { type: require('sequelize').DataTypes.STRING(80), allowNull: true });
     for (const [column, definition] of Object.entries({
+      inspection_number: { type: require('sequelize').DataTypes.STRING(40), allowNull: true },
       maintenance_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      work_order_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true, references: { model: 'maintenance_work_orders', key: 'id' }, onUpdate: 'CASCADE', onDelete: 'SET NULL' },
+      created_by: { type: require('sequelize').DataTypes.INTEGER, allowNull: true, references: { model: 'users', key: 'id' }, onUpdate: 'CASCADE', onDelete: 'SET NULL' },
+      inspection_type: { type: require('sequelize').DataTypes.STRING(80), allowNull: true, defaultValue: 'Routine Inspection' },
+      priority: { type: require('sequelize').DataTypes.STRING(30), allowNull: true, defaultValue: 'medium' },
+      follow_up_required: { type: require('sequelize').DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       next_inspection: { type: require('sequelize').DataTypes.DATE, allowNull: true },
+      deleted_at: { type: require('sequelize').DataTypes.DATE, allowNull: true },
       health_status: { type: require('sequelize').DataTypes.STRING(50), allowNull: true, defaultValue: 'Unknown' },
       health_score: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
       hardware_status: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
@@ -165,7 +172,62 @@ async function syncDatabase() {
       last_seen: { type: require('sequelize').DataTypes.DATE, allowNull: true },
     })) await ensureColumn('maintenance_inspections', column, definition);
     await sequelize.getQueryInterface().changeColumn('maintenance_inspections', 'maintenance_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
+    const inspectionReferences = [
+      { column: 'asset_id', table: 'assets', onDelete: 'RESTRICT' },
+      { column: 'inspector_id', table: 'users', onDelete: 'RESTRICT' },
+      { column: 'maintenance_id', table: 'maintenances', onDelete: 'SET NULL' },
+      { column: 'work_order_id', table: 'maintenance_work_orders', onDelete: 'SET NULL' },
+      { column: 'created_by', table: 'users', onDelete: 'SET NULL' },
+    ];
+    for (const reference of inspectionReferences) {
+      const [existingConstraints] = await sequelize.query(
+        'SELECT COUNT(*) AS total FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column AND REFERENCED_TABLE_NAME IS NOT NULL',
+        { replacements: { table: 'maintenance_inspections', column: reference.column } },
+      );
+      if (Number(existingConstraints[0]?.total || 0)) continue;
+      const [orphanRows] = await sequelize.query(
+        `SELECT COUNT(*) AS total FROM maintenance_inspections i LEFT JOIN \`${reference.table}\` r ON r.id = i.\`${reference.column}\` WHERE i.\`${reference.column}\` IS NOT NULL AND r.id IS NULL`,
+      );
+      if (Number(orphanRows[0]?.total || 0)) {
+        console.warn(`Skipped inspection foreign key ${reference.column}: orphaned references exist.`);
+        continue;
+      }
+      await sequelize.getQueryInterface().addConstraint('maintenance_inspections', {
+        fields: [reference.column],
+        type: 'foreign key',
+        name: `maintenance_inspections_${reference.column}_fk`,
+        references: { table: reference.table, field: 'id' },
+        onUpdate: 'CASCADE',
+        onDelete: reference.onDelete,
+      });
+    }
+    for (const [column, definition] of Object.entries({
+      test_type: { type: require('sequelize').DataTypes.STRING(100), allowNull: false, defaultValue: 'Functional' },
+      procedure: { type: require('sequelize').DataTypes.TEXT, allowNull: true },
+      expected_result: { type: require('sequelize').DataTypes.TEXT, allowNull: true },
+      actual_result: { type: require('sequelize').DataTypes.TEXT, allowNull: true },
+      failure_reason: { type: require('sequelize').DataTypes.TEXT, allowNull: true },
+      failed_check: { type: require('sequelize').DataTypes.STRING(255), allowNull: true },
+      recommended_action: { type: require('sequelize').DataTypes.TEXT, allowNull: true },
+      checklist: { type: require('sequelize').DataTypes.JSON, allowNull: false },
+      measurements: { type: require('sequelize').DataTypes.JSON, allowNull: false },
+      parent_test_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      quality_status: { type: require('sequelize').DataTypes.STRING(40), allowNull: false, defaultValue: 'not-reviewed' },
+      reviewer_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      reviewed_at: { type: require('sequelize').DataTypes.DATE, allowNull: true },
+      rejection_reason: { type: require('sequelize').DataTypes.TEXT, allowNull: true },
+      corrective_action: { type: require('sequelize').DataTypes.TEXT, allowNull: true },
+    })) await ensureColumn('maintenance_tests', column, definition);
     await ensureColumn('purchase_orders', 'budget_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
+    for (const [column, definition] of Object.entries({
+      legal_name: { type: require('sequelize').DataTypes.STRING(255), allowNull: true, defaultValue: '' },
+      vendor_type: { type: require('sequelize').DataTypes.STRING(100), allowNull: true, defaultValue: 'Other' },
+      registration_number: { type: require('sequelize').DataTypes.STRING(120), allowNull: true, defaultValue: '' },
+      website: { type: require('sequelize').DataTypes.STRING(255), allowNull: true, defaultValue: '' },
+      city: { type: require('sequelize').DataTypes.STRING(120), allowNull: true, defaultValue: '' },
+      country: { type: require('sequelize').DataTypes.STRING(120), allowNull: true, defaultValue: '' },
+      notes: { type: require('sequelize').DataTypes.TEXT, allowNull: true, defaultValue: '' },
+    })) await ensureColumn('suppliers', column, definition);
     for (const [column, definition] of Object.entries({
       verification_status: { type: require('sequelize').DataTypes.ENUM('Pending', 'Verified', 'Rejected'), allowNull: false, defaultValue: 'Pending' },
       approval_status: { type: require('sequelize').DataTypes.ENUM('Pending', 'Approved', 'Rejected'), allowNull: false, defaultValue: 'Pending' },

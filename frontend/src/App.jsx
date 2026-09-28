@@ -142,6 +142,7 @@ import MaintRepairs from './components/maintenance/MaintRepairs';
 import MaintPreventive from './components/maintenance/MaintPreventive';
 import MaintTechnicians from './components/maintenance/MaintTechnicians';
 import MaintSpareParts from './components/maintenance/MaintSpareParts';
+import MaintVendors from './components/maintenance/MaintVendors';
 import MaintAssetsUnderMaintenance from './components/maintenance/MaintAssetsUnderMaintenance';
 import MaintTestingQuality from './components/maintenance/MaintTestingQuality';
 import MaintAssigned from './components/maintenance/MaintAssigned';
@@ -3042,7 +3043,6 @@ function AppContent() {
         { path: '/maintenance/testing-quality', label: '🧪 Testing', section: 'QUALITY' },
         { path: '/maintenance/quality-control', label: '✅ Quality Control', section: 'QUALITY' },
         { path: '/maintenance/history', label: '📜 History', section: 'ANALYTICS' },
-        { path: '/maintenance/cost-analysis', label: '💰 Cost Analysis', section: 'ANALYTICS' },
         { path: '/maintenance/reports', label: '📊 Reports', section: 'ANALYTICS' }
       ],
       'infrastructure': [
@@ -3257,7 +3257,7 @@ function AppContent() {
             <Route path="files" element={<AdminAssetDocuments />} />
             <Route path="users" element={<AdminUserManagement />} />
             <Route path="reports" element={<AdminReports />} />
-            <Route path="settings" element={<AdminSettings />} />
+            <Route path="settings" element={<Navigate to="/admin/settings" replace />} />
           </Route>
 
           {/* ADMIN ROUTES - Fixed with AdminLayout */}
@@ -3580,14 +3580,13 @@ function AppContent() {
             <Route path="technicians" element={<MaintTechnicians />} />
             <Route path="spare-parts" element={<MaintSpareParts />} />
             <Route path="materials" element={<MaintSpareParts />} />
-            <Route path="vendors" element={<MaintSpareParts />} />
+            <Route path="vendors" element={<MaintVendors />} />
             <Route path="assets-under-maintenance" element={<MaintAssetsUnderMaintenance />} />
             <Route path="testing-quality" element={<MaintTestingQuality />} />
             <Route path="quality-control" element={<MaintTestingQuality />} />
             <Route path="assigned-tasks" element={<MaintAssigned />} />
             <Route path="notifications" element={<MaintNotifications />} />
             <Route path="history" element={<MaintHistory />} />
-            <Route path="cost-analysis" element={<MaintReports />} />
             <Route path="reports" element={<MaintReports />} />
             <Route path="parts" element={<MaintSpareParts />} />
             <Route path="assets" element={<MaintAssetsUnderMaintenance />} />

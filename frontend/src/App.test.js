@@ -132,6 +132,36 @@ describe('Administrator route wiring', () => {
   });
 });
 
+describe('Maintenance coordinator route wiring', () => {
+  const appSource = fs.readFileSync(path.resolve(__dirname, 'App.jsx'), 'utf8');
+  const maintenanceRoutes = [
+    '/maintenance',
+    '/maintenance/requests',
+    '/maintenance/inspection',
+    '/maintenance/work-orders',
+    '/maintenance/repairs',
+    '/maintenance/assets-under-maintenance',
+    '/maintenance/schedule',
+    '/maintenance/preventive',
+    '/maintenance/calendar',
+    '/maintenance/technicians',
+    '/maintenance/spare-parts',
+    '/maintenance/vendors',
+    '/maintenance/testing-quality',
+    '/maintenance/quality-control',
+    '/maintenance/history',
+    '/maintenance/reports',
+  ];
+
+  it('removes Cost Analysis while retaining the requested maintenance navigation', () => {
+    expect(appSource).not.toContain('/maintenance/cost-analysis');
+    expect(appSource).not.toContain('Cost Analysis');
+    for (const route of maintenanceRoutes) {
+      expect(appSource).toContain(`path: '${route}'`);
+    }
+  });
+});
+
 describe('Login page navigation', () => {
   it('renders a homepage link on the standalone login page', () => {
     render(

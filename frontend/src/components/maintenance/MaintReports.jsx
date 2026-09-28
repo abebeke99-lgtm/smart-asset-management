@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../../contexts/UiContext';
-import { getInventory, getMaintenance, getMaintenanceDashboard, getRepairHistory, getTechnicians } from '../../services/maintenanceApi';
+import { getInventory, getMaintenance, getMaintenanceDashboard, getMaintenanceReportsSummary, getRepairHistory, getTechnicians } from '../../services/maintenanceApi';
 
 const MaintReports = () => {
   const [reportType, setReportType] = useState('summary');
@@ -22,16 +22,21 @@ const MaintReports = () => {
   useEffect(() => {
     (async () => {
       try {
-        const [dash, list, repairs, techList, stock] = await Promise.all([
+        const [dash, list, repairs, techList, stock, reportSummary] = await Promise.all([
           getMaintenanceDashboard(period),
           getMaintenance({ limit: 100, period, search: search.trim() || undefined }),
           getRepairHistory({ limit: 100, period, search: search.trim() || undefined }),
           getTechnicians(),
           getInventory(),
+          getMaintenanceReportsSummary({ period, search: search.trim() || undefined, limit: 100 }).catch(() => null),
         ]);
-        setDashboard(dash);
-        setMaintenance(list);
-        setRepairReport({ records: repairs.records || [], stats: repairs.stats || {} });
+        const summaryData = reportSummary?.summary || {};
+        setDashboard({ ...dash, ...summaryData });
+        setMaintenance((reportSummary && Array.isArray(reportSummary.activity) ? reportSummary.activity : list) || []);
+        setRepairReport({
+          records: Array.isArray(reportSummary?.repairs) ? reportSummary.repairs : (repairs.records || []),
+          stats: repairs.stats || { totalRepairs: reportSummary?.summary?.repairs || 0, totalRepairCost: reportSummary?.summary?.totalCost || 0 },
+        });
         setTechnicians(techList);
         setInventory(stock);
       } catch (err) {

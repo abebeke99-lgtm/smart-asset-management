@@ -160,15 +160,25 @@ const updateProfile = async (req, res) => {
     const user = await User.findByPk(req.user.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     const updates = {};
-    if (req.body.full_name !== undefined) updates.fullName = String(req.body.full_name).trim();
+    const hasFullName = req.body.fullName !== undefined || req.body.full_name !== undefined;
+    if (hasFullName) {
+      const nextFullName = req.body.fullName ?? req.body.full_name;
+      updates.fullName = String(nextFullName ?? '').trim();
+    }
     if (req.body.email !== undefined) {
       if (req.body.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(req.body.email))) return res.status(400).json({ success: false, message: 'Invalid email address' });
       updates.email = req.body.email || null;
     }
-    if (req.body.phone !== undefined) updates.phone = String(req.body.phone).trim();
+    if (req.body.phone !== undefined) updates.phone = String(req.body.phone ?? '').trim();
+
+    if (!Object.keys(updates).length) {
+      return res.json({ success: true, message: 'No profile changes to save.', user: safeUser(user), data: safeUser(user) });
+    }
+
     await user.update(updates);
     await AuditLog.create({ userId: user.id, action: 'PROFILE_UPDATED', entity: `user:${user.id}`, details: JSON.stringify({ fields: Object.keys(updates) }) });
-    res.json({ success: true, user: safeUser(user) });
+    const payload = safeUser(user);
+    return res.json({ success: true, user: payload, data: payload, message: 'Profile updated successfully.' });
   } catch (error) { console.error('Profile update failed:', error); res.status(500).json({ success: false, message: 'Unable to update profile.' }); }
 };
 

@@ -21,6 +21,8 @@ const SparePart = require('./SparePart');
 const SparePartTransaction = require('./SparePartTransaction');
 const MaintenanceTask = require('./MaintenanceTask');
 const MaintenanceTest = require('./MaintenanceTest');
+const MaintenanceQualityControl = require('./MaintenanceQualityControl');
+const MaintenanceQualityControlItem = require('./MaintenanceQualityControlItem');
 const MaintenanceCost = require('./MaintenanceCost');
 const MaintenanceHistory = require('./MaintenanceHistory');
 const Notification = require('./Notification');
@@ -211,8 +213,12 @@ Asset.hasMany(MaintenanceInspection, { foreignKey: 'assetId' });
 MaintenanceInspection.belongsTo(Asset, { foreignKey: 'assetId' });
 Maintenance.hasMany(MaintenanceInspection, { foreignKey: 'maintenanceId' });
 MaintenanceInspection.belongsTo(Maintenance, { foreignKey: 'maintenanceId' });
+MaintenanceWorkOrder.hasMany(MaintenanceInspection, { foreignKey: 'workOrderId', as: 'Inspections' });
+MaintenanceInspection.belongsTo(MaintenanceWorkOrder, { foreignKey: 'workOrderId', as: 'WorkOrder' });
 User.hasMany(MaintenanceInspection, { foreignKey: 'inspectorId' });
 MaintenanceInspection.belongsTo(User, { foreignKey: 'inspectorId', as: 'Inspector' });
+User.hasMany(MaintenanceInspection, { foreignKey: 'createdBy', as: 'CreatedInspections' });
+MaintenanceInspection.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
 
 // Maintenance Work Order Relationships
 Asset.hasMany(MaintenanceWorkOrder, { foreignKey: 'assetId' });
@@ -267,6 +273,24 @@ Asset.hasMany(MaintenanceTest, { foreignKey: 'assetId' });
 MaintenanceTest.belongsTo(Asset, { foreignKey: 'assetId' });
 User.hasMany(MaintenanceTest, { foreignKey: 'testerId' });
 MaintenanceTest.belongsTo(User, { foreignKey: 'testerId', as: 'Tester' });
+MaintenanceTest.belongsTo(User, { foreignKey: 'reviewerId', as: 'Reviewer' });
+MaintenanceTest.belongsTo(MaintenanceTest, { foreignKey: 'parentTestId', as: 'ParentTest' });
+MaintenanceTest.hasMany(MaintenanceTest, { foreignKey: 'parentTestId', as: 'Retests' });
+
+Maintenance.hasMany(MaintenanceQualityControl, { foreignKey: 'maintenanceId' });
+MaintenanceQualityControl.belongsTo(Maintenance, { foreignKey: 'maintenanceId' });
+MaintenanceWorkOrder.hasMany(MaintenanceQualityControl, { foreignKey: 'workOrderId' });
+MaintenanceQualityControl.belongsTo(MaintenanceWorkOrder, { foreignKey: 'workOrderId' });
+Asset.hasMany(MaintenanceQualityControl, { foreignKey: 'assetId' });
+MaintenanceQualityControl.belongsTo(Asset, { foreignKey: 'assetId' });
+User.hasMany(MaintenanceQualityControl, { foreignKey: 'technicianId' });
+MaintenanceQualityControl.belongsTo(User, { foreignKey: 'technicianId', as: 'Technician' });
+User.hasMany(MaintenanceQualityControl, { foreignKey: 'testerId' });
+MaintenanceQualityControl.belongsTo(User, { foreignKey: 'testerId', as: 'Tester' });
+User.hasMany(MaintenanceQualityControl, { foreignKey: 'reviewerId' });
+MaintenanceQualityControl.belongsTo(User, { foreignKey: 'reviewerId', as: 'Reviewer' });
+MaintenanceQualityControl.hasMany(MaintenanceQualityControlItem, { foreignKey: 'qualityControlId', as: 'ChecklistItems' });
+MaintenanceQualityControlItem.belongsTo(MaintenanceQualityControl, { foreignKey: 'qualityControlId' });
 
 // Maintenance Cost Relationships
 Maintenance.hasMany(MaintenanceCost, { foreignKey: 'maintenanceId' });
@@ -438,6 +462,8 @@ module.exports = {
   SparePartTransaction,
   MaintenanceTask,
   MaintenanceTest,
+  MaintenanceQualityControl,
+  MaintenanceQualityControlItem,
   MaintenanceCost,
   MaintenanceHistory,
   Notification,

@@ -1,23 +1,292 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { getAllMaintenance, getMaintenanceHistory, createMaintenance, updateMaintenance, setStatus, approve, reject, start, complete, assign, removeMaintenance, dashboard, getRepairHistory, getRepairDetails, createRepair, updateRepair } = require('../controllers/maintenanceController');
+const { getAllMaintenance, getPreventiveMaintenance, getPreventiveMaintenanceById, createPreventiveMaintenance, startPreventiveMaintenance, pausePreventiveMaintenance, resumePreventiveMaintenance, assignPreventiveMaintenance, updatePreventiveChecklist, updatePreventiveFindings, completePreventiveMaintenance, getMaintenanceHistory, createMaintenance, updateMaintenance, setStatus, approve, reject, start, complete, assign, removeMaintenance, dashboard, getMaintenanceCalendar, getTechnicianDirectory, getMaintenanceWorkOrders, getMaintenanceWorkOrder, getMaintenanceWorkOrderOptions, createMaintenanceWorkOrder, updateMaintenanceWorkOrder, updateMaintenanceWorkOrderStatus, assignMaintenanceWorkOrder, getRepairHistory, getRepairDetails, createRepair, updateRepair, getSpareParts, getSparePartDetail, listMaintenanceVendors, getMaintenanceVendor, createMaintenanceVendor, updateMaintenanceVendor, setMaintenanceVendorStatus, getMaintenanceReportsSummary, getMaintenanceReportsActivity, getMaintenanceReportsHistory, getMaintenanceReportsWorkOrders, getMaintenanceReportsRepairs, getMaintenanceReportsPreventive, getMaintenanceReportsAssets, getMaintenanceReportsTechnicians, getMaintenanceReportsVendors, getMaintenanceReportsTesting, getMaintenanceReportsCosts, getMaintenanceReportsDowntime, getMaintenanceReportsDepartments } = require('../controllers/maintenanceController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
-const { sequelize, Config, Notification, AuditLog } = require('../models');
+const inspectionController = require('../controllers/maintenanceInspectionController');
+const testingController = require('../controllers/maintenanceTestingController');
+const { sequelize, Config, Notification, AuditLog, MaintenanceQualityControl, MaintenanceQualityControlItem, MaintenanceTest, MaintenanceWorkOrder, Asset, Maintenance, User } = require('../models');
 const { Op } = require('sequelize');
+const { validateQcDecision, normalizeQcStatus, isTestEligibleForQualityControl } = require('../utils/maintenanceQualityControl');
 
 const router = express.Router();
 
 const maintenanceReadAccess = [requireAuth, requireRole('admin', 'ict_officer', 'maintenance', 'college', 'store_manager')];
 router.get('/', ...maintenanceReadAccess, getAllMaintenance);
 router.get('/scheduled', ...maintenanceReadAccess, getAllMaintenance);
+router.get('/assets-under-maintenance', ...maintenanceReadAccess, require('../controllers/maintenanceController').getAssetsUnderMaintenance);
+router.get('/assets-under-maintenance/:id', ...maintenanceReadAccess, require('../controllers/maintenanceController').getAssetMaintenanceDetail);
+router.get('/assets-under-maintenance/:id/timeline', ...maintenanceReadAccess, async (req, res, next) => {
+  try {
+    const asset = await require('../controllers/maintenanceController').getAssetMaintenanceDetail(req, res, next);
+    if (asset) return asset;
+  } catch (error) { return next(error); }
+});
+router.get('/preventive', ...maintenanceReadAccess, getPreventiveMaintenance);
+router.get('/preventive/:id', ...maintenanceReadAccess, getPreventiveMaintenanceById);
+router.post('/preventive', ...maintenanceReadAccess, createPreventiveMaintenance);
+router.patch('/preventive/:id/start', ...maintenanceReadAccess, startPreventiveMaintenance);
+router.patch('/preventive/:id/pause', ...maintenanceReadAccess, pausePreventiveMaintenance);
+router.patch('/preventive/:id/resume', ...maintenanceReadAccess, resumePreventiveMaintenance);
+router.patch('/preventive/:id/assign', ...maintenanceReadAccess, assignPreventiveMaintenance);
+router.patch('/preventive/:id/checklist', ...maintenanceReadAccess, updatePreventiveChecklist);
+router.patch('/preventive/:id/findings', ...maintenanceReadAccess, updatePreventiveFindings);
+router.post('/preventive/:id/complete', ...maintenanceReadAccess, completePreventiveMaintenance);
 router.get('/history', ...maintenanceReadAccess, getMaintenanceHistory);
+router.get('/reports', ...maintenanceReadAccess, getMaintenanceReportsSummary);
+router.get('/reports/summary', ...maintenanceReadAccess, getMaintenanceReportsSummary);
+router.get('/reports/activity', ...maintenanceReadAccess, getMaintenanceReportsActivity);
+router.get('/reports/history', ...maintenanceReadAccess, getMaintenanceReportsHistory);
+router.get('/reports/work-orders', ...maintenanceReadAccess, getMaintenanceReportsWorkOrders);
+router.get('/reports/repairs', ...maintenanceReadAccess, getMaintenanceReportsRepairs);
+router.get('/reports/preventive', ...maintenanceReadAccess, getMaintenanceReportsPreventive);
+router.get('/reports/assets', ...maintenanceReadAccess, getMaintenanceReportsAssets);
+router.get('/reports/technicians', ...maintenanceReadAccess, getMaintenanceReportsTechnicians);
+router.get('/reports/vendors', ...maintenanceReadAccess, getMaintenanceReportsVendors);
+router.get('/reports/testing', ...maintenanceReadAccess, getMaintenanceReportsTesting);
+router.get('/reports/costs', ...maintenanceReadAccess, getMaintenanceReportsCosts);
+router.get('/reports/downtime', ...maintenanceReadAccess, getMaintenanceReportsDowntime);
+router.get('/reports/departments', ...maintenanceReadAccess, getMaintenanceReportsDepartments);
 router.get('/dashboard', ...maintenanceReadAccess, dashboard);
+router.get('/calendar', ...maintenanceReadAccess, getMaintenanceCalendar);
+router.get('/spare-parts', ...maintenanceReadAccess, getSpareParts);
+router.get('/spare-parts/:id', ...maintenanceReadAccess, getSparePartDetail);
+router.get('/technicians', ...maintenanceReadAccess, getTechnicianDirectory);
+router.get('/work-orders', ...maintenanceReadAccess, getMaintenanceWorkOrders);
+router.get('/work-orders/options', ...maintenanceReadAccess, getMaintenanceWorkOrderOptions);
+router.get('/work-orders/:id', ...maintenanceReadAccess, getMaintenanceWorkOrder);
+router.post('/work-orders', ...maintenanceReadAccess, createMaintenanceWorkOrder);
+router.put('/work-orders/:id', ...maintenanceReadAccess, updateMaintenanceWorkOrder);
+router.patch('/work-orders/:id/status', ...maintenanceReadAccess, updateMaintenanceWorkOrderStatus);
+router.patch('/work-orders/:id/assign', ...maintenanceReadAccess, assignMaintenanceWorkOrder);
+
+const qualityControlAccess = [requireAuth, requireRole('admin', 'maintenance', 'ict_officer', 'quality_control_reviewer')];
+router.get('/quality-control', ...qualityControlAccess, async (req, res, next) => {
+  try {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
+    const search = String(req.query.search || '').trim();
+    const status = String(req.query.status || '').trim();
+    const where = {};
+    if (status) where.status = normalizeQcStatus(status);
+    if (search) {
+      where[Op.or] = [
+        { id: Number.isInteger(Number(search)) ? Number(search) : null },
+        { '$Asset.name$': { [Op.like]: `%${search}%` } },
+        { '$Asset.assetCode$': { [Op.like]: `%${search}%` } },
+        { '$Asset.serialNumber$': { [Op.like]: `%${search}%` } },
+        { '$Maintenance.title$': { [Op.like]: `%${search}%` } },
+        { '$Technician.fullName$': { [Op.like]: `%${search}%` } },
+        { '$Tester.fullName$': { [Op.like]: `%${search}%` } },
+        { '$Reviewer.fullName$': { [Op.like]: `%${search}%` } },
+      ].filter(Boolean);
+    }
+    const { rows, count } = await MaintenanceQualityControl.findAndCountAll({
+      where,
+      include: [
+        { model: Asset, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'category', 'status', 'department', 'location'] },
+        { model: Maintenance, attributes: ['id', 'title', 'status', 'priority'] },
+        { model: User, as: 'Technician', attributes: ['id', 'fullName', 'username'] },
+        { model: User, as: 'Tester', attributes: ['id', 'fullName', 'username'] },
+        { model: User, as: 'Reviewer', attributes: ['id', 'fullName', 'username'] },
+        { model: MaintenanceQualityControlItem, as: 'ChecklistItems', attributes: ['id', 'requirement', 'expectedCondition', 'actualCondition', 'result', 'notes', 'required'] },
+      ],
+      order: [['reviewDate', 'DESC'], ['id', 'DESC']],
+      limit,
+      offset: (page - 1) * limit,
+      distinct: true,
+    });
+    const summary = {
+      pending: rows.filter((item) => item.status === 'pending').length,
+      inReview: rows.filter((item) => item.status === 'in-review').length,
+      approved: rows.filter((item) => item.decision === 'approved').length,
+      rejected: rows.filter((item) => item.decision === 'rejected').length,
+      conditionalApproval: rows.filter((item) => item.decision === 'conditional-approval').length,
+      retestRequired: rows.filter((item) => item.decision === 'retest-required').length,
+      readyForReturn: rows.filter((item) => item.readyForReturn).length,
+      overdueReviews: rows.filter((item) => item.dueDate && new Date(item.dueDate) < new Date() && item.status !== 'approved').length,
+    };
+    res.json({ success: true, data: rows.map((item) => item.toJSON()), summary, pagination: { page, limit, total: count, pages: Math.max(1, Math.ceil(count / limit)) } });
+  } catch (error) { next(error); }
+});
+router.get('/quality-control/:id', ...qualityControlAccess, async (req, res, next) => {
+  try {
+    const item = await MaintenanceQualityControl.findOne({
+      where: { id: req.params.id },
+      include: [
+        { model: Asset, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'category', 'status', 'department', 'location'] },
+        { model: Maintenance, attributes: ['id', 'title', 'status', 'priority'] },
+        { model: User, as: 'Technician', attributes: ['id', 'fullName', 'username'] },
+        { model: User, as: 'Tester', attributes: ['id', 'fullName', 'username'] },
+        { model: User, as: 'Reviewer', attributes: ['id', 'fullName', 'username'] },
+        { model: MaintenanceQualityControlItem, as: 'ChecklistItems', attributes: ['id', 'requirement', 'expectedCondition', 'actualCondition', 'result', 'notes', 'required'] },
+      ],
+    });
+    if (!item) return res.status(404).json({ success: false, message: 'Quality control review not found' });
+    return res.json({ success: true, data: item.toJSON() });
+  } catch (error) { next(error); }
+});
+router.post('/quality-control', ...qualityControlAccess, async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const assetId = Number(body.assetId ?? body.asset_id);
+    const maintenanceId = Number(body.maintenanceId ?? body.maintenance_id);
+    if (!assetId || !maintenanceId) return res.status(422).json({ success: false, message: 'Asset and maintenance record are required' });
+    const [asset, maintenance, workOrder] = await Promise.all([
+      Asset.findByPk(assetId),
+      Maintenance.findByPk(maintenanceId),
+      body.workOrderId || body.work_order_id ? MaintenanceWorkOrder.findByPk(Number(body.workOrderId ?? body.work_order_id)) : null,
+    ]);
+    if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
+    if (!maintenance) return res.status(404).json({ success: false, message: 'Maintenance record not found' });
+    if (workOrder && Number(workOrder.assetId) !== Number(assetId)) return res.status(422).json({ success: false, message: 'The selected work order must match the asset' });
+    const testId = body.testId ?? body.test_id ?? null;
+    if (testId) {
+      const testRecord = await MaintenanceTest.findByPk(testId);
+      if (!testRecord) return res.status(404).json({ success: false, message: 'Test record not found' });
+      if (Number(testRecord.maintenanceId) !== Number(maintenanceId) || Number(testRecord.assetId) !== Number(assetId)) return res.status(422).json({ success: false, message: 'The test record must belong to the same maintenance and asset' });
+    }
+    const entry = await MaintenanceQualityControl.create({
+      maintenanceId,
+      workOrderId: workOrder ? workOrder.id : (body.workOrderId ?? body.work_order_id ?? null),
+      assetId,
+      testId,
+      technicianId: body.technicianId ?? body.technician_id ?? maintenance.assignedTo ?? null,
+      testerId: body.testerId ?? body.tester_id ?? null,
+      reviewerId: body.reviewerId ?? body.reviewer_id ?? req.user.id,
+      reviewDate: body.reviewDate || new Date(),
+      dueDate: body.dueDate || body.reviewDueDate || null,
+      status: body.status || 'pending',
+      decision: body.decision || 'pending',
+      findings: body.findings || '',
+      rejectionReason: body.rejectionReason || '',
+      failedRequirement: body.failedRequirement || '',
+      correctiveAction: body.correctiveAction || '',
+      conditions: body.conditions || '',
+      notes: body.notes || '',
+      requiredChecklistCompleted: Boolean(body.requiredChecklistCompleted),
+      documentationComplete: Boolean(body.documentationComplete),
+      readyForReturn: Boolean(body.readyForReturn),
+    });
+    const checklist = Array.isArray(body.checklist) ? body.checklist : [];
+    if (checklist.length) {
+      await Promise.all(checklist.map((item) => MaintenanceQualityControlItem.create({
+        qualityControlId: entry.id,
+        requirement: String(item.requirement || '').trim(),
+        expectedCondition: item.expectedCondition || '',
+        actualCondition: item.actualCondition || '',
+        result: String(item.result || 'pass').trim() || 'pass',
+        notes: item.notes || '',
+        required: item.required !== false,
+      })));
+    }
+    return res.status(201).json({ success: true, data: entry.toJSON() });
+  } catch (error) { next(error); }
+});
+router.patch('/quality-control/:id/decision', ...qualityControlAccess, async (req, res, next) => {
+  try {
+    const review = await MaintenanceQualityControl.findByPk(req.params.id, { include: [{ model: MaintenanceQualityControlItem, as: 'ChecklistItems' }] });
+    if (!review) return res.status(404).json({ success: false, message: 'Quality control review not found' });
+    const testRecord = review.testId ? await MaintenanceTest.findByPk(review.testId) : null;
+    const validation = validateQcDecision(req.body.decision, req.body, testRecord || { maintenanceId: review.maintenanceId, assetId: review.assetId, status: 'completed', overallResult: 'Passed' });
+    if (validation.message) return res.status(422).json({ success: false, message: validation.message });
+    const updates = {
+      reviewerId: req.body.reviewerId ?? req.body.reviewer_id ?? review.reviewerId ?? req.user.id,
+      decision: validation.decision,
+      status: normalizeQcStatus(req.body.status || 'in-review'),
+      findings: req.body.findings || review.findings || '',
+      rejectionReason: req.body.rejectionReason || review.rejectionReason || '',
+      failedRequirement: req.body.failedRequirement || review.failedRequirement || '',
+      correctiveAction: req.body.correctiveAction || review.correctiveAction || '',
+      conditions: req.body.conditions || review.conditions || '',
+      notes: req.body.notes || review.notes || '',
+      readyForReturn: validation.decision === 'approved',
+      reviewDate: req.body.reviewDate || new Date(),
+      requiredChecklistCompleted: true,
+      documentationComplete: req.body.documentationComplete !== undefined ? Boolean(req.body.documentationComplete) : review.documentationComplete,
+    };
+    await review.update(updates);
+    await AuditLog.create({ userId: req.user.id, action: 'QC_DECISION', entity: `quality_control:${review.id}`, details: JSON.stringify({ decision: validation.decision, status: updates.status }) });
+    return res.json({ success: true, data: review.toJSON() });
+  } catch (error) { next(error); }
+});
+router.patch('/quality-control/:id/start', ...qualityControlAccess, async (req, res, next) => {
+  try {
+    const item = await MaintenanceQualityControl.findByPk(req.params.id);
+    if (!item) return res.status(404).json({ success: false, message: 'Quality control review not found' });
+    await item.update({ status: 'in-review', reviewerId: req.user.id, reviewDate: new Date() });
+    return res.json({ success: true, data: item.toJSON() });
+  } catch (error) { next(error); }
+});
+router.patch('/quality-control/:id/approve', ...qualityControlAccess, async (req, res, next) => {
+  try {
+    const item = await MaintenanceQualityControl.findByPk(req.params.id);
+    if (!item) return res.status(404).json({ success: false, message: 'Quality control review not found' });
+    const testRecord = item.testId ? await MaintenanceTest.findByPk(item.testId) : null;
+    if (!isTestEligibleForQualityControl(testRecord || { maintenanceId: item.maintenanceId, assetId: item.assetId, status: 'completed', overallResult: 'Passed' })) {
+      return res.status(422).json({ success: false, message: 'Approval requires a completed test with a passing result.' });
+    }
+    await item.update({ status: 'approved', decision: 'approved', reviewerId: req.user.id, readyForReturn: true, reviewDate: new Date() });
+    return res.json({ success: true, data: item.toJSON() });
+  } catch (error) { next(error); }
+});
+router.patch('/quality-control/:id/reject', ...qualityControlAccess, async (req, res, next) => {
+  try {
+    const item = await MaintenanceQualityControl.findByPk(req.params.id);
+    if (!item) return res.status(404).json({ success: false, message: 'Quality control review not found' });
+    if (!String(req.body.rejectionReason || '').trim()) return res.status(422).json({ success: false, message: 'Provide a rejection reason.' });
+    await item.update({ status: 'rejected', decision: 'rejected', reviewerId: req.user.id, rejectionReason: req.body.rejectionReason || '', failedRequirement: req.body.failedRequirement || '', correctiveAction: req.body.correctiveAction || '', reviewDate: new Date() });
+    return res.json({ success: true, data: item.toJSON() });
+  } catch (error) { next(error); }
+});
+router.patch('/quality-control/:id/retest', ...qualityControlAccess, async (req, res, next) => {
+  try {
+    const item = await MaintenanceQualityControl.findByPk(req.params.id);
+    if (!item) return res.status(404).json({ success: false, message: 'Quality control review not found' });
+    await item.update({ status: 'retest-required', decision: 'retest-required', reviewerId: req.user.id, notes: req.body.notes || item.notes || '', reviewDate: new Date() });
+    return res.json({ success: true, data: item.toJSON() });
+  } catch (error) { next(error); }
+});
+router.patch('/quality-control/:id/return-to-service', ...qualityControlAccess, async (req, res, next) => {
+  try {
+    const item = await MaintenanceQualityControl.findByPk(req.params.id);
+    if (!item) return res.status(404).json({ success: false, message: 'Quality control review not found' });
+    if (item.decision !== 'approved') return res.status(409).json({ success: false, message: 'Only approved items can be returned to service' });
+    const asset = await Asset.findByPk(item.assetId);
+    if (asset) await asset.update({ status: 'available' });
+    await item.update({ readyForReturn: true, status: 'approved' });
+    return res.json({ success: true, data: item.toJSON() });
+  } catch (error) { next(error); }
+});
+const vendorAccess = [requireAuth, requireRole('admin', 'maintenance', 'store_manager', 'finance')];
+router.get('/vendors', ...vendorAccess, listMaintenanceVendors);
+router.get('/vendors/:id', ...vendorAccess, getMaintenanceVendor);
+router.post('/vendors', ...vendorAccess, createMaintenanceVendor);
+router.put('/vendors/:id', ...vendorAccess, updateMaintenanceVendor);
+router.patch('/vendors/:id/status', ...vendorAccess, setMaintenanceVendorStatus);
 const repairAccess = [requireAuth, requireRole('ict_officer', 'maintenance')];
+const inspectionReadAccess = [requireAuth, requireRole('admin', 'maintenance', 'ict_officer')];
+router.get('/inspections', ...inspectionReadAccess, inspectionController.listInspections);
+router.get('/inspections/options', ...inspectionReadAccess, inspectionController.getInspectionOptions);
+router.get('/inspections/:id', ...inspectionReadAccess, inspectionController.getInspection);
+router.post('/inspections', ...inspectionReadAccess, inspectionController.createInspection);
+router.put('/inspections/:id', ...inspectionReadAccess, inspectionController.updateInspection);
+router.delete('/inspections/:id', requireAuth, requireRole('admin'), inspectionController.deleteInspection);
 router.get('/repairs', ...repairAccess, getRepairHistory);
 router.get('/repairs/:id', ...repairAccess, getRepairDetails);
 router.post('/repairs', ...repairAccess, createRepair);
 router.put('/repairs/:id', ...repairAccess, updateRepair);
+const testingAccess = [requireAuth, requireRole('admin', 'maintenance', 'ict_officer')];
+router.get('/testing', ...testingAccess, testingController.getMaintenanceTests);
+router.get('/testing/options', ...testingAccess, testingController.getMaintenanceTestOptions);
+router.get('/testing/:id', ...testingAccess, testingController.getMaintenanceTest);
+router.post('/testing', ...testingAccess, testingController.createMaintenanceTest);
+router.patch('/testing/:id/start', ...testingAccess, testingController.startMaintenanceTest);
+router.patch('/testing/:id/complete', ...testingAccess, testingController.completeMaintenanceTest);
+router.post('/testing/:id/retest', ...testingAccess, testingController.createMaintenanceRetest);
+router.patch('/testing/:id/send-to-qc', ...testingAccess, testingController.sendMaintenanceTestToQuality);
+router.patch('/testing/:id/quality', requireAuth, requireRole('admin'), testingController.reviewMaintenanceTestQuality);
+router.patch('/testing/:id/return-to-service', requireAuth, requireRole('admin', 'maintenance'), testingController.returnMaintenanceTestToService);
 const ictMaintenanceAccess = [requireAuth, requireRole('admin', 'ict_officer', 'maintenance', 'store_manager')];
 router.post('/', requireAuth, requireRole('admin', 'ict_officer', 'maintenance', 'college', 'store_manager'), createMaintenance);
 router.put('/:id', ...ictMaintenanceAccess, updateMaintenance);

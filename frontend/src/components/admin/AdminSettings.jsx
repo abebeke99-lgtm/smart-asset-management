@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { useTheme } from '../../contexts/UiContext';
+import { useLanguage, useTheme } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
 import { toast } from 'react-toastify';
 import UserAvatar from '../common/UserAvatar';
@@ -44,13 +44,14 @@ const DEFAULT_SETTINGS = {
   },
 
   security: {
-    timeout: 30,
+    timeout: 60,
     maxAttempts: 5,
     minPass: 8,
-    strongPass: true,
-    mfa: false,
-    lockoutDuration: 15,
-    sessionRemember: false
+    requireUppercase: true,
+    requireLowercase: true,
+    requireNumbers: true,
+    requireSpecial: true,
+    lockoutDuration: 30
   },
 
   notifications: {
@@ -96,15 +97,6 @@ const DEFAULT_SETTINGS = {
     'Assignment Approval': false
   },
 
-  rfid: {
-    enabled: false,
-    reader: '',
-    interval: 5,
-    autoRegister: false,
-    scanHistory: true,
-    duplicateProtection: true
-  },
-
   maintenance: {
     preventive: true,
     remindDays: 7,
@@ -130,12 +122,6 @@ const DEFAULT_SETTINGS = {
     retentionDays: 365
   },
 
-  integrations: {
-    email: false,
-    rfid: false,
-    externalApi: false,
-    webhooks: false
-  }
 };
 
 /* ============================================================
@@ -145,18 +131,23 @@ const DEFAULT_SETTINGS = {
 const AdminSettings = () => {
   const { user } = useAuth();
   const { theme } = useTheme();
+  const { language, setLanguage } = useLanguage();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState(() => searchParams.get('section') || 'organization');
+  const [activeTab, setActiveTab] = useState(() => {
+    const requestedSection = searchParams.get('section');
+    return CATEGORIES.some((category) => category.id === requestedSection)
+      ? requestedSection
+      : 'organization';
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
 
   const [auditLogs, setAuditLogs] = useState([]);
-
-  const [maintenanceLoading, setMaintenanceLoading] = useState(false);
+  const [auditRetention, setAuditRetention] = useState(null);
 
   const isDark = theme === 'dark';
 
@@ -189,10 +180,22 @@ const AdminSettings = () => {
         response?.data ||
         {};
 
+      const localization = serverSettings.localization || {};
+      const selectedLanguage = ['am', 'amharic'].includes(String(localization.lang || '').toLowerCase())
+        ? 'Amharic'
+        : localization.lang
+          ? 'English'
+          : language === 'am' ? 'Amharic' : 'English';
+
       setSettings((previous) => ({
         ...DEFAULT_SETTINGS,
         ...previous,
-        ...serverSettings
+        ...serverSettings,
+        localization: {
+          ...DEFAULT_SETTINGS.localization,
+          ...localization,
+          lang: selectedLanguage
+        }
       }));
     } catch (error) {
       console.error('Settings loading error:', error);
@@ -212,7 +215,10 @@ const AdminSettings = () => {
 
   const fetchAuditLogs = async () => {
     try {
-      const response = await apiClient.get('/api/audit?limit=50');
+      const [response, retentionResponse] = await Promise.all([
+        apiClient.get('/api/audit?limit=50'),
+        apiClient.get('/api/audit/retention')
+      ]);
 
       const logs =
         response?.data?.logs ||
@@ -220,6 +226,7 @@ const AdminSettings = () => {
         [];
 
       setAuditLogs(Array.isArray(logs) ? logs : []);
+      setAuditRetention(retentionResponse?.data || null);
     } catch (error) {
       console.error('Audit log error:', error);
 
@@ -246,6 +253,7 @@ const AdminSettings = () => {
       }));
 
       toast.success('✓ Settings saved successfully');
+      return true;
     } catch (error) {
       console.error('Settings save error:', error);
 
@@ -253,6 +261,7 @@ const AdminSettings = () => {
         error?.response?.data?.message ||
         'Failed to save changes'
       );
+      return false;
     } finally {
       setSaving(false);
     }
@@ -261,31 +270,6 @@ const AdminSettings = () => {
   /* ============================================================
      MAINTENANCE ACTION
   ============================================================ */
-
-  const handleMaintenanceAction = async (action, message) => {
-    const confirmed = window.confirm(message);
-
-    if (!confirmed) {
-      return;
-    }
-
-    setMaintenanceLoading(true);
-
-    try {
-      await apiClient.post(`/api/maintenance/${action}`);
-
-      toast.success('✓ Action executed successfully');
-    } catch (error) {
-      console.error('Maintenance action error:', error);
-
-      toast.error(
-        error?.response?.data?.message ||
-        'Operation failed'
-      );
-    } finally {
-      setMaintenanceLoading(false);
-    }
-  };
 
   /* ============================================================
      ACTIVE CONTENT
@@ -337,7 +321,7 @@ const AdminSettings = () => {
         return (
           <RedirectPanel
             title="Roles & Permissions"
-            path="/admin/users"
+            path="/admin/roles-permissions"
             icon="👥"
             description="Manage users, roles, permissions and access control."
             onNavigate={navigate}
@@ -359,9 +343,10 @@ const AdminSettings = () => {
         return (
           <LocalizationForm
             data={data}
-            onSave={(value) =>
-              handleUpdate('localization', value)
-            }
+            onSave={async (value) => {
+              const saved = await handleUpdate('localization', value);
+              if (saved) setLanguage(value.lang === 'Amharic' ? 'am' : 'en');
+            }}
             saving={saving}
           />
         );
@@ -390,12 +375,12 @@ const AdminSettings = () => {
 
       case 'rfid':
         return (
-          <RfidForm
-            data={data}
-            onSave={(value) =>
-              handleUpdate('rfid', value)
-            }
-            saving={saving}
+          <RedirectPanel
+            title="RFID & Tracking"
+            path="/admin/rfid"
+            icon="🏷️"
+            description="Manage registered readers, tagged assets, QR codes, and scan history in the existing tracking module."
+            onNavigate={navigate}
           />
         );
 
@@ -436,28 +421,8 @@ const AdminSettings = () => {
         return (
           <AuditView
             logs={auditLogs}
+            retention={auditRetention}
             onRefresh={fetchAuditLogs}
-          />
-        );
-
-      case 'monitoring':
-        return (
-          <RedirectPanel
-            title="System Monitoring"
-            path="/admin/settings/system-monitoring"
-            description="View measured health, resource, performance, security, alert, and activity metrics."
-            onNavigate={navigate}
-          />
-        );
-
-      case 'integrations':
-        return (
-          <IntegrationsForm
-            data={data}
-            onSave={(value) =>
-              handleUpdate('integrations', value)
-            }
-            saving={saving}
           />
         );
 
@@ -469,14 +434,6 @@ const AdminSettings = () => {
             icon="💾"
             description="Create backups, manage recovery points and restore system data."
             onNavigate={navigate}
-          />
-        );
-
-      case 'maintenance_sys':
-        return (
-          <MaintenanceSysView
-            onAction={handleMaintenanceAction}
-            loading={maintenanceLoading}
           />
         );
 
@@ -885,8 +842,48 @@ const AdminSettings = () => {
             position: static;
           }
 
+          .settings-nav {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          }
+
           .settings-panel {
             padding: 18px;
+          }
+        }
+
+        @media (max-width: 560px) {
+          .admin-settings-layout {
+            padding: 12px;
+          }
+
+          .settings-nav {
+            grid-template-columns: 1fr;
+          }
+
+          .settings-panel {
+            min-height: 0;
+            padding: 14px;
+          }
+
+          .settings-panel-header {
+            align-items: flex-start;
+          }
+
+          .panel-title {
+            font-size: 16px;
+          }
+
+          .form-grid {
+            grid-template-columns: minmax(0, 1fr);
+          }
+
+          .audit-table-wrapper {
+            overflow-x: auto;
+          }
+
+          .audit-table {
+            min-width: 600px;
           }
         }
 `}</style>
@@ -905,6 +902,7 @@ const AdminSettings = () => {
                 key={category.id}
                 type="button"
                 className={`nav-item ${activeTab === category.id ? 'active' : ''}`}
+                aria-current={activeTab === category.id ? 'page' : undefined}
                 onClick={() => setActiveTab(category.id)}
               >
                 <span className="nav-icon">{category.icon}</span>
@@ -1063,7 +1061,7 @@ const OrganizationForm = ({
             onClick={onReset}
             disabled={saving}
           >
-            Reset
+            Discard Changes
           </button>
         )}
       </div>
@@ -1079,6 +1077,34 @@ export const AccountProfile = ({ user }) => {
   const { updateUser } = useAuth();
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [form, setForm] = useState({
+    fullName: user?.fullName || user?.full_name || user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || ''
+  });
+
+  useEffect(() => {
+    setForm({
+      fullName: user?.fullName || user?.full_name || user?.name || '',
+      email: user?.email || '',
+      phone: user?.phone || ''
+    });
+  }, [user?.fullName, user?.full_name, user?.name, user?.email, user?.phone]);
+
+  const handleProfileSave = async () => {
+    setSavingProfile(true);
+    try {
+      const response = await apiClient.put('/api/admin/settings/profile', form);
+      const updatedUser = response?.data?.data;
+      if (updatedUser) updateUser(updatedUser);
+      toast.success('Profile updated successfully.');
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Unable to update profile.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   const handlePhotoUpload = async (event) => {
     const file = event.target.files?.[0];
@@ -1167,26 +1193,25 @@ export const AccountProfile = ({ user }) => {
 
         <Field
           label="Full Name"
-          value={
-            user?.full_name ||
-            user?.fullName ||
-            user?.name
-          }
-          disabled
+          value={form.fullName}
+          onChange={(value) => setForm({ ...form, fullName: value })}
         />
 
         <Field
           label="Email"
-          value={user?.email}
-          disabled
+          value={form.email}
+          type="email"
+          onChange={(value) => setForm({ ...form, email: value })}
         />
 
         <Field
-          label="Role"
-          value={user?.role}
-          disabled
+          label="Phone"
+          value={form.phone}
+          onChange={(value) => setForm({ ...form, phone: value })}
         />
       </div>
+
+      <SaveButton saving={savingProfile} onClick={handleProfileSave} text="Save Profile" />
 
       <p
         style={{
@@ -1214,6 +1239,33 @@ const SecurityForm = ({
     DEFAULT_SETTINGS.security,
     data
   );
+  const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const handlePasswordChange = async () => {
+    if (!passwords.currentPassword || passwords.newPassword.length < 8) {
+      toast.error('Enter your current password and a new password with at least 8 characters.');
+      return;
+    }
+    if (passwords.newPassword !== passwords.confirmPassword) {
+      toast.error('The new password and confirmation do not match.');
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await apiClient.post('/api/admin/settings/profile/change-password', {
+        currentPassword: passwords.currentPassword,
+        newPassword: passwords.newPassword
+      });
+      setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      toast.success('Password changed. Please sign in again with the new password.');
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Unable to change password.');
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   return (
     <div className="form-section">
@@ -1276,44 +1328,24 @@ const SecurityForm = ({
         />
       </div>
 
-      <Toggle
-        label="Require Strong Password"
-        checked={form.strongPass}
-        onChange={(value) =>
-          setForm({
-            ...form,
-            strongPass: value
-          })
-        }
-      />
-
-      <Toggle
-        label="Two-Factor Authentication"
-        checked={form.mfa}
-        onChange={(value) =>
-          setForm({
-            ...form,
-            mfa: value
-          })
-        }
-      />
-
-      <Toggle
-        label="Allow Remember Session"
-        checked={form.sessionRemember}
-        onChange={(value) =>
-          setForm({
-            ...form,
-            sessionRemember: value
-          })
-        }
-      />
+      <Toggle label="Require uppercase letters" checked={form.requireUppercase} onChange={(value) => setForm({ ...form, requireUppercase: value })} />
+      <Toggle label="Require lowercase letters" checked={form.requireLowercase} onChange={(value) => setForm({ ...form, requireLowercase: value })} />
+      <Toggle label="Require numbers" checked={form.requireNumbers} onChange={(value) => setForm({ ...form, requireNumbers: value })} />
+      <Toggle label="Require special characters" checked={form.requireSpecial} onChange={(value) => setForm({ ...form, requireSpecial: value })} />
 
       <SaveButton
         saving={saving}
         text="Update Security Policies"
         onClick={() => onSave(form)}
       />
+
+      <h3 className="subsection-title">Change Password</h3>
+      <div className="form-grid">
+        <Field label="Current Password" type="password" value={passwords.currentPassword} onChange={(value) => setPasswords({ ...passwords, currentPassword: value })} />
+        <Field label="New Password" type="password" value={passwords.newPassword} onChange={(value) => setPasswords({ ...passwords, newPassword: value })} />
+        <Field label="Confirm New Password" type="password" value={passwords.confirmPassword} onChange={(value) => setPasswords({ ...passwords, confirmPassword: value })} />
+      </div>
+      <SaveButton saving={changingPassword} onClick={handlePasswordChange} text="Change Password" />
     </div>
   );
 };
@@ -1358,9 +1390,6 @@ const NotificationsForm = ({
         <Toggle label="Enable Email Notifications" checked={form.emailEnabled && emailConfigured} onChange={(value) => setForm({ ...form, emailEnabled: value })} />
         <span className={emailConfigured ? 'channel-status enabled' : 'channel-status'}>{emailConfigured ? 'Configured' : 'Not configured'}</span>
       </div>
-      <div className="channel-row unsupported"><span>Browser Push Notifications</span><span className="channel-status">Not available</span></div>
-      <div className="channel-row unsupported"><span>SMS Notifications</span><span className="channel-status">Not available</span></div>
-
       <h3 className="subsection-title">Event Notifications</h3>
       <div className="notification-event-table">
         <div className="notification-event-head"><span>Event</span><span>Enabled</span><span>In-App</span><span>Email</span><span>Recipients</span><span>Priority</span></div>
@@ -1733,109 +1762,6 @@ const WorkflowForm = ({
 };
 
 /* ============================================================
-   RFID
-============================================================ */
-
-const RfidForm = ({
-  data,
-  onSave,
-  saving
-}) => {
-  const [form, setForm] = useFormState(
-    DEFAULT_SETTINGS.rfid,
-    data
-  );
-
-  return (
-    <div className="form-section">
-      <h2 className="section-title">
-        📡 RFID & Tracking
-      </h2>
-
-      <p className="section-description">
-        Configure RFID readers, scanning and tracking
-        behavior.
-      </p>
-
-      <Toggle
-        label="Enable RFID Tracking"
-        checked={form.enabled}
-        onChange={(value) =>
-          setForm({
-            ...form,
-            enabled: value
-          })
-        }
-      />
-
-      <div className="form-grid">
-        <Field
-          label="Reader ID"
-          value={form.reader}
-          onChange={(value) =>
-            setForm({
-              ...form,
-              reader: value
-            })
-          }
-        />
-
-        <Field
-          label="Scan Interval (Seconds)"
-          type="number"
-          value={form.interval}
-          onChange={(value) =>
-            setForm({
-              ...form,
-              interval: value
-            })
-          }
-        />
-      </div>
-
-      <Toggle
-        label="Automatically Register New Tags"
-        checked={form.autoRegister}
-        onChange={(value) =>
-          setForm({
-            ...form,
-            autoRegister: value
-          })
-        }
-      />
-
-      <Toggle
-        label="Keep RFID Scan History"
-        checked={form.scanHistory}
-        onChange={(value) =>
-          setForm({
-            ...form,
-            scanHistory: value
-          })
-        }
-      />
-
-      <Toggle
-        label="Duplicate Scan Protection"
-        checked={form.duplicateProtection}
-        onChange={(value) =>
-          setForm({
-            ...form,
-            duplicateProtection: value
-          })
-        }
-      />
-
-      <SaveButton
-        saving={saving}
-        text="Update RFID Configuration"
-        onClick={() => onSave(form)}
-      />
-    </div>
-  );
-};
-
-/* ============================================================
    MAINTENANCE
 ============================================================ */
 
@@ -2128,66 +2054,12 @@ const ReportsForm = ({
 };
 
 /* ============================================================
-   INTEGRATIONS
-============================================================ */
-
-const IntegrationsForm = ({
-  data,
-  onSave,
-  saving
-}) => {
-  const [form, setForm] = useFormState(
-    DEFAULT_SETTINGS.integrations,
-    data
-  );
-
-  const services = [
-    ['email', '📧 Email Service'],
-    ['rfid', '📡 RFID Service'],
-    ['externalApi', '🔗 External API'],
-    ['webhooks', '🪝 Webhooks']
-  ];
-
-  return (
-    <div className="form-section">
-      <h2 className="section-title">
-        🔗 Integrations
-      </h2>
-
-      <p className="section-description">
-        Enable external services connected to the
-        University Asset Management System.
-      </p>
-
-      {services.map(([key, label]) => (
-        <Toggle
-          key={key}
-          label={label}
-          checked={Boolean(form[key])}
-          onChange={(value) =>
-            setForm({
-              ...form,
-              [key]: value
-            })
-          }
-        />
-      ))}
-
-      <SaveButton
-        saving={saving}
-        text="Update Integrations"
-        onClick={() => onSave(form)}
-      />
-    </div>
-  );
-};
-
-/* ============================================================
    AUDIT
 ============================================================ */
 
 const AuditView = ({
   logs,
+  retention,
   onRefresh
 }) => {
   return (
@@ -2206,7 +2078,7 @@ const AuditView = ({
           </h2>
 
           <p className="section-description">
-            Review administrative and system activity.
+            Review administrative activity and the active audit retention policy.
           </p>
         </div>
 
@@ -2218,6 +2090,14 @@ const AuditView = ({
           🔄 Refresh
         </button>
       </div>
+
+      {retention?.policy && (
+        <div className="toggle-group" role="status">
+          <span>
+            Retention: {retention.policy.archiveAfterDays} days. {retention.pending} records eligible for archival; {retention.archived} archived.
+          </span>
+        </div>
+      )}
 
       <div className="audit-table-wrapper">
         <table className="audit-table">
@@ -2267,7 +2147,7 @@ const AuditView = ({
                     </td>
 
                     <td>
-                      {log.user ||
+                      {log.user?.username || log.user?.fullName ||
                         log.username ||
                         log.user_name ||
                         '—'}
@@ -2282,7 +2162,7 @@ const AuditView = ({
                     </td>
 
                     <td>
-                      {log.ip ||
+                      {log.ipAddress || log.ip ||
                         log.ip_address ||
                         '—'}
                     </td>
@@ -2293,100 +2173,6 @@ const AuditView = ({
           </tbody>
         </table>
       </div>
-    </div>
-  );
-};
-
-/* ============================================================
-   SYSTEM MAINTENANCE
-============================================================ */
-
-const MaintenanceSysView = ({
-  onAction,
-  loading
-}) => {
-  return (
-    <div className="form-section">
-      <h2 className="section-title">
-        🧹 Data & System Maintenance
-      </h2>
-
-      <p className="section-description">
-        Administrative tools for cache, database
-        optimization and system cleanup.
-      </p>
-
-      <div className="action-grid">
-        <button
-          type="button"
-          className="action-button"
-          disabled={loading}
-          onClick={() =>
-            onAction(
-              'clear-cache',
-              'Are you sure you want to clear system cache?'
-            )
-          }
-        >
-          🧹
-          <br />
-          Clear Cache
-        </button>
-
-        <button
-          type="button"
-          className="action-button"
-          disabled={loading}
-          onClick={() =>
-            onAction(
-              'optimize-db',
-              'Initialize database optimization?'
-            )
-          }
-        >
-          ⚙️
-          <br />
-          Optimize Database
-        </button>
-
-        <button
-          type="button"
-          className="action-button"
-          disabled={loading}
-          onClick={() =>
-            onAction(
-              'cleanup',
-              'Run system cleanup for temporary files?'
-            )
-          }
-        >
-          📋
-          <br />
-          System Cleanup
-        </button>
-
-        <button
-          type="button"
-          className="action-button danger"
-          disabled={loading}
-          onClick={() =>
-            onAction(
-              'reset',
-              'CRITICAL: Reset ALL system settings? This cannot be undone.'
-            )
-          }
-        >
-          ⚠️
-          <br />
-          Reset Settings
-        </button>
-      </div>
-
-      {loading && (
-        <div className="loading-state">
-          Processing system action...
-        </div>
-      )}
     </div>
   );
 };

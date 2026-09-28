@@ -23,7 +23,7 @@ const requireSettingsPermission = (permission) => [requireAuth, async (req, res,
 }];
 const requireSettingsView = requireSettingsPermission('settings.view');
 const requireSettingsUpdate = requireSettingsPermission('settings.manage');
-const sections = ['organization', 'account', 'security', 'roles', 'notifications', 'localization', 'assets', 'workflow', 'rfid', 'maintenance', 'financial', 'reports', 'audit', 'monitoring', 'integrations', 'backup', 'maintenance_sys'];
+const sections = ['organization', 'account', 'security', 'roles', 'notifications', 'localization', 'assets', 'workflow', 'rfid', 'maintenance', 'financial', 'reports', 'audit', 'backup'];
 const sensitiveKeys = /password|secret|token|api.?key|private.?key|credential/i;
 const redact = (value) => {
   if (!value || typeof value !== 'object') return value;
@@ -89,11 +89,28 @@ const getSection = async (section) => {
     return resolveOrganizationSettings(configured);
   }
 
+  if (section === 'security') {
+    const [legacyRecord, record] = await Promise.all([
+      Config.findByPk(configKey(section)),
+      Config.findByPk('security')
+    ]);
+    const security = { ...parseValue(legacyRecord), ...parseValue(record) };
+    return {
+      timeout: security.session_timeout ?? security.timeout ?? 60,
+      maxAttempts: security.max_login_attempts ?? security.maxAttempts ?? 5,
+      minPass: security.password_min_length ?? security.minPass ?? 8,
+      lockoutDuration: security.account_lockout_duration ?? security.lockoutDuration ?? 30,
+      requireUppercase: security.password_require_uppercase ?? true,
+      requireLowercase: security.password_require_lowercase ?? true,
+      requireNumbers: security.password_require_numbers ?? true,
+      requireSpecial: security.password_require_special ?? true
+    };
+  }
+
   const record = await Config.findByPk(configKey(section));
   if (section === 'notifications' && !record) return defaultNotificationSettings;
   if (section === 'assets' && !record) return defaultAssetSettings;
   if (record) return parseValue(record);
-  if (section === 'security') return parseValue(await Config.findByPk('security'));
   return {};
 };
 
@@ -109,8 +126,15 @@ const validateSection = (section, data) => {
   if (section === 'security') {
     const minimum = Number(data.minPass ?? data.password_min_length ?? 8);
     const attempts = Number(data.maxAttempts ?? data.max_login_attempts ?? 5);
+    const timeout = Number(data.timeout ?? data.session_timeout ?? 60);
+    const lockoutDuration = Number(data.lockoutDuration ?? data.account_lockout_duration ?? 30);
     if (!Number.isInteger(minimum) || minimum < 6 || minimum > 64) return 'Minimum password length must be between 6 and 64';
     if (!Number.isInteger(attempts) || attempts < 1 || attempts > 20) return 'Maximum login attempts must be between 1 and 20';
+    if (!Number.isInteger(timeout) || timeout < 1 || timeout > 1440) return 'Session timeout must be between 1 and 1440 minutes';
+    if (!Number.isInteger(lockoutDuration) || lockoutDuration < 1 || lockoutDuration > 1440) return 'Lockout duration must be between 1 and 1440 minutes';
+    for (const field of ['requireUppercase', 'requireLowercase', 'requireNumbers', 'requireSpecial']) {
+      if (data[field] !== undefined && typeof data[field] !== 'boolean') return `${field} must be a boolean`;
+    }
   }
   if (section === 'notifications') {
     if (typeof data.enabled !== 'boolean' || typeof data.inAppEnabled !== 'boolean' || typeof data.emailEnabled !== 'boolean') return 'Notification enablement values must be boolean';
@@ -151,12 +175,20 @@ router.put('/settings/profile', ...requireSettingsUpdate, async (req, res, next)
     const user = await User.findByPk(req.user.id);
     if (!user) return res.status(404).json({ success: false, message: 'Administrator profile not found' });
     const updates = {};
-    for (const field of ['fullName', 'email', 'phone']) if (req.body[field] !== undefined) updates[field] = String(req.body[field]).trim();
+    const fullNameValue = req.body.fullName ?? req.body.full_name;
+    if (fullNameValue !== undefined) updates.fullName = String(fullNameValue).trim();
+    if (req.body.email !== undefined) updates.email = String(req.body.email).trim();
+    if (req.body.phone !== undefined) updates.phone = String(req.body.phone).trim();
     if (updates.email && !/^\S+@\S+\.\S+$/.test(updates.email)) return res.status(400).json({ success: false, message: 'Invalid email address' });
+    if (updates.email) {
+      const existingUser = await User.findOne({ where: { email: updates.email } });
+      if (existingUser && String(existingUser.id) !== String(user.id)) return res.status(409).json({ success: false, message: 'Email address is already in use' });
+    }
+    if (Object.keys(updates).length === 0) return res.json({ success: true, message: 'No profile changes to save.', data: user.get({ plain: true }) });
     await user.update(updates);
     await AuditLog.create({ userId: req.user.id, action: 'ADMIN_PROFILE_UPDATED', entity: `user:${user.id}`, details: JSON.stringify({ changed: Object.keys(updates) }) });
     const safe = await User.findByPk(user.id, { attributes: { exclude: ['password'] } });
-    return res.json({ success: true, data: safe });
+    return res.json({ success: true, data: safe, user: safe, message: 'Profile updated successfully.' });
   } catch (error) { next(error); }
 });
 
@@ -165,7 +197,9 @@ router.post('/settings/profile/change-password', ...requireSettingsUpdate, async
     const { currentPassword, newPassword } = req.body;
     const user = await User.findByPk(req.user.id);
     if (!user || !currentPassword || !newPassword || !(await bcrypt.compare(currentPassword, user.password))) return res.status(400).json({ success: false, message: 'Current password is incorrect' });
-    if (String(newPassword).length < 8) return res.status(400).json({ success: false, message: 'New password must be at least 8 characters' });
+    const { getSecuritySettings, validatePassword } = require('../controllers/authController');
+    const passwordError = validatePassword(String(newPassword), await getSecuritySettings());
+    if (passwordError) return res.status(400).json({ success: false, message: passwordError });
     await user.update({ password: await bcrypt.hash(newPassword, 10), sessionVersion: (user.sessionVersion || 0) + 1, forcePasswordChange: false });
     await AuditLog.create({ userId: req.user.id, action: 'ADMIN_PASSWORD_CHANGED', entity: `user:${user.id}`, details: JSON.stringify({ sessionInvalidated: true }) });
     return res.json({ success: true, message: 'Password changed successfully' });
@@ -230,12 +264,28 @@ router.put('/settings/:section', ...requireSettingsUpdate, async (req, res, next
         ? { ...defaultNotificationSettings, ...previous, ...data, events: { ...defaultEventRules, ...(previous.events || {}), ...(data.events || {}) } }
       : { ...previous, ...data };
 
-    const persisted = section === 'organization'
+    let persisted = section === 'organization'
       ? normalizeOrganizationSettings(nextSettings)
       : nextSettings;
 
+    if (section === 'security') {
+      const existingSecurity = parseValue(await Config.findByPk('security'));
+      persisted = {
+        ...existingSecurity,
+        session_timeout: Number(nextSettings.timeout),
+        max_login_attempts: Number(nextSettings.maxAttempts),
+        password_min_length: Number(nextSettings.minPass),
+        account_lockout_duration: Number(nextSettings.lockoutDuration),
+        password_require_uppercase: Boolean(nextSettings.requireUppercase),
+        password_require_lowercase: Boolean(nextSettings.requireLowercase),
+        password_require_numbers: Boolean(nextSettings.requireNumbers),
+        password_require_special: Boolean(nextSettings.requireSpecial)
+      };
+    }
+
     await sequelize.transaction(async (transaction) => {
-      const [record] = await Config.findOrCreate({ where: { key: configKey(section) }, defaults: { key: configKey(section), value: JSON.stringify(persisted) }, transaction });
+      const key = section === 'security' ? 'security' : configKey(section);
+      const [record] = await Config.findOrCreate({ where: { key }, defaults: { key, value: JSON.stringify(persisted) }, transaction });
       if (record.value !== JSON.stringify(persisted)) await record.update({ value: JSON.stringify(persisted) }, { transaction });
       await AuditLog.create({ userId: req.user.id, action: 'SETTINGS_SECTION_UPDATED', entity: `settings:${section}`, details: JSON.stringify({ changed: Object.keys(data), previous: redact(previous), next: redact(nextSettings) }) }, { transaction });
     });

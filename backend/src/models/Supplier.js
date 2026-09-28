@@ -5,13 +5,20 @@ const Supplier = sequelize.define('Supplier', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   supplierCode: { type: DataTypes.STRING(80), allowNull: false, unique: true, field: 'supplier_code' },
   supplierName: { type: DataTypes.STRING(255), allowNull: false, field: 'supplier_name' },
+  legalName: { type: DataTypes.STRING(255), allowNull: true, defaultValue: '', field: 'legal_name' },
+  vendorType: { type: DataTypes.STRING(100), allowNull: true, defaultValue: 'Other', field: 'vendor_type' },
+  registrationNumber: { type: DataTypes.STRING(120), allowNull: true, defaultValue: '', field: 'registration_number' },
+  taxIdentificationNumber: { type: DataTypes.STRING(120), allowNull: true, defaultValue: '', field: 'tax_identification_number' },
   contactPerson: { type: DataTypes.STRING(255), allowNull: true, defaultValue: '', field: 'contact_person' },
   phone: { type: DataTypes.STRING(80), allowNull: true, defaultValue: '' },
   email: { type: DataTypes.STRING(255), allowNull: true, defaultValue: '' },
+  website: { type: DataTypes.STRING(255), allowNull: true, defaultValue: '' },
   address: { type: DataTypes.STRING(500), allowNull: true, defaultValue: '' },
-  taxIdentificationNumber: { type: DataTypes.STRING(120), allowNull: true, defaultValue: '', field: 'tax_identification_number' },
+  city: { type: DataTypes.STRING(120), allowNull: true, defaultValue: '' },
+  country: { type: DataTypes.STRING(120), allowNull: true, defaultValue: '' },
   paymentTerms: { type: DataTypes.TEXT, allowNull: true, defaultValue: '', field: 'payment_terms' },
+  notes: { type: DataTypes.TEXT, allowNull: true, defaultValue: '' },
   status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'active' },
-}, { tableName: 'suppliers', timestamps: true, indexes: [{ unique: true, fields: ['supplier_code'] }] });
+}, { tableName: 'suppliers', timestamps: true, indexes: [{ unique: true, fields: ['supplier_code'] }, { fields: ['supplier_name'] }, { fields: ['status'] }, { fields: ['email'] }] });
 
 module.exports = Supplier;
