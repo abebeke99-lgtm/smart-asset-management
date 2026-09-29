@@ -212,7 +212,8 @@ router.post('/users', ...requireAdmin, async (req, res, next) => {
     if (!username || !fullName) return res.status(400).json({ success: false, message: 'Username and full name are required' });
     if (!allowedRoles.includes(role)) return res.status(422).json({ success: false, message: 'Invalid user role' });
     if (email && !isValidEmail(email)) return res.status(422).json({ success: false, message: 'Valid email is required' });
-    const password = String(req.body.password || 'bekelei123').trim();
+    const password = String(req.body.password || '').trim();
+    if (password.length < 12) return res.status(422).json({ success: false, message: 'Password must be at least 12 characters' });
     const user = await User.create({ username, email, fullName, phone, role, department: String(req.body.department || ''), collegeId: req.body.collegeId || null, departmentId: req.body.departmentId || null, active: req.body.active !== false, password: await bcrypt.hash(password, 10), forcePasswordChange: Boolean(req.body.forcePasswordChange || req.body.force_password_change || false) });
     await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CREATE_USER', entity: `user:${user.id}`, entityId: user.id, newValue: normalizeUser(user), details: { username, role, collegeId: user.collegeId, departmentId: user.departmentId, legacyAction: 'USER_CREATED' } });
     return res.status(201).json({ success: true, data: normalizeUser(user), user: normalizeUser(user) });
@@ -288,7 +289,9 @@ router.post('/users/:id/reset-password', ...requireAdmin, async (req, res, next)
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     const previousValue = normalizeUser(user);
     user.forcePasswordChange = true;
-    user.password = await bcrypt.hash(String(req.body.password || 'bekelei123'), 10);
+    const password = String(req.body.password || '').trim();
+    if (password.length < 12) return res.status(422).json({ success: false, message: 'A new password of at least 12 characters is required' });
+    user.password = await bcrypt.hash(password, 10);
     await user.save();
     await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_USER', entity: `user:${user.id}`, entityId: user.id, oldValue: previousValue, newValue: normalizeUser(user), details: { operation: 'password_reset', legacyAction: 'PASSWORD_RESET' } });
     return res.json({ success: true, data: normalizeUser(user), user: normalizeUser(user) });

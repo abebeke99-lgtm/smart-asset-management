@@ -40,6 +40,11 @@ export const completeMaintenanceTest = async (id, payload) => {
   return res.data?.data || null;
 };
 
+export const createMaintenanceRetest = async (id, payload = {}) => {
+  const res = await apiClient.post(`/maintenance/testing/${id}/retest`, payload);
+  return res.data?.data || null;
+};
+
 export const sendMaintenanceTestToQC = async (id) => {
   const res = await apiClient.patch(`/maintenance/testing/${id}/send-to-qc`);
   return res.data?.data || null;
@@ -309,6 +314,7 @@ export const normalizeItem = (r) => ({
   assetTag: r.asset_tag || (r.asset && r.asset.assetCode) || "",
   department: (r.asset && r.asset.department) || "",
   requester: r.requested_by_name || "—",
+  assigned_to: r.assigned_to,
   title: r.title || "",
   problem: r.description || r.title || "",
   priority: capPriority(r.priority),
@@ -325,4 +331,55 @@ export const observe = (fn, setValue, setError) => {
     .catch((err) => {
       if (setError) setError(err && err.message ? err.message : "Request failed");
     });
+};
+
+export const getPreventiveMaintenancePage = async (params = {}) => {
+  const res = await apiClient.get('/maintenance/preventive', { params });
+  const body = res.data || {};
+  return { items: body.data || [], summary: body.summary || {}, pagination: body.pagination || {} };
+};
+
+export const getPreventiveMaintenance = async (id) => {
+  const res = await apiClient.get(`/maintenance/preventive/${id}`);
+  return res.data?.data || null;
+};
+
+export const createPreventiveMaintenance = async (payload) => {
+  const res = await apiClient.post('/maintenance/preventive', payload);
+  return res.data?.data || null;
+};
+
+export const updatePreventiveMaintenance = async (id, payload) => {
+  const res = await apiClient.put(`/maintenance/preventive/${id}`, payload);
+  return res.data?.data || null;
+};
+
+export const deletePreventiveMaintenance = async (id, reason = '') => {
+  const res = await apiClient.delete(`/maintenance/preventive/${id}`, { data: { reason } });
+  return res.data?.data || null;
+};
+
+export const activatePreventiveMaintenance = async (id) => {
+  const res = await apiClient.patch(`/maintenance/preventive/${id}/activate`);
+  return res.data?.data || null;
+};
+
+export const assignPreventiveMaintenance = async (id, technicianId) => {
+  const res = await apiClient.patch(`/maintenance/preventive/${id}/assign`, { technicianId: Number(technicianId) });
+  return res.data?.data || null;
+};
+
+export const startPreventiveMaintenance = async (id, technicianId) => {
+  const res = await apiClient.patch(`/maintenance/preventive/${id}/start`, technicianId ? { technicianId: Number(technicianId) } : {});
+  return res.data?.data || null;
+};
+
+export const updatePreventiveChecklist = async (id, checklist) => {
+  const res = await apiClient.patch(`/maintenance/preventive/${id}/checklist`, { checklist });
+  return res.data?.data || null;
+};
+
+export const completePreventiveMaintenance = async (id, notes = '') => {
+  const res = await apiClient.post(`/maintenance/preventive/${id}/complete`, { notes });
+  return res.data?.data || null;
 };

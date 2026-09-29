@@ -1,549 +1,1778 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useLanguage } from '../../contexts/UiContext';
-import { useAuth } from '../../contexts/AuthContext';
-import { toast } from 'react-toastify';
-import apiClient from '../../services/apiClient';
-import * as XLSX from 'xlsx';
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Search,
+  Plus,
+  Eye,
+  Pencil,
+  Trash2,
+  Download,
+  RefreshCw,
+  X,
+  Router,
+  Wifi,
+  Server,
+  Network,
+  ShieldCheck,
+  CheckCircle2,
+  AlertTriangle,
+  Wrench,
+  Package,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  Building2,
+  MapPin,
+  CalendarDays,
+  Hash,
+  Cable,
+  Activity,
+} from "lucide-react";
 
-const ICTEquipment = () => {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const { language, theme } = useLanguage();
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
-  // State
-  const [allAssets, setAllAssets] = useState([]);
-  const [filteredAssets, setFilteredAssets] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [equipmentType, setEquipmentType] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterCondition, setFilterCondition] = useState('all');
-  const [pageSize] = useState(20);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [error, setError] = useState('');
+const PAGE_SIZE = 10;
 
-  // Stats
-  const [stats, setStats] = useState({
-    total: 0,
-    available: 0,
-    assigned: 0,
-    maintenance: 0,
-    repair: 0,
-    missing: 0,
-    retired: 0,
-    byType: {},
-    byStatus: {},
-    byCondition: {}
+const STATUS_OPTIONS = [
+  "Active",
+  "Available",
+  "Assigned",
+  "Maintenance",
+  "Faulty",
+  "Retired",
+];
+
+const CONDITION_OPTIONS = [
+  "Excellent",
+  "Good",
+  "Fair",
+  "Poor",
+  "Damaged",
+];
+
+const TYPE_OPTIONS = [
+  "Router",
+  "Switch",
+  "Access Point",
+  "Firewall",
+  "Server",
+  "Modem",
+  "Network Controller",
+  "Rack",
+  "Other",
+];
+
+const initialForm = {
+ assetTag: "",
+  serialNumber: "",
+  equipmentName: "",
+  equipmentType: "Switch",
+  manufacturer: "",
+  model: "",
+  ipAddress: "",
+  macAddress: "",
+  portCount: "",
+  networkRole: "",
+  department: "",
+  location: "",
+  assignedTo: "",
+  purchaseDate: "",
+  warrantyExpiry: "",
+  condition: "Good",
+  status: "Active",
+  specifications: "",
+  notes: "",
+};
+
+async function request(url, options = {}) {
+  const response = await fetch(`${API_BASE_URL}${url}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
   });
 
-  const isDark = theme === 'dark';
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
 
-  const englishTranslations = {
-    itEquipment: 'IT Equipment',
-    allEquipment: 'All Equipment',
-    computers: 'Computers',
-    laptops: 'Laptops',
-    printers: 'Printers',
-    servers: 'Servers',
-    networkDevices: 'Network Devices',
-    monitors: 'Monitors',
-    ups: 'UPS',
-    otherDevices: 'Other Devices',
-    assetTag: 'Asset Tag',
-    assetName: 'Asset Name',
-    category: 'Category',
-    serialNumber: 'Serial Number',
-    brand: 'Brand',
-    model: 'Model',
-    department: 'Department',
-    location: 'Location',
-    status: 'Status',
-    condition: 'Condition',
-    assignedTo: 'Assigned To',
-    purchaseDate: 'Purchase Date',
-    warranty: 'Warranty',
-    search: 'Search by asset tag, name, or serial number...',
-    noEquipment: 'No equipment found',
-    loading: 'Loading equipment...',
-    export: 'Export to Excel',
-    refresh: 'Refresh',
-    view: 'View',
-    details: 'Details',
-    fetchError: 'Failed to load equipment',
-    available: 'Available',
-    assigned: 'Assigned',
-    maintenance: 'Maintenance',
-    damaged: 'Damaged',
-    missing: 'Missing',
-    new: 'New',
-    good: 'Good',
-    fair: 'Fair',
-    poor: 'Poor',
-    total: 'Total',
-    page: 'Page',
-    of: 'of',
-    previousPage: 'Previous',
-    nextPage: 'Next'
-  };
-
-  const amharicTranslations = {
-    itEquipment: 'ኢቲ መሳሪያ',
-    allEquipment: 'ሁሉም መሳሪያ',
-    computers: 'ኮምፒተሮች',
-    laptops: 'ላፕቶፖች',
-    printers: 'ገፁ ማተሚያ',
-    servers: 'አገልግሎት ሰጪ',
-    networkDevices: 'ネットワーク ডিভাইস',
-    monitors: 'ስክሪኖች',
-    ups: 'UPS',
-    otherDevices: 'ሌሎች መሳሪያ',
-    assetTag: 'ንብረት ታግ',
-    assetName: 'ንብረት ስም',
-    category: 'ምድብ',
-    serialNumber: 'ተከታታይ ቁጥር',
-    brand: 'ብራንድ',
-    model: 'ሞዴል',
-    department: 'ክፍል',
-    location: 'ቦታ',
-    status: 'ሁኔታ',
-    condition: 'ሁኔታ',
-    assignedTo: 'ተሰጠ ለ',
-    purchaseDate: 'ወደ ገንዘብ ታሪክ',
-    warranty: 'ትዋቅይት',
-    search: 'የንብረት ታግ፣ ስም ወይም ተከታታይ ቁጥር ይፈልጉ...',
-    noEquipment: 'መሳሪያ አልተገኙም',
-    loading: 'መሳሪያን በማስጫን ላይ...',
-    export: 'Excelに書き出す',
-    refresh: 'ዳግም ሙላት',
-    view: 'ይመልከቱ',
-    details: 'ዝርዝር',
-    fetchError: 'መሳሪያን ማስጫን ወደ ውድቅ ደረሰ',
-    available: 'አመቻች',
-    assigned: 'ተሰጠ',
-    maintenance: 'ጥገና',
-    damaged: 'ተሰቅፎ',
-    missing: 'የጠፋ',
-    new: '새로운',
-    good: 'ጥሩ',
-    fair: 'ፍትሃዊ',
-    poor: 'ደካማ',
-    total: 'አጠቃላይ',
-    page: 'ገጽ',
-    of: 'ስብስብ',
-    previousPage: 'ቀደም',
-    nextPage: 'ተከታዩ'
-  };
-
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
-
-  const equipmentCategories = [
-    { value: 'computers', label: t.computers, filter: c => c && (c.toLowerCase().includes('computer') || c.toLowerCase().includes('desktop')) },
-    { value: 'laptops', label: t.laptops, filter: c => c && c.toLowerCase().includes('laptop') },
-    { value: 'printers', label: t.printers, filter: c => c && c.toLowerCase().includes('printer') },
-    { value: 'servers', label: t.servers, filter: c => c && c.toLowerCase().includes('server') },
-    { value: 'monitors', label: t.monitors, filter: c => c && c.toLowerCase().includes('monitor') },
-    { value: 'ups', label: t.ups, filter: c => c && c.toLowerCase().includes('ups') },
-    { value: 'other', label: t.otherDevices, filter: () => true }
-  ];
-
-  // Fetch equipment
-  const fetchEquipment = useCallback(async () => {
-    setLoading(true);
-    setError('');
     try {
-      const response = await apiClient.get('/api/ict/equipment', {
-        params: {
-          page: currentPage,
-          limit: pageSize,
-          search: searchQuery,
-          type: equipmentType === 'all' ? '' : equipmentType,
-          status: filterStatus === 'all' ? '' : filterStatus,
-          condition: filterCondition === 'all' ? '' : filterCondition,
+      const error = await response.json();
+      message = error?.message || error?.error || message;
+    } catch {
+      // Ignore invalid error responses.
+    }
+
+    throw new Error(message);
+  }
+
+  if (response.status === 204) return null;
+
+  return response.json();
+}
+
+function getArray(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.equipment)) return data.equipment;
+  if (Array.isArray(data?.networkEquipment)) return data.networkEquipment;
+  if (Array.isArray(data?.results)) return data.results;
+  return [];
+}
+
+function normalizeEquipment(item, index) {
+  return {
+    id:
+      item.id ??
+      item._id ??
+      item.assetId ??
+      item.asset_id ??
+      `NET-${String(index + 1).padStart(4, "0")}`,
+
+    assetTag:
+      item.assetTag ??
+      item.asset_tag ??
+      item.assetNumber ??
+      item.tagNumber ??
+      `NET-${String(index + 1).padStart(4, "0")}`,
+
+    serialNumber:
+      item.serialNumber ??
+      item.serial_number ??
+      item.serial ??
+      "",
+
+    equipmentName:
+      item.equipmentName ??
+      item.equipment_name ??
+      item.name ??
+      item.assetName ??
+      "",
+
+    equipmentType:
+      item.equipmentType ??
+      item.equipment_type ??
+      item.type ??
+      item.category ??
+      "Other",
+
+    manufacturer:
+      item.manufacturer ??
+      item.brand ??
+      "",
+
+    model:
+      item.model ??
+      item.modelNumber ??
+      item.model_number ??
+      "",
+
+    ipAddress:
+      item.ipAddress ??
+      item.ip_address ??
+      item.ip ??
+      "",
+
+    macAddress:
+      item.macAddress ??
+      item.mac_address ??
+      item.mac ??
+      "",
+
+    portCount:
+      item.portCount ??
+      item.port_count ??
+      item.ports ??
+      "",
+
+    networkRole:
+      item.networkRole ??
+      item.network_role ??
+      item.role ??
+      "",
+
+    department:
+      item.department ??
+      item.departmentName ??
+      item.department_name ??
+      "",
+
+    location:
+      item.location ??
+      item.room ??
+      item.locationName ??
+      "",
+
+    assignedTo:
+      item.assignedTo ??
+      item.assigned_to ??
+      item.assignee?.name ??
+      item.user?.name ??
+      "",
+
+    purchaseDate:
+      item.purchaseDate ??
+      item.purchase_date ??
+      "",
+
+    warrantyExpiry:
+      item.warrantyExpiry ??
+      item.warranty_expiry ??
+      item.warrantyEndDate ??
+      "",
+
+    condition: item.condition ?? "Good",
+
+    status: item.status ?? "Active",
+
+    specifications:
+      item.specifications ??
+      item.specs ??
+      item.description ??
+      "",
+
+    notes: item.notes ?? "",
+
+    createdAt: item.createdAt ?? item.created_at ?? "",
+
+    updatedAt: item.updatedAt ?? item.updated_at ?? "",
+
+    raw: item,
+  };
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function statusClasses(status) {
+  switch (String(status).toLowerCase()) {
+    case "active":
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+
+    case "available":
+      return "bg-blue-50 text-blue-700 border-blue-200";
+
+    case "assigned":
+      return "bg-indigo-50 text-indigo-700 border-indigo-200";
+
+    case "maintenance":
+      return "bg-amber-50 text-amber-700 border-amber-200";
+
+    case "faulty":
+      return "bg-red-50 text-red-700 border-red-200";
+
+    case "retired":
+      return "bg-slate-100 text-slate-600 border-slate-200";
+
+    default:
+      return "bg-slate-100 text-slate-600 border-slate-200";
+  }
+}
+
+function conditionClasses(condition) {
+  switch (String(condition).toLowerCase()) {
+    case "excellent":
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+
+    case "good":
+      return "bg-blue-50 text-blue-700 border-blue-200";
+
+    case "fair":
+      return "bg-amber-50 text-amber-700 border-amber-200";
+
+    case "poor":
+      return "bg-orange-50 text-orange-700 border-orange-200";
+
+    case "damaged":
+      return "bg-red-50 text-red-700 border-red-200";
+
+    default:
+      return "bg-slate-100 text-slate-600 border-slate-200";
+  }
+}
+
+function EquipmentIcon({ type, size = 19 }) {
+  const value = String(type).toLowerCase();
+
+  if (value.includes("router")) return <Router size={size} />;
+  if (value.includes("switch")) return <Network size={size} />;
+  if (value.includes("access")) return <Wifi size={size} />;
+  if (value.includes("firewall")) return <ShieldCheck size={size} />;
+  if (value.includes("server")) return <Server size={size} />;
+  if (value.includes("modem")) return <Cable size={size} />;
+
+  return <Router size={size} />;
+}
+
+function SummaryCard({ title, value, icon: Icon, iconClass }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-500">{title}</p>
+          <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
+        </div>
+
+        <div
+          className={`flex h-11 w-11 items-center justify-center rounded-xl ${iconClass}`}
+        >
+          <Icon size={21} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActionButton({ children, title, onClick, className = "" }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function FormField({
+  label,
+  name,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  required = false,
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+        {label}
+        {required && <span className="ml-1 text-red-500">*</span>}
+      </label>
+
+      <input
+        type={type}
+        name={name}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        required={required}
+        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      />
+    </div>
+  );
+}
+
+function SelectField({ label, name, value, onChange, options }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+        {label}
+      </label>
+
+      <select
+        name={name}
+        value={value}
+        onChange={onChange}
+        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function DetailItem({ label, value, icon: Icon }) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-400">
+        {Icon && <Icon size={13} />}
+        {label}
+      </div>
+
+      <div className="mt-1 text-sm font-medium text-slate-800">
+        {value || "—"}
+      </div>
+    </div>
+  );
+}
+
+function Modal({ title, icon: Icon, children, onClose, large = false }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-slate-950/50 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+
+      <div
+        className={`relative flex max-h-[92vh] w-full ${
+          large ? "max-w-5xl" : "max-w-2xl"
+        } flex-col overflow-hidden rounded-2xl bg-white shadow-2xl`}
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+              <Icon size={18} />
+            </div>
+
+            <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          >
+            <X size={19} />
+          </button>
+        </div>
+
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export default function NetworkEquipment() {
+  const [equipment, setEquipment] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [typeFilter, setTypeFilter] = useState("All");
+  const [conditionFilter, setConditionFilter] = useState("All");
+
+  const [page, setPage] = useState(1);
+
+  const [showForm, setShowForm] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+
+  const [editingItem, setEditingItem] = useState(null);
+  const [selectedItem, setSelectedItem] = useState(null);
+
+  const [form, setForm] = useState(initialForm);
+
+  const loadEquipment = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      let data;
+
+      try {
+        data = await request("/network-equipment");
+      } catch {
+        try {
+          data = await request("/networkEquipment");
+        } catch {
+          data = await request("/assets?category=Network");
         }
-      });
+      }
 
-      const apiPayload = response.data || {};
-      const assets = Array.isArray(apiPayload.equipment || apiPayload.data) ? (apiPayload.equipment || apiPayload.data) : [];
-      const summary = apiPayload.summary || { total: 0, available: 0, assigned: 0, maintenance: 0, repair: 0, missing: 0, retired: 0 };
-
-      setAllAssets(assets);
-      setFilteredAssets(assets);
-      setStats({
-        total: Number(summary.total ?? assets.length ?? 0),
-        available: Number(summary.available ?? 0),
-        assigned: Number(summary.assigned ?? 0),
-        maintenance: Number(summary.maintenance ?? 0),
-        repair: Number(summary.repair ?? 0),
-        missing: Number(summary.missing ?? 0),
-        retired: Number(summary.retired ?? 0),
-        byType: summary.byType || {},
-        byStatus: summary.byStatus || {},
-        byCondition: summary.byCondition || {},
-      });
-      setCurrentPage(Number(apiPayload.pagination?.page || currentPage));
-    } catch (error) {
-      console.error('Failed to load ICT equipment:', error);
-      const message = error?.response?.data?.message || 'Failed to load equipment';
-      setError(message);
-      toast.error(message);
-      setAllAssets([]);
-      setFilteredAssets([]);
-      setStats({ total: 0, available: 0, assigned: 0, maintenance: 0, repair: 0, missing: 0, retired: 0, byType: {}, byStatus: {}, byCondition: {} });
+      setEquipment(getArray(data).map(normalizeEquipment));
+    } catch (err) {
+      setError(err.message || "Unable to load network equipment.");
     } finally {
       setLoading(false);
     }
-  }, [currentPage, pageSize, searchQuery, equipmentType, filterStatus, filterCondition]);
+  };
 
-  // Calculate statistics
-  const exportToExcel = () => {
-    if (filteredAssets.length === 0) {
-      toast.warning('No data to export');
+  useEffect(() => {
+    loadEquipment();
+  }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, typeFilter, conditionFilter]);
+
+  const statistics = useMemo(() => {
+    return {
+      total: equipment.length,
+
+      active: equipment.filter(
+        (item) => String(item.status).toLowerCase() === "active"
+      ).length,
+
+      available: equipment.filter(
+        (item) => String(item.status).toLowerCase() === "available"
+      ).length,
+
+      maintenance: equipment.filter(
+        (item) => String(item.status).toLowerCase() === "maintenance"
+      ).length,
+
+      faulty: equipment.filter(
+        (item) => String(item.status).toLowerCase() === "faulty"
+      ).length,
+    };
+  }, [equipment]);
+
+  const filteredEquipment = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return equipment.filter((item) => {
+      const matchesSearch =
+        !query ||
+        [
+          item.assetTag,
+          item.serialNumber,
+          item.equipmentName,
+          item.equipmentType,
+          item.manufacturer,
+          item.model,
+          item.ipAddress,
+          item.macAddress,
+          item.networkRole,
+          item.department,
+          item.location,
+          item.assignedTo,
+        ].some((value) =>
+          String(value || "")
+            .toLowerCase()
+            .includes(query)
+        );
+
+      const matchesStatus =
+        statusFilter === "All" ||
+        String(item.status).toLowerCase() === statusFilter.toLowerCase();
+
+      const matchesType =
+        typeFilter === "All" ||
+        String(item.equipmentType).toLowerCase() === typeFilter.toLowerCase();
+
+      const matchesCondition =
+        conditionFilter === "All" ||
+        String(item.condition).toLowerCase() ===
+          conditionFilter.toLowerCase();
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesType &&
+        matchesCondition
+      );
+    });
+  }, [
+    equipment,
+    search,
+    statusFilter,
+    typeFilter,
+    conditionFilter,
+  ]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredEquipment.length / PAGE_SIZE)
+  );
+
+  const paginatedEquipment = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredEquipment.slice(start, start + PAGE_SIZE);
+  }, [filteredEquipment, page]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const openCreate = () => {
+    setEditingItem(null);
+
+    setForm({
+      ...initialForm,
+      assetTag: `NET-${Date.now().toString().slice(-6)}`,
+    });
+
+    setShowForm(true);
+  };
+
+  const openEdit = (item) => {
+    setEditingItem(item);
+
+    setForm({
+      assetTag: item.assetTag || "",
+      serialNumber: item.serialNumber || "",
+      equipmentName: item.equipmentName || "",
+      equipmentType: item.equipmentType || "Switch",
+      manufacturer: item.manufacturer || "",
+      model: item.model || "",
+      ipAddress: item.ipAddress || "",
+      macAddress: item.macAddress || "",
+      portCount: item.portCount || "",
+      networkRole: item.networkRole || "",
+      department: item.department || "",
+      location: item.location || "",
+      assignedTo: item.assignedTo || "",
+      purchaseDate: item.purchaseDate?.slice?.(0, 10) || "",
+      warrantyExpiry: item.warrantyExpiry?.slice?.(0, 10) || "",
+      condition: item.condition || "Good",
+      status: item.status || "Active",
+      specifications: item.specifications || "",
+      notes: item.notes || "",
+    });
+
+    setShowForm(true);
+  };
+
+  const openDetails = (item) => {
+    setSelectedItem(item);
+    setShowDetails(true);
+  };
+
+  const closeAll = () => {
+    if (!saving) {
+      setShowForm(false);
+      setShowDetails(false);
+      setEditingItem(null);
+      setSelectedItem(null);
+    }
+  };
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  };
+
+  const saveEquipment = async (event) => {
+    event.preventDefault();
+
+    if (!form.assetTag.trim()) {
+      setError("Asset tag is required.");
       return;
     }
 
-    const data = filteredAssets.map(a => ({
-      'Asset Tag': a.asset_tag,
-      'Asset Name': a.name,
-      'Category': a.category_name,
-      'Serial Number': a.serial_number,
-      'Brand': a.brand || a.manufacturer,
-      'Model': a.model,
-      'Status': a.status,
-      'Condition': a.condition,
-      'Department': a.department_name || a.department,
-      'Location': a.location,
-      'Assigned To': a.assigned_to_name || 'Unassigned',
-      'Purchase Date': a.purchase_date ? new Date(a.purchase_date).toLocaleDateString() : '',
-      'Warranty Expiry': a.warranty_expiry ? new Date(a.warranty_expiry).toLocaleDateString() : ''
-    }));
+    if (!form.equipmentName.trim()) {
+      setError("Equipment name is required.");
+      return;
+    }
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'IT Equipment');
-    XLSX.writeFile(wb, 'it_equipment.xlsx');
-    toast.success('File exported successfully');
-  };
+    setSaving(true);
+    setError("");
 
-  // Effects
-  useEffect(() => {
-    fetchEquipment();
-  }, [fetchEquipment]);
+    const payload = {
+      assetTag: form.assetTag,
+      serialNumber: form.serialNumber,
+      equipmentName: form.equipmentName,
+      equipmentType: form.equipmentType,
+      manufacturer: form.manufacturer,
+      model: form.model,
+      ipAddress: form.ipAddress,
+      macAddress: form.macAddress,
+      portCount: form.portCount,
+      networkRole: form.networkRole,
+      department: form.department,
+      location: form.location,
+      assignedTo: form.assignedTo,
+      purchaseDate: form.purchaseDate,
+      warrantyExpiry: form.warrantyExpiry,
+      condition: form.condition,
+      status: form.status,
+      specifications: form.specifications,
+      notes: form.notes,
+    };
 
-  // Pagination
-  const totalPages = Math.max(1, Math.ceil((stats.total || 0) / pageSize));
-  const paginatedAssets = filteredAssets;
+    try {
+      if (editingItem) {
+        let response;
 
-  // Styles
-  const styles = {
-    container: {
-      padding: '20px',
-      backgroundColor: isDark ? '#0f1419' : '#f8f9fa',
-      borderRadius: '8px',
-      minHeight: 'calc(100vh - 120px)'
-    },
-    header: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '24px',
-      flexWrap: 'wrap',
-      gap: '12px'
-    },
-    title: {
-      fontSize: '24px',
-      fontWeight: '700',
-      color: isDark ? '#ffffff' : '#000000'
-    },
-    buttonGroup: {
-      display: 'flex',
-      gap: '8px',
-      flexWrap: 'wrap'
-    },
-    button: {
-      padding: '8px 16px',
-      borderRadius: '6px',
-      border: 'none',
-      cursor: 'pointer',
-      fontWeight: '500',
-      fontSize: '14px'
-    },
-    primaryButton: {
-      backgroundColor: '#3b82f6',
-      color: '#ffffff'
-    },
-    secondaryButton: {
-      backgroundColor: isDark ? '#374151' : '#e5e7eb',
-      color: isDark ? '#f3f4f6' : '#111827'
-    },
-    categoriesContainer: {
-      display: 'flex',
-      gap: '8px',
-      marginBottom: '20px',
-      overflowX: 'auto',
-      paddingBottom: '8px'
-    },
-    categoryButton: (isActive) => ({
-      padding: '8px 14px',
-      borderRadius: '6px',
-      border: isActive ? '2px solid #3b82f6' : `1px solid ${isDark ? '#374151' : '#d1d5db'}`,
-      backgroundColor: isActive ? '#3b82f6' : isDark ? '#1f2937' : '#ffffff',
-      color: isActive ? '#ffffff' : isDark ? '#e5e7eb' : '#111827',
-      cursor: 'pointer',
-      fontWeight: '500',
-      whiteSpace: 'nowrap',
-      fontSize: '13px'
-    }),
-    filterContainer: {
-      display: 'flex',
-      gap: '12px',
-      marginBottom: '20px',
-      flexWrap: 'wrap'
-    },
-    input: {
-      flex: 1,
-      minWidth: '200px',
-      padding: '10px 14px',
-      borderRadius: '6px',
-      border: `1px solid ${isDark ? '#374151' : '#d1d5db'}`,
-      backgroundColor: isDark ? '#1f2937' : '#ffffff',
-      color: isDark ? '#f3f4f6' : '#000000',
-      fontSize: '14px'
-    },
-    select: {
-      padding: '10px 14px',
-      borderRadius: '6px',
-      border: `1px solid ${isDark ? '#374151' : '#d1d5db'}`,
-      backgroundColor: isDark ? '#1f2937' : '#ffffff',
-      color: isDark ? '#f3f4f6' : '#000000',
-      fontSize: '14px',
-      cursor: 'pointer'
-    },
-    table: {
-      width: '100%',
-      borderCollapse: 'collapse',
-      backgroundColor: isDark ? '#1f2937' : '#ffffff',
-      border: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`,
-      borderRadius: '8px',
-      marginBottom: '20px'
-    },
-    th: {
-      padding: '12px 16px',
-      textAlign: 'left',
-      backgroundColor: isDark ? '#111827' : '#f3f4f6',
-      fontWeight: '600',
-      color: isDark ? '#f3f4f6' : '#111827',
-      borderBottom: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`,
-      fontSize: '13px'
-    },
-    td: {
-      padding: '12px 16px',
-      borderBottom: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`,
-      color: isDark ? '#e5e7eb' : '#111827',
-      fontSize: '13px'
-    },
-    statusBadge: (status) => {
-      const baseStyle = {
-        padding: '4px 8px',
-        borderRadius: '4px',
-        fontSize: '12px',
-        fontWeight: '600'
-      };
-      if (status === 'Available') return { ...baseStyle, backgroundColor: '#dcfce7', color: '#15803d' };
-      if (status === 'Assigned') return { ...baseStyle, backgroundColor: '#dbeafe', color: '#0c4a6e' };
-      if (status === 'Maintenance') return { ...baseStyle, backgroundColor: '#fed7aa', color: '#92400e' };
-      if (status === 'Damaged') return { ...baseStyle, backgroundColor: '#fee2e2', color: '#991b1b' };
-      if (status === 'Missing') return { ...baseStyle, backgroundColor: '#e9d5ff', color: '#6b21a8' };
-      return baseStyle;
-    },
-    conditionBadge: (condition) => {
-      const baseStyle = {
-        padding: '4px 8px',
-        borderRadius: '4px',
-        fontSize: '12px',
-        fontWeight: '600'
-      };
-      if (condition === 'New') return { ...baseStyle, backgroundColor: '#d1fae5', color: '#065f46' };
-      if (condition === 'Good') return { ...baseStyle, backgroundColor: '#dcfce7', color: '#15803d' };
-      if (condition === 'Fair') return { ...baseStyle, backgroundColor: '#fef3c7', color: '#92400e' };
-      if (condition === 'Poor') return { ...baseStyle, backgroundColor: '#fee2e2', color: '#991b1b' };
-      return baseStyle;
-    },
-    pagination: {
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      gap: '12px',
-      marginTop: '20px'
-    },
-    emptyState: {
-      textAlign: 'center',
-      padding: '40px 20px',
-      color: isDark ? '#9ca3af' : '#6b7280'
+        try {
+          response = await request(
+            `/network-equipment/${editingItem.id}`,
+            {
+              method: "PUT",
+              body: JSON.stringify(payload),
+            }
+          );
+        } catch {
+          response = await request(`/networkEquipment/${editingItem.id}`, {
+            method: "PUT",
+            body: JSON.stringify(payload),
+          });
+        }
+
+        const updated = normalizeEquipment(
+          response?.data || response || payload,
+          0
+        );
+
+        setEquipment((current) =>
+          current.map((item) =>
+            item.id === editingItem.id
+              ? {
+                  ...item,
+                  ...updated,
+                  id: editingItem.id,
+                }
+              : item
+          )
+        );
+      } else {
+        let response;
+
+        try {
+          response = await request("/network-equipment", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+        } catch {
+          response = await request("/networkEquipment", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+        }
+
+        const created = normalizeEquipment(
+          response?.data || response || payload,
+          equipment.length
+        );
+
+        setEquipment((current) => [created, ...current]);
+      }
+
+      setShowForm(false);
+      setEditingItem(null);
+      setForm(initialForm);
+    } catch (err) {
+      setError(err.message || "Unable to save network equipment.");
+    } finally {
+      setSaving(false);
     }
   };
 
+  const deleteEquipment = async (item) => {
+    const confirmed = window.confirm(
+      `Delete ${item.assetTag} - ${item.equipmentName}? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setError("");
+
+    try {
+      try {
+        await request(`/network-equipment/${item.id}`, {
+          method: "DELETE",
+        });
+      } catch {
+        await request(`/networkEquipment/${item.id}`, {
+          method: "DELETE",
+        });
+      }
+
+      setEquipment((current) =>
+        current.filter((equipmentItem) => equipmentItem.id !== item.id)
+      );
+
+      if (selectedItem?.id === item.id) {
+        setSelectedItem(null);
+        setShowDetails(false);
+      }
+    } catch (err) {
+      setError(err.message || "Unable to delete network equipment.");
+    }
+  };
+
+  const exportCSV = () => {
+    if (!filteredEquipment.length) return;
+
+    const headers = [
+      "Asset Tag",
+      "Serial Number",
+      "Equipment Name",
+      "Type",
+      "Manufacturer",
+      "Model",
+      "IP Address",
+      "MAC Address",
+      "Port Count",
+      "Network Role",
+      "Department",
+      "Location",
+      "Assigned To",
+      "Purchase Date",
+      "Warranty Expiry",
+      "Condition",
+      "Status",
+    ];
+
+    const rows = filteredEquipment.map((item) => [
+      item.assetTag,
+      item.serialNumber,
+      item.equipmentName,
+      item.equipmentType,
+      item.manufacturer,
+      item.model,
+      item.ipAddress,
+      item.macAddress,
+      item.portCount,
+      item.networkRole,
+      item.department,
+      item.location,
+      item.assignedTo,
+      item.purchaseDate,
+      item.warrantyExpiry,
+      item.condition,
+      item.status,
+    ]);
+
+    const escapeCSV = (value) => {
+      const text = String(value ?? "");
+
+      if (
+        text.includes(",") ||
+        text.includes('"') ||
+        text.includes("\n")
+      ) {
+        return `"${text.replace(/"/g, '""')}"`;
+      }
+
+      return text;
+    };
+
+    const csv = [headers, ...rows]
+      .map((row) => row.map(escapeCSV).join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `network-equipment-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div style={styles.container}>
-      {/* Header */}
-      <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>{t.itEquipment}</h1>
-          <p style={{ margin: '6px 0 0', color: isDark ? '#9ca3af' : '#6b7280' }}>Manage, monitor, and maintain institutional IT equipment.</p>
-        </div>
-        <div style={styles.buttonGroup}>
-          <button style={{ ...styles.button, ...styles.primaryButton }} onClick={fetchEquipment}>
-            {t.refresh}
-          </button>
-          <button style={{ ...styles.button, ...styles.primaryButton }} onClick={() => navigate('/ict/assets/create')}>
-            + Add Equipment
-          </button>
-          <button style={{ ...styles.button, ...styles.secondaryButton }} onClick={exportToExcel}>
-            {t.export}
-          </button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6">
+      <div className="mx-auto max-w-[1600px] space-y-6">
+        {/* Header */}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-sm text-slate-500">
+              <Network size={16} />
+              <span>ICT Asset Management</span>
+              <span>/</span>
+              <span className="text-slate-700">
+                Network Equipment
+              </span>
+            </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-        {[['Total Equipment', stats.total], ['Available', stats.available || 0], ['Assigned', stats.assigned || 0], ['Maintenance', stats.maintenance || 0], ['Repair', stats.repair || 0], ['Retired', stats.retired || 0]].map(([label, value]) => (
-          <div key={label} style={{ ...styles.table, marginBottom: 0, padding: '16px' }}>
-            <div style={{ color: isDark ? '#9ca3af' : '#6b7280', fontSize: '13px' }}>{label}</div>
-            <strong style={{ display: 'block', fontSize: '24px', marginTop: '8px', color: isDark ? '#fff' : '#111827' }}>{value}</strong>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+              Network Equipment
+            </h1>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Manage routers, switches, access points, firewalls, and other
+              university network infrastructure.
+            </p>
           </div>
-        ))}
-      </div>
 
-      {/* Equipment Type Categories */}
-      <div style={styles.categoriesContainer}>
-        <button
-          style={styles.categoryButton(equipmentType === 'all')}
-          onClick={() => setEquipmentType('all')}
-        >
-          {t.allEquipment}
-        </button>
-        {equipmentCategories.map(cat => (
-          <button
-            key={cat.value}
-            style={styles.categoryButton(equipmentType === cat.value)}
-            onClick={() => setEquipmentType(cat.value)}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={loadEquipment}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+            >
+              <RefreshCw
+                size={17}
+                className={loading ? "animate-spin" : ""}
+              />
+              Refresh
+            </button>
 
-      {/* Filters */}
-      <div style={styles.filterContainer}>
-        <input
-          type="text"
-          placeholder={t.search}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={styles.input}
-        />
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={styles.select}>
-          <option value="all">All Status</option>
-          <option value="available">{t.available}</option>
-          <option value="assigned">{t.assigned}</option>
-          <option value="maintenance">{t.maintenance}</option>
-          <option value="damaged">{t.damaged}</option>
-          <option value="missing">{t.missing}</option>
-        </select>
-        <select value={filterCondition} onChange={(e) => setFilterCondition(e.target.value)} style={styles.select}>
-          <option value="all">All Conditions</option>
-          <option value="new">{t.new}</option>
-          <option value="good">{t.good}</option>
-          <option value="fair">{t.fair}</option>
-          <option value="poor">{t.poor}</option>
-        </select>
-      </div>
+            <button
+              type="button"
+              onClick={exportCSV}
+              disabled={!filteredEquipment.length}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Download size={17} />
+              Export
+            </button>
 
-      {/* Table */}
-      {loading ? (
-        <div style={styles.emptyState}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
-          <p>{t.loading}</p>
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+            >
+              <Plus size={18} />
+              Add Equipment
+            </button>
+          </div>
         </div>
-      ) : error ? (
-        <div style={styles.emptyState}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
-          <p>{error}</p>
+
+        {/* Error */}
+        {error && (
+          <div className="flex items-start justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="flex gap-3">
+              <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+
+              <div>
+                <p className="font-semibold">Operation failed</p>
+                <p className="mt-0.5">{error}</p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setError("")}
+              className="rounded-md p-1 hover:bg-red-100"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
+        {/* Summary */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <SummaryCard
+            title="Total Equipment"
+            value={statistics.total}
+            icon={Package}
+            iconClass="bg-blue-50 text-blue-600"
+          />
+
+          <SummaryCard
+            title="Active"
+            value={statistics.active}
+            icon={Activity}
+            iconClass="bg-emerald-50 text-emerald-600"
+          />
+
+          <SummaryCard
+            title="Available"
+            value={statistics.available}
+            icon={CheckCircle2}
+            iconClass="bg-indigo-50 text-indigo-600"
+          />
+
+          <SummaryCard
+            title="Maintenance"
+            value={statistics.maintenance}
+            icon={Wrench}
+            iconClass="bg-amber-50 text-amber-600"
+          />
+
+          <SummaryCard
+            title="Faulty"
+            value={statistics.faulty}
+            icon={AlertTriangle}
+            iconClass="bg-red-50 text-red-600"
+          />
         </div>
-      ) : paginatedAssets.length === 0 ? (
-        <div style={styles.emptyState}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>💻</div>
-          <p>No IT equipment found for your authorized scope.</p>
-          <button style={{ ...styles.button, ...styles.primaryButton, marginTop: '16px' }} onClick={() => navigate('/ict/assets/create')}>Add Equipment</button>
-        </div>
-      ) : (
-        <>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>{t.assetTag}</th>
-                  <th style={styles.th}>{t.assetName}</th>
-                  <th style={styles.th}>{t.category}</th>
-                  <th style={styles.th}>{t.serialNumber}</th>
-                  <th style={styles.th}>{t.brand}</th>
-                  <th style={styles.th}>{t.model}</th>
-                  <th style={styles.th}>{t.status}</th>
-                  <th style={styles.th}>{t.condition}</th>
-                  <th style={styles.th}>{t.department}</th>
+
+        {/* Main Table */}
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          {/* Filters */}
+          <div className="border-b border-slate-200 p-4">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="relative w-full xl:max-w-md">
+                <Search
+                  size={18}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search tag, serial, IP, equipment..."
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <div className="relative">
+                  <Filter
+                    size={16}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                  <select
+                    value={statusFilter}
+                    onChange={(event) =>
+                      setStatusFilter(event.target.value)
+                    }
+                    className="h-10 min-w-[150px] appearance-none rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="All">All Statuses</option>
+
+                    {STATUS_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <select
+                  value={typeFilter}
+                  onChange={(event) =>
+                    setTypeFilter(event.target.value)
+                  }
+                  className="h-10 min-w-[145px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="All">All Types</option>
+
+                  {TYPE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={conditionFilter}
+                  onChange={(event) =>
+                    setConditionFilter(event.target.value)
+                  }
+                  className="h-10 min-w-[145px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="All">All Conditions</option>
+
+                  {CONDITION_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1350px] text-left">
+              <thead className="bg-slate-50">
+                <tr className="border-b border-slate-200">
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Equipment
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Network
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Manufacturer / Model
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Department
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Location
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Condition
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Status
+                  </th>
+
+                  <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Actions
+                  </th>
                 </tr>
               </thead>
-              <tbody>
-                {paginatedAssets.map(asset => (
-                  <tr key={asset.id}>
-                    <td style={styles.td}>{asset.assetTag || asset.assetCode || '-'}</td>
-                    <td style={styles.td}>{asset.name}</td>
-                    <td style={styles.td}>{asset.category || '-'}</td>
-                    <td style={styles.td}>{asset.serialNumber || '-'}</td>
-                    <td style={styles.td}>{asset.brand || asset.manufacturer || '-'}</td>
-                    <td style={styles.td}>{asset.model || '-'}</td>
-                    <td style={styles.td}>
-                      <span style={styles.statusBadge(asset.status)}>
-                        {asset.status}
-                      </span>
+
+              <tbody className="divide-y divide-slate-100">
+                {loading ? (
+                  Array.from({ length: 7 }).map((_, rowIndex) => (
+                    <tr key={rowIndex}>
+                      {Array.from({ length: 8 }).map((__, cellIndex) => (
+                        <td key={cellIndex} className="px-5 py-5">
+                          <div className="h-4 animate-pulse rounded bg-slate-100" />
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                ) : paginatedEquipment.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-16 text-center">
+                      <div className="mx-auto flex max-w-sm flex-col items-center">
+                        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                          <Router size={27} />
+                        </div>
+
+                        <h3 className="text-base font-semibold text-slate-900">
+                          No network equipment found
+                        </h3>
+
+                        <p className="mt-1 text-sm text-slate-500">
+                          Change your filters or add new network equipment.
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={openCreate}
+                          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                        >
+                          <Plus size={16} />
+                          Add Equipment
+                        </button>
+                      </div>
                     </td>
-                    <td style={styles.td}>
-                      <span style={styles.conditionBadge(asset.condition)}>
-                        {asset.condition}
-                      </span>
-                    </td>
-                    <td style={styles.td}>{asset.department || '-'}</td>
                   </tr>
-                ))}
+                ) : (
+                  paginatedEquipment.map((item) => (
+                    <tr
+                      key={item.id}
+                      className="group transition hover:bg-slate-50/80"
+                    >
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                            <EquipmentIcon
+                              type={item.equipmentType}
+                              size={19}
+                            />
+                          </div>
+
+                          <div>
+                            <button
+                              type="button"
+                              onClick={() => openDetails(item)}
+                              className="font-semibold text-blue-600 hover:text-blue-700"
+                            >
+                              {item.assetTag}
+                            </button>
+
+                            <div className="mt-0.5 max-w-[220px] truncate text-sm text-slate-700">
+                              {item.equipmentName || "Unnamed equipment"}
+                            </div>
+
+                            <div className="mt-0.5 text-xs text-slate-400">
+                              {item.equipmentType}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="font-mono text-sm text-slate-700">
+                          {item.ipAddress || "No IP"}
+                        </div>
+
+                        <div className="mt-1 text-xs text-slate-500">
+                          {item.macAddress || "No MAC"}
+                        </div>
+
+                        {item.portCount && (
+                          <div className="mt-1 text-xs text-slate-400">
+                            {item.portCount} ports
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="text-sm font-medium text-slate-800">
+                          {item.manufacturer || "—"}
+                        </div>
+
+                        <div className="mt-1 text-xs text-slate-500">
+                          {item.model || "No model"}
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2 text-sm text-slate-700">
+                          <Building2
+                            size={15}
+                            className="text-slate-400"
+                          />
+                          {item.department || "—"}
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2 text-sm text-slate-700">
+                          <MapPin size={15} className="text-slate-400" />
+                          {item.location || "—"}
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${conditionClasses(
+                            item.condition
+                          )}`}
+                        >
+                          {item.condition}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClasses(
+                            item.status
+                          )}`}
+                        >
+                          {item.status}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex justify-end gap-1">
+                          <ActionButton
+                            title="View equipment"
+                            onClick={() => openDetails(item)}
+                          >
+                            <Eye size={16} />
+                          </ActionButton>
+
+                          <ActionButton
+                            title="Edit equipment"
+                            onClick={() => openEdit(item)}
+                          >
+                            <Pencil size={16} />
+                          </ActionButton>
+
+                          <ActionButton
+                            title="Delete equipment"
+                            onClick={() => deleteEquipment(item)}
+                            className="text-red-500 hover:bg-red-50 hover:text-red-700"
+                          >
+                            <Trash2 size={16} />
+                          </ActionButton>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
 
           {/* Pagination */}
-          {totalPages > 1 && (
-            <div style={styles.pagination}>
-              <button
-                style={{ ...styles.button, ...styles.secondaryButton }}
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage(currentPage - 1)}
-              >
-                {t.previousPage}
-              </button>
-              <span style={{ color: isDark ? '#e5e7eb' : '#111827' }}>
-                {t.page} {currentPage} {t.of} {totalPages}
-              </span>
-              <button
-                style={{ ...styles.button, ...styles.secondaryButton }}
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(currentPage + 1)}
-              >
-                {t.nextPage}
-              </button>
+          {!loading && filteredEquipment.length > 0 && (
+            <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-slate-500">
+                Showing{" "}
+                <span className="font-medium text-slate-700">
+                  {(page - 1) * PAGE_SIZE + 1}
+                </span>{" "}
+                to{" "}
+                <span className="font-medium text-slate-700">
+                  {Math.min(page * PAGE_SIZE, filteredEquipment.length)}
+                </span>{" "}
+                of{" "}
+                <span className="font-medium text-slate-700">
+                  {filteredEquipment.length}
+                </span>{" "}
+                equipment records
+              </p>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={page === 1}
+                  onClick={() => setPage((current) => current - 1)}
+                  className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  <ChevronLeft size={16} />
+                  Previous
+                </button>
+
+                <div className="flex h-9 min-w-9 items-center justify-center rounded-lg bg-blue-600 px-3 text-sm font-semibold text-white">
+                  {page}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((current) => current + 1)}
+                  className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  Next
+                  <ChevronRight size={16} />
+                </button>
+              </div>
             </div>
           )}
-        </>
+        </div>
+      </div>
+
+      {/* Add / Edit Modal */}
+      {showForm && (
+        <Modal
+          title={
+            editingItem
+              ? "Edit Network Equipment"
+              : "Add Network Equipment"
+          }
+          icon={editingItem ? Pencil : Plus}
+          onClose={closeAll}
+          large
+        >
+          <form onSubmit={saveEquipment}>
+            <div className="max-h-[70vh] overflow-y-auto px-6 py-5">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <FormField
+                  label="Asset Tag"
+                  name="assetTag"
+                  value={form.assetTag}
+                  onChange={handleChange}
+                  placeholder="NET-0001"
+                  required
+                />
+
+                <FormField
+                  label="Serial Number"
+                  name="serialNumber"
+                  value={form.serialNumber}
+                  onChange={handleChange}
+                  placeholder="Serial number"
+                />
+
+                <FormField
+                  label="Equipment Name"
+                  name="equipmentName"
+                  value={form.equipmentName}
+                  onChange={handleChange}
+                  placeholder="e.g. Cisco Catalyst Switch"
+                  required
+                />
+
+                <SelectField
+                  label="Equipment Type"
+                  name="equipmentType"
+                  value={form.equipmentType}
+                  onChange={handleChange}
+                  options={TYPE_OPTIONS}
+                />
+
+                <FormField
+                  label="Manufacturer"
+                  name="manufacturer"
+                  value={form.manufacturer}
+                  onChange={handleChange}
+                  placeholder="e.g. Cisco"
+                />
+
+                <FormField
+                  label="Model"
+                  name="model"
+                  value={form.model}
+                  onChange={handleChange}
+                  placeholder="e.g. Catalyst 2960"
+                />
+
+                <FormField
+                  label="IP Address"
+                  name="ipAddress"
+                  value={form.ipAddress}
+                  onChange={handleChange}
+                  placeholder="192.168.1.1"
+                />
+
+                <FormField
+                  label="MAC Address"
+                  name="macAddress"
+                  value={form.macAddress}
+                  onChange={handleChange}
+                  placeholder="00:1A:2B:3C:4D:5E"
+                />
+
+                <FormField
+                  label="Port Count"
+                  name="portCount"
+                  value={form.portCount}
+                  onChange={handleChange}
+                  placeholder="24"
+                  type="number"
+                />
+
+                <FormField
+                  label="Network Role"
+                  name="networkRole"
+                  value={form.networkRole}
+                  onChange={handleChange}
+                  placeholder="Core / Distribution / Access"
+                />
+
+                <FormField
+                  label="Department"
+                  name="department"
+                  value={form.department}
+                  onChange={handleChange}
+                  placeholder="Department / College"
+                />
+
+                <FormField
+                  label="Location"
+                  name="location"
+                  value={form.location}
+                  onChange={handleChange}
+                  placeholder="Building / Server Room"
+                />
+
+                <FormField
+                  label="Assigned To"
+                  name="assignedTo"
+                  value={form.assignedTo}
+                  onChange={handleChange}
+                  placeholder="Responsible staff"
+                />
+
+                <FormField
+                  label="Purchase Date"
+                  name="purchaseDate"
+                  type="date"
+                  value={form.purchaseDate}
+                  onChange={handleChange}
+                />
+
+                <FormField
+                  label="Warranty Expiry"
+                  name="warrantyExpiry"
+                  type="date"
+                  value={form.warrantyExpiry}
+                  onChange={handleChange}
+                />
+
+                <SelectField
+                  label="Condition"
+                  name="condition"
+                  value={form.condition}
+                  onChange={handleChange}
+                  options={CONDITION_OPTIONS}
+                />
+
+                <SelectField
+                  label="Status"
+                  name="status"
+                  value={form.status}
+                  onChange={handleChange}
+                  options={STATUS_OPTIONS}
+                />
+
+                <div className="md:col-span-2">
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Specifications
+                  </label>
+
+                  <textarea
+                    name="specifications"
+                    value={form.specifications}
+                    onChange={handleChange}
+                    rows={4}
+                    placeholder="Bandwidth, VLAN support, firmware version, interfaces, routing protocols, etc."
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Notes
+                  </label>
+
+                  <textarea
+                    name="notes"
+                    value={form.notes}
+                    onChange={handleChange}
+                    rows={3}
+                    placeholder="Additional information..."
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+              <button
+                type="button"
+                onClick={closeAll}
+                disabled={saving}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {saving && (
+                  <RefreshCw size={16} className="animate-spin" />
+                )}
+
+                {editingItem ? "Save Changes" : "Add Equipment"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Details Modal */}
+      {showDetails && selectedItem && (
+        <Modal
+          title="Network Equipment Details"
+          icon={Router}
+          onClose={closeAll}
+          large
+        >
+          <div className="max-h-[78vh] overflow-y-auto">
+            <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
+                    <EquipmentIcon
+                      type={selectedItem.equipmentType}
+                      size={27}
+                    />
+                  </div>
+
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                      {selectedItem.assetTag}
+                    </div>
+
+                    <h2 className="mt-1 text-xl font-bold text-slate-900">
+                      {selectedItem.equipmentName}
+                    </h2>
+
+                    <p className="mt-1 text-sm text-slate-500">
+                      {selectedItem.manufacturer || "Unknown manufacturer"}{" "}
+                      {selectedItem.model
+                        ? `• ${selectedItem.model}`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <span
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${statusClasses(
+                      selectedItem.status
+                    )}`}
+                  >
+                    {selectedItem.status}
+                  </span>
+
+                  <span
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${conditionClasses(
+                      selectedItem.condition
+                    )}`}
+                  >
+                    {selectedItem.condition}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6 px-6 py-6">
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                  Equipment Identification
+                </h3>
+
+                <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-3">
+                  <DetailItem
+                    label="Asset Tag"
+                    value={selectedItem.assetTag}
+                    icon={Hash}
+                  />
+
+                  <DetailItem
+                    label="Serial Number"
+                    value={selectedItem.serialNumber}
+                    icon={Hash}
+                  />
+
+                  <DetailItem
+                    label="Equipment Type"
+                    value={selectedItem.equipmentType}
+                    icon={Router}
+                  />
+
+                  <DetailItem
+                    label="Manufacturer"
+                    value={selectedItem.manufacturer}
+                  />
+
+                  <DetailItem
+                    label="Model"
+                    value={selectedItem.model}
+                  />
+
+                  <DetailItem
+                    label="Network Role"
+                    value={selectedItem.networkRole}
+                    icon={Network}
+                  />
+                </div>
+              </section>
+
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                  Network Configuration
+                </h3>
+
+                <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-3">
+                  <DetailItem
+                    label="IP Address"
+                    value={selectedItem.ipAddress}
+                    icon={Activity}
+                  />
+
+                  <DetailItem
+                    label="MAC Address"
+                    value={selectedItem.macAddress}
+                    icon={Hash}
+                  />
+
+                  <DetailItem
+                    label="Port Count"
+                    value={selectedItem.portCount}
+                    icon={Cable}
+                  />
+                </div>
+              </section>
+
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                  Assignment & Location
+                </h3>
+
+                <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-3">
+                  <DetailItem
+                    label="Department"
+                    value={selectedItem.department}
+                    icon={Building2}
+                  />
+
+                  <DetailItem
+                    label="Location"
+                    value={selectedItem.location}
+                    icon={MapPin}
+                  />
+
+                  <DetailItem
+                    label="Assigned To"
+                    value={selectedItem.assignedTo}
+                  />
+                </div>
+              </section>
+
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                  Lifecycle Information
+                </h3>
+
+                <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-3">
+                  <DetailItem
+                    label="Purchase Date"
+                    value={formatDate(selectedItem.purchaseDate)}
+                    icon={CalendarDays}
+                  />
+
+                  <DetailItem
+                    label="Warranty Expiry"
+                    value={formatDate(selectedItem.warrantyExpiry)}
+                    icon={CalendarDays}
+                  />
+
+                  <DetailItem
+                    label="Condition"
+                    value={selectedItem.condition}
+                  />
+
+                  <DetailItem
+                    label="Status"
+                    value={selectedItem.status}
+                  />
+                </div>
+              </section>
+
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                  Specifications
+                </h3>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+                  {selectedItem.specifications ||
+                    "No specifications have been recorded."}
+                </div>
+              </section>
+
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                  Notes
+                </h3>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+                  {selectedItem.notes || "No additional notes."}
+                </div>
+              </section>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDetails(false);
+                  openEdit(selectedItem);
+                }}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <Pencil size={16} />
+                Edit Equipment
+              </button>
+
+              <button
+                type="button"
+                onClick={closeAll}
+                className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );
-};
-
-export default ICTEquipment;
+}

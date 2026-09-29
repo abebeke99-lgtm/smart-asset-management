@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FileText, Upload, Trash2, Download, Search, Filter, RefreshCw, X, File, Image as ImageIcon } from 'lucide-react';
+import { FileText, Upload, Trash2, Download, Search, RefreshCw, X, File, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'react-toastify';
 import apiClient from '../../services/apiClient';
 import './ICTDocuments.css';
@@ -117,14 +117,20 @@ export default function ICTDocuments() {
     }
   };
 
-  const handleDownload = (doc) => {
-    const link = document.createElement('a');
-    link.href = `/api/ict/assets/${selectedAsset}/documents/${doc.id}/file`;
-    link.download = doc.originalName;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownload = async (doc) => {
+    try {
+      const response = await apiClient.get(`/api/assets/${selectedAsset}/documents/${doc.id}/file`, { responseType: 'blob' });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = doc.originalName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error('Unable to download document.');
+    }
   };
 
   const filteredDocuments = documents.filter((doc) => {

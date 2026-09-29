@@ -1,5 +1,5 @@
 const { Op, Sequelize } = require('sequelize');
-const { sequelize, Maintenance, MaintenanceRepair, MaintenanceHistory, MaintenanceWorkOrder, PreventiveMaintenance, MaintenanceInspection, Asset, User, Assignment, AuditLog, Inventory, InventoryTransaction, Department, Supplier } = require('../models');
+const { sequelize, Maintenance, MaintenanceRepair, MaintenanceHistory, MaintenanceWorkOrder, PreventiveMaintenance, MaintenanceInspection, MaintenanceCost, Asset, User, Assignment, AuditLog, Inventory, InventoryTransaction, Department, Supplier } = require('../models');
 const { createEventNotification } = require('../services/notificationService');
 const { createAuditLog } = require('../services/auditLogService');
 
@@ -49,6 +49,21 @@ const normalizePreventiveStatus = (status) => {
   };
   return aliases[normalized] || normalized || 'scheduled';
 };
+const isValidPreventiveTransition = (from, to) => {
+  const transitions = {
+    scheduled: ['in-progress', 'cancelled'],
+    due: ['in-progress', 'cancelled'],
+    overdue: ['in-progress', 'cancelled'],
+    failed: ['in-progress', 'cancelled'],
+    'in-progress': ['waiting-for-parts', 'awaiting-testing', 'awaiting-quality-control', 'completed', 'failed', 'cancelled'],
+    'waiting-for-parts': ['in-progress', 'cancelled'],
+    'awaiting-testing': ['in-progress', 'awaiting-quality-control', 'failed'],
+    'awaiting-quality-control': ['in-progress', 'completed', 'failed'],
+    cancelled: ['scheduled'],
+    completed: [],
+  };
+  return transitions[normalizePreventiveStatus(from)]?.includes(normalizePreventiveStatus(to)) || false;
+};
 const displayPreventiveStatus = (status) => ({
   scheduled: 'Scheduled',
   due: 'Due',
@@ -91,6 +106,33 @@ const buildPreventiveSummary = (rows = []) => rows.reduce((summary, row) => {
 const parseDateLike = (value) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+};
+const rollbackIfPending = async (transaction) => {
+  if (transaction && !transaction.finished) await transaction.rollback();
+};
+const validatePreventiveScheduleInput = (input = {}) => {
+  const assetId = Number(input.assetId ?? input.asset_id);
+  const scheduleValue = input.scheduleDate ?? input.schedule_date ?? input.dueDate;
+  const nextScheduleValue = input.nextScheduleDate ?? input.next_schedule_date ?? scheduleValue;
+  const frequency = String(input.frequency || 'monthly').trim().toLowerCase();
+  const estimatedCost = Number(input.estimatedCost ?? 0);
+  const technicianValue = input.technicianId ?? input.technician_id;
+  const technicianId = technicianValue === '' || technicianValue == null ? null : Number(technicianValue);
+  const scheduleDate = scheduleValue == null || scheduleValue === '' ? null : parseDateLike(scheduleValue);
+  const nextScheduleDate = nextScheduleValue == null || nextScheduleValue === '' ? null : parseDateLike(nextScheduleValue);
+  const frequencies = ['once', 'daily', 'weekly', 'monthly', 'quarterly', 'semi-annual', 'annual', 'custom'];
+
+  if (!Number.isInteger(assetId) || assetId <= 0) return { error: 'A valid asset is required' };
+  if (!String(input.maintenanceType || input.type || '').trim()) return { error: 'Maintenance type is required' };
+  if (!scheduleValue) return { error: 'Schedule date is required' };
+  if (!scheduleDate) return { error: 'Schedule date is invalid' };
+  if (!nextScheduleDate) return { error: 'Next maintenance date is invalid' };
+  if (nextScheduleDate < scheduleDate) return { error: 'Next maintenance date must be on or after the schedule date' };
+  if (!frequencies.includes(frequency)) return { error: 'Invalid preventive maintenance frequency' };
+  if (!Number.isFinite(estimatedCost) || estimatedCost < 0) return { error: 'Estimated cost must be a non-negative number' };
+  if (technicianId !== null && (!Number.isInteger(technicianId) || technicianId <= 0)) return { error: 'A valid technician is required' };
+
+  return { assetId, scheduleDate, nextScheduleDate, frequency, estimatedCost, technicianId };
 };
 const serializePreventiveItem = (item) => {
   const asset = item.Asset || {};
@@ -317,7 +359,6 @@ const normalizeMaintenanceWorkOrder = (item) => {
 
   return {
     ...data,
-    ...item,
     id: data.id ?? item?.id,
     workOrderNumber: data.workOrderNumber || item?.workOrderNumber || `WO-${String(data.id ?? item?.id ?? Date.now()).padStart(4, '0')}`,
     assetId: data.assetId ?? item?.assetId,
@@ -440,23 +481,25 @@ const getPreventiveMaintenanceById = async (req, res, next) => {
 const createPreventiveMaintenance = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
-    const assetId = Number(req.body.assetId ?? req.body.asset_id);
-    if (!assetId) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Asset is required' }); }
+    const validated = validatePreventiveScheduleInput(req.body);
+    if (validated.error) { await transaction.rollback(); return res.status(400).json({ success: false, message: validated.error }); }
+    const { assetId, scheduleDate, nextScheduleDate, frequency, estimatedCost, technicianId } = validated;
     const asset = await Asset.findByPk(assetId, { transaction });
     if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
-    const technicianId = req.body.technicianId ?? req.body.technician_id ?? null;
-    const scheduledDate = parseDateLike(req.body.scheduleDate || req.body.schedule_date || req.body.dueDate || new Date());
-    const nextScheduleDate = parseDateLike(req.body.nextScheduleDate || req.body.next_schedule_date || scheduledDate);
+    if (technicianId !== null) {
+      const technician = await User.findOne({ where: { id: technicianId, role: 'maintenance', active: true }, transaction });
+      if (!technician) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Technician not found' }); }
+    }
     const status = normalizePreventiveStatus(req.body.status || 'scheduled');
     const item = await PreventiveMaintenance.create({
       assetId: asset.id,
       maintenanceType: String(req.body.maintenanceType || req.body.type || 'Routine Maintenance').trim() || 'Routine Maintenance',
-      scheduleDate: scheduledDate || new Date(),
-      nextScheduleDate: nextScheduleDate || scheduledDate || new Date(),
-      frequency: String(req.body.frequency || 'monthly').trim().toLowerCase() || 'monthly',
-      technicianId: technicianId ? Number(technicianId) : null,
+      scheduleDate,
+      nextScheduleDate,
+      frequency,
+      technicianId,
       checklist: typeof req.body.checklist === 'string' ? req.body.checklist : JSON.stringify(req.body.checklist || []),
-      estimatedCost: Number(req.body.estimatedCost || 0),
+      estimatedCost,
       notes: String(req.body.notes || req.body.description || '').trim(),
       status,
       lastCompletedDate: req.body.lastCompletedDate || null,
@@ -469,7 +512,97 @@ const createPreventiveMaintenance = async (req, res, next) => {
     await transaction.commit();
     const created = await PreventiveMaintenance.findByPk(item.id, { include: [{ model: Asset, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'digitalId', 'category', 'department', 'location', 'status', 'condition'] }, { model: User, as: 'Technician', attributes: ['id', 'username', 'fullName', 'department'] }] });
     res.status(201).json({ success: true, data: serializePreventiveItem(created) });
-  } catch (error) { await transaction.rollback(); return next(error); }
+  } catch (error) { await rollbackIfPending(transaction); return next(error); }
+};
+
+const updatePreventiveMaintenance = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const item = await PreventiveMaintenance.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Preventive maintenance record not found' }); }
+    if (['in-progress', 'completed', 'cancelled'].includes(normalizePreventiveStatus(item.status))) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'Only scheduled, due, overdue, or failed schedules can be edited' });
+    }
+
+    const body = req.body || {};
+    const validated = validatePreventiveScheduleInput({
+      assetId: body.assetId ?? body.asset_id ?? item.assetId,
+      maintenanceType: body.maintenanceType ?? body.type ?? item.maintenanceType,
+      scheduleDate: body.scheduleDate ?? body.schedule_date ?? item.scheduleDate,
+      nextScheduleDate: body.nextScheduleDate ?? body.next_schedule_date ?? item.nextScheduleDate ?? item.scheduleDate,
+      frequency: body.frequency ?? item.frequency,
+      estimatedCost: body.estimatedCost ?? item.estimatedCost,
+      technicianId: body.technicianId ?? body.technician_id ?? item.technicianId,
+    });
+    if (validated.error) { await transaction.rollback(); return res.status(400).json({ success: false, message: validated.error }); }
+
+    const asset = await Asset.findByPk(validated.assetId, { transaction });
+    if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
+    if (validated.technicianId !== null) {
+      const technician = await User.findOne({ where: { id: validated.technicianId, role: 'maintenance', active: true }, transaction });
+      if (!technician) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Technician not found' }); }
+    }
+
+    const activeStatuses = ['scheduled', 'due', 'overdue', 'in-progress', 'waiting-for-parts', 'awaiting-testing', 'awaiting-quality-control'];
+    const duplicate = await PreventiveMaintenance.findOne({ where: { assetId: asset.id, status: { [Op.in]: activeStatuses }, scheduleDate: validated.scheduleDate, id: { [Op.ne]: item.id } }, transaction });
+    if (duplicate) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Another active preventive maintenance record already exists for this asset and schedule.' }); }
+
+    const oldValue = { assetId: item.assetId, maintenanceType: item.maintenanceType, scheduleDate: item.scheduleDate, nextScheduleDate: item.nextScheduleDate, frequency: item.frequency, technicianId: item.technicianId, estimatedCost: Number(item.estimatedCost || 0) };
+    const updates = {
+      assetId: asset.id,
+      maintenanceType: String(body.maintenanceType ?? body.type ?? item.maintenanceType).trim(),
+      scheduleDate: validated.scheduleDate,
+      nextScheduleDate: validated.nextScheduleDate,
+      frequency: validated.frequency,
+      technicianId: validated.technicianId,
+      estimatedCost: validated.estimatedCost,
+      ...(body.checklist !== undefined ? { checklist: typeof body.checklist === 'string' ? body.checklist : JSON.stringify(body.checklist) } : {}),
+      ...(body.notes !== undefined || body.description !== undefined ? { notes: String(body.notes ?? body.description ?? '').trim() } : {}),
+    };
+    await item.update(updates, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'UPDATE_PREVENTIVE_MAINTENANCE', entity: `preventive_maintenance:${item.id}`, details: JSON.stringify({ actorRole: req.user.role, oldValue, newValue: { ...oldValue, ...updates } }) }, { transaction });
+    await transaction.commit();
+    return res.json({ success: true, data: serializePreventiveItem(item) });
+  } catch (error) { await rollbackIfPending(transaction); return next(error); }
+};
+
+const deletePreventiveMaintenance = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const item = await PreventiveMaintenance.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Preventive maintenance record not found' }); }
+    const currentStatus = normalizePreventiveStatus(item.status);
+    if (['in-progress', 'completed'].includes(currentStatus)) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'Running or completed schedules cannot be deleted' });
+    }
+    if (currentStatus === 'cancelled') { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Preventive maintenance schedule is already cancelled' }); }
+    const reason = String(req.body?.reason || '').trim();
+    await item.update({ status: 'cancelled', ...(reason ? { notes: [item.notes, `Cancellation reason: ${reason}`].filter(Boolean).join('\n') } : {}) }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'CANCEL_PREVENTIVE_MAINTENANCE', entity: `preventive_maintenance:${item.id}`, details: JSON.stringify({ actorRole: req.user.role, previousStatus: currentStatus, newStatus: 'cancelled', reason }) }, { transaction });
+    await transaction.commit();
+    return res.json({ success: true, data: serializePreventiveItem(item) });
+  } catch (error) { await rollbackIfPending(transaction); return next(error); }
+};
+
+const activatePreventiveMaintenance = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const item = await PreventiveMaintenance.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Preventive maintenance record not found' }); }
+    const previousStatus = normalizePreventiveStatus(item.status);
+    if (!isValidPreventiveTransition(previousStatus, 'scheduled')) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: `Cannot activate a ${displayPreventiveStatus(previousStatus).toLowerCase()} schedule` });
+    }
+    const duplicate = await PreventiveMaintenance.findOne({ where: { assetId: item.assetId, status: { [Op.in]: ['scheduled', 'due', 'overdue', 'in-progress'] }, scheduleDate: item.scheduleDate, id: { [Op.ne]: item.id } }, transaction });
+    if (duplicate) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Another active preventive maintenance record already exists for this asset and schedule.' }); }
+    await item.update({ status: 'scheduled' }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'ACTIVATE_PREVENTIVE_MAINTENANCE', entity: `preventive_maintenance:${item.id}`, details: JSON.stringify({ actorRole: req.user.role, previousStatus, newStatus: 'scheduled' }) }, { transaction });
+    await transaction.commit();
+    return res.json({ success: true, data: serializePreventiveItem(item) });
+  } catch (error) { await rollbackIfPending(transaction); return next(error); }
 };
 
 const startPreventiveMaintenance = async (req, res, next) => {
@@ -477,6 +610,7 @@ const startPreventiveMaintenance = async (req, res, next) => {
   try {
     const item = await PreventiveMaintenance.findOne({ where: { id: req.params.id }, include: [{ model: Asset, attributes: ['id', 'name', 'assetCode', 'status', 'department', 'location'] }], transaction, lock: transaction.LOCK.UPDATE });
     if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Preventive maintenance record not found' }); }
+    if (!isValidPreventiveTransition(item.status, 'in-progress')) { await transaction.rollback(); return res.status(409).json({ success: false, message: `Cannot start a ${displayPreventiveStatus(item.status).toLowerCase()} schedule` }); }
     const activeStatuses = ['scheduled', 'due', 'overdue', 'in-progress', 'waiting-for-parts', 'awaiting-testing', 'awaiting-quality-control'];
     const duplicate = await PreventiveMaintenance.findOne({ where: { assetId: item.assetId, status: { [Op.in]: activeStatuses }, scheduleDate: item.scheduleDate, id: { [Op.ne]: item.id } }, transaction });
     if (duplicate) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Another active preventive maintenance record already exists for this asset and schedule.' }); }
@@ -488,7 +622,7 @@ const startPreventiveMaintenance = async (req, res, next) => {
     await AuditLog.create({ userId: req.user.id, action: 'START_PREVENTIVE_MAINTENANCE', entity: `preventive_maintenance:${updated.id}`, details: JSON.stringify({ assetId: asset.id, technicianId: updated.technicianId }) }, { transaction });
     await transaction.commit();
     return res.json({ success: true, data: serializePreventiveItem(updated) });
-  } catch (error) { await transaction.rollback(); return next(error); }
+  } catch (error) { await rollbackIfPending(transaction); return next(error); }
 };
 
 const pausePreventiveMaintenance = async (req, res, next) => {
@@ -498,11 +632,12 @@ const pausePreventiveMaintenance = async (req, res, next) => {
     if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Preventive maintenance record not found' }); }
     const previousStatus = item.status;
     const pausedStatus = normalizePreventiveStatus(req.body.status || 'waiting-for-parts');
+    if (!isValidPreventiveTransition(previousStatus, pausedStatus) || pausedStatus !== 'waiting-for-parts') { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Only in-progress preventive maintenance can be paused for parts' }); }
     await item.update({ status: pausedStatus, notes: [item.notes, req.body.reason ? `Pause reason: ${req.body.reason}` : ''].filter(Boolean).join('\n') }, { transaction });
     await AuditLog.create({ userId: req.user.id, action: 'PAUSE_PREVENTIVE_MAINTENANCE', entity: `preventive_maintenance:${item.id}`, details: JSON.stringify({ previousStatus, newStatus: pausedStatus, reason: req.body.reason || '' }) }, { transaction });
     await transaction.commit();
     return res.json({ success: true, data: serializePreventiveItem(item) });
-  } catch (error) { await transaction.rollback(); return next(error); }
+  } catch (error) { await rollbackIfPending(transaction); return next(error); }
 };
 
 const resumePreventiveMaintenance = async (req, res, next) => {
@@ -511,11 +646,12 @@ const resumePreventiveMaintenance = async (req, res, next) => {
     const item = await PreventiveMaintenance.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
     if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Preventive maintenance record not found' }); }
     const previousStatus = item.status;
+    if (!isValidPreventiveTransition(previousStatus, 'in-progress')) { await transaction.rollback(); return res.status(409).json({ success: false, message: `Cannot resume a ${displayPreventiveStatus(previousStatus).toLowerCase()} schedule` }); }
     await item.update({ status: 'in-progress', startedAt: item.startedAt || new Date() }, { transaction });
     await AuditLog.create({ userId: req.user.id, action: 'RESUME_PREVENTIVE_MAINTENANCE', entity: `preventive_maintenance:${item.id}`, details: JSON.stringify({ previousStatus, newStatus: 'in-progress' }) }, { transaction });
     await transaction.commit();
     return res.json({ success: true, data: serializePreventiveItem(item) });
-  } catch (error) { await transaction.rollback(); return next(error); }
+  } catch (error) { await rollbackIfPending(transaction); return next(error); }
 };
 
 const assignPreventiveMaintenance = async (req, res, next) => {
@@ -559,6 +695,7 @@ const completePreventiveMaintenance = async (req, res, next) => {
   try {
     const item = await PreventiveMaintenance.findOne({ where: { id: req.params.id }, include: [{ model: Asset, attributes: ['id', 'name', 'assetCode', 'status', 'department', 'location'] }], transaction, lock: transaction.LOCK.UPDATE });
     if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Preventive maintenance record not found' }); }
+    if (!isValidPreventiveTransition(item.status, 'completed')) { await transaction.rollback(); return res.status(409).json({ success: false, message: `Cannot complete a ${displayPreventiveStatus(item.status).toLowerCase()} schedule` }); }
     const checklistValue = String(item.checklist || '');
     const checklistCount = checklistValue ? checklistValue.split(/\n|\r\n|\|/).filter(Boolean).length : 0;
     if (checklistCount > 0 && !checklistValue.includes('true') && !checklistValue.includes('completed')) {
@@ -574,7 +711,7 @@ const completePreventiveMaintenance = async (req, res, next) => {
     await AuditLog.create({ userId: req.user.id, action: 'COMPLETE_PREVENTIVE_MAINTENANCE', entity: `preventive_maintenance:${item.id}`, details: JSON.stringify({ assetId: asset.id, completedAt: completedAt.toISOString() }) }, { transaction });
     await transaction.commit();
     return res.json({ success: true, data: serializePreventiveItem(item) });
-  } catch (error) { await transaction.rollback(); return next(error); }
+  } catch (error) { await rollbackIfPending(transaction); return next(error); }
 };
 
 const getAllMaintenance = async (req, res, next) => {
@@ -590,15 +727,18 @@ const getAllMaintenance = async (req, res, next) => {
     if (req.query.department) where['$Asset.department$'] = String(req.query.department).trim();
     if (req.query.search) {
       const search = String(req.query.search).trim();
-      if (search) where[Op.or] = [
-        { title: { [Op.like]: `%${search}%` } },
-        { description: { [Op.like]: `%${search}%` } },
-        { '$Asset.name$': { [Op.like]: `%${search}%` } },
-        { '$Asset.assetCode$': { [Op.like]: `%${search}%` } },
-        { '$Technician.fullName$': { [Op.like]: `%${search}%` } },
-        { '$Technician.username$': { [Op.like]: `%${search}%` } },
-        ...(Number.isInteger(Number(search)) ? [{ id: Number(search) }] : [])
-      ];
+      if (search) {
+        const pattern = `%${search}%`;
+        where[Op.or] = [
+          { title: { [Op.like]: pattern } },
+          { description: { [Op.like]: pattern } },
+          Sequelize.where(Sequelize.col('Asset.name'), { [Op.like]: pattern }),
+          Sequelize.where(Sequelize.col('Asset.asset_code'), { [Op.like]: pattern }),
+          Sequelize.where(Sequelize.col('Technician.full_name'), { [Op.like]: pattern }),
+          Sequelize.where(Sequelize.col('Technician.username'), { [Op.like]: pattern }),
+          ...(Number.isInteger(Number(search)) ? [{ id: Number(search) }] : [])
+        ];
+      }
     }
     if (req.query.assigned_to) where.assignedTo = req.query.assigned_to; 
     if (req.query.scope === 'assigned' && req.user.role === 'maintenance') where.assignedTo = req.user.id;
@@ -796,6 +936,106 @@ const getAssetMaintenanceDetail = async (req, res, next) => {
 const sumNumber = (value) => {
   const numeric = Number(value || 0);
   return Number.isFinite(numeric) ? numeric : 0;
+};
+
+const summarizeMaintenanceCosts = ({ costRows = [], repairRows = [], workOrderRows = [] } = {}) => {
+  const totals = { laborCost: 0, partsCost: 0, materialsCost: 0, otherCost: 0 };
+  const add = (field, value) => { totals[field] += Math.round(sumNumber(value) * 100); };
+  const costMaintenanceIds = new Set(costRows.map((row) => Number(row.maintenanceId)).filter(Boolean));
+  const costRepairIds = new Set(costRows.map((row) => Number(row.repairId)).filter(Boolean));
+  const costWorkOrderIds = new Set(costRows.map((row) => Number(row.workOrderId)).filter(Boolean));
+
+  costRows.forEach((row) => {
+    const category = String(row.costCategory || '').trim().toLowerCase();
+    const field = /labor|technician/.test(category) ? 'laborCost'
+      : /material/.test(category) ? 'materialsCost'
+        : /part|spare/.test(category) ? 'partsCost'
+          : 'otherCost';
+    add(field, row.amount);
+  });
+
+  repairRows.forEach((repair) => {
+    const maintenanceId = Number(repair.maintenanceId);
+    if (costRepairIds.has(Number(repair.id)) || costMaintenanceIds.has(maintenanceId) || costWorkOrderIds.has(Number(repair.workOrderId))) return;
+    const labor = Math.round(sumNumber(repair.laborCost) * 100);
+    const parts = Math.round(sumNumber(repair.partsCost) * 100);
+    const materials = Math.round(sumNumber(repair.materialsCost) * 100);
+    const recordedTotal = Math.round(sumNumber(repair.totalCost) * 100);
+    const other = recordedTotal
+      ? Math.max(0, recordedTotal - labor - parts - materials)
+      : Math.round((sumNumber(repair.serviceCost) + sumNumber(repair.otherCost)) * 100);
+    totals.laborCost += labor;
+    totals.partsCost += parts;
+    totals.materialsCost += materials;
+    totals.otherCost += other;
+  });
+
+  const linkedWorkOrderIds = new Set(repairRows.map((repair) => Number(repair.workOrderId)).filter(Boolean));
+  workOrderRows.forEach((order) => {
+    if (linkedWorkOrderIds.has(Number(order.id)) || costWorkOrderIds.has(Number(order.id)) || costMaintenanceIds.has(Number(order.maintenanceId))) return;
+    totals.otherCost += Math.round(sumNumber(order.actualCost || order.estimatedCost || 0) * 100);
+  });
+
+  const result = Object.fromEntries(Object.entries(totals).map(([key, cents]) => [key, cents / 100]));
+  result.totalCost = Math.round(Object.values(totals).reduce((sum, cents) => sum + cents, 0)) / 100;
+  return result;
+};
+
+const repairCostInputs = [
+  { category: 'labor', field: 'laborCost', aliases: ['labor_cost', 'laborCost'] },
+  { category: 'parts', field: 'partsCost', aliases: ['parts_cost', 'partsCost'] },
+  { category: 'materials', field: 'materialsCost', aliases: ['materials_cost', 'materialsCost'] },
+  { category: 'other', field: 'otherCost', aliases: ['other_cost', 'otherCost'] },
+];
+
+const hasRepairCostBreakdown = (body = {}) => repairCostInputs.some(({ aliases }) => aliases.some((key) => Object.prototype.hasOwnProperty.call(body, key)));
+
+const readRepairCostBreakdown = (body = {}, repair = null) => {
+  const explicitBreakdown = hasRepairCostBreakdown(body);
+  const legacyCostProvided = Object.prototype.hasOwnProperty.call(body, 'cost');
+  const result = {};
+  for (const { field, aliases } of repairCostInputs) {
+    const existing = field === 'otherCost'
+      ? repair?.serviceCost ?? Math.max(0, sumNumber(repair?.totalCost) - sumNumber(repair?.laborCost) - sumNumber(repair?.partsCost) - sumNumber(repair?.materialsCost))
+      : repair?.[field] ?? 0;
+    const supplied = aliases.find((key) => Object.prototype.hasOwnProperty.call(body, key));
+    const value = explicitBreakdown ? (supplied ? body[supplied] : existing)
+      : legacyCostProvided ? (field === 'otherCost' ? body.cost : 0)
+        : existing;
+    const amount = Number(value ?? 0);
+    if (!Number.isFinite(amount) || amount < 0 || amount > 9999999999.99) {
+      return { error: 'Repair costs must be valid non-negative amounts with at most 12 digits' };
+    }
+    result[field] = Math.round(amount * 100) / 100;
+  }
+  result.totalCost = Math.round(Object.values(result).reduce((sum, amount) => sum + Math.round(amount * 100), 0)) / 100;
+  if (result.totalCost > 9999999999.99) return { error: 'Combined repair cost must not exceed 12 digits' };
+  return result;
+};
+
+const persistRepairCostRows = async ({ breakdown, repair, maintenance, asset, userId, transaction }) => {
+  const rows = await MaintenanceCost.findAll({ where: { repairId: repair.id }, transaction, lock: transaction.LOCK.UPDATE });
+  for (const { category, field } of repairCostInputs) {
+    const existing = rows.find((row) => String(row.costCategory || '').toLowerCase() === category);
+    const amount = breakdown[field];
+    if (amount === 0) {
+      if (existing) await existing.destroy({ transaction });
+      continue;
+    }
+    const values = {
+      maintenanceId: maintenance.id,
+      repairId: repair.id,
+      workOrderId: repair.workOrderId || null,
+      assetId: asset.id,
+      costCategory: category,
+      description: `${category[0].toUpperCase()}${category.slice(1)} cost`,
+      amount,
+      approvedBy: userId,
+      status: 'approved',
+    };
+    if (existing) await existing.update(values, { transaction });
+    else await MaintenanceCost.create(values, { transaction });
+  }
 };
 
 const buildMaintenanceHistoryRows = ({ maintenanceRows = [], workOrderRows = [], repairRows = [], preventiveRows = [], testRows = [], qcRows = [], costRows = [] }) => {
@@ -1131,7 +1371,10 @@ const buildMaintenanceReportsData = async (req) => {
     ];
   }
 
-  const [maintenanceRows, workOrderRows, repairRows, preventiveRows, technicianRows, supplierRows, testRows, inventoryTransactions] = await Promise.all([
+  const costWhere = {};
+  if (startDate) costWhere.costDate = { [Op.gte]: startDate };
+  if (req.query.assetId) costWhere.assetId = Number(req.query.assetId);
+  const [maintenanceRows, workOrderRows, repairRows, preventiveRows, technicianRows, supplierRows, testRows, inventoryTransactions, costRows] = await Promise.all([
     Maintenance.findAll({
       where,
       include: [
@@ -1176,6 +1419,11 @@ const buildMaintenanceReportsData = async (req) => {
       order: [['createdAt', 'DESC']],
       limit: 200,
     }),
+    MaintenanceCost.findAll({
+      where: costWhere,
+      include: [{ model: Asset, attributes: [], ...(req.query.department ? { where: { department: String(req.query.department).trim() }, required: true } : {}) }],
+      raw: true,
+    }),
   ]);
 
   const activity = maintenanceRows.map((item) => {
@@ -1201,7 +1449,8 @@ const buildMaintenanceReportsData = async (req) => {
   const vendors = supplierRows.map((item) => item.toJSON());
   const testing = testRows.map((item) => item.toJSON());
   const departments = Array.from(new Set(activity.map((item) => item.department).filter(Boolean))).sort();
-  const totalCost = [...workOrders, ...repairs].reduce((sum, item) => sum + Number(item.actualCost || item.estimatedCost || item.repairCost || 0), 0);
+  const costs = summarizeMaintenanceCosts({ costRows, repairRows, workOrderRows });
+  const totalCost = costs.totalCost;
   const totalDowntimeHours = workOrders.reduce((sum, item) => {
     if (!item.dueDate) return sum;
     const due = new Date(item.dueDate).getTime();
@@ -1232,7 +1481,7 @@ const buildMaintenanceReportsData = async (req) => {
     technicians: technicianRows.map((item) => item.toJSON()),
     vendors,
     testing,
-    costs: { partsCost: 0, laborCost: 0, vendorCost: 0, otherCost: 0, totalCost },
+    costs,
     downtime: { totalDowntimeHours, rows: workOrders },
     departments: departments.map((department) => ({ department, maintenanceCount: activity.filter((item) => item.department === department).length })),
     filters: { period, department: req.query.department || '', status: req.query.status || '', priority: req.query.priority || '', technicianId: req.query.technicianId || '', assetId: req.query.assetId || '', category: req.query.category || '' },
@@ -1492,7 +1741,8 @@ const dashboard = async (req, res, next) => {
     const createdAfter = periodStart(String(req.query.period || '').toLowerCase());
     const maintenanceWhere = createdAfter ? { createdAt: { [Op.gte]: createdAfter } } : {};
     const assetScope = req.user.role === 'college' ? { department: req.user.department } : undefined;
-    const [maintenanceRows, workOrderRows, assets, preventiveRows, technicians, completedEvents, inspections, repairRows] = await Promise.all([
+    const costWhere = createdAfter ? { costDate: { [Op.gte]: createdAfter } } : {};
+    const [maintenanceRows, workOrderRows, assets, preventiveRows, technicians, completedEvents, inspections, repairRows, costRows] = await Promise.all([
       Maintenance.findAll({
         attributes: ['id', 'assetId', 'assignedTo', 'title', 'status', 'priority', 'createdAt', 'updatedAt'],
         where: maintenanceWhere,
@@ -1535,9 +1785,14 @@ const dashboard = async (req, res, next) => {
         include: [{ model: Asset, attributes: [], ...(assetScope ? { where: assetScope, required: true } : {}) }],
       }),
       MaintenanceRepair.findAll({
-        attributes: ['id', 'maintenanceId', 'status', 'completionDate', 'createdAt'],
+        attributes: ['id', 'maintenanceId', 'workOrderId', 'status', 'completionDate', 'createdAt', 'laborCost', 'partsCost', 'serviceCost', 'totalCost'],
         where: createdAfter ? { createdAt: { [Op.gte]: createdAfter } } : {},
         include: [{ model: Asset, attributes: [], ...(assetScope ? { where: assetScope, required: true } : {}) }],
+      }),
+      MaintenanceCost.findAll({
+        where: costWhere,
+        include: [{ model: Asset, attributes: [], ...(assetScope ? { where: assetScope, required: true } : {}) }],
+        raw: true,
       }),
     ]);
 
@@ -1546,6 +1801,7 @@ const dashboard = async (req, res, next) => {
     const workOrders = workOrderRows.map(toRecord);
     const schedules = preventiveRows.map(toRecord);
     const repairs = repairRows.map(toRecord);
+    const costs = summarizeMaintenanceCosts({ costRows, repairRows: repairs, workOrderRows: workOrders });
     const normalizeRecordStatus = (item) => normalizeStatus(item.status);
     const byStatus = maintenances.reduce((acc, item) => {
       const status = normalizeRecordStatus(item);
@@ -1694,6 +1950,7 @@ const dashboard = async (req, res, next) => {
           pendingRequests: pendingCount,
           inProgress: byStatus['in-progress'] || 0,
           completedRepairs: completedCount,
+          totalMaintenanceCost: costs.totalCost,
           overdueWorkOrders: overdueWorkOrders.length,
           assetsUnderMaintenance: assets.filter((asset) => ['under-maintenance', 'under maintenance', 'under_maintenance', 'in_maintenance', 'in-maintenance'].includes(normalizeStatus(asset.status))).length,
           waitingForParts,
@@ -1724,6 +1981,7 @@ const dashboard = async (req, res, next) => {
         assetsUnderMaintenance: assets.filter((asset) => ['under-maintenance', 'under maintenance', 'under_maintenance', 'in_maintenance', 'in-maintenance'].includes(normalizeStatus(asset.status))).length,
         assetStatus,
         assetCondition,
+        costs,
       },
     });
   } catch (error) { next(error); }
@@ -1883,13 +2141,25 @@ const getTechnicianDirectory = async (req, res, next) => {
 const repairInclude = [
   { model: Asset, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'category', 'department', 'location', 'status', 'condition', 'warrantyExpiry'] },
   { model: User, as: 'Technician', attributes: ['id', 'username', 'fullName'] },
-  { model: MaintenanceRepair, required: true, attributes: ['id', 'workOrderId', 'technicianId', 'status', 'diagnosis', 'repairAction', 'partsUsed', 'totalCost', 'completionDate', 'notes'] },
+  // `materialsCost` is a derived bucket only: the MaintenanceRepair model and the
+  // maintenance_repairs table persist labor/parts/service/total, not materials.
+  // Selecting it here made Sequelize emit a column the database does not have,
+  // which failed every /maintenance/repairs request with
+  // "Unknown column 'MaintenanceRepairs.materialsCost' in 'field list'".
+  // Downstream code reads repair.materialsCost and sumNumber() maps undefined to 0.
+  { model: MaintenanceRepair, required: true, attributes: ['id', 'workOrderId', 'technicianId', 'status', 'diagnosis', 'repairAction', 'partsUsed', 'laborCost', 'partsCost', 'serviceCost', 'totalCost', 'completionDate', 'notes'], include: [{ model: MaintenanceWorkOrder, attributes: ['id', 'workOrderNumber', 'status', 'priority'] }, { model: MaintenanceCost, attributes: ['id', 'costCategory', 'amount'] }] },
 ];
 const repairScope = (req) => req.user.collegeId ? { '$Asset.collegeId$': req.user.collegeId } : {};
 const normalizeRepair = (item) => {
   const data = item.toJSON();
   const repair = data.MaintenanceRepairs?.[0] || data.MaintenanceRepair || {};
-  const repairStatus = normalizeRepairStatus(data.status || repair.status || 'open');
+  const workOrder = repair.MaintenanceWorkOrder || {};
+  const repairCosts = repair.MaintenanceCosts || [];
+  const amountFor = (category, fallback) => repairCosts.length
+    ? repairCosts.filter((row) => String(row.costCategory || '').toLowerCase() === category).reduce((sum, row) => sum + sumNumber(row.amount), 0)
+    : Number(fallback || 0);
+  const repairStatus = normalizeRepairStatus(repair.status || data.status || 'open');
+  const priority = String(workOrder.priority || repair.priority || data.priority || 'medium').toLowerCase();
   return {
     ...data,
     repairId: `REP-${String(data.id).padStart(3, '0')}`,
@@ -1901,11 +2171,16 @@ const normalizeRepair = (item) => {
     diagnosis: repair.diagnosis || '',
     repairAction: repair.repairAction || '',
     partsReplaced: repair.partsUsed || '',
+    laborCost: amountFor('labor', repair.laborCost),
+    partsCost: amountFor('parts', repair.partsCost),
+    materialsCost: amountFor('materials', repair.materialsCost),
+    otherCost: amountFor('other', repair.serviceCost),
     repairCost: Number(repair.totalCost || 0),
     completionDate: repair.completionDate || (data.status === 'completed' ? data.updatedAt : null),
     notes: repair.notes || '',
     status: displayRepairStatus(repairStatus),
     statusRaw: repairStatus,
+    priority,
     workOrderId: repair.workOrderId || null,
     progress: Number(data.progress ?? repair.progress ?? (repairStatus === 'completed' ? 100 : repairStatus === 'in-progress' ? 70 : repairStatus === 'testing' ? 80 : repairStatus === 'waiting-for-parts' ? 45 : repairStatus === 'diagnosing' ? 30 : repairStatus === 'assigned' ? 20 : repairStatus === 'failed' ? 50 : repairStatus === 'rework' ? 60 : 10)),
   };
@@ -2199,6 +2474,8 @@ const createMaintenanceWorkOrder = async (req, res, next) => {
     const maintenance = await Maintenance.findByPk(maintenanceId, { transaction });
     if (!maintenance) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Maintenance request not found' }); }
     if (Number(maintenance.assetId) !== Number(asset.id)) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'The maintenance request must belong to the selected asset' }); }
+    const duplicate = await MaintenanceWorkOrder.findOne({ where: { maintenanceId }, transaction, lock: transaction.LOCK.UPDATE });
+    if (duplicate) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'A work order already exists for this maintenance request' }); }
 
     const technicianId = body.technicianId ?? body.technician_id ?? null;
     if (technicianId) {
@@ -2207,26 +2484,39 @@ const createMaintenanceWorkOrder = async (req, res, next) => {
     }
 
     const status = normalizeWorkOrderStatus(body.status || 'open');
-    const statusReady = Object.keys(workOrderStatusTransitions).includes(status) ? status : 'open';
+    if (!Object.keys(workOrderStatusTransitions).includes(status)) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Invalid work order status' }); }
+    const statusReady = status;
+    const priority = String(body.priority || 'medium').trim().toLowerCase();
+    if (!['low', 'medium', 'high', 'critical'].includes(priority)) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Invalid work order priority' }); }
     const number = String(body.workOrderNumber || '').trim() || `WO-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now()).slice(-4)}`;
     const parsedCost = Number(body.estimatedCost ?? body.estimated_cost ?? 0);
     if (!Number.isFinite(parsedCost) || parsedCost < 0) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Estimated cost must be a valid non-negative number' }); }
+    const actualCost = Number(body.actualCost ?? body.actual_cost ?? 0);
+    if (!Number.isFinite(actualCost) || actualCost < 0) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Actual cost must be a valid non-negative number' }); }
+    const startValue = body.scheduledDate ?? body.startDate ?? null;
+    const dueValue = body.dueDate ?? body.expectedCompletionDate ?? null;
+    const completedValue = body.completedDate ?? body.actualCompletionDate ?? null;
+    const startDate = startValue ? parseDateLike(startValue) : null;
+    const expectedCompletionDate = dueValue ? parseDateLike(dueValue) : null;
+    const actualCompletionDate = completedValue ? parseDateLike(completedValue) : null;
+    if ((startValue && !startDate) || (dueValue && !expectedCompletionDate) || (completedValue && !actualCompletionDate)) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Work order dates must be valid dates' }); }
+    if (startDate && expectedCompletionDate && expectedCompletionDate < startDate) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Expected completion must be on or after the start date' }); }
 
     const item = await MaintenanceWorkOrder.create({
       maintenanceId: maintenanceId || null,
       assetId,
       workOrderNumber: number,
       technicianId: technicianId || null,
-      priority: String(body.priority || 'medium').toLowerCase(),
+      priority,
       status: statusReady,
       problemDescription: String(body.problemDescription || body.problem || '').trim(),
       diagnosis: String(body.diagnosis || '').trim(),
       requiredWork: String(body.requiredWork || body.required_work || '').trim(),
-      startDate: body.scheduledDate || body.startDate || null,
-      expectedCompletionDate: body.dueDate || body.expectedCompletionDate || null,
-      actualCompletionDate: body.completedDate || body.actualCompletionDate || null,
+      startDate,
+      expectedCompletionDate,
+      actualCompletionDate,
       estimatedCost: parsedCost,
-      actualCost: Number(body.actualCost ?? body.actual_cost ?? 0),
+      actualCost,
       notes: String(body.notes || '').trim(),
       progress: Number(body.progress ?? (statusReady === 'completed' ? 100 : 0)),
     }, { transaction });
@@ -2241,11 +2531,11 @@ const createMaintenanceWorkOrder = async (req, res, next) => {
       description: `Work order ${number} created`,
       details: { workOrderId: item.id },
     }, { transaction });
-    await AuditLog.create({ userId: req.user.id, action: 'CREATE_MAINTENANCE_WORK_ORDER', entity: `maintenance_work_order:${item.id}`, details: JSON.stringify({ workOrderId: item.id, assetId: asset.id }) }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'CREATE_MAINTENANCE_WORK_ORDER', entity: `maintenance_work_order:${item.id}`, details: JSON.stringify({ actorRole: req.user.role, oldValue: null, newValue: { workOrderId: item.id, workOrderNumber: number, maintenanceId: maintenance.id, assetId: asset.id, technicianId: item.technicianId, status: item.status, priority: item.priority, estimatedCost: item.estimatedCost, actualCost: item.actualCost } }) }, { transaction });
     await transaction.commit();
     const created = await MaintenanceWorkOrder.findByPk(item.id, { include: [{ model: Asset, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'category', 'location', 'status'] }, { model: Maintenance, attributes: ['id', 'title', 'description', 'status', 'priority'] }, { model: User, as: 'Technician', attributes: ['id', 'username', 'fullName', 'department'] }] });
     return res.status(201).json({ success: true, data: normalizeMaintenanceWorkOrder(created) });
-  } catch (error) { await transaction.rollback(); next(error); }
+  } catch (error) { await rollbackIfPending(transaction); next(error); }
 };
 
 const updateMaintenanceWorkOrder = async (req, res, next) => {
@@ -2256,6 +2546,7 @@ const updateMaintenanceWorkOrder = async (req, res, next) => {
     const body = req.body || {};
     const status = body.status ? normalizeWorkOrderStatus(body.status) : item.status;
     if (status && !Object.keys(workOrderStatusTransitions).includes(status)) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Invalid work order status' }); }
+    const oldValue = { workOrderNumber: item.workOrderNumber, maintenanceId: item.maintenanceId, assetId: item.assetId, technicianId: item.technicianId, priority: item.priority, status: item.status, startDate: item.startDate, expectedCompletionDate: item.expectedCompletionDate, estimatedCost: Number(item.estimatedCost || 0), actualCost: Number(item.actualCost || 0) };
 
     const technicianId = body.technicianId ?? body.technician_id ?? item.technicianId;
     if (technicianId) {
@@ -2281,13 +2572,22 @@ const updateMaintenanceWorkOrder = async (req, res, next) => {
       notes: body.notes ?? item.notes,
       progress: Number(body.progress ?? item.progress ?? (status === 'completed' ? 100 : 0)),
     };
+    if (!Number.isFinite(updates.estimatedCost) || updates.estimatedCost < 0 || !Number.isFinite(updates.actualCost) || updates.actualCost < 0) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Work order costs must be valid non-negative numbers' }); }
+    const startDate = updates.startDate ? parseDateLike(updates.startDate) : null;
+    const expectedCompletionDate = updates.expectedCompletionDate ? parseDateLike(updates.expectedCompletionDate) : null;
+    const actualCompletionDate = updates.actualCompletionDate ? parseDateLike(updates.actualCompletionDate) : null;
+    if ((updates.startDate && !startDate) || (updates.expectedCompletionDate && !expectedCompletionDate) || (updates.actualCompletionDate && !actualCompletionDate)) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Work order dates must be valid dates' }); }
+    if (startDate && expectedCompletionDate && expectedCompletionDate < startDate) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Expected completion must be on or after the start date' }); }
+    updates.startDate = startDate;
+    updates.expectedCompletionDate = expectedCompletionDate;
+    updates.actualCompletionDate = actualCompletionDate;
 
     await item.update(updates, { transaction });
     await MaintenanceHistory.create({ assetId: item.assetId, maintenanceId: item.maintenanceId || item.id, userId: req.user.id, actionType: 'work_order_updated', actionDate: new Date(), newStatus: status, description: 'Work order updated', details: { workOrderId: item.id } }, { transaction });
-    await AuditLog.create({ userId: req.user.id, action: 'UPDATE_MAINTENANCE_WORK_ORDER', entity: `maintenance_work_order:${item.id}`, details: JSON.stringify({ workOrderId: item.id }) }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'UPDATE_MAINTENANCE_WORK_ORDER', entity: `maintenance_work_order:${item.id}`, details: JSON.stringify({ actorRole: req.user.role, oldValue, newValue: { ...oldValue, ...updates } }) }, { transaction });
     await transaction.commit();
     return res.json({ success: true, data: normalizeMaintenanceWorkOrder(item) });
-  } catch (error) { await transaction.rollback(); next(error); }
+  } catch (error) { await rollbackIfPending(transaction); next(error); }
 };
 
 const updateMaintenanceWorkOrderStatus = async (req, res, next) => {
@@ -2296,6 +2596,7 @@ const updateMaintenanceWorkOrderStatus = async (req, res, next) => {
     const item = await MaintenanceWorkOrder.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
     if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Work order not found' }); }
     const previousStatus = normalizeWorkOrderStatus(item.status);
+    const previousProgress = item.progress;
     const nextStatus = normalizeWorkOrderStatus(req.body?.status || 'open');
     if (!Object.keys(workOrderStatusTransitions).includes(nextStatus) || !workOrderStatusTransitions[previousStatus]?.includes(nextStatus)) {
       await transaction.rollback();
@@ -2306,24 +2607,30 @@ const updateMaintenanceWorkOrderStatus = async (req, res, next) => {
     if (nextStatus === 'completed') updates.actualCompletionDate = new Date();
     await item.update(updates, { transaction });
     await MaintenanceHistory.create({ assetId: item.assetId, maintenanceId: item.maintenanceId || item.id, userId: req.user.id, actionType: 'status_changed', actionDate: new Date(), previousStatus, newStatus: nextStatus, description: `Work order status changed from ${displayWorkOrderStatus(previousStatus)} to ${displayWorkOrderStatus(nextStatus)}`, details: { workOrderId: item.id } }, { transaction });
-    await AuditLog.create({ userId: req.user.id, action: 'UPDATE_MAINTENANCE_WORK_ORDER_STATUS', entity: `maintenance_work_order:${item.id}`, details: JSON.stringify({ previousStatus, newStatus: nextStatus }) }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'UPDATE_MAINTENANCE_WORK_ORDER_STATUS', entity: `maintenance_work_order:${item.id}`, details: JSON.stringify({ actorRole: req.user.role, oldValue: { status: previousStatus, progress: previousProgress }, newValue: { status: nextStatus, progress: updates.progress, actualCompletionDate: updates.actualCompletionDate || item.actualCompletionDate } }) }, { transaction });
     await transaction.commit();
     return res.json({ success: true, data: normalizeMaintenanceWorkOrder(item) });
-  } catch (error) { await transaction.rollback(); next(error); }
+  } catch (error) { await rollbackIfPending(transaction); next(error); }
 };
 
 const assignMaintenanceWorkOrder = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
   try {
-    const item = await MaintenanceWorkOrder.findByPk(req.params.id);
-    if (!item) return res.status(404).json({ success: false, message: 'Work order not found' });
+    const item = await MaintenanceWorkOrder.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Work order not found' }); }
+    const oldValue = { technicianId: item.technicianId, status: item.status, progress: item.progress };
     const technicianId = req.body.technicianId ?? req.body.technician_id ?? null;
     if (technicianId) {
-      const technician = await User.findOne({ where: { id: technicianId, role: 'maintenance', active: true } });
-      if (!technician) return res.status(422).json({ success: false, message: 'A valid active maintenance technician is required' });
+      const technician = await User.findOne({ where: { id: technicianId, role: 'maintenance', active: true }, transaction });
+      if (!technician) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'A valid active maintenance technician is required' }); }
     }
-    await item.update({ technicianId: technicianId || null, status: technicianId ? 'assigned' : item.status, progress: Number(req.body.progress ?? item.progress ?? 0) });
+    const updates = { technicianId: technicianId || null, status: technicianId ? 'assigned' : item.status, progress: Number(req.body.progress ?? item.progress ?? 0) };
+    await item.update(updates, { transaction });
+    await MaintenanceHistory.create({ assetId: item.assetId, maintenanceId: item.maintenanceId || item.id, userId: req.user.id, actionType: 'work_order_assigned', actionDate: new Date(), previousStatus: oldValue.status, newStatus: updates.status, description: technicianId ? 'Technician assigned to work order' : 'Technician unassigned from work order', details: { workOrderId: item.id, previousTechnicianId: oldValue.technicianId, technicianId: updates.technicianId } }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'ASSIGN_MAINTENANCE_WORK_ORDER', entity: `maintenance_work_order:${item.id}`, details: JSON.stringify({ actorRole: req.user.role, oldValue, newValue: updates }) }, { transaction });
+    await transaction.commit();
     return res.json({ success: true, data: normalizeMaintenanceWorkOrder(item) });
-  } catch (error) { next(error); }
+  } catch (error) { await rollbackIfPending(transaction); next(error); }
 };
 
 const getRepairHistory = async (req, res, next) => {
@@ -2368,22 +2675,51 @@ const getRepairDetails = async (req, res, next) => {
 const createRepair = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
-    const { asset_id, problem, diagnosis = '', repair_action = '', parts_replaced = '', technician_id = null, vendor = '', cost = 0, repair_date, completion_date = null, status = 'open', priority = 'medium', notes = '', work_order_id = null } = req.body;
+    const { asset_id, problem, diagnosis = '', repair_action = '', parts_replaced = '', technician_id = null, vendor = '', repair_date, completion_date = null, status = 'open', priority = 'medium', notes = '', work_order_id = null } = req.body;
     if (!asset_id || !String(problem || '').trim()) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Asset and problem are required' }); }
-    const numericCost = Number(cost);
-    if (!Number.isFinite(numericCost) || numericCost < 0) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Repair cost must be a valid non-negative number' }); }
+    const costBreakdown = readRepairCostBreakdown(req.body || {});
+    if (costBreakdown.error) { await transaction.rollback(); return res.status(422).json({ success: false, message: costBreakdown.error }); }
     const nextRepairStatus = normalizeRepairStatus(status || 'open');
     if (!Object.keys(repairStatusTransitions).includes(nextRepairStatus)) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Invalid repair status' }); }
+    const normalizedPriority = String(priority || 'medium').trim().toLowerCase();
+    if (!['low', 'medium', 'high', 'critical'].includes(normalizedPriority)) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Invalid repair priority' }); }
     const asset = await Asset.findOne({ where: { id: asset_id, ...(req.user.collegeId ? { collegeId: req.user.collegeId } : {}) }, transaction });
     if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found in your college scope' }); }
-    const item = await Maintenance.create({ assetId: asset.id, requestedBy: req.user.id, assignedTo: technician_id || null, title: String(problem).trim().slice(0, 255), description: String(problem).trim(), priority: String(priority).toLowerCase(), status: nextRepairStatus }, { transaction });
-    await MaintenanceRepair.create({ maintenanceId: item.id, assetId: asset.id, workOrderId: work_order_id || null, technicianId: technician_id || null, problemDescription: problem, diagnosis, repairAction: repair_action, partsUsed: parts_replaced, totalCost: numericCost, completionDate: completion_date || null, notes, serviceCost: 0, laborCost: 0, partsCost: 0, status: nextRepairStatus }, { transaction });
-    await MaintenanceHistory.create({ assetId: asset.id, maintenanceId: item.id, userId: req.user.id, actionType: 'created', description: 'Repair record created', newStatus: nextRepairStatus }, { transaction });
-    await AuditLog.create({ userId: req.user.id, action: 'REPAIR_CREATED', entity: `maintenance:${item.id}`, details: JSON.stringify({ assetId: asset.id, status: nextRepairStatus }) }, { transaction });
+    if (technician_id) {
+      const technician = await User.findOne({ where: { id: technician_id, role: 'maintenance', active: true }, transaction });
+      if (!technician) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'A valid active maintenance technician is required' }); }
+    }
+
+    let workOrder = null;
+    let item;
+    if (work_order_id !== null && work_order_id !== '') {
+      const parsedWorkOrderId = Number(work_order_id);
+      if (!Number.isInteger(parsedWorkOrderId) || parsedWorkOrderId < 1) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'A valid work order is required' }); }
+      workOrder = await MaintenanceWorkOrder.findByPk(parsedWorkOrderId, { transaction, lock: transaction.LOCK.UPDATE });
+      if (!workOrder) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Work order not found' }); }
+      if (Number(workOrder.assetId) !== Number(asset.id)) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'The work order must belong to the selected asset' }); }
+      item = await Maintenance.findByPk(workOrder.maintenanceId, { transaction, lock: transaction.LOCK.UPDATE });
+      if (!item || Number(item.assetId) !== Number(asset.id)) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Linked maintenance request not found for this work order' }); }
+      const workOrderPriority = String(workOrder.priority || normalizedPriority).trim().toLowerCase();
+      if (!['low', 'medium', 'high', 'critical'].includes(workOrderPriority)) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'The linked work order has an invalid priority' }); }
+      if (item.priority !== workOrderPriority) await item.update({ priority: workOrderPriority }, { transaction });
+      if (nextRepairStatus === 'in-progress' && item.status !== 'in-progress') {
+        if (!allowedTransitions[item.status]?.includes('in-progress')) { await transaction.rollback(); return res.status(409).json({ success: false, message: `Cannot start a repair while maintenance is ${displayStatus(item.status)}` }); }
+        await item.update({ status: 'in-progress' }, { transaction });
+        await asset.update({ status: 'under-maintenance' }, { transaction });
+      }
+    } else {
+      item = await Maintenance.create({ assetId: asset.id, requestedBy: req.user.id, assignedTo: technician_id || null, title: String(problem).trim().slice(0, 255), description: String(problem).trim(), priority: normalizedPriority, status: nextRepairStatus }, { transaction });
+    }
+
+    const repair = await MaintenanceRepair.create({ maintenanceId: item.id, assetId: asset.id, workOrderId: workOrder?.id || null, technicianId: technician_id || null, problemDescription: problem, diagnosis, repairAction: repair_action, partsUsed: parts_replaced, totalCost: costBreakdown.totalCost, completionDate: completion_date || null, notes, serviceCost: costBreakdown.otherCost, laborCost: costBreakdown.laborCost, partsCost: costBreakdown.partsCost, materialsCost: costBreakdown.materialsCost, status: nextRepairStatus }, { transaction });
+    if (hasRepairCostBreakdown(req.body || {})) await persistRepairCostRows({ breakdown: costBreakdown, repair, maintenance: item, asset, userId: req.user.id, transaction });
+    await MaintenanceHistory.create({ assetId: asset.id, maintenanceId: item.id, userId: req.user.id, actionType: 'repair_created', description: 'Repair record created', newStatus: nextRepairStatus, details: { repairId: repair.id, workOrderId: workOrder?.id || null } }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'REPAIR_CREATED', entity: `maintenance_repair:${repair.id}`, details: JSON.stringify({ assetId: asset.id, maintenanceId: item.id, workOrderId: workOrder?.id || null, status: nextRepairStatus }) }, { transaction });
     await transaction.commit();
     const created = await Maintenance.findOne({ where: { id: item.id }, include: repairInclude });
     res.status(201).json({ success: true, data: normalizeRepair(created) });
-  } catch (error) { await transaction.rollback(); next(error); }
+  } catch (error) { await rollbackIfPending(transaction); next(error); }
 };
 
 const updateRepair = async (req, res, next) => {
@@ -2392,16 +2728,90 @@ const updateRepair = async (req, res, next) => {
     const item = await Maintenance.findOne({ where: { id: req.params.id, ...repairScope(req) }, include: [{ model: MaintenanceRepair, required: false }], transaction, lock: transaction.LOCK.UPDATE });
     if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Repair record not found' }); }
     const repair = item.MaintenanceRepairs?.[0];
-    const status = req.body.status ? normalizeRepairStatus(req.body.status) : normalizeRepairStatus(item.status || 'open');
+    if (!repair) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Repair record not found' }); }
+    const previousStatus = normalizeRepairStatus(repair.status || 'open');
+    const status = req.body.status ? normalizeRepairStatus(req.body.status) : previousStatus;
     if (!Object.keys(repairStatusTransitions).includes(status)) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Invalid repair status' }); }
-    await item.update({ description: req.body.problem ?? item.description, title: String(req.body.problem ?? item.title).slice(0, 255), priority: String(req.body.priority ?? item.priority).toLowerCase(), status, assignedTo: req.body.technician_id ?? item.assignedTo }, { transaction });
-    if (repair) await repair.update({ diagnosis: req.body.diagnosis ?? repair.diagnosis, repairAction: req.body.repair_action ?? repair.repairAction, partsUsed: req.body.parts_replaced ?? repair.partsUsed, totalCost: req.body.cost ?? repair.totalCost, completionDate: req.body.completion_date ?? repair.completionDate, notes: req.body.notes ?? repair.notes, technicianId: req.body.technician_id ?? repair.technicianId, workOrderId: req.body.work_order_id ?? repair.workOrderId, status }, { transaction });
-    await MaintenanceHistory.create({ assetId: item.assetId, maintenanceId: item.id, userId: req.user.id, actionType: 'updated', description: 'Repair record updated', newStatus: status }, { transaction });
-    await AuditLog.create({ userId: req.user.id, action: 'REPAIR_UPDATED', entity: `maintenance:${item.id}`, details: JSON.stringify({ status }) }, { transaction });
+    if (status !== previousStatus && !repairStatusTransitions[previousStatus]?.includes(status)) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: `Invalid repair status transition from ${displayRepairStatus(previousStatus)} to ${displayRepairStatus(status)}` });
+    }
+
+    const costBreakdown = readRepairCostBreakdown(req.body || {}, repair);
+    if (costBreakdown.error) { await transaction.rollback(); return res.status(422).json({ success: false, message: costBreakdown.error }); }
+    const cost = costBreakdown.totalCost;
+    const priority = String(req.body.priority ?? item.priority ?? 'medium').trim().toLowerCase();
+    if (!['low', 'medium', 'high', 'critical'].includes(priority)) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Invalid repair priority' }); }
+
+    const technicianId = req.body.technician_id === undefined ? (repair.technicianId || item.assignedTo || null) : (req.body.technician_id ? Number(req.body.technician_id) : null);
+    if (technicianId !== null) {
+      const technician = await User.findOne({ where: { id: technicianId, role: 'maintenance', active: true }, transaction });
+      if (!technician) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'A valid active maintenance technician is required' }); }
+    }
+
+    const workOrderId = req.body.work_order_id === null ? null : (req.body.work_order_id === undefined ? repair.workOrderId : Number(req.body.work_order_id));
+    if (workOrderId !== null) {
+      const workOrder = await MaintenanceWorkOrder.findByPk(workOrderId, { transaction, lock: transaction.LOCK.UPDATE });
+      if (!workOrder || Number(workOrder.maintenanceId) !== Number(item.id) || Number(workOrder.assetId) !== Number(item.assetId)) {
+        await transaction.rollback();
+        return res.status(422).json({ success: false, message: 'The work order must belong to this repair maintenance record and asset' });
+      }
+    }
+
+    const completionDate = req.body.completion_date
+      ? new Date(req.body.completion_date)
+      : status === 'completed' && previousStatus !== 'completed'
+        ? new Date()
+        : repair.completionDate;
+    if (completionDate && Number.isNaN(completionDate.getTime())) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Invalid repair completion date' }); }
+
+    const maintenanceStatus = {
+      'in-progress': 'in-progress',
+      'waiting-for-parts': 'waiting-for-parts',
+      testing: 'testing',
+    }[status];
+    if (maintenanceStatus && item.status !== maintenanceStatus && !allowedTransitions[item.status]?.includes(maintenanceStatus)) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: `Invalid maintenance status transition from ${displayStatus(item.status)} to ${displayStatus(maintenanceStatus)}` });
+    }
+
+    const previousValue = { status: previousStatus, totalCost: Number(repair.totalCost || 0), laborCost: Number(repair.laborCost || 0), partsCost: Number(repair.partsCost || 0), materialsCost: Number(repair.materialsCost || 0), otherCost: Number(repair.serviceCost || 0), technicianId: repair.technicianId, workOrderId: repair.workOrderId, completionDate: repair.completionDate };
+    const nextValue = { status, totalCost: cost, laborCost: costBreakdown.laborCost, partsCost: costBreakdown.partsCost, materialsCost: costBreakdown.materialsCost, otherCost: costBreakdown.otherCost, technicianId, workOrderId, completionDate };
+    await item.update({
+      description: req.body.problem ?? item.description,
+      title: String(req.body.problem ?? item.title).slice(0, 255),
+      priority,
+      assignedTo: technicianId,
+      ...(maintenanceStatus ? { status: maintenanceStatus } : {}),
+    }, { transaction });
+    await repair.update({
+      diagnosis: req.body.diagnosis ?? repair.diagnosis,
+      repairAction: req.body.repair_action ?? repair.repairAction,
+      partsUsed: req.body.parts_replaced ?? repair.partsUsed,
+      totalCost: cost,
+      laborCost: costBreakdown.laborCost,
+      partsCost: costBreakdown.partsCost,
+      materialsCost: costBreakdown.materialsCost,
+      serviceCost: costBreakdown.otherCost,
+      completionDate,
+      notes: req.body.notes ?? repair.notes,
+      technicianId,
+      workOrderId,
+      status,
+    }, { transaction });
+    if (hasRepairCostBreakdown(req.body || {}) || Object.prototype.hasOwnProperty.call(req.body || {}, 'cost')) {
+      await persistRepairCostRows({ breakdown: costBreakdown, repair, maintenance: item, asset: { id: item.assetId }, userId: req.user.id, transaction });
+    }
+    if (maintenanceStatus) {
+      const asset = await Asset.findByPk(item.assetId, { transaction, lock: transaction.LOCK.UPDATE });
+      if (asset) await asset.update({ status: maintenanceStatus === 'testing' ? 'testing' : 'under-maintenance' }, { transaction });
+    }
+    await MaintenanceHistory.create({ assetId: item.assetId, maintenanceId: item.id, userId: req.user.id, actionType: status === previousStatus ? 'repair_updated' : 'repair_status_changed', previousStatus, newStatus: status, description: status === previousStatus ? 'Repair record updated' : `Repair status changed from ${displayRepairStatus(previousStatus)} to ${displayRepairStatus(status)}`, details: { repairId: repair.id, workOrderId, previousValue, newValue: nextValue } }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'REPAIR_UPDATED', entity: `maintenance_repair:${repair.id}`, details: JSON.stringify({ actorRole: req.user.role, maintenanceId: item.id, previousValue, newValue: nextValue }) }, { transaction });
     await transaction.commit();
     const updated = await Maintenance.findOne({ where: { id: item.id }, include: repairInclude });
     res.json({ success: true, data: normalizeRepair(updated) });
-  } catch (error) { await transaction.rollback(); next(error); }
+  } catch (error) { await rollbackIfPending(transaction); next(error); }
 };
 
 const calendarEventsSummary = (events = []) => ({
@@ -2696,6 +3106,8 @@ module.exports = {
   getPreventiveMaintenance,
   getPreventiveMaintenanceById,
   createPreventiveMaintenance,
+  updatePreventiveMaintenance,
+  deletePreventiveMaintenance,
   startPreventiveMaintenance,
   pausePreventiveMaintenance,
   resumePreventiveMaintenance,
@@ -2743,6 +3155,12 @@ module.exports = {
   updateMaintenanceWorkOrderStatus,
   assignMaintenanceWorkOrder,
   getRepairHistory,
+  normalizeRepair,
+  validatePreventiveScheduleInput,
+  rollbackIfPending,
+  isValidPreventiveTransition,
+  summarizeMaintenanceCosts,
+  activatePreventiveMaintenance,
   buildRepairSummary,
   getRepairDetails,
   createRepair,

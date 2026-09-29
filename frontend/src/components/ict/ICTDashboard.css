@@ -1,15 +1,17 @@
-﻿.ict-dashboard {
-  --bg: #f8fafc;
-  --panel: #ffffff;
-  --panel-soft: #f8fafc;
-  --border: #e2e8f0;
-  --text: #0f172a;
-  --muted: #64748b;
-  --blue: #2563eb;
-  --green: #16a34a;
-  --cyan: #0891b2;
-  --amber: #d97706;
-  --red: #dc2626;
+﻿/* Dashboard tokens resolve to the shared design system
+   (src/styles/theme.css). Nothing here holds a raw hex. */
+.ict-dashboard {
+  --bg: var(--color-background);
+  --panel: var(--color-surface);
+  --panel-soft: var(--color-surface-muted);
+  --border: var(--color-border);
+  --text: var(--color-text-primary);
+  --muted: var(--color-text-muted);
+  --blue: var(--color-primary);
+  --green: var(--color-success);
+  --cyan: var(--color-info);
+  --amber: var(--color-warning);
+  --red: var(--color-danger);
   min-height: 100%;
   padding: 32px;
   background: var(--bg);
@@ -36,7 +38,7 @@
 
 .ict-dashboard-header p {
   margin: 8px 0 0;
-  color: var(--muted);
+  color: var(--color-text-secondary-on-page);
   font-size: 1rem;
 }
 
@@ -55,23 +57,23 @@
   border: 1px solid var(--border);
   border-radius: 18px;
   background: var(--panel);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.03);
+  box-shadow: var(--shadow-dashboard-card);
 }
 
+/* KPI icon squares: light tint + readable foreground (WCAG AA on the tint). */
 .ict-stat-icon {
   display: grid;
   place-items: center;
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  color: white;
 }
 
-.ict-tone-blue .ict-stat-icon { background: var(--blue); }
-.ict-tone-green .ict-stat-icon { background: var(--green); }
-.ict-tone-cyan .ict-stat-icon { background: var(--cyan); }
-.ict-tone-amber .ict-stat-icon { background: var(--amber); }
-.ict-tone-red .ict-stat-icon { background: var(--red); }
+.ict-tone-blue .ict-stat-icon { background: var(--color-primary-light); color: var(--color-primary-text); }
+.ict-tone-green .ict-stat-icon { background: var(--color-success-light); color: var(--color-success-text); }
+.ict-tone-cyan .ict-stat-icon { background: var(--color-info-light); color: var(--color-info-text); }
+.ict-tone-amber .ict-stat-icon { background: var(--color-warning-light); color: var(--color-warning-text); }
+.ict-tone-red .ict-stat-icon { background: var(--color-danger-light); color: var(--color-danger-text); }
 
 .ict-stat-copy {
   display: flex;
@@ -103,7 +105,7 @@
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 20px;
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.03);
+  box-shadow: var(--shadow-dashboard-card);
 }
 
 .ict-panel-header {
@@ -202,11 +204,11 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--blue), #60a5fa);
+  background: var(--color-primary);
 }
 
 .ict-chart-bar.maintenance {
-  background: linear-gradient(90deg, var(--amber), #fbbf24);
+  background: var(--color-warning);
 }
 
 .ict-empty-card,
@@ -241,7 +243,7 @@
   border: 1px solid var(--border);
   border-radius: 24px;
   background: var(--panel);
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--shadow-dashboard-card-hover);
 }
 
 .ict-empty-panel h1 {
@@ -261,13 +263,18 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: none;
+  border: 1px solid var(--color-primary);
   border-radius: 12px;
   padding: 10px 16px;
-  background: var(--blue);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-surface);
   font-weight: 600;
   cursor: pointer;
+}
+
+.ict-primary-button:hover {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
 }
 
 .ict-activity-list {
@@ -298,8 +305,8 @@
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: #eff6ff;
-  color: var(--blue);
+  background: var(--color-primary-light);
+  color: var(--color-primary-text);
 }
 
 .ict-activity-copy {
@@ -365,9 +372,7 @@
 .ict-skeleton-line {
   height: 18px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%);
-  background-size: 200% 100%;
-  animation: ict-pulse 1.5s ease infinite;
+  background: var(--color-surface-muted);
 }
 
 .ict-skeleton-line.long { width: 280px; }
@@ -382,14 +387,13 @@
 .ict-skeleton-card {
   height: 120px;
   border-radius: 18px;
-  background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%);
-  background-size: 200% 100%;
-  animation: ict-pulse 1.5s ease infinite;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
 }
 
 @keyframes ict-pulse {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }
 
 @media (max-width: 1024px) {

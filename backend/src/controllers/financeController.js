@@ -596,7 +596,7 @@ const listBudgetReports = async (req, res, next) => {
     const include = [
       { model: FiscalYear, as: 'FiscalYear', attributes: ['id', 'code', 'name', 'startDate', 'endDate', 'status'] },
       { model: FundSource, as: 'FundSource', attributes: ['id', 'code', 'name', 'status'] },
-      { model: College, as: 'CollegeRecord', attributes: ['id', 'name'], required: false },
+      { model: College, as: 'CollegeRecord', attributes: ['id', ['collegeName', 'name']], required: false },
       { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name'], required: false },
     ];
     const result = await Budget.findAndCountAll({ where, include, limit, offset: (page - 1) * limit, distinct: true, order: [['budgetCode', 'ASC']] });
@@ -664,7 +664,7 @@ const listBudgetReports = async (req, res, next) => {
     const [fiscalYears, fundSources, colleges, departments] = await Promise.all([
       FiscalYear.findAll({ order: [['startDate', 'DESC']] }),
       FundSource.findAll({ order: [['name', 'ASC']] }),
-      College.findAll({ attributes: ['id', 'name'], order: [['name', 'ASC']] }),
+      College.findAll({ attributes: ['id', ['collegeName', 'name']], order: [['collegeName', 'ASC']] }),
       Department.findAll({ attributes: ['id', 'name', 'collegeId'], order: [['name', 'ASC']] }),
     ]);
     res.json({ success: true, data: rows, summary, filters: { fiscalYears, fundSources, colleges, departments }, pagination: { page, limit, total: result.count, totalPages: Math.max(1, Math.ceil(result.count / limit)) } });

@@ -9,18 +9,23 @@ const { resolveDemoPassword } = require('../src/config/seed');
 const { findCollegeScopeForUser } = require('../src/middlewares/organizationScope');
 const { normalizeOrganizationSettings, resolveOrganizationSettings } = require('../src/routes/adminSettingsRoutes');
 
-test('uses the project default demo password for the seeded admin account', () => {
+test('demo account seeding requires an explicitly configured password', () => {
   const previousNodeEnv = process.env.NODE_ENV;
   const previousSeedPassword = process.env.SEED_DEMO_PASSWORD;
+  const previousDemoPassword = process.env.DEMO_USER_PASSWORD;
 
   process.env.NODE_ENV = 'development';
   delete process.env.SEED_DEMO_PASSWORD;
+  delete process.env.DEMO_USER_PASSWORD;
 
   try {
-    assert.equal(resolveDemoPassword(), 'bekelei123');
+    assert.throws(resolveDemoPassword, /requires SEED_DEMO_PASSWORD/);
+    process.env.SEED_DEMO_PASSWORD = 'explicit-test-only-password';
+    assert.equal(resolveDemoPassword(), 'explicit-test-only-password');
   } finally {
     if (previousNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousNodeEnv;
     if (previousSeedPassword === undefined) delete process.env.SEED_DEMO_PASSWORD; else process.env.SEED_DEMO_PASSWORD = previousSeedPassword;
+    if (previousDemoPassword === undefined) delete process.env.DEMO_USER_PASSWORD; else process.env.DEMO_USER_PASSWORD = previousDemoPassword;
   }
 });
 

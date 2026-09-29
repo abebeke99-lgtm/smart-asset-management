@@ -1023,11 +1023,24 @@ const globalIctSearch = async (req, res, next) => {
     const like = { [Op.like]: `%${search}%` };
     const assetWhere = { ...ictAssetWhere(req), [Op.or]: [{ name: like }, { assetCode: like }, { serialNumber: like }, { digitalId: like }, { rfidTag: like }] };
     const orgScope = req.user.role === 'admin' ? {} : { collegeId: req.organizationScope.collegeId };
+    const incidentScope = req.user.role === 'admin' ? {} : {
+      [Op.or]: [
+        { '$Reporter.college_id$': req.organizationScope.collegeId },
+        { '$Asset.college_id$': req.organizationScope.collegeId },
+        { '$DepartmentRecord.college_id$': req.organizationScope.collegeId },
+      ],
+    };
     const [assets, tickets, incidents, maintenance, users, locations] = await Promise.all([
       Asset.findAll({ where: assetWhere, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'category', 'status', 'condition', 'location', 'department'], limit: 10 }),
       ServiceRequest.findAll({ where: { ...orgScope, requestType: 'support', [Op.or]: [{ title: like }, { requestCode: like }, { description: like }] }, attributes: ['id', 'requestCode', 'title', 'status', 'priority', 'createdAt'], limit: 10 }),
-      Incident.findAll({ where: { ...orgScope, [Op.or]: [{ title: like }, { incidentNumber: like }, { description: like }] }, attributes: ['id', 'incidentNumber', 'title', 'status', 'priority', 'createdAt'], limit: 10 }),
-      Maintenance.findAll({ where: { [Op.or]: [{ description: like }, { assetId: { [Op.in]: (await Asset.findAll({ where: assetWhere, attributes: ['id'], raw: true })).map((a) => a.id) } }] }, attributes: ['id', 'assetId', 'type', 'status', 'description', 'createdAt'], limit: 10 }),
+      Incident.findAll({
+        where: { ...incidentScope, [Op.and]: [{ [Op.or]: [{ title: like }, { incidentNumber: like }, { description: like }] }] },
+        include: incidentInclude,
+        attributes: ['id', 'incidentNumber', 'title', 'status', 'priority', 'createdAt'],
+        limit: 10,
+        subQuery: false,
+      }),
+      Maintenance.findAll({ where: { [Op.or]: [{ description: like }, { assetId: { [Op.in]: (await Asset.findAll({ where: assetWhere, attributes: ['id'], raw: true })).map((a) => a.id) } }] }, attributes: ['id', 'assetId', 'title', 'status', 'description', 'createdAt'], limit: 10 }),
       req.user.role === 'admin' ? User.findAll({ where: { [Op.or]: [{ username: like }, { fullName: like }, { email: like }] }, attributes: ['id', 'username', 'fullName', 'email', 'role'], limit: 10 }) : [],
       req.user.role === 'admin' ? Location.findAll({ where: { [Op.or]: [{ name: like }, { type: like }] }, attributes: ['id', 'name', 'type'], limit: 10 }) : [],
     ]);

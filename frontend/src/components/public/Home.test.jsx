@@ -15,28 +15,24 @@ describe('Home', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('heading', { name: /University Asset Management System/i })).toBeInTheDocument();
-    expect(screen.getByText(/Asset registration/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Smart University Asset Management' })).toBeInTheDocument();
+    expect(screen.getAllByText('UNIVERSITY ASSET OPERATIONS')).toHaveLength(2);
+    expect(screen.getByText('Manage, track, assign, maintain, and monitor every university asset from one centralized platform.')).toBeInTheDocument();
+    expect(screen.getByText(/From asset registration and assignment to transfer, maintenance, verification, returns, and financial reporting/)).toBeInTheDocument();
+    expect(within(screen.getByRole('list', { name: 'Core system features' })).getByText('Asset Registration')).toBeInTheDocument();
+    expect(screen.getByText('Reports & Analytics')).toBeInTheDocument();
+    expect(screen.getByText('Complete visibility across the entire asset lifecycle.')).toBeInTheDocument();
+    expect(screen.getByText('SYSTEM GOAL')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Operational services built for the university/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Why Departments Choose This System' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Centralized Asset Records' })).toBeInTheDocument();
-    expect(screen.getByText('Manage accurate university asset information in one centralized platform.')).toBeInTheDocument();
-    expect(screen.getByText('Track who is responsible for each asset and maintain clear accountability.')).toBeInTheDocument();
-    expect(screen.getByText('Support efficient coordination between departments, colleges, stores, ICT, finance, and maintenance.')).toBeInTheDocument();
-    expect(screen.getByText('Provide organized information for operational and financial decision-making.')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'How the System Works' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Built for Every Role' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Secure by Design' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Trusted by Mekdela Amba University' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Quick Links' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Ready to Get Started?' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /View the full asset lifecycle/i })).toHaveAttribute('href', '/about#lifecycle');
-    expect(screen.getByRole('link', { name: /View role responsibilities/i })).toHaveAttribute('href', '/about#about-roles-title');
-    expect(screen.getByRole('link', { name: /Help/i })).toHaveAttribute('href', '/help');
-    expect(screen.getByRole('link', { name: /Contact/i })).toHaveAttribute('href', '/contact');
-    expect(screen.getAllByRole('link', { name: /Login/i })).toHaveLength(2);
-    expect(screen.getAllByRole('link', { name: /Login/i })[0]).toHaveAttribute('href', '/login');
-    expect(screen.getByRole('link', { name: /Learn More/i })).toHaveAttribute('href', '/about');
+    expect(screen.queryByRole('heading', { name: 'Why Departments Choose This System' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'How the System Works' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Built for Every Role' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Secure by Design' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Trusted by Mekdela Amba University' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Quick Links' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Ready to Get Started?' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Login to System' })).toHaveAttribute('href', '/login');
+    expect(screen.getByRole('link', { name: 'Explore System' })).toHaveAttribute('href', '/about');
   });
 
   it('renders Amharic page content from the shared language context', () => {
@@ -47,13 +43,13 @@ describe('Home', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('heading', { name: 'የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'ዘመናዊ የዩኒቨርሲቲ ንብረት አስተዳደር' })).toBeInTheDocument();
     expect(screen.getByText('ንብረት መመዝገብ')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'ስርዓቱ እንዴት ይሰራል?' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'ለሁሉም ሚናዎች የተዘጋጀ' })).toBeInTheDocument();
-    expect(screen.getByText('ትክክለኛ የዩኒቨርሲቲ ንብረት መረጃን በአንድ ማዕከላዊ መድረክ ያስተዳድሩ።')).toBeInTheDocument();
-    expect(screen.getByText('ለእያንዳንዱ ንብረት ተጠያቂውን ይከታተሉ እና ግልጽ ተጠያቂነትን ያስጠብቁ።')).toBeInTheDocument();
-    expect(screen.getByText('የአስተዳደርና የፋይናንስ ኦዲት መዝገቦች')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'ስርዓቱ እንዴት ይሰራል?' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'ለሁሉም ሚናዎች የተዘጋጀ' })).not.toBeInTheDocument();
+    expect(screen.queryByText('ትክክለኛ የዩኒቨርሲቲ ንብረት መረጃን በአንድ ማዕከላዊ መድረክ ያስተዳድሩ።')).not.toBeInTheDocument();
+    expect(screen.queryByText('ለእያንዳንዱ ንብረት ተጠያቂውን ይከታተሉ እና ግልጽ ተጠያቂነትን ያስጠብቁ።')).not.toBeInTheDocument();
+    expect(screen.queryByText('የአስተዳደርና የፋይናንስ ኦዲት መዝገቦች')).not.toBeInTheDocument();
   });
 
   it('renders the shared public footer with navigation, legal notice, and language controls', () => {

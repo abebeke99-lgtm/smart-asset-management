@@ -1,0 +1,38 @@
+.maintenance-request-status--warning {
+  background-color: var(--color-warning-light);
+  color: var(--color-warning-text);
+}
+
+.maintenance-request-status--success {
+  background-color: var(--color-success-light);
+  color: var(--color-success-text);
+}
+
+.maintenance-request-status--danger {
+  background-color: var(--color-danger-light);
+  color: var(--color-danger-text);
+}
+
+.maintenance-request-status--primary {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-text);
+}
+
+.maintenance-request-status--info {
+  background-color: var(--color-info-light);
+  color: var(--color-info-text);
+}
+
+.maintenance-request-status--neutral {
+  background-color: var(--color-neutral-light);
+  color: var(--color-neutral-text);
+}
+
+.maintenance-request-primary:hover:not(:disabled) {
+  background-color: var(--color-primary-hover) !important;
+}
+
+.maintenance-request-secondary:hover:not(:disabled) {
+  background-color: var(--color-primary-light) !important;
+  color: var(--color-primary-text) !important;
+}

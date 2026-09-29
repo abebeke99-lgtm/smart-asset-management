@@ -33,39 +33,39 @@ code {
 
 /* ==========================================
    CSS Variables
+   Thin aliases over the canonical tokens in styles/theme.css.
    ========================================== */
 
 :root {
-  --primary: var(--color-shell-primary);
-  --primary-dark: var(--color-shell-footer);
-  --primary-hover: var(--color-shell-sidebar);
-  --sidebar: var(--color-shell-sidebar);
+  --primary: var(--color-primary);
+  --primary-dark: var(--color-primary-hover);
+  --primary-hover: var(--color-primary-hover);
+  --sidebar: var(--color-sidebar);
   --sidebar-hover: var(--color-sidebar-hover);
   --sidebar-active: var(--color-sidebar-active);
   --body-bg: var(--color-page-bg);
   --surface: var(--color-card);
-  --surface-muted: #f3f6f8;
-  --surface-hover: #e9eef4;
+  --surface-muted: var(--color-surface-muted);
+  --surface-hover: var(--color-surface-muted);
   --text-primary: var(--color-text-primary);
   --text-secondary: var(--color-text-secondary);
   --text-muted: var(--color-text-muted);
+  --text-muted-on-page: var(--color-text-secondary-on-page);
   --text-on-dark: #f8fafc;
-  --success: #16a34a;
-  --success-light: #dcfce7;
-  --warning: #f59e0b;
-  --warning-light: #fef3c7;
-  --danger: #dc2626;
-  --danger-light: #fee2e2;
-  --info: var(--color-shell-primary);
-  --info-light: #edf2f7;
-  --purple: #7c3aed;
-  --purple-light: #ede9fe;
+  --success: var(--color-success);
+  --success-light: var(--color-success-light);
+  --warning: var(--color-warning);
+  --warning-light: var(--color-warning-light);
+  --danger: var(--color-danger);
+  --danger-light: var(--color-danger-light);
+  --info: var(--color-info);
+  --info-light: var(--color-info-light);
   --border: var(--color-border);
-  --border-light: #f5f7f9;
-  --focus: var(--color-shell-primary);
-  --mau-blue: var(--color-shell-footer);
-  --mau-sky: var(--color-shell-primary);
-  --mau-light: var(--info-light);
+  --border-light: var(--color-border);
+  --focus: var(--color-primary);
+  --mau-blue: var(--color-primary);
+  --mau-sky: var(--color-header);
+  --mau-light: var(--color-info-light);
   --mau-text: var(--text-primary);
   --mau-text-light: var(--text-secondary);
 }
@@ -98,12 +98,12 @@ body.dark .App {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2b6cb0;
+  background: var(--color-border);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #1a365d;
+  background: var(--color-text-muted);
 }
 
 body.dark ::-webkit-scrollbar-track {

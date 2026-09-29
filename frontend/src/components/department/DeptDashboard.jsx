@@ -7,6 +7,7 @@ import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/apiClient';
 import { Activity, AlertTriangle, ClipboardList, CircleCheck, DollarSign, LayoutDashboard, LoaderCircle, Package, RefreshCw, Users, Wrench, Zap } from 'lucide-react';
+import { CHART_PALETTE, CHART_TEXT, NOTIFICATION_TONES } from '../../utils/chartPalette';
 import './DeptDashboard.css';
 
 ChartJS.register(
@@ -120,30 +121,19 @@ const [showAlerts, setShowAlerts] = useState(true);
     }
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
-      'In-Use': '#48bb78',
-      'Available': '#4299e1',
-      'Under-Maintenance': '#ed8936',
-      'In-Repair': '#fc8181',
-      'Disposed': '#a0aec0',
-      'Pending': '#f6ad55',
-      'Pending Approval': '#ed8936',
-      'Approved': '#48bb78',
-      'Rejected': '#fc8181',
-      'Completed': '#38a169'
-    };
-    return colors[status] || '#a0aec0';
+  const getStatusTone = (status) => {
+    if (['In-Use', 'Available', 'Approved', 'Completed'].includes(status)) return NOTIFICATION_TONES.success;
+    if (['Under-Maintenance', 'Pending', 'Pending Approval'].includes(status)) return NOTIFICATION_TONES.warning;
+    if (['In-Repair', 'Rejected'].includes(status)) return NOTIFICATION_TONES.danger;
+    if (status === 'Disposed') return NOTIFICATION_TONES.neutral;
+    return NOTIFICATION_TONES.neutral;
   };
 
-  const getPriorityColor = (priority) => {
-    const colors = {
-      'Critical': '#fc8181',
-      'High': '#ed8936',
-      'Medium': '#f6ad55',
-      'Low': '#48bb78'
-    };
-    return colors[priority] || '#a0aec0';
+  const getPriorityTone = (priority) => {
+    if (priority === 'Critical') return NOTIFICATION_TONES.danger;
+    if (priority === 'High' || priority === 'Medium') return NOTIFICATION_TONES.warning;
+    if (priority === 'Low') return NOTIFICATION_TONES.success;
+    return NOTIFICATION_TONES.neutral;
   };
 
   const getActivityIcon = (type) => {
@@ -159,13 +149,13 @@ const [showAlerts, setShowAlerts] = useState(true);
   };
 
   const chartColors = {
-    primary: isDark ? '#63b3ed' : '#2b6cb0',
-    success: isDark ? '#68d391' : '#48bb78',
-    warning: isDark ? '#f6ad55' : '#ed8936',
-    danger: isDark ? '#fc8181' : '#e53e3e',
-    purple: isDark ? '#b794f4' : '#805ad5',
-    pink: isDark ? '#f687b3' : '#d53f8c',
-    teal: isDark ? '#81e6d9' : '#319795'
+    primary: CHART_PALETTE[0],
+    success: NOTIFICATION_TONES.success.text,
+    warning: NOTIFICATION_TONES.warning.text,
+    danger: NOTIFICATION_TONES.danger.text,
+    purple: CHART_PALETTE[2],
+    pink: CHART_PALETTE[5],
+    teal: CHART_PALETTE[4]
   };
 
   const chartOptions = {
@@ -176,7 +166,7 @@ const [showAlerts, setShowAlerts] = useState(true);
       legend: {
         position: 'bottom',
         labels: {
-          color: isDark ? '#c8dcf5' : '#1a365d',
+          color: CHART_TEXT.primary,
           boxWidth: 12,
           padding: 15
         }
@@ -185,13 +175,13 @@ const [showAlerts, setShowAlerts] = useState(true);
     scales: {
       y: {
         ticks: { 
-          color: isDark ? '#8896b0' : '#4a5568'
+          color: CHART_TEXT.secondary
         },
-        grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+        grid: { color: CHART_TEXT.grid }
       },
       x: {
-        ticks: { color: isDark ? '#8896b0' : '#4a5568' },
-        grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }
+        ticks: { color: CHART_TEXT.secondary },
+        grid: { color: CHART_TEXT.grid }
       }
     }
   };
@@ -201,8 +191,8 @@ const [showAlerts, setShowAlerts] = useState(true);
     datasets: [{
       label: 'Assets by Status',
       data: stats.assetByStatus.map(item => item.value),
-      backgroundColor: ['#48bb78', '#4299e1', '#ed8936', '#fc8181', '#805ad5', '#a0aec0'],
-      borderColor: isDark ? '#1e2d45' : '#ffffff',
+      backgroundColor: CHART_PALETTE,
+      borderColor: CHART_TEXT.surface,
       borderWidth: 2
     }]
   };
@@ -212,8 +202,8 @@ const [showAlerts, setShowAlerts] = useState(true);
     datasets: [{
       label: 'Assets by Category',
       data: stats.assetByCategory.map(item => item.value),
-      backgroundColor: ['#63b3ed', '#68d391', '#f6ad55', '#fc8181', '#b794f4', '#81e6d9'],
-      borderColor: isDark ? '#1e2d45' : '#ffffff',
+      backgroundColor: CHART_PALETTE,
+      borderColor: CHART_TEXT.surface,
       borderWidth: 2
     }]
   };
@@ -223,8 +213,8 @@ const [showAlerts, setShowAlerts] = useState(true);
     datasets: [{
       label: 'Assets by Location',
       data: stats.assetByLocation.map(item => item.value),
-      backgroundColor: ['#319795', '#63b3ed', '#68d391', '#f6ad55', '#fc8181', '#805ad5'],
-      borderColor: isDark ? '#1e2d45' : '#ffffff',
+      backgroundColor: CHART_PALETTE,
+      borderColor: CHART_TEXT.surface,
       borderWidth: 2
     }]
   };
@@ -234,8 +224,8 @@ const [showAlerts, setShowAlerts] = useState(true);
     datasets: [{
       label: 'Assets by Condition',
       data: stats.assetByCondition.map(item => item.value),
-      backgroundColor: ['#68d391', '#f6ad55', '#fc8181', '#a0aec0', '#63b3ed'],
-      borderColor: isDark ? '#1e2d45' : '#ffffff',
+      backgroundColor: CHART_PALETTE,
+      borderColor: CHART_TEXT.surface,
       borderWidth: 2
     }]
   };
@@ -245,7 +235,7 @@ const [showAlerts, setShowAlerts] = useState(true);
       padding: '20px',
       maxWidth: '1600px',
       margin: '0 auto',
-      background: isDark ? '#0d1a2e' : '#f0f4f8',
+      background: 'var(--color-background)',
       minHeight: '100vh'
     },
     header: {
@@ -256,13 +246,13 @@ const [showAlerts, setShowAlerts] = useState(true);
       marginBottom: '24px'
     },
     title: {
-      color: isDark ? '#c8dcf5' : '#1a365d',
+      color: 'var(--color-text-primary)',
       fontSize: '1.75rem',
       fontWeight: 700,
       marginBottom: '4px'
     },
     subtitle: {
-      color: isDark ? '#8896b0' : '#4a5568',
+      color: 'var(--color-text-secondary-on-page)',
       fontSize: '0.95rem'
     },
     headerActions: {
@@ -273,15 +263,15 @@ const [showAlerts, setShowAlerts] = useState(true);
     timeRangeButton: {
       padding: '6px 12px',
       borderRadius: '6px',
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      background: isDark ? '#141e2d' : '#ffffff',
-      color: isDark ? '#c8dcf5' : '#1a365d',
+      border: '1px solid var(--color-border)',
+      background: 'var(--color-surface)',
+      color: 'var(--color-text-primary)',
       cursor: 'pointer',
       fontSize: '0.85rem'
     },
     activeTimeRange: {
-      background: isDark ? '#2d4a6f' : '#2b6cb0',
-      color: 'white',
+      background: 'var(--color-primary)',
+      color: 'var(--color-surface)',
       border: 'none'
     },
     statsGrid: {
@@ -291,15 +281,15 @@ const [showAlerts, setShowAlerts] = useState(true);
       marginBottom: '24px'
     },
     statCard: {
-      background: isDark ? '#1e2d45' : '#ffffff',
+      background: 'var(--color-surface)',
       padding: '16px',
       borderRadius: '12px',
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
+      border: '1px solid var(--color-border)',
       cursor: 'pointer',
       transition: 'transform 0.2s, box-shadow 0.2s',
       ':hover': {
         transform: 'translateY(-2px)',
-        boxShadow: isDark ? '0 8px 24px rgba(0,0,0,0.3)' : '0 8px 24px rgba(0,0,100,0.08)'
+        boxShadow: 'var(--shadow-dashboard-card-hover)'
       }
     },
     statIcon: {
@@ -309,16 +299,16 @@ const [showAlerts, setShowAlerts] = useState(true);
     statNumber: {
       fontSize: '1.5rem',
       fontWeight: 700,
-      color: isDark ? '#c8dcf5' : '#1a365d'
+      color: 'var(--color-text-primary)'
     },
     statLabel: {
-      color: isDark ? '#8896b0' : '#4a5568',
+      color: 'var(--color-text-secondary-on-page)',
       fontSize: '0.8rem',
       marginTop: '2px'
     },
     statTrend: {
       fontSize: '0.75rem',
-      color: isDark ? '#68d391' : '#38a169',
+      color: 'var(--color-success-text)',
       marginTop: '4px'
     },
     chartsRow: {
@@ -328,24 +318,24 @@ const [showAlerts, setShowAlerts] = useState(true);
       marginBottom: '24px'
     },
     chartCard: {
-      background: isDark ? '#1e2d45' : '#ffffff',
+      background: 'var(--color-surface)',
       padding: '20px',
       borderRadius: '12px',
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)'
+      border: '1px solid var(--color-border)',
+      boxShadow: 'var(--shadow-dashboard-card)'
     },
     chartTitle: {
-      color: isDark ? '#c8dcf5' : '#1a365d',
+      color: 'var(--color-text-primary)',
       fontSize: '0.95rem',
       fontWeight: 600,
       marginBottom: '16px'
     },
     activityCard: {
-      background: isDark ? '#1e2d45' : '#ffffff',
+      background: 'var(--color-surface)',
       padding: '20px',
       borderRadius: '12px',
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)',
+      border: '1px solid var(--color-border)',
+      boxShadow: 'var(--shadow-dashboard-card)',
       marginBottom: '20px'
     },
     activityItem: {
@@ -353,8 +343,8 @@ const [showAlerts, setShowAlerts] = useState(true);
       alignItems: 'center',
       justifyContent: 'space-between',
       padding: '10px 0',
-      borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      color: isDark ? '#c8dcf5' : '#1a365d'
+      borderBottom: '1px solid var(--color-border)',
+      color: 'var(--color-text-primary)'
     },
     activityIcon: {
       fontSize: '1.2rem',
@@ -365,7 +355,7 @@ const [showAlerts, setShowAlerts] = useState(true);
     },
     activityTime: {
       fontSize: '0.75rem',
-      color: isDark ? '#8896b0' : '#4a5568'
+      color: 'var(--color-text-secondary-on-page)'
     },
     statusBadge: {
       padding: '2px 10px',
@@ -375,7 +365,7 @@ const [showAlerts, setShowAlerts] = useState(true);
       display: 'inline-block'
     },
     alertCard: {
-      background: isDark ? 'rgba(252, 129, 129, 0.1)' : 'rgba(252, 129, 129, 0.05)',
+      background: 'var(--color-danger-light)',
       padding: '12px 16px',
       borderRadius: '8px',
       borderLeft: `4px solid ${chartColors.danger}`,
@@ -388,15 +378,15 @@ const [showAlerts, setShowAlerts] = useState(true);
     emptyState: {
       textAlign: 'center',
       padding: '40px',
-      color: isDark ? '#8896b0' : '#4a5568'
+      color: 'var(--color-text-secondary-on-page)'
     },
     staffBadge: {
       display: 'inline-block',
       padding: '4px 12px',
-      background: isDark ? '#2d4a6f' : '#e8edf5',
+      background: 'var(--color-neutral-light)',
       borderRadius: '12px',
       fontSize: '0.8rem',
-      color: isDark ? '#c8dcf5' : '#1a365d',
+      color: 'var(--color-neutral-text)',
       marginRight: '4px'
     }
   };
@@ -435,7 +425,7 @@ const [showAlerts, setShowAlerts] = useState(true);
           <p className="dept-dashboard__subtitle" style={styles.subtitle}>
             {t.welcome}, {user?.fullName || user?.username || 'User'}
             {!isCollegeManagerRole && (
-              <span style={{ marginLeft: '12px', fontSize: '0.85rem', color: isDark ? '#8896b0' : '#4a5568' }}>
+              <span style={{ marginLeft: '12px', fontSize: '0.85rem', color: 'var(--color-text-secondary-on-page)' }}>
                 {user?.department || ''}
               </span>
             )}
@@ -548,22 +538,20 @@ const [showAlerts, setShowAlerts] = useState(true);
             <div key={index} style={styles.alertCard}>
               <div>
                 <strong>{alert.title}</strong>
-                <span style={{ marginLeft: '12px', fontSize: '0.85rem', color: isDark ? '#8896b0' : '#4a5568' }}>
+                <span style={{ marginLeft: '12px', fontSize: '0.85rem', color: 'var(--color-text-secondary-on-page)' }}>
                   {alert.message || ''}
                 </span>
               </div>
               <div>
                 <span style={{
                   ...styles.statusBadge,
-                  background: `${getPriorityColor(alert.priority)}22`,
-                  color: getPriorityColor(alert.priority)
+                  ...getPriorityTone(alert.priority)
                 }}>
                   {alert.priority}
                 </span>
                 <span style={{
                   ...styles.statusBadge,
-                  background: `${getStatusColor(alert.status)}22`,
-                  color: getStatusColor(alert.status),
+                  ...getStatusTone(alert.status),
                   marginLeft: '8px'
                 }}>
                   {alert.status}
@@ -575,7 +563,7 @@ const [showAlerts, setShowAlerts] = useState(true);
             style={{ 
               ...styles.timeRangeButton, 
               marginTop: '8px',
-              color: isDark ? '#8896b0' : '#4a5568'
+              color: 'var(--color-text-secondary-on-page)'
             }}
             onClick={() => setShowAlerts(false)}
           >
@@ -596,13 +584,12 @@ const [showAlerts, setShowAlerts] = useState(true);
                 <span style={styles.activityIcon}>{getActivityIcon(activity.type)}</span>
                 <div style={styles.activityText}>
                   <div>{activity.title}</div>
-                  <div style={{ fontSize: '0.8rem', color: isDark ? '#8896b0' : '#4a5568' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary-on-page)' }}>
                     {activity.action}
                     {activity.status && (
                       <span style={{
                         ...styles.statusBadge,
-                        background: `${getStatusColor(activity.status)}22`,
-                        color: getStatusColor(activity.status),
+                        ...getStatusTone(activity.status),
                         marginLeft: '8px'
                       }}>
                         {activity.status}
@@ -630,7 +617,7 @@ const [showAlerts, setShowAlerts] = useState(true);
               <div key={index} style={styles.activityItem}>
                 <div>
                   <div style={{ fontWeight: 500 }}>{assignment.name}</div>
-                  <div style={{ fontSize: '0.8rem', color: isDark ? '#8896b0' : '#4a5568' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary-on-page)' }}>
                     {t.assignedTo}: {assignment.assigned_to}
                   </div>
                 </div>
@@ -654,14 +641,13 @@ const [showAlerts, setShowAlerts] = useState(true);
                   <div style={{ fontSize: '0.8rem' }}>
                     <span style={{
                       ...styles.statusBadge,
-                      background: `${getPriorityColor(request.priority)}22`,
-                      color: getPriorityColor(request.priority)
+                      ...getPriorityTone(request.priority)
                     }}>
                       {request.priority}
                     </span>
                   </div>
                 </div>
-                <div style={{ fontSize: '0.8rem', color: isDark ? '#8896b0' : '#4a5568' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary-on-page)' }}>
                   {t.pending}
                 </div>
               </div>
@@ -677,9 +663,9 @@ const [showAlerts, setShowAlerts] = useState(true);
           <button 
             style={{
               ...styles.timeRangeButton,
-              background: isDark ? '#2d4a6f' : '#2b6cb0',
-              color: 'white',
-              border: 'none'
+              background: 'var(--color-surface)',
+              color: 'var(--color-primary)',
+              border: '1px solid var(--color-primary)'
             }}
             onClick={() => navigate('/department/assets')}
           >
@@ -688,9 +674,9 @@ const [showAlerts, setShowAlerts] = useState(true);
           <button 
             style={{
               ...styles.timeRangeButton,
-              background: isDark ? '#2d4a6f' : '#38a169',
-              color: 'white',
-              border: 'none'
+              background: 'var(--color-surface)',
+              color: 'var(--color-primary)',
+              border: '1px solid var(--color-primary)'
             }}
             onClick={() => navigate('/department/maintenance')}
           >
@@ -699,9 +685,9 @@ const [showAlerts, setShowAlerts] = useState(true);
           <button 
             style={{
               ...styles.timeRangeButton,
-              background: isDark ? '#2d4a6f' : '#805ad5',
-              color: 'white',
-              border: 'none'
+              background: 'var(--color-surface)',
+              color: 'var(--color-primary)',
+              border: '1px solid var(--color-primary)'
             }}
             onClick={() => navigate('/department/staff')}
           >
@@ -710,9 +696,9 @@ const [showAlerts, setShowAlerts] = useState(true);
           <button 
             style={{
               ...styles.timeRangeButton,
-              background: isDark ? '#2d4a6f' : '#ed8936',
-              color: 'white',
-              border: 'none'
+              background: 'var(--color-surface)',
+              color: 'var(--color-primary)',
+              border: '1px solid var(--color-primary)'
             }}
             onClick={() => navigate('/department/reports')}
           >

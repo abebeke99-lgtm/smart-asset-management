@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
-const { sequelize, Maintenance, MaintenanceRepair, MaintenanceWorkOrder, MaintenanceTest, MaintenanceHistory, Asset, User, AuditLog } = require('../models');
+const { sequelize, Maintenance, MaintenanceRepair, MaintenanceWorkOrder, MaintenanceTest, MaintenanceQualityControl, MaintenanceHistory, Asset, User, AuditLog } = require('../models');
 const { normalizeTestResult, validateTestResult } = require('../utils/maintenanceTesting');
+const notificationService = require('../services/notificationService');
 
 const testIncludes = [
   { model: Asset, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'department', 'location', 'status'] },
@@ -261,14 +262,47 @@ const sendMaintenanceTestToQuality = async (req, res, next) => {
     if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Maintenance test not found.' }); }
     if (normalizeTestResult(item.overallResult) !== 'Passed' || item.status !== 'passed') { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Only a passed test can be sent to quality control.' }); }
     if (item.qualityStatus !== 'not-reviewed') { await transaction.rollback(); return res.status(409).json({ success: false, message: 'This test has already been sent to quality control.' }); }
+    const maintenance = await Maintenance.findByPk(item.maintenanceId, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!maintenance) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Linked maintenance record not found.' }); }
+    const existingReview = await MaintenanceQualityControl.findOne({ where: { testId: item.id }, transaction, lock: transaction.LOCK.UPDATE });
+    if (existingReview) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'A quality-control review already exists for this test.' }); }
     const previousStatus = item.qualityStatus;
     await item.update({ qualityStatus: 'pending-qc' }, { transaction });
     const asset = await Asset.findByPk(item.assetId, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Linked asset not found.' }); }
     await asset.update({ status: 'quality-control' }, { transaction });
+    const review = await MaintenanceQualityControl.create({
+      maintenanceId: item.maintenanceId,
+      workOrderId: item.workOrderId || null,
+      assetId: item.assetId,
+      testId: item.id,
+      technicianId: maintenance.assignedTo || null,
+      testerId: item.testerId,
+      reviewDate: new Date(),
+      status: 'pending',
+      decision: 'pending',
+      findings: item.actualResult || '',
+      notes: item.notes || '',
+    }, { transaction });
     await appendTestHistory(item, req.user.id, 'test_sent_to_qc', previousStatus, item.qualityStatus, `Test ${item.id} sent for quality review`, transaction);
     await auditTestAction(req, item, 'MAINTENANCE_TEST_SENT_TO_QC', previousStatus, item.qualityStatus, transaction);
+    const reviewers = await User.findAll({ where: { role: { [Op.in]: ['admin', 'maintenance', 'quality_control_reviewer'] }, active: true }, attributes: ['id'], transaction });
+    const recipientIds = [...new Set([...reviewers.map((user) => user.id), item.testerId, maintenance.assignedTo, maintenance.requestedBy].filter(Boolean).map(Number))];
     await transaction.commit();
-    return res.json({ success: true, data: item });
+    try {
+      await notificationService.createEventNotification({
+        event: 'maintenance_test_sent_to_qc',
+        eventKey: `maintenance_test_sent_to_qc:${item.id}`,
+        entityId: review.id,
+        userIds: recipientIds,
+        senderId: req.user.id,
+        assetId: item.assetId,
+        type: 'maintenance',
+        title: 'Technical test awaiting quality review',
+        message: `Test ${item.id} for maintenance request ${item.maintenanceId} passed and is awaiting quality review.`,
+      });
+    } catch (notificationError) { console.error('Maintenance test QC notification failed:', notificationError.message); }
+    return res.json({ success: true, data: item, qualityControl: review });
   } catch (error) { await transaction.rollback(); return next(error); }
 };
 

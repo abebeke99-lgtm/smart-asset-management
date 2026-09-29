@@ -8,12 +8,8 @@ function resolveDemoPassword() {
   const configured = String(process.env.SEED_DEMO_PASSWORD || process.env.DEMO_USER_PASSWORD || '').trim();
   if (configured) return configured;
 
-  if (process.env.NODE_ENV !== 'production') {
-    return 'bekelei123';
-  }
-
   throw new Error(
-    'Seeding demo accounts requires SEED_DEMO_PASSWORD (or DEMO_USER_PASSWORD) to be configured in production. Set it in the backend environment file.'
+    'Seeding demo accounts requires SEED_DEMO_PASSWORD (or DEMO_USER_PASSWORD). Set it in the backend environment before enabling demo seeding.'
   );
 }
 

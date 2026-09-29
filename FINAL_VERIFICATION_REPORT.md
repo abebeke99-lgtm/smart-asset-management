@@ -3,7 +3,7 @@
 **ፕሮጀክት:** Smart Asset Management  
 **ቀን:** 2026-09-24  
 **ቦታ:** C:\xampp\htdocs\smart-asset-management  
-**የተጠቀሰው ቁልፍ:** `admin` / `bekelei123` (የሙሉ ሪፖርት ውስጥ ያልተሰራ)
+**የይለፍ ቃል ማስታወሻ:** ቀድሞ የተጠቀሰ demo credential አይሰራም፤ እንደገና አትጠቀሙበት።
 
 ---
 

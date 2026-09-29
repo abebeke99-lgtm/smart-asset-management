@@ -9,7 +9,7 @@ import './App.css';
 import './admin-design-system.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, House, Info, Languages, LayoutDashboard, LifeBuoy, LockKeyhole, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, Phone, Radio, Search, Settings, ShieldCheck, Sparkles, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
+import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, House, Info, Languages, LayoutDashboard, LifeBuoy, LockKeyhole, LogIn, LogOut, Mail, MapPin, Moon, MoreHorizontal, Package, Phone, Radio, Search, Settings, ShieldCheck, Sparkles, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
@@ -79,7 +79,7 @@ import ICTEquipment from './components/ict/ICTEquipment';
 import ICTNetwork from './components/ict/ICTNetwork';
 import ICTSoftwareLicenses from './components/ict/ICTSoftwareLicenses';
 import ICTTechnicalSupport from './components/ict/ICTTechnicalSupport';
-import ICTIncidents from './components/ict/ICTIncidents';
+import IncidentManagement from './components/ict/IncidentManagement';
 import ICTNotifications from './components/ict/ICTNotifications';
 import ICTDocuments from './components/ict/ICTDocuments';
 import ICTWarranty from './components/ict/ICTWarranty';
@@ -112,7 +112,6 @@ import FinanceValuation from './components/finance/FinanceValuation';
 import FinanceDepreciation from './components/finance/FinanceDepreciation';
 import Capitalization from './components/finance/Capitalization';
 import DisposalFinancialRecords from './components/finance/DisposalFinancialRecords';
-const FinanceFinancialReports = lazy(() => import('./components/finance/FinanceFinancialReports'));
 import FinanceBudgetReports from './components/finance/FinanceBudgetReports';
 import FinanceDepreciationReports from './components/finance/FinanceDepreciationReports';
 import FinanceAssetValueReports from './components/finance/FinanceAssetValueReports';
@@ -145,6 +144,7 @@ import MaintSpareParts from './components/maintenance/MaintSpareParts';
 import MaintVendors from './components/maintenance/MaintVendors';
 import MaintAssetsUnderMaintenance from './components/maintenance/MaintAssetsUnderMaintenance';
 import MaintTestingQuality from './components/maintenance/MaintTestingQuality';
+import MaintTechnicalTesting from './components/maintenance/MaintTechnicalTesting';
 import MaintAssigned from './components/maintenance/MaintAssigned';
 import MaintNotifications from './components/maintenance/MaintNotifications';
 import MaintHistory from './components/maintenance/MaintHistory';
@@ -189,6 +189,7 @@ const AdminAssignment = lazy(() => import('./components/admin/AdminAssignment'))
 const AdminTransfer = lazy(() => import('./components/admin/AdminTransfer'));
 const AdminMaintenance = lazy(() => import('./components/admin/AdminMaintenance'));
 const AdminRFIDTracking = lazy(() => import('./components/admin/AdminRFIDTracking'));
+const FinanceFinancialReports = lazy(() => import('./components/finance/FinanceFinancialReports'));
 
 export const normalizeRole = (role) => {
   if (!role) return 'user';
@@ -2172,9 +2173,6 @@ function AppContent() {
     address: ''
   });
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [collegeManagementOpen, setCollegeManagementOpen] = useState(() => JSON.parse(localStorage.getItem('collegeManagementOpen') || 'true'));
   const [departmentManagementOpen, setDepartmentManagementOpen] = useState(() => JSON.parse(localStorage.getItem('departmentManagementOpen') || 'false'));
@@ -2183,13 +2181,11 @@ function AppContent() {
   const allowPublicNavigationRef = useRef(false);
   const logoutDestinationRef = useRef(null);
   const notificationMenuRef = useRef(null);
-  const mobileNavRef = useRef(null);
-  const mobileNavToggleRef = useRef(null);
 
   const t = getShellTranslations(language);
   const collegeNavigationCopy = language === 'am' ? {
     'COLLEGE MANAGER': 'የኮሌጅ አስተዳዳሪ', OVERVIEW: 'አጠቃላይ እይታ', 'COLLEGE MANAGEMENT': 'የኮሌጅ አስተዳደር', 'ASSET MANAGEMENT': 'የንብረት አስተዳደር', OPERATIONS: 'ስራዎች', 'REPORTS & ANALYTICS': 'ሪፖርቶች እና ትንታኔዎች', SYSTEM: 'ስርዓት',
-    Dashboard: 'ዳሽቦርድ', 'College Profile': 'የኮሌጅ መገለጫ', 'College Staff': 'የኮሌጅ ሰራተኞች', Locations: 'ቦታዎች', Departments: 'ዲፓርትመንቶች', 'All College Assets': 'ሁሉም የኮሌጅ ንብረቶች', Inventory: 'ኢንቬንቶሪ', 'Asset Requests': 'የንብረት ጥያቄዎች', Approvals: 'ማጽደቆች', Assignments: 'ምደባዎች', Transfers: 'ዝውውሮች', Returns: 'መመለሻዎች', 'Maintenance Oversight': 'የጥገና ክትትል', 'RFID / QR Tracking': 'RFID / QR ክትትል', 'Asset Verification': 'የንብረት ማረጋገጫ', 'College Reports': 'የኮሌጅ ሪፖርቶች', 'College Analytics': 'የኮሌጅ ትንታኔዎች', Notifications: 'ማስታወቂያዎች', 'College Manager': 'የኮሌጅ አስተዳዳሪ', Online: 'በመስመር ላይ', 'Close navigation menu': 'የአሰሳ ምናሌን ዝጋ'
+    Dashboard: 'ዳሽቦርድ', 'College Profile': 'የኮሌጅ መገለጫ', 'College Staff': 'የኮሌጅ ሰራተኞች', Locations: 'ቦታዎች', Departments: 'ዲፓርትመንቶች', 'All College Assets': 'ሁሉም የኮሌጅ ንብረቶች', Inventory: 'ኢንቬንቶሪ', 'Asset Requests': 'የንብረት ጥያቄዎች', Approvals: 'ማጽደቆች', Assignments: 'ምደባዎች', Transfers: 'ዝውውሮች', Returns: 'መመለሻዎች', 'Maintenance Oversight': 'የጥገና ክትትል', 'RFID / QR Tracking': 'RFID / QR ክትትል', 'Asset Verification': 'የንብረት ማረጋገጫ', 'College Reports': 'የኮሌጅ ሪፖርቶች', 'College Analytics': 'የኮሌጅ ትንታኔዎች', Notifications: 'ማስታወቂያዎች', 'College Manager': 'የኮሌጅ አስተዳዳሪ', Online: 'በመስመር ላይ'
   } : {};
   const translateCollegeNavigation = (value) => language === 'am' ? collegeNavigationCopy[value] || value : value;
 
@@ -2247,41 +2243,6 @@ function AppContent() {
     document.addEventListener('mousedown', handleDocumentClick);
     return () => document.removeEventListener('mousedown', handleDocumentClick);
   }, []);
-
-  useEffect(() => {
-    setMobileNavOpen(false);
-  }, [location.pathname, location.hash]);
-
-  useEffect(() => {
-    if (!mobileNavOpen) return undefined;
-
-    const handleKeyDown = (event) => {
-      if (event.key !== 'Escape') return;
-      setMobileNavOpen(false);
-      mobileNavToggleRef.current?.focus();
-    };
-
-    const handleDocumentClick = (event) => {
-      const panel = mobileNavRef.current;
-      const toggle = mobileNavToggleRef.current;
-      const target = event.target;
-      if (panel?.contains(target) || toggle?.contains(target)) return;
-      setMobileNavOpen(false);
-    };
-
-    const handleResize = () => {
-      if (window.innerWidth > 1023) setMobileNavOpen(false);
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('mousedown', handleDocumentClick);
-    window.addEventListener('resize', handleResize);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('mousedown', handleDocumentClick);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [mobileNavOpen]);
 
   useEffect(() => {
     const collegeManagementActive = [
@@ -2401,44 +2362,46 @@ function AppContent() {
 
   const handleLogoError = () => setLogoError(true);
 
+  // Shell colours for the light/dark toggle. These mirror the CSS custom
+  // properties in src/styles/theme.css — keep both in sync.
   const themeStyles = {
     light: {
-      headerBg: '#B1BAC4',
-      headerText: '#17212B',
-      footerBg: '#687784',
-      footerText: '#FFFFFF',
-      mainBg: '#F5F7F9',
-      mainText: '#17212B',
+      headerBg: '#0EA5D9',
+      headerText: '#FFFFFF',
+      footerBg: '#FFFFFF',
+      footerText: '#6B7280',
+      mainBg: '#F3F6F9',
+      mainText: '#111827',
       cardBg: '#FFFFFF',
-      cardBorder: '#D7DEE5',
+      cardBorder: '#E5E7EB',
       cardShadow: 'none',
-      sidebarBg: '#8F9BA7',
-      sidebarHover: '#C5CED6',
-      sidebarActive: '#D9E0E6',
-      accent: '#536575',
-      accentLight: '#EEF2F5',
-      subText: '#334155',
-      danger: '#EF4444',
-      success: '#10B981'
+      sidebarBg: '#111827',
+      sidebarHover: '#1F2937',
+      sidebarActive: '#1F2937',
+      accent: '#F4C542',
+      accentLight: '#FEF3C7',
+      subText: '#6B7280',
+      danger: '#DC2626',
+      success: '#16A34A'
     },
     dark: {
-      headerBg: '#B1BAC4',
-      headerText: '#17212B',
-      footerBg: '#687784',
-      footerText: '#FFFFFF',
-      mainBg: '#F5F7F9',
-      mainText: '#17212B',
-      cardBg: '#FFFFFF',
-      cardBorder: '#D7DEE5',
+      headerBg: '#0EA5D9',
+      headerText: '#FFFFFF',
+      footerBg: '#FFFFFF',
+      footerText: '#6B7280',
+      mainBg: '#0F172A',
+      mainText: '#F1F5F9',
+      cardBg: '#1E293B',
+      cardBorder: '#334155',
       cardShadow: 'none',
-      sidebarBg: '#8F9BA7',
-      sidebarHover: '#C5CED6',
-      sidebarActive: '#D9E0E6',
-      accent: '#536575',
-      accentLight: '#EEF2F5',
-      subText: '#334155',
-      danger: '#EF4444',
-      success: '#10B981'
+      sidebarBg: '#111827',
+      sidebarHover: '#1F2937',
+      sidebarActive: '#1F2937',
+      accent: '#F4C542',
+      accentLight: '#FEF3C7',
+      subText: '#94A3B8',
+      danger: '#F87171',
+      success: '#4ADE80'
     }
   };
 
@@ -2521,7 +2484,7 @@ function AppContent() {
 
     return (
       <header
-        className={`app-header public-site-header${onHomeRoute ? ' home-public-header' : ''}${mobileNavOpen ? ' mobile-nav-open' : ''}`}
+        className={`app-header public-site-header${onHomeRoute ? ' home-public-header' : ''}`}
       >
         <Link
           className="app-header-brand public-brand-link"
@@ -2547,38 +2510,17 @@ function AppContent() {
         </Link>
 
         <div className="app-header-actions public-header-actions">
-          <div className="public-header-desktop-actions">
-            <nav className="public-desktop-nav" aria-label={t.primaryNavigation}>
-              {publicNavLinks.map((item) => (
-                <HeaderLink key={item.to} to={item.to}>{item.label}</HeaderLink>
-              ))}
-            </nav>
-
+          <nav className="public-desktop-nav" aria-label={t.primaryNavigation}>
+            {publicNavLinks.map((item) => (
+              <HeaderLink key={item.to} to={item.to}>{item.label}</HeaderLink>
+            ))}
+          </nav>
+          <div className="public-header-controls">
             <LanguageToggle />
             <ThemeToggle />
             <LoginButton />
           </div>
-
         </div>
-
-        <nav
-          id="public-mobile-nav"
-          ref={mobileNavRef}
-          className="public-mobile-nav"
-          aria-label={t.primaryNavigation}
-        >
-          {publicNavLinks.map((item) => (
-            <HeaderLink key={item.to} to={item.to} className="public-mobile-nav-link">
-              {item.label}
-            </HeaderLink>
-          ))}
-
-          <div className="public-mobile-nav-actions">
-            <LanguageToggle variant="public-mobile-language-toggle" />
-            <ThemeToggle />
-            <LoginButton />
-          </div>
-        </nav>
       </header>
     );
   };
@@ -2607,27 +2549,11 @@ function AppContent() {
 
   const DashboardHeader = () => {
     const notificationPath = sidebarItems.find((item) => item.path.endsWith('/notifications'))?.path || getDashboardRoute(user?.role);
-    const toggleSidebar = () => {
-      if (window.innerWidth <= 900) {
-        setSidebarOpen(true);
-        return;
-      }
-      setSidebarCollapsed((current) => !current);
-    };
 
     return (
       <header className="dashboard-header">
         <div className="dashboard-header-left">
-          <button
-            type="button"
-            className="dashboard-menu-button"
-            onClick={toggleSidebar}
-            aria-label={sidebarCollapsed ? 'Expand navigation menu' : 'Collapse navigation menu'}
-            aria-expanded={!sidebarCollapsed}
-            title={sidebarCollapsed ? 'Expand navigation menu' : 'Collapse navigation menu'}
-          >
-            <img className="dashboard-menu-logo" src={UNIVERSITY_LOGO} alt="" aria-hidden="true" />
-          </button>
+          <img className="dashboard-menu-logo" src={UNIVERSITY_LOGO} alt="Mekdela Amba University" />
         </div>
 
         {sidebarRole === 'ict_officer' && (
@@ -2655,7 +2581,7 @@ function AppContent() {
               onClick={() => setLanguage('en')}
               aria-label="English"
               aria-pressed={language === 'en'}
-              style={{ borderRadius: '7px 0 0 7px', background: language === 'en' ? 'rgba(255, 255, 255, 0.42)' : 'transparent' }}
+              style={{ borderRadius: '7px 0 0 7px' }}
             >
               EN
             </button>
@@ -2665,7 +2591,7 @@ function AppContent() {
               onClick={() => setLanguage('am')}
               aria-label="Amharic"
               aria-pressed={language === 'am'}
-              style={{ borderLeft: 0, borderRadius: '0 7px 7px 0', background: language === 'am' ? 'rgba(255, 255, 255, 0.42)' : 'transparent' }}
+              style={{ borderLeft: 0, borderRadius: '0 7px 7px 0' }}
             >
               AM
             </button>
@@ -2699,22 +2625,9 @@ function AppContent() {
   const AuthenticatedLayout = ({ children }) => (
     <div className="App" style={{ backgroundColor: currentTheme.mainBg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <DashboardHeader />
-      {showDashboardSidebar && (
-        <>
-          {sidebarOpen && <button className="sidebar-backdrop is-visible" type="button" onClick={() => setSidebarOpen(false)} aria-label={showCollegeNavigation ? translateCollegeNavigation('Close navigation menu') : 'Close navigation menu'} />}
-        </>
-      )}
       <div className={`authenticated-shell${isStoreManager ? ' store-manager-body' : ''}`} style={hideSidebar || !showDashboardSidebar ? { display: 'block' } : undefined}>
         {showDashboardSidebar && (
-          <aside className={`admin-sidebar${isStoreManager ? ' store-manager-sidebar' : ''}${sidebarOpen ? ' is-open' : ''}${sidebarCollapsed ? ' is-collapsed' : ''}`} style={{
-            backgroundColor: '#8F9BA7',
-            borderRight: `1px solid ${currentTheme.cardBorder}`,
-            display: 'flex',
-            flexDirection: 'column',
-            minHeight: 0
-          }}>
-            <button className="sidebar-close" type="button" onClick={() => setSidebarOpen(false)} aria-label={showCollegeNavigation ? translateCollegeNavigation('Close navigation menu') : 'Close navigation menu'}><X size={18} /></button>
-
+          <aside className={`admin-sidebar${isStoreManager ? ' store-manager-sidebar' : ''}`}>
             <nav className="admin-sidebar-nav" aria-label="Application navigation">
               {showCollegeNavigation && <div className="sidebar-subsection-label">{translateCollegeNavigation('COLLEGE MANAGER')}</div>}
               {showCollegeNavigation && (
@@ -2835,7 +2748,7 @@ function AppContent() {
           </aside>
         )}
 
-        <main className={`admin-main-content app-main-content${isStoreManager ? ' store-manager-main' : ''}${hideSidebar ? ' create-asset-main' : ''}`} style={hideSidebar || !showDashboardSidebar ? { width: '100%', maxWidth: '100%' } : undefined}>
+        <main className={`admin-main-content app-main-content${isStoreManager ? ' store-manager-main' : ''}${hideSidebar ? ' create-asset-main' : ''}`} style={hideSidebar || !showDashboardSidebar ? { width: '100%', maxWidth: '100%', marginLeft: 0 } : undefined}>
           {children}
         </main>
       </div>
@@ -3206,8 +3119,6 @@ function AppContent() {
         to={item.path}
         className={`admin-nav-link${isActive ? ' is-active' : ''}`}
         aria-current={isActive ? 'page' : undefined}
-        onClick={() => setSidebarOpen(false)}
-        title={sidebarCollapsed ? stripLeadingDecoration(itemLabel) : undefined}
         style={nested ? { paddingLeft: '34px', fontSize: '0.86rem' } : undefined}
       >
         <Icon size={17} strokeWidth={1.9} aria-hidden="true" />
@@ -3415,7 +3326,7 @@ function AppContent() {
             <Route path="software-licenses" element={<ICTSoftwareLicenses />} />
             <Route path="support" element={<ICTTechnicalSupport />} />
             <Route path="technical-support" element={<Navigate to="/ict/support" replace />} />
-            <Route path="incidents" element={<ICTIncidents />} />
+            <Route path="incidents" element={<IncidentManagement />} />
             <Route path="notifications" element={<ICTNotifications />} />
             <Route path="documents" element={<ICTDocuments />} />
             <Route path="warranty" element={<ICTWarranty />} />
@@ -3582,7 +3493,7 @@ function AppContent() {
             <Route path="materials" element={<MaintSpareParts />} />
             <Route path="vendors" element={<MaintVendors />} />
             <Route path="assets-under-maintenance" element={<MaintAssetsUnderMaintenance />} />
-            <Route path="testing-quality" element={<MaintTestingQuality />} />
+            <Route path="testing-quality" element={<MaintTechnicalTesting />} />
             <Route path="quality-control" element={<MaintTestingQuality />} />
             <Route path="assigned-tasks" element={<MaintAssigned />} />
             <Route path="notifications" element={<MaintNotifications />} />
@@ -3590,7 +3501,7 @@ function AppContent() {
             <Route path="reports" element={<MaintReports />} />
             <Route path="parts" element={<MaintSpareParts />} />
             <Route path="assets" element={<MaintAssetsUnderMaintenance />} />
-            <Route path="testing" element={<MaintTestingQuality />} />
+            <Route path="testing" element={<MaintTechnicalTesting />} />
             <Route path="assigned" element={<MaintAssigned />} />
           </Route>
 

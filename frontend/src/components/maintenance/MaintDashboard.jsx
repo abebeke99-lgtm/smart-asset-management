@@ -1,439 +1,1264 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import {
-  TrendingUp,
-  AlertCircle,
-  Clock,
-  CheckCircle,
-  BarChart3,
-  Calendar,
-  Package,
-  FlaskConical,
-  RefreshCw,
-} from 'lucide-react';
-import { getMaintenanceDashboard } from '../../services/maintenanceApi';
-import './MaintDashboard.css';
+import React, { useEffect, useMemo, useState } from "react";
 
-const MaintDashboard = () => {
-  const [period, setPeriod] = useState('30days');
+/**
+ * Maintenance Coordinator Dashboard
+ *
+ * Route:
+ *   /maintenance
+ *
+ * Backend:
+ *   GET /api/maintenance/dashboard
+ *
+ * Documentation requirements:
+ * - Total Maintenance Requests
+ * - New Requests
+ * - Scheduled Repairs
+ * - In-Progress Repairs
+ * - Completed Repairs
+ * - Assets Under Maintenance
+ * - Overdue Maintenance
+ * - Preventive Maintenance Due
+ * - Critical Repairs
+ * - Available Technicians
+ * - Low Spare Parts
+ * - Pending Quality Checks
+ *
+ * All KPI values are loaded from backend APIs.
+ */
+
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL || "";
+
+const KPI_CONFIG = [
+  {
+    key: "totalRequests",
+    title: "Total Maintenance Requests",
+    icon: "📋",
+    type: "number",
+  },
+  {
+    key: "newRequests",
+    title: "New Requests",
+    icon: "🆕",
+    type: "number",
+  },
+  {
+    key: "scheduledRepairs",
+    title: "Scheduled Repairs",
+    icon: "📅",
+    type: "number",
+  },
+  {
+    key: "inProgressRepairs",
+    title: "In-Progress Repairs",
+    icon: "🔧",
+    type: "number",
+  },
+  {
+    key: "completedRepairs",
+    title: "Completed Repairs",
+    icon: "✅",
+    type: "number",
+  },
+  {
+    key: "assetsUnderMaintenance",
+    title: "Assets Under Maintenance",
+    icon: "🛠️",
+    type: "number",
+  },
+  {
+    key: "overdueMaintenance",
+    title: "Overdue Maintenance",
+    icon: "⚠️",
+    type: "number",
+    danger: true,
+  },
+  {
+    key: "preventiveMaintenanceDue",
+    title: "Preventive Maintenance Due",
+    icon: "🔄",
+    type: "number",
+  },
+  {
+    key: "criticalRepairs",
+    title: "Critical Repairs",
+    icon: "🚨",
+    type: "number",
+    danger: true,
+  },
+  {
+    key: "availableTechnicians",
+    title: "Available Technicians",
+    icon: "👨‍🔧",
+    type: "number",
+  },
+  {
+    key: "lowSpareParts",
+    title: "Low Spare Parts",
+    icon: "📦",
+    type: "number",
+    danger: true,
+  },
+  {
+    key: "pendingQualityChecks",
+    title: "Pending Quality Checks",
+    icon: "🔍",
+    type: "number",
+  },
+];
+
+const DEFAULT_DATA = {
+  totalRequests: 0,
+  newRequests: 0,
+  scheduledRepairs: 0,
+  inProgressRepairs: 0,
+  completedRepairs: 0,
+  assetsUnderMaintenance: 0,
+  overdueMaintenance: 0,
+  preventiveMaintenanceDue: 0,
+  criticalRepairs: 0,
+  availableTechnicians: 0,
+  lowSpareParts: 0,
+  pendingQualityChecks: 0,
+};
+
+function getAuthToken() {
+  return (
+    localStorage.getItem("token") ||
+    localStorage.getItem("accessToken") ||
+    sessionStorage.getItem("token") ||
+    sessionStorage.getItem("accessToken")
+  );
+}
+
+async function apiRequest(endpoint, options = {}) {
+  const token = getAuthToken();
+
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  if (response.status === 401) {
+    throw new Error("Your session has expired. Please log in again.");
+  }
+
+  if (response.status === 403) {
+    throw new Error(
+      "You do not have permission to access maintenance dashboard data."
+    );
+  }
+
+  let body = null;
+
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      body?.message ||
+        body?.error ||
+        `Unable to load dashboard data. HTTP ${response.status}`
+    );
+  }
+
+  return body;
+}
+
+function normalizeDashboardResponse(response) {
+  /**
+   * Supports common API response structures:
+   *
+   * {
+   *   data: {...}
+   * }
+   *
+   * or
+   *
+   * {
+   *   dashboard: {...}
+   * }
+   *
+   * or directly:
+   *
+   * {
+   *   totalRequests: 10,
+   *   ...
+   * }
+   */
+
+  const source =
+    response?.data?.dashboard ||
+    response?.data ||
+    response?.dashboard ||
+    response ||
+    {};
+
+  return {
+    totalRequests:
+      Number(
+        source.totalRequests ??
+          source.totalMaintenanceRequests ??
+          source.total_requests ??
+          0
+      ) || 0,
+
+    newRequests:
+      Number(
+        source.newRequests ??
+          source.newMaintenanceRequests ??
+          source.new_requests ??
+          0
+      ) || 0,
+
+    scheduledRepairs:
+      Number(
+        source.scheduledRepairs ??
+          source.scheduled_repairs ??
+          0
+      ) || 0,
+
+    inProgressRepairs:
+      Number(
+        source.inProgressRepairs ??
+          source.in_progress_repairs ??
+          0
+      ) || 0,
+
+    completedRepairs:
+      Number(
+        source.completedRepairs ??
+          source.completed_repairs ??
+          0
+      ) || 0,
+
+    assetsUnderMaintenance:
+      Number(
+        source.assetsUnderMaintenance ??
+          source.assets_under_maintenance ??
+          0
+      ) || 0,
+
+    overdueMaintenance:
+      Number(
+        source.overdueMaintenance ??
+          source.overdue_maintenance ??
+          0
+      ) || 0,
+
+    preventiveMaintenanceDue:
+      Number(
+        source.preventiveMaintenanceDue ??
+          source.preventive_maintenance_due ??
+          0
+      ) || 0,
+
+    criticalRepairs:
+      Number(
+        source.criticalRepairs ??
+          source.critical_repairs ??
+          0
+      ) || 0,
+
+    availableTechnicians:
+      Number(
+        source.availableTechnicians ??
+          source.available_technicians ??
+          0
+      ) || 0,
+
+    lowSpareParts:
+      Number(
+        source.lowSpareParts ??
+          source.low_spare_parts ??
+          0
+      ) || 0,
+
+    pendingQualityChecks:
+      Number(
+        source.pendingQualityChecks ??
+          source.pending_quality_checks ??
+          0
+      ) || 0,
+  };
+}
+
+function formatNumber(value) {
+  return new Intl.NumberFormat().format(Number(value) || 0);
+}
+
+function getCardClass(item, value) {
+  if (item.danger && Number(value) > 0) {
+    return "maintenance-kpi-card maintenance-kpi-card-danger";
+  }
+
+  return "maintenance-kpi-card";
+}
+
+function Dashboard() {
+  const [dashboard, setDashboard] = useState(DEFAULT_DATA);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [dashboardData, setDashboardData] = useState(null);
-  const [reloadKey, setReloadKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  const hasCriticalItems = useMemo(() => {
+    return (
+      dashboard.overdueMaintenance > 0 ||
+      dashboard.criticalRepairs > 0 ||
+      dashboard.lowSpareParts > 0 ||
+      dashboard.pendingQualityChecks > 0
+    );
+  }, [dashboard]);
+
+  async function loadDashboard({ silent = false } = {}) {
+    try {
+      if (silent) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      setError("");
+
+      const response = await apiRequest(
+        "/api/maintenance/dashboard"
+      );
+
+      const normalized = normalizeDashboardResponse(response);
+
+      setDashboard(normalized);
+      setLastUpdated(new Date());
+    } catch (err) {
+      console.error("Maintenance dashboard error:", err);
+
+      setError(
+        err?.message ||
+          "Unable to load maintenance dashboard."
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
 
   useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    setError('');
-    (async () => {
-      try {
-        const dash = await getMaintenanceDashboard(period);
-        if (!mounted) return;
-        setDashboardData(dash);
-      } catch (err) {
-        if (mounted) setError('Unable to load maintenance dashboard data. Please check the server connection.');
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [period, reloadKey]);
+    loadDashboard();
 
-  const summary = dashboardData?.summary || {};
-  const recentRequests = dashboardData?.recentRequests || [];
-  const recentWorkOrders = dashboardData?.recentWorkOrders || [];
-  const technicianWorkload = dashboardData?.technicianWorkload || [];
-  const statusBreakdown = dashboardData?.statusDistribution || [];
-  const monthlyTrend = dashboardData?.monthlyTrend || [];
-  const phaseStats = dashboardData?.workPhases || { completedJobs: 0, waitingForParts: 0, testing: 0 };
-  const nextScheduled = dashboardData?.nextScheduledMaintenance;
-  const nextPreventive = nextScheduled
-    ? `${nextScheduled.asset} · ${nextScheduled.maintenanceType} · ${String(nextScheduled.scheduledDate).slice(0, 10)}`
-    : 'No upcoming maintenance';
-  const formatDate = (value) => value ? String(value).slice(0, 10) : '—';
-  const statusColors = {
-    pending: '#f59e0b', approved: '#0ea5e9', assigned: '#6366f1',
-    'in-progress': '#3b82f6', 'waiting-for-parts': '#f97316', testing: '#a855f7',
-    completed: '#10b981', rejected: '#ef4444', cancelled: '#64748b',
-  };
-  const statusTotal = statusBreakdown.reduce((total, row) => total + row.count, 0);
-  const trendMax = Math.max(1, ...monthlyTrend.flatMap((row) => [row.requests, row.completed]));
-  const phases = [
-    { label: 'Completed Jobs', value: phaseStats.completedJobs },
-    { label: 'Waiting for Parts', value: phaseStats.waitingForParts },
-    { label: 'Testing', value: phaseStats.testing },
-  ];
-  const phaseMax = Math.max(1, ...phases.map((phase) => phase.value));
+    /**
+     * Refresh dashboard periodically so operational KPIs
+     * remain reasonably current.
+     */
+    const interval = setInterval(() => {
+      loadDashboard({ silent: true });
+    }, 60000);
 
-  const kpiCards = [
-    {
-      title: 'Total Maintenance Requests',
-      value: summary.totalRequests,
-      icon: AlertCircle,
-      color: 'blue',
-      trend: 'Selected period',
-    },
-    {
-      title: 'Pending Requests',
-      value: summary.pendingRequests,
-      icon: Clock,
-      color: 'orange',
-      trend: summary.totalRequests ? `${Math.round((summary.pendingRequests / summary.totalRequests) * 100)}% of total` : 'No requests',
-    },
-    {
-      title: 'In Progress',
-      value: summary.inProgress,
-      icon: BarChart3,
-      color: 'cyan',
-      trend: summary.totalRequests ? `${Math.round((summary.inProgress / summary.totalRequests) * 100)}% of total` : 'No requests',
-    },
-    {
-      title: 'Completed Repairs',
-      value: summary.completedRepairs,
-      icon: CheckCircle,
-      color: 'green',
-      trend: summary.totalRequests ? `${Math.round((summary.completedRepairs / summary.totalRequests) * 100)}% of total` : 'No requests',
-    },
-    {
-      title: 'Overdue Work Orders',
-      value: summary.overdueWorkOrders,
-      icon: AlertCircle,
-      color: 'red',
-      trend: 'Past due',
-    },
-    {
-      title: 'Assets Under Maintenance',
-      value: summary.assetsUnderMaintenance,
-      icon: TrendingUp,
-      color: 'purple',
-      trend: 'Current asset status',
-    },
-    {
-      title: 'Waiting on Parts',
-      value: summary.waitingForParts,
-      icon: Package,
-      color: 'indigo',
-      trend: 'requests awaiting spare parts',
-    },
-    {
-      title: 'In Testing',
-      value: summary.inTesting,
-      icon: FlaskConical,
-      color: 'pink',
-      trend: 'requests in testing/verification',
-    },
-  ];
+    return () => clearInterval(interval);
+  }, []);
 
-  const getPriorityColor = (priority) => {
-    const colors = {
-      Critical: '#ef4444',
-      High: '#f97316',
-      Medium: '#eab308',
-      Low: '#10b981',
-    };
-    return colors[priority] || '#06b6d4';
-  };
+  function handleRefresh() {
+    loadDashboard({ silent: true });
+  }
 
-  const getStatusColor = (status) => {
-    const colors = {
-      Pending: '#f59e0b',
-      'In Progress': '#3b82f6',
-      Completed: '#10b981',
-      Overdue: '#ef4444',
-    };
-    return colors[status] || '#06b6d4';
-  };
+  function navigateTo(path) {
+    window.location.href = path;
+  }
 
-  const getColorClass = (color) => {
-    const classMap = {
-      blue: 'kpi-card-blue',
-      orange: 'kpi-card-orange',
-      cyan: 'kpi-card-cyan',
-      green: 'kpi-card-green',
-      red: 'kpi-card-red',
-      purple: 'kpi-card-purple',
-      indigo: 'kpi-card-indigo',
-      pink: 'kpi-card-pink',
-    };
-    return classMap[color] || '';
-  };
+  if (loading) {
+    return (
+      <div className="maintenance-dashboard">
+        <div className="maintenance-dashboard-header">
+          <div>
+            <div className="maintenance-skeleton-title" />
+            <div className="maintenance-skeleton-subtitle" />
+          </div>
+        </div>
 
-  if (loading) return <div className="dashboard-state" role="status">Loading maintenance dashboard…</div>;
-  if (error) return <div className="dashboard-state dashboard-error" role="alert">{error}<button type="button" onClick={() => setReloadKey((value) => value + 1)}>Retry</button></div>;
+        <div className="maintenance-kpi-grid">
+          {Array.from({ length: 12 }).map((_, index) => (
+            <div
+              key={index}
+              className="maintenance-kpi-card maintenance-skeleton-card"
+            >
+              <div className="maintenance-skeleton-icon" />
+              <div className="maintenance-skeleton-line" />
+              <div className="maintenance-skeleton-value" />
+            </div>
+          ))}
+        </div>
+
+        <style>{styles}</style>
+      </div>
+    );
+  }
 
   return (
-    <div className="dashboard-container">
-      {/* Header Section */}
-      <div className="maintenance-dashboard-header">
-        <div className="header-content">
-          <h1 className="dashboard-title">Maintenance Management Dashboard</h1>
-          <p className="dashboard-subtitle">
-            University Asset Management System - Real-time Maintenance Operations
+    <div className="maintenance-dashboard">
+      {/* =====================================================
+          HEADER
+      ====================================================== */}
+
+      <header className="maintenance-dashboard-header">
+        <div>
+          <div className="maintenance-breadcrumb">
+            Maintenance / Dashboard
+          </div>
+
+          <h1>Maintenance Dashboard</h1>
+
+          <p>
+            Real-time overview of university maintenance
+            activities and operational status.
           </p>
         </div>
 
-        <div className="header-controls">
-          <div className="period-selector">
-            {[
-              ['Today', 'today'],
-              ['7 Days', '7days'],
-              ['30 Days', '30days'],
-              ['90 Days', '90days'],
-            ].map(([label, value]) => (
-              <button
-                key={value}
-                className={`period-btn ${period === value ? 'active' : ''}`}
-                onClick={() => setPeriod(value)}
-                aria-pressed={period === value}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <button className="dashboard-refresh" type="button" onClick={() => setReloadKey((value) => value + 1)} aria-label="Refresh dashboard" title="Refresh dashboard">
-            <RefreshCw size={17} />
+        <div className="maintenance-header-actions">
+          {lastUpdated && (
+            <span className="maintenance-last-updated">
+              Updated{" "}
+              {lastUpdated.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          )}
+
+          <button
+            type="button"
+            className="maintenance-refresh-button"
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            {refreshing ? "Refreshing..." : "Refresh"}
           </button>
         </div>
-      </div>
+      </header>
 
-      {!summary.hasRecords && <div className="dashboard-empty">No maintenance records</div>}
+      {/* =====================================================
+          ERROR STATE
+      ====================================================== */}
 
-      {/* KPI Cards Grid */}
-      <section className="kpi-section">
-        <h2 className="section-title">Key Performance Indicators</h2>
-        <div className="kpi-grid">
-          {kpiCards.map((card, idx) => {
-            const Icon = card.icon;
-            return (
-              <div key={idx} className={`kpi-card ${getColorClass(card.color)}`}>
-                <div className="kpi-header">
-                  <div className="kpi-icon">
-                    <Icon size={24} />
-                  </div>
-                  <div className={`kpi-trend ${card.trend.includes('-') ? 'negative' : 'positive'}`}>
-                    {card.trend}
-                  </div>
-                </div>
-                <div className="kpi-content">
-                  <div className="kpi-value">{card.value}</div>
-                  <div className="kpi-label">{card.title}</div>
-                </div>
-              </div>
-            );
-          })}
+      {error && (
+        <div
+          className="maintenance-alert maintenance-alert-error"
+          role="alert"
+        >
+          <div>
+            <strong>Unable to load dashboard</strong>
+            <p>{error}</p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => loadDashboard()}
+          >
+            Try Again
+          </button>
         </div>
-      </section>
+      )}
 
-      {/* Charts Section */}
-      <section className="charts-section">
-        <div className="charts-grid">
-          {/* Status Distribution Chart */}
-          <div className="chart-card">
-            <h3 className="chart-title">Maintenance Status Distribution</h3>
-            <div className="chart-placeholder">
-              {statusBreakdown.length === 0 ? <div className="chart-empty">No maintenance records</div> : (
-                <div className="status-bar">
-                  {statusBreakdown.map((segment) => (
-                    <div
-                      className="status-segment"
-                      style={{ width: `${Math.round((segment.count / statusTotal) * 100)}%`, backgroundColor: statusColors[segment.status] || '#06b6d4' }}
-                      key={segment.status}
-                    >
-                      <span>{segment.label} ({segment.count})</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+      {/* =====================================================
+          CRITICAL OPERATIONAL ALERT
+      ====================================================== */}
+
+      {!error && hasCriticalItems && (
+        <div className="maintenance-alert maintenance-alert-warning">
+          <div>
+            <strong>Maintenance attention required</strong>
+
+            <p>
+              One or more maintenance items require
+              coordinator attention.
+            </p>
           </div>
 
-          {/* Monthly Trend Chart */}
-          <div className="chart-card">
-            <h3 className="chart-title">Monthly Maintenance Trend</h3>
-            <div className="chart-placeholder trend-chart">
-              {monthlyTrend.length === 0 ? <div className="chart-empty">No maintenance records</div> : (
-                <>
-                  <div className="trend-legend"><span>Requests</span><span>Completed</span></div>
-                  <div className="trend-bars">
-                    {monthlyTrend.map((bucket) => (
-                      <div key={bucket.period} className="trend-bar-item">
-                        <div className="trend-bar-pair">
-                          <div className="bar" title={`${bucket.requests} requests`} style={{ height: `${(bucket.requests / trendMax) * 100}%` }}></div>
-                          <div className="bar completed-bar" title={`${bucket.completed} completed`} style={{ height: `${(bucket.completed / trendMax) * 100}%` }}></div>
-                        </div>
-                        <span className="bar-label">{bucket.period.slice(5)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+          <div className="maintenance-alert-actions">
+            {dashboard.overdueMaintenance > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  navigateTo(
+                    "/maintenance/work-orders?filter=overdue"
+                  )
+                }
+              >
+                Overdue
+              </button>
+            )}
 
-          {/* Repair Work Phase Breakdown */}
-          <div className="chart-card">
-            <h3 className="chart-title">Repair Work Phase Breakdown</h3>
-            <div className="cost-breakdown">
-              {phases.map((phase) => (
-                <div className="cost-item" key={phase.label}>
-                  <div className="cost-label">{phase.label}</div>
-                  <div className="cost-bar">
-                    <div className="cost-fill" style={{ width: `${(phase.value / phaseMax) * 100}%` }}></div>
-                  </div>
-                  <div className="cost-value">{phase.value}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+            {dashboard.criticalRepairs > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  navigateTo(
+                    "/maintenance/repairs?priority=critical"
+                  )
+                }
+              >
+                Critical
+              </button>
+            )}
 
-          {/* Technician Workload */}
-          <div className="chart-card">
-            <h3 className="chart-title">Technician Workload</h3>
-            {technicianWorkload.length === 0 ? <div className="chart-empty">No assignments yet</div> : (
-              <div className="table-container">
-                <table className="activity-table workload-table">
-                  <thead><tr><th>Technician</th><th>Assigned</th><th>In Progress</th><th>Completed</th></tr></thead>
-                  <tbody>{technicianWorkload.map((technician) => (
-                    <tr key={technician.technicianId} className="table-row">
-                      <td className="tech-cell">{technician.name}</td>
-                      <td>{technician.assigned}</td>
-                      <td>{technician.inProgress}</td>
-                      <td>{technician.completed}</td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-              </div>
+            {dashboard.lowSpareParts > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  navigateTo(
+                    "/maintenance/spare-parts?filter=low-stock"
+                  )
+                }
+              >
+                Low Stock
+              </button>
+            )}
+
+            {dashboard.pendingQualityChecks > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  navigateTo(
+                    "/maintenance/quality-control?status=pending"
+                  )
+                }
+              >
+                Quality Checks
+              </button>
             )}
           </div>
         </div>
+      )}
+
+      {/* =====================================================
+          KPI CARDS
+      ====================================================== */}
+
+      <section
+        className="maintenance-kpi-grid"
+        aria-label="Maintenance KPIs"
+      >
+        {KPI_CONFIG.map((item) => {
+          const value = dashboard[item.key];
+
+          return (
+            <article
+              key={item.key}
+              className={getCardClass(item, value)}
+            >
+              <div className="maintenance-kpi-top">
+                <div className="maintenance-kpi-icon">
+                  {item.icon}
+                </div>
+
+                <span className="maintenance-kpi-menu">
+                  ⋯
+                </span>
+              </div>
+
+              <div className="maintenance-kpi-title">
+                {item.title}
+              </div>
+
+              <div className="maintenance-kpi-value">
+                {formatNumber(value)}
+              </div>
+
+              {item.key === "newRequests" && (
+                <button
+                  type="button"
+                  className="maintenance-kpi-link"
+                  onClick={() =>
+                    navigateTo(
+                      "/maintenance/requests?status=submitted"
+                    )
+                  }
+                >
+                  View requests →
+                </button>
+              )}
+
+              {item.key === "scheduledRepairs" && (
+                <button
+                  type="button"
+                  className="maintenance-kpi-link"
+                  onClick={() =>
+                    navigateTo(
+                      "/maintenance/work-orders?status=scheduled"
+                    )
+                  }
+                >
+                  View schedule →
+                </button>
+              )}
+
+              {item.key === "inProgressRepairs" && (
+                <button
+                  type="button"
+                  className="maintenance-kpi-link"
+                  onClick={() =>
+                    navigateTo(
+                      "/maintenance/work-orders?status=in-progress"
+                    )
+                  }
+                >
+                  View work orders →
+                </button>
+              )}
+
+              {item.key === "assetsUnderMaintenance" && (
+                <button
+                  type="button"
+                  className="maintenance-kpi-link"
+                  onClick={() =>
+                    navigateTo(
+                      "/maintenance/assets-under-maintenance"
+                    )
+                  }
+                >
+                  View assets →
+                </button>
+              )}
+
+              {item.key === "preventiveMaintenanceDue" && (
+                <button
+                  type="button"
+                  className="maintenance-kpi-link"
+                  onClick={() =>
+                    navigateTo(
+                      "/maintenance/preventive?filter=due"
+                    )
+                  }
+                >
+                  View preventive →
+                </button>
+              )}
+
+              {item.key === "lowSpareParts" && (
+                <button
+                  type="button"
+                  className="maintenance-kpi-link"
+                  onClick={() =>
+                    navigateTo(
+                      "/maintenance/spare-parts?filter=low-stock"
+                    )
+                  }
+                >
+                  View spare parts →
+                </button>
+              )}
+
+              {item.key === "pendingQualityChecks" && (
+                <button
+                  type="button"
+                  className="maintenance-kpi-link"
+                  onClick={() =>
+                    navigateTo(
+                      "/maintenance/quality-control?status=pending"
+                    )
+                  }
+                >
+                  Review quality →
+                </button>
+              )}
+            </article>
+          );
+        })}
       </section>
 
-      {/* Recent Activity Section */}
-      <section className="activity-section">
-        <div className="activity-grid">
-          {/* Recent Maintenance Requests */}
-          <div className="activity-card">
-            <div className="activity-header">
-              <h3 className="activity-title">Recent Maintenance Requests</h3>
-              <Link to="/maintenance/requests" className="view-all-link">
-                View All →
-              </Link>
-            </div>
-            <div className="table-container">
-              <table className="activity-table">
-                <thead>
-                  <tr>
-                    <th>Request ID</th>
-                    <th>Asset</th>
-                    <th>Status</th>
-                    <th>Priority</th>
-                    <th>Due Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentRequests.map((req) => (
-                    <tr key={req.id} className="table-row">
-                      <td className="id-cell">{req.requestId}</td>
-                      <td className="asset-cell">{req.asset}</td>
-                      <td>
-                        <span
-                          className="status-badge"
-                          style={{ borderColor: getStatusColor(req.status) }}
-                        >
-                          {req.status}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="priority-badge" style={{ borderColor: getPriorityColor(req.priority) }}>
-                          {req.priority}
-                        </span>
-                      </td>
-                      <td className="date-cell">{formatDate(req.dueDate)}</td>
-                    </tr>
-                  ))}
-                  {recentRequests.length === 0 && <tr><td colSpan="5" className="table-empty">No maintenance records</td></tr>}
-                </tbody>
-              </table>
+      {/* =====================================================
+          QUICK ACTIONS
+      ====================================================== */}
+
+      <section className="maintenance-section">
+        <div className="maintenance-section-header">
+          <div>
+            <h2>Quick Actions</h2>
+            <p>
+              Common maintenance coordinator operations.
+            </p>
+          </div>
+        </div>
+
+        <div className="maintenance-quick-actions">
+          <button
+            type="button"
+            onClick={() =>
+              navigateTo("/maintenance/requests")
+            }
+          >
+            <span>📋</span>
+            <strong>Maintenance Requests</strong>
+            <small>Review and manage requests</small>
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              navigateTo("/maintenance/work-orders")
+            }
+          >
+            <span>🔧</span>
+            <strong>Work Orders</strong>
+            <small>Coordinate maintenance work</small>
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              navigateTo("/maintenance/repairs")
+            }
+          >
+            <span>🛠️</span>
+            <strong>Repairs</strong>
+            <small>Monitor repair activities</small>
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              navigateTo("/maintenance/preventive")
+            }
+          >
+            <span>🔄</span>
+            <strong>Preventive Maintenance</strong>
+            <small>Manage maintenance plans</small>
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              navigateTo("/maintenance/quality-control")
+            }
+          >
+            <span>✓</span>
+            <strong>Quality Control</strong>
+            <small>Review completed maintenance</small>
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              navigateTo("/maintenance/reports")
+            }
+          >
+            <span>📊</span>
+            <strong>Reports</strong>
+            <small>View maintenance analytics</small>
+          </button>
+        </div>
+      </section>
+
+      {/* =====================================================
+          OPERATIONAL SUMMARY
+      ====================================================== */}
+
+      <section className="maintenance-summary-grid">
+        <div className="maintenance-summary-card">
+          <div className="maintenance-summary-header">
+            <div>
+              <h2>Maintenance Status</h2>
+              <p>Current operational indicators</p>
             </div>
           </div>
 
-          {/* Recent Work Orders */}
-          <div className="activity-card">
-            <div className="activity-header">
-              <h3 className="activity-title">Recent Work Orders</h3>
-              <Link to="/maintenance/work-orders" className="view-all-link">
-                View All →
-              </Link>
+          <div className="maintenance-status-list">
+            <div>
+              <span>New Requests</span>
+              <strong>
+                {formatNumber(dashboard.newRequests)}
+              </strong>
             </div>
-            <div className="table-container">
-              <table className="activity-table">
-                <thead>
-                  <tr>
-                    <th>Work Order</th>
-                    <th>Asset</th>
-                    <th>Technician</th>
-                    <th>Status</th>
-                    <th>Assigned Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentWorkOrders.map((wo) => (
-                    <tr key={wo.id} className="table-row">
-                      <td className="id-cell">{wo.workOrderNumber}</td>
-                      <td className="asset-cell">{wo.asset}</td>
-                      <td className="tech-cell">{wo.technician}</td>
-                      <td>
-                        <span
-                          className="status-badge"
-                          style={{ borderColor: getStatusColor(wo.status) }}
-                        >
-                          {wo.status}
-                        </span>
-                      </td>
-                      <td className="date-cell">{formatDate(wo.assignedDate)}</td>
-                    </tr>
-                  ))}
-                  {recentWorkOrders.length === 0 && <tr><td colSpan="5" className="table-empty">No work orders found</td></tr>}
-                </tbody>
-              </table>
+
+            <div>
+              <span>Scheduled Repairs</span>
+              <strong>
+                {formatNumber(dashboard.scheduledRepairs)}
+              </strong>
+            </div>
+
+            <div>
+              <span>In Progress</span>
+              <strong>
+                {formatNumber(dashboard.inProgressRepairs)}
+              </strong>
+            </div>
+
+            <div>
+              <span>Completed Repairs</span>
+              <strong>
+                {formatNumber(dashboard.completedRepairs)}
+              </strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="maintenance-summary-card">
+          <div className="maintenance-summary-header">
+            <div>
+              <h2>Attention Required</h2>
+              <p>Items requiring coordinator action</p>
+            </div>
+          </div>
+
+          <div className="maintenance-status-list">
+            <div>
+              <span>Overdue Maintenance</span>
+              <strong className="danger-value">
+                {formatNumber(
+                  dashboard.overdueMaintenance
+                )}
+              </strong>
+            </div>
+
+            <div>
+              <span>Critical Repairs</span>
+              <strong className="danger-value">
+                {formatNumber(dashboard.criticalRepairs)}
+              </strong>
+            </div>
+
+            <div>
+              <span>Low Spare Parts</span>
+              <strong className="danger-value">
+                {formatNumber(dashboard.lowSpareParts)}
+              </strong>
+            </div>
+
+            <div>
+              <span>Pending Quality Checks</span>
+              <strong className="danger-value">
+                {formatNumber(
+                  dashboard.pendingQualityChecks
+                )}
+              </strong>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Quick Stats Footer */}
-      <section className="quick-stats">
-        <div className="stat-box">
-          <Calendar size={20} />
-          <div>
-            <div className="stat-label">Next Scheduled Maintenance</div>
-            <div className="stat-value">{nextPreventive}</div>
-          </div>
-        </div>
-        <div className="stat-box">
-          <AlertCircle size={20} />
-          <div>
-            <div className="stat-label">Critical Alerts</div>
-            <div className="stat-value">{summary.criticalAlerts} Active</div>
-          </div>
-        </div>
-        <div className="stat-box">
-          <CheckCircle size={20} />
-          <div>
-            <div className="stat-label">Technician Efficiency</div>
-            <div className="stat-value">{summary.technicianEfficiency === null ? 'Insufficient data' : `${summary.technicianEfficiency}%`}</div>
-          </div>
-        </div>
-        <div className="stat-box">
-          <TrendingUp size={20} />
-          <div>
-            <div className="stat-label">Assigned Staff</div>
-            <div className="stat-value">{summary.assignedStaff}</div>
-          </div>
-        </div>
-      </section>
+      <style>{styles}</style>
     </div>
   );
-};
+}
 
-export default MaintDashboard;
+const styles = `
+  .maintenance-dashboard {
+    min-height: 100%;
+    padding: 24px;
+    background: var(--color-background);
+    color: var(--color-text-primary);
+    box-sizing: border-box;
+  }
+
+  .maintenance-dashboard *,
+  .maintenance-dashboard *::before,
+  .maintenance-dashboard *::after {
+    box-sizing: border-box;
+  }
+
+  .maintenance-dashboard-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+
+  .maintenance-breadcrumb {
+    color: var(--color-text-secondary-on-page);
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  .maintenance-dashboard-header h1 {
+    margin: 0;
+    font-size: 28px;
+    line-height: 1.2;
+    font-weight: 700;
+    color: var(--color-text-primary);
+  }
+
+  .maintenance-dashboard-header p {
+    margin: 8px 0 0;
+    color: var(--color-text-secondary-on-page);
+    font-size: 14px;
+  }
+
+  .maintenance-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .maintenance-last-updated {
+    color: var(--color-text-secondary-on-page);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .maintenance-refresh-button {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    border-radius: 8px;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .maintenance-refresh-button:hover {
+    background: var(--color-surface-muted);
+  }
+
+  .maintenance-refresh-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .maintenance-alert {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 18px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+    border-left-width: 4px;
+  }
+
+  .maintenance-alert strong {
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .maintenance-alert p {
+    margin: 0;
+    font-size: 13px;
+  }
+
+  .maintenance-alert-error {
+    background: var(--color-danger-light);
+    border-color: var(--color-danger-light);
+    border-left-color: var(--color-danger-text);
+    color: var(--color-danger-text);
+  }
+
+  .maintenance-alert-warning {
+    background: var(--color-warning-light);
+    border-color: var(--color-warning-light);
+    border-left-color: var(--color-warning-text);
+    color: var(--color-warning-text);
+  }
+
+  .maintenance-alert button {
+    border: 0;
+    background: var(--color-surface);
+    border-radius: 7px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .maintenance-alert-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .maintenance-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .maintenance-kpi-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 18px;
+    min-height: 170px;
+    box-shadow: var(--shadow-dashboard-card);
+  }
+
+  .maintenance-kpi-card-danger {
+    border-color: var(--color-danger-light);
+  }
+
+  .maintenance-kpi-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .maintenance-kpi-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-primary-light);
+    font-size: 20px;
+  }
+
+  .maintenance-kpi-menu {
+    color: var(--color-text-secondary-on-page);
+    font-size: 20px;
+  }
+
+  .maintenance-kpi-title {
+    margin-top: 16px;
+    color: var(--color-text-secondary-on-page);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .maintenance-kpi-value {
+    margin-top: 7px;
+    color: var(--color-text-primary);
+    font-size: 29px;
+    font-weight: 700;
+  }
+
+  .maintenance-kpi-link {
+    margin-top: 12px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-primary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .maintenance-section {
+    margin-top: 28px;
+  }
+
+  .maintenance-section-header {
+    margin-bottom: 14px;
+  }
+
+  .maintenance-section-header h2,
+  .maintenance-summary-header h2 {
+    margin: 0;
+    font-size: 19px;
+  }
+
+  .maintenance-section-header p,
+  .maintenance-summary-header p {
+    margin: 5px 0 0;
+    color: var(--color-text-secondary-on-page);
+    font-size: 13px;
+  }
+
+  .maintenance-quick-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .maintenance-quick-actions button {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 12px;
+    text-align: left;
+    padding: 16px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    border-radius: 10px;
+    cursor: pointer;
+  }
+
+  .maintenance-quick-actions button:hover {
+    border-color: var(--color-primary);
+    transform: translateY(-1px);
+  }
+
+  .maintenance-quick-actions span {
+    grid-row: 1 / 3;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: var(--color-primary-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+
+  .maintenance-quick-actions strong {
+    color: var(--color-text-primary);
+    font-size: 14px;
+  }
+
+  .maintenance-quick-actions small {
+    color: var(--color-text-secondary-on-page);
+    font-size: 12px;
+    margin-top: 4px;
+  }
+
+  .maintenance-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 28px;
+  }
+
+  .maintenance-summary-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+
+  .maintenance-status-list {
+    margin-top: 18px;
+    display: grid;
+    gap: 12px;
+  }
+
+  .maintenance-status-list > div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .maintenance-status-list > div:last-child {
+    border-bottom: 0;
+  }
+
+  .maintenance-status-list span {
+    color: var(--color-text-secondary-on-page);
+    font-size: 13px;
+  }
+
+  .maintenance-status-list strong {
+    color: var(--color-text-primary);
+    font-size: 15px;
+  }
+
+  .danger-value {
+    color: var(--color-danger) !important;
+  }
+
+  .maintenance-skeleton-card {
+    overflow: hidden;
+  }
+
+  .maintenance-skeleton-title,
+  .maintenance-skeleton-subtitle,
+  .maintenance-skeleton-icon,
+  .maintenance-skeleton-line,
+  .maintenance-skeleton-value {
+    background: var(--color-surface-muted);
+    border-radius: 7px;
+  }
+
+  .maintenance-skeleton-title {
+    width: 280px;
+    height: 30px;
+  }
+
+  .maintenance-skeleton-subtitle {
+    width: 380px;
+    max-width: 80%;
+    height: 14px;
+    margin-top: 10px;
+  }
+
+  .maintenance-skeleton-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .maintenance-skeleton-line {
+    width: 75%;
+    height: 13px;
+    margin-top: 20px;
+  }
+
+  .maintenance-skeleton-value {
+    width: 45%;
+    height: 28px;
+    margin-top: 10px;
+  }
+
+  @media (max-width: 1200px) {
+    .maintenance-kpi-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .maintenance-quick-actions {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 900px) {
+    .maintenance-dashboard {
+      padding: 18px;
+    }
+
+    .maintenance-dashboard-header {
+      flex-direction: column;
+    }
+
+    .maintenance-kpi-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .maintenance-summary-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .maintenance-dashboard {
+      padding: 12px;
+    }
+
+    .maintenance-dashboard-header h1 {
+      font-size: 23px;
+    }
+
+    .maintenance-header-actions {
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    .maintenance-kpi-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .maintenance-quick-actions {
+      grid-template-columns: 1fr;
+    }
+
+    .maintenance-alert {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .maintenance-kpi-card {
+      min-height: 150px;
+    }
+  }
+`;
+
+export default Dashboard;

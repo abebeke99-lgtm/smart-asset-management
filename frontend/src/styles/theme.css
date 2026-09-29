@@ -1,63 +1,149 @@
+/* ==========================================================
+   Mekdela Amba University — Asset Management System
+   CANONICAL DESIGN TOKENS (single source of truth)
+
+   Every colour in the Header / Sidebar / Dashboard / Footer
+   resolves back to this file. Never hard-code a hex in a
+   component or in a component-scoped stylesheet.
+
+   Brand ramp (fixed — do not change):
+     sky   #0EA5D9   navy  #111827
+     blue  #2563EB   gold  #F4C542
+     page  #F3F6F9   card  #FFFFFF
+   ========================================================== */
+
 :root {
   color-scheme: light;
 
-  --color-primary: #2563EB;
-  --color-primary-hover: #1D4ED8;
-  --color-header: #0EA5D9;
-  --color-sidebar: #111827;
+  /* ---------- Brand ramp ---------- */
+  --color-brand-sky: #0EA5D9;
+  --color-brand-sky-dark: #0284C7;
+  --color-brand-navy: #111827;
+  --color-brand-blue: #2563EB;
+  --color-brand-blue-dark: #1D4ED8;
+  --color-brand-gold: #F4C542;
+  --color-brand-page: #F3F6F9;
+  --color-brand-card: #FFFFFF;
+
+  /* ---------- Header ----------
+     Cyan background with ink text. */
+  --color-header: #00A3C7;
+  --color-header-hover: #0086A5;
+  --color-header-border: #0086A5;
+  --color-header-text: #111827;
+  --color-header-text-strong: #111827;
+  /* #0C4A6E only reaches 3.33:1 on the sky fill; this step clears 4.5:1. */
+  --color-header-text-muted: #08344A;
+  --color-header-icon-hover: rgba(17, 24, 39, 0.10);
+  --color-header-focus: #111827;
+  --color-header-badge: #DC2626;
+   --color-header-control-border: rgba(17, 24, 39, 0.22);
+
+  /* ---------- Sidebar ---------- */
+  --color-sidebar: var(--color-brand-navy);
   --color-sidebar-hover: #1F2937;
-  --color-sidebar-active: #263449;
-  --color-accent: #F4C542;
-  --color-background: #F3F6F9;
-  --color-surface: #FFFFFF;
-  --color-surface-muted: #F8FAFC;
+  --color-sidebar-active: #1F2937;
+  --color-sidebar-text: #D1D5DB;
+  --color-sidebar-text-active: #FFFFFF;
+  --color-sidebar-label: #9CA3AF;
+  --color-sidebar-divider: #374151;
+  --color-sidebar-accent: var(--color-brand-gold);
+
+  /* ---------- Primary action ---------- */
+  --color-primary: var(--color-brand-blue);
+  --color-primary-hover: var(--color-brand-blue-dark);
+  --color-primary-light: #DBEAFE;
+  --color-primary-text: #1D4ED8;
+
+  /* ---------- Surfaces ---------- */
+  --color-background: var(--color-brand-page);
+  --color-surface: var(--color-brand-card);
+  --color-surface-muted: #F9FAFB;
+  --color-border: #E5E7EB;
+
+  /* ---------- Text ----------
+     --color-text-muted is for text sitting on a WHITE card (#FFFFFF, 4.83:1).
+     Anything rendered on the page canvas (#F3F6F9) or a muted surface
+     (#F9FAFB) must use --color-text-secondary-on-page instead: #6B7280 drops
+     to 4.46:1 on the page background, #4B5563 holds at 6.97:1. */
   --color-text-primary: #111827;
   --color-text-secondary: #475569;
-  --color-text-muted: #64748B;
-  --color-border: #E2E8F0;
-  --color-success: #15803D;
+  --color-text-muted: #6B7280;
+  --color-text-secondary-on-page: #4B5563;
+
+  /* ---------- Status (fill / accent) ---------- */
+  --color-success: #16A34A;
   --color-success-light: #DCFCE7;
-  --color-warning: #B45309;
+  --color-success-text: #166534;
+  --color-warning: #F59E0B;
   --color-warning-light: #FEF3C7;
-  --color-danger: #B91C1C;
+  --color-warning-text: #92400E;
+   --color-warning-icon: #B45309;
+  --color-danger: #DC2626;
   --color-danger-light: #FEE2E2;
-  --color-info: #0369A1;
+  --color-danger-text: #991B1B;
+  --color-info: #0EA5D9;
   --color-info-light: #E0F2FE;
+  --color-info-text: #075985;
+  --color-neutral: #6B7280;
+  --color-neutral-light: #F3F4F6;
+  --color-neutral-text: #374151;
+  --color-disabled: #9CA3AF;
+
+  /* ---------- Accent (active nav only) ---------- */
+  --color-accent: var(--color-brand-gold);
+
+  /* ---------- Footer ---------- */
+   --color-footer-background: #517B97;
+   --color-footer-border: rgba(255, 255, 255, 0.28);
+   --color-footer-text: #FFFFFF;
+   --color-footer-link: #FFFFFF;
+
+  /* ---------- Tables / charts ---------- */
+  --color-table-header: #F3F6F9;
+  --color-table-hover: #F9FAFB;
+  --color-chart-grid: #E5E7EB;
+  /* Six-colour categorical ramp, led by the primary blue.
+     Every slot clears 3:1 against a white card (WCAG 1.4.11). The warning and
+     info slots use their 600-weight steps because the 500-weight fills
+     (#F59E0B = 2.15:1, #0EA5D9 = 2.84:1) do not. */
+  --color-chart-1: #2563EB;
+  --color-chart-2: #D97706;
+  --color-chart-3: #6B7280;
+  --color-chart-4: #16A34A;
+  --color-chart-5: #0E7490;
+  --color-chart-6: #DC2626;
+
+  /* ---------- Spacing ---------- */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 16px;
   --spacing-lg: 24px;
   --spacing-xl: 32px;
+
+  /* ---------- Radius ---------- */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
+
+  /* ---------- Elevation ---------- */
   --shadow-sm: 0 1px 3px rgba(17, 24, 39, 0.08);
   --shadow-md: 0 4px 12px rgba(17, 24, 39, 0.08);
   --shadow-lg: 0 12px 30px rgba(17, 24, 39, 0.12);
+  --shadow-dashboard-card: 0 2px 8px rgba(17, 24, 39, 0.04);
+  --shadow-dashboard-card-hover: 0 8px 24px rgba(17, 24, 39, 0.08);
+  --shadow-dashboard-primary: 0 4px 12px rgba(37, 99, 235, 0.3);
+   --shadow-header: 0 1px 3px rgba(2, 132, 199, 0.32);
+   --shadow-header-menu: 0 10px 24px rgba(17, 24, 39, 0.15);
   --focus-ring: rgba(37, 99, 235, 0.35);
   --transition: 160ms ease;
 
-  /* Compatibility aliases for existing page styles. */
-  --dashboard-header: var(--color-header);
-  --dashboard-sidebar: var(--color-sidebar);
-  --dashboard-sidebar-hover: var(--color-sidebar-hover);
-  --dashboard-sidebar-active: var(--color-sidebar-active);
-  --page-background: var(--color-background);
-  --card-background: var(--color-surface);
-  --footer-background: var(--color-sidebar);
-  --footer-text: #FFFFFF;
-  --footer-muted: #CBD5E1;
-  --login-background: var(--color-background);
-  --login-card: var(--color-surface);
-  --login-primary: var(--color-primary);
-  --login-primary-hover: var(--color-primary-hover);
-  --color-shell-primary: var(--color-header);
-  --color-shell-sidebar: var(--color-sidebar);
-  --color-shell-footer: var(--footer-background);
-  --color-page-bg: var(--color-background);
-  --color-card: var(--color-surface);
+  /* ==========================================================
+     Compatibility aliases — existing page styles.
+     Every alias points at a token above; none holds a raw hex.
+     ========================================================== */
   --primary: var(--color-primary);
-  --primary-dark: #1D4ED8;
+  --primary-dark: var(--color-primary-hover);
   --primary-hover: var(--color-primary-hover);
   --navy: var(--color-sidebar);
   --navy-soft: #334155;
@@ -74,6 +160,7 @@
   --danger: var(--color-danger);
   --danger-soft: var(--color-danger-light);
   --info: var(--color-info);
+
   --header-background: var(--color-header);
   --sidebar-background: var(--color-sidebar);
   --sidebar-hover: var(--color-sidebar-hover);
@@ -84,6 +171,25 @@
   --color-secondary-hover: #334155;
   --header-gradient-start: var(--color-header);
   --header-gradient-end: var(--color-header);
+
+  --dashboard-header: var(--color-header);
+  --dashboard-sidebar: var(--color-sidebar);
+  --dashboard-sidebar-hover: var(--color-sidebar-hover);
+  --dashboard-sidebar-active: var(--color-sidebar-active);
+  --page-background: var(--color-background);
+  --card-background: var(--color-surface);
+  --footer-background: var(--color-footer-background);
+  --footer-text: var(--color-footer-text);
+  --footer-muted: var(--color-footer-text);
+  --login-background: var(--color-background);
+  --login-card: var(--color-surface);
+  --login-primary: var(--color-primary);
+  --login-primary-hover: var(--color-primary-hover);
+  --color-shell-primary: var(--color-primary);
+  --color-shell-sidebar: var(--color-sidebar);
+  --color-shell-footer: var(--color-footer-background);
+  --color-page-bg: var(--color-background);
+  --color-card: var(--color-surface);
 }
 
 [data-theme="dark"] {
@@ -107,3 +213,21 @@
   --border: var(--color-border);
 }
 
+:where(
+   .admin-dashboard-shell,
+   .maintenance-dashboard,
+   .dept-dashboard,
+   .college-dashboard,
+   .ict-dashboard,
+   .store-dashboard,
+   .finance-dashboard,
+   .admin-main-content:has(.infra-header)
+) {
+   --color-background: var(--color-brand-page);
+   --color-surface: var(--color-brand-card);
+   --color-surface-muted: #F9FAFB;
+   --color-text-primary: var(--color-brand-navy);
+   --color-text-secondary: var(--color-text-secondary-on-page);
+   --color-text-muted: #6B7280;
+   --color-border: #E5E7EB;
+}

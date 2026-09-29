@@ -3,6 +3,7 @@ const activeStatuses = new Set(['pending', 'in-review']);
 
 const normalizeQcStatus = (value) => String(value || '').trim().toLowerCase().replace(/[_\s]+/g, '-');
 const normalizeTestStatus = (value) => String(value || '').trim().toLowerCase().replace(/[_\s]+/g, '-');
+const resolveQcStatusForDecision = (decision, requestedStatus) => normalizeQcStatus(requestedStatus) || normalizeQcStatus(decision) || 'in-review';
 
 const isTestEligibleForQualityControl = (test) => {
   if (!test || !test.maintenanceId || !test.assetId) return false;
@@ -65,6 +66,7 @@ module.exports = {
   activeStatuses,
   isTestEligibleForQualityControl,
   normalizeQcStatus,
+  resolveQcStatusForDecision,
   validateChecklist,
   validateQcDecision,
 };

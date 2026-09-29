@@ -26,9 +26,9 @@
    - Option to force recreate if needed
 
 ### 4. **Initial Data Seeding**
-   - Default admin user: `admin` / `Admin@123`
+   - Demo accounts are not created by default. Configure `SEED_DEMO_DATA=true` and a private `SEED_DEMO_PASSWORD` only when local demo accounts are explicitly needed.
    - 6 default asset categories
-   - Ready for production use
+   - Configure an administrator account and production environment before deployment.
 
 ### 5. **Configuration Files**
    - `.sequelizerc` - Sequelize configuration
@@ -66,7 +66,7 @@ npm run dev
 Database connection established successfully.
 Syncing database models...
 ✓ Database synchronized successfully
-✓ Default admin user created (username: admin, password: Admin@123)
+Demo account seeding is disabled unless explicitly enabled with a private environment password.
 ✓ Categories seeded
 Server running on port 5000
 ```
@@ -153,7 +153,7 @@ Response:
 ```bash
 curl -X POST http://localhost:5000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"Admin@123"}'
+   -d '{"username":"YOUR_ADMIN_USERNAME","password":"YOUR_ADMIN_PASSWORD"}'
 ```
 
 ### 3. List Assets

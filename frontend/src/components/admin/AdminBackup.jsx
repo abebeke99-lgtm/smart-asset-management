@@ -1,1655 +1,1229 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useLanguage, useTheme } from '../../contexts/UiContext';
-import { toast } from 'react-toastify';
-import { apiClient } from '../../utils/api';
+import React, { useEffect, useMemo, useState } from "react";
 
-/**
- * AdminBackup
- *
- * BACKUP MANAGEMENT
- * ├── Create Backup
- * ├── Backup History
- * ├── Restore
- * ├── Backup Status
- * └── Backup Information
- *     ├── Backup Date
- *     ├── Backup Type
- *     ├── File Size
- *     ├── Created By
- *     ├── Status
- *     └── Restore Status
- */
-const AdminBackup = () => {
-  const { language } = useLanguage();
-  const { theme } = useTheme();
+const API_URL = "/api/system/backup";
 
-  const isDark = theme === 'dark';
+const getToken = () =>
+  localStorage.getItem("token") ||
+  localStorage.getItem("accessToken") ||
+  localStorage.getItem("authToken") ||
+  "";
 
-  const [backups, setBackups] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [restoring, setRestoring] = useState(null);
-  const [deleting, setDeleting] = useState(null);
-  const [verifying, setVerifying] = useState(null);
+const getHeaders = (json = false) => {
+  const token = getToken();
 
-  const [filter, setFilter] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loadError, setLoadError] = useState('');
-
-  const [showRestoreModal, setShowRestoreModal] = useState(false);
-  const [selectedBackup, setSelectedBackup] = useState(null);
-
-  const t = language === 'en'
-    ? englishTranslations
-    : amharicTranslations;
-
-  /* =========================================================
-     THEME
-  ========================================================= */
-
-  const colors = {
-    background: isDark ? '#0f172a' : '#f5f7fb',
-    card: isDark ? '#1e293b' : '#ffffff',
-    cardSecondary: isDark ? '#172033' : '#f8fafc',
-    text: isDark ? '#e2e8f0' : '#1e293b',
-    subText: isDark ? '#94a3b8' : '#64748b',
-    border: isDark ? '#334155' : '#e2e8f0',
-
-    primary: '#2563eb',
-    primaryHover: '#1d4ed8',
-
-    success: '#16a34a',
-    successBg: isDark ? 'rgba(22,163,74,0.15)' : '#dcfce7',
-
-    danger: '#dc2626',
-    dangerBg: isDark ? 'rgba(220,38,38,0.15)' : '#fee2e2',
-
-    warning: '#d97706',
-    warningBg: isDark ? 'rgba(217,119,6,0.15)' : '#fef3c7',
-
-    info: '#0284c7',
-    infoBg: isDark ? 'rgba(2,132,199,0.15)' : '#e0f2fe',
-
-    purple: '#7c3aed',
-    purpleBg: isDark ? 'rgba(124,58,237,0.15)' : '#ede9fe',
-
-    shadow: isDark
-      ? '0 4px 16px rgba(0,0,0,0.25)'
-      : '0 4px 16px rgba(15,23,42,0.06)'
+  return {
+    Accept: "application/json",
+    ...(json ? { "Content-Type": "application/json" } : {}),
+    ...(token
+      ? { Authorization: `Bearer ${token}` }
+      : {}),
   };
+};
 
-  /* =========================================================
-     FETCH BACKUPS
-  ========================================================= */
+const normalizeBackups = (payload) => {
+  if (Array.isArray(payload)) return payload;
 
-  const fetchBackups = async () => {
+  if (Array.isArray(payload?.backups)) {
+    return payload.backups;
+  }
+
+  if (Array.isArray(payload?.data)) {
+    return payload.data;
+  }
+
+  if (Array.isArray(payload?.data?.backups)) {
+    return payload.data.backups;
+  }
+
+  if (Array.isArray(payload?.items)) {
+    return payload.items;
+  }
+
+  return [];
+};
+
+const getBackupId = (backup) =>
+  backup?.backupId ??
+  backup?.backup_id ??
+  backup?.id;
+
+const getBackupName = (backup) =>
+  backup?.name ||
+  backup?.fileName ||
+  backup?.filename ||
+  backup?.backupName ||
+  "System Backup";
+
+const getBackupStatus = (backup) =>
+  backup?.status ||
+  "Completed";
+
+const getBackupType = (backup) =>
+  backup?.type ||
+  backup?.backupType ||
+  "Full";
+
+const getBackupSize = (backup) =>
+  backup?.size ||
+  backup?.fileSize ||
+  backup?.file_size ||
+  "—";
+
+const getBackupDate = (backup) =>
+  backup?.createdAt ||
+  backup?.created_at ||
+  backup?.date ||
+  backup?.backupDate ||
+  null;
+
+const formatDate = (value) => {
+  if (!value) return "—";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleString();
+};
+
+const statusStyle = (status) => {
+  const value = String(status).toLowerCase();
+
+  if (
+    value === "completed" ||
+    value === "success" ||
+    value === "successful"
+  ) {
+    return {
+      background: "#ECFDF5",
+      color: "#047857",
+    };
+  }
+
+  if (
+    value === "failed" ||
+    value === "error"
+  ) {
+    return {
+      background: "#FEF2F2",
+      color: "#B91C1C",
+    };
+  }
+
+  if (
+    value === "running" ||
+    value === "processing"
+  ) {
+    return {
+      background: "#EFF6FF",
+      color: "#1D4ED8",
+    };
+  }
+
+  return {
+    background: "#F1F5F9",
+    color: "#475569",
+  };
+};
+
+export default function Backup() {
+  const [backups, setBackups] =
+    useState([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [creating, setCreating] =
+    useState(false);
+
+  const [restoring, setRestoring] =
+    useState(null);
+
+  const [deleting, setDeleting] =
+    useState(null);
+
+  const [downloading, setDownloading] =
+    useState(null);
+
+  const [error, setError] =
+    useState("");
+
+  const [success, setSuccess] =
+    useState("");
+
+  const [selectedBackup, setSelectedBackup] =
+    useState(null);
+
+  const [showDetails, setShowDetails] =
+    useState(false);
+
+  const [backupType, setBackupType] =
+    useState("Full");
+
+  const [includeFiles, setIncludeFiles] =
+    useState(true);
+
+  useEffect(() => {
+    loadBackups();
+  }, []);
+
+  const loadBackups = async () => {
     setLoading(true);
-    setLoadError('');
+    setError("");
 
     try {
-      const params = {
-        search: searchQuery.trim() || undefined,
-        type: 'JSON'
-      };
-
-      if (filter === 'completed') {
-        params.status = 'Completed';
-      }
-
-      if (filter === 'failed') {
-        params.status = 'Failed';
-      }
-
-      const response = await apiClient.get('/api/backups', {
-        params
-      });
-
-      const responseData = response.data || {};
-
-      const rawBackups =
-        responseData.backups ||
-        responseData.data ||
-        responseData.logs ||
-        (Array.isArray(responseData) ? responseData : []);
-
-      const normalized = Array.isArray(rawBackups)
-        ? rawBackups.map((backup) => ({
-            ...backup,
-
-            id:
-              backup.id ||
-              backup._id ||
-              backup.filename,
-
-            filename:
-              backup.filename ||
-              backup.fileName ||
-              backup.name ||
-              'Unknown Backup',
-
-            created_at:
-              backup.created_at ||
-              backup.createdAt ||
-              backup.date ||
-              backup.createdAt,
-
-            created_by:
-              backup.created_by ||
-              backup.createdBy ||
-              backup.user?.username ||
-              backup.user?.name ||
-              '',
-
-            type:
-              backup.type ||
-              backup.backupType ||
-              'JSON',
-
-            size:
-              Number(
-                backup.size ||
-                backup.fileSize ||
-                backup.file_size ||
-                0
-              ),
-
-            status:
-              backup.status ||
-              'Invalid',
-
-            restoreStatus:
-              backup.restoreStatus ||
-              backup.restore_status ||
-              'Not Restored',
-
-            notes:
-              backup.notes ||
-              backup.description ||
-              ''
-          }))
-        : [];
-
-      normalized.sort(
-        (a, b) =>
-          new Date(b.created_at || 0) -
-          new Date(a.created_at || 0)
+      const response = await fetch(
+        API_URL,
+        {
+          method: "GET",
+          headers: getHeaders(),
+        }
       );
 
-      setBackups(normalized);
-    } catch (error) {
-      console.error('Error loading backups:', error);
+      if (!response.ok) {
+        throw new Error(
+          `Unable to load backups: ${response.status} ${response.statusText}`
+        );
+      }
 
-      setLoadError(
-        error?.response?.data?.message ||
-        t.loadFailed
+      const payload =
+        await response.json();
+
+      setBackups(
+        normalizeBackups(payload)
+      );
+    } catch (err) {
+      console.error(
+        "Backup load error:",
+        err
       );
 
-      setBackups([]);
+      setError(
+        err.message ||
+          "Unable to load backup history."
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchBackups();
-  }, [filter, searchQuery]);
+  const completedBackups = useMemo(
+    () =>
+      backups.filter((backup) => {
+        const status =
+          String(
+            getBackupStatus(backup)
+          ).toLowerCase();
 
-  /* =========================================================
-     CREATE BACKUP
-  ========================================================= */
+        return (
+          status === "completed" ||
+          status === "success" ||
+          status === "successful"
+        );
+      }).length,
+    [backups]
+  );
+
+  const failedBackups = useMemo(
+    () =>
+      backups.filter((backup) => {
+        const status =
+          String(
+            getBackupStatus(backup)
+          ).toLowerCase();
+
+        return (
+          status === "failed" ||
+          status === "error"
+        );
+      }).length,
+    [backups]
+  );
+
+  const latestBackup = useMemo(() => {
+    if (!backups.length) return null;
+
+    return [...backups].sort(
+      (a, b) => {
+        const dateA =
+          new Date(
+            getBackupDate(a) || 0
+          ).getTime();
+
+        const dateB =
+          new Date(
+            getBackupDate(b) || 0
+          ).getTime();
+
+        return dateB - dateA;
+      }
+    )[0];
+  }, [backups]);
 
   const createBackup = async () => {
-    if (creating) return;
-
     setCreating(true);
+    setError("");
+    setSuccess("");
 
     try {
-      const response = await apiClient.post('/api/backups');
+      const response = await fetch(
+        API_URL,
+        {
+          method: "POST",
+          headers: getHeaders(true),
+          body: JSON.stringify({
+            type: backupType,
+            backupType,
+            includeFiles,
+          }),
+        }
+      );
 
-      if (response.data?.success === false) {
+      const text =
+        await response.text();
+
+      let data = null;
+
+      try {
+        data = text
+          ? JSON.parse(text)
+          : null;
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
         throw new Error(
-          response.data?.message || t.createFailed
+          data?.message ||
+            data?.error ||
+            text ||
+            `Backup creation failed (${response.status})`
         );
       }
 
-      toast.success(
-        response.data?.message || t.backupCreated
+      setSuccess(
+        "System backup created successfully."
       );
 
-      await fetchBackups();
-    } catch (error) {
-      console.error('Create backup error:', error);
+      await loadBackups();
+    } catch (err) {
+      console.error(
+        "Create backup error:",
+        err
+      );
 
-      toast.error(
-        error?.response?.data?.message ||
-        t.createFailed
+      setError(
+        err.message ||
+          "Unable to create system backup."
       );
     } finally {
       setCreating(false);
     }
   };
 
-  /* =========================================================
-     DOWNLOAD BACKUP
-  ========================================================= */
+  const downloadBackup = async (
+    backup
+  ) => {
+    const id =
+      getBackupId(backup);
 
-  const downloadBackup = async (filename) => {
-    if (!filename) {
-      toast.error(t.downloadFailed);
+    if (!id) {
+      setError(
+        "Backup ID is missing."
+      );
       return;
     }
 
+    setDownloading(id);
+    setError("");
+    setSuccess("");
+
     try {
-      const response = await apiClient.get(
-        `/api/backups/download/${encodeURIComponent(filename)}`,
+      const response = await fetch(
+        `${API_URL}/${id}/download`,
         {
-          responseType: 'blob'
+          method: "GET",
+          headers: getHeaders(),
         }
       );
 
-      const blob =
-        response.data instanceof Blob
-          ? response.data
-          : new Blob([response.data]);
+      if (!response.ok) {
+        const text =
+          await response.text();
 
-      const url = URL.createObjectURL(blob);
-
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      URL.revokeObjectURL(url);
-
-      toast.success(t.downloadStarted);
-    } catch (error) {
-      console.error('Download backup error:', error);
-
-      toast.error(
-        error?.response?.data?.message ||
-        t.downloadFailed
-      );
-    }
-  };
-
-  /* =========================================================
-     VERIFY BACKUP
-  ========================================================= */
-
-  const verifyBackup = async (filename) => {
-    if (!filename || verifying) return;
-
-    setVerifying(filename);
-
-    try {
-      const response = await apiClient.get(
-        `/api/backups/verify/${encodeURIComponent(filename)}`
-      );
-
-      if (
-        response.data?.valid === true ||
-        response.data?.success === true
-      ) {
-        toast.success(
-          response.data?.message ||
-          t.verifySuccess
-        );
-      } else {
-        toast.warning(
-          response.data?.message ||
-          t.verifyFailed
+        throw new Error(
+          text ||
+            `Unable to download backup (${response.status})`
         );
       }
 
-      await fetchBackups();
-    } catch (error) {
-      console.error('Verify backup error:', error);
+      const blob =
+        await response.blob();
 
-      toast.error(
-        error?.response?.data?.message ||
-        t.verifyError
+      const url =
+        window.URL.createObjectURL(
+          blob
+        );
+
+      const anchor =
+        document.createElement("a");
+
+      anchor.href = url;
+
+      anchor.download =
+        getBackupName(backup);
+
+      document.body.appendChild(
+        anchor
+      );
+
+      anchor.click();
+
+      anchor.remove();
+
+      window.URL.revokeObjectURL(
+        url
+      );
+
+      setSuccess(
+        "Backup download started."
+      );
+    } catch (err) {
+      console.error(
+        "Download backup error:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Unable to download backup."
       );
     } finally {
-      setVerifying(null);
+      setDownloading(null);
     }
   };
 
-  /* =========================================================
-     RESTORE BACKUP
-  ========================================================= */
+  const restoreBackup = async (
+    backup
+  ) => {
+    const id =
+      getBackupId(backup);
 
-  const openRestoreModal = (backup) => {
-    setSelectedBackup(backup);
-    setShowRestoreModal(true);
-  };
-
-  const closeRestoreModal = () => {
-    if (restoring) return;
-
-    setShowRestoreModal(false);
-    setSelectedBackup(null);
-  };
-
-  const restoreBackup = async () => {
-    if (!selectedBackup?.filename || restoring) {
+    if (!id) {
+      setError(
+        "Backup ID is missing."
+      );
       return;
     }
 
-    const filename = selectedBackup.filename;
-
-    setRestoring(filename);
-
-    try {
-      const response = await apiClient.post(
-        `/api/backups/restore/${encodeURIComponent(filename)}`
+    const confirmed =
+      window.confirm(
+        `Restore the system from "${getBackupName(
+          backup
+        )}"?\n\nThis operation may replace current system data.`
       );
 
-      if (response.data?.success === false) {
+    if (!confirmed) return;
+
+    setRestoring(id);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/${id}/restore`,
+        {
+          method: "POST",
+          headers: getHeaders(true),
+          body: JSON.stringify({
+            backupId: id,
+          }),
+        }
+      );
+
+      const text =
+        await response.text();
+
+      let data = null;
+
+      try {
+        data = text
+          ? JSON.parse(text)
+          : null;
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
         throw new Error(
-          response.data?.message || t.restoreFailed
+          data?.message ||
+            data?.error ||
+            text ||
+            `Unable to restore backup (${response.status})`
         );
       }
 
-      toast.success(
-        response.data?.message ||
-        t.restoreSuccess
+      setSuccess(
+        "Backup restoration request completed successfully."
       );
 
-      closeRestoreModal();
+      await loadBackups();
+    } catch (err) {
+      console.error(
+        "Restore backup error:",
+        err
+      );
 
-      await fetchBackups();
-    } catch (error) {
-      console.error('Restore backup error:', error);
-
-      toast.error(
-        error?.response?.data?.message ||
-        t.restoreFailed
+      setError(
+        err.message ||
+          "Unable to restore backup."
       );
     } finally {
       setRestoring(null);
     }
   };
 
-  /* =========================================================
-     DELETE BACKUP
-  ========================================================= */
+  const deleteBackup = async (
+    backup
+  ) => {
+    const id =
+      getBackupId(backup);
 
-  const deleteBackup = async (filename) => {
-    if (!filename || deleting) return;
+    if (!id) {
+      setError(
+        "Backup ID is missing."
+      );
+      return;
+    }
 
-    const confirmed = window.confirm(
-      t.confirmDelete
-    );
+    const confirmed =
+      window.confirm(
+        `Delete "${getBackupName(
+          backup
+        )}" permanently?`
+      );
 
     if (!confirmed) return;
 
-    setDeleting(filename);
+    setDeleting(id);
+    setError("");
+    setSuccess("");
 
     try {
-      const response = await apiClient.delete(
-        `/api/backups/${encodeURIComponent(filename)}`
+      const response = await fetch(
+        `${API_URL}/${id}`,
+        {
+          method: "DELETE",
+          headers: getHeaders(),
+        }
       );
 
-      if (response.data?.success === false) {
+      const text =
+        await response.text();
+
+      let data = null;
+
+      try {
+        data = text
+          ? JSON.parse(text)
+          : null;
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
         throw new Error(
-          response.data?.message || t.deleteFailed
+          data?.message ||
+            data?.error ||
+            text ||
+            `Unable to delete backup (${response.status})`
         );
       }
 
-      toast.success(
-        response.data?.message ||
-        t.deleteSuccess
+      setBackups(
+        (current) =>
+          current.filter(
+            (item) =>
+              getBackupId(item) !== id
+          )
       );
 
-      await fetchBackups();
-    } catch (error) {
-      console.error('Delete backup error:', error);
+      setSuccess(
+        "Backup deleted successfully."
+      );
+    } catch (err) {
+      console.error(
+        "Delete backup error:",
+        err
+      );
 
-      toast.error(
-        error?.response?.data?.message ||
-        t.deleteFailed
+      setError(
+        err.message ||
+          "Unable to delete backup."
       );
     } finally {
       setDeleting(null);
     }
   };
 
-  /* =========================================================
-     FILE SIZE
-  ========================================================= */
-
-  const getFileSize = (bytes) => {
-    const value = Number(bytes) || 0;
-
-    if (value <= 0) {
-      return '0 B';
-    }
-
-    if (value < 1024) {
-      return `${value} B`;
-    }
-
-    if (value < 1024 * 1024) {
-      return `${(value / 1024).toFixed(1)} KB`;
-    }
-
-    if (value < 1024 * 1024 * 1024) {
-      return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-    }
-
-    return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-  };
-
-  /* =========================================================
-     DATE
-  ========================================================= */
-
-  const formatDate = (value) => {
-    if (!value) {
-      return '—';
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return '—';
-    }
-
-    return date.toLocaleString();
-  };
-
-  /* =========================================================
-     STATUS
-  ========================================================= */
-
-  const getStatusInfo = (status) => {
-    const normalized = String(status || '').toLowerCase();
-
-    if (
-      normalized === 'completed' ||
-      normalized === 'success' ||
-      normalized === 'successful' ||
-      normalized === 'valid'
-    ) {
-      return {
-        color: colors.success,
-        background: colors.successBg,
-        icon: '✓',
-        label: status || 'Completed'
-      };
-    }
-
-    if (
-      normalized === 'failed' ||
-      normalized === 'invalid' ||
-      normalized === 'error'
-    ) {
-      return {
-        color: colors.danger,
-        background: colors.dangerBg,
-        icon: '✕',
-        label: status || 'Failed'
-      };
-    }
-
-    if (
-      normalized === 'in progress' ||
-      normalized === 'processing'
-    ) {
-      return {
-        color: colors.info,
-        background: colors.infoBg,
-        icon: '↻',
-        label: status || 'In Progress'
-      };
-    }
-
-    if (normalized === 'pending') {
-      return {
-        color: colors.warning,
-        background: colors.warningBg,
-        icon: '!',
-        label: status || 'Pending'
-      };
-    }
-
-    return {
-      color: colors.subText,
-      background: isDark ? '#334155' : '#f1f5f9',
-      icon: '•',
-      label: status || 'Unknown'
-    };
-  };
-
-  const getRestoreInfo = (status) => {
-    const normalized = String(status || '').toLowerCase();
-
-    if (
-      normalized.includes('restored') &&
-      !normalized.includes('not')
-    ) {
-      return {
-        color: colors.success,
-        background: colors.successBg,
-        icon: '↺'
-      };
-    }
-
-    if (
-      normalized.includes('failed') ||
-      normalized.includes('error')
-    ) {
-      return {
-        color: colors.danger,
-        background: colors.dangerBg,
-        icon: '✕'
-      };
-    }
-
-    return {
-      color: colors.subText,
-      background: isDark ? '#334155' : '#f1f5f9',
-      icon: '—'
-    };
-  };
-
-  /* =========================================================
-     FILTER
-  ========================================================= */
-
-  const filteredBackups = useMemo(() => {
-    let result = [...backups];
-
-    if (filter === 'completed') {
-      result = result.filter(
-        (backup) =>
-          String(backup.status).toLowerCase() ===
-          'completed'
-      );
-    }
-
-    if (filter === 'failed') {
-      result = result.filter((backup) => {
-        const status =
-          String(backup.status).toLowerCase();
-
-        return (
-          status === 'failed' ||
-          status === 'invalid' ||
-          status === 'error'
-        );
-      });
-    }
-
-    const query = searchQuery.trim().toLowerCase();
-
-    if (query) {
-      result = result.filter((backup) => {
-        const filename =
-          String(backup.filename || '').toLowerCase();
-
-        const creator =
-          String(backup.created_by || '').toLowerCase();
-
-        const type =
-          String(backup.type || '').toLowerCase();
-
-        const status =
-          String(backup.status || '').toLowerCase();
-
-        return (
-          filename.includes(query) ||
-          creator.includes(query) ||
-          type.includes(query) ||
-          status.includes(query)
-        );
-      });
-    }
-
-    return result;
-  }, [backups, filter, searchQuery]);
-
-  /* =========================================================
-     STATS
-  ========================================================= */
-
-  const stats = useMemo(() => {
-    const total = backups.length;
-
-    const completed = backups.filter(
-      (backup) =>
-        String(backup.status).toLowerCase() ===
-        'completed'
-    ).length;
-
-    const failed = backups.filter((backup) => {
-      const status =
-        String(backup.status).toLowerCase();
-
-      return (
-        status === 'failed' ||
-        status === 'invalid' ||
-        status === 'error'
-      );
-    }).length;
-
-    const pending = backups.filter((backup) => {
-      const status =
-        String(backup.status).toLowerCase();
-
-      return (
-        status === 'pending' ||
-        status === 'in progress' ||
-        status === 'processing'
-      );
-    }).length;
-
-    const totalSize = backups.reduce(
-      (sum, backup) =>
-        sum + (Number(backup.size) || 0),
-      0
+  const openDetails = (
+    backup
+  ) => {
+    setSelectedBackup(
+      backup
     );
 
-    const restored = backups.filter((backup) => {
-      const status =
-        String(backup.restoreStatus || '').toLowerCase();
-
-      return (
-        status.includes('restored') &&
-        !status.includes('not')
-      );
-    }).length;
-
-    return {
-      total,
-      completed,
-      failed,
-      pending,
-      restored,
-      totalSize
-    };
-  }, [backups]);
-
-  /* =========================================================
-     CLEAR FILTERS
-  ========================================================= */
-
-  const clearFilters = () => {
-    setFilter('all');
-    setSearchQuery('');
+    setShowDetails(true);
   };
 
-  /* =========================================================
-     BUTTON COMPONENT
-  ========================================================= */
-
-  const buttonStyle = (
-    background,
-    disabled = false
-  ) => ({
-    padding: '8px 13px',
-    border: 'none',
-    borderRadius: '7px',
-    background: disabled
-      ? '#94a3b8'
-      : background,
-    color: '#ffffff',
-    cursor: disabled
-      ? 'not-allowed'
-      : 'pointer',
-    fontSize: '0.78rem',
-    fontWeight: 600,
-    opacity: disabled ? 0.65 : 1,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '5px',
-    minHeight: '34px'
-  });
-
-  /* =========================================================
-     RENDER
-  ========================================================= */
-
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: colors.background,
-        color: colors.text,
-        padding: '24px'
-      }}
-    >
-      <div
-        style={{
-          maxWidth: '1250px',
-          margin: '0 auto'
-        }}
-      >
-        {/* ===================================================
-            HEADER
-        =================================================== */}
+    <div style={styles.page}>
+      <div style={styles.header}>
+        <div>
+          <div style={styles.breadcrumb}>
+            Administration / System / Backup
+          </div>
 
-        <div
+          <h1 style={styles.title}>
+            System Backup
+          </h1>
+
+          <p style={styles.subtitle}>
+            Create, download, restore, and monitor
+            system backup records.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={createBackup}
+          disabled={creating}
           style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '20px',
-            flexWrap: 'wrap',
-            marginBottom: '24px'
+            ...styles.primaryButton,
+            opacity: creating ? 0.7 : 1,
           }}
         >
-          <div>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: '1.8rem',
-                fontWeight: 750,
-                color: colors.text
-              }}
-            >
-              💾 {t.backupManager}
-            </h1>
+          {creating
+            ? "Creating Backup..."
+            : "Create Backup"}
+        </button>
+      </div>
 
-            <p
+      {error && (
+        <div style={styles.errorAlert}>
+          <strong>Error:</strong>{" "}
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div style={styles.successAlert}>
+          {success}
+        </div>
+      )}
+
+      <div style={styles.statsGrid}>
+        <StatCard
+          title="Total Backups"
+          value={backups.length}
+          icon="💾"
+        />
+
+        <StatCard
+          title="Completed"
+          value={completedBackups}
+          icon="✓"
+        />
+
+        <StatCard
+          title="Failed"
+          value={failedBackups}
+          icon="!"
+        />
+
+        <StatCard
+          title="Latest Backup"
+          value={
+            latestBackup
+              ? formatDate(
+                  getBackupDate(
+                    latestBackup
+                  )
+                )
+              : "—"
+          }
+          icon="🕒"
+          smallValue
+        />
+      </div>
+
+      <div style={styles.mainGrid}>
+        <section style={styles.createCard}>
+          <div style={styles.cardHeader}>
+            <div>
+              <h2 style={styles.cardTitle}>
+                Create New Backup
+              </h2>
+
+              <p style={styles.cardDescription}>
+                Select the backup options before
+                starting the backup operation.
+              </p>
+            </div>
+          </div>
+
+          <div style={styles.cardBody}>
+            <div style={styles.field}>
+              <label style={styles.label}>
+                Backup Type
+              </label>
+
+              <select
+                value={backupType}
+                onChange={(event) =>
+                  setBackupType(
+                    event.target.value
+                  )
+                }
+                style={styles.input}
+              >
+                <option value="Full">
+                  Full Backup
+                </option>
+
+                <option value="Database">
+                  Database Only
+                </option>
+
+                <option value="Files">
+                  Files Only
+                </option>
+              </select>
+            </div>
+
+            <label style={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={includeFiles}
+                onChange={(event) =>
+                  setIncludeFiles(
+                    event.target.checked
+                  )
+                }
+              />
+
+              <span>
+                Include uploaded files and
+                documents
+              </span>
+            </label>
+
+            <div style={styles.infoBox}>
+              <strong>
+                Backup information
+              </strong>
+
+              <p>
+                Backups should be created regularly
+                and stored securely. Restoring a
+                backup can affect current system data.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={createBackup}
+              disabled={creating}
               style={{
-                margin: '6px 0 0',
-                color: colors.subText,
-                fontSize: '0.9rem'
+                ...styles.fullButton,
+                opacity: creating
+                  ? 0.7
+                  : 1,
               }}
             >
-              {t.backupSubtitle}
+              {creating
+                ? "Creating..."
+                : "Start Backup"}
+            </button>
+          </div>
+        </section>
+
+        <section style={styles.securityCard}>
+          <div style={styles.cardHeader}>
+            <h2 style={styles.cardTitle}>
+              Backup Guidelines
+            </h2>
+          </div>
+
+          <div style={styles.guidelines}>
+            <Guideline
+              number="1"
+              title="Create regular backups"
+              text="Maintain recent copies of important system data."
+            />
+
+            <Guideline
+              number="2"
+              title="Protect backup files"
+              text="Store backup files in a controlled and secure location."
+            />
+
+            <Guideline
+              number="3"
+              title="Verify backup status"
+              text="Review completed and failed backup operations."
+            />
+
+            <Guideline
+              number="4"
+              title="Test restoration"
+              text="Periodically verify that backup restoration procedures work correctly."
+            />
+          </div>
+        </section>
+      </div>
+
+      <section style={styles.tableCard}>
+        <div style={styles.cardHeaderRow}>
+          <div>
+            <h2 style={styles.cardTitle}>
+              Backup History
+            </h2>
+
+            <p style={styles.cardDescription}>
+              Previous backup operations and their
+              current status.
             </p>
           </div>
 
           <button
-            onClick={createBackup}
-            disabled={creating}
-            style={{
-              ...buttonStyle(colors.success, creating),
-              padding: '11px 20px',
-              fontSize: '0.9rem'
-            }}
+            type="button"
+            onClick={loadBackups}
+            style={styles.refreshButton}
           >
-            {creating
-              ? `⏳ ${t.creating}`
-              : `➕ ${t.createBackup}`}
+            Refresh
           </button>
         </div>
 
-        {/* ===================================================
-            ERROR
-        =================================================== */}
-
-        {loadError && (
-          <div
-            style={{
-              background: colors.dangerBg,
-              color: colors.danger,
-              border: `1px solid ${colors.danger}`,
-              borderRadius: '9px',
-              padding: '12px 15px',
-              marginBottom: '18px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: '12px'
-            }}
-          >
-            <span>⚠️ {loadError}</span>
-
-            <button
-              onClick={fetchBackups}
-              style={buttonStyle(colors.danger)}
-            >
-              🔄 {t.retry}
-            </button>
-          </div>
-        )}
-
-        {/* ===================================================
-            STATISTICS
-        =================================================== */}
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns:
-              'repeat(auto-fit, minmax(170px, 1fr))',
-            gap: '14px',
-            marginBottom: '20px'
-          }}
-        >
-          <StatCard
-            icon="💾"
-            label={t.total}
-            value={stats.total}
-            colors={colors}
-          />
-
-          <StatCard
-            icon="✅"
-            label={t.completed}
-            value={stats.completed}
-            colors={colors}
-            valueColor={colors.success}
-          />
-
-          <StatCard
-            icon="❌"
-            label={t.failed}
-            value={stats.failed}
-            colors={colors}
-            valueColor={colors.danger}
-          />
-
-          <StatCard
-            icon="⏳"
-            label={t.pending}
-            value={stats.pending}
-            colors={colors}
-            valueColor={colors.warning}
-          />
-
-          <StatCard
-            icon="↺"
-            label={t.restored}
-            value={stats.restored}
-            colors={colors}
-            valueColor={colors.primary}
-          />
-
-          <StatCard
-            icon="📦"
-            label={t.totalSize}
-            value={getFileSize(stats.totalSize)}
-            colors={colors}
-          />
-        </div>
-
-        {/* ===================================================
-            FILTERS
-        =================================================== */}
-
-        <div
-          style={{
-            background: colors.card,
-            border: `1px solid ${colors.border}`,
-            borderRadius: '12px',
-            padding: '16px',
-            marginBottom: '18px',
-            boxShadow: colors.shadow
-          }}
-        >
-          <div
-            style={{
-              fontWeight: 700,
-              color: colors.text,
-              marginBottom: '12px'
-            }}
-          >
-            🔍 {t.filters}
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              gap: '10px',
-              flexWrap: 'wrap'
-            }}
-          >
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) =>
-                setSearchQuery(e.target.value)
-              }
-              placeholder={t.searchPlaceholder}
-              style={{
-                flex: 1,
-                minWidth: '220px',
-                padding: '10px 13px',
-                borderRadius: '8px',
-                border: `1px solid ${colors.border}`,
-                background: colors.cardSecondary,
-                color: colors.text,
-                outline: 'none'
-              }}
-            />
-
-            <select
-              value={filter}
-              onChange={(e) =>
-                setFilter(e.target.value)
-              }
-              style={{
-                padding: '10px 13px',
-                minWidth: '160px',
-                borderRadius: '8px',
-                border: `1px solid ${colors.border}`,
-                background: colors.cardSecondary,
-                color: colors.text,
-                cursor: 'pointer'
-              }}
-            >
-              <option value="all">
-                {t.allBackups}
-              </option>
-
-              <option value="completed">
-                {t.completedOnly}
-              </option>
-
-              <option value="failed">
-                {t.failedOnly}
-              </option>
-            </select>
-
-            {(filter !== 'all' ||
-              searchQuery) && (
-              <button
-                onClick={clearFilters}
-                style={buttonStyle('#64748b')}
-              >
-                ✕ {t.clearFilters}
-              </button>
-            )}
-
-            <button
-              onClick={fetchBackups}
-              disabled={loading}
-              style={buttonStyle(
-                colors.primary,
-                loading
-              )}
-            >
-              🔄 {t.refresh}
-            </button>
-          </div>
-        </div>
-
-        {/* ===================================================
-            BACKUP HISTORY HEADER
-        =================================================== */}
-
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '12px',
-            gap: '10px'
-          }}
-        >
-          <div>
-            <h2
-              style={{
-                margin: 0,
-                fontSize: '1.15rem',
-                color: colors.text
-              }}
-            >
-              📜 {t.backupHistory}
-            </h2>
-
-            <p
-              style={{
-                margin: '4px 0 0',
-                color: colors.subText,
-                fontSize: '0.8rem'
-              }}
-            >
-              {filteredBackups.length} {t.backupsFound}
-            </p>
-          </div>
-        </div>
-
-        {/* ===================================================
-            LOADING
-        =================================================== */}
-
         {loading ? (
-          <div
-            style={{
-              background: colors.card,
-              border: `1px solid ${colors.border}`,
-              borderRadius: '12px',
-              padding: '60px 20px',
-              textAlign: 'center',
-              boxShadow: colors.shadow
-            }}
-          >
-            <div
-              style={{
-                fontSize: '2.2rem',
-                marginBottom: '10px'
-              }}
-            >
-              ⏳
-            </div>
-
-            <div
-              style={{
-                color: colors.subText
-              }}
-            >
-              {t.loading}
-            </div>
+          <div style={styles.loading}>
+            <div style={styles.spinner} />
+            <span>
+              Loading backup history...
+            </span>
           </div>
         ) : backups.length === 0 ? (
-          /* =================================================
-             NO BACKUPS
-          ================================================== */
-
-          <div
-            style={{
-              background: colors.card,
-              border: `1px solid ${colors.border}`,
-              borderRadius: '12px',
-              padding: '65px 20px',
-              textAlign: 'center',
-              boxShadow: colors.shadow
-            }}
-          >
-            <div
-              style={{
-                fontSize: '4rem',
-                marginBottom: '15px'
-              }}
-            >
-              📂
+          <div style={styles.empty}>
+            <div style={styles.emptyIcon}>
+              💾
             </div>
 
-            <h3
-              style={{
-                margin: '0 0 8px',
-                color: colors.text
-              }}
-            >
-              {t.noBackups}
+            <h3 style={styles.emptyTitle}>
+              No backups found
             </h3>
 
-            <p
-              style={{
-                color: colors.subText,
-                maxWidth: '550px',
-                margin: '0 auto'
-              }}
-            >
-              {t.noBackupsDesc}
+            <p style={styles.emptyText}>
+              Create the first system backup to
+              start maintaining backup history.
             </p>
-
-            <button
-              onClick={createBackup}
-              disabled={creating}
-              style={{
-                ...buttonStyle(
-                  colors.success,
-                  creating
-                ),
-                marginTop: '20px',
-                padding: '11px 20px'
-              }}
-            >
-              ➕ {t.createFirstBackup}
-            </button>
-          </div>
-        ) : filteredBackups.length === 0 ? (
-          /* =================================================
-             NO FILTER RESULTS
-          ================================================== */
-
-          <div
-            style={{
-              background: colors.card,
-              border: `1px solid ${colors.border}`,
-              borderRadius: '12px',
-              padding: '60px 20px',
-              textAlign: 'center',
-              boxShadow: colors.shadow
-            }}
-          >
-            <div
-              style={{
-                fontSize: '3.5rem',
-                marginBottom: '12px'
-              }}
-            >
-              🔍
-            </div>
-
-            <h3
-              style={{
-                color: colors.text,
-                margin: '0 0 8px'
-              }}
-            >
-              {t.noResults}
-            </h3>
-
-            <p
-              style={{
-                color: colors.subText
-              }}
-            >
-              {t.noResultsDesc}
-            </p>
-
-            <button
-              onClick={clearFilters}
-              style={{
-                ...buttonStyle('#64748b'),
-                marginTop: '10px'
-              }}
-            >
-              {t.clearFilters}
-            </button>
           </div>
         ) : (
-          /* =================================================
-             BACKUP LIST
-          ================================================== */
+          <div style={styles.tableWrapper}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>
+                    Backup
+                  </th>
 
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px'
-            }}
-          >
-            {filteredBackups.map((backup, index) => {
-              const statusInfo =
-                getStatusInfo(backup.status);
+                  <th style={styles.th}>
+                    Type
+                  </th>
 
-              const restoreInfo =
-                getRestoreInfo(
-                  backup.restoreStatus
-                );
+                  <th style={styles.th}>
+                    Size
+                  </th>
 
-              const isDeleting =
-                deleting === backup.filename;
+                  <th style={styles.th}>
+                    Date
+                  </th>
 
-              const isVerifying =
-                verifying === backup.filename;
+                  <th style={styles.th}>
+                    Status
+                  </th>
 
-              const isRestoring =
-                restoring === backup.filename;
-
-              return (
-                <div
-                  key={
-                    backup.id ||
-                    backup.filename ||
-                    index
-                  }
-                  style={{
-                    background: colors.card,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: '12px',
-                    padding: '18px',
-                    boxShadow: colors.shadow
-                  }}
-                >
-                  <div
+                  <th
                     style={{
-                      display: 'flex',
-                      justifyContent:
-                        'space-between',
-                      alignItems: 'center',
-                      gap: '18px',
-                      flexWrap: 'wrap'
+                      ...styles.th,
+                      textAlign: "right",
                     }}
                   >
-                    {/* BACKUP INFO */}
+                    Actions
+                  </th>
+                </tr>
+              </thead>
 
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems:
-                          'flex-start',
-                        gap: '14px',
-                        flex: 1,
-                        minWidth: '280px'
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: '48px',
-                          height: '48px',
-                          minWidth: '48px',
-                          borderRadius: '10px',
-                          background:
-                            statusInfo.background,
-                          display: 'flex',
-                          alignItems:
-                            'center',
-                          justifyContent:
-                            'center',
-                          fontSize: '1.5rem'
-                        }}
+              <tbody>
+                {backups.map(
+                  (backup, index) => {
+                    const id =
+                      getBackupId(
+                        backup
+                      ) ||
+                      `backup-${index}`;
+
+                    const status =
+                      getBackupStatus(
+                        backup
+                      );
+
+                    return (
+                      <tr
+                        key={id}
+                        style={
+                          styles.tr
+                        }
                       >
-                        {backup.status ===
-                        'Completed'
-                          ? '💾'
-                          : '⚠️'}
-                      </div>
-
-                      <div
-                        style={{
-                          minWidth: 0,
-                          flex: 1
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems:
-                              'center',
-                            gap: '8px',
-                            flexWrap: 'wrap',
-                            marginBottom:
-                              '6px'
-                          }}
+                        <td
+                          style={
+                            styles.td
+                          }
                         >
-                          <span
-                            style={{
-                              fontWeight: 700,
-                              color:
-                                colors.text,
-                              fontSize:
-                                '0.95rem',
-                              wordBreak:
-                                'break-all'
-                            }}
-                          >
-                            {backup.filename}
-                          </span>
-
-                          <StatusBadge
-                            info={statusInfo}
-                          />
-
-                          <span
-                            style={{
-                              padding:
-                                '3px 9px',
-                              borderRadius:
-                                '20px',
-                              background:
-                                colors.infoBg,
-                              color:
-                                colors.info,
-                              fontSize:
-                                '0.7rem',
-                              fontWeight: 700
-                            }}
-                          >
-                            {backup.type}
-                          </span>
-                        </div>
-
-                        {/* BACKUP INFORMATION */}
-
-                        <div
-                          style={{
-                            display: 'flex',
-                            gap: '14px',
-                            flexWrap: 'wrap',
-                            color:
-                              colors.subText,
-                            fontSize:
-                              '0.78rem'
-                          }}
-                        >
-                          <span>
-                            📅{' '}
-                            {formatDate(
-                              backup.created_at
-                            )}
-                          </span>
-
-                          <span>
-                            📦{' '}
-                            {getFileSize(
-                              backup.size
-                            )}
-                          </span>
-
-                          <span>
-                            👤{' '}
-                            {backup.created_by ||
-                              'System'}
-                          </span>
-
-                          <span>
-                            ↺{' '}
-                            {t.restoreStatus}:{' '}
-                            <strong
-                              style={{
-                                color:
-                                  restoreInfo.color
-                              }}
-                            >
-                              {backup.restoreStatus ||
-                                t.notRestored}
-                            </strong>
-                          </span>
-                        </div>
-
-                        {backup.notes && (
                           <div
+                            style={
+                              styles.backupName
+                            }
+                          >
+                            {getBackupName(
+                              backup
+                            )}
+                          </div>
+
+                          <div
+                            style={
+                              styles.backupId
+                            }
+                          >
+                            ID:{" "}
+                            {getBackupId(
+                              backup
+                            ) || "—"}
+                          </div>
+                        </td>
+
+                        <td
+                          style={
+                            styles.td
+                          }
+                        >
+                          <span
+                            style={
+                              styles.typeBadge
+                            }
+                          >
+                            {getBackupType(
+                              backup
+                            )}
+                          </span>
+                        </td>
+
+                        <td
+                          style={
+                            styles.td
+                          }
+                        >
+                          {getBackupSize(
+                            backup
+                          )}
+                        </td>
+
+                        <td
+                          style={
+                            styles.td
+                          }
+                        >
+                          {formatDate(
+                            getBackupDate(
+                              backup
+                            )
+                          )}
+                        </td>
+
+                        <td
+                          style={
+                            styles.td
+                          }
+                        >
+                          <span
                             style={{
-                              marginTop:
-                                '7px',
-                              fontSize:
-                                '0.78rem',
-                              color:
-                                colors.subText,
-                              fontStyle:
-                                'italic'
+                              ...styles.statusBadge,
+                              ...statusStyle(
+                                status
+                              ),
                             }}
                           >
-                            📝 {backup.notes}
+                            {status}
+                          </span>
+                        </td>
+
+                        <td
+                          style={{
+                            ...styles.td,
+                            textAlign:
+                              "right",
+                          }}
+                        >
+                          <div
+                            style={
+                              styles.actions
+                            }
+                          >
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openDetails(
+                                  backup
+                                )
+                              }
+                              style={
+                                styles.actionButton
+                              }
+                            >
+                              View
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                downloadBackup(
+                                  backup
+                                )
+                              }
+                              disabled={
+                                downloading ===
+                                id
+                              }
+                              style={
+                                styles.actionButton
+                              }
+                            >
+                              {downloading ===
+                              id
+                                ? "..."
+                                : "Download"}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                restoreBackup(
+                                  backup
+                                )
+                              }
+                              disabled={
+                                restoring ===
+                                id
+                              }
+                              style={
+                                styles.restoreButton
+                              }
+                            >
+                              {restoring ===
+                              id
+                                ? "..."
+                                : "Restore"}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                deleteBackup(
+                                  backup
+                                )
+                              }
+                              disabled={
+                                deleting ===
+                                id
+                              }
+                              style={
+                                styles.deleteButton
+                              }
+                            >
+                              {deleting ===
+                              id
+                                ? "..."
+                                : "Delete"}
+                            </button>
                           </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* ACTIONS */}
-
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '7px',
-                        flexWrap: 'wrap',
-                        justifyContent:
-                          'flex-end'
-                      }}
-                    >
-                      <button
-                        onClick={() =>
-                          verifyBackup(
-                            backup.filename
-                          )
-                        }
-                        disabled={
-                          isVerifying ||
-                          isDeleting ||
-                          isRestoring
-                        }
-                        style={buttonStyle(
-                          colors.success,
-                          isVerifying ||
-                            isDeleting ||
-                            isRestoring
-                        )}
-                        title={t.verify}
-                      >
-                        {isVerifying
-                          ? '⏳'
-                          : '✓'}{' '}
-                        {isVerifying
-                          ? t.verifying
-                          : t.verify}
-                      </button>
-
-                      <button
-                        onClick={() =>
-                          downloadBackup(
-                            backup.filename
-                          )
-                        }
-                        disabled={
-                          isDeleting ||
-                          isRestoring
-                        }
-                        style={buttonStyle(
-                          colors.info,
-                          isDeleting ||
-                            isRestoring
-                        )}
-                        title={t.download}
-                      >
-                        📥 {t.download}
-                      </button>
-
-                      <button
-                        onClick={() =>
-                          openRestoreModal(
-                            backup
-                          )
-                        }
-                        disabled={
-                          backup.status !==
-                            'Completed' ||
-                          isDeleting ||
-                          isRestoring
-                        }
-                        style={buttonStyle(
-                          colors.purple,
-                          backup.status !==
-                            'Completed' ||
-                            isDeleting ||
-                            isRestoring
-                        )}
-                        title={t.restore}
-                      >
-                        {isRestoring
-                          ? '⏳'
-                          : '↺'}{' '}
-                        {t.restore}
-                      </button>
-
-                      <button
-                        onClick={() =>
-                          deleteBackup(
-                            backup.filename
-                          )
-                        }
-                        disabled={
-                          isDeleting ||
-                          isRestoring
-                        }
-                        style={buttonStyle(
-                          colors.danger,
-                          isDeleting ||
-                            isRestoring
-                        )}
-                        title={t.delete}
-                      >
-                        {isDeleting
-                          ? '⏳'
-                          : '🗑️'}{' '}
-                        {isDeleting
-                          ? t.deleting
-                          : t.delete}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                        </td>
+                      </tr>
+                    );
+                  }
+                )}
+              </tbody>
+            </table>
           </div>
         )}
+      </section>
 
-        {/* ===================================================
-            INFORMATION
-        =================================================== */}
-
-        <div
-          style={{
-            marginTop: '22px',
-            padding: '16px',
-            background: colors.warningBg,
-            border: `1px solid ${colors.warning}`,
-            borderRadius: '10px',
-            color: colors.warning,
-            fontSize: '0.82rem'
-          }}
-        >
-          <strong>
-            ⚠️ {t.important}
-          </strong>
-
-          <div
-            style={{
-              marginTop: '6px'
-            }}
-          >
-            {t.backupWarning}
-          </div>
-        </div>
-      </div>
-
-      {/* =====================================================
-          RESTORE CONFIRMATION MODAL
-      ====================================================== */}
-
-      {showRestoreModal &&
+      {showDetails &&
         selectedBackup && (
           <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background:
-                'rgba(0,0,0,0.65)',
-              display: 'flex',
-              alignItems:
-                'center',
-              justifyContent:
-                'center',
-              padding: '20px',
-              zIndex: 9999
-            }}
+            style={styles.overlay}
+            onClick={() =>
+              setShowDetails(false)
+            }
           >
             <div
-              style={{
-                width: '100%',
-                maxWidth: '480px',
-                background:
-                  colors.card,
-                borderRadius:
-                  '16px',
-                padding: '26px',
-                boxShadow:
-                  '0 25px 70px rgba(0,0,0,0.4)'
-              }}
+              style={styles.modal}
+              onClick={(event) =>
+                event.stopPropagation()
+              }
             >
-              <div
-                style={{
-                  fontSize: '2.5rem',
-                  textAlign:
-                    'center',
-                  marginBottom:
-                    '10px'
-                }}
-              >
-                ⚠️
+              <div style={styles.modalHeader}>
+                <div>
+                  <h2
+                    style={
+                      styles.modalTitle
+                    }
+                  >
+                    Backup Details
+                  </h2>
+
+                  <p
+                    style={
+                      styles.modalSubtitle
+                    }
+                  >
+                    {getBackupName(
+                      selectedBackup
+                    )}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowDetails(
+                      false
+                    )
+                  }
+                  style={
+                    styles.closeButton
+                  }
+                >
+                  ×
+                </button>
               </div>
 
-              <h2
-                style={{
-                  margin:
-                    '0 0 10px',
-                  textAlign:
-                    'center',
-                  color:
-                    colors.text,
-                  fontSize:
-                    '1.25rem'
-                }}
-              >
-                {t.restoreBackup}
-              </h2>
-
-              <p
-                style={{
-                  color:
-                    colors.subText,
-                  lineHeight: 1.6,
-                  textAlign:
-                    'center',
-                  marginBottom:
-                    '16px'
-                }}
-              >
-                {t.confirmRestore}
-              </p>
-
               <div
-                style={{
-                  padding: '12px',
-                  background:
-                    colors.cardSecondary,
-                  border: `1px solid ${colors.border}`,
-                  borderRadius:
-                    '8px',
-                  marginBottom:
-                    '20px',
-                  textAlign:
-                    'center',
-                  color:
-                    colors.text,
-                  fontWeight: 700,
-                  wordBreak:
-                    'break-all'
-                }}
-              >
-                💾{' '}
-                {
-                  selectedBackup.filename
+                style={
+                  styles.detailsGrid
                 }
+              >
+                <Detail
+                  label="Backup ID"
+                  value={
+                    getBackupId(
+                      selectedBackup
+                    ) || "—"
+                  }
+                />
+
+                <Detail
+                  label="Backup Name"
+                  value={getBackupName(
+                    selectedBackup
+                  )}
+                />
+
+                <Detail
+                  label="Type"
+                  value={getBackupType(
+                    selectedBackup
+                  )}
+                />
+
+                <Detail
+                  label="Size"
+                  value={getBackupSize(
+                    selectedBackup
+                  )}
+                />
+
+                <Detail
+                  label="Status"
+                  value={getBackupStatus(
+                    selectedBackup
+                  )}
+                />
+
+                <Detail
+                  label="Created"
+                  value={formatDate(
+                    getBackupDate(
+                      selectedBackup
+                    )
+                  )}
+                />
+
+                <Detail
+                  label="File"
+                  value={
+                    selectedBackup?.filePath ||
+                    selectedBackup?.file_path ||
+                    selectedBackup?.path ||
+                    "—"
+                  }
+                />
+
+                <Detail
+                  label="Created By"
+                  value={
+                    selectedBackup?.createdByName ||
+                    selectedBackup?.created_by_name ||
+                    selectedBackup?.createdBy ||
+                    "—"
+                  }
+                />
               </div>
 
               <div
-                style={{
-                  display: 'flex',
-                  justifyContent:
-                    'center',
-                  gap: '10px'
-                }}
+                style={
+                  styles.modalFooter
+                }
               >
                 <button
-                  onClick={
-                    closeRestoreModal
+                  type="button"
+                  onClick={() =>
+                    setShowDetails(
+                      false
+                    )
                   }
-                  disabled={
-                    Boolean(restoring)
+                  style={
+                    styles.secondaryButton
                   }
-                  style={{
-                    ...buttonStyle(
-                      '#64748b',
-                      Boolean(restoring)
-                    ),
-                    padding:
-                      '10px 22px'
-                  }}
                 >
-                  {t.cancel}
+                  Close
                 </button>
 
                 <button
-                  onClick={
-                    restoreBackup
-                  }
-                  disabled={
-                    Boolean(restoring)
-                  }
-                  style={{
-                    ...buttonStyle(
-                      colors.purple,
-                      Boolean(restoring)
-                    ),
-                    padding:
-                      '10px 22px'
+                  type="button"
+                  onClick={() => {
+                    setShowDetails(
+                      false
+                    );
+                    downloadBackup(
+                      selectedBackup
+                    );
                   }}
+                  style={
+                    styles.primaryButton
+                  }
                 >
-                  {restoring
-                    ? `⏳ ${t.restoring}`
-                    : `↺ ${t.restore}`}
+                  Download Backup
                 </button>
               </div>
             </div>
@@ -1657,325 +1231,622 @@ const AdminBackup = () => {
         )}
     </div>
   );
-};
+}
 
-/* ===========================================================
-   STAT CARD
-=========================================================== */
-
-const StatCard = ({
-  icon,
-  label,
+function StatCard({
+  title,
   value,
-  colors,
-  valueColor
-}) => (
-  <div
-    style={{
-      background: colors.card,
-      border: `1px solid ${colors.border}`,
-      borderRadius: '12px',
-      padding: '16px',
-      boxShadow: colors.shadow
-    }}
-  >
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px'
-      }}
-    >
-      <div
-        style={{
-          width: '40px',
-          height: '40px',
-          borderRadius: '9px',
-          background: colors.cardSecondary,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '1.25rem'
-        }}
-      >
+  icon,
+  smallValue = false,
+}) {
+  return (
+    <div style={styles.statCard}>
+      <div style={styles.statIcon}>
         {icon}
       </div>
 
       <div>
-        <div
-          style={{
-            fontSize: '0.72rem',
-            color: colors.subText,
-            marginBottom: '2px'
-          }}
-        >
-          {label}
+        <div style={styles.statTitle}>
+          {title}
         </div>
 
         <div
           style={{
-            fontSize: '1.35rem',
-            fontWeight: 750,
-            color:
-              valueColor || colors.text
+            ...styles.statValue,
+            ...(smallValue
+              ? styles.statValueSmall
+              : {}),
           }}
         >
           {value}
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+}
 
-/* ===========================================================
-   STATUS BADGE
-=========================================================== */
+function Guideline({
+  number,
+  title,
+  text,
+}) {
+  return (
+    <div style={styles.guideline}>
+      <div style={styles.guidelineNumber}>
+        {number}
+      </div>
 
-const StatusBadge = ({ info }) => (
-  <span
-    style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '4px',
-      padding: '3px 9px',
-      borderRadius: '20px',
-      background: info.background,
-      color: info.color,
-      fontSize: '0.7rem',
-      fontWeight: 700
-    }}
-  >
-    {info.icon} {info.label}
-  </span>
-);
+      <div>
+        <div style={styles.guidelineTitle}>
+          {title}
+        </div>
 
-/* ===========================================================
-   ENGLISH
-=========================================================== */
+        <div style={styles.guidelineText}>
+          {text}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-const englishTranslations = {
-  backupManager: 'Backup Manager',
+function Detail({
+  label,
+  value,
+}) {
+  return (
+    <div style={styles.detail}>
+      <div style={styles.detailLabel}>
+        {label}
+      </div>
 
-  backupSubtitle:
-    'Create, manage, verify, download, restore and monitor system backups.',
+      <div style={styles.detailValue}>
+        {value}
+      </div>
+    </div>
+  );
+}
 
-  createBackup: 'Create Backup',
-  createFirstBackup:
-    'Create Your First Backup',
+const styles = {
+  page: {
+    minHeight: "100%",
+    background: "#F3F6F9",
+    padding: "24px",
+    boxSizing: "border-box",
+    fontFamily:
+      "Inter, Arial, sans-serif",
+    color: "#111827",
+  },
 
-  creating: 'Creating...',
-  loading: 'Loading...',
-  verifying: 'Verifying...',
-  deleting: 'Deleting...',
-  restoring: 'Restoring...',
+  header: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: "20px",
+    marginBottom: "24px",
+  },
 
-  total: 'Total',
-  completed: 'Completed',
-  failed: 'Failed',
-  pending: 'Pending',
-  restored: 'Restored',
-  totalSize: 'Total Size',
+  breadcrumb: {
+    fontSize: "13px",
+    color: "#64748B",
+    marginBottom: "8px",
+  },
 
-  backupHistory: 'Backup History',
-  backupsFound: 'backups found',
+  title: {
+    margin: 0,
+    fontSize: "28px",
+    fontWeight: 700,
+  },
 
-  filters: 'Filters',
+  subtitle: {
+    margin: "7px 0 0",
+    fontSize: "14px",
+    lineHeight: 1.6,
+    color: "#64748B",
+  },
 
-  allBackups: 'All Backups',
-  completedOnly: 'Completed Only',
-  failedOnly: 'Failed Only',
+  primaryButton: {
+    border: "none",
+    borderRadius: "8px",
+    background: "#2563EB",
+    color: "#FFFFFF",
+    padding: "11px 18px",
+    fontSize: "14px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
 
-  searchPlaceholder:
-    'Search by filename, creator, type or status...',
+  secondaryButton: {
+    border: "1px solid #CBD5E1",
+    borderRadius: "8px",
+    background: "#FFFFFF",
+    color: "#334155",
+    padding: "10px 16px",
+    fontSize: "14px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
 
-  clearFilters: 'Clear Filters',
-  refresh: 'Refresh',
-  retry: 'Retry',
+  errorAlert: {
+    marginBottom: "18px",
+    padding: "13px 16px",
+    borderRadius: "8px",
+    border: "1px solid #FECACA",
+    background: "#FEF2F2",
+    color: "#B91C1C",
+    fontSize: "14px",
+  },
 
-  noBackups: 'No Backups Found',
+  successAlert: {
+    marginBottom: "18px",
+    padding: "13px 16px",
+    borderRadius: "8px",
+    border: "1px solid #BBF7D0",
+    background: "#F0FDF4",
+    color: "#166534",
+    fontSize: "14px",
+  },
 
-  noBackupsDesc:
-    'Create your first system backup to protect your university asset management data.',
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(4, minmax(0, 1fr))",
+    gap: "16px",
+    marginBottom: "20px",
+  },
 
-  noResults: 'No Results Found',
+  statCard: {
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    background: "#FFFFFF",
+    border: "1px solid #E2E8F0",
+    borderRadius: "10px",
+    padding: "18px",
+    boxShadow:
+      "0 1px 3px rgba(15,23,42,0.04)",
+  },
 
-  noResultsDesc:
-    'No backups match your current search or filter.',
+  statIcon: {
+    width: "42px",
+    height: "42px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "9px",
+    background: "#EFF6FF",
+    fontSize: "20px",
+  },
 
-  download: 'Download',
-  restore: 'Restore',
-  delete: 'Delete',
-  verify: 'Verify',
+  statTitle: {
+    fontSize: "12px",
+    color: "#64748B",
+    marginBottom: "5px",
+  },
 
-  createdBy: 'Created By',
-  restoreStatus: 'Restore Status',
-  notRestored: 'Not Restored',
+  statValue: {
+    fontSize: "24px",
+    fontWeight: 700,
+    color: "#111827",
+  },
 
-  restoreBackup: 'Restore Backup',
+  statValueSmall: {
+    fontSize: "15px",
+    lineHeight: 1.4,
+  },
 
-  confirmRestore:
-    'Are you sure you want to restore this backup? The current system data may be overwritten. This operation should only be performed after confirming that the backup is valid.',
+  mainGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(0, 1.2fr) minmax(300px, 0.8fr)",
+    gap: "20px",
+    marginBottom: "20px",
+  },
 
-  confirmDelete:
-    'Are you sure you want to delete this backup? This action cannot be undone.',
+  createCard: {
+    background: "#FFFFFF",
+    border: "1px solid #E2E8F0",
+    borderRadius: "10px",
+    overflow: "hidden",
+  },
 
-  cancel: 'Cancel',
+  securityCard: {
+    background: "#FFFFFF",
+    border: "1px solid #E2E8F0",
+    borderRadius: "10px",
+    overflow: "hidden",
+  },
 
-  backupCreated:
-    'Backup created successfully.',
+  cardHeader: {
+    padding: "20px 22px",
+    borderBottom:
+      "1px solid #E2E8F0",
+  },
 
-  restoreSuccess:
-    'Backup restored successfully.',
+  cardTitle: {
+    margin: 0,
+    fontSize: "17px",
+    fontWeight: 700,
+    color: "#111827",
+  },
 
-  deleteSuccess:
-    'Backup deleted successfully.',
+  cardDescription: {
+    margin: "6px 0 0",
+    fontSize: "13px",
+    color: "#64748B",
+    lineHeight: 1.5,
+  },
 
-  verifySuccess:
-    'Backup verified successfully.',
+  cardBody: {
+    padding: "22px",
+  },
 
-  verifyFailed:
-    'Backup verification failed. The file may be corrupted.',
+  field: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "7px",
+    marginBottom: "18px",
+  },
 
-  verifyError:
-    'Failed to verify backup.',
+  label: {
+    fontSize: "13px",
+    fontWeight: 600,
+    color: "#334155",
+  },
 
-  downloadStarted:
-    'Download started.',
+  input: {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "11px 12px",
+    border: "1px solid #CBD5E1",
+    borderRadius: "7px",
+    background: "#FFFFFF",
+    color: "#111827",
+    fontSize: "14px",
+    outline: "none",
+  },
 
-  loadFailed:
-    'Failed to load backups.',
+  checkboxRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "9px",
+    fontSize: "14px",
+    color: "#334155",
+    marginBottom: "18px",
+    cursor: "pointer",
+  },
 
-  createFailed:
-    'Failed to create backup.',
+  infoBox: {
+    padding: "14px",
+    borderRadius: "8px",
+    background: "#F8FAFC",
+    border: "1px solid #E2E8F0",
+    color: "#475569",
+    fontSize: "13px",
+    lineHeight: 1.5,
+    marginBottom: "18px",
+  },
 
-  downloadFailed:
-    'Failed to download backup.',
+  fullButton: {
+    width: "100%",
+    border: "none",
+    borderRadius: "8px",
+    padding: "12px",
+    background: "#2563EB",
+    color: "#FFFFFF",
+    fontSize: "14px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
 
-  restoreFailed:
-    'Failed to restore backup.',
+  guidelines: {
+    padding: "8px 22px 18px",
+  },
 
-  deleteFailed:
-    'Failed to delete backup.',
+  guideline: {
+    display: "flex",
+    gap: "12px",
+    padding: "15px 0",
+    borderBottom:
+      "1px solid #E2E8F0",
+  },
 
-  important: 'Important:',
+  guidelineNumber: {
+    width: "28px",
+    height: "28px",
+    flexShrink: 0,
+    borderRadius: "50%",
+    background: "#EFF6FF",
+    color: "#2563EB",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "13px",
+    fontWeight: 700,
+  },
 
-  backupWarning:
-    'Backups contain important system data. Verify a backup before restoring it. Keep regular backups and do not delete the only available copy.'
+  guidelineTitle: {
+    fontSize: "14px",
+    fontWeight: 600,
+    color: "#1E293B",
+  },
+
+  guidelineText: {
+    marginTop: "4px",
+    color: "#64748B",
+    fontSize: "13px",
+    lineHeight: 1.5,
+  },
+
+  tableCard: {
+    background: "#FFFFFF",
+    border: "1px solid #E2E8F0",
+    borderRadius: "10px",
+    overflow: "hidden",
+  },
+
+  cardHeaderRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "16px",
+    padding: "20px 22px",
+    borderBottom:
+      "1px solid #E2E8F0",
+  },
+
+  refreshButton: {
+    border: "1px solid #CBD5E1",
+    borderRadius: "7px",
+    background: "#FFFFFF",
+    color: "#334155",
+    padding: "8px 13px",
+    fontSize: "13px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+
+  tableWrapper: {
+    width: "100%",
+    overflowX: "auto",
+  },
+
+  table: {
+    width: "100%",
+    minWidth: "900px",
+    borderCollapse: "collapse",
+  },
+
+  th: {
+    padding: "12px 16px",
+    background: "#F8FAFC",
+    borderBottom:
+      "1px solid #E2E8F0",
+    color: "#64748B",
+    fontSize: "12px",
+    fontWeight: 700,
+    textAlign: "left",
+    whiteSpace: "nowrap",
+  },
+
+  tr: {
+    borderBottom:
+      "1px solid #F1F5F9",
+  },
+
+  td: {
+    padding: "14px 16px",
+    color: "#334155",
+    fontSize: "13px",
+    verticalAlign: "middle",
+  },
+
+  backupName: {
+    fontWeight: 600,
+    color: "#1E293B",
+  },
+
+  backupId: {
+    marginTop: "4px",
+    fontSize: "11px",
+    color: "#94A3B8",
+  },
+
+  typeBadge: {
+    display: "inline-block",
+    padding: "5px 9px",
+    borderRadius: "999px",
+    background: "#F1F5F9",
+    color: "#475569",
+    fontSize: "11px",
+    fontWeight: 600,
+  },
+
+  statusBadge: {
+    display: "inline-block",
+    padding: "5px 9px",
+    borderRadius: "999px",
+    fontSize: "11px",
+    fontWeight: 700,
+  },
+
+  actions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: "6px",
+    flexWrap: "wrap",
+  },
+
+  actionButton: {
+    border: "1px solid #CBD5E1",
+    borderRadius: "6px",
+    background: "#FFFFFF",
+    color: "#334155",
+    padding: "6px 9px",
+    fontSize: "11px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+
+  restoreButton: {
+    border: "1px solid #BFDBFE",
+    borderRadius: "6px",
+    background: "#EFF6FF",
+    color: "#1D4ED8",
+    padding: "6px 9px",
+    fontSize: "11px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+
+  deleteButton: {
+    border: "1px solid #FECACA",
+    borderRadius: "6px",
+    background: "#FEF2F2",
+    color: "#B91C1C",
+    padding: "6px 9px",
+    fontSize: "11px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+
+  loading: {
+    minHeight: "220px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "12px",
+    color: "#64748B",
+    fontSize: "14px",
+  },
+
+  spinner: {
+    width: "30px",
+    height: "30px",
+    border: "3px solid #E2E8F0",
+    borderTop:
+      "3px solid #2563EB",
+    borderRadius: "50%",
+    animation:
+      "spin 0.8s linear infinite",
+  },
+
+  empty: {
+    padding: "60px 20px",
+    textAlign: "center",
+  },
+
+  emptyIcon: {
+    fontSize: "38px",
+    marginBottom: "10px",
+  },
+
+  emptyTitle: {
+    margin: 0,
+    fontSize: "17px",
+    color: "#1E293B",
+  },
+
+  emptyText: {
+    margin: "7px auto 0",
+    maxWidth: "420px",
+    color: "#64748B",
+    fontSize: "13px",
+    lineHeight: 1.5,
+  },
+
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 1000,
+    background:
+      "rgba(15, 23, 42, 0.55)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "20px",
+    boxSizing: "border-box",
+  },
+
+  modal: {
+    width: "100%",
+    maxWidth: "700px",
+    maxHeight: "90vh",
+    overflowY: "auto",
+    background: "#FFFFFF",
+    borderRadius: "12px",
+    boxShadow:
+      "0 20px 50px rgba(15,23,42,0.2)",
+  },
+
+  modalHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: "20px",
+    padding: "20px 22px",
+    borderBottom:
+      "1px solid #E2E8F0",
+  },
+
+  modalTitle: {
+    margin: 0,
+    fontSize: "19px",
+    fontWeight: 700,
+  },
+
+  modalSubtitle: {
+    margin: "5px 0 0",
+    color: "#64748B",
+    fontSize: "13px",
+  },
+
+  closeButton: {
+    width: "32px",
+    height: "32px",
+    border: "none",
+    borderRadius: "6px",
+    background: "#F1F5F9",
+    color: "#475569",
+    fontSize: "22px",
+    lineHeight: 1,
+    cursor: "pointer",
+  },
+
+  detailsGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(2, minmax(0, 1fr))",
+    gap: "18px",
+    padding: "22px",
+  },
+
+  detail: {
+    minWidth: 0,
+  },
+
+  detailLabel: {
+    fontSize: "11px",
+    fontWeight: 700,
+    color: "#94A3B8",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    marginBottom: "5px",
+  },
+
+  detailValue: {
+    fontSize: "14px",
+    color: "#334155",
+    wordBreak: "break-word",
+  },
+
+  modalFooter: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "10px",
+    padding: "16px 22px",
+    borderTop:
+      "1px solid #E2E8F0",
+  },
 };
-
-/* ===========================================================
-   AMHARIC
-=========================================================== */
-
-const amharicTranslations = {
-  backupManager: 'የምትኬ አስተዳደር',
-
-  backupSubtitle:
-    'የስርዓት ምትኬ ይፍጠሩ፣ ያስተዳድሩ፣ ያረጋግጡ፣ ያውርዱ እና ይመልሱ።',
-
-  createBackup: 'ምትኬ ፍጠር',
-
-  createFirstBackup:
-    'የመጀመሪያ ምትኬዎን ይፍጠሩ',
-
-  creating: 'በመፍጠር ላይ...',
-  loading: 'በመጫን ላይ...',
-  verifying: 'በማረጋገጥ ላይ...',
-  deleting: 'በመሰረዝ ላይ...',
-  restoring: 'በመመለስ ላይ...',
-
-  total: 'ጠቅላላ',
-  completed: 'የተጠናቀቀ',
-  failed: 'ያልተሳካ',
-  pending: 'በመጠባበቅ ላይ',
-  restored: 'የተመለሰ',
-  totalSize: 'ጠቅላላ መጠን',
-
-  backupHistory: 'የምትኬ ታሪክ',
-  backupsFound: 'ምትኬዎች ተገኝተዋል',
-
-  filters: 'ማጣሪያዎች',
-
-  allBackups: 'ሁሉም ምትኬዎች',
-  completedOnly: 'የተጠናቀቁ ብቻ',
-  failedOnly: 'ያልተሳኩ ብቻ',
-
-  searchPlaceholder:
-    'በፋይል ስም፣ ፈጣሪ፣ አይነት ወይም ሁኔታ ፈልግ...',
-
-  clearFilters: 'ማጣሪያ አጽዳ',
-  refresh: 'አድስ',
-  retry: 'እንደገና ሞክር',
-
-  noBackups: 'ምንም ምትኬ አልተገኘም',
-
-  noBackupsDesc:
-    'የዩኒቨርሲቲውን የAsset Management መረጃ ለመጠበቅ የመጀመሪያ ምትኬዎን ይፍጠሩ።',
-
-  noResults: 'ምንም ውጤት አልተገኘም',
-
-  noResultsDesc:
-    'ከአሁኑ ፍለጋ ወይም ማጣሪያ ጋር የሚዛመድ ምትኬ የለም።',
-
-  download: 'አውርድ',
-  restore: 'መልስ',
-  delete: 'ሰርዝ',
-  verify: 'አረጋግጥ',
-
-  createdBy: 'የፈጠረው',
-  restoreStatus: 'የመመለስ ሁኔታ',
-  notRestored: 'አልተመለሰም',
-
-  restoreBackup: 'ምትኬን መልስ',
-
-  confirmRestore:
-    'ይህንን ምትኬ መመለስ እርግጠኛ ነዎት? አሁን ያለው የስርዓት መረጃ ሊተካ ይችላል። ምትኬው ትክክለኛ መሆኑን ካረጋገጡ በኋላ ብቻ ይህንን እርምጃ ይፈጽሙ።',
-
-  confirmDelete:
-    'ይህንን ምትኬ መሰረዝ እርግጠኛ ነዎት? ይህ እርምጃ መመለስ አይችልም።',
-
-  cancel: 'ሰርዝ',
-
-  backupCreated:
-    'ምትኬ በተሳካ ሁኔታ ተፈጥሯል።',
-
-  restoreSuccess:
-    'ምትኬው በተሳካ ሁኔታ ተመልሷል።',
-
-  deleteSuccess:
-    'ምትኬው በተሳካ ሁኔታ ተሰርዟል።',
-
-  verifySuccess:
-    'ምትኬው በተሳካ ሁኔታ ተረጋግጧል።',
-
-  verifyFailed:
-    'የምትኬ ማረጋገጫ አልተሳካም። ፋይሉ የተበላሸ ሊሆን ይችላል።',
-
-  verifyError:
-    'ምትኬውን ማረጋገጥ አልተቻለም።',
-
-  downloadStarted:
-    'ማውረድ ተጀምሯል።',
-
-  loadFailed:
-    'ምትኬዎችን መጫን አልተቻለም።',
-
-  createFailed:
-    'ምትኬ መፍጠር አልተቻለም።',
-
-  downloadFailed:
-    'ምትኬውን ማውረድ አልተቻለም።',
-
-  restoreFailed:
-    'ምትኬውን መመለስ አልተቻለም።',
-
-  deleteFailed:
-    'ምትኬውን መሰረዝ አልተቻለም።',
-
-  important: 'አስፈላጊ:',
-
-  backupWarning:
-    'ምትኬዎች አስፈላጊ የስርዓት መረጃዎችን ይይዛሉ። ምትኬን ከመመለስ በፊት ያረጋግጡ። መደበኛ ምትኬ ይፍጠሩ እና ብቸኛውን የምትኬ ቅጂ አይሰርዙ።'
-};
-
-export default AdminBackup;

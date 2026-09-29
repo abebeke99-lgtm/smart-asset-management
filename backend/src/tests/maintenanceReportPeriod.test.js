@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { Op } = require('sequelize');
-const { Asset, Maintenance, MaintenanceRepair, MaintenanceWorkOrder, PreventiveMaintenance, MaintenanceHistory, MaintenanceInspection, User } = require('../models');
-const { dashboard, getRepairHistory } = require('../controllers/maintenanceController');
+const { Asset, Maintenance, MaintenanceRepair, MaintenanceWorkOrder, PreventiveMaintenance, MaintenanceHistory, MaintenanceInspection, MaintenanceCost, User } = require('../models');
+const { dashboard, getRepairHistory, summarizeMaintenanceCosts } = require('../controllers/maintenanceController');
 
 test('maintenance dashboard summarizes persisted Asset status and condition', async () => {
   const originalAssetFindAll = Asset.findAll;
@@ -12,6 +12,7 @@ test('maintenance dashboard summarizes persisted Asset status and condition', as
   const originalPreventiveFindAll = PreventiveMaintenance.findAll;
   const originalHistoryFindAll = MaintenanceHistory.findAll;
   const originalInspectionFindAll = MaintenanceInspection.findAll;
+  const originalCostFindAll = MaintenanceCost.findAll;
   const originalUserFindAll = User.findAll;
   Asset.findAll = async () => [
     { status: 'available', condition: 'good' },
@@ -23,6 +24,7 @@ test('maintenance dashboard summarizes persisted Asset status and condition', as
   PreventiveMaintenance.findAll = async () => [];
   MaintenanceHistory.findAll = async () => [];
   MaintenanceInspection.findAll = async () => [];
+  MaintenanceCost.findAll = async () => [];
   User.findAll = async () => [];
   let responseBody;
 
@@ -50,6 +52,7 @@ test('maintenance dashboard summarizes persisted Asset status and condition', as
     PreventiveMaintenance.findAll = originalPreventiveFindAll;
     MaintenanceHistory.findAll = originalHistoryFindAll;
     MaintenanceInspection.findAll = originalInspectionFindAll;
+    MaintenanceCost.findAll = originalCostFindAll;
     User.findAll = originalUserFindAll;
   }
 });
@@ -63,6 +66,7 @@ test('maintenance dashboard returns scoped requests, work orders, due alerts and
     preventive: PreventiveMaintenance.findAll,
     history: MaintenanceHistory.findAll,
     inspections: MaintenanceInspection.findAll,
+    costs: MaintenanceCost.findAll,
     users: User.findAll,
   };
   const createdAt = new Date('2026-09-28T10:00:00.000Z');
@@ -99,6 +103,7 @@ test('maintenance dashboard returns scoped requests, work orders, due alerts and
   PreventiveMaintenance.findAll = async () => [];
   MaintenanceHistory.findAll = async () => [{ maintenanceId: 99, actionDate: createdAt, actionType: 'completed', newStatus: 'completed' }];
   MaintenanceInspection.findAll = async () => [];
+  MaintenanceCost.findAll = async () => [];
   User.findAll = async () => [{ id: 8, username: 'aster', fullName: 'Aster Technician' }];
 
   try {
@@ -135,6 +140,7 @@ test('maintenance dashboard returns scoped requests, work orders, due alerts and
     PreventiveMaintenance.findAll = originals.preventive;
     MaintenanceHistory.findAll = originals.history;
     MaintenanceInspection.findAll = originals.inspections;
+    MaintenanceCost.findAll = originals.costs;
     User.findAll = originals.users;
   }
 });
@@ -164,4 +170,43 @@ test('repair report period filters persisted repair timestamps for rows and stat
     Maintenance.findAndCountAll = originalFindAndCountAll;
     Maintenance.findAll = originalFindAll;
   }
+});
+
+test('maintenance cost totals use persisted categories and round to cents', () => {
+  assert.deepEqual(summarizeMaintenanceCosts({ costRows: [
+    { costCategory: 'labor', amount: '10.125' },
+    { costCategory: 'parts', amount: '4.25' },
+    { costCategory: 'materials', amount: '2.10' },
+    { costCategory: 'service', amount: '3.50' },
+  ] }), { laborCost: 10.13, partsCost: 4.25, materialsCost: 2.1, otherCost: 3.5, totalCost: 19.98 });
+});
+
+test('repair and standalone work-order totals avoid linked record double counting', () => {
+  assert.deepEqual(summarizeMaintenanceCosts({
+    repairRows: [{ workOrderId: 4, laborCost: '30.00', partsCost: '50.00', serviceCost: '10.00', totalCost: '100.00' }],
+    workOrderRows: [
+      { id: 4, actualCost: '100.00', estimatedCost: '120.00' },
+      { id: 5, actualCost: '20.00', estimatedCost: '25.00' },
+    ],
+  }), { laborCost: 30, partsCost: 50, materialsCost: 0, otherCost: 40, totalCost: 120 });
+});
+
+test('partial persisted cost rows do not hide unrelated repair and work-order totals', () => {
+  assert.deepEqual(summarizeMaintenanceCosts({
+    costRows: [
+      { maintenanceId: 10, repairId: 1, costCategory: 'labor', amount: '5.00' },
+      { maintenanceId: 10, repairId: 1, costCategory: 'materials', amount: '3.00' },
+      { maintenanceId: 20, workOrderId: 6, costCategory: 'other', amount: '2.00' },
+    ],
+    repairRows: [
+      { id: 1, maintenanceId: 10, workOrderId: 4, laborCost: '90.00', totalCost: '100.00' },
+      { id: 2, maintenanceId: 11, workOrderId: 5, laborCost: '10.00', partsCost: '10.00', materialsCost: '5.00', totalCost: '50.00' },
+    ],
+    workOrderRows: [
+      { id: 4, maintenanceId: 10, actualCost: '100.00' },
+      { id: 5, maintenanceId: 11, actualCost: '50.00' },
+      { id: 6, maintenanceId: 20, actualCost: '20.00' },
+      { id: 7, maintenanceId: 21, actualCost: '9.00' },
+    ],
+  }), { laborCost: 15, partsCost: 10, materialsCost: 8, otherCost: 36, totalCost: 69 });
 });

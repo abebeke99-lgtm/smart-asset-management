@@ -4,123 +4,45 @@ import { useLanguage } from '../../contexts/UiContext';
 import { homepageImages } from '../../config/homepageImages';
 import {
   Building2,
-  CheckCircle2,
-  ClipboardCheck,
-  PackagePlus,
-  ArrowLeftRight,
-  ScanSearch,
-  Wrench,
-  RotateCcw,
-  UserRoundCog,
-  Package,
-  QrCode,
-  Users,
-  WalletCards,
-  Database,
-  ShieldCheck,
-  Network,
-  ArrowRight,
-  CircleHelp,
-  Mail,
-  Info,
-  KeyRound,
-  FileClock
+  CheckCircle2
 } from 'lucide-react';
 
 const pageText = {
   en: {
-    systemTitle: 'University Asset Management System',
-    heroEyebrow: 'University asset operations',
-    lead: 'A central platform to manage university assets, monitor lifecycle activity, coordinate responsibility, and support operational accountability across departments and colleges.',
+    systemTitle: 'Smart University Asset Management',
+    heroEyebrow: 'UNIVERSITY ASSET OPERATIONS',
+    lead: 'Manage, track, assign, maintain, and monitor every university asset from one centralized platform.',
+    supportingText: 'From asset registration and assignment to transfer, maintenance, verification, returns, and financial reporting — keep university resources organized, accountable, and visible.',
     featureList: 'Core system features',
-    login: 'Login',
-    learnMore: 'Learn More',
+    login: 'Login to System',
+    learnMore: 'Explore System',
     overview: 'System overview',
-    panelTitle: 'University Asset Operations',
-    coreFunction: 'Core function',
-    lifecycle: 'Complete asset lifecycle oversight',
-    managedBy: 'Managed by',
-    teams: 'Administration, departments, finance, ICT, maintenance',
-    purpose: 'Purpose',
-    purposeText: 'Improve accountability, visibility, and reporting',
-    highlights: ['Asset registration', 'Asset tracking', 'Assignment', 'Transfer', 'Verification', 'Maintenance', 'Returns', 'Financial management', 'Reporting']
+    panelTitle: 'UNIVERSITY ASSET OPERATIONS',
+    coreFunction: 'CORE FUNCTION',
+    lifecycle: 'Complete visibility across the entire asset lifecycle.',
+    managedBy: 'MANAGED BY',
+    teams: 'Administration · Departments · Finance · ICT · Maintenance',
+    purpose: 'SYSTEM GOAL',
+    purposeText: 'Improve accountability, efficiency, transparency, and operational control.',
+    highlights: ['Asset Registration', 'Asset Tracking', 'Assignment', 'Transfer', 'Verification', 'Maintenance', 'Returns', 'Financial Management', 'Reports & Analytics']
   },
   am: {
-    systemTitle: 'የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት',
+    systemTitle: 'ዘመናዊ የዩኒቨርሲቲ ንብረት አስተዳደር',
     heroEyebrow: 'የዩኒቨርሲቲ ንብረት አስተዳደር',
-    lead: 'በዩኒቨርሲቲው ያሉ ንብረቶችን ለማስተዳደር፣ የንብረት የሕይወት ዑደትን ለመከታተል፣ ኃላፊነትን ለማስተባበር እና በኮሌጆችና በክፍሎች ውስጥ ተጠያቂነትን ለማጠናከር የተዘጋጀ ማዕከላዊ መድረክ።',
+    lead: 'እያንዳንዱን የዩኒቨርሲቲ ንብረት በአንድ ማዕከላዊ መድረክ ያስተዳድሩ፣ ይመዝግቡ፣ ይመድቡ፣ ይጠግኑ እና ይከታተሉ።',
+    supportingText: 'ከንብረት ምዝገባና ምደባ እስከ ማስተላለፍ፣ ጥገና፣ ማረጋገጫ፣ መመለስ እና የፋይናንስ ሪፖርት ድረስ፤ የዩኒቨርሲቲ ሀብቶችን የተደራጁ፣ ተጠያቂ እና ግልጽ ያድርጉ።',
     featureList: 'የስርዓቱ ዋና ተግባራት',
-    login: 'ግባ',
-    learnMore: 'ተጨማሪ ይወቁ',
+    login: 'ወደ ስርዓቱ ይግቡ',
+    learnMore: 'ስርዓቱን ይመልከቱ',
     overview: 'የስርዓቱ አጠቃላይ እይታ',
     panelTitle: 'የዩኒቨርሲቲ ንብረት አስተዳደር',
     coreFunction: 'ዋና ተግባር',
-    lifecycle: 'የንብረትን ሙሉ የሕይወት ዑደት መከታተል',
+    lifecycle: 'በንብረት የሕይወት ዑደት ሁሉ ሙሉ ታይነት።',
     managedBy: 'በኃላፊነት የሚያስተዳድሩት',
-    teams: 'አስተዳደር፣ ክፍሎች፣ ፋይናንስ፣ አይሲቲ እና ጥገና',
-    purpose: 'ዓላማ',
-    purposeText: 'ተጠያቂነትን፣ ግልጽነትን እና ሪፖርት አዘገጃጀትን ማሻሻል',
-    highlights: ['ንብረት መመዝገብ', 'ንብረት መከታተል', 'የንብረት ምደባ', 'የንብረት ማስተላለፍ', 'ማረጋገጫ', 'ጥገና', 'መመለስ', 'የፋይናንስ አስተዳደር', 'ሪፖርት አዘገጃጀት']
-  }
-};
-
-const workflowIcons = [PackagePlus, ClipboardCheck, Users, ArrowLeftRight, ScanSearch, Wrench, RotateCcw];
-const roleIcons = [UserRoundCog, Package, QrCode, Users, Building2, WalletCards, Wrench];
-const benefitIcons = [Database, ClipboardCheck, Network, FileClock];
-const securityIcons = [KeyRound, ShieldCheck, FileClock];
-
-const additionalText = {
-  en: {
-    benefitsTitle: 'Why Departments Choose This System',
-    benefits: [
-      { title: 'Centralized Asset Records', description: 'Manage accurate university asset information in one centralized platform.' },
-      { title: 'Clear Responsibility and Accountability', description: 'Track who is responsible for each asset and maintain clear accountability.' },
-      { title: 'Coordination Across Departments', description: 'Support efficient coordination between departments, colleges, stores, ICT, finance, and maintenance.' },
-      { title: 'Operational and Financial Reporting', description: 'Provide organized information for operational and financial decision-making.' }
-    ],
-    workflowTitle: 'How the System Works',
-    workflow: ['Register', 'Receive', 'Assign', 'Transfer', 'Verify', 'Maintain', 'Return / Dispose'],
-    viewWorkflow: 'View the full asset lifecycle',
-    rolesTitle: 'Built for Every Role',
-    roles: ['Admin', 'Store Manager', 'ICT Officer', 'Department Head', 'College Manager', 'Finance', 'Maintenance'],
-    viewRoles: 'View role responsibilities',
-    securityTitle: 'Secure by Design',
-    security: ['Secure sign-in', 'Role-based access', 'Administrative and financial audit logs'],
-    trustTitle: 'Trusted by Mekdela Amba University',
-    trustText: 'A shared platform for university asset records and the operational workflows that support them.',
-    quickLinksTitle: 'Quick Links',
-    help: 'Help',
-    contact: 'Contact',
-    about: 'About Us',
-    finalTitle: 'Ready to Get Started?',
-    finalText: 'Sign in to continue to your university asset workspace.',
-    login: 'Login'
-  },
-  am: {
-    benefitsTitle: 'ክፍሎች ይህን ስርዓት ለምን ይመርጣሉ?',
-    benefits: [
-      { title: 'ማዕከላዊ የንብረት መዝገቦች', description: 'ትክክለኛ የዩኒቨርሲቲ ንብረት መረጃን በአንድ ማዕከላዊ መድረክ ያስተዳድሩ።' },
-      { title: 'ግልጽ ኃላፊነትና ተጠያቂነት', description: 'ለእያንዳንዱ ንብረት ተጠያቂውን ይከታተሉ እና ግልጽ ተጠያቂነትን ያስጠብቁ።' },
-      { title: 'በክፍሎች መካከል ቅንጅት', description: 'በክፍሎች፣ በኮሌጆች፣ በመጋዘኖች፣ በአይሲቲ፣ በፋይናንስ እና በጥገና መካከል ውጤታማ ቅንጅትን ይደግፉ።' },
-      { title: 'የስራና የፋይናንስ ሪፖርት', description: 'ለአስተዳደራዊና ለፋይናንስ ውሳኔ አሰጣጥ የተደራጀ መረጃ ያቅርቡ።' }
-    ],
-    workflowTitle: 'ስርዓቱ እንዴት ይሰራል?',
-    workflow: ['መመዝገብ', 'መቀበል', 'መመደብ', 'ማስተላለፍ', 'ማረጋገጥ', 'ጥገና', 'መመለስ / ማስወገድ'],
-    viewWorkflow: 'ሙሉውን የንብረት የሕይወት ዑደት ይመልከቱ',
-    rolesTitle: 'ለሁሉም ሚናዎች የተዘጋጀ',
-    roles: ['አስተዳዳሪ', 'የመጋዘን ኃላፊ', 'የአይሲቲ ባለሙያ', 'የክፍል ኃላፊ', 'የኮሌጅ አስተዳዳሪ', 'ፋይናንስ', 'ጥገና'],
-    viewRoles: 'የሚናዎችን ኃላፊነት ይመልከቱ',
-    securityTitle: 'ደህንነት ከመሠረቱ የተካተተ',
-    security: ['ደህንነቱ የተጠበቀ መግቢያ', 'በሚና ላይ የተመሰረተ ፈቃድ', 'የአስተዳደርና የፋይናንስ ኦዲት መዝገቦች'],
-    trustTitle: 'በመቅደላ አምባ ዩኒቨርሲቲ የተደገፈ',
-    trustText: 'የዩኒቨርሲቲ ንብረት መዝገቦችንና ተያያዥ የስራ ሂደቶችን በአንድ ቦታ የሚያቀናጅ መድረክ።',
-    quickLinksTitle: 'ፈጣን አገናኞች',
-    help: 'እገዛ',
-    contact: 'ያግኙን',
-    about: 'ስለ እኛ',
-    finalTitle: 'ለመጀመር ዝግጁ ነዎት?',
-    finalText: 'ወደ የዩኒቨርሲቲው የንብረት መድረክዎ ለመቀጠል ይግቡ።',
-    login: 'ግባ'
+    teams: 'አስተዳደር · ክፍሎች · ፋይናንስ · አይሲቲ · ጥገና',
+    purpose: 'የስርዓቱ ግብ',
+    purposeText: 'ተጠያቂነትን፣ ቅልጥፍናን፣ ግልጽነትን እና የሥራ ቁጥጥርን ማሻሻል።',
+    highlights: ['ንብረት መመዝገብ', 'ንብረት መከታተል', 'የንብረት ምደባ', 'የንብረት ማስተላለፍ', 'ማረጋገጫ', 'ጥገና', 'መመለስ', 'የፋይናንስ አስተዳደር', 'ሪፖርቶች እና ትንታኔ']
   }
 };
 
@@ -128,7 +50,6 @@ const Home = () => {
   const { language } = useLanguage();
   const [activeHeroImage, setActiveHeroImage] = useState(0);
   const text = pageText[language] || pageText.en;
-  const additional = additionalText[language] || additionalText.en;
   const heroImages = homepageImages.slides;
 
   useEffect(() => {
@@ -157,10 +78,11 @@ const Home = () => {
       <div className="uam-hero-shell">
         <div className="uam-hero-copy">
           <span className="uam-eyebrow">{text.heroEyebrow}</span>
-          <h1 id="home-title">{text.systemTitle}</h1>
+          <h1 id="home-title">{language === 'en' ? <>Smart University<br />Asset Management</> : text.systemTitle}</h1>
           <p className="uam-lead">
             {text.lead}
           </p>
+          <p className="uam-supporting-text">{text.supportingText}</p>
 
           <ul className="uam-highlight-list" aria-label={text.featureList}>
             {text.highlights.map((item) => (
@@ -174,7 +96,7 @@ const Home = () => {
           </div>
         </div>
 
-        <div className="uam-hero-panel" aria-label={text.overview}>
+        <aside className="uam-hero-panel" aria-label={text.overview}>
           <div className="uam-panel-header">
             <Building2 size={18} aria-hidden="true" />
             <span>{text.panelTitle}</span>
@@ -193,97 +115,22 @@ const Home = () => {
               <strong>{text.purposeText}</strong>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
-
-    <section className="uam-section uam-benefits-section" aria-labelledby="uam-benefits-title">
-      <div className="uam-shell">
-        <div className="uam-section-heading"><h2 id="uam-benefits-title">{additional.benefitsTitle}</h2></div>
-        <div className="uam-card-grid uam-benefit-grid">
-          {additional.benefits.map((benefit, index) => {
-            const Icon = benefitIcons[index];
-            return <article className="uam-card uam-benefit" key={benefit.title}><span className="uam-card-icon"><Icon size={21} aria-hidden="true" /></span><h3>{benefit.title}</h3><p>{benefit.description}</p></article>;
-          })}
-        </div>
-      </div>
-    </section>
-
-    <section className="uam-section uam-surface" aria-labelledby="uam-workflow-title">
-      <div className="uam-shell">
-        <div className="uam-section-heading"><h2 id="uam-workflow-title">{additional.workflowTitle}</h2></div>
-        <ol className="uam-workflow-list">
-          {additional.workflow.map((step, index) => {
-            const Icon = workflowIcons[index];
-            return <li className="uam-workflow-step" key={step}><span className="uam-card-icon"><Icon size={20} aria-hidden="true" /></span><strong>{step}</strong></li>;
-          })}
-        </ol>
-        <Link className="uam-section-link" to="/about#lifecycle">{additional.viewWorkflow}<ArrowRight size={17} aria-hidden="true" /></Link>
-      </div>
-    </section>
-
-    <section className="uam-section" aria-labelledby="uam-roles-title">
-      <div className="uam-shell">
-        <div className="uam-section-heading"><h2 id="uam-roles-title">{additional.rolesTitle}</h2></div>
-        <div className="uam-role-list">
-          {additional.roles.map((role, index) => {
-            const Icon = roleIcons[index];
-            return <div className="uam-role-item" key={role}><Icon size={21} aria-hidden="true" /><span>{role}</span></div>;
-          })}
-        </div>
-        <Link className="uam-section-link" to="/about#about-roles-title">{additional.viewRoles}<ArrowRight size={17} aria-hidden="true" /></Link>
-      </div>
-    </section>
-
-    <section className="uam-section uam-security-section" aria-labelledby="uam-security-title">
-      <div className="uam-shell">
-        <div className="uam-section-heading"><h2 id="uam-security-title">{additional.securityTitle}</h2></div>
-        <div className="uam-security-list">
-          {additional.security.map((item, index) => {
-            const Icon = securityIcons[index];
-            return <div className="uam-security-item" key={item}><Icon size={21} aria-hidden="true" /><span>{item}</span></div>;
-          })}
-        </div>
-      </div>
-    </section>
-
-    <section className="uam-trust-section" aria-labelledby="uam-trust-title">
-      <div className="uam-shell uam-trust-content">
-        <Building2 size={30} aria-hidden="true" />
-        <div><h2 id="uam-trust-title">{additional.trustTitle}</h2><p>{additional.trustText}</p></div>
-      </div>
-    </section>
-
-    <section className="uam-section uam-surface" aria-labelledby="uam-links-title">
-      <div className="uam-shell">
-        <div className="uam-section-heading"><h2 id="uam-links-title">{additional.quickLinksTitle}</h2></div>
-        <div className="uam-quick-links">
-          <Link to="/help"><CircleHelp size={20} aria-hidden="true" /><span>{additional.help}</span><ArrowRight size={17} aria-hidden="true" /></Link>
-          <Link to="/contact"><Mail size={20} aria-hidden="true" /><span>{additional.contact}</span><ArrowRight size={17} aria-hidden="true" /></Link>
-          <Link to="/about"><Info size={20} aria-hidden="true" /><span>{additional.about}</span><ArrowRight size={17} aria-hidden="true" /></Link>
-        </div>
-      </div>
-    </section>
-
-    <section className="uam-final-cta" aria-labelledby="uam-final-title">
-      <div className="uam-shell uam-final-content">
-        <div><h2 id="uam-final-title">{additional.finalTitle}</h2><p>{additional.finalText}</p></div>
-        <Link className="uam-primary-button" to="/login">{additional.login}<ArrowRight size={18} aria-hidden="true" /></Link>
+        </aside>
       </div>
     </section>
 
     <style>{`
       .uam-home-page {
-        color: #17212b;
-        background: #f5f7f9;
+        color: #fff;
+        background: #0b1d34;
       }
 
       .uam-hero {
         position: relative;
         isolation: isolate;
         overflow: hidden;
-        min-height: 640px;
-        background: #0f172a;
+        min-height: min(760px, calc(100svh - 82px));
+        background: #0b1d34;
         color: #fff;
       }
 
@@ -291,7 +138,7 @@ const Home = () => {
         position: absolute;
         inset: 0;
         z-index: -1;
-        background: linear-gradient(90deg, rgba(15,23,42,0.88) 0%, rgba(15,23,42,0.68) 48%, rgba(15,23,42,0.5) 100%);
+        background: linear-gradient(90deg, rgba(8, 24, 44, 0.91) 0%, rgba(10, 33, 59, 0.82) 52%, rgba(10, 33, 59, 0.70) 100%);
         content: '';
       }
 
@@ -299,7 +146,7 @@ const Home = () => {
         position: absolute;
         inset: 0;
         z-index: -2;
-        background: #0f172a;
+        background: #0b1d34;
       }
 
       .uam-hero-image {
@@ -309,8 +156,8 @@ const Home = () => {
         height: 100%;
         object-fit: cover;
         opacity: 0;
-        transform: scale(1.02);
-        transition: opacity 900ms ease, transform 6s ease;
+        transform: scale(1.015);
+        transition: opacity 700ms ease, transform 5s ease;
       }
 
       .uam-hero-image.is-active {
@@ -328,38 +175,51 @@ const Home = () => {
       .uam-hero-shell {
         position: relative;
         z-index: 1;
-        width: min(1180px, calc(100% - 36px));
+        width: min(1280px, calc(100% - 64px));
         margin: 0 auto;
         display: grid;
-        grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.85fr);
-        gap: 40px;
+        grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.75fr);
+        gap: clamp(44px, 7vw, 100px);
         align-items: center;
-        padding: clamp(72px, 10vw, 120px) 0;
+        padding: clamp(64px, 8vw, 112px) 0;
       }
 
       .uam-eyebrow {
         display: inline-block;
-        margin-bottom: 16px;
-        color: #93c5fd;
-        font-size: 0.76rem;
+        margin-bottom: 18px;
+        color: #a8d4ff;
+        font-size: 0.8rem;
         font-weight: 800;
-        letter-spacing: 0.14em;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
       }
 
       .uam-hero-copy h1 {
+        max-width: 720px;
         margin: 0;
-        font-size: clamp(2.5rem, 5vw, 5rem);
-        line-height: 1.04;
-        letter-spacing: -0.05em;
+        font-size: clamp(3rem, 5vw, 4.5rem);
+        line-height: 1.06;
+        letter-spacing: 0;
+        text-wrap: balance;
+        animation: uam-enter 500ms ease both;
       }
 
       .uam-lead {
-        margin: 22px 0 28px;
-        max-width: 700px;
-        color: rgba(255,255,255,0.82);
-        font-size: 1.13rem;
-        line-height: 1.75;
+        max-width: 650px;
+        margin: 22px 0 10px;
+        color: #f1f6fc;
+        font-size: 1.12rem;
+        line-height: 1.65;
+        animation: uam-enter 550ms 50ms ease both;
+      }
+
+      .uam-supporting-text {
+        max-width: 660px;
+        margin: 0 0 26px;
+        color: #c8d6e5;
+        font-size: 0.98rem;
+        line-height: 1.65;
+        animation: uam-enter 600ms 90ms ease both;
       }
 
       .uam-highlight-list {
@@ -367,22 +227,32 @@ const Home = () => {
         padding: 0;
         margin: 0 0 30px;
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, max-content));
-        gap: 12px 22px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 13px 20px;
+        animation: uam-enter 650ms 130ms ease both;
       }
 
       .uam-highlight-list li {
         display: inline-flex;
         align-items: center;
-        gap: 10px;
-        color: #e5eefb;
+        min-width: 0;
+        gap: 9px;
+        color: #f1f6fc;
+        font-size: 0.94rem;
         font-weight: 600;
+        line-height: 1.4;
+      }
+
+      .uam-highlight-list svg {
+        flex: 0 0 auto;
+        color: #83c3ff;
       }
 
       .uam-cta-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 16px;
+        gap: 12px;
+        animation: uam-enter 700ms 170ms ease both;
       }
 
       .uam-primary-button,
@@ -390,71 +260,126 @@ const Home = () => {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-height: 48px;
-        padding: 0 22px;
-        border-radius: 12px;
-        font-weight: 800;
+        min-height: 52px;
+        padding: 0 24px;
+        border: 1px solid transparent;
+        border-radius: 7px;
+        font-weight: 700;
         text-decoration: none;
-        transition: transform 0.18s ease, opacity 0.18s ease;
+        cursor: pointer;
+        transition: transform 220ms ease, background-color 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+      }
+
+      .uam-primary-button:focus-visible,
+      .uam-secondary-button:focus-visible {
+        outline: 3px solid #a8d4ff;
+        outline-offset: 4px;
       }
 
       .uam-primary-button {
-        background: #ffffff;
-        color: #17212b;
+        color: #102640;
+        background: #fff;
+        box-shadow: 0 8px 22px rgba(3, 15, 29, 0.22);
       }
 
       .uam-secondary-button {
-        border: 1px solid rgba(255,255,255,0.5);
-        color: #ffffff;
-        background: rgba(255,255,255,0.08);
+        border-color: rgba(219, 234, 254, 0.62);
+        color: #fff;
+        background: rgba(255,255,255,0.06);
       }
 
-      .uam-primary-button:hover,
+      .uam-primary-button:hover {
+        transform: translateY(-2px);
+        background: #e8f3ff;
+        box-shadow: 0 12px 28px rgba(3, 15, 29, 0.3);
+      }
+
       .uam-secondary-button:hover {
-        transform: translateY(-1px);
+        transform: translateY(-2px);
+        border-color: #fff;
+        background: rgba(255,255,255,0.13);
       }
 
       .uam-hero-panel {
-        background: rgba(15, 23, 42, 0.42);
-        border: 1px solid rgba(148, 163, 184, 0.34);
-        border-radius: 22px;
-        padding: 22px;
-        box-shadow: 0 20px 42px rgba(15, 23, 42, 0.18);
+        padding: clamp(24px, 3vw, 34px);
+        border: 1px solid rgba(210, 229, 249, 0.24);
+        border-radius: 12px;
+        background: rgba(11, 29, 52, 0.72);
+        box-shadow: 0 24px 58px rgba(2, 12, 24, 0.28);
+        backdrop-filter: blur(14px);
+        animation: uam-panel-enter 550ms 120ms ease both;
+        transition: transform 250ms ease, box-shadow 250ms ease;
+      }
+
+      .uam-hero-panel:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 28px 64px rgba(2, 12, 24, 0.34);
       }
 
       .uam-panel-header {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        margin-bottom: 18px;
+        margin-bottom: 24px;
         color: #dbeafe;
-        font-weight: 700;
+        font-size: 0.82rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
       }
 
       .uam-panel-stack {
         display: grid;
-        gap: 16px;
+        gap: 0;
       }
 
       .uam-panel-card {
-        background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(148, 163, 184, 0.4);
-        border-radius: 16px;
-        padding: 18px 18px 16px;
+        padding: 19px 0;
+        border-top: 1px solid rgba(210, 229, 249, 0.19);
       }
 
       .uam-panel-label {
         display: block;
-        margin-bottom: 8px;
-        color: #cbd5e1;
+        margin-bottom: 7px;
+        color: #a9c9e8;
         font-size: 0.75rem;
-        letter-spacing: 0.08em;
+        font-weight: 800;
+        letter-spacing: 0.1em;
         text-transform: uppercase;
       }
 
       .uam-panel-card strong {
-        font-size: 1rem;
-        line-height: 1.6;
+        display: block;
+        color: #fff;
+        font-size: 1.02rem;
+        font-weight: 600;
+        line-height: 1.55;
+      }
+
+      @keyframes uam-enter {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      @keyframes uam-panel-enter {
+        from { opacity: 0; transform: translate(10px, 8px); }
+        to { opacity: 1; transform: translate(0, 0); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .uam-hero-copy h1,
+        .uam-lead,
+        .uam-supporting-text,
+        .uam-highlight-list,
+        .uam-cta-row,
+        .uam-hero-panel {
+          animation: none;
+        }
+
+        .uam-primary-button,
+        .uam-secondary-button,
+        .uam-hero-panel {
+          transition: none;
+        }
       }
 
       .uam-shell { width: min(1120px, calc(100% - 36px)); margin: 0 auto; }
@@ -500,15 +425,27 @@ const Home = () => {
       .uam-final-content .uam-primary-button { gap: 10px; border-radius: 6px; color: #fff; background: #1d4ed8; }
 
       @media (max-width: 960px) {
-        .uam-hero-shell { grid-template-columns: 1fr; }
+        .uam-hero-shell { grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr); gap: 32px; }
+        .uam-hero-copy h1 { font-size: clamp(2.75rem, 5vw, 3.65rem); }
+        .uam-highlight-list { column-gap: 12px; }
         .uam-benefit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .uam-workflow-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         .uam-role-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       }
 
       @media (max-width: 640px) {
-        .uam-hero-shell { width: min(100% - 24px, 1120px); }
-        .uam-highlight-list { grid-template-columns: 1fr; }
+        .uam-hero { min-height: auto; }
+        .uam-hero::after { background: linear-gradient(90deg, rgba(8, 24, 44, 0.94), rgba(10, 33, 59, 0.83)); }
+        .uam-hero-shell { width: min(100% - 32px, 560px); grid-template-columns: 1fr; gap: 36px; padding: 58px 0 64px; }
+        .uam-hero-copy h1 { font-size: clamp(2.35rem, 10vw, 3rem); }
+        .uam-lead { margin-top: 18px; font-size: 1.03rem; }
+        .uam-supporting-text { margin-bottom: 23px; font-size: 0.94rem; }
+        .uam-highlight-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; margin-bottom: 26px; }
+        .uam-highlight-list li { gap: 7px; font-size: 0.85rem; }
+        .uam-highlight-list svg { width: 16px; height: 16px; }
+        .uam-cta-row { display: grid; grid-template-columns: 1fr; gap: 10px; }
+        .uam-primary-button, .uam-secondary-button { width: 100%; min-height: 52px; }
+        .uam-hero-panel { padding: 23px; }
         .uam-shell { width: min(100% - 24px, 1120px); }
         .uam-benefit-grid,
         .uam-workflow-list,
@@ -517,6 +454,11 @@ const Home = () => {
         .uam-quick-links { grid-template-columns: 1fr; }
         .uam-final-content { align-items: flex-start; flex-direction: column; }
         .uam-trust-content { align-items: flex-start; }
+      }
+
+      @media (min-width: 641px) and (max-width: 820px) {
+        .uam-hero-shell { width: min(100% - 44px, 760px); grid-template-columns: 1fr; gap: 34px; padding: 64px 0; }
+        .uam-hero-panel { max-width: 620px; }
       }
     `}</style>
   </main>

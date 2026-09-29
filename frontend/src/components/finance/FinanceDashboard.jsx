@@ -865,20 +865,22 @@ export default function FinanceDashboard() {
   return (
     <div className="finance-dashboard">
       <style>{`
+        /* Resolves to the shared design tokens in src/styles/theme.css. */
         :root {
-          --finance-primary: #0ea5e9;
-          --finance-blue: #2563eb;
-          --finance-navy: #0f172a;
-          --finance-bg: #f8fafc;
-          --finance-border: #e2e8f0;
-          --finance-muted: #64748b;
+          --finance-primary: var(--color-primary);
+          --finance-blue: var(--color-primary);
+          --finance-navy: var(--color-text-primary);
+          --finance-bg: var(--color-background);
+          --finance-border: var(--color-border);
+          --finance-muted: var(--color-text-muted);
+          --finance-muted-on-page: var(--color-text-secondary-on-page);
 
-          --chart-0: #0ea5e9;
-          --chart-1: #2563eb;
-          --chart-2: #14b8a6;
-          --chart-3: #8b5cf6;
-          --chart-4: #f59e0b;
-          --chart-5: #ef4444;
+          --chart-0: var(--color-primary);
+          --chart-1: var(--color-chart-2);
+          --chart-2: var(--color-neutral);
+          --chart-3: var(--color-success);
+          --chart-4: var(--color-chart-5);
+          --chart-5: var(--color-danger);
         }
 
         * {
@@ -947,7 +949,7 @@ export default function FinanceDashboard() {
 
         .welcome-area p {
           margin: 5px 0 0;
-          color: var(--finance-muted);
+          color: var(--finance-muted-on-page);
           font-size: 13px;
         }
 
@@ -991,22 +993,22 @@ export default function FinanceDashboard() {
         }
 
         .btn-primary:hover {
-          background: #0284c7;
+          background: var(--color-info-text);
         }
 
         .btn-secondary {
-          color: #334155;
+          color: var(--color-text-secondary);
           background: white;
           border-color: var(--finance-border);
         }
 
         .btn-secondary:hover {
-          background: #f8fafc;
+          background: var(--color-background);
         }
 
         .btn-green {
           color: white;
-          background: #16a34a;
+          background: var(--color-success);
         }
 
         .alert {
@@ -1021,15 +1023,15 @@ export default function FinanceDashboard() {
         }
 
         .alert-error {
-          color: #991b1b;
-          background: #fef2f2;
-          border: 1px solid #fecaca;
+          color: var(--color-danger-text);
+          background: var(--color-danger-light);
+          border: 1px solid var(--color-danger);
         }
 
         .alert-success {
-          color: #166534;
-          background: #f0fdf4;
-          border: 1px solid #bbf7d0;
+          color: var(--color-success-text);
+          background: var(--color-success-light);
+          border: 1px solid var(--color-success);
         }
 
         .filters-card {
@@ -1073,7 +1075,7 @@ export default function FinanceDashboard() {
         }
 
         .field label {
-          color: #64748b;
+          color: var(--color-text-muted);
           font-size: 9px;
           font-weight: 800;
           text-transform: uppercase;
@@ -1088,7 +1090,7 @@ export default function FinanceDashboard() {
           border: 1px solid var(--finance-border);
           border-radius: 8px;
           background: white;
-          color: #334155;
+          color: var(--color-text-secondary);
           font-size: 11px;
           outline: none;
         }
@@ -1116,7 +1118,7 @@ export default function FinanceDashboard() {
           top: 50%;
           transform: translateY(-50%);
           pointer-events: none;
-          color: #94a3b8;
+          color: var(--color-text-muted);
         }
 
         .filter-buttons {
@@ -1157,7 +1159,7 @@ export default function FinanceDashboard() {
         }
 
         .stat-title {
-          color: #64748b;
+          color: var(--color-text-muted);
           font-size: 10px;
           font-weight: 800;
           text-transform: uppercase;
@@ -1174,7 +1176,7 @@ export default function FinanceDashboard() {
 
         .stat-subtitle {
           margin-top: 5px;
-          color: #94a3b8;
+          color: var(--color-text-muted);
           font-size: 9px;
         }
 
@@ -1189,33 +1191,33 @@ export default function FinanceDashboard() {
         }
 
         .stat-icon.blue {
-          color: #2563eb;
-          background: #eff6ff;
+          color: var(--color-primary);
+          background: var(--color-primary-light);
         }
 
         .stat-icon.cyan {
-          color: #0891b2;
-          background: #ecfeff;
+          color: var(--color-info-text);
+          background: var(--color-info-light);
         }
 
         .stat-icon.green {
-          color: #16a34a;
-          background: #f0fdf4;
+          color: var(--color-success);
+          background: var(--color-success-light);
         }
 
         .stat-icon.orange {
-          color: #ea580c;
-          background: #fff7ed;
+          color: var(--color-warning-text);
+          background: var(--color-warning-light);
         }
 
         .stat-icon.red {
-          color: #dc2626;
-          background: #fef2f2;
+          color: var(--color-danger);
+          background: var(--color-danger-light);
         }
 
         .stat-icon.purple {
-          color: #7c3aed;
-          background: #f5f3ff;
+          color: var(--color-primary-text);
+          background: var(--color-primary-light);
         }
 
         .chart-grid {
@@ -1255,7 +1257,7 @@ export default function FinanceDashboard() {
 
         .chart-subtitle {
           margin-top: 3px;
-          color: #94a3b8;
+          color: var(--color-text-muted);
           font-size: 9px;
         }
 
@@ -1274,7 +1276,7 @@ export default function FinanceDashboard() {
           align-items: center;
           justify-content: center;
           gap: 9px;
-          color: #94a3b8;
+          color: var(--color-text-muted);
           font-size: 11px;
         }
 
@@ -1302,11 +1304,11 @@ export default function FinanceDashboard() {
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-          color: #475569;
+          color: var(--color-text-secondary);
         }
 
         .bar-label strong {
-          color: #0f172a;
+          color: var(--color-text-primary);
           white-space: nowrap;
         }
 
@@ -1314,7 +1316,7 @@ export default function FinanceDashboard() {
           height: 9px;
           overflow: hidden;
           border-radius: 999px;
-          background: #f1f5f9;
+          background: var(--color-surface-muted);
         }
 
         .bar-fill {
@@ -1361,7 +1363,7 @@ export default function FinanceDashboard() {
           justify-content: center;
           text-align: center;
           box-shadow:
-            inset 0 0 0 1px #f1f5f9;
+            inset 0 0 0 1px var(--color-surface-muted);
         }
 
         .donut-inner strong {
@@ -1372,7 +1374,7 @@ export default function FinanceDashboard() {
 
         .donut-inner span {
           margin-top: 4px;
-          color: #94a3b8;
+          color: var(--color-text-muted);
           font-size: 8px;
         }
 
@@ -1422,7 +1424,7 @@ export default function FinanceDashboard() {
           align-items: stretch;
           justify-content: center;
           gap: 18px;
-          border-bottom: 1px solid #e2e8f0;
+          border-bottom: 1px solid var(--color-border);
         }
 
         .status-column {
@@ -1436,7 +1438,7 @@ export default function FinanceDashboard() {
 
         .status-number {
           margin-bottom: 5px;
-          color: #475569;
+          color: var(--color-text-secondary);
           font-size: 9px;
           font-weight: 800;
         }
@@ -1465,7 +1467,7 @@ export default function FinanceDashboard() {
         .status-label {
           width: 100%;
           margin-top: 8px;
-          color: #64748b;
+          color: var(--color-text-muted);
           font-size: 8px;
           text-align: center;
           overflow: hidden;
@@ -1484,7 +1486,7 @@ export default function FinanceDashboard() {
         }
 
         .grid-line {
-          stroke: #e2e8f0;
+          stroke: var(--color-border);
           stroke-width: 1;
           stroke-dasharray: 4 4;
         }
@@ -1506,7 +1508,7 @@ export default function FinanceDashboard() {
           display: flex;
           justify-content: space-between;
           gap: 6px;
-          color: #94a3b8;
+          color: var(--color-text-muted);
           font-size: 8px;
         }
 
@@ -1532,7 +1534,7 @@ export default function FinanceDashboard() {
           border: 1px solid var(--finance-border);
           border-radius: 11px;
           background: white;
-          color: #334155;
+          color: var(--color-text-secondary);
           text-decoration: none;
           display: flex;
           align-items: center;
@@ -1543,9 +1545,9 @@ export default function FinanceDashboard() {
         }
 
         .quick-link:hover {
-          border-color: #bae6fd;
-          background: #f0f9ff;
-          color: #0369a1;
+          border-color: var(--color-primary);
+          background: var(--color-primary-light);
+          color: var(--color-info-text);
           transform: translateY(-1px);
         }
 
@@ -1572,7 +1574,7 @@ export default function FinanceDashboard() {
           display: flex;
           align-items: center;
           gap: 10px;
-          color: #334155;
+          color: var(--color-text-secondary);
           font-size: 12px;
           font-weight: 700;
         }
@@ -2171,7 +2173,7 @@ export default function FinanceDashboard() {
                 <div className="chart-title">
                   <Building2
                     size={16}
-                    color="#2563eb"
+                    color="var(--color-primary)"
                   />
                   Assets by Department
                 </div>
@@ -2197,7 +2199,7 @@ export default function FinanceDashboard() {
                 <div className="chart-title">
                   <PieChartIcon
                     size={16}
-                    color="#0ea5e9"
+                    color="var(--color-info)"
                   />
                   Assets by Category
                 </div>
@@ -2223,7 +2225,7 @@ export default function FinanceDashboard() {
                 <div className="chart-title">
                   <Activity
                     size={16}
-                    color="#16a34a"
+                    color="var(--color-success)"
                   />
                   Assets by Status
                 </div>
@@ -2249,7 +2251,7 @@ export default function FinanceDashboard() {
                 <div className="chart-title">
                   <TrendingUp
                     size={16}
-                    color="#2563eb"
+                    color="var(--color-primary)"
                   />
                   Asset Value Trend
                 </div>

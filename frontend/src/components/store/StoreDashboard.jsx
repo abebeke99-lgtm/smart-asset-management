@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
+import { CHART_PALETTE } from '../../utils/chartPalette';
 import './StoreDashboard.css';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
@@ -58,7 +59,7 @@ export default function StoreDashboard() {
   const { data } = state;
   const kpis = [['totalAssets', data.kpis.totalAssets], ['availableAssets', data.kpis.availableAssets], ['pendingRequests', data.kpis.pendingRequests], ['pendingReceipts', data.kpis.pendingReceipts], ['pendingIssues', data.kpis.pendingIssues], ['pendingReturns', data.kpis.pendingReturns], ['pendingTransfers', data.kpis.pendingTransfers], ['lowStock', data.kpis.lowStock]];
   const health = data.inventoryHealth || {};
-  const chart = { labels: ['Available', 'Assigned', 'Maintenance', 'Missing', 'Damaged'], datasets: [{ label: 'Assets', data: [health.available || 0, health.assigned || 0, health.maintenance || 0, health.missing || 0, health.damaged || 0], backgroundColor: ['#0ea5e9', '#2563eb', '#f59e0b', '#ef4444', '#64748b'], borderRadius: 5 }] };
+  const chart = { labels: ['Available', 'Assigned', 'Maintenance', 'Missing', 'Damaged'], datasets: [{ label: 'Assets', data: [health.available || 0, health.assigned || 0, health.maintenance || 0, health.missing || 0, health.damaged || 0], backgroundColor: CHART_PALETTE, borderRadius: 5 }] };
   const quickActions = [['Receive', PackagePlus], ['Issue', PackageOpen], ['Return', PackageX], ['Transfer', Truck], ['Verification', ScanLine], ['Inventory', Boxes], ['Maintenance', Wrench]];
   return <main className="store-dashboard">
     <header className="store-dashboard-header"><div><p className="eyebrow">{t.title}</p><h1>{t.subtitle}</h1><p className="store-welcome">{user?.fullName || user?.username || t.title}</p></div><div className="store-connection"><span className="status-dot" /> {data.health?.api === 'online' ? t.online : t.offline}</div></header>

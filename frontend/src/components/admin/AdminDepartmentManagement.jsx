@@ -1,2880 +1,1806 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { toast } from "react-toastify";
-import { apiClient } from "../../utils/api";
-import { useLanguage } from "../../contexts/UiContext";
-import {
-  Plus,
-  Edit2,
-  Trash2,
-  Search,
-  X,
-  AlertCircle,
-  Building2,
-  Users,
-  Package,
-  MapPin,
-  UserCheck,
-  RefreshCw,
-  Eye,
-  Save,
-} from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
 
-const AdminDepartmentManagement = () => {
-  const { language, theme } = useLanguage();
-  const isDark = theme === "dark";
+const API_URL = "/api/departments";
 
-  const t = language === "en" ? englishTranslations : amharicTranslations;
+const getToken = () =>
+  localStorage.getItem("token") ||
+  localStorage.getItem("accessToken") ||
+  localStorage.getItem("authToken") ||
+  "";
 
+const getHeaders = (includeJson = false) => {
+  const token = getToken();
+
+  const headers = {
+    Accept: "application/json",
+  };
+
+  if (includeJson) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  return headers;
+};
+
+const normalizeDepartments = (data) => {
+  if (Array.isArray(data)) return data;
+
+  if (Array.isArray(data?.departments)) {
+    return data.departments;
+  }
+
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+
+  if (Array.isArray(data?.data?.departments)) {
+    return data.data.departments;
+  }
+
+  return [];
+};
+
+const getDepartmentId = (department) =>
+  department?.departmentId ??
+  department?.department_id ??
+  department?.id;
+
+const getCollegeName = (department) =>
+  department?.collegeName ||
+  department?.college?.name ||
+  department?.college?.collegeName ||
+  "—";
+
+const getStatus = (department) => {
+  if (
+    department?.status === false ||
+    department?.isActive === false ||
+    department?.active === false
+  ) {
+    return "Inactive";
+  }
+
+  return "Active";
+};
+
+export default function Departments() {
   const [departments, setDepartments] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [assets, setAssets] = useState([]);
   const [colleges, setColleges] = useState([]);
-  const [statistics, setStatistics] = useState({
-    total: 0,
-    heads: 0,
-    departmentUsers: 0,
-    departmentAssets: 0,
-    locations: 0,
-    inactive: 0,
-  });
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [showCreate, setShowCreate] = useState(false);
-  const [showEdit, setShowEdit] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+
+  const [showModal, setShowModal] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
+  const [editingDepartment, setEditingDepartment] = useState(null);
   const [selectedDepartment, setSelectedDepartment] = useState(null);
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [collegeFilter, setCollegeFilter] = useState("");
-
-  const [formErrors, setFormErrors] = useState({});
-
-  const [formData, setFormData] = useState({
+  const emptyForm = {
     name: "",
     code: "",
     description: "",
-    head: "",
     collegeId: "",
     location: "",
-    building: "",
-    floor: "",
-    room: "",
-    phone: "",
+    headName: "",
     email: "",
-    status: "active",
-  });
-
-  /* =========================================================
-     HELPERS
-  ========================================================= */
-
-  const normalizeArray = (response, keys = []) => {
-    const responseData = response?.data;
-
-    if (Array.isArray(responseData)) {
-      return responseData;
-    }
-
-    for (const key of keys) {
-      if (Array.isArray(responseData?.[key])) {
-        return responseData[key];
-      }
-
-      if (Array.isArray(responseData?.data?.[key])) {
-        return responseData.data[key];
-      }
-    }
-
-    if (Array.isArray(responseData?.data)) {
-      return responseData.data;
-    }
-
-    return [];
+    phone: "",
+    status: "Active",
   };
 
-  const getDepartmentId = (department) => {
-    return department?.id || department?._id || department?.department_id;
-  };
+  const [form, setForm] = useState(emptyForm);
 
-  const getDepartmentName = (department) => {
-    return (
-      department?.name ||
-      department?.department_name ||
-      department?.title ||
-      "-"
-    );
-  };
-
-  const getDepartmentCode = (department) => {
-    return department?.code || department?.department_code || "-";
-  };
-
-  const getDepartmentStatus = (department) => {
-    if (
-      department?.status === "inactive" ||
-      department?.active === false ||
-      department?.is_active === false
-    ) {
-      return "inactive";
-    }
-
-    return "active";
-  };
-
-  const getUserName = (user) => {
-    return (
-      user?.fullName ||
-      user?.full_name ||
-      user?.name ||
-      user?.username ||
-      "-"
-    );
-  };
-
-  const getAssetDepartment = (asset) => {
-    return (
-      asset?.department ||
-      asset?.department_name ||
-      asset?.departmentName ||
-      asset?.department_id ||
-      ""
-    );
-  };
-
-  /* =========================================================
-     FETCH DEPARTMENTS
-  ========================================================= */
-
-  const fetchDepartments = useCallback(async () => {
-    setLoading(true);
-
+  const loadDepartments = async () => {
     try {
-      const response = await apiClient.get("/api/departments", {
-        params: {
-          search: searchQuery.trim() || undefined,
-          status: statusFilter || undefined,
-          collegeId: collegeFilter || undefined,
-          limit: 100,
-        },
+      setLoading(true);
+      setError("");
+
+      const response = await fetch(API_URL, {
+        method: "GET",
+        headers: getHeaders(),
       });
 
-      const data = normalizeArray(response, [
-        "departments",
-        "items",
-        "results",
-      ]);
+      if (!response.ok) {
+        throw new Error(
+          `Unable to load departments (${response.status})`
+        );
+      }
 
-      setDepartments(data);
-    } catch (error) {
-      console.error("Failed to load departments:", error);
-
-      const message =
-        error?.response?.data?.message || t.loadFailed;
-
-      toast.error(message);
-      setDepartments([]);
+      const data = await response.json();
+      setDepartments(normalizeDepartments(data));
+    } catch (err) {
+      console.error("Departments load error:", err);
+      setError(err.message || "Unable to load departments.");
     } finally {
       setLoading(false);
     }
-  }, [collegeFilter, searchQuery, statusFilter, t.loadFailed]);
+  };
 
-  const fetchStatistics = useCallback(async () => {
+  const loadColleges = async () => {
     try {
-      const response = await apiClient.get("/api/departments/stats");
-      setStatistics(response.data?.data || {});
-    } catch (error) {
-      console.error("Failed to load department statistics:", error);
-      setStatistics({
-        total: 0,
-        heads: 0,
-        departmentUsers: 0,
-        departmentAssets: 0,
-        locations: 0,
-        inactive: 0,
+      const response = await fetch("/api/colleges", {
+        method: "GET",
+        headers: getHeaders(),
       });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const data = await response.json();
+
+      if (Array.isArray(data)) {
+        setColleges(data);
+      } else if (Array.isArray(data?.colleges)) {
+        setColleges(data.colleges);
+      } else if (Array.isArray(data?.data)) {
+        setColleges(data.data);
+      } else if (Array.isArray(data?.data?.colleges)) {
+        setColleges(data.data.colleges);
+      }
+    } catch (err) {
+      console.warn("College list could not be loaded:", err);
     }
-  }, []);
-
-  const fetchColleges = useCallback(async () => {
-    try {
-      const response = await apiClient.get("/api/admin/colleges", {
-        params: { limit: 100, status: "active" },
-      });
-      setColleges(normalizeArray(response, ["colleges", "items", "results"]));
-    } catch (error) {
-      console.error("Failed to load colleges:", error);
-      setColleges([]);
-    }
-  }, []);
-
-  /* =========================================================
-     FETCH USERS
-  ========================================================= */
-
-  const fetchUsers = useCallback(async () => {
-    try {
-      const response = await apiClient.get("/api/users");
-
-      const data = normalizeArray(response, [
-        "users",
-        "items",
-        "results",
-      ]);
-
-      setUsers(data);
-    } catch (error) {
-      console.error("Failed to load users:", error);
-      setUsers([]);
-    }
-  }, []);
-
-  /* =========================================================
-     FETCH ASSETS
-  ========================================================= */
-
-  const fetchAssets = useCallback(async () => {
-    try {
-      const response = await apiClient.get("/api/assets");
-
-      const data = normalizeArray(response, [
-        "assets",
-        "items",
-        "results",
-      ]);
-
-      setAssets(data);
-    } catch (error) {
-      console.error("Failed to load assets:", error);
-      setAssets([]);
-    }
-  }, []);
-
-  /* =========================================================
-     INITIAL LOAD
-  ========================================================= */
+  };
 
   useEffect(() => {
-    fetchDepartments();
-    fetchStatistics();
-    fetchUsers();
-    fetchAssets();
-    fetchColleges();
-  }, [fetchDepartments, fetchStatistics, fetchUsers, fetchAssets, fetchColleges]);
+    loadDepartments();
+    loadColleges();
+  }, []);
 
-  /* =========================================================
-     DEPARTMENT USERS
-  ========================================================= */
+  const filteredDepartments = useMemo(() => {
+    const query = search.trim().toLowerCase();
 
-  const getDepartmentUsers = useCallback(
-    (department) => {
-      const departmentId = String(getDepartmentId(department) || "");
-      const departmentName = getDepartmentName(department).toLowerCase();
+    return departments.filter((department) => {
+      const matchesSearch =
+        !query ||
+        String(department?.name || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(department?.departmentName || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(department?.code || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(department?.departmentCode || "")
+          .toLowerCase()
+          .includes(query) ||
+        getCollegeName(department)
+          .toLowerCase()
+          .includes(query);
 
-      return users.filter((user) => {
-        const userDepartmentId = String(
-          user?.department_id ||
-            user?.departmentId ||
-            user?.department?.id ||
-            ""
-        );
+      const status = getStatus(department);
 
-        const userDepartmentName = String(
-          user?.department ||
-            user?.department_name ||
-            user?.departmentName ||
-            user?.department?.name ||
-            ""
-        ).toLowerCase();
+      const matchesStatus =
+        statusFilter === "All" || status === statusFilter;
 
-        return (
-          (departmentId && userDepartmentId === departmentId) ||
-          (departmentName && userDepartmentName === departmentName)
-        );
-      });
-    },
-    [users]
-  );
-
-  /* =========================================================
-     DEPARTMENT ASSETS
-  ========================================================= */
-
-  const getDepartmentAssets = useCallback(
-    (department) => {
-      const departmentId = String(getDepartmentId(department) || "");
-      const departmentName = getDepartmentName(department).toLowerCase();
-
-      return assets.filter((asset) => {
-        const assetDepartmentId = String(
-          asset?.department_id ||
-            asset?.departmentId ||
-            asset?.department?.id ||
-            ""
-        );
-
-        const assetDepartmentName =
-          String(getAssetDepartment(asset)).toLowerCase();
-
-        return (
-          (departmentId && assetDepartmentId === departmentId) ||
-          (departmentName &&
-            assetDepartmentName === departmentName)
-        );
-      });
-    },
-    [assets]
-  );
-
-  /* =========================================================
-     DEPARTMENT HEAD
-  ========================================================= */
-
-  const getDepartmentHead = useCallback(
-    (department) => {
-      if (department?.head) return department.head;
-      const departmentId = String(getDepartmentId(department) || "");
-      const departmentName = getDepartmentName(department).toLowerCase();
-
-      const explicitHeadId = String(
-        department?.head_id ||
-          department?.headId ||
-          department?.department_head_id ||
-          ""
-      );
-
-      const explicitHeadName = String(
-        department?.head ||
-          department?.head_name ||
-          department?.department_head ||
-          ""
-      ).toLowerCase();
-
-      const head = users.find((user) => {
-        const userId = String(user?.id || user?._id || "");
-        const userName = getUserName(user).toLowerCase();
-
-        const userDepartmentId = String(
-          user?.department_id ||
-            user?.departmentId ||
-            user?.department?.id ||
-            ""
-        );
-
-        const userDepartmentName = String(
-          user?.department ||
-            user?.department_name ||
-            user?.departmentName ||
-            user?.department?.name ||
-            ""
-        ).toLowerCase();
-
-        const isDepartmentHead =
-          user?.role === "department_head" ||
-          user?.role === "department head";
-
-        const sameDepartment =
-          (departmentId && userDepartmentId === departmentId) ||
-          (departmentName &&
-            userDepartmentName === departmentName);
-
-        return (
-          (explicitHeadId && userId === explicitHeadId) ||
-          (explicitHeadName && userName === explicitHeadName) ||
-          (isDepartmentHead && sameDepartment)
-        );
-      });
-
-      return head || null;
-    },
-    [users]
-  );
-
-  /* =========================================================
-     FILTERED DEPARTMENTS
-  ========================================================= */
-
-  const filteredDepartments = departments;
-
-  /* =========================================================
-     FORM HANDLING
-  ========================================================= */
-
-  const updateForm = (field, value) => {
-    setFormData((previous) => ({
-      ...previous,
-      [field]: value,
-    }));
-
-    if (formErrors[field]) {
-      setFormErrors((previous) => ({
-        ...previous,
-        [field]: "",
-      }));
-    }
-  };
-
-  const validateForm = () => {
-    const errors = {};
-
-    if (!formData.name.trim()) {
-      errors.name = t.nameRequired;
-    }
-
-    if (!formData.code.trim()) {
-      errors.code = t.codeRequired;
-    }
-
-    if (!formData.description.trim()) {
-      errors.description = t.descriptionRequired;
-    }
-
-    setFormErrors(errors);
-
-    return Object.keys(errors).length === 0;
-  };
-
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      code: "",
-      description: "",
-      head: "",
-      collegeId: "",
-      location: "",
-      building: "",
-      floor: "",
-      room: "",
-      phone: "",
-      email: "",
-      status: "active",
+      return matchesSearch && matchesStatus;
     });
+  }, [departments, search, statusFilter]);
 
-    setFormErrors({});
+  const stats = useMemo(() => {
+    const total = departments.length;
+
+    const active = departments.filter(
+      (department) => getStatus(department) === "Active"
+    ).length;
+
+    const inactive = departments.filter(
+      (department) => getStatus(department) === "Inactive"
+    ).length;
+
+    const collegesCount = new Set(
+      departments
+        .map((department) => department?.collegeId || department?.college_id)
+        .filter(Boolean)
+    ).size;
+
+    return {
+      total,
+      active,
+      inactive,
+      collegesCount,
+    };
+  }, [departments]);
+
+  const openCreateModal = () => {
+    setEditingDepartment(null);
+    setForm(emptyForm);
+    setError("");
+    setSuccess("");
+    setShowModal(true);
   };
-
-  /* =========================================================
-     CREATE DEPARTMENT
-  ========================================================= */
-
-  const handleCreateSubmit = async (event) => {
-    event.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      await apiClient.post("/api/departments", {
-        name: formData.name.trim(),
-        code: formData.code.trim(),
-        description: formData.description.trim(),
-        headId: formData.head || null,
-        collegeId: formData.collegeId || null,
-        location: formData.location.trim(),
-        building: formData.building.trim(),
-        floor: formData.floor.trim(),
-        room: formData.room.trim(),
-        phone: formData.phone.trim(),
-        email: formData.email.trim(),
-        status: formData.status,
-        active: formData.status === "active",
-      });
-
-      toast.success(t.createSuccess);
-
-      setShowCreate(false);
-      resetForm();
-
-      await Promise.all([fetchDepartments(), fetchStatistics()]);
-    } catch (error) {
-      console.error("Create department error:", error);
-
-      toast.error(
-        error?.response?.data?.message || t.createFailed
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  /* =========================================================
-     EDIT DEPARTMENT
-  ========================================================= */
 
   const openEditModal = (department) => {
-    setSelectedDepartment(department);
+    setEditingDepartment(department);
 
-    setFormData({
-      name: getDepartmentName(department) === "-" 
-        ? "" 
-        : getDepartmentName(department),
-
+    setForm({
+      name:
+        department?.name ||
+        department?.departmentName ||
+        "",
       code:
-        getDepartmentCode(department) === "-"
-          ? ""
-          : getDepartmentCode(department),
-
+        department?.code ||
+        department?.departmentCode ||
+        "",
       description: department?.description || "",
-
-      head:
-        department?.head_id ||
-        department?.headId ||
-        department?.head ||
-        department?.department_head_id ||
+      collegeId:
+        department?.collegeId ||
+        department?.college_id ||
+        department?.college?.id ||
         "",
-
-      collegeId: department?.collegeId || department?.college?.id || "",
-
       location: department?.location || "",
-
-      building: department?.building || "",
-
-      floor: department?.floor || "",
-
-      room: department?.room || "",
-
-      phone:
-        department?.phone ||
-        department?.phone_number ||
+      headName:
+        department?.headName ||
+        department?.head_name ||
+        department?.head?.name ||
         "",
-
       email: department?.email || "",
-
-      status: getDepartmentStatus(department),
+      phone: department?.phone || "",
+      status: getStatus(department),
     });
 
-    setFormErrors({});
-    setShowEdit(true);
+    setError("");
+    setSuccess("");
+    setShowModal(true);
   };
 
-  const handleEditSubmit = async (event) => {
-    event.preventDefault();
-
-    if (!validateForm() || !selectedDepartment) {
-      return;
-    }
-
-    const departmentId = getDepartmentId(selectedDepartment);
-
-    if (!departmentId) {
-      toast.error(t.invalidDepartment);
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      await apiClient.put(`/api/departments/${departmentId}`, {
-        name: formData.name.trim(),
-        code: formData.code.trim(),
-        description: formData.description.trim(),
-        headId: formData.head || null,
-        collegeId: formData.collegeId || null,
-        location: formData.location.trim(),
-        building: formData.building.trim(),
-        floor: formData.floor.trim(),
-        room: formData.room.trim(),
-        phone: formData.phone.trim(),
-        email: formData.email.trim(),
-        status: formData.status,
-        active: formData.status === "active",
-      });
-
-      toast.success(t.updateSuccess);
-
-      setShowEdit(false);
-      setSelectedDepartment(null);
-      resetForm();
-
-      await Promise.all([fetchDepartments(), fetchStatistics()]);
-    } catch (error) {
-      console.error("Update department error:", error);
-
-      toast.error(
-        error?.response?.data?.message || t.updateFailed
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  /* =========================================================
-     DELETE DEPARTMENT
-  ========================================================= */
-
-  const handleDelete = async (department) => {
-    const departmentName = getDepartmentName(department);
-    const departmentId = getDepartmentId(department);
-
-    if (!departmentId) {
-      toast.error(t.invalidDepartment);
-      return;
-    }
-
-    const departmentUsers = getDepartmentUsers(department);
-    const departmentAssets = getDepartmentAssets(department);
-
-    let warning = `${t.deleteConfirm} "${departmentName}"?`;
-
-    if (
-      departmentUsers.length > 0 ||
-      departmentAssets.length > 0
-    ) {
-      warning += `\n\n${departmentUsers.length} ${t.users} / ${departmentAssets.length} ${t.assets}`;
-    }
-
-    if (!window.confirm(warning)) {
-      return;
-    }
-
-    try {
-      await apiClient.delete(
-        `/api/departments/${departmentId}`
-      );
-
-      toast.success(t.deleteSuccess);
-
-      await Promise.all([fetchDepartments(), fetchStatistics()]);
-    } catch (error) {
-      console.error("Delete department error:", error);
-
-      toast.error(
-        error?.response?.data?.message || t.deleteFailed
-      );
-    }
-  };
-
-  /* =========================================================
-     DETAILS MODAL
-  ========================================================= */
-
-  const openDetails = (department) => {
+  const openDetailsModal = (department) => {
     setSelectedDepartment(department);
     setShowDetails(true);
   };
 
-  const closeDetails = () => {
-    setShowDetails(false);
-    setSelectedDepartment(null);
+  const closeModal = () => {
+    if (saving) return;
+
+    setShowModal(false);
+    setEditingDepartment(null);
+    setForm(emptyForm);
   };
 
-  const closeCreate = () => {
-    setShowCreate(false);
-    resetForm();
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
   };
 
-  const closeEdit = () => {
-    setShowEdit(false);
-    setSelectedDepartment(null);
-    resetForm();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!form.name.trim()) {
+      setError("Department name is required.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setSuccess("");
+
+      const isEditing = Boolean(editingDepartment);
+      const departmentId = getDepartmentId(editingDepartment);
+
+      const payload = {
+        name: form.name.trim(),
+        code: form.code.trim(),
+        description: form.description.trim(),
+        collegeId: form.collegeId || null,
+        location: form.location.trim(),
+        headName: form.headName.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        status: form.status,
+      };
+
+      const url = isEditing
+        ? `${API_URL}/${departmentId}`
+        : API_URL;
+
+      const response = await fetch(url, {
+        method: isEditing ? "PUT" : "POST",
+        headers: getHeaders(true),
+        body: JSON.stringify(payload),
+      });
+
+      const responseText = await response.text();
+
+      let responseData = null;
+
+      try {
+        responseData = responseText
+          ? JSON.parse(responseText)
+          : null;
+      } catch {
+        responseData = null;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          responseData?.message ||
+            responseData?.error ||
+            responseText ||
+            `Request failed (${response.status})`
+        );
+      }
+
+      setSuccess(
+        isEditing
+          ? "Department updated successfully."
+          : "Department created successfully."
+      );
+
+      setShowModal(false);
+      setEditingDepartment(null);
+      setForm(emptyForm);
+
+      await loadDepartments();
+    } catch (err) {
+      console.error("Department save error:", err);
+      setError(err.message || "Unable to save department.");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  /* =========================================================
-     REFRESH
-  ========================================================= */
+  const toggleStatus = async (department) => {
+    const departmentId = getDepartmentId(department);
 
-  const refreshAll = async () => {
-    await Promise.all([
-      fetchDepartments(),
-      fetchStatistics(),
-      fetchUsers(),
-      fetchAssets(),
-      fetchColleges(),
-    ]);
+    if (!departmentId) {
+      setError("Department ID is missing.");
+      return;
+    }
 
-    toast.success(t.refreshed);
+    const currentStatus = getStatus(department);
+    const newStatus =
+      currentStatus === "Active" ? "Inactive" : "Active";
+
+    const confirmed = window.confirm(
+      `${newStatus === "Active" ? "Activate" : "Deactivate"} "${
+        department?.name || department?.departmentName
+      }"?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setError("");
+      setSuccess("");
+
+      const response = await fetch(`${API_URL}/${departmentId}`, {
+        method: "PUT",
+        headers: getHeaders(true),
+        body: JSON.stringify({
+          ...department,
+          status: newStatus,
+          isActive: newStatus === "Active",
+        }),
+      });
+
+      const responseText = await response.text();
+
+      let responseData = null;
+
+      try {
+        responseData = responseText
+          ? JSON.parse(responseText)
+          : null;
+      } catch {
+        responseData = null;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          responseData?.message ||
+            responseData?.error ||
+            responseText ||
+            `Unable to update status (${response.status})`
+        );
+      }
+
+      setSuccess(
+        `Department ${
+          newStatus === "Active" ? "activated" : "deactivated"
+        } successfully.`
+      );
+
+      await loadDepartments();
+    } catch (err) {
+      console.error("Department status error:", err);
+      setError(err.message || "Unable to update department status.");
+    }
   };
 
-  /* =========================================================
-     DEPARTMENT FORM
-  ========================================================= */
+  const deleteDepartment = async (department) => {
+    const departmentId = getDepartmentId(department);
 
-  const renderDepartmentForm = (isEdit = false) => {
-    return (
-      <form
-        onSubmit={
-          isEdit ? handleEditSubmit : handleCreateSubmit
+    if (!departmentId) {
+      setError("Department ID is missing.");
+      return;
+    }
+
+    const departmentName =
+      department?.name ||
+      department?.departmentName ||
+      "this department";
+
+    const confirmed = window.confirm(
+      `Delete "${departmentName}"?\n\nThis action may fail if assets, users, or other records are still associated with the department.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setError("");
+      setSuccess("");
+
+      const response = await fetch(
+        `${API_URL}/${departmentId}`,
+        {
+          method: "DELETE",
+          headers: getHeaders(),
         }
-      >
-        <div className="dam-form-grid">
-          <div className="dam-form-group">
-            <label>
-              {t.departmentName} <span>*</span>
-            </label>
+      );
 
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(event) =>
-                updateForm("name", event.target.value)
-              }
-              placeholder={t.departmentNamePlaceholder}
-              className={formErrors.name ? "error" : ""}
-            />
+      const responseText = await response.text();
 
-            {formErrors.name && (
-              <small className="dam-error">
-                {formErrors.name}
-              </small>
-            )}
-          </div>
+      let responseData = null;
 
-          <div className="dam-form-group">
-            <label>
-              {t.departmentCode} <span>*</span>
-            </label>
+      try {
+        responseData = responseText
+          ? JSON.parse(responseText)
+          : null;
+      } catch {
+        responseData = null;
+      }
 
-            <input
-              type="text"
-              value={formData.code}
-              onChange={(event) =>
-                updateForm(
-                  "code",
-                  event.target.value.toUpperCase()
-                )
-              }
-              placeholder="e.g. CSE"
-              className={formErrors.code ? "error" : ""}
-            />
+      if (!response.ok) {
+        throw new Error(
+          responseData?.message ||
+            responseData?.error ||
+            responseText ||
+            `Unable to delete department (${response.status})`
+        );
+      }
 
-            {formErrors.code && (
-              <small className="dam-error">
-                {formErrors.code}
-              </small>
-            )}
-          </div>
+      setSuccess("Department deleted successfully.");
 
-          <div className="dam-form-group dam-full">
-            <label>
-              {t.description} <span>*</span>
-            </label>
-
-            <textarea
-              value={formData.description}
-              onChange={(event) =>
-                updateForm(
-                  "description",
-                  event.target.value
-                )
-              }
-              placeholder={t.descriptionPlaceholder}
-              rows={3}
-              className={
-                formErrors.description ? "error" : ""
-              }
-            />
-
-            {formErrors.description && (
-              <small className="dam-error">
-                {formErrors.description}
-              </small>
-            )}
-          </div>
-
-          <div className="dam-form-group">
-            <label>{t.departmentHead}</label>
-
-            <select
-              value={formData.head}
-              onChange={(event) =>
-                updateForm("head", event.target.value)
-              }
-            >
-              <option value="">
-                {t.selectHead}
-              </option>
-
-              {users
-                .filter(
-                  (user) =>
-                    user?.role === "department_head" ||
-                    user?.role === "department head"
-                )
-                .map((user) => (
-                  <option
-                    key={user.id || user._id}
-                    value={user.id || user._id}
-                  >
-                    {getUserName(user)}
-                  </option>
-                ))}
-            </select>
-          </div>
-
-          <div className="dam-form-group">
-            <label>{t.status}</label>
-
-            <select
-              value={formData.status}
-              onChange={(event) =>
-                updateForm("status", event.target.value)
-              }
-            >
-              <option value="active">
-                {t.active}
-              </option>
-
-              <option value="inactive">
-                {t.inactive}
-              </option>
-            </select>
-          </div>
-
-          <div className="dam-form-group">
-            <label>{t.college}</label>
-            <select
-              value={formData.collegeId}
-              onChange={(event) => updateForm("collegeId", event.target.value)}
-            >
-              <option value="">{t.selectCollege}</option>
-              {colleges.map((college) => (
-                <option key={college.id} value={college.id}>
-                  {college.collegeName || college.name || college.college_code}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="dam-form-group">
-            <label>
-              <MapPin size={15} />
-              {t.location}
-            </label>
-
-            <input
-              type="text"
-              value={formData.location}
-              onChange={(event) =>
-                updateForm(
-                  "location",
-                  event.target.value
-                )
-              }
-              placeholder="e.g. Main Campus"
-            />
-          </div>
-
-          <div className="dam-form-group">
-            <label>{t.building}</label>
-
-            <input
-              type="text"
-              value={formData.building}
-              onChange={(event) =>
-                updateForm(
-                  "building",
-                  event.target.value
-                )
-              }
-              placeholder="e.g. Engineering Building"
-            />
-          </div>
-
-          <div className="dam-form-group">
-            <label>{t.floor}</label>
-
-            <input
-              type="text"
-              value={formData.floor}
-              onChange={(event) =>
-                updateForm("floor", event.target.value)
-              }
-              placeholder="e.g. 2nd Floor"
-            />
-          </div>
-
-          <div className="dam-form-group">
-            <label>{t.room}</label>
-
-            <input
-              type="text"
-              value={formData.room}
-              onChange={(event) =>
-                updateForm("room", event.target.value)
-              }
-              placeholder="e.g. 204"
-            />
-          </div>
-
-          <div className="dam-form-group">
-            <label>{t.phone}</label>
-
-            <input
-              type="tel"
-              value={formData.phone}
-              onChange={(event) =>
-                updateForm("phone", event.target.value)
-              }
-              placeholder="+251..."
-            />
-          </div>
-
-          <div className="dam-form-group">
-            <label>{t.email}</label>
-
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(event) =>
-                updateForm("email", event.target.value)
-              }
-              placeholder="department@university.edu"
-            />
-          </div>
-        </div>
-
-        <div className="dam-modal-actions">
-          <button
-            type="button"
-            className="dam-btn dam-btn-secondary"
-            onClick={isEdit ? closeEdit : closeCreate}
-          >
-            <X size={17} />
-            {t.cancel}
-          </button>
-
-          <button
-            type="submit"
-            className="dam-btn dam-btn-primary"
-            disabled={saving}
-          >
-            {saving ? (
-              <>
-                <RefreshCw
-                  size={17}
-                  className="dam-spin"
-                />
-                {t.saving}
-              </>
-            ) : (
-              <>
-                {isEdit ? (
-                  <Save size={17} />
-                ) : (
-                  <Plus size={17} />
-                )}
-
-                {isEdit ? t.saveChanges : t.createDepartment}
-              </>
-            )}
-          </button>
-        </div>
-      </form>
-    );
+      await loadDepartments();
+    } catch (err) {
+      console.error("Department delete error:", err);
+      setError(err.message || "Unable to delete department.");
+    }
   };
 
-  /* =========================================================
-     LOADING
-  ========================================================= */
+  const getCollegeOptionValue = (college) =>
+    college?.collegeId ??
+    college?.college_id ??
+    college?.id;
 
-  if (loading) {
-    return (
-      <div
-        className={`dam-container ${
-          isDark ? "dam-dark" : "dam-light"
-        }`}
-      >
-        <div className="dam-loading">
-          <div className="dam-spinner" />
-          <p>{t.loading}</p>
-        </div>
-
-        <DepartmentStyles isDark={isDark} />
-      </div>
-    );
-  }
-
-  /* =========================================================
-     MAIN UI
-  ========================================================= */
+  const getCollegeOptionName = (college) =>
+    college?.name ||
+    college?.collegeName ||
+    college?.title ||
+    "Unnamed College";
 
   return (
-    <div
-      className={`dam-container ${
-        isDark ? "dam-dark" : "dam-light"
-      }`}
-    >
-      {/* HEADER */}
-      <div className="dam-header">
+    <div style={styles.page}>
+      <div style={styles.header}>
         <div>
-          <div className="dam-breadcrumb">Admin / Organization / Departments</div>
-          <div className="dam-title-row">
-            <div className="dam-title-icon">
-              <Building2 size={25} />
-            </div>
-
-            <div>
-              <h1>{t.departmentManagement}</h1>
-
-              <p>{t.departmentSubtitle}</p>
-            </div>
+          <div style={styles.breadcrumb}>
+            Administration / Organization / Departments
           </div>
+
+          <h1 style={styles.title}>Departments</h1>
+
+          <p style={styles.subtitle}>
+            Manage university departments, their college relationships,
+            responsible heads, and operational status.
+          </p>
         </div>
 
-        <div className="dam-header-actions">
-          <button
-            className="dam-btn dam-btn-secondary"
-            onClick={refreshAll}
-          >
-            <RefreshCw size={17} />
-            {t.refresh}
-          </button>
-
-          <button
-            className="dam-btn dam-btn-primary"
-            onClick={() => {
-              resetForm();
-              setShowCreate(true);
-            }}
-          >
-            <Plus size={18} />
-            {t.createDepartment}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={openCreateModal}
+          style={styles.primaryButton}
+        >
+          <span style={styles.buttonIcon}>＋</span>
+          Add Department
+        </button>
       </div>
 
-      {/* STATISTICS */}
-      <div className="dam-stats-grid">
-        <div className="dam-stat-card">
-          <div className="dam-stat-icon blue">
-            <Building2 size={23} />
-          </div>
-
-          <div>
-            <span>{t.totalDepartments}</span>
-            <strong>{statistics.total}</strong>
-          </div>
-        </div>
-
-        <div className="dam-stat-card">
-          <div className="dam-stat-icon green">
-            <UserCheck size={23} />
-          </div>
-
-          <div>
-            <span>{t.departmentHeads}</span>
-            <strong>{statistics.heads}</strong>
-          </div>
-        </div>
-
-        <div className="dam-stat-card">
-          <div className="dam-stat-icon purple">
-            <Users size={23} />
-          </div>
-
-          <div>
-            <span>{t.departmentUsers}</span>
-            <strong>
-              {statistics.departmentUsers}
-            </strong>
-          </div>
-        </div>
-
-        <div className="dam-stat-card">
-          <div className="dam-stat-icon orange">
-            <Package size={23} />
-          </div>
-
-          <div>
-            <span>{t.departmentAssets}</span>
-            <strong>
-              {statistics.departmentAssets}
-            </strong>
-          </div>
-        </div>
-
-        <div className="dam-stat-card">
-          <div className="dam-stat-icon teal">
-            <MapPin size={23} />
-          </div>
-
-          <div>
-            <span>{t.locations}</span>
-            <strong>{statistics.locations}</strong>
-          </div>
-        </div>
-
-        <div className="dam-stat-card">
-          <div className="dam-stat-icon red">
-            <AlertCircle size={23} />
-          </div>
-
-          <div>
-            <span>{t.inactive}</span>
-            <strong>{statistics.inactive}</strong>
-          </div>
-        </div>
-      </div>
-
-      {/* TOOLBAR */}
-      <div className="dam-toolbar">
-        <div className="dam-search">
-          <Search size={19} />
-
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(event) =>
-              setSearchQuery(event.target.value)
-            }
-            placeholder={t.searchDepartments}
-          />
-
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="dam-search-clear"
-              type="button"
-            >
-              <X size={16} />
-            </button>
-          )}
-        </div>
-
-        <select
-          className="dam-filter"
-          value={statusFilter}
-          onChange={(event) =>
-            setStatusFilter(event.target.value)
-          }
-        >
-          <option value="">
-            {t.allStatus}
-          </option>
-
-          <option value="active">
-            {t.active}
-          </option>
-
-          <option value="inactive">
-            {t.inactive}
-          </option>
-        </select>
-
-        <select
-          className="dam-filter"
-          value={collegeFilter}
-          onChange={(event) => setCollegeFilter(event.target.value)}
-        >
-          <option value="">{t.allColleges}</option>
-          {colleges.map((college) => (
-            <option key={college.id} value={college.id}>
-              {college.collegeName || college.name || college.college_code}
-            </option>
-          ))}
-        </select>
-
-        {(searchQuery || statusFilter || collegeFilter) && (
+      {error && (
+        <div style={styles.errorAlert}>
+          <span>⚠</span>
+          <span>{error}</span>
           <button
             type="button"
-            className="dam-btn dam-btn-secondary"
-            onClick={() => {
-              setSearchQuery("");
-              setStatusFilter("");
-              setCollegeFilter("");
-            }}
+            onClick={() => setError("")}
+            style={styles.alertClose}
           >
-            <X size={16} />
-            {t.clearFilters}
+            ×
           </button>
-        )}
+        </div>
+      )}
+
+      {success && (
+        <div style={styles.successAlert}>
+          <span>✓</span>
+          <span>{success}</span>
+          <button
+            type="button"
+            onClick={() => setSuccess("")}
+            style={styles.alertClose}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      <div style={styles.statsGrid}>
+        <StatCard
+          label="Total Departments"
+          value={stats.total}
+          icon="▦"
+          accent="#2563EB"
+        />
+
+        <StatCard
+          label="Active"
+          value={stats.active}
+          icon="✓"
+          accent="#16A34A"
+        />
+
+        <StatCard
+          label="Inactive"
+          value={stats.inactive}
+          icon="◷"
+          accent="#DC2626"
+        />
+
+        <StatCard
+          label="Colleges Represented"
+          value={stats.collegesCount}
+          icon="⌂"
+          accent="#F4C542"
+        />
       </div>
 
-      {/* CONTENT */}
-      {filteredDepartments.length === 0 ? (
-        <div className="dam-empty">
-          <Building2 size={58} />
+      <div style={styles.card}>
+        <div style={styles.toolbar}>
+          <div style={styles.searchWrapper}>
+            <span style={styles.searchIcon}>⌕</span>
 
-          <h3>{t.noDepartments}</h3>
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search department, code, or college..."
+              style={styles.searchInput}
+            />
+          </div>
 
-          <p>
-            {searchQuery
-              ? t.adjustSearch
-              : t.createFirstDepartment}
-          </p>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            style={styles.select}
+          >
+            <option value="All">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
 
+          <button
+            type="button"
+            onClick={loadDepartments}
+            style={styles.refreshButton}
+            title="Refresh"
+          >
+            ↻ Refresh
+          </button>
         </div>
-      ) : (
-        <div className="dam-table-wrapper">
-          <table className="dam-table">
+
+        <div style={styles.tableWrapper}>
+          <table style={styles.table}>
             <thead>
               <tr>
-                <th>{t.department}</th>
-                <th>{t.code}</th>
-                <th>{t.college}</th>
-                <th>{t.departmentHead}</th>
-                <th>{t.users}</th>
-                <th>{t.assets}</th>
-                <th>{t.location}</th>
-                <th>{t.status}</th>
-                <th>{t.actions}</th>
+                <th style={styles.th}>Department</th>
+                <th style={styles.th}>Code</th>
+                <th style={styles.th}>College</th>
+                <th style={styles.th}>Head</th>
+                <th style={styles.th}>Contact</th>
+                <th style={styles.th}>Status</th>
+                <th style={{ ...styles.th, textAlign: "right" }}>
+                  Actions
+                </th>
               </tr>
             </thead>
 
             <tbody>
-              {filteredDepartments.map((department) => {
-                const head =
-                  getDepartmentHead(department);
-
-                const departmentUsers =
-                  getDepartmentUsers(department);
-
-                const departmentAssets =
-                  getDepartmentAssets(department);
-
-                const status =
-                  getDepartmentStatus(department);
-
-                return (
-                  <tr
-                    key={getDepartmentId(department)}
-                  >
-                    <td>
-                      <div className="dam-department-cell">
-                        <div className="dam-department-avatar">
-                          <Building2 size={19} />
-                        </div>
-
-                        <div>
-                          <strong>
-                            {getDepartmentName(
-                              department
-                            )}
-                          </strong>
-
-                          <small>
-                            {department?.description ||
-                              t.noDescription}
-                          </small>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td>
-                      <span className="dam-code">
-                        {getDepartmentCode(
-                          department
-                        )}
+              {loading ? (
+                <tr>
+                  <td colSpan="7" style={styles.emptyCell}>
+                    <div style={styles.loading}>
+                      <div style={styles.spinner} />
+                      Loading departments...
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredDepartments.length === 0 ? (
+                <tr>
+                  <td colSpan="7" style={styles.emptyCell}>
+                    <div style={styles.emptyState}>
+                      <div style={styles.emptyIcon}>▦</div>
+                      <strong>No departments found</strong>
+                      <span>
+                        Try changing your search or status filter.
                       </span>
-                    </td>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredDepartments.map((department, index) => {
+                  const id = getDepartmentId(department) ?? index;
 
-                    <td>
-                      {department?.college?.collegeName || t.notAssigned}
-                    </td>
+                  const name =
+                    department?.name ||
+                    department?.departmentName ||
+                    "Unnamed Department";
 
-                    <td>
-                      {head ? (
-                        <div className="dam-head-cell">
-                          <div className="dam-user-avatar">
-                            {getUserName(head)
-                              .charAt(0)
-                              .toUpperCase()}
+                  const code =
+                    department?.code ||
+                    department?.departmentCode ||
+                    "—";
+
+                  const head =
+                    department?.headName ||
+                    department?.head_name ||
+                    department?.head?.name ||
+                    "—";
+
+                  const email = department?.email || "";
+
+                  const phone = department?.phone || "";
+
+                  const status = getStatus(department);
+
+                  return (
+                    <tr key={String(id)} style={styles.tr}>
+                      <td style={styles.td}>
+                        <div style={styles.departmentCell}>
+                          <div style={styles.departmentIcon}>
+                            {name.charAt(0).toUpperCase()}
                           </div>
 
                           <div>
-                            <strong>
-                              {getUserName(head)}
-                            </strong>
+                            <div style={styles.departmentName}>
+                              {name}
+                            </div>
 
-                            <small>
-                              {head?.email || "-"}
-                            </small>
+                            {department?.description && (
+                              <div style={styles.departmentDescription}>
+                                {department.description}
+                              </div>
+                            )}
                           </div>
                         </div>
-                      ) : (
-                        <span className="dam-muted">
-                          {t.notAssigned}
+                      </td>
+
+                      <td style={styles.td}>
+                        <span style={styles.codeBadge}>{code}</span>
+                      </td>
+
+                      <td style={styles.td}>
+                        <span style={styles.secondaryText}>
+                          {getCollegeName(department)}
                         </span>
-                      )}
-                    </td>
+                      </td>
 
-                    <td>
-                      <span className="dam-count">
-                        <Users size={15} />
-                        {Number(department.userCount ?? departmentUsers.length)}
-                      </span>
-                    </td>
-
-                    <td>
-                      <span className="dam-count">
-                        <Package size={15} />
-                        {Number(department.assetCount ?? departmentAssets.length)}
-                      </span>
-                    </td>
-
-                    <td>
-                      <div className="dam-location">
-                        <MapPin size={15} />
-
-                        <span>
-                          {department?.locationRecord?.name ||
-                            department?.location ||
-                            department?.building ||
-                            department?.room ||
-                            "-"}
+                      <td style={styles.td}>
+                        <span style={styles.secondaryText}>
+                          {head}
                         </span>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td>
-                      <span
-                        className={`dam-status ${status}`}
-                      >
-                        {status === "active"
-                          ? t.active
-                          : t.inactive}
-                      </span>
-                    </td>
+                      <td style={styles.td}>
+                        <div style={styles.contactCell}>
+                          {email && <span>{email}</span>}
+                          {phone && <span>{phone}</span>}
+                          {!email && !phone && <span>—</span>}
+                        </div>
+                      </td>
 
-                    <td>
-                      <div className="dam-actions">
-                        <button
-                          type="button"
-                          className="dam-action view"
-                          title={t.viewDetails}
-                          onClick={() =>
-                            openDetails(department)
-                          }
-                        >
-                          <Eye size={16} />
-                        </button>
+                      <td style={styles.td}>
+                        <StatusBadge status={status} />
+                      </td>
 
-                        <button
-                          type="button"
-                          className="dam-action edit"
-                          title={t.edit}
-                          onClick={() =>
-                            openEditModal(department)
-                          }
-                        >
-                          <Edit2 size={16} />
-                        </button>
+                      <td style={styles.td}>
+                        <div style={styles.actions}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openDetailsModal(department)
+                            }
+                            style={styles.actionButton}
+                            title="View"
+                          >
+                            View
+                          </button>
 
-                        <button
-                          type="button"
-                          className="dam-action delete"
-                          title={t.delete}
-                          onClick={() =>
-                            handleDelete(department)
-                          }
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openEditModal(department)
+                            }
+                            style={styles.actionButton}
+                            title="Edit"
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              toggleStatus(department)
+                            }
+                            style={{
+                              ...styles.actionButton,
+                              color:
+                                status === "Active"
+                                  ? "#B91C1C"
+                                  : "#15803D",
+                            }}
+                            title={
+                              status === "Active"
+                                ? "Deactivate"
+                                : "Activate"
+                            }
+                          >
+                            {status === "Active"
+                              ? "Deactivate"
+                              : "Activate"}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              deleteDepartment(department)
+                            }
+                            style={{
+                              ...styles.actionButton,
+                              color: "#DC2626",
+                            }}
+                            title="Delete"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
-      )}
 
-      {/* CREATE MODAL */}
-      {showCreate && (
-        <div className="dam-modal-overlay">
-          <div className="dam-modal">
-            <div className="dam-modal-header">
-              <div>
-                <h2>{t.createDepartment}</h2>
-                <p>{t.createDepartmentSubtitle}</p>
-              </div>
-
-              <button
-                type="button"
-                className="dam-close"
-                onClick={closeCreate}
-              >
-                <X size={21} />
-              </button>
-            </div>
-
-            <div className="dam-modal-body">
-              {renderDepartmentForm(false)}
-            </div>
-          </div>
+        <div style={styles.tableFooter}>
+          <span>
+            Showing{" "}
+            <strong>{filteredDepartments.length}</strong>{" "}
+            of <strong>{departments.length}</strong> departments
+          </span>
         </div>
-      )}
+      </div>
 
-      {/* EDIT MODAL */}
-      {showEdit && selectedDepartment && (
-        <div className="dam-modal-overlay">
-          <div className="dam-modal">
-            <div className="dam-modal-header">
+      {showModal && (
+        <div
+          style={styles.modalOverlay}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeModal();
+            }
+          }}
+        >
+          <div style={styles.modal}>
+            <div style={styles.modalHeader}>
               <div>
-                <h2>{t.editDepartment}</h2>
-
-                <p>
-                  {getDepartmentName(
-                    selectedDepartment
-                  )}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                className="dam-close"
-                onClick={closeEdit}
-              >
-                <X size={21} />
-              </button>
-            </div>
-
-            <div className="dam-modal-body">
-              {renderDepartmentForm(true)}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* DETAILS MODAL */}
-      {showDetails && selectedDepartment && (
-        <div className="dam-modal-overlay">
-          <div className="dam-modal dam-details-modal">
-            <div className="dam-modal-header">
-              <div>
-                <h2>
-                  {getDepartmentName(
-                    selectedDepartment
-                  )}
+                <h2 style={styles.modalTitle}>
+                  {editingDepartment
+                    ? "Edit Department"
+                    : "Add Department"}
                 </h2>
 
-                <p>
-                  {getDepartmentCode(
-                    selectedDepartment
-                  )}
+                <p style={styles.modalSubtitle}>
+                  {editingDepartment
+                    ? "Update department information."
+                    : "Register a new university department."}
                 </p>
               </div>
 
               <button
                 type="button"
-                className="dam-close"
-                onClick={closeDetails}
+                onClick={closeModal}
+                style={styles.modalClose}
               >
-                <X size={21} />
+                ×
               </button>
             </div>
 
-            <div className="dam-details-body">
-              <div className="dam-detail-cards">
-                <div className="dam-detail-card">
-                  <Users size={22} />
+            <form onSubmit={handleSubmit}>
+              <div style={styles.formBody}>
+                <div style={styles.formGrid}>
+                  <FormField label="Department Name" required>
+                    <input
+                      name="name"
+                      value={form.name}
+                      onChange={handleChange}
+                      placeholder="e.g. Computer Science"
+                      style={styles.input}
+                      required
+                    />
+                  </FormField>
 
-                  <div>
-                    <span>{t.departmentUsers}</span>
+                  <FormField label="Department Code">
+                    <input
+                      name="code"
+                      value={form.code}
+                      onChange={handleChange}
+                      placeholder="e.g. CS"
+                      style={styles.input}
+                    />
+                  </FormField>
 
-                    <strong>
-                      {
-                        getDepartmentUsers(
-                          selectedDepartment
-                        ).length
-                      }
-                    </strong>
-                  </div>
-                </div>
+                  <FormField label="College">
+                    <select
+                      name="collegeId"
+                      value={form.collegeId}
+                      onChange={handleChange}
+                      style={styles.input}
+                    >
+                      <option value="">Select college</option>
 
-                <div className="dam-detail-card">
-                  <Package size={22} />
+                      {colleges.map((college, index) => {
+                        const value = getCollegeOptionValue(college);
 
-                  <div>
-                    <span>{t.departmentAssets}</span>
+                        return (
+                          <option
+                            key={String(value ?? index)}
+                            value={value ?? ""}
+                          >
+                            {getCollegeOptionName(college)}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </FormField>
 
-                    <strong>
-                      {
-                        getDepartmentAssets(
-                          selectedDepartment
-                        ).length
-                      }
-                    </strong>
-                  </div>
-                </div>
+                  <FormField label="Location">
+                    <input
+                      name="location"
+                      value={form.location}
+                      onChange={handleChange}
+                      placeholder="Department location"
+                      style={styles.input}
+                    />
+                  </FormField>
 
-                <div className="dam-detail-card">
-                  <UserCheck size={22} />
+                  <FormField label="Department Head">
+                    <input
+                      name="headName"
+                      value={form.headName}
+                      onChange={handleChange}
+                      placeholder="Full name"
+                      style={styles.input}
+                    />
+                  </FormField>
 
-                  <div>
-                    <span>{t.departmentHead}</span>
+                  <FormField label="Email">
+                    <input
+                      type="email"
+                      name="email"
+                      value={form.email}
+                      onChange={handleChange}
+                      placeholder="department@university.edu"
+                      style={styles.input}
+                    />
+                  </FormField>
 
-                    <strong>
-                      {getDepartmentHead(
-                        selectedDepartment
-                      )
-                        ? getUserName(
-                            getDepartmentHead(
-                              selectedDepartment
-                            )
-                          )
-                        : t.notAssigned}
-                    </strong>
-                  </div>
-                </div>
-              </div>
+                  <FormField label="Phone">
+                    <input
+                      name="phone"
+                      value={form.phone}
+                      onChange={handleChange}
+                      placeholder="+251 ..."
+                      style={styles.input}
+                    />
+                  </FormField>
 
-              <div className="dam-detail-section">
-                <h3>
-                  <Building2 size={18} />
-                  {t.departmentInformation}
-                </h3>
+                  <FormField label="Status">
+                    <select
+                      name="status"
+                      value={form.status}
+                      onChange={handleChange}
+                      style={styles.input}
+                    >
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                    </select>
+                  </FormField>
 
-                <div className="dam-info-grid">
-                  <div>
-                    <span>{t.departmentName}</span>
-                    <strong>
-                      {getDepartmentName(
-                        selectedDepartment
-                      )}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span>{t.departmentCode}</span>
-                    <strong>
-                      {getDepartmentCode(
-                        selectedDepartment
-                      )}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span>{t.status}</span>
-
-                    <strong>
-                      <span
-                        className={`dam-status ${getDepartmentStatus(
-                          selectedDepartment
-                        )}`}
-                      >
-                        {getDepartmentStatus(
-                          selectedDepartment
-                        ) === "active"
-                          ? t.active
-                          : t.inactive}
-                      </span>
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span>{t.location}</span>
-
-                    <strong>
-                      {selectedDepartment.location ||
-                        "-"}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span>{t.building}</span>
-
-                    <strong>
-                      {selectedDepartment.building ||
-                        "-"}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span>{t.floor}</span>
-
-                    <strong>
-                      {selectedDepartment.floor ||
-                        "-"}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span>{t.room}</span>
-
-                    <strong>
-                      {selectedDepartment.room ||
-                        "-"}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span>{t.phone}</span>
-
-                    <strong>
-                      {selectedDepartment.phone ||
-                        selectedDepartment.phone_number ||
-                        "-"}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span>{t.email}</span>
-
-                    <strong>
-                      {selectedDepartment.email ||
-                        "-"}
-                    </strong>
+                  <div style={styles.fullWidth}>
+                    <FormField label="Description">
+                      <textarea
+                        name="description"
+                        value={form.description}
+                        onChange={handleChange}
+                        placeholder="Brief description of the department..."
+                        rows="4"
+                        style={{
+                          ...styles.input,
+                          resize: "vertical",
+                        }}
+                      />
+                    </FormField>
                   </div>
                 </div>
               </div>
 
-              <div className="dam-detail-section">
-                <h3>
-                  <Users size={18} />
-                  {t.departmentUsers}
-                </h3>
+              <div style={styles.modalFooter}>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  style={styles.cancelButton}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
 
-                {getDepartmentUsers(
-                  selectedDepartment
-                ).length === 0 ? (
-                  <div className="dam-no-data">
-                    {t.noDepartmentUsers}
-                  </div>
-                ) : (
-                  <div className="dam-user-list">
-                    {getDepartmentUsers(
-                      selectedDepartment
-                    ).map((user) => (
-                      <div
-                        className="dam-user-list-item"
-                        key={user.id || user._id}
-                      >
-                        <div className="dam-user-avatar">
-                          {getUserName(user)
-                            .charAt(0)
-                            .toUpperCase()}
-                        </div>
+                <button
+                  type="submit"
+                  style={styles.primaryButton}
+                  disabled={saving}
+                >
+                  {saving
+                    ? "Saving..."
+                    : editingDepartment
+                    ? "Update Department"
+                    : "Create Department"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-                        <div>
-                          <strong>
-                            {getUserName(user)}
-                          </strong>
+      {showDetails && selectedDepartment && (
+        <div
+          style={styles.modalOverlay}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setShowDetails(false);
+            }
+          }}
+        >
+          <div style={styles.detailsModal}>
+            <div style={styles.modalHeader}>
+              <div>
+                <h2 style={styles.modalTitle}>
+                  Department Details
+                </h2>
 
-                          <small>
-                            {user?.email || "-"}
-                          </small>
-                        </div>
-
-                        <span className="dam-role">
-                          {user?.role || "user"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <p style={styles.modalSubtitle}>
+                  Complete department information
+                </p>
               </div>
 
-              <div className="dam-detail-section">
-                <h3>
-                  <Package size={18} />
-                  {t.departmentAssets}
-                </h3>
+              <button
+                type="button"
+                onClick={() => setShowDetails(false)}
+                style={styles.modalClose}
+              >
+                ×
+              </button>
+            </div>
 
-                {getDepartmentAssets(
-                  selectedDepartment
-                ).length === 0 ? (
-                  <div className="dam-no-data">
-                    {t.noDepartmentAssets}
+            <div style={styles.detailsBody}>
+              <div style={styles.detailsHero}>
+                <div style={styles.largeDepartmentIcon}>
+                  {(
+                    selectedDepartment?.name ||
+                    selectedDepartment?.departmentName ||
+                    "D"
+                  )
+                    .charAt(0)
+                    .toUpperCase()}
+                </div>
+
+                <div>
+                  <h3 style={styles.detailsName}>
+                    {selectedDepartment?.name ||
+                      selectedDepartment?.departmentName ||
+                      "Unnamed Department"}
+                  </h3>
+
+                  <div style={styles.detailsCode}>
+                    {selectedDepartment?.code ||
+                      selectedDepartment?.departmentCode ||
+                      "No code"}
                   </div>
-                ) : (
-                  <div className="dam-assets-list">
-                    {getDepartmentAssets(
-                      selectedDepartment
-                    ).slice(0, 20).map((asset) => (
-                      <div
-                        className="dam-asset-item"
-                        key={
-                          asset.id ||
-                          asset._id ||
-                          asset.asset_id
-                        }
-                      >
-                        <Package size={18} />
+                </div>
 
-                        <div>
-                          <strong>
-                            {asset.name ||
-                              asset.asset_name ||
-                              asset.asset_tag ||
-                              "-"}
-                          </strong>
+                <StatusBadge status={getStatus(selectedDepartment)} />
+              </div>
 
-                          <small>
-                            {asset.asset_code ||
-                              asset.serial_number ||
-                              asset.assetTag ||
-                              "-"}
-                          </small>
-                        </div>
+              <div style={styles.detailsGrid}>
+                <DetailItem
+                  label="College"
+                  value={getCollegeName(selectedDepartment)}
+                />
 
-                        <span>
-                          {asset.status || "-"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <DetailItem
+                  label="Location"
+                  value={
+                    selectedDepartment?.location || "—"
+                  }
+                />
+
+                <DetailItem
+                  label="Department Head"
+                  value={
+                    selectedDepartment?.headName ||
+                    selectedDepartment?.head_name ||
+                    selectedDepartment?.head?.name ||
+                    "—"
+                  }
+                />
+
+                <DetailItem
+                  label="Email"
+                  value={selectedDepartment?.email || "—"}
+                />
+
+                <DetailItem
+                  label="Phone"
+                  value={selectedDepartment?.phone || "—"}
+                />
+
+                <DetailItem
+                  label="Department ID"
+                  value={String(
+                    getDepartmentId(selectedDepartment) || "—"
+                  )}
+                />
+              </div>
+
+              <div style={styles.descriptionBox}>
+                <div style={styles.detailLabel}>Description</div>
+
+                <div style={styles.descriptionText}>
+                  {selectedDepartment?.description ||
+                    "No description provided."}
+                </div>
               </div>
             </div>
 
-            <div className="dam-modal-actions">
+            <div style={styles.modalFooter}>
               <button
-                className="dam-btn dam-btn-secondary"
-                onClick={closeDetails}
+                type="button"
+                onClick={() => setShowDetails(false)}
+                style={styles.cancelButton}
               >
-                <X size={17} />
-                {t.close}
+                Close
               </button>
 
               <button
-                className="dam-btn dam-btn-primary"
+                type="button"
                 onClick={() => {
-                  closeDetails();
+                  setShowDetails(false);
                   openEditModal(selectedDepartment);
                 }}
+                style={styles.primaryButton}
               >
-                <Edit2 size={17} />
-                {t.editDepartment}
+                Edit Department
               </button>
             </div>
           </div>
         </div>
       )}
-
-      <DepartmentStyles isDark={isDark} />
     </div>
   );
+}
+
+function StatCard({ label, value, icon, accent }) {
+  return (
+    <div style={styles.statCard}>
+      <div
+        style={{
+          ...styles.statIcon,
+          background: `${accent}18`,
+          color: accent,
+        }}
+      >
+        {icon}
+      </div>
+
+      <div>
+        <div style={styles.statLabel}>{label}</div>
+        <div style={styles.statValue}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ status }) {
+  const active = status === "Active";
+
+  return (
+    <span
+      style={{
+        ...styles.statusBadge,
+        background: active ? "#DCFCE7" : "#FEE2E2",
+        color: active ? "#15803D" : "#B91C1C",
+      }}
+    >
+      <span
+        style={{
+          ...styles.statusDot,
+          background: active ? "#16A34A" : "#DC2626",
+        }}
+      />
+      {status}
+    </span>
+  );
+}
+
+function FormField({ label, required, children }) {
+  return (
+    <label style={styles.formField}>
+      <span style={styles.formLabel}>
+        {label}
+        {required && <span style={styles.required}> *</span>}
+      </span>
+
+      {children}
+    </label>
+  );
+}
+
+function DetailItem({ label, value }) {
+  return (
+    <div style={styles.detailItem}>
+      <div style={styles.detailLabel}>{label}</div>
+      <div style={styles.detailValue}>{value}</div>
+    </div>
+  );
+}
+
+const styles = {
+  page: {
+    minHeight: "100%",
+    padding: "28px",
+    background: "#F3F6F9",
+    color: "#111827",
+    boxSizing: "border-box",
+    fontFamily:
+      "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  },
+
+  header: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: "20px",
+    marginBottom: "24px",
+  },
+
+  breadcrumb: {
+    color: "#64748B",
+    fontSize: "13px",
+    marginBottom: "8px",
+  },
+
+  title: {
+    margin: 0,
+    fontSize: "28px",
+    lineHeight: 1.2,
+    fontWeight: 750,
+    color: "#111827",
+  },
+
+  subtitle: {
+    margin: "8px 0 0",
+    color: "#64748B",
+    fontSize: "14px",
+    maxWidth: "720px",
+    lineHeight: 1.6,
+  },
+
+  primaryButton: {
+    border: "none",
+    borderRadius: "9px",
+    background: "#2563EB",
+    color: "#FFFFFF",
+    padding: "11px 16px",
+    minHeight: "42px",
+    fontSize: "14px",
+    fontWeight: 700,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "7px",
+    whiteSpace: "nowrap",
+    boxShadow: "0 2px 5px rgba(37, 99, 235, 0.18)",
+  },
+
+  buttonIcon: {
+    fontSize: "18px",
+    lineHeight: 1,
+  },
+
+  errorAlert: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "12px 14px",
+    marginBottom: "16px",
+    background: "#FEF2F2",
+    color: "#991B1B",
+    border: "1px solid #FECACA",
+    borderRadius: "9px",
+    fontSize: "14px",
+  },
+
+  successAlert: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "12px 14px",
+    marginBottom: "16px",
+    background: "#F0FDF4",
+    color: "#166534",
+    border: "1px solid #BBF7D0",
+    borderRadius: "9px",
+    fontSize: "14px",
+  },
+
+  alertClose: {
+    marginLeft: "auto",
+    border: "none",
+    background: "transparent",
+    color: "inherit",
+    cursor: "pointer",
+    fontSize: "20px",
+    lineHeight: 1,
+  },
+
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(210px, 1fr))",
+    gap: "16px",
+    marginBottom: "20px",
+  },
+
+  statCard: {
+    background: "#FFFFFF",
+    border: "1px solid #E5E7EB",
+    borderRadius: "12px",
+    padding: "18px",
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    boxShadow: "0 2px 7px rgba(15, 23, 42, 0.04)",
+  },
+
+  statIcon: {
+    width: "44px",
+    height: "44px",
+    borderRadius: "10px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "21px",
+    fontWeight: 700,
+    flexShrink: 0,
+  },
+
+  statLabel: {
+    color: "#64748B",
+    fontSize: "12px",
+    fontWeight: 600,
+    marginBottom: "4px",
+  },
+
+  statValue: {
+    color: "#111827",
+    fontSize: "24px",
+    fontWeight: 750,
+  },
+
+  card: {
+    background: "#FFFFFF",
+    border: "1px solid #E5E7EB",
+    borderRadius: "12px",
+    overflow: "hidden",
+    boxShadow: "0 2px 7px rgba(15, 23, 42, 0.04)",
+  },
+
+  toolbar: {
+    padding: "16px",
+    borderBottom: "1px solid #E5E7EB",
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
+
+  searchWrapper: {
+    position: "relative",
+    flex: "1 1 320px",
+    minWidth: "240px",
+  },
+
+  searchIcon: {
+    position: "absolute",
+    left: "12px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    color: "#94A3B8",
+    fontSize: "21px",
+    pointerEvents: "none",
+  },
+
+  searchInput: {
+    width: "100%",
+    height: "40px",
+    boxSizing: "border-box",
+    border: "1px solid #CBD5E1",
+    borderRadius: "8px",
+    padding: "0 12px 0 38px",
+    outline: "none",
+    fontSize: "14px",
+    color: "#111827",
+    background: "#FFFFFF",
+  },
+
+  select: {
+    height: "40px",
+    border: "1px solid #CBD5E1",
+    borderRadius: "8px",
+    padding: "0 34px 0 11px",
+    background: "#FFFFFF",
+    color: "#334155",
+    fontSize: "14px",
+    outline: "none",
+    cursor: "pointer",
+  },
+
+  refreshButton: {
+    height: "40px",
+    border: "1px solid #CBD5E1",
+    borderRadius: "8px",
+    padding: "0 13px",
+    background: "#FFFFFF",
+    color: "#334155",
+    fontSize: "14px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+
+  tableWrapper: {
+    overflowX: "auto",
+  },
+
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+    minWidth: "1050px",
+  },
+
+  th: {
+    padding: "13px 16px",
+    textAlign: "left",
+    fontSize: "11px",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    fontWeight: 750,
+    color: "#64748B",
+    background: "#F8FAFC",
+    borderBottom: "1px solid #E5E7EB",
+    whiteSpace: "nowrap",
+  },
+
+  tr: {
+    borderBottom: "1px solid #F1F5F9",
+  },
+
+  td: {
+    padding: "14px 16px",
+    verticalAlign: "middle",
+    fontSize: "13px",
+    color: "#334155",
+  },
+
+  departmentCell: {
+    display: "flex",
+    alignItems: "center",
+    gap: "11px",
+    minWidth: "220px",
+  },
+
+  departmentIcon: {
+    width: "38px",
+    height: "38px",
+    borderRadius: "9px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#E0F2FE",
+    color: "#0369A1",
+    fontSize: "15px",
+    fontWeight: 800,
+    flexShrink: 0,
+  },
+
+  departmentName: {
+    fontWeight: 700,
+    color: "#1E293B",
+    marginBottom: "3px",
+  },
+
+  departmentDescription: {
+    maxWidth: "230px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    color: "#94A3B8",
+    fontSize: "12px",
+  },
+
+  codeBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    borderRadius: "6px",
+    padding: "5px 8px",
+    background: "#EFF6FF",
+    color: "#1D4ED8",
+    fontSize: "12px",
+    fontWeight: 750,
+  },
+
+  secondaryText: {
+    color: "#475569",
+    fontSize: "13px",
+  },
+
+  contactCell: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "3px",
+    color: "#64748B",
+    fontSize: "12px",
+  },
+
+  statusBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    borderRadius: "999px",
+    padding: "5px 9px",
+    fontSize: "11px",
+    fontWeight: 750,
+    whiteSpace: "nowrap",
+  },
+
+  statusDot: {
+    width: "6px",
+    height: "6px",
+    borderRadius: "50%",
+  },
+
+  actions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: "4px",
+    flexWrap: "wrap",
+  },
+
+  actionButton: {
+    border: "none",
+    background: "transparent",
+    color: "#2563EB",
+    padding: "5px 6px",
+    borderRadius: "5px",
+    fontSize: "12px",
+    fontWeight: 650,
+    cursor: "pointer",
+  },
+
+  tableFooter: {
+    display: "flex",
+    justifyContent: "flex-end",
+    padding: "13px 16px",
+    borderTop: "1px solid #E5E7EB",
+    color: "#64748B",
+    fontSize: "12px",
+  },
+
+  emptyCell: {
+    height: "280px",
+    textAlign: "center",
+  },
+
+  loading: {
+    height: "280px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "10px",
+    color: "#64748B",
+    fontSize: "14px",
+  },
+
+  spinner: {
+    width: "18px",
+    height: "18px",
+    border: "2px solid #DBEAFE",
+    borderTopColor: "#2563EB",
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite",
+  },
+
+  emptyState: {
+    height: "280px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "7px",
+    color: "#64748B",
+    fontSize: "13px",
+  },
+
+  emptyIcon: {
+    width: "48px",
+    height: "48px",
+    borderRadius: "12px",
+    background: "#F1F5F9",
+    color: "#94A3B8",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "22px",
+    marginBottom: "4px",
+  },
+
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(15, 23, 42, 0.55)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "20px",
+    zIndex: 1000,
+    overflowY: "auto",
+  },
+
+  modal: {
+    width: "min(780px, 100%)",
+    maxHeight: "calc(100vh - 40px)",
+    overflowY: "auto",
+    background: "#FFFFFF",
+    borderRadius: "14px",
+    boxShadow: "0 24px 70px rgba(15, 23, 42, 0.25)",
+  },
+
+  detailsModal: {
+    width: "min(700px, 100%)",
+    maxHeight: "calc(100vh - 40px)",
+    overflowY: "auto",
+    background: "#FFFFFF",
+    borderRadius: "14px",
+    boxShadow: "0 24px 70px rgba(15, 23, 42, 0.25)",
+  },
+
+  modalHeader: {
+    padding: "20px 22px",
+    borderBottom: "1px solid #E5E7EB",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "15px",
+  },
+
+  modalTitle: {
+    margin: 0,
+    fontSize: "20px",
+    fontWeight: 750,
+    color: "#111827",
+  },
+
+  modalSubtitle: {
+    margin: "5px 0 0",
+    color: "#64748B",
+    fontSize: "13px",
+  },
+
+  modalClose: {
+    border: "none",
+    background: "#F1F5F9",
+    color: "#475569",
+    width: "34px",
+    height: "34px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontSize: "21px",
+    lineHeight: 1,
+  },
+
+  formBody: {
+    padding: "22px",
+  },
+
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(2, minmax(0, 1fr))",
+    gap: "17px",
+  },
+
+  fullWidth: {
+    gridColumn: "1 / -1",
+  },
+
+  formField: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "7px",
+  },
+
+  formLabel: {
+    fontSize: "12px",
+    fontWeight: 700,
+    color: "#334155",
+  },
+
+  required: {
+    color: "#DC2626",
+  },
+
+  input: {
+    width: "100%",
+    minHeight: "41px",
+    boxSizing: "border-box",
+    border: "1px solid #CBD5E1",
+    borderRadius: "8px",
+    padding: "9px 11px",
+    outline: "none",
+    fontSize: "13px",
+    color: "#111827",
+    background: "#FFFFFF",
+  },
+
+  modalFooter: {
+    padding: "15px 22px",
+    borderTop: "1px solid #E5E7EB",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: "9px",
+  },
+
+  cancelButton: {
+    minHeight: "42px",
+    border: "1px solid #CBD5E1",
+    background: "#FFFFFF",
+    color: "#475569",
+    borderRadius: "8px",
+    padding: "0 15px",
+    fontSize: "14px",
+    fontWeight: 650,
+    cursor: "pointer",
+  },
+
+  detailsBody: {
+    padding: "22px",
+  },
+
+  detailsHero: {
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    padding: "16px",
+    background: "#F8FAFC",
+    border: "1px solid #E2E8F0",
+    borderRadius: "10px",
+    marginBottom: "18px",
+  },
+
+  largeDepartmentIcon: {
+    width: "54px",
+    height: "54px",
+    borderRadius: "12px",
+    background: "#E0F2FE",
+    color: "#0369A1",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "21px",
+    fontWeight: 800,
+    flexShrink: 0,
+  },
+
+  detailsName: {
+    margin: 0,
+    color: "#111827",
+    fontSize: "18px",
+    fontWeight: 750,
+  },
+
+  detailsCode: {
+    marginTop: "4px",
+    color: "#64748B",
+    fontSize: "12px",
+  },
+
+  detailsGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(2, minmax(0, 1fr))",
+    gap: "14px",
+  },
+
+  detailItem: {
+    padding: "13px",
+    border: "1px solid #E5E7EB",
+    borderRadius: "9px",
+    background: "#FFFFFF",
+  },
+
+  detailLabel: {
+    color: "#64748B",
+    fontSize: "11px",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    marginBottom: "5px",
+  },
+
+  detailValue: {
+    color: "#1E293B",
+    fontSize: "13px",
+    fontWeight: 600,
+    wordBreak: "break-word",
+  },
+
+  descriptionBox: {
+    marginTop: "14px",
+    padding: "14px",
+    border: "1px solid #E5E7EB",
+    borderRadius: "9px",
+  },
+
+  descriptionText: {
+    color: "#475569",
+    fontSize: "13px",
+    lineHeight: 1.6,
+  },
 };
-
-/* =========================================================
-   STYLES
-========================================================= */
-
-const DepartmentStyles = ({ isDark }) => (
-  <style>{`
-    .dam-container {
-      min-height: 100vh;
-      width: 100%;
-      padding: 24px;
-      box-sizing: border-box;
-      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      transition: background .2s ease, color .2s ease;
-    }
-
-    .dam-light {
-      background: #f8fafc;
-      color: #1a202c;
-    }
-
-    .dam-dark {
-      background: #111827;
-      color: #f3f4f6;
-    }
-
-    .dam-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 20px;
-      margin-bottom: 24px;
-    }
-
-    .dam-title-row {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-
-    .dam-title-icon {
-      width: 52px;
-      height: 52px;
-      border-radius: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #3182ce;
-      color: white;
-      box-shadow: 0 5px 15px rgba(49, 130, 206, .22);
-    }
-
-    .dam-header h1 {
-      margin: 0;
-      font-size: 26px;
-      font-weight: 750;
-      letter-spacing: -.4px;
-    }
-
-    .dam-header p {
-      margin: 5px 0 0;
-      font-size: 14px;
-      opacity: .7;
-    }
-
-    .dam-header-actions {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .dam-btn {
-      border: none;
-      border-radius: 9px;
-      padding: 10px 15px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      font-size: 14px;
-      font-weight: 650;
-      cursor: pointer;
-      transition: all .2s ease;
-      white-space: nowrap;
-    }
-
-    .dam-btn:disabled {
-      opacity: .6;
-      cursor: not-allowed;
-    }
-
-    .dam-btn-primary {
-      background: #3182ce;
-      color: white;
-    }
-
-    .dam-btn-primary:hover:not(:disabled) {
-      background: #2563a8;
-      transform: translateY(-1px);
-    }
-
-    .dam-btn-secondary {
-      background: ${isDark ? "#374151" : "#e5e7eb"};
-      color: ${isDark ? "#f3f4f6" : "#1f2937"};
-    }
-
-    .dam-btn-secondary:hover {
-      background: ${isDark ? "#4b5563" : "#d1d5db"};
-    }
-
-    .dam-stats-grid {
-      display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-      gap: 14px;
-      margin-bottom: 22px;
-    }
-
-    .dam-stat-card {
-      min-width: 0;
-      padding: 16px;
-      border-radius: 12px;
-      border: 1px solid ${isDark ? "#374151" : "#e5e7eb"};
-      background: ${isDark ? "#1f2937" : "#ffffff"};
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.04);
-    }
-
-    .dam-stat-icon {
-      width: 43px;
-      height: 43px;
-      flex: 0 0 43px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 11px;
-    }
-
-    .dam-stat-icon.blue {
-      background: #dbeafe;
-      color: #2563eb;
-    }
-
-    .dam-stat-icon.green {
-      background: #dcfce7;
-      color: #16a34a;
-    }
-
-    .dam-stat-icon.purple {
-      background: #ede9fe;
-      color: #7c3aed;
-    }
-
-    .dam-stat-icon.orange {
-      background: #ffedd5;
-      color: #ea580c;
-    }
-
-    .dam-stat-icon.teal {
-      background: #ccfbf1;
-      color: #0f766e;
-    }
-
-    .dam-stat-icon.red {
-      background: #fee2e2;
-      color: #dc2626;
-    }
-
-    .dam-stat-card span {
-      display: block;
-      font-size: 11px;
-      opacity: .65;
-      margin-bottom: 4px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .dam-stat-card strong {
-      display: block;
-      font-size: 23px;
-      line-height: 1;
-    }
-
-    .dam-toolbar {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      margin-bottom: 18px;
-    }
-
-    .dam-search {
-      flex: 1;
-      min-width: 220px;
-      display: flex;
-      align-items: center;
-      gap: 9px;
-      padding: 10px 13px;
-      border-radius: 9px;
-      border: 1px solid ${isDark ? "#374151" : "#d1d5db"};
-      background: ${isDark ? "#1f2937" : "#ffffff"};
-    }
-
-    .dam-search svg {
-      opacity: .6;
-      flex: 0 0 auto;
-    }
-
-    .dam-search input {
-      flex: 1;
-      min-width: 0;
-      border: none;
-      outline: none;
-      background: transparent;
-      color: inherit;
-      font-size: 14px;
-    }
-
-    .dam-search-clear {
-      border: none;
-      background: transparent;
-      color: inherit;
-      opacity: .6;
-      cursor: pointer;
-      padding: 2px;
-    }
-
-    .dam-filter {
-      min-width: 150px;
-      padding: 10px 13px;
-      border-radius: 9px;
-      border: 1px solid ${isDark ? "#374151" : "#d1d5db"};
-      background: ${isDark ? "#1f2937" : "#ffffff"};
-      color: inherit;
-      outline: none;
-      cursor: pointer;
-    }
-
-    .dam-table-wrapper {
-      overflow-x: auto;
-      border-radius: 12px;
-      border: 1px solid ${isDark ? "#374151" : "#e5e7eb"};
-      background: ${isDark ? "#1f2937" : "#ffffff"};
-      box-shadow: 0 2px 10px rgba(0,0,0,.04);
-    }
-
-    .dam-table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 1100px;
-    }
-
-    .dam-table thead {
-      background: ${isDark ? "#111827" : "#f8fafc"};
-    }
-
-    .dam-table th {
-      padding: 13px 14px;
-      text-align: left;
-      font-size: 12px;
-      font-weight: 750;
-      text-transform: uppercase;
-      letter-spacing: .3px;
-      color: ${isDark ? "#cbd5e1" : "#64748b"};
-      border-bottom: 1px solid ${isDark ? "#374151" : "#e5e7eb"};
-      white-space: nowrap;
-    }
-
-    .dam-table td {
-      padding: 14px;
-      border-bottom: 1px solid ${isDark ? "#374151" : "#edf0f3"};
-      vertical-align: middle;
-      font-size: 13px;
-    }
-
-    .dam-table tbody tr {
-      transition: background .15s ease;
-    }
-
-    .dam-table tbody tr:hover {
-      background: ${isDark ? "#263244" : "#f8fafc"};
-    }
-
-    .dam-department-cell {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      min-width: 210px;
-    }
-
-    .dam-department-avatar {
-      width: 38px;
-      height: 38px;
-      border-radius: 10px;
-      background: ${isDark ? "#1e40af" : "#dbeafe"};
-      color: ${isDark ? "#bfdbfe" : "#2563eb"};
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex: 0 0 38px;
-    }
-
-    .dam-department-cell strong,
-    .dam-head-cell strong,
-    .dam-user-list-item strong,
-    .dam-asset-item strong {
-      display: block;
-      font-weight: 700;
-    }
-
-    .dam-department-cell small,
-    .dam-head-cell small,
-    .dam-user-list-item small,
-    .dam-asset-item small {
-      display: block;
-      margin-top: 3px;
-      font-size: 11px;
-      opacity: .6;
-      max-width: 210px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .dam-code {
-      display: inline-flex;
-      align-items: center;
-      padding: 4px 8px;
-      border-radius: 6px;
-      background: ${isDark ? "#374151" : "#f1f5f9"};
-      font-weight: 700;
-      font-size: 11px;
-      letter-spacing: .4px;
-    }
-
-    .dam-head-cell {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 160px;
-    }
-
-    .dam-user-avatar {
-      width: 34px;
-      height: 34px;
-      border-radius: 50%;
-      background: #3182ce;
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 13px;
-      font-weight: 750;
-      flex: 0 0 34px;
-    }
-
-    .dam-muted {
-      opacity: .55;
-      font-size: 12px;
-    }
-
-    .dam-count {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      font-weight: 700;
-    }
-
-    .dam-location {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      max-width: 170px;
-    }
-
-    .dam-location svg {
-      color: #3182ce;
-      flex: 0 0 auto;
-    }
-
-    .dam-location span {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .dam-status {
-      display: inline-flex;
-      align-items: center;
-      padding: 4px 8px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 750;
-    }
-
-    .dam-status.active {
-      background: #dcfce7;
-      color: #166534;
-    }
-
-    .dam-status.inactive {
-      background: #fee2e2;
-      color: #991b1b;
-    }
-
-    .dam-actions {
-      display: flex;
-      gap: 6px;
-    }
-
-    .dam-action {
-      width: 31px;
-      height: 31px;
-      border: none;
-      border-radius: 7px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all .15s ease;
-    }
-
-    .dam-action.view {
-      background: ${isDark ? "#164e63" : "#cffafe"};
-      color: ${isDark ? "#67e8f9" : "#0e7490"};
-    }
-
-    .dam-action.edit {
-      background: ${isDark ? "#1e3a8a" : "#dbeafe"};
-      color: ${isDark ? "#93c5fd" : "#2563eb"};
-    }
-
-    .dam-action.delete {
-      background: ${isDark ? "#7f1d1d" : "#fee2e2"};
-      color: ${isDark ? "#fca5a5" : "#dc2626"};
-    }
-
-    .dam-action:hover {
-      transform: translateY(-1px);
-      filter: brightness(.95);
-    }
-
-    .dam-empty {
-      min-height: 400px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      gap: 10px;
-      border: 1px dashed ${isDark ? "#4b5563" : "#cbd5e1"};
-      border-radius: 12px;
-      background: ${isDark ? "#1f2937" : "#ffffff"};
-    }
-
-    .dam-empty > svg {
-      opacity: .35;
-    }
-
-    .dam-empty h3 {
-      margin: 4px 0 0;
-      font-size: 19px;
-    }
-
-    .dam-empty p {
-      margin: 0 0 10px;
-      opacity: .65;
-      font-size: 14px;
-    }
-
-    .dam-loading {
-      min-height: 70vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 15px;
-    }
-
-    .dam-spinner {
-      width: 42px;
-      height: 42px;
-      border-radius: 50%;
-      border: 4px solid ${isDark ? "#374151" : "#e5e7eb"};
-      border-top-color: #3182ce;
-      animation: dam-spin .8s linear infinite;
-    }
-
-    .dam-loading p {
-      opacity: .65;
-    }
-
-    .dam-spin {
-      animation: dam-spin .8s linear infinite;
-    }
-
-    @keyframes dam-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    .dam-modal-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 2000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      background: rgba(15, 23, 42, .65);
-      backdrop-filter: blur(3px);
-    }
-
-    .dam-modal {
-      width: min(760px, 100%);
-      max-height: 92vh;
-      overflow-y: auto;
-      border-radius: 14px;
-      background: ${isDark ? "#1f2937" : "#ffffff"};
-      color: ${isDark ? "#f3f4f6" : "#1f2937"};
-      box-shadow: 0 25px 70px rgba(0,0,0,.25);
-    }
-
-    .dam-details-modal {
-      width: min(900px, 100%);
-    }
-
-    .dam-modal-header {
-      position: sticky;
-      top: 0;
-      z-index: 2;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 20px;
-      padding: 20px 22px;
-      background: ${isDark ? "#1f2937" : "#ffffff"};
-      border-bottom: 1px solid ${isDark ? "#374151" : "#e5e7eb"};
-    }
-
-    .dam-modal-header h2 {
-      margin: 0;
-      font-size: 21px;
-    }
-
-    .dam-modal-header p {
-      margin: 4px 0 0;
-      opacity: .6;
-      font-size: 13px;
-    }
-
-    .dam-close {
-      width: 34px;
-      height: 34px;
-      border: none;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      background: ${isDark ? "#374151" : "#f1f5f9"};
-      color: inherit;
-    }
-
-    .dam-close:hover {
-      background: #fee2e2;
-      color: #dc2626;
-    }
-
-    .dam-modal-body {
-      padding: 22px;
-    }
-
-    .dam-form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-
-    .dam-form-group {
-      min-width: 0;
-    }
-
-    .dam-form-group.dam-full {
-      grid-column: 1 / -1;
-    }
-
-    .dam-form-group label {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      margin-bottom: 7px;
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    .dam-form-group label span {
-      color: #dc2626;
-    }
-
-    .dam-form-group input,
-    .dam-form-group select,
-    .dam-form-group textarea {
-      box-sizing: border-box;
-      width: 100%;
-      padding: 10px 11px;
-      border-radius: 8px;
-      border: 1px solid ${isDark ? "#4b5563" : "#cbd5e1"};
-      background: ${isDark ? "#111827" : "#ffffff"};
-      color: inherit;
-      outline: none;
-      font-family: inherit;
-      font-size: 13px;
-      transition: border-color .15s ease, box-shadow .15s ease;
-    }
-
-    .dam-form-group textarea {
-      resize: vertical;
-    }
-
-    .dam-form-group input:focus,
-    .dam-form-group select:focus,
-    .dam-form-group textarea:focus {
-      border-color: #3182ce;
-      box-shadow: 0 0 0 3px rgba(49,130,206,.12);
-    }
-
-    .dam-form-group input.error,
-    .dam-form-group select.error,
-    .dam-form-group textarea.error {
-      border-color: #ef4444;
-    }
-
-    .dam-error {
-      display: block;
-      margin-top: 5px;
-      color: #ef4444;
-      font-size: 11px;
-    }
-
-    .dam-modal-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      padding: 18px 22px;
-      border-top: 1px solid ${isDark ? "#374151" : "#e5e7eb"};
-    }
-
-    .dam-details-body {
-      padding: 22px;
-    }
-
-    .dam-detail-cards {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-bottom: 22px;
-    }
-
-    .dam-detail-card {
-      padding: 15px;
-      border-radius: 10px;
-      border: 1px solid ${isDark ? "#374151" : "#e5e7eb"};
-      background: ${isDark ? "#111827" : "#f8fafc"};
-      display: flex;
-      align-items: center;
-      gap: 11px;
-    }
-
-    .dam-detail-card > svg {
-      color: #3182ce;
-    }
-
-    .dam-detail-card span {
-      display: block;
-      font-size: 11px;
-      opacity: .6;
-    }
-
-    .dam-detail-card strong {
-      display: block;
-      margin-top: 3px;
-      font-size: 14px;
-    }
-
-    .dam-detail-section {
-      margin-top: 22px;
-    }
-
-    .dam-detail-section h3 {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      margin: 0 0 12px;
-      font-size: 15px;
-    }
-
-    .dam-info-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1px;
-      overflow: hidden;
-      border: 1px solid ${isDark ? "#374151" : "#e5e7eb"};
-      border-radius: 10px;
-      background: ${isDark ? "#374151" : "#e5e7eb"};
-    }
-
-    .dam-info-grid > div {
-      padding: 13px;
-      background: ${isDark ? "#1f2937" : "#ffffff"};
-    }
-
-    .dam-info-grid span {
-      display: block;
-      margin-bottom: 4px;
-      font-size: 11px;
-      opacity: .6;
-    }
-
-    .dam-info-grid strong {
-      font-size: 13px;
-    }
-
-    .dam-user-list,
-    .dam-assets-list {
-      display: flex;
-      flex-direction: column;
-      gap: 7px;
-    }
-
-    .dam-user-list-item,
-    .dam-asset-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px;
-      border-radius: 9px;
-      border: 1px solid ${isDark ? "#374151" : "#e5e7eb"};
-      background: ${isDark ? "#111827" : "#ffffff"};
-    }
-
-    .dam-user-list-item > div:nth-child(2),
-    .dam-asset-item > div {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .dam-role {
-      padding: 4px 8px;
-      border-radius: 999px;
-      background: ${isDark ? "#374151" : "#f1f5f9"};
-      font-size: 10px;
-      font-weight: 700;
-    }
-
-    .dam-asset-item > svg {
-      color: #3182ce;
-      flex: 0 0 auto;
-    }
-
-    .dam-asset-item > span {
-      font-size: 11px;
-      opacity: .7;
-    }
-
-    .dam-no-data {
-      padding: 25px;
-      text-align: center;
-      border: 1px dashed ${isDark ? "#4b5563" : "#cbd5e1"};
-      border-radius: 9px;
-      opacity: .6;
-      font-size: 13px;
-    }
-
-    @media (max-width: 1250px) {
-      .dam-stats-grid {
-        grid-template-columns: repeat(3, 1fr);
-      }
-    }
-
-    @media (max-width: 850px) {
-      .dam-container {
-        padding: 16px;
-      }
-
-      .dam-header {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .dam-header-actions {
-        width: 100%;
-      }
-
-      .dam-header-actions .dam-btn {
-        flex: 1;
-      }
-
-      .dam-form-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .dam-form-group.dam-full {
-        grid-column: auto;
-      }
-
-      .dam-detail-cards {
-        grid-template-columns: 1fr;
-      }
-
-      .dam-info-grid {
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-
-    @media (max-width: 600px) {
-      .dam-stats-grid {
-        grid-template-columns: 1fr 1fr;
-      }
-
-      .dam-toolbar {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      .dam-filter {
-        width: 100%;
-      }
-
-      .dam-header h1 {
-        font-size: 21px;
-      }
-
-      .dam-title-icon {
-        width: 44px;
-        height: 44px;
-      }
-
-      .dam-modal-overlay {
-        padding: 8px;
-      }
-
-      .dam-modal {
-        max-height: 96vh;
-      }
-
-      .dam-info-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .dam-modal-actions {
-        flex-direction: column-reverse;
-      }
-
-      .dam-modal-actions .dam-btn {
-        width: 100%;
-      }
-    }
-
-    @media (max-width: 420px) {
-      .dam-stats-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .dam-header-actions {
-        flex-direction: column;
-      }
-
-      .dam-header-actions .dam-btn {
-        width: 100%;
-      }
-    }
-  `}</style>
-);
-
-/* =========================================================
-   TRANSLATIONS
-========================================================= */
-
-const englishTranslations = {
-  loading: "Loading departments...",
-  departmentManagement: "Department Management",
-  departmentSubtitle:
-    "Manage university departments, heads, users, assets, locations, and operational status.",
-
-  refresh: "Refresh",
-
-  createDepartment: "Create Department",
-  createDepartmentSubtitle:
-    "Add a new university department.",
-
-  editDepartment: "Edit Department",
-
-  totalDepartments: "Total Departments",
-  departmentHeads: "Department Heads",
-  departmentUsers: "Department Users",
-  departmentAssets: "Department Assets",
-  locations: "Locations",
-
-  department: "Department",
-  code: "Code",
-  college: "College",
-  departmentCode: "Department Code",
-  departmentName: "Department Name",
-
-  description: "Description",
-  departmentHead: "Department Head",
-
-  location: "Location",
-  building: "Building",
-  floor: "Floor",
-  room: "Room",
-
-  phone: "Phone",
-  email: "Email",
-
-  status: "Status",
-  active: "Active",
-  inactive: "Inactive",
-
-  users: "Users",
-  assets: "Assets",
-  actions: "Actions",
-
-  searchDepartments: "Search departments...",
-  allStatus: "All Status",
-  allColleges: "All Colleges",
-  selectCollege: "Select college",
-  clearFilters: "Clear Filters",
-
-  noDepartments: "No Departments Found",
-  adjustSearch: "Try adjusting your search or filters.",
-  createFirstDepartment:
-    "Create your first department to get started.",
-
-  noDescription: "No description",
-
-  notAssigned: "Not assigned",
-
-  viewDetails: "View Details",
-  edit: "Edit",
-  delete: "Delete",
-  close: "Close",
-  cancel: "Cancel",
-
-  saving: "Saving...",
-  saveChanges: "Save Changes",
-
-  selectHead: "-- Select Department Head --",
-
-  departmentNamePlaceholder:
-    "e.g. Computer Science and Engineering",
-
-  descriptionPlaceholder:
-    "Enter department description...",
-
-  nameRequired: "Department name is required.",
-  codeRequired: "Department code is required.",
-  descriptionRequired:
-    "Department description is required.",
-
-  invalidDepartment: "Invalid department.",
-
-  createSuccess:
-    "Department created successfully.",
-
-  createFailed:
-    "Failed to create department.",
-
-  updateSuccess:
-    "Department updated successfully.",
-
-  updateFailed:
-    "Failed to update department.",
-
-  deleteSuccess:
-    "Department deleted successfully.",
-
-  deleteFailed:
-    "Failed to delete department.",
-
-  deleteConfirm:
-    "Are you sure you want to delete department",
-
-  refreshed: "Department data refreshed.",
-
-  noDepartmentUsers:
-    "No users assigned to this department.",
-
-  noDepartmentAssets:
-    "No assets assigned to this department.",
-
-  departmentInformation:
-    "Department Information",
-
-  loadFailed:
-    "Failed to load departments.",
-};
-
-const amharicTranslations = {
-  loading: "ዲፓርትመንቶች በመጫን ላይ...",
-  departmentManagement: "የዲፓርትመንት አስተዳደር",
-  departmentSubtitle:
-    "የዩኒቨርሲቲ ዲፓርትመንቶችን፣ ኃላፊዎችን፣ ተጠቃሚዎችን፣ assets፣ አካባቢዎችን እና የሥራ ሁኔታን ያስተዳድሩ።",
-
-  refresh: "አድስ",
-
-  createDepartment: "ዲፓርትመንት ፍጠር",
-  createDepartmentSubtitle:
-    "አዲስ የዩኒቨርሲቲ ዲፓርትመንት ይጨምሩ።",
-
-  editDepartment: "ዲፓርትመንት አርትዕ",
-
-  totalDepartments: "ጠቅላላ ዲፓርትመንቶች",
-  departmentHeads: "የዲፓርትመንት ኃላፊዎች",
-  departmentUsers: "የዲፓርትመንት ተጠቃሚዎች",
-  departmentAssets: "የዲፓርትመንት Assets",
-  locations: "አካባቢዎች",
-
-  department: "ዲፓርትመንት",
-  code: "ኮድ",
-  college: "ኮሌጅ",
-  departmentCode: "የዲፓርትመንት ኮድ",
-  departmentName: "የዲፓርትመንት ስም",
-
-  description: "መግለጫ",
-  departmentHead: "የዲፓርትመንት ኃላፊ",
-
-  location: "አካባቢ",
-  building: "ህንፃ",
-  floor: "ፎቅ",
-  room: "ክፍል",
-
-  phone: "ስልክ",
-  email: "ኢሜይል",
-
-  status: "ሁኔታ",
-  active: "ንቁ",
-  inactive: "የተዘጋ",
-
-  users: "ተጠቃሚዎች",
-  assets: "Assets",
-  actions: "ተግባራት",
-
-  searchDepartments:
-    "ዲፓርትመንቶችን ይፈልጉ...",
-
-  allStatus: "ሁሉም ሁኔታ",
-  allColleges: "ሁሉም ኮሌጆች",
-  selectCollege: "ኮሌጅ ይምረጡ",
-  clearFilters: "ማጣሪያዎችን አጽዳ",
-
-  noDepartments:
-    "ምንም ዲፓርትመንት አልተገኘም",
-
-  adjustSearch:
-    "የፍለጋ ቃሉን ወይም filter ያስተካክሉ።",
-
-  createFirstDepartment:
-    "መጀመሪያ ዲፓርትመንት ይፍጠሩ።",
-
-  noDescription: "መግለጫ የለም",
-
-  notAssigned: "አልተመደበም",
-
-  viewDetails: "ዝርዝር ይመልከቱ",
-  edit: "አርትዕ",
-  delete: "ሰርዝ",
-  close: "ዝጋ",
-  cancel: "ሰርዝ",
-
-  saving: "በማስቀመጥ ላይ...",
-  saveChanges: "ለውጦችን አስቀምጥ",
-
-  selectHead:
-    "-- የዲፓርትመንት ኃላፊ ይምረጡ --",
-
-  departmentNamePlaceholder:
-    "ለምሳሌ Computer Science and Engineering",
-
-  descriptionPlaceholder:
-    "የዲፓርትመንቱን መግለጫ ያስገቡ...",
-
-  nameRequired:
-    "የዲፓርትመንት ስም ያስፈልጋል።",
-
-  codeRequired:
-    "የዲፓርትመንት ኮድ ያስፈልጋል።",
-
-  descriptionRequired:
-    "የዲፓርትመንት መግለጫ ያስፈልጋል።",
-
-  invalidDepartment:
-    "የዲፓርትመንት መረጃ ትክክል አይደለም።",
-
-  createSuccess:
-    "ዲፓርትመንቱ በተሳካ ሁኔታ ተፈጥሯል።",
-
-  createFailed:
-    "ዲፓርትመንት መፍጠር አልተቻለም።",
-
-  updateSuccess:
-    "ዲፓርትመንቱ በተሳካ ሁኔታ ተሻሽሏል።",
-
-  updateFailed:
-    "ዲፓርትመንት ማሻሻል አልተቻለም።",
-
-  deleteSuccess:
-    "ዲፓርትመንቱ በተሳካ ሁኔታ ተሰርዟል።",
-
-  deleteFailed:
-    "ዲፓርትመንት መሰረዝ አልተቻለም።",
-
-  deleteConfirm:
-    "ይህን ዲፓርትመንት መሰረዝ ይፈልጋሉ",
-
-  refreshed:
-    "የዲፓርትመንት መረጃ ታድሷል።",
-
-  noDepartmentUsers:
-    "በዚህ ዲፓርትመንት ውስጥ ምንም ተጠቃሚ አልተመደበም።",
-
-  noDepartmentAssets:
-    "ለዚህ ዲፓርትመንት ምንም Asset አልተመደበም።",
-
-  departmentInformation:
-    "የዲፓርትመንት መረጃ",
-
-  loadFailed:
-    "ዲፓርትመንቶችን መጫን አልተቻለም።",
-};
-
-export default AdminDepartmentManagement;

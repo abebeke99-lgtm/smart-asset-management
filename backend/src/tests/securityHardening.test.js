@@ -2,8 +2,32 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { getJwtSecret } = require('../config/jwt');
 
 const read = (file) => fs.readFileSync(path.join(__dirname, file), 'utf8');
+
+test('production JWT signing fails fast without JWT_SECRET and uses only its environment value', () => {
+  const previousNodeEnvironment = process.env.NODE_ENV;
+  const previousJwtSecret = process.env.JWT_SECRET;
+  try {
+    process.env.NODE_ENV = 'production';
+    delete process.env.JWT_SECRET;
+    assert.throws(getJwtSecret, /JWT_SECRET must be configured in production/);
+    process.env.JWT_SECRET = 'test-only-env-secret';
+    assert.equal(getJwtSecret(), 'test-only-env-secret');
+  } finally {
+    if (previousNodeEnvironment === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnvironment;
+    if (previousJwtSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = previousJwtSecret;
+  }
+});
+
+test('unused legacy MySQL server and its frontend script are removed', () => {
+  const frontendPackage = JSON.parse(read('../../../frontend/package.json'));
+  assert.equal(frontendPackage.scripts.mysql, undefined);
+  assert.equal(fs.existsSync(path.join(__dirname, '../../../frontend/server.mysql.js')), false);
+});
 
 test('canonical administrator API mount requires JWT authentication and admin role', () => {
   const appSource = read('../app.js');

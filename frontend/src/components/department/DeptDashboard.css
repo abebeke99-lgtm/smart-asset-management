@@ -1,10 +1,13 @@
+/* Dashboard tokens resolve to the shared design system
+   (src/styles/theme.css). Nothing here holds a raw hex. */
 .dept-dashboard {
-  --dashboard-bg: #f8fafc;
-  --dashboard-navy: #0f172a;
-  --dashboard-blue: #0ea5e9;
-  --dashboard-secondary: #2563eb;
-  --dashboard-border: #e2e8f0;
-  --dashboard-muted: #64748b;
+  --dashboard-bg: var(--color-background);
+  --dashboard-navy: var(--color-text-primary);
+  --dashboard-blue: var(--color-primary);
+  --dashboard-secondary: var(--color-primary-hover);
+  --dashboard-border: var(--color-border);
+  --dashboard-muted: var(--color-text-muted);
+  --dashboard-muted-on-page: var(--color-text-secondary-on-page);
   box-sizing: border-box;
   width: 100%;
   color: var(--dashboard-navy);
@@ -35,7 +38,7 @@
 }
 
 .dept-dashboard__subtitle {
-  color: var(--dashboard-muted) !important;
+  color: var(--color-text-secondary-on-page) !important;
 }
 
 .dept-dashboard__stats,
@@ -55,7 +58,7 @@
 .dept-dashboard__stat,
 .dept-dashboard__card {
   border: 1px solid var(--dashboard-border) !important;
-  box-shadow: 0 1px 2px rgb(15 23 42 / 4%) !important;
+  box-shadow: var(--shadow-dashboard-card) !important;
 }
 
 .dept-dashboard__stat {
@@ -66,19 +69,19 @@
 .dept-dashboard__stat:hover,
 .dept-dashboard__stat:focus-visible {
   border-color: var(--dashboard-blue) !important;
-  box-shadow: 0 8px 20px rgb(15 23 42 / 8%) !important;
+  box-shadow: var(--shadow-dashboard-card-hover) !important;
   transform: translateY(-2px);
   outline: none;
 }
 
 .dept-dashboard__stat:focus-visible {
-  outline: 3px solid rgb(14 165 233 / 28%);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 .dept-dashboard__card {
   min-width: 0;
-  background: #fff !important;
+  background: var(--color-surface) !important;
   border-radius: 10px !important;
 }
 
@@ -114,7 +117,7 @@
 .dept-dashboard__quick-actions button:focus-visible {
   filter: brightness(0.96);
   transform: translateY(-1px);
-  outline: 3px solid rgb(14 165 233 / 24%);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 

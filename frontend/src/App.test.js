@@ -160,6 +160,12 @@ describe('Maintenance coordinator route wiring', () => {
       expect(appSource).toContain(`path: '${route}'`);
     }
   });
+
+  it('routes technical testing separately from quality-control review', () => {
+    expect(appSource).toContain('<Route path="testing-quality" element={<MaintTechnicalTesting />} />');
+    expect(appSource).toContain('<Route path="testing" element={<MaintTechnicalTesting />} />');
+    expect(appSource).toContain('<Route path="quality-control" element={<MaintTestingQuality />} />');
+  });
 });
 
 describe('Login page navigation', () => {

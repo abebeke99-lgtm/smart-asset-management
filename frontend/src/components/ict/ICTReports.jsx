@@ -1,220 +1,2423 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, CircleAlert, Download, FileBarChart, Filter, Package, Radio, RefreshCw, RotateCcw, Search, SlidersHorizontal, UserCheck, Wrench } from 'lucide-react';
-import { toast } from 'react-toastify';
-import { useLanguage } from '../../contexts/UiContext';
-import { getApiErrorMessage } from '../../services/apiClient';
-import { exportIctReport, getIctReports } from '../../services/ictReportsService';
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Eye,
+  Filter,
+  History,
+  MapPin,
+  Monitor,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  User,
+  Wrench,
+  X,
+  CheckCircle2,
+  Clock3,
+  CircleDollarSign,
+} from "lucide-react";
 
-const initialFilters = { search: '', category: '', status: '', priority: '', condition: '', location: '', departmentId: '', dateFrom: '', dateTo: '', sortBy: 'updatedAt', sortOrder: 'DESC' };
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
-const COPY = {
-  en: {
-    title: 'ICT Reports', description: 'Generate and export reports from authorized ICT records.', controls: 'Report Controls', reportType: 'Report Type', search: 'Search', searchAssets: 'Asset, serial, or location', searchLicenses: 'Software, vendor, or license number', searchSupport: 'Ticket, requester, or asset', searchIncidents: 'Incident, title, reporter, or asset',
-    dateFrom: 'From Date', dateTo: 'To Date', expiryFrom: 'Expiration From', expiryTo: 'Expiration To', reportedFrom: 'Reported From', reportedTo: 'Reported To', category: 'Category', status: 'Status', priority: 'Priority', condition: 'Condition', department: 'Department', location: 'Location', rows: 'Rows', all: 'All', reset: 'Reset Filters', refresh: 'Refresh', export: 'Export CSV', exporting: 'Exporting...', exported: 'CSV report exported.', generated: 'Generated', records: 'records', serverFilters: 'Filters are applied on the server',
-    generating: 'Generating report...', noData: 'No data found', noMatches: 'No records match the selected filters.', errorGenerate: 'Unable to generate the report.', errorExport: 'Unable to export the report.', retry: 'Retry', page: 'Page', of: 'of', previous: 'Previous', next: 'Next', reportSummary: 'Report summary', results: 'Report results', tableCaption: 'Report records',
-    inventory: 'Asset Inventory Report', equipment: 'ICT Equipment Report', network: 'Network Equipment Report', licenses: 'Software License Report', support: 'ICT Support Report', incidents: 'Incident Report', statusReport: 'Asset Status Report', assignments: 'Asset Assignment Report', maintenance: 'Maintenance Report', rfid: 'RFID Tracking Report',
-    assetTag: 'Asset Tag', assetName: 'Asset Name', equipmentName: 'Equipment', device: 'Device', type: 'Type', name: 'Name', manufacturer: 'Manufacturer', model: 'Model', serial: 'Serial Number', specifications: 'Specifications', categoryLabel: 'Category', conditionLabel: 'Condition', departmentLabel: 'Department', locationLabel: 'Location', assignedTo: 'Assigned To', assigned: 'Assigned', purchaseDate: 'Purchase Date', statusLabel: 'Status', count: 'Records', request: 'Request', titleLabel: 'Title', priorityLabel: 'Priority', requester: 'Requester', asset: 'Asset', created: 'Created', completed: 'Completed', resolution: 'Resolution', incident: 'Incident', reporter: 'Reporter', reported: 'Reported', resolved: 'Resolved', history: 'History', software: 'Software', vendor: 'Vendor', version: 'Version', licenseType: 'License Type', expiration: 'Expiration', licensesCount: 'Licenses', inUse: 'In Use', assignedDevices: 'Assigned Devices', assignedUsers: 'Assigned Users', totalAssets: 'Total Assets', totalEquipment: 'Total Equipment', networkDevices: 'Network Devices', totalLicenses: 'Total Licenses', totalRequests: 'Total Requests', totalIncidents: 'Total Incidents', active: 'Active', available: 'Available', underMaintenance: 'Under Maintenance', expiringSoon: 'Expiring Soon', expired: 'Expired', open: 'Open', resolvedCount: 'Resolved', closed: 'Closed', critical: 'Critical', totalAssignments: 'Total Assignments', returned: 'Returned', totalMaintenance: 'Total Maintenance', totalScans: 'Total Scans', uniqueAssets: 'Unique Assets', college: 'Authorized college',
-  },
-  am: {
-    title: 'የአይሲቲ ሪፖርቶች', description: 'ከተፈቀዱ የአይሲቲ መዝገቦች ሪፖርቶችን ይፍጠሩ እና ያውርዱ።', controls: 'የሪፖርት መቆጣጠሪያዎች', reportType: 'የሪፖርት አይነት', search: 'ፈልግ', searchAssets: 'ንብረት፣ ተከታታይ ወይም ቦታ', searchLicenses: 'ሶፍትዌር፣ አቅራቢ ወይም ፈቃድ ቁጥር', searchSupport: 'ጥያቄ፣ ጠያቂ ወይም ንብረት', searchIncidents: 'ክስተት፣ ርዕስ፣ ዘጋቢ ወይም ንብረት',
-    dateFrom: 'ከቀን', dateTo: 'እስከ ቀን', expiryFrom: 'ከማብቂያ ቀን', expiryTo: 'እስከ ማብቂያ ቀን', reportedFrom: 'ከተዘገበበት ቀን', reportedTo: 'እስከ ተዘገበበት ቀን', category: 'ምድብ', status: 'ሁኔታ', priority: 'ቅድሚያ', condition: 'የንብረት ሁኔታ', department: 'የሥራ ክፍል', location: 'ቦታ', rows: 'ረድፎች', all: 'ሁሉም', reset: 'ማጣሪያዎችን አጽዳ', refresh: 'አድስ', export: 'CSV አውርድ', exporting: 'በማውረድ ላይ...', exported: 'የCSV ሪፖርት ወርዷል።', generated: 'የተፈጠረበት', records: 'መዝገቦች', serverFilters: 'ማጣሪያዎቹ በሰርቨር ላይ ይተገበራሉ',
-    generating: 'ሪፖርቱ በመፍጠር ላይ...', noData: 'መረጃ አልተገኘም', noMatches: 'ከተመረጡት ማጣሪያዎች ጋር የሚዛመድ መዝገብ የለም።', errorGenerate: 'ሪፖርቱን ማመንጨት አልተቻለም።', errorExport: 'ሪፖርቱን ማውረድ አልተቻለም።', retry: 'እንደገና ሞክር', page: 'ገጽ', of: 'ከ', previous: 'ቀዳሚ', next: 'ቀጣይ', reportSummary: 'የሪፖርት ማጠቃለያ', results: 'የሪፖርት ውጤቶች', tableCaption: 'የሪፖርት መዝገቦች',
-    inventory: 'የንብረት ክምችት ሪፖርት', equipment: 'የአይሲቲ መሣሪያ ሪፖርት', network: 'የኔትወርክ መሣሪያ ሪፖርት', licenses: 'የሶፍትዌር ፈቃድ ሪፖርት', support: 'የአይሲቲ ድጋፍ ሪፖርት', incidents: 'የክስተት ሪፖርት', statusReport: 'የንብረት ሁኔታ ሪፖርት', assignments: 'የንብረት ምደባ ሪፖርት', maintenance: 'የጥገና ሪፖርት', rfid: 'የRFID ክትትል ሪፖርት',
-    assetTag: 'የንብረት መለያ', assetName: 'የንብረት ስም', equipmentName: 'መሣሪያ', device: 'መሣሪያ', type: 'አይነት', name: 'ስም', manufacturer: 'አምራች', model: 'ሞዴል', serial: 'ተከታታይ ቁጥር', specifications: 'ዝርዝር መግለጫ', categoryLabel: 'ምድብ', conditionLabel: 'ሁኔታ', departmentLabel: 'የሥራ ክፍል', locationLabel: 'ቦታ', assignedTo: 'የተመደበለት', assigned: 'የተመደቡ', purchaseDate: 'የግዢ ቀን', statusLabel: 'ሁኔታ', count: 'መዝገቦች', request: 'ጥያቄ', titleLabel: 'ርዕስ', priorityLabel: 'ቅድሚያ', requester: 'ጠያቂ', asset: 'ንብረት', created: 'የተፈጠረበት', completed: 'የተጠናቀቀበት', resolution: 'መፍትሄ', incident: 'ክስተት', reporter: 'ዘጋቢ', reported: 'የተዘገበበት', resolved: 'የተፈታበት', history: 'ታሪክ', software: 'ሶፍትዌር', vendor: 'አቅራቢ', version: 'ስሪት', licenseType: 'የፈቃድ አይነት', expiration: 'የሚያበቃበት', licensesCount: 'ፈቃዶች', inUse: 'በአገልግሎት ላይ', assignedDevices: 'የተመደቡ መሣሪያዎች', assignedUsers: 'የተመደቡ ተጠቃሚዎች', totalAssets: 'ጠቅላላ ንብረቶች', totalEquipment: 'ጠቅላላ መሣሪያዎች', networkDevices: 'የኔትወርክ መሣሪያዎች', totalLicenses: 'ጠቅላላ ፈቃዶች', totalRequests: 'ጠቅላላ ጥያቄዎች', totalIncidents: 'ጠቅላላ ክስተቶች', active: 'ንቁ', available: 'ዝግጁ', underMaintenance: 'በጥገና ላይ', expiringSoon: 'በቅርቡ የሚያበቃ', expired: 'ያበቃ', open: 'ክፍት', resolvedCount: 'የተፈቱ', closed: 'የተዘጉ', critical: 'አስቸኳይ', totalAssignments: 'ጠቅላላ ምደባዎች', returned: 'የተመለሱ', totalMaintenance: 'ጠቅላላ ጥገናዎች', totalScans: 'ጠቅላላ ቅኝቶች', uniqueAssets: 'ልዩ ንብረቶች', college: 'የተፈቀደ ኮሌጅ',
-  },
+const PAGE_SIZE = 10;
+
+const STATUS_OPTIONS = [
+  "Reported",
+  "Diagnosed",
+  "In Repair",
+  "Waiting for Parts",
+  "Completed",
+  "Returned",
+  "Cancelled",
+];
+
+const PRIORITY_OPTIONS = [
+  "Low",
+  "Medium",
+  "High",
+  "Critical",
+];
+
+const REPAIR_TYPES = [
+  "Hardware Repair",
+  "Software Repair",
+  "Network Repair",
+  "Printer Repair",
+  "Peripheral Repair",
+  "Electrical Repair",
+  "Other",
+];
+
+const initialForm = {
+  repairNumber: "",
+  assetTag: "",
+  assetName: "",
+  assetCategory: "",
+  serialNumber: "",
+  repairType: "Hardware Repair",
+  priority: "Medium",
+  status: "Reported",
+  reportedBy: "",
+  assignedTechnician: "",
+  department: "",
+  location: "",
+  vendor: "",
+  dateReported: "",
+  diagnosisDate: "",
+  repairStartDate: "",
+  completionDate: "",
+  returnDate: "",
+  estimatedCost: "",
+  actualCost: "",
+  downtimeHours: "",
+  warrantyStatus: "Unknown",
+  issueDescription: "",
+  diagnosis: "",
+  repairAction: "",
+  partsReplaced: "",
+  rootCause: "",
+  recommendations: "",
+  notes: "",
 };
 
-const getReportTypes = (t) => ({
-  inventory: { label: t.inventory, icon: Package },
-  equipment: { label: t.equipment, icon: Package },
-  network: { label: t.network, icon: Radio },
-  'software-licenses': { label: t.licenses, icon: FileBarChart },
-  support: { label: t.support, icon: Wrench },
-  incidents: { label: t.incidents, icon: Radio },
-  status: { label: t.statusReport, icon: FileBarChart },
-  assignments: { label: t.assignments, icon: UserCheck },
-  maintenance: { label: t.maintenance, icon: Wrench },
-  rfid: { label: t.rfid, icon: Radio },
-});
+async function apiRequest(url, options = {}) {
+  const response = await fetch(`${API_BASE_URL}${url}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
 
-const columnsFor = (type, t) => ({
-  inventory: [['assetTag', t.assetTag], ['name', t.assetName], ['category', t.categoryLabel], ['serialNumber', t.serial], ['status', t.statusLabel], ['condition', t.conditionLabel], ['department', t.departmentLabel], ['location', t.locationLabel], ['assignedTo', t.assignedTo], ['purchaseDate', t.purchaseDate]],
-  equipment: [['assetTag', t.assetTag], ['name', t.equipmentName], ['category', t.categoryLabel], ['manufacturer', t.manufacturer], ['model', t.model], ['serialNumber', t.serial], ['status', t.statusLabel], ['condition', t.conditionLabel], ['department', t.departmentLabel], ['location', t.locationLabel], ['assignedTo', t.assignedTo]],
-  network: [['assetTag', t.assetTag], ['name', t.device], ['category', t.type], ['manufacturer', t.manufacturer], ['model', t.model], ['serialNumber', t.serial], ['specifications', t.specifications], ['status', t.statusLabel], ['condition', t.conditionLabel], ['department', t.departmentLabel], ['location', t.locationLabel], ['assignedTo', t.assignedTo]],
-  'software-licenses': [['softwareName', t.software], ['vendor', t.vendor], ['version', t.version], ['licenseType', t.licenseType], ['status', t.statusLabel], ['expiryDate', t.expiration], ['quantity', t.licensesCount], ['usedQuantity', t.inUse], ['assignedDevices', t.assignedDevices], ['assignedUsers', t.assignedUsers]],
-  support: [['ticketNumber', t.request], ['title', t.titleLabel], ['category', t.categoryLabel], ['priority', t.priorityLabel], ['status', t.statusLabel], ['requester', t.requester], ['assignedTo', t.assignedTo], ['asset', t.asset], ['department', t.departmentLabel], ['createdAt', t.created], ['completedAt', t.completed], ['resolution', t.resolution]],
-  incidents: [['incidentNumber', t.incident], ['title', t.titleLabel], ['category', t.categoryLabel], ['status', t.statusLabel], ['priority', t.priorityLabel], ['reporter', t.reporter], ['assignedTo', t.assignedTo], ['asset', t.asset], ['department', t.departmentLabel], ['reportedAt', t.reported], ['resolvedAt', t.resolved], ['resolution', t.resolution], ['history', t.history]],
-  status: [['status', t.statusLabel], ['count', t.count]],
-  assignments: [['assetTag', t.assetTag], ['asset', t.asset], ['assignedTo', t.assignedTo], ['department', t.departmentLabel], ['assignedDate', t.created], ['status', t.statusLabel], ['location', t.locationLabel]],
-  maintenance: [['assetTag', t.assetTag], ['asset', t.asset], ['title', t.titleLabel], ['status', t.statusLabel], ['priority', t.priorityLabel], ['reportedDate', t.reported], ['completedDate', t.completed], ['technician', t.assignedTo]],
-  rfid: [['assetTag', t.assetTag], ['asset', t.asset], ['tag', 'RFID'], ['action', t.type], ['location', t.locationLabel], ['readerId', t.device], ['detectedAt', t.reported]],
-}[type] || []);
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
 
-const summariesFor = (type, t) => ({
-  inventory: [['totalAssets', t.totalAssets], ['assigned', t.assigned], ['available', t.available], ['underMaintenance', t.underMaintenance]],
-  equipment: [['totalEquipment', t.totalEquipment], ['assigned', t.assigned], ['available', t.available], ['underMaintenance', t.underMaintenance]],
-  network: [['totalNetworkEquipment', t.networkDevices], ['assigned', t.assigned], ['available', t.available], ['underMaintenance', t.underMaintenance]],
-  'software-licenses': [['totalLicenses', t.totalLicenses], ['active', t.active], ['expiringSoon', t.expiringSoon], ['expired', t.expired]],
-  support: [['totalRequests', t.totalRequests], ['active', t.active], ['resolved', t.resolvedCount], ['closed', t.closed]],
-  incidents: [['totalIncidents', t.totalIncidents], ['open', t.open], ['resolved', t.resolvedCount], ['critical', t.critical]],
-  assignments: [['totalAssignments', t.totalAssignments], ['active', t.active], ['returned', t.returned]],
-  maintenance: [['totalMaintenance', t.totalMaintenance], ['open', t.open], ['completed', t.resolvedCount]],
-  rfid: [['totalScans', t.totalScans], ['uniqueAssets', t.uniqueAssets]],
-  status: [['totalAssets', t.totalAssets]],
-}[type] || []);
-
-const displayValue = (value) => value === null || value === undefined || value === '' ? '—' : value;
-const formatCell = (key, value, locale) => {
-  if (key === 'specifications' && value && typeof value === 'object') return JSON.stringify(value);
-  if (/date|at$/i.test(key)) return value ? new Date(value).toLocaleDateString(locale) : '—';
-  return displayValue(value);
-};
-
-const ICTReports = () => {
-  const { language } = useLanguage();
-  const t = COPY[language] || COPY.en;
-  const locale = language === 'am' ? 'am-ET' : 'en-US';
-  const reportTypes = getReportTypes(t);
-  const [reportType, setReportType] = useState('inventory');
-  const [filters, setFilters] = useState(initialFilters);
-  const [report, setReport] = useState({ data: [], summary: {}, filters: {}, pagination: { page: 1, limit: 25, total: 0, totalPages: 0 }, generatedAt: null, scope: null });
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
-  const [error, setError] = useState('');
-  const [errorTitle, setErrorTitle] = useState('');
-  const requestParams = useMemo(() => ({ type: reportType, page, limit: report.pagination.limit || 25, ...filters }), [filters, page, report.pagination.limit, reportType]);
-  const loadReport = useCallback(async () => {
-    setLoading(true);
-    setError('');
     try {
-      const response = await getIctReports(requestParams);
-      setReport(response.data);
-    } catch (requestError) {
-      setErrorTitle(t.errorGenerate);
-      setError(getApiErrorMessage(requestError, t.errorGenerate));
+      const error = await response.json();
+      message = error?.message || error?.error || message;
+    } catch {
+      // Ignore invalid response bodies.
+    }
+
+    throw new Error(message);
+  }
+
+  if (response.status === 204) return null;
+
+  return response.json();
+}
+
+function extractArray(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.repairs)) return data.repairs;
+  if (Array.isArray(data?.repairHistory))
+    return data.repairHistory;
+  if (Array.isArray(data?.repair_history))
+    return data.repair_history;
+  if (Array.isArray(data?.results)) return data.results;
+
+  return [];
+}
+
+function normalizeRepair(item, index) {
+  return {
+    id:
+      item.id ??
+      item._id ??
+      item.repairId ??
+      item.repair_id ??
+      `REP-${String(index + 1).padStart(5, "0")}`,
+
+    repairNumber:
+      item.repairNumber ??
+      item.repair_number ??
+      item.referenceNumber ??
+      item.reference_number ??
+      `REP-${String(index + 1).padStart(5, "0")}`,
+
+    assetTag:
+      item.assetTag ??
+      item.asset_tag ??
+      item.asset?.assetTag ??
+      item.asset?.asset_tag ??
+      "",
+
+    assetName:
+      item.assetName ??
+      item.asset_name ??
+      item.asset?.name ??
+      "",
+
+    assetCategory:
+      item.assetCategory ??
+      item.asset_category ??
+      item.asset?.category ??
+      "",
+
+    serialNumber:
+      item.serialNumber ??
+      item.serial_number ??
+      item.asset?.serialNumber ??
+      "",
+
+    repairType:
+      item.repairType ??
+      item.repair_type ??
+      item.type ??
+      "Hardware Repair",
+
+    priority: item.priority ?? "Medium",
+
+    status: item.status ?? "Reported",
+
+    reportedBy:
+      item.reportedBy ??
+      item.reported_by ??
+      item.requester?.name ??
+      "",
+
+    assignedTechnician:
+      item.assignedTechnician ??
+      item.assigned_technician ??
+      item.technicianName ??
+      item.technician?.name ??
+      "",
+
+    department:
+      item.department ??
+      item.departmentName ??
+      item.department_name ??
+      "",
+
+    location:
+      item.location ??
+      item.locationName ??
+      "",
+
+    vendor:
+      item.vendor ??
+      item.vendorName ??
+      item.vendor_name ??
+      "",
+
+    dateReported:
+      item.dateReported ??
+      item.date_reported ??
+      item.reportedDate ??
+      item.reported_date ??
+      "",
+
+    diagnosisDate:
+      item.diagnosisDate ??
+      item.diagnosis_date ??
+      "",
+
+    repairStartDate:
+      item.repairStartDate ??
+      item.repair_start_date ??
+      item.startDate ??
+      item.start_date ??
+      "",
+
+    completionDate:
+      item.completionDate ??
+      item.completion_date ??
+      "",
+
+    returnDate:
+      item.returnDate ??
+      item.return_date ??
+      "",
+
+    estimatedCost:
+      item.estimatedCost ??
+      item.estimated_cost ??
+      0,
+
+    actualCost:
+      item.actualCost ??
+      item.actual_cost ??
+      0,
+
+    downtimeHours:
+      item.downtimeHours ??
+      item.downtime_hours ??
+      item.downtime ??
+      0,
+
+    warrantyStatus:
+      item.warrantyStatus ??
+      item.warranty_status ??
+      "Unknown",
+
+    issueDescription:
+      item.issueDescription ??
+      item.issue_description ??
+      item.description ??
+      "",
+
+    diagnosis: item.diagnosis ?? "",
+
+    repairAction:
+      item.repairAction ??
+      item.repair_action ??
+      item.actionTaken ??
+      item.action_taken ??
+      "",
+
+    partsReplaced:
+      item.partsReplaced ??
+      item.parts_replaced ??
+      "",
+
+    rootCause:
+      item.rootCause ??
+      item.root_cause ??
+      "",
+
+    recommendations:
+      item.recommendations ??
+      "",
+
+    notes: item.notes ?? "",
+
+    createdAt:
+      item.createdAt ??
+      item.created_at ??
+      "",
+
+    updatedAt:
+      item.updatedAt ??
+      item.updated_at ??
+      "",
+
+    raw: item,
+  };
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatCurrency(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return "ETB 0.00";
+  }
+
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "ETB",
+    minimumFractionDigits: 2,
+  }).format(number);
+}
+
+function getStatusClasses(status) {
+  switch (String(status).toLowerCase()) {
+    case "reported":
+      return "border-blue-200 bg-blue-50 text-blue-700";
+
+    case "diagnosed":
+      return "border-indigo-200 bg-indigo-50 text-indigo-700";
+
+    case "in repair":
+      return "border-violet-200 bg-violet-50 text-violet-700";
+
+    case "waiting for parts":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+
+    case "completed":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+
+    case "returned":
+      return "border-green-200 bg-green-50 text-green-700";
+
+    case "cancelled":
+      return "border-red-200 bg-red-50 text-red-700";
+
+    default:
+      return "border-slate-200 bg-slate-100 text-slate-600";
+  }
+}
+
+function getPriorityClasses(priority) {
+  switch (String(priority).toLowerCase()) {
+    case "critical":
+      return "border-red-200 bg-red-50 text-red-700";
+
+    case "high":
+      return "border-orange-200 bg-orange-50 text-orange-700";
+
+    case "medium":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+
+    case "low":
+      return "border-slate-200 bg-slate-100 text-slate-600";
+
+    default:
+      return "border-slate-200 bg-slate-100 text-slate-600";
+  }
+}
+
+function SummaryCard({
+  title,
+  value,
+  icon: Icon,
+  iconClass,
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-500">
+            {title}
+          </p>
+
+          <p className="mt-2 text-2xl font-bold text-slate-900">
+            {value}
+          </p>
+        </div>
+
+        <div
+          className={`flex h-11 w-11 items-center justify-center rounded-xl ${iconClass}`}
+        >
+          <Icon size={21} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Modal({
+  title,
+  icon: Icon,
+  children,
+  onClose,
+  large = false,
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-slate-950/50 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+
+      <div
+        className={`relative flex max-h-[92vh] w-full ${
+          large ? "max-w-5xl" : "max-w-2xl"
+        } flex-col overflow-hidden rounded-2xl bg-white shadow-2xl`}
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+              <Icon size={18} />
+            </div>
+
+            <h2 className="text-lg font-semibold text-slate-900">
+              {title}
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          >
+            <X size={19} />
+          </button>
+        </div>
+
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function InputField({
+  label,
+  name,
+  value,
+  onChange,
+  type = "text",
+  placeholder,
+  required = false,
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+        {label}
+
+        {required && (
+          <span className="ml-1 text-red-500">*</span>
+        )}
+      </label>
+
+      <input
+        type={type}
+        name={name}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        required={required}
+        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      />
+    </div>
+  );
+}
+
+function SelectField({
+  label,
+  name,
+  value,
+  onChange,
+  options,
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+        {label}
+      </label>
+
+      <select
+        name={name}
+        value={value}
+        onChange={onChange}
+        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function TextAreaField({
+  label,
+  name,
+  value,
+  onChange,
+  placeholder,
+  rows = 3,
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+        {label}
+      </label>
+
+      <textarea
+        name={name}
+        value={value}
+        onChange={onChange}
+        rows={rows}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      />
+    </div>
+  );
+}
+
+function DetailItem({
+  label,
+  value,
+  icon: Icon,
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-400">
+        {Icon && <Icon size={13} />}
+        {label}
+      </div>
+
+      <div className="mt-1 break-words text-sm font-medium text-slate-800">
+        {value || "—"}
+      </div>
+    </div>
+  );
+}
+
+export default function RepairHistory() {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [priorityFilter, setPriorityFilter] =
+    useState("All");
+  const [typeFilter, setTypeFilter] = useState("All");
+
+  const [page, setPage] = useState(1);
+
+  const [showForm, setShowForm] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+
+  const [editingRecord, setEditingRecord] = useState(null);
+  const [selectedRecord, setSelectedRecord] = useState(null);
+
+  const [form, setForm] = useState(initialForm);
+
+  const loadRepairs = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      let data;
+
+      try {
+        data = await apiRequest("/repair-history");
+      } catch {
+        try {
+          data = await apiRequest("/repairHistory");
+        } catch {
+          try {
+            data = await apiRequest("/repairs");
+          } catch {
+            data = await apiRequest("/repair");
+          }
+        }
+      }
+
+      setRecords(
+        extractArray(data).map(normalizeRepair)
+      );
+    } catch (err) {
+      setError(
+        err.message ||
+          "Unable to load repair history."
+      );
     } finally {
       setLoading(false);
     }
-  }, [requestParams, t.errorGenerate]);
-  useEffect(() => { loadReport(); }, [loadReport]);
+  };
 
-  const changeFilter = (name, value) => { setPage(1); setFilters((current) => ({ ...current, [name]: value })); };
-  const resetFilters = () => { setPage(1); setFilters(initialFilters); };
-  const changeReport = (value) => { setPage(1); setReportType(value); setFilters(initialFilters); };
-  const exportCsv = async () => {
-    if (!report.pagination.total || exporting) return;
-    setExporting(true);
-    setError('');
+  useEffect(() => {
+    loadRepairs();
+  }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [
+    search,
+    statusFilter,
+    priorityFilter,
+    typeFilter,
+  ]);
+
+  const statistics = useMemo(() => {
+    const total = records.length;
+
+    const active = records.filter(
+      (item) =>
+        [
+          "Reported",
+          "Diagnosed",
+          "In Repair",
+          "Waiting for Parts",
+        ].includes(item.status)
+    ).length;
+
+    const completed = records.filter(
+      (item) =>
+        item.status === "Completed" ||
+        item.status === "Returned"
+    ).length;
+
+    const critical = records.filter(
+      (item) =>
+        item.priority === "Critical"
+    ).length;
+
+    const totalCost = records.reduce(
+      (sum, item) =>
+        sum + Number(item.actualCost || 0),
+      0
+    );
+
+    const totalDowntime = records.reduce(
+      (sum, item) =>
+        sum + Number(item.downtimeHours || 0),
+      0
+    );
+
+    return {
+      total,
+      active,
+      completed,
+      critical,
+      totalCost,
+      totalDowntime,
+    };
+  }, [records]);
+
+  const filteredRecords = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return records.filter((item) => {
+      const searchable = [
+        item.repairNumber,
+        item.assetTag,
+        item.assetName,
+        item.assetCategory,
+        item.serialNumber,
+        item.repairType,
+        item.priority,
+        item.status,
+        item.reportedBy,
+        item.assignedTechnician,
+        item.department,
+        item.location,
+        item.vendor,
+        item.issueDescription,
+        item.diagnosis,
+        item.repairAction,
+        item.partsReplaced,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      const matchesSearch =
+        !query || searchable.includes(query);
+
+      const matchesStatus =
+        statusFilter === "All" ||
+        item.status.toLowerCase() ===
+          statusFilter.toLowerCase();
+
+      const matchesPriority =
+        priorityFilter === "All" ||
+        item.priority.toLowerCase() ===
+          priorityFilter.toLowerCase();
+
+      const matchesType =
+        typeFilter === "All" ||
+        item.repairType.toLowerCase() ===
+          typeFilter.toLowerCase();
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesPriority &&
+        matchesType
+      );
+    });
+  }, [
+    records,
+    search,
+    statusFilter,
+    priorityFilter,
+    typeFilter,
+  ]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      filteredRecords.length / PAGE_SIZE
+    )
+  );
+
+  const paginatedRecords = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+
+    return filteredRecords.slice(
+      start,
+      start + PAGE_SIZE
+    );
+  }, [filteredRecords, page]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const openCreate = () => {
+    setEditingRecord(null);
+
+    setForm({
+      ...initialForm,
+      repairNumber: `REP-${Date.now()
+        .toString()
+        .slice(-8)}`,
+      dateReported: new Date()
+        .toISOString()
+        .slice(0, 10),
+    });
+
+    setShowForm(true);
+  };
+
+  const openEdit = (record) => {
+    setEditingRecord(record);
+
+    const dateOnly = (value) =>
+      value?.slice?.(0, 10) || "";
+
+    setForm({
+      repairNumber: record.repairNumber || "",
+      assetTag: record.assetTag || "",
+      assetName: record.assetName || "",
+      assetCategory: record.assetCategory || "",
+      serialNumber: record.serialNumber || "",
+      repairType:
+        record.repairType || "Hardware Repair",
+      priority: record.priority || "Medium",
+      status: record.status || "Reported",
+      reportedBy: record.reportedBy || "",
+      assignedTechnician:
+        record.assignedTechnician || "",
+      department: record.department || "",
+      location: record.location || "",
+      vendor: record.vendor || "",
+      dateReported: dateOnly(record.dateReported),
+      diagnosisDate: dateOnly(record.diagnosisDate),
+      repairStartDate: dateOnly(
+        record.repairStartDate
+      ),
+      completionDate: dateOnly(
+        record.completionDate
+      ),
+      returnDate: dateOnly(record.returnDate),
+      estimatedCost: record.estimatedCost ?? "",
+      actualCost: record.actualCost ?? "",
+      downtimeHours: record.downtimeHours ?? "",
+      warrantyStatus:
+        record.warrantyStatus || "Unknown",
+      issueDescription:
+        record.issueDescription || "",
+      diagnosis: record.diagnosis || "",
+      repairAction: record.repairAction || "",
+      partsReplaced: record.partsReplaced || "",
+      rootCause: record.rootCause || "",
+      recommendations:
+        record.recommendations || "",
+      notes: record.notes || "",
+    });
+
+    setShowForm(true);
+  };
+
+  const openDetails = (record) => {
+    setSelectedRecord(record);
+    setShowDetails(true);
+  };
+
+  const closeModals = () => {
+    if (saving) return;
+
+    setShowForm(false);
+    setShowDetails(false);
+    setEditingRecord(null);
+    setSelectedRecord(null);
+  };
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  };
+
+  const saveRepair = async (event) => {
+    event.preventDefault();
+
+    if (!form.assetTag.trim()) {
+      setError("Asset tag is required.");
+      return;
+    }
+
+    if (!form.issueDescription.trim()) {
+      setError(
+        "Issue description is required."
+      );
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    const payload = {
+      repairNumber: form.repairNumber,
+      assetTag: form.assetTag,
+      assetName: form.assetName,
+      assetCategory: form.assetCategory,
+      serialNumber: form.serialNumber,
+      repairType: form.repairType,
+      priority: form.priority,
+      status: form.status,
+      reportedBy: form.reportedBy,
+      assignedTechnician:
+        form.assignedTechnician,
+      department: form.department,
+      location: form.location,
+      vendor: form.vendor,
+      dateReported: form.dateReported,
+      diagnosisDate: form.diagnosisDate,
+      repairStartDate: form.repairStartDate,
+      completionDate: form.completionDate,
+      returnDate: form.returnDate,
+      estimatedCost:
+        Number(form.estimatedCost) || 0,
+      actualCost:
+        Number(form.actualCost) || 0,
+      downtimeHours:
+        Number(form.downtimeHours) || 0,
+      warrantyStatus: form.warrantyStatus,
+      issueDescription: form.issueDescription,
+      diagnosis: form.diagnosis,
+      repairAction: form.repairAction,
+      partsReplaced: form.partsReplaced,
+      rootCause: form.rootCause,
+      recommendations: form.recommendations,
+      notes: form.notes,
+    };
+
     try {
-      const response = await exportIctReport({ type: reportType, ...filters });
-      const url = URL.createObjectURL(new Blob([response.data], { type: 'text/csv;charset=utf-8' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${reportType}-report.csv`;
-      link.click();
-      URL.revokeObjectURL(url);
-      toast.success(t.exported);
-    } catch (requestError) {
-      setErrorTitle(t.errorExport);
-      setError(getApiErrorMessage(requestError, t.errorExport));
+      if (editingRecord) {
+        let response;
+
+        try {
+          response = await apiRequest(
+            `/repair-history/${editingRecord.id}`,
+            {
+              method: "PUT",
+              body: JSON.stringify(payload),
+            }
+          );
+        } catch {
+          try {
+            response = await apiRequest(
+              `/repairHistory/${editingRecord.id}`,
+              {
+                method: "PUT",
+                body: JSON.stringify(payload),
+              }
+            );
+          } catch {
+            response = await apiRequest(
+              `/repairs/${editingRecord.id}`,
+              {
+                method: "PUT",
+                body: JSON.stringify(payload),
+              }
+            );
+          }
+        }
+
+        const updated = normalizeRepair(
+          response?.data ||
+            response ||
+            payload,
+          0
+        );
+
+        setRecords((current) =>
+          current.map((item) =>
+            item.id === editingRecord.id
+              ? {
+                  ...item,
+                  ...updated,
+                  id: editingRecord.id,
+                }
+              : item
+          )
+        );
+      } else {
+        let response;
+
+        try {
+          response = await apiRequest(
+            "/repair-history",
+            {
+              method: "POST",
+              body: JSON.stringify(payload),
+            }
+          );
+        } catch {
+          try {
+            response = await apiRequest(
+              "/repairHistory",
+              {
+                method: "POST",
+                body: JSON.stringify(payload),
+              }
+            );
+          } catch {
+            response = await apiRequest(
+              "/repairs",
+              {
+                method: "POST",
+                body: JSON.stringify(payload),
+              }
+            );
+          }
+        }
+
+        const created = normalizeRepair(
+          response?.data ||
+            response ||
+            payload,
+          records.length
+        );
+
+        setRecords((current) => [
+          created,
+          ...current,
+        ]);
+      }
+
+      setForm(initialForm);
+      setEditingRecord(null);
+      setShowForm(false);
+    } catch (err) {
+      setError(
+        err.message ||
+          "Unable to save repair record."
+      );
     } finally {
-      setExporting(false);
+      setSaving(false);
     }
   };
 
-  const metadata = report.filters || {};
-  const columns = columnsFor(reportType, t);
-  const Icon = reportTypes[reportType].icon;
-  const summaryEntries = summariesFor(reportType, t);
-  const assetReports = ['inventory', 'equipment', 'network', 'assignments', 'maintenance', 'rfid'].includes(reportType);
-  const showCategory = assetReports || reportType === 'support' || reportType === 'incidents';
-  const showDepartment = assetReports || reportType === 'support' || reportType === 'incidents';
-  const showPriority = reportType === 'support' || reportType === 'incidents';
-  const dateFromLabel = reportType === 'software-licenses' ? t.expiryFrom : reportType === 'incidents' ? t.reportedFrom : t.dateFrom;
-  const dateToLabel = reportType === 'software-licenses' ? t.expiryTo : reportType === 'incidents' ? t.reportedTo : t.dateTo;
-  const searchHint = reportType === 'software-licenses' ? t.searchLicenses : reportType === 'support' ? t.searchSupport : reportType === 'incidents' ? t.searchIncidents : t.searchAssets;
+  const deleteRepair = async (record) => {
+    const confirmed = window.confirm(
+      `Delete repair record ${record.repairNumber}?`
+    );
 
-  return <main style={pageStyle} aria-labelledby="ict-reports-title">
-    <header style={headerStyle}>
-      <div style={titleGroupStyle}>
-        <span style={titleIconStyle}><FileBarChart size={23} aria-hidden="true" /></span>
-        <div><h1 id="ict-reports-title" style={titleStyle}>{t.title}</h1><p style={descriptionStyle}>{t.description}</p></div>
-      </div>
-      <div style={buttonGroupStyle}>
-        <button type="button" onClick={loadReport} disabled={loading} aria-label={t.refresh} style={buttonStyle('secondary')}><RefreshCw size={16} aria-hidden="true" /> {t.refresh}</button>
-        <button type="button" onClick={exportCsv} disabled={exporting || loading || !report.pagination.total} style={buttonStyle('primary')}><Download size={16} aria-hidden="true" /> {exporting ? t.exporting : t.export}</button>
-      </div>
-    </header>
+    if (!confirmed) return;
 
-    <section style={panelStyle} aria-label={t.controls}>
-      <div style={sectionTitleStyle}><SlidersHorizontal size={18} aria-hidden="true" /><strong>{t.controls}</strong></div>
-      <div style={gridStyle}>
-        <label style={labelStyle}>{t.reportType}<select value={reportType} onChange={(event) => changeReport(event.target.value)} style={inputStyle}>{Object.entries(reportTypes).map(([value, item]) => <option key={value} value={value}>{item.label}</option>)}</select></label>
-        <label style={labelStyle}>{t.search}<span style={inputWithIconStyle}><Search size={16} aria-hidden="true" style={iconInputStyle} /><input value={filters.search} onChange={(event) => changeFilter('search', event.target.value)} placeholder={searchHint} style={{ ...inputStyle, paddingLeft: 34 }} /></span></label>
-        <DateInput label={dateFromLabel} value={filters.dateFrom} onChange={(value) => changeFilter('dateFrom', value)} />
-        <DateInput label={dateToLabel} value={filters.dateTo} onChange={(value) => changeFilter('dateTo', value)} />
-        {showCategory && <Option label={t.category} value={filters.category} onChange={(value) => changeFilter('category', value)} options={metadata.categories} allLabel={t.all} />}
-        <Option label={t.status} value={filters.status} onChange={(value) => changeFilter('status', value)} options={metadata.statuses} allLabel={t.all} />
-        {showPriority && <Option label={t.priority} value={filters.priority} onChange={(value) => changeFilter('priority', value)} options={metadata.priorities} allLabel={t.all} />}
-        {assetReports && <Option label={t.condition} value={filters.condition} onChange={(value) => changeFilter('condition', value)} options={metadata.conditions} allLabel={t.all} />}
-        {showDepartment && <Option label={t.department} value={filters.departmentId} onChange={(value) => changeFilter('departmentId', value)} options={metadata.departments} objectOptions allLabel={t.all} />}
-        {assetReports && <Option label={t.location} value={filters.location} onChange={(value) => changeFilter('location', value)} options={metadata.locations} allLabel={t.all} />}
-        <label style={labelStyle}>{t.rows}<select value={report.pagination.limit || 25} onChange={(event) => { setPage(1); setReport((current) => ({ ...current, pagination: { ...current.pagination, limit: Number(event.target.value) } })); }} style={inputStyle}><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
-      </div>
-      <button type="button" onClick={resetFilters} style={{ ...buttonStyle('link'), marginTop: 12 }}><RotateCcw size={15} aria-hidden="true" /> {t.reset}</button>
-    </section>
+    setError("");
 
-    {error ? <section style={errorPanelStyle} role="alert"><div style={errorTitleStyle}><CircleAlert size={20} aria-hidden="true" /><strong>{errorTitle || t.errorGenerate}</strong></div><p>{error}</p><button type="button" onClick={loadReport} style={buttonStyle('primary')}><RotateCcw size={15} aria-hidden="true" /> {t.retry}</button></section> : <>
-      <section style={summaryGridStyle} aria-label={t.reportSummary} aria-live="polite">{summaryEntries.map(([key, label]) => <div key={key} style={summaryStyle}><span style={summaryLabelStyle}>{label}</span><strong style={summaryValueStyle}>{displayValue(report.summary?.[key] ?? 0)}</strong></div>)}</section>
-      <section style={panelStyle} aria-labelledby="ict-report-results-title">
-        <div style={resultsHeaderStyle}>
-          <div><h2 id="ict-report-results-title" style={resultsTitleStyle}><Icon size={19} aria-hidden="true" /> {reportTypes[reportType].label}</h2><p style={metaStyle}>{t.generated} {report.generatedAt ? new Date(report.generatedAt).toLocaleString(locale) : '—'} · {report.scope?.collegeName || t.college} · {report.pagination.total || 0} {t.records}</p></div>
-          <span style={filterNoteStyle}><Filter size={14} aria-hidden="true" /> {t.serverFilters}</span>
+    try {
+      try {
+        await apiRequest(
+          `/repair-history/${record.id}`,
+          {
+            method: "DELETE",
+          }
+        );
+      } catch {
+        try {
+          await apiRequest(
+            `/repairHistory/${record.id}`,
+            {
+              method: "DELETE",
+            }
+          );
+        } catch {
+          await apiRequest(
+            `/repairs/${record.id}`,
+            {
+              method: "DELETE",
+            }
+          );
+        }
+      }
+
+      setRecords((current) =>
+        current.filter(
+          (item) => item.id !== record.id
+        )
+      );
+
+      if (
+        selectedRecord?.id === record.id
+      ) {
+        setSelectedRecord(null);
+        setShowDetails(false);
+      }
+    } catch (err) {
+      setError(
+        err.message ||
+          "Unable to delete repair record."
+      );
+    }
+  };
+
+  const exportCSV = () => {
+    if (!filteredRecords.length) return;
+
+    const headers = [
+      "Repair Number",
+      "Asset Tag",
+      "Asset Name",
+      "Asset Category",
+      "Serial Number",
+      "Repair Type",
+      "Priority",
+      "Status",
+      "Reported By",
+      "Assigned Technician",
+      "Department",
+      "Location",
+      "Vendor",
+      "Date Reported",
+      "Diagnosis Date",
+      "Repair Start Date",
+      "Completion Date",
+      "Return Date",
+      "Estimated Cost",
+      "Actual Cost",
+      "Downtime Hours",
+      "Warranty Status",
+      "Issue Description",
+      "Diagnosis",
+      "Repair Action",
+      "Parts Replaced",
+      "Root Cause",
+      "Recommendations",
+    ];
+
+    const rows = filteredRecords.map(
+      (item) => [
+        item.repairNumber,
+        item.assetTag,
+        item.assetName,
+        item.assetCategory,
+        item.serialNumber,
+        item.repairType,
+        item.priority,
+        item.status,
+        item.reportedBy,
+        item.assignedTechnician,
+        item.department,
+        item.location,
+        item.vendor,
+        item.dateReported,
+        item.diagnosisDate,
+        item.repairStartDate,
+        item.completionDate,
+        item.returnDate,
+        item.estimatedCost,
+        item.actualCost,
+        item.downtimeHours,
+        item.warrantyStatus,
+        item.issueDescription,
+        item.diagnosis,
+        item.repairAction,
+        item.partsReplaced,
+        item.rootCause,
+        item.recommendations,
+      ]
+    );
+
+    const escapeCSV = (value) => {
+      const text = String(value ?? "");
+
+      if (
+        text.includes(",") ||
+        text.includes('"') ||
+        text.includes("\n")
+      ) {
+        return `"${text.replace(
+          /"/g,
+          '""'
+        )}"`;
+      }
+
+      return text;
+    };
+
+    const csv = [headers, ...rows]
+      .map((row) =>
+        row.map(escapeCSV).join(",")
+      )
+      .join("\n");
+
+    const blob = new Blob([csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `repair-history-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6">
+      <div className="mx-auto max-w-[1600px] space-y-6">
+        {/* Header */}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-sm text-slate-500">
+              <History size={16} />
+
+              <span>ICT Operations</span>
+
+              <span>/</span>
+
+              <span className="text-slate-700">
+                Repair History
+              </span>
+            </div>
+
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+              Repair History
+            </h1>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Track ICT asset faults, diagnoses, repair
+              activities, costs, downtime, and returns.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={loadRepairs}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+            >
+              <RefreshCw
+                size={17}
+                className={
+                  loading
+                    ? "animate-spin"
+                    : ""
+                }
+              />
+              Refresh
+            </button>
+
+            <button
+              type="button"
+              onClick={exportCSV}
+              disabled={!filteredRecords.length}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Download size={17} />
+              Export
+            </button>
+
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+            >
+              <Plus size={18} />
+              Record Repair
+            </button>
+          </div>
         </div>
-        {loading ? <div style={stateStyle} role="status"><RefreshCw size={22} aria-hidden="true" style={spinnerStyle} /><span>{t.generating}</span></div> : report.data?.length ? <div style={tableWrapStyle}><table style={tableStyle}><caption className="sr-only">{t.tableCaption}</caption><thead><tr>{columns.map(([key, label]) => <th key={key} scope="col" style={thStyle}>{label}</th>)}</tr></thead><tbody>{report.data.map((row, index) => <tr key={row.id ?? index}>{columns.map(([key]) => <td key={key} style={{ ...tdStyle, ...(key === 'history' ? historyCellStyle : {}) }}>{formatCell(key, row[key], locale)}</td>)}</tr>)}</tbody></table></div> : <div style={stateStyle}><Package size={30} aria-hidden="true" /><strong>{t.noData}</strong><span>{t.noMatches}</span></div>}
-        {!loading && report.pagination.totalPages > 1 && <div style={paginationStyle}><span>{t.page} {report.pagination.page} {t.of} {report.pagination.totalPages}</span><div style={buttonGroupStyle}><button type="button" disabled={page <= 1} onClick={() => setPage((current) => current - 1)} style={buttonStyle('secondary')}><ChevronLeft size={16} aria-hidden="true" /> {t.previous}</button><button type="button" disabled={page >= report.pagination.totalPages} onClick={() => setPage((current) => current + 1)} style={buttonStyle('secondary')}>{t.next} <ChevronRight size={16} aria-hidden="true" /></button></div></div>}
-      </section>
-    </>}
-  </main>;
-};
 
-const DateInput = ({ label, value, onChange }) => <label style={labelStyle}>{label}<span style={inputWithIconStyle}><CalendarDays size={16} aria-hidden="true" style={iconInputStyle} /><input type="date" value={value} onChange={(event) => onChange(event.target.value)} style={{ ...inputStyle, paddingLeft: 34 }} /></span></label>;
+        {/* Error */}
+        {error && (
+          <div className="flex items-start justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="flex gap-3">
+              <AlertTriangle
+                size={18}
+                className="mt-0.5 shrink-0"
+              />
 
-const Option = ({ label, value, onChange, options = [], objectOptions = false, allLabel }) => <label style={labelStyle}>{label}<select value={value} onChange={(event) => onChange(event.target.value)} style={inputStyle}><option value="">{allLabel} {label}</option>{options.map((option) => <option key={objectOptions ? option.id : option} value={objectOptions ? option.id : option}>{objectOptions ? option.name : option}</option>)}</select></label>;
+              <div>
+                <p className="font-semibold">
+                  Operation failed
+                </p>
 
-const pageStyle = { maxWidth: 1500, margin: '0 auto', padding: '24px clamp(14px, 2.5vw, 28px)', color: '#18324b' };
-const headerStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap', marginBottom: 22 };
-const titleGroupStyle = { display: 'flex', gap: 13, alignItems: 'flex-start', minWidth: 220 };
-const titleIconStyle = { display: 'grid', placeItems: 'center', width: 44, height: 44, flex: '0 0 44px', background: '#e6f4f1', color: '#087f75', borderRadius: 8 };
-const titleStyle = { margin: 0, fontSize: 26, lineHeight: 1.2 };
-const descriptionStyle = { margin: '6px 0 0', color: '#60758a', lineHeight: 1.5 };
-const buttonGroupStyle = { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' };
-const panelStyle = { background: '#fff', border: '1px solid #dfe8ee', borderRadius: 8, padding: 18, boxShadow: '0 4px 16px rgba(22, 53, 76, 0.04)', marginBottom: 18 };
-const sectionTitleStyle = { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 };
-const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 190px), 1fr))', gap: 13 };
-const labelStyle = { display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, fontSize: 13, fontWeight: 600, color: '#36526a' };
-const inputStyle = { width: '100%', minHeight: 39, boxSizing: 'border-box', border: '1px solid #c9d7e0', borderRadius: 6, padding: '8px 10px', background: '#fff', color: '#18324b', font: 'inherit', fontWeight: 400 };
-const inputWithIconStyle = { position: 'relative', display: 'block' };
-const iconInputStyle = { position: 'absolute', zIndex: 1, left: 10, top: 11, color: '#7890a2' };
-const summaryGridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: 12, margin: '20px 0' };
-const summaryStyle = { background: '#fff', border: '1px solid #dfe8ee', borderTop: '3px solid #0b8f83', borderRadius: 7, padding: '13px 16px', minWidth: 0 };
-const summaryLabelStyle = { color: '#60758a', fontSize: 13, lineHeight: 1.4 };
-const summaryValueStyle = { display: 'block', fontSize: 22, marginTop: 5, lineHeight: 1.2 };
-const resultsHeaderStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 16 };
-const resultsTitleStyle = { margin: 0, fontSize: 19, display: 'flex', gap: 8, alignItems: 'center' };
-const metaStyle = { margin: '6px 0 0', color: '#60758a', fontSize: 13, lineHeight: 1.5 };
-const filterNoteStyle = { display: 'inline-flex', alignItems: 'center', gap: 6, color: '#60758a', fontSize: 12 };
-const tableWrapStyle = { overflowX: 'auto', maxWidth: '100%' };
-const tableStyle = { width: '100%', borderCollapse: 'collapse', minWidth: 820 };
-const thStyle = { textAlign: 'left', padding: '11px 10px', background: '#f3f7f8', color: '#36526a', borderBottom: '1px solid #dfe8ee', fontSize: 11, textTransform: 'uppercase', whiteSpace: 'nowrap' };
-const tdStyle = { padding: '11px 10px', borderBottom: '1px solid #edf1f3', color: '#29465c', fontSize: 13, whiteSpace: 'nowrap', verticalAlign: 'top' };
-const historyCellStyle = { whiteSpace: 'normal', minWidth: 230, maxWidth: 380, lineHeight: 1.45 };
-const stateStyle = { minHeight: 150, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 9, padding: 24, textAlign: 'center', color: '#60758a' };
-const paginationStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 16, color: '#60758a', fontSize: 13 };
-const errorPanelStyle = { ...panelStyle, borderColor: '#e7a1a1', background: '#fff7f7', color: '#7e2b2b' };
-const errorTitleStyle = { display: 'flex', alignItems: 'center', gap: 8 };
-const buttonStyle = (variant) => ({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 38, border: variant === 'link' ? 0 : '1px solid #c9d7e0', borderRadius: 6, padding: '8px 11px', cursor: 'pointer', background: variant === 'primary' ? '#087f75' : variant === 'link' ? 'transparent' : '#fff', color: variant === 'primary' ? '#fff' : '#36526a', fontWeight: 600, font: 'inherit' });
-const spinnerStyle = { animation: 'ict-report-spin 1s linear infinite' };
+                <p className="mt-0.5">{error}</p>
+              </div>
+            </div>
 
-export default ICTReports;
+            <button
+              type="button"
+              onClick={() => setError("")}
+              className="rounded-md p-1 hover:bg-red-100"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
+        {/* Summary */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <SummaryCard
+            title="Total Repairs"
+            value={statistics.total}
+            icon={History}
+            iconClass="bg-blue-50 text-blue-600"
+          />
+
+          <SummaryCard
+            title="Active Repairs"
+            value={statistics.active}
+            icon={Wrench}
+            iconClass="bg-violet-50 text-violet-600"
+          />
+
+          <SummaryCard
+            title="Completed"
+            value={statistics.completed}
+            icon={CheckCircle2}
+            iconClass="bg-emerald-50 text-emerald-600"
+          />
+
+          <SummaryCard
+            title="Critical Cases"
+            value={statistics.critical}
+            icon={AlertTriangle}
+            iconClass="bg-red-50 text-red-600"
+          />
+
+          <SummaryCard
+            title="Total Cost"
+            value={formatCurrency(
+              statistics.totalCost
+            )}
+            icon={CircleDollarSign}
+            iconClass="bg-amber-50 text-amber-600"
+          />
+        </div>
+
+        {/* Downtime */}
+        <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
+                <Clock3 size={19} />
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-slate-500">
+                  Total Recorded Downtime
+                </p>
+
+                <p className="text-lg font-bold text-slate-900">
+                  {statistics.totalDowntime} hours
+                </p>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-500">
+              Across all repair history records
+            </p>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          {/* Filters */}
+          <div className="border-b border-slate-200 p-4">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="relative w-full xl:max-w-md">
+                <Search
+                  size={18}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(event) =>
+                    setSearch(event.target.value)
+                  }
+                  placeholder="Search repair, asset, technician..."
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <div className="relative">
+                  <Filter
+                    size={16}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                  <select
+                    value={statusFilter}
+                    onChange={(event) =>
+                      setStatusFilter(
+                        event.target.value
+                      )
+                    }
+                    className="h-10 min-w-[150px] appearance-none rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="All">
+                      All Statuses
+                    </option>
+
+                    {STATUS_OPTIONS.map(
+                      (option) => (
+                        <option
+                          key={option}
+                          value={option}
+                        >
+                          {option}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </div>
+
+                <select
+                  value={typeFilter}
+                  onChange={(event) =>
+                    setTypeFilter(
+                      event.target.value
+                    )
+                  }
+                  className="h-10 min-w-[165px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="All">
+                    All Repair Types
+                  </option>
+
+                  {REPAIR_TYPES.map(
+                    (option) => (
+                      <option
+                        key={option}
+                        value={option}
+                      >
+                        {option}
+                      </option>
+                    )
+                  )}
+                </select>
+
+                <select
+                  value={priorityFilter}
+                  onChange={(event) =>
+                    setPriorityFilter(
+                      event.target.value
+                    )
+                  }
+                  className="h-10 min-w-[140px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="All">
+                    All Priorities
+                  </option>
+
+                  {PRIORITY_OPTIONS.map(
+                    (option) => (
+                      <option
+                        key={option}
+                        value={option}
+                      >
+                        {option}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1450px] text-left">
+              <thead className="bg-slate-50">
+                <tr className="border-b border-slate-200">
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Repair
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Asset
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Repair Type
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Priority
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Technician
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Reported
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Cost
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Status
+                  </th>
+
+                  <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-100">
+                {loading ? (
+                  Array.from({ length: 7 }).map(
+                    (_, rowIndex) => (
+                      <tr key={rowIndex}>
+                        {Array.from({
+                          length: 9,
+                        }).map(
+                          (_, cellIndex) => (
+                            <td
+                              key={cellIndex}
+                              className="px-5 py-5"
+                            >
+                              <div className="h-4 animate-pulse rounded bg-slate-100" />
+                            </td>
+                          )
+                        )}
+                      </tr>
+                    )
+                  )
+                ) : paginatedRecords.length ===
+                  0 ? (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="px-6 py-16 text-center"
+                    >
+                      <div className="mx-auto flex max-w-sm flex-col items-center">
+                        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                          <History size={27} />
+                        </div>
+
+                        <h3 className="text-base font-semibold text-slate-900">
+                          No repair records found
+                        </h3>
+
+                        <p className="mt-1 text-sm text-slate-500">
+                          Change your filters or add a
+                          new repair record.
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={openCreate}
+                          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                        >
+                          <Plus size={16} />
+                          Record Repair
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedRecords.map(
+                    (record) => (
+                      <tr
+                        key={record.id}
+                        className="group transition hover:bg-slate-50/80"
+                      >
+                        <td className="px-5 py-4">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openDetails(record)
+                            }
+                            className="font-semibold text-blue-600 hover:text-blue-700"
+                          >
+                            {record.repairNumber}
+                          </button>
+
+                          <div className="mt-1 max-w-[230px] truncate text-sm font-medium text-slate-800">
+                            {record.issueDescription ||
+                              "Repair case"}
+                          </div>
+
+                          <div className="mt-1 text-xs text-slate-400">
+                            {record.department ||
+                              "No department"}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                              <Monitor size={15} />
+                            </div>
+
+                            <div>
+                              <div className="text-sm font-semibold text-slate-800">
+                                {record.assetTag ||
+                                  "No asset tag"}
+                              </div>
+
+                              <div className="mt-0.5 max-w-[180px] truncate text-xs text-slate-400">
+                                {record.assetName ||
+                                  "ICT Asset"}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="text-sm font-medium text-slate-700">
+                            {record.repairType}
+                          </div>
+
+                          <div className="mt-1 text-xs text-slate-400">
+                            {record.serialNumber ||
+                              "No serial number"}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getPriorityClasses(
+                              record.priority
+                            )}`}
+                          >
+                            {record.priority}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2 text-sm text-slate-700">
+                            <User
+                              size={15}
+                              className="text-slate-400"
+                            />
+
+                            {record.assignedTechnician ||
+                              "Unassigned"}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2 text-sm text-slate-700">
+                            <CalendarDays
+                              size={15}
+                              className="text-slate-400"
+                            />
+
+                            {formatDate(
+                              record.dateReported
+                            )}
+                          </div>
+
+                          {record.completionDate && (
+                            <div className="mt-1 text-xs text-slate-400">
+                              Completed:{" "}
+                              {formatDate(
+                                record.completionDate
+                              )}
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="text-sm font-semibold text-slate-700">
+                            {formatCurrency(
+                              record.actualCost
+                            )}
+                          </div>
+
+                          <div className="mt-1 text-xs text-slate-400">
+                            {record.downtimeHours ||
+                              0}{" "}
+                            hrs downtime
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getStatusClasses(
+                              record.status
+                            )}`}
+                          >
+                            {record.status}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="flex justify-end gap-1">
+                            <button
+                              type="button"
+                              title="View repair"
+                              onClick={() =>
+                                openDetails(record)
+                              }
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                            >
+                              <Eye size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              title="Edit repair"
+                              onClick={() =>
+                                openEdit(record)
+                              }
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                            >
+                              <Pencil size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              title="Delete repair"
+                              onClick={() =>
+                                deleteRepair(record)
+                              }
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {!loading &&
+            filteredRecords.length > 0 && (
+              <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-500">
+                  Showing{" "}
+                  <span className="font-medium text-slate-700">
+                    {(page - 1) * PAGE_SIZE + 1}
+                  </span>{" "}
+                  to{" "}
+                  <span className="font-medium text-slate-700">
+                    {Math.min(
+                      page * PAGE_SIZE,
+                      filteredRecords.length
+                    )}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-medium text-slate-700">
+                    {filteredRecords.length}
+                  </span>{" "}
+                  repair records
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={page === 1}
+                    onClick={() =>
+                      setPage(
+                        (current) => current - 1
+                      )
+                    }
+                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    <ChevronLeft size={16} />
+                    Previous
+                  </button>
+
+                  <div className="flex h-9 min-w-9 items-center justify-center rounded-lg bg-blue-600 px-3 text-sm font-semibold text-white">
+                    {page}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() =>
+                      setPage(
+                        (current) => current + 1
+                      )
+                    }
+                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    Next
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+        </div>
+      </div>
+
+      {/* Add / Edit Modal */}
+      {showForm && (
+        <Modal
+          title={
+            editingRecord
+              ? "Edit Repair Record"
+              : "Record ICT Repair"
+          }
+          icon={editingRecord ? Pencil : Wrench}
+          onClose={closeModals}
+          large
+        >
+          <form onSubmit={saveRepair}>
+            <div className="max-h-[70vh] overflow-y-auto px-6 py-5">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <InputField
+                  label="Repair Number"
+                  name="repairNumber"
+                  value={form.repairNumber}
+                  onChange={handleChange}
+                  placeholder="REP-00001"
+                />
+
+                <InputField
+                  label="Asset Tag"
+                  name="assetTag"
+                  value={form.assetTag}
+                  onChange={handleChange}
+                  placeholder="ICT-00001"
+                  required
+                />
+
+                <InputField
+                  label="Asset Name"
+                  name="assetName"
+                  value={form.assetName}
+                  onChange={handleChange}
+                  placeholder="Desktop Computer"
+                />
+
+                <InputField
+                  label="Asset Category"
+                  name="assetCategory"
+                  value={form.assetCategory}
+                  onChange={handleChange}
+                  placeholder="Computer / Network / Printer"
+                />
+
+                <InputField
+                  label="Serial Number"
+                  name="serialNumber"
+                  value={form.serialNumber}
+                  onChange={handleChange}
+                  placeholder="Serial number"
+                />
+
+                <SelectField
+                  label="Repair Type"
+                  name="repairType"
+                  value={form.repairType}
+                  onChange={handleChange}
+                  options={REPAIR_TYPES}
+                />
+
+                <SelectField
+                  label="Priority"
+                  name="priority"
+                  value={form.priority}
+                  onChange={handleChange}
+                  options={PRIORITY_OPTIONS}
+                />
+
+                <SelectField
+                  label="Status"
+                  name="status"
+                  value={form.status}
+                  onChange={handleChange}
+                  options={STATUS_OPTIONS}
+                />
+
+                <InputField
+                  label="Reported By"
+                  name="reportedBy"
+                  value={form.reportedBy}
+                  onChange={handleChange}
+                  placeholder="Staff / department"
+                />
+
+                <InputField
+                  label="Assigned Technician"
+                  name="assignedTechnician"
+                  value={
+                    form.assignedTechnician
+                  }
+                  onChange={handleChange}
+                  placeholder="Technician name"
+                />
+
+                <InputField
+                  label="Department"
+                  name="department"
+                  value={form.department}
+                  onChange={handleChange}
+                  placeholder="Department / College"
+                />
+
+                <InputField
+                  label="Location"
+                  name="location"
+                  value={form.location}
+                  onChange={handleChange}
+                  placeholder="Building / Room"
+                />
+
+                <InputField
+                  label="Vendor"
+                  name="vendor"
+                  value={form.vendor}
+                  onChange={handleChange}
+                  placeholder="Service provider"
+                />
+
+                <InputField
+                  label="Warranty Status"
+                  name="warrantyStatus"
+                  value={form.warrantyStatus}
+                  onChange={handleChange}
+                  placeholder="Active / Expired / Unknown"
+                />
+
+                <InputField
+                  label="Date Reported"
+                  name="dateReported"
+                  type="date"
+                  value={form.dateReported}
+                  onChange={handleChange}
+                />
+
+                <InputField
+                  label="Diagnosis Date"
+                  name="diagnosisDate"
+                  type="date"
+                  value={form.diagnosisDate}
+                  onChange={handleChange}
+                />
+
+                <InputField
+                  label="Repair Start Date"
+                  name="repairStartDate"
+                  type="date"
+                  value={form.repairStartDate}
+                  onChange={handleChange}
+                />
+
+                <InputField
+                  label="Completion Date"
+                  name="completionDate"
+                  type="date"
+                  value={form.completionDate}
+                  onChange={handleChange}
+                />
+
+                <InputField
+                  label="Return Date"
+                  name="returnDate"
+                  type="date"
+                  value={form.returnDate}
+                  onChange={handleChange}
+                />
+
+                <InputField
+                  label="Estimated Cost"
+                  name="estimatedCost"
+                  type="number"
+                  value={form.estimatedCost}
+                  onChange={handleChange}
+                  placeholder="0.00"
+                />
+
+                <InputField
+                  label="Actual Cost"
+                  name="actualCost"
+                  type="number"
+                  value={form.actualCost}
+                  onChange={handleChange}
+                  placeholder="0.00"
+                />
+
+                <InputField
+                  label="Downtime (Hours)"
+                  name="downtimeHours"
+                  type="number"
+                  value={form.downtimeHours}
+                  onChange={handleChange}
+                  placeholder="0"
+                />
+
+                <div className="md:col-span-2">
+                  <TextAreaField
+                    label="Issue Description"
+                    name="issueDescription"
+                    value={form.issueDescription}
+                    onChange={handleChange}
+                    placeholder="Describe the reported fault or problem..."
+                    rows={4}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <TextAreaField
+                    label="Diagnosis"
+                    name="diagnosis"
+                    value={form.diagnosis}
+                    onChange={handleChange}
+                    placeholder="Describe the diagnosis and technical findings..."
+                    rows={4}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <TextAreaField
+                    label="Repair Action"
+                    name="repairAction"
+                    value={form.repairAction}
+                    onChange={handleChange}
+                    placeholder="Describe the repair work performed..."
+                    rows={4}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <TextAreaField
+                    label="Parts Replaced"
+                    name="partsReplaced"
+                    value={form.partsReplaced}
+                    onChange={handleChange}
+                    placeholder="List replaced components, parts, or materials..."
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <TextAreaField
+                    label="Root Cause"
+                    name="rootCause"
+                    value={form.rootCause}
+                    onChange={handleChange}
+                    placeholder="Describe the identified root cause..."
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <TextAreaField
+                    label="Recommendations"
+                    name="recommendations"
+                    value={form.recommendations}
+                    onChange={handleChange}
+                    placeholder="Recommended preventive actions or follow-up..."
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <TextAreaField
+                    label="Notes"
+                    name="notes"
+                    value={form.notes}
+                    onChange={handleChange}
+                    placeholder="Additional repair notes..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+              <button
+                type="button"
+                onClick={closeModals}
+                disabled={saving}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {saving && (
+                  <RefreshCw
+                    size={16}
+                    className="animate-spin"
+                  />
+                )}
+
+                {editingRecord
+                  ? "Save Changes"
+                  : "Record Repair"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Details Modal */}
+      {showDetails && selectedRecord && (
+        <Modal
+          title="Repair Details"
+          icon={History}
+          onClose={closeModals}
+          large
+        >
+          <div className="max-h-[78vh] overflow-y-auto">
+            <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    {selectedRecord.repairNumber}
+                  </div>
+
+                  <h2 className="mt-1 text-xl font-bold text-slate-900">
+                    {selectedRecord.assetName ||
+                      selectedRecord.assetTag ||
+                      "ICT Asset Repair"}
+                  </h2>
+
+                  <p className="mt-1 text-sm text-slate-500">
+                    {selectedRecord.repairType} •{" "}
+                    {selectedRecord.assetTag}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <span
+                    className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold ${getPriorityClasses(
+                      selectedRecord.priority
+                    )}`}
+                  >
+                    {selectedRecord.priority}
+                  </span>
+
+                  <span
+                    className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold ${getStatusClasses(
+                      selectedRecord.status
+                    )}`}
+                  >
+                    {selectedRecord.status}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6 px-6 py-6">
+              {/* Asset */}
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                  Asset Information
+                </h3>
+
+                <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-4">
+                  <DetailItem
+                    label="Asset Tag"
+                    value={selectedRecord.assetTag}
+                    icon={Monitor}
+                  />
+
+                  <DetailItem
+                    label="Asset Name"
+                    value={selectedRecord.assetName}
+                    icon={Monitor}
+                  />
+
+                  <DetailItem
+                    label="Category"
+                    value={selectedRecord.assetCategory}
+                  />
+
+                  <DetailItem
+                    label="Serial Number"
+                    value={selectedRecord.serialNumber}
+                  />
+
+                  <DetailItem
+                    label="Department"
+                    value={selectedRecord.department}
+                  />
+
+                  <DetailItem
+                    label="Location"
+                    value={selectedRecord.location}
+                    icon={MapPin}
+                  />
+
+                  <DetailItem
+                    label="Vendor"
+                    value={selectedRecord.vendor}
+                  />
+
+                  <DetailItem
+                    label="Warranty"
+                    value={selectedRecord.warrantyStatus}
+                  />
+                </div>
+              </section>
+
+              {/* People */}
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                  Responsibility
+                </h3>
+
+                <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-3">
+                  <DetailItem
+                    label="Reported By"
+                    value={selectedRecord.reportedBy}
+                    icon={User}
+                  />
+
+                  <DetailItem
+                    label="Assigned Technician"
+                    value={
+                      selectedRecord.assignedTechnician
+                    }
+                    icon={Wrench}
+                  />
+
+                  <DetailItem
+                    label="Repair Type"
+                    value={selectedRecord.repairType}
+                    icon={History}
+                  />
+                </div>
+              </section>
+
+              {/* Timeline */}
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                  Repair Timeline
+                </h3>
+
+                <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-5">
+                  <DetailItem
+                    label="Reported"
+                    value={formatDate(
+                      selectedRecord.dateReported
+                    )}
+                    icon={CalendarDays}
+                  />
+
+                  <DetailItem
+                    label="Diagnosed"
+                    value={formatDate(
+                      selectedRecord.diagnosisDate
+                    )}
+                    icon={Search}
+                  />
+
+                  <DetailItem
+                    label="Repair Started"
+                    value={formatDate(
+                      selectedRecord.repairStartDate
+                    )}
+                    icon={Wrench}
+                  />
+
+                  <DetailItem
+                    label="Completed"
+                    value={formatDate(
+                      selectedRecord.completionDate
+                    )}
+                    icon={CheckCircle2}
+                  />
+
+                  <DetailItem
+                    label="Returned"
+                    value={formatDate(
+                      selectedRecord.returnDate
+                    )}
+                    icon={Monitor}
+                  />
+                </div>
+              </section>
+
+              {/* Financial */}
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                  Repair Cost & Downtime
+                </h3>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Estimated Cost
+                    </div>
+
+                    <div className="mt-1 text-lg font-bold text-slate-900">
+                      {formatCurrency(
+                        selectedRecord.estimatedCost
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
+                      Actual Cost
+                    </div>
+
+                    <div className="mt-1 text-lg font-bold text-slate-900">
+                      {formatCurrency(
+                        selectedRecord.actualCost
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-orange-600">
+                      Downtime
+                    </div>
+
+                    <div className="mt-1 text-lg font-bold text-slate-900">
+                      {selectedRecord.downtimeHours ||
+                        0}{" "}
+                      hours
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Issue */}
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                  Reported Issue
+                </h3>
+
+                <div className="rounded-xl border border-slate-200 p-4">
+                  <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                    {selectedRecord.issueDescription ||
+                      "No issue description recorded."}
+                  </p>
+                </div>
+              </section>
+
+              {/* Diagnosis */}
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                  Diagnosis
+                </h3>
+
+                <div className="rounded-xl border border-slate-200 p-4">
+                  <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                    {selectedRecord.diagnosis ||
+                      "No diagnosis recorded."}
+                  </p>
+                </div>
+              </section>
+
+              {/* Repair action */}
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                  Repair Action
+                </h3>
+
+                <div className="rounded-xl border border-slate-200 p-4">
+                  <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                    {selectedRecord.repairAction ||
+                      "No repair action recorded."}
+                  </p>
+                </div>
+              </section>
+
+              {/* Parts and root cause */}
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                  Parts & Root Cause
+                </h3>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Parts Replaced
+                    </div>
+
+                    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                      {selectedRecord.partsReplaced ||
+                        "No parts recorded."}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Root Cause
+                    </div>
+
+                    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                      {selectedRecord.rootCause ||
+                        "No root cause recorded."}
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              {/* Recommendations */}
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                  Recommendations
+                </h3>
+
+                <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
+                  <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                    {selectedRecord.recommendations ||
+                      "No recommendations recorded."}
+                  </p>
+                </div>
+              </section>
+
+              {selectedRecord.notes && (
+                <section>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                    Notes
+                  </h3>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+                    {selectedRecord.notes}
+                  </div>
+                </section>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDetails(false);
+                  openEdit(selectedRecord);
+                }}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <Pencil size={16} />
+                Edit Repair
+              </button>
+
+              <button
+                type="button"
+                onClick={closeModals}
+                className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}

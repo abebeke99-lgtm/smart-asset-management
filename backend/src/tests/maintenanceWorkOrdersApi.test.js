@@ -1,7 +1,16 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { Asset, Maintenance, MaintenanceWorkOrder, User, sequelize } = require('../models');
-const { normalizeMaintenanceWorkOrder, getMaintenanceWorkOrderSummary, getMaintenanceWorkOrderOptions, createMaintenanceWorkOrder } = require('../controllers/maintenanceController');
+const { Asset, Maintenance, MaintenanceWorkOrder, User, AuditLog, MaintenanceHistory, sequelize } = require('../models');
+const { normalizeMaintenanceWorkOrder, getMaintenanceWorkOrderSummary, getMaintenanceWorkOrderOptions, createMaintenanceWorkOrder, updateMaintenanceWorkOrder, rollbackIfPending } = require('../controllers/maintenanceController');
+
+test('maintenance transaction rollback is skipped after commit and used while open', async () => {
+  let rollbackCount = 0;
+  await rollbackIfPending({ finished: 'commit', rollback: async () => { rollbackCount += 1; } });
+  assert.equal(rollbackCount, 0);
+
+  await rollbackIfPending({ finished: undefined, rollback: async () => { rollbackCount += 1; } });
+  assert.equal(rollbackCount, 1);
+});
 
 test('maintenance work-order normalizer exposes real work-order fields', () => {
   const result = normalizeMaintenanceWorkOrder({
@@ -98,6 +107,66 @@ test('work-order creation rejects a missing maintenance request before writing',
     assert.equal(rolledBack, true);
   } finally {
     sequelize.transaction = originalTransaction;
+  }
+});
+
+test('work-order audit snapshot records old and new persisted values', async () => {
+  const originals = {
+    transaction: sequelize.transaction,
+    workOrderFindByPk: MaintenanceWorkOrder.findByPk,
+    userFindOne: User.findOne,
+    historyCreate: MaintenanceHistory.create,
+    auditCreate: AuditLog.create,
+  };
+  const transaction = { LOCK: { UPDATE: 'UPDATE' }, finished: undefined, async commit() { this.finished = 'commit'; }, async rollback() { this.finished = 'rollback'; } };
+  const workOrder = {
+    id: 17,
+    workOrderNumber: 'WO-017',
+    maintenanceId: 12,
+    assetId: 3,
+    technicianId: 8,
+    priority: 'medium',
+    status: 'open',
+    startDate: new Date('2026-09-20T10:00:00.000Z'),
+    expectedCompletionDate: null,
+    estimatedCost: '25.00',
+    actualCost: '5.00',
+    progress: 0,
+    Asset: { id: 3, name: 'QA Asset', assetCode: 'QA-003' },
+    Maintenance: { id: 12, title: 'Repair projector' },
+    Technician: { id: 8, fullName: 'QA Technician' },
+    async update(values) { Object.assign(this, values); },
+    toJSON() { return { id: this.id, workOrderNumber: this.workOrderNumber, maintenanceId: this.maintenanceId, assetId: this.assetId, technicianId: this.technicianId, priority: this.priority, status: this.status, startDate: this.startDate, expectedCompletionDate: this.expectedCompletionDate, estimatedCost: this.estimatedCost, actualCost: this.actualCost, progress: this.progress }; },
+  };
+  let auditEntry;
+  sequelize.transaction = async () => transaction;
+  MaintenanceWorkOrder.findByPk = async () => workOrder;
+  User.findOne = async () => ({ id: 8, role: 'maintenance', active: true });
+  MaintenanceHistory.create = async () => {};
+  AuditLog.create = async (entry) => { auditEntry = entry; };
+
+  try {
+    let response;
+    await updateMaintenanceWorkOrder({ params: { id: '17' }, body: { status: 'in-progress', estimatedCost: 40, actualCost: 20 }, user: { id: 6, role: 'maintenance' } }, {
+      json(payload) { response = payload; return this; },
+    }, (error) => { throw error; });
+
+    assert.equal(response.success, true);
+    assert.equal(transaction.finished, 'commit');
+    const snapshot = JSON.parse(auditEntry.details);
+    assert.deepEqual(snapshot.oldValue, {
+      workOrderNumber: 'WO-017', maintenanceId: 12, assetId: 3, technicianId: 8, priority: 'medium', status: 'open',
+      startDate: workOrder.startDate.toISOString(), expectedCompletionDate: null, estimatedCost: 25, actualCost: 5,
+    });
+    assert.deepEqual(snapshot.newValue, {
+      ...snapshot.oldValue, status: 'in-progress', estimatedCost: 40, actualCost: 20, actualCompletionDate: null, progress: 0,
+    });
+  } finally {
+    sequelize.transaction = originals.transaction;
+    MaintenanceWorkOrder.findByPk = originals.workOrderFindByPk;
+    User.findOne = originals.userFindOne;
+    MaintenanceHistory.create = originals.historyCreate;
+    AuditLog.create = originals.auditCreate;
   }
 });
 

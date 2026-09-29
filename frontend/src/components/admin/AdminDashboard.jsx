@@ -1,1992 +1,708 @@
-// AdminDashboard.jsx - Complete Single File
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { useLanguage, useTheme } from '../../contexts/UiContext';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement,
-  PointElement,
-  LineElement,
-  Filler
-} from 'chart.js';
-import { Bar, Doughnut, Line } from 'react-chartjs-2';
-import { toast } from 'react-toastify';
-import { apiClient, getApiErrorMessage } from '../../utils/api';
-import './AdminDashboard.css';
-import { useNavigate } from 'react-router-dom';
-import {
-  RefreshCw,
-  Search,
-  Download,
-  Eye,
-  Pencil,
-  Plus,
-  Users,
-  Building2,
-  Wrench,
-  Radio,
-  FileText,
-  Settings,
-  Database,
-  Bell,
-  Activity,
-  Package,
-  AlertTriangle,
-  CheckCircle,
-  XCircle
-} from 'lucide-react';
+import React, { useEffect, useState } from "react";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement,
-  PointElement,
-  LineElement,
-  Filler
-);
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL || "http://localhost:5000";
 
-const DEFAULT_STATS = {
-  totalAssets: 0,
-  activeAssets: 0,
-  availableAssets: 0,
-  retiredAssets: 0,
-  missingAssets: 0,
-  damagedAssets: 0,
-  underMaintenance: 0,
-  totalDepartments: 0,
-  totalUsers: 0,
-  pendingMaintenance: 0,
-  rfidActivity: 0,
-  totalValue: 0,
-  assignedAssets: 0,
-  overdueReturns: 0,
-  assetByStatus: [],
-  assetByDepartment: [],
-  assetByCategory: [],
-  assetsPurchasedOverTime: [],
-  maintenanceTrend: [],
-  rfidActivityLog: [],
-  recentActivities: [],
-  alerts: [],
-  quickActions: [],
-  rfidMetrics: {
-    detectedTags: 0,
-    uniqueTags: 0,
-    onlineDevices: 0,
-    offlineDevices: 0,
-    unknownAlerts: 0,
-    latestActivity: null
-  },
-  weeklySummary: {
-    newAssets: 0,
-    assignments: 0,
-    maintenanceRequests: 0,
-    completedMaintenance: 0,
-    rfidActivity: 0
-  },
-  maintenanceSummary: {
-    open: 0,
-    inProgress: 0,
-    completed: 0,
-    overdue: 0,
-    scheduled: 0
-  },
-  userSummary: {
-    active: 0,
-    inactive: 0,
-    byRole: {}
-  },
-  departmentSummary: {
-    mostAssets: null,
-    attention: []
-  },
-  storeSummary: {
-    totalItems: 0,
-    inStock: 0,
-    lowStock: 0,
-    outOfStock: 0,
-    totalTransactions: 0,
-    thisWeek: 0,
-    issues: 0
-  },
-  storeInventory: [],
-  storeTransactions: [],
-  recentAssets: [],
-  assetByCollege: [],
-  assetByLocation: [],
-  assetCondition: [],
-  assetValueByCategory: [],
-  assetValueByCollege: [],
-  monthlyAcquisitions: [],
-  transferTrend: [],
-  disposalTrend: [],
-  searchCatalog: {
-    assets: [],
-    users: [],
-    departments: []
-  }
-};
-
-const AdminDashboard = () => {
-  const { user } = useAuth();
-  const { language } = useLanguage();
-  const { theme } = useTheme();
-  const navigate = useNavigate();
-
-  const [stats, setStats] = useState(DEFAULT_STATS);
+function Dashboard() {
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [notifications, setNotifications] = useState([]);
-  const [backups, setBackups] = useState([]);
-  const [lastUpdated, setLastUpdated] = useState(null);
-  const [apiError, setApiError] = useState('');
-  const isDark = theme === 'dark';
-
-  // Translations
-  const translations = {
-    en: {
-      dashboard: 'Admin Dashboard',
-      welcome: 'Welcome',
-      totalAssets: 'Total Assets',
-      availableAssets: 'Available',
-      assignedAssets: 'Assigned',
-      retiredAssets: 'Retired',
-      overdueReturns: 'Overdue Returns',
-      missingAssets: 'Missing',
-      damagedAssets: 'Damaged',
-      underMaintenance: 'In Maintenance',
-      totalDepartments: 'Departments',
-      totalUsers: 'Users',
-      pendingMaintenance: 'Pending Maintenance',
-      rfidActivity: 'RFID Activity',
-      totalValue: 'Total Value',
-      assetsByStatus: 'Assets by Status',
-      assetsByDepartment: 'Assets by Department',
-      assetsByCategory: 'Assets by Category',
-      assetsPurchased: 'Purchase Trend',
-      maintenanceTrend: 'Maintenance Trend',
-      recentActivities: 'Recent Activities',
-      rfidActivityLog: 'RFID Log',
-      recentAssets: 'Recent Assets',
-      noRecentActivities: 'No recent activities',
-      loading: 'Loading...',
-      refresh: 'Refresh',
-      retry: 'Retry',
-      searchPlaceholder: 'Search assets, users, departments...',
-      searchResults: 'Search Results',
-      noSearchResults: 'No results found',
-      asset: 'Asset',
-      location: 'Location',
-      timestamp: 'Timestamp',
-      viewAll: 'View All',
-      noData: 'No data available',
-      loadError: 'Unable to load dashboard data.',
-      notificationCenter: 'Notifications',
-      notification: 'Notification',
-      read: 'Read',
-      unread: 'Unread',
-      apiStatus: 'API Status',
-      databaseStatus: 'Database',
-      healthy: 'Healthy',
-      error: 'Error',
-      unavailable: 'Unavailable',
-      maintenanceSummary: 'Maintenance Summary',
-      inProgressMaintenance: 'In Progress',
-      completedMaintenance: 'Completed',
-      overdueMaintenance: 'Overdue',
-      cancelledMaintenance: 'Cancelled',
-      detectedTags: 'Detected Tags',
-      uniqueTags: 'Unique Tags',
-      onlineDevices: 'Online Devices',
-      offlineDevices: 'Offline Devices',
-      unknownAlerts: 'Unknown Alerts',
-      openRfid: 'Open RFID',
-      rfidSummary: 'RFID Summary',
-      rfidAlerts: 'RFID Alerts',
-      systemPerformance: 'System Performance',
-      assetUtilization: 'Asset Utilization',
-      maintenanceCompletion: 'Maintenance Completion',
-      backupStatus: 'Backup',
-      latestBackup: 'Latest Backup',
-      backupDate: 'Backup Date',
-      openBackup: 'Open Backup',
-      notAvailable: 'Not available',
-      weeklySummary: 'Weekly Summary',
-      assetsAdded: 'Assets Added',
-      assignments: 'Assignments',
-      maintenanceRequests: 'Requests',
-      adminTasks: 'Admin Tasks',
-      noTasks: 'No pending tasks',
-      review: 'Review',
-      quickSettings: 'Quick Settings',
-      quickActions: 'Quick Actions',
-      settings: 'Settings',
-      quickReports: 'Reports',
-      helpSupport: 'Help & Support',
-      account: 'Account',
-      adminRole: 'System Administrator',
-      addUser: 'Add User',
-      addDepartment: 'Add Department',
-      createMaintenance: 'Maintenance Request',
-      alertCenter: 'Alert Center',
-      systemAlert: 'System Alert',
-      userSummary: 'User Summary',
-      activeUsers: 'Active Users',
-      inactiveUsers: 'Inactive Users',
-      manageUsers: 'Manage Users',
-      departmentSummary: 'Department Summary',
-      mostAssets: 'Most Assets',
-      needsAttention: 'Needs Attention',
-      manageDepartments: 'Manage Departments',
-      viewMaintenance: 'View Maintenance',
-      exportDashboard: 'Export',
-      exportSuccess: 'Export completed successfully.',
-      exportError: 'Export failed.',
-      pdfTitle: 'Admin Dashboard Asset Summary',
-      lastUpdated: 'Last Updated',
-      id: 'ID',
-      name: 'Name',
-      category: 'Category',
-      department: 'Department',
-      status: 'Status',
-      rfid: 'RFID',
-      lastUpdatedCol: 'Updated',
-      actions: 'Actions',
-      view: 'View',
-      edit: 'Edit',
-      none: 'None',
-      storeDashboard: 'Store Dashboard',
-      storeOverview: 'Store Overview',
-      storeInventory: 'Store Inventory',
-      totalStoreItems: 'Total Items',
-      inStock: 'In Stock',
-      lowStock: 'Low Stock',
-      outOfStock: 'Out of Stock',
-      totalTransactions: 'Total Transactions',
-      thisWeekTransactions: 'This Week',
-      stockIssues: 'Stock Issues',
-      lowStockAlert: 'Low Stock Alert',
-      allItemsInGoodStock: 'All items in good stock',
-      topSellingItems: 'Top Selling Items',
-      itemName: 'Item Name',
-      quantity: 'Quantity',
-      unitPrice: 'Unit Price',
-      addItem: 'Add Item',
-      recentTransactions: 'Recent Transactions',
-      noTransactionsYet: 'No transactions yet',
-      viewInventory: 'View Inventory',
-      totalValueLabel: 'Total Value'
+  const [error, setError] = useState("");
+  const [dashboard, setDashboard] = useState({
+    assets: {
+      total: 0,
+      active: 0,
+      damaged: 0,
+      replaced: 0,
+      expired: 0,
     },
-    am: {
-      dashboard: 'የአስተዳዳሪ ዳሽቦርድ',
-      welcome: 'እንኳን ደህና መጡ',
-      totalAssets: 'ጠቅላላ ንብረቶች',
-      availableAssets: 'ያሉ',
-      assignedAssets: 'የተመደቡ',
-      retiredAssets: 'የተሰናበቱ',
-      overdueReturns: 'ያለፈባቸው',
-      missingAssets: 'የጠፉ',
-      damagedAssets: 'የተበላሹ',
-      underMaintenance: 'በጥገና',
-      totalDepartments: 'ክፍሎች',
-      totalUsers: 'ተጠቃሚዎች',
-      pendingMaintenance: 'በመጠባበቅ',
-      rfidActivity: 'RFID እንቅስቃሴ',
-      totalValue: 'ጠቅላላ ዋጋ',
-      assetsByStatus: 'በሁኔታ',
-      assetsByDepartment: 'በክፍል',
-      assetsByCategory: 'በምድብ',
-      assetsPurchased: 'የግዢ አዝማሚያ',
-      maintenanceTrend: 'የጥገና አዝማሚያ',
-      recentActivities: 'የቅርብ ጊዜ እንቅስቃሴዎች',
-      rfidActivityLog: 'RFID መዝገብ',
-      recentAssets: 'የቅርብ ጊዜ ንብረቶች',
-      noRecentActivities: 'ምንም እንቅስቃሴ የለም',
-      loading: 'በመጫን...',
-      refresh: 'አድስ',
-      retry: 'እንደገና ሞክር',
-      searchPlaceholder: 'ፈልግ...',
-      searchResults: 'ውጤቶች',
-      noSearchResults: 'ምንም አልተገኘም',
-      asset: 'ንብረት',
-      location: 'ቦታ',
-      timestamp: 'ሰዓት',
-      viewAll: 'ሁሉንም ተመልከት',
-      noData: 'መረጃ የለም',
-      loadError: 'መረጃ መጫን አልተቻለም።',
-      notificationCenter: 'ማሳወቂያዎች',
-      notification: 'ማሳወቂያ',
-      read: 'ተነቧል',
-      unread: 'ያልተነበበ',
-      apiStatus: 'API ሁኔታ',
-      databaseStatus: 'መረጃ ቋት',
-      healthy: 'ጤናማ',
-      error: 'ስህተት',
-      unavailable: 'አይገኝም',
-      maintenanceSummary: 'የጥገና ማጠቃለያ',
-      inProgressMaintenance: 'በሂደት',
-      completedMaintenance: 'ተጠናቋል',
-      overdueMaintenance: 'ያለፈበት',
-      cancelledMaintenance: 'ተሰርዟል',
-      detectedTags: 'የተገኙ መለያዎች',
-      uniqueTags: 'ልዩ መለያዎች',
-      onlineDevices: 'በመስመር',
-      offlineDevices: 'ከመስመር ውጭ',
-      unknownAlerts: 'ያልታወቁ',
-      openRfid: 'RFID ክፈት',
-      rfidSummary: 'RFID ማጠቃለያ',
-      rfidAlerts: 'RFID ማንቂያዎች',
-      systemPerformance: 'የስርዓት አፈጻጸም',
-      assetUtilization: 'የንብረት አጠቃቀም',
-      maintenanceCompletion: 'የጥገና ማጠናቀቅ',
-      backupStatus: 'ምትኬ',
-      latestBackup: 'የቅርብ ጊዜ',
-      backupDate: 'ቀን',
-      openBackup: 'ምትኬ ክፈት',
-      notAvailable: 'አይገኝም',
-      weeklySummary: 'ሳምንታዊ ማጠቃለያ',
-      assetsAdded: 'ንብረቶች',
-      assignments: 'ምደባዎች',
-      maintenanceRequests: 'ጥያቄዎች',
-      adminTasks: 'የአስተዳዳሪ ሥራዎች',
-      noTasks: 'ምንም ሥራ የለም',
-      review: 'ገምግም',
-      quickSettings: 'ፈጣን ቅንብሮች',
-      quickActions: 'ፈጣን እርምጃዎች',
-      settings: 'ቅንብሮች',
-      quickReports: 'ሪፖርቶች',
-      helpSupport: 'እገዛ',
-      account: 'መለያ',
-      adminRole: 'አስተዳዳሪ',
-      addUser: 'ተጠቃሚ ጨምር',
-      addDepartment: 'ክፍል ጨምር',
-      createMaintenance: 'ጥገና ጠይቅ',
-      alertCenter: 'ማንቂያዎች',
-      systemAlert: 'ስርዓት',
-      userSummary: 'ተጠቃሚዎች',
-      activeUsers: 'ንቁ',
-      inactiveUsers: 'ንቁ ያልሆኑ',
-      manageUsers: 'አስተዳድር',
-      departmentSummary: 'ክፍሎች',
-      mostAssets: 'ብዙ ንብረት',
-      needsAttention: 'ትኩረት የሚፈልጉ',
-      manageDepartments: 'አስተዳድር',
-      viewMaintenance: 'ጥገና ተመልከት',
-      exportDashboard: 'ላክ',
-      exportSuccess: 'በትክክል ተልኳል።',
-      exportError: 'መላክ አልተሳካም።',
-      pdfTitle: 'የአስተዳዳሪ ዳሽቦርድ ማጠቃለያ',
-      lastUpdated: 'የመጨረሻ ማሻሻያ',
-      id: 'መለያ',
-      name: 'ስም',
-      category: 'ምድብ',
-      department: 'ክፍል',
-      status: 'ሁኔታ',
-      rfid: 'RFID',
-      lastUpdatedCol: 'የተሻሻለ',
-      actions: 'እርምጃዎች',
-      view: 'ተመልከት',
-      edit: 'አስተካክል',
-      none: 'የለም',
-      storeDashboard: 'የሱቅ ዳሽቦርድ',
-      storeOverview: 'አጠቃላይ',
-      storeInventory: 'ስቶክ',
-      totalStoreItems: 'ጠቅላላ ዕቃዎች',
-      inStock: 'በሱቁ ላይ',
-      lowStock: 'ዝቅተኛ',
-      outOfStock: 'አልተገኘም',
-      totalTransactions: 'ግብይቶች',
-      thisWeekTransactions: 'ይህ ሳምንት',
-      stockIssues: 'ችግሮች',
-      lowStockAlert: 'ዝቅተኛ ስቶክ',
-      allItemsInGoodStock: 'ሁሉም ጤናማ ናቸው',
-      topSellingItems: 'በርካታ የሚሸጡ',
-      itemName: 'ዕቃ',
-      quantity: 'ብዛት',
-      unitPrice: 'ዋጋ',
-      addItem: 'ዕቃ ጨምር',
-      recentTransactions: 'የቅርብ ግብይቶች',
-      noTransactionsYet: 'ግብይት የለም',
-      viewInventory: 'ስቶክን ተመልከት',
-      totalValueLabel: 'ጠቅላላ ዋጋ'
+    users: 0,
+    colleges: 0,
+    departments: 0,
+    maintenance: {
+      submitted: 0,
+      scheduled: 0,
+      inProgress: 0,
+      completed: 0,
+      escalated: 0,
+    },
+    inventory: {
+      lowStock: 0,
+      outOfStock: 0,
+      expiringChemicals: 0,
+      expiredChemicals: 0,
+      quarantinedChemicals: 0,
+    },
+    recentActivity: [],
+  });
+
+  const getToken = () => {
+    return (
+      localStorage.getItem("token") ||
+      localStorage.getItem("authToken") ||
+      sessionStorage.getItem("token") ||
+      sessionStorage.getItem("authToken")
+    );
+  };
+
+  const buildHeaders = () => {
+    const token = getToken();
+
+    const headers = {
+      "Content-Type": "application/json",
+    };
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
+
+    return headers;
   };
 
-  const t = translations[language] || translations.en;
+  const fetchJson = async (url) => {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: buildHeaders(),
+      credentials: "include",
+    });
 
-  // Safe helpers
-  const safeArray = (value) => Array.isArray(value) ? value : [];
-  const safeObject = (value, fallback = {}) => value && typeof value === 'object' && !Array.isArray(value) ? value : fallback;
-  const safeNumber = (value, fallback = 0) => {
-    if (value === null || value === undefined || value === '') return fallback;
-    const num = Number(value);
-    return Number.isFinite(num) && num >= 0 ? num : fallback;
-  };
-  const safeDate = (value) => {
-    if (!value) return '-';
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
-  };
-  const safeDateOnly = (value) => {
-    if (!value) return '-';
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString();
+    const contentType = response.headers.get("content-type") || "";
+
+    let data = null;
+
+    if (contentType.includes("application/json")) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      data = text ? { message: text } : null;
+    }
+
+    if (!response.ok) {
+      const message =
+        data?.message ||
+        data?.error ||
+        `Request failed with status ${response.status}`;
+
+      throw new Error(message);
+    }
+
+    return data;
   };
 
-  const normalizeStats = (data) => {
-    const source = safeObject(data);
+  const normalizeNumber = (value) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
+  };
+
+  const normalizeDashboard = (data) => {
+    const source = data?.data || data || {};
+
+    const assets = source.assets || source.assetSummary || {};
+    const maintenance =
+      source.maintenance || source.maintenanceSummary || {};
+    const inventory =
+      source.inventory || source.inventorySummary || {};
+
     return {
-      ...DEFAULT_STATS,
-      totalAssets: safeNumber(source.totalAssets),
-      activeAssets: safeNumber(source.activeAssets),
-      availableAssets: safeNumber(source.availableAssets || source.availableAssets === 0 ? source.availableAssets : source.activeAssets),
-      retiredAssets: safeNumber(source.retiredAssets),
-      missingAssets: safeNumber(source.missingAssets),
-      damagedAssets: safeNumber(source.damagedAssets),
-      underMaintenance: safeNumber(source.underMaintenance || source.maintenanceAssets),
-      totalDepartments: safeNumber(source.totalDepartments),
-      totalUsers: safeNumber(source.totalUsers),
-      pendingMaintenance: safeNumber(source.pendingMaintenance),
-      rfidActivity: safeNumber(source.rfidActivity),
-      totalValue: safeNumber(source.totalAssetValue || source.totalValue),
-      assignedAssets: safeNumber(source.assignedAssets),
-      overdueReturns: safeNumber(source.overdueReturns),
-      assetByStatus: safeArray(source.assetByStatus),
-      assetByDepartment: safeArray(source.assetByDepartment),
-      assetByCategory: safeArray(source.assetByCategory),
-      assetByCollege: safeArray(source.assetByCollege),
-      assetByLocation: safeArray(source.assetByLocation),
-      assetCondition: safeArray(source.assetCondition),
-      assetValueByCategory: safeArray(source.assetValueByCategory),
-      assetValueByCollege: safeArray(source.assetValueByCollege),
-      assetsPurchasedOverTime: safeArray(source.assetsPurchasedOverTime),
-      monthlyAcquisitions: safeArray(source.monthlyAcquisitions || source.monthlyAcquisitionTrend || source.transfers),
-      transferTrend: safeArray(source.transferTrend || source.transfers),
-      disposalTrend: safeArray(source.disposalTrend || source.disposals),
-      maintenanceTrend: safeArray(source.maintenanceTrend),
-      rfidActivityLog: safeArray(source.rfidActivityLog),
-      recentActivities: safeArray(source.recentActivities),
-      alerts: safeArray(source.alerts),
-      quickActions: safeArray(source.quickActions),
-      rfidMetrics: { ...DEFAULT_STATS.rfidMetrics, ...safeObject(source.rfidMetrics) },
-      weeklySummary: { ...DEFAULT_STATS.weeklySummary, ...safeObject(source.weeklySummary) },
-      maintenanceSummary: { ...DEFAULT_STATS.maintenanceSummary, ...safeObject(source.maintenanceSummary) },
-      userSummary: { ...DEFAULT_STATS.userSummary, ...safeObject(source.userSummary), byRole: safeObject(source.userSummary?.byRole) },
-      departmentSummary: { ...DEFAULT_STATS.departmentSummary, ...safeObject(source.departmentSummary), attention: safeArray(source.departmentSummary?.attention) },
-      storeSummary: { ...DEFAULT_STATS.storeSummary, ...safeObject(source.storeSummary) },
-      storeInventory: safeArray(source.storeInventory),
-      storeTransactions: safeArray(source.storeTransactions),
-      recentAssets: safeArray(source.recentAssets),
-      searchCatalog: { ...DEFAULT_STATS.searchCatalog, ...safeObject(source.searchCatalog), assets: safeArray(source.searchCatalog?.assets), users: safeArray(source.searchCatalog?.users), departments: safeArray(source.searchCatalog?.departments) }
+      assets: {
+        total: normalizeNumber(
+          assets.total ??
+            assets.totalAssets ??
+            source.totalAssets
+        ),
+        active: normalizeNumber(
+          assets.active ??
+            assets.activeAssets ??
+            source.activeAssets
+        ),
+        damaged: normalizeNumber(
+          assets.damaged ??
+            assets.damagedAssets ??
+            source.damagedAssets
+        ),
+        replaced: normalizeNumber(
+          assets.replaced ??
+            assets.replacedAssets ??
+            source.replacedAssets
+        ),
+        expired: normalizeNumber(
+          assets.expired ??
+            assets.expiredAssets ??
+            source.expiredAssets
+        ),
+      },
+
+      users: normalizeNumber(
+        source.users ??
+          source.totalUsers ??
+          source.userCount
+      ),
+
+      colleges: normalizeNumber(
+        source.colleges ??
+          source.totalColleges ??
+          source.collegeCount
+      ),
+
+      departments: normalizeNumber(
+        source.departments ??
+          source.totalDepartments ??
+          source.departmentCount
+      ),
+
+      maintenance: {
+        submitted: normalizeNumber(
+          maintenance.submitted ??
+            maintenance.submittedRequests ??
+            source.submittedMaintenance
+        ),
+        scheduled: normalizeNumber(
+          maintenance.scheduled ??
+            maintenance.scheduledRequests ??
+            source.scheduledMaintenance
+        ),
+        inProgress: normalizeNumber(
+          maintenance.inProgress ??
+            maintenance.in_progress ??
+            maintenance.inProgressRequests ??
+            source.inProgressMaintenance
+        ),
+        completed: normalizeNumber(
+          maintenance.completed ??
+            maintenance.completedRequests ??
+            source.completedMaintenance
+        ),
+        escalated: normalizeNumber(
+          maintenance.escalated ??
+            maintenance.escalatedRequests ??
+            source.escalatedMaintenance
+        ),
+      },
+
+      inventory: {
+        lowStock: normalizeNumber(
+          inventory.lowStock ??
+            inventory.low_stock ??
+            source.lowStock
+        ),
+        outOfStock: normalizeNumber(
+          inventory.outOfStock ??
+            inventory.out_of_stock ??
+            source.outOfStock
+        ),
+        expiringChemicals: normalizeNumber(
+          inventory.expiringChemicals ??
+            inventory.expiring_chemicals ??
+            source.expiringChemicals
+        ),
+        expiredChemicals: normalizeNumber(
+          inventory.expiredChemicals ??
+            inventory.expired_chemicals ??
+            source.expiredChemicals
+        ),
+        quarantinedChemicals: normalizeNumber(
+          inventory.quarantinedChemicals ??
+            inventory.quarantined_chemicals ??
+            source.quarantinedChemicals
+        ),
+      },
+
+      recentActivity: Array.isArray(source.recentActivity)
+        ? source.recentActivity
+        : Array.isArray(source.activities)
+        ? source.activities
+        : [],
     };
   };
 
-  // Fetch dashboard data
-  const fetchDashboardData = useCallback(async () => {
+  const loadDashboard = async () => {
     setLoading(true);
-    setLoadError(false);
-    setApiError('');
+    setError("");
 
     try {
-      const response = await apiClient.get('/api/admin/dashboard');
-      let data = {};
-      
-      if (response?.data?.data && typeof response.data.data === 'object') {
-        data = response.data.data;
-      } else if (response?.data && typeof response.data === 'object') {
-        if (response.data.success !== undefined) {
-          data = response.data.data || response.data;
-        } else {
-          data = response.data;
-        }
-      }
+      /*
+       * The Administrator documentation defines:
+       * /admin as the dashboard route and
+       * /api/maintenance/* as the maintenance API group.
+       *
+       * Reuse the existing dashboard endpoint when available.
+       */
+      const endpoints = [
+        `${API_BASE_URL}/api/admin/dashboard`,
+        `${API_BASE_URL}/api/dashboard`,
+        `${API_BASE_URL}/api/analytics/dashboard`,
+      ];
 
-      // Fetch optional data
-      const [notificationsResponse, backupsResponse] = await Promise.allSettled([
-        apiClient.get('/api/notifications'),
-        apiClient.get('/api/admin/backups')
-      ]);
+      let result = null;
+      let lastError = null;
 
-      if (notificationsResponse.status === 'fulfilled') {
+      for (const endpoint of endpoints) {
         try {
-          const notificationData = notificationsResponse.value?.data;
-          setNotifications(safeArray(notificationData?.notifications || notificationData?.data || notificationData));
-        } catch (err) {
-          console.warn('Failed to parse notifications:', err);
-          setNotifications([]);
+          result = await fetchJson(endpoint);
+          break;
+        } catch (requestError) {
+          lastError = requestError;
         }
-      } else {
-        setNotifications([]);
       }
 
-      if (backupsResponse.status === 'fulfilled') {
-        try {
-          const backupData = backupsResponse.value?.data;
-          setBackups(safeArray(backupData?.backups || backupData?.data || backupData));
-        } catch (err) {
-          console.warn('Failed to parse backups:', err);
-          setBackups([]);
-        }
-      } else {
-        setBackups([]);
+      if (!result) {
+        throw lastError || new Error("Unable to load dashboard");
       }
 
-      const normalizedStats = normalizeStats(data);
-      setStats(normalizedStats);
-      setLastUpdated(new Date());
-    } catch (error) {
-      const message = getApiErrorMessage(error, t.loadError);
-      setApiError(message);
-      setLoadError(true);
-      setStats(DEFAULT_STATS);
-      console.error('Dashboard fetch failed:', error.response?.status || error.code || 'unknown');
-      toast.error(message);
+      setDashboard(normalizeDashboard(result));
+    } catch (requestError) {
+      console.error("Dashboard loading error:", requestError);
+
+      setError(
+        requestError?.message ||
+          "Unable to load administrator dashboard."
+      );
     } finally {
       setLoading(false);
     }
-  }, [t.loadError]);
+  };
 
-  // Load once when the dashboard opens. Refreshes are explicit so the shell stays stable.
   useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
-
-  // Colors
-  const chartColors = {
-    light: {
-      primary: '#2b6cb0',
-      secondary: '#4299e1',
-      success: '#48bb78',
-      warning: '#ed8936',
-      danger: '#fc8181',
-      purple: '#805ad5',
-      teal: '#38b2ac',
-      background: 'rgba(43, 108, 176, 0.2)'
-    },
-    dark: {
-      primary: '#63b3ed',
-      secondary: '#4299e1',
-      success: '#48bb78',
-      warning: '#ed8936',
-      danger: '#fc8181',
-      purple: '#b794f4',
-      teal: '#4fd1c5',
-      background: 'rgba(99, 179, 237, 0.2)'
-    }
-  };
-  const colors = isDark ? chartColors.dark : chartColors.light;
-
-  // Status routes
-  const statusRoutes = {
-    Available: '/admin/assets?status=available',
-    Active: '/admin/assets?status=active',
-    Assigned: '/admin/assets?status=assigned',
-    Maintenance: '/admin/maintenance',
-    'Under-Maintenance': '/admin/maintenance',
-    Damaged: '/admin/assets?status=damaged',
-    Missing: '/admin/assets?status=missing',
-    Retired: '/admin/assets?status=retired'
-  };
-
-  // Chart data
-  const statusChartData = useMemo(() => {
-    const labels = safeArray(stats.assetByStatus).map(item => item?.label || item?.status || 'Unknown');
-    const values = safeArray(stats.assetByStatus).map(item => safeNumber(item?.value));
-    return {
-      labels: labels.length > 0 ? labels : ['No Data'],
-      datasets: [{
-        label: t.assetsByStatus,
-        data: values.length > 0 ? values : [0],
-        backgroundColor: [colors.success, colors.primary, colors.warning, colors.danger, colors.purple, colors.secondary],
-        borderColor: isDark ? '#1e2d45' : '#ffffff',
-        borderWidth: 2
-      }]
-    };
-  }, [stats.assetByStatus, t.assetsByStatus, colors, isDark]);
-
-  const departmentChartData = useMemo(() => {
-    const labels = safeArray(stats.assetByDepartment).map(item => item?.label || item?.department || 'Unknown');
-    const values = safeArray(stats.assetByDepartment).map(item => safeNumber(item?.value));
-    return {
-      labels: labels.length > 0 ? labels : ['No Data'],
-      datasets: [{
-        label: t.assetsByDepartment,
-        data: values.length > 0 ? values : [0],
-        backgroundColor: ['#4299e1', '#48bb78', '#ed8936', '#fc8181', '#805ad5', '#9f7aea', '#f687b3', '#4fd1c5', '#f6ad55', '#63b3ed'],
-        borderColor: isDark ? '#1e2d45' : '#ffffff',
-        borderWidth: 2
-      }]
-    };
-  }, [stats.assetByDepartment, t.assetsByDepartment, isDark]);
-
-  const collegeChartData = useMemo(() => {
-    const rows = safeArray(stats.assetByCollege).slice(0, 6);
-    return {
-      labels: rows.length > 0 ? rows.map(item => item?.label || 'Unknown') : ['No Data'],
-      datasets: [{
-        label: 'Assets by College',
-        data: rows.length > 0 ? rows.map(item => safeNumber(item?.value)) : [0],
-        backgroundColor: '#4f7cff',
-        borderRadius: 8
-      }]
-    };
-  }, [stats.assetByCollege]);
-
-  const locationChartData = useMemo(() => {
-    const rows = safeArray(stats.assetByLocation).slice(0, 6);
-    return {
-      labels: rows.length > 0 ? rows.map(item => item?.label || 'Unknown') : ['No Data'],
-      datasets: [{
-        label: 'Assets by location',
-        data: rows.length > 0 ? rows.map(item => safeNumber(item?.value)) : [0],
-        backgroundColor: '#36b37e',
-        borderRadius: 8
-      }]
-    };
-  }, [stats.assetByLocation]);
-
-  const conditionChartData = useMemo(() => {
-    const rows = safeArray(stats.assetCondition).slice(0, 6);
-    return {
-      labels: rows.length > 0 ? rows.map(item => item?.label || 'Unknown') : ['No Data'],
-      datasets: [{
-        label: 'Asset condition',
-        data: rows.length > 0 ? rows.map(item => safeNumber(item?.value)) : [0],
-        backgroundColor: ['#2f6fed', '#36b37e', '#f5a623', '#ef4444', '#8b5cf6', '#64748b'],
-        borderWidth: 0
-      }]
-    };
-  }, [stats.assetCondition]);
-
-  const purchasedChartData = useMemo(() => {
-    const labels = safeArray(stats.assetsPurchasedOverTime).map(item => item?.label || item?.month || item?.year || '-');
-    const values = safeArray(stats.assetsPurchasedOverTime).map(item => safeNumber(item?.value));
-    return {
-      labels: labels.length > 0 ? labels : ['No Data'],
-      datasets: [{
-        label: t.assetsPurchased,
-        data: values.length > 0 ? values : [0],
-        borderColor: '#2864E8',
-        backgroundColor: 'rgba(40,100,232,0.18)',
-        fill: true,
-        tension: 0.35
-      }]
-    };
-  }, [stats.assetsPurchasedOverTime, t.assetsPurchased]);
-
-  const trendChartData = useMemo(() => {
-    const maintenanceData = safeArray(stats.maintenanceTrend);
-    const labels = maintenanceData.length > 0 ? maintenanceData.map(item => item?.month || item?.label || '-') : ['No Data'];
-    return {
-      labels,
-      datasets: [
-        { label: t.pendingMaintenance, data: maintenanceData.length > 0 ? maintenanceData.map(item => safeNumber(item?.pending)) : [0], borderColor: colors.warning, backgroundColor: 'transparent', tension: 0.4 },
-        { label: t.inProgressMaintenance, data: maintenanceData.length > 0 ? maintenanceData.map(item => safeNumber(item?.inProgress)) : [0], borderColor: colors.primary, backgroundColor: 'transparent', tension: 0.4 },
-        { label: t.completedMaintenance, data: maintenanceData.length > 0 ? maintenanceData.map(item => safeNumber(item?.completed)) : [0], borderColor: colors.success, backgroundColor: 'transparent', tension: 0.4 },
-        { label: t.cancelledMaintenance, data: maintenanceData.length > 0 ? maintenanceData.map(item => safeNumber(item?.cancelled)) : [0], borderColor: colors.danger, backgroundColor: 'transparent', tension: 0.4 }
-      ]
-    };
-  }, [stats.maintenanceTrend, t.pendingMaintenance, t.inProgressMaintenance, t.completedMaintenance, t.cancelledMaintenance, colors]);
-
-  const monthlyAcquisitionChartData = useMemo(() => {
-    const rows = safeArray(stats.monthlyAcquisitions);
-    const labels = rows.length > 0 ? rows.map(item => item?.label || item?.month || 'Unknown') : ['No Data'];
-    return {
-      labels,
-      datasets: [{
-        label: 'Monthly acquisitions',
-        data: rows.length > 0 ? rows.map(item => safeNumber(item?.value)) : [0],
-        borderColor: '#2f6fed',
-        backgroundColor: 'rgba(47, 111, 237, 0.18)',
-        fill: true,
-        tension: 0.25
-      }]
-    };
-  }, [stats.monthlyAcquisitions]);
-
-  const transferChartData = useMemo(() => {
-    const rows = safeArray(stats.transferTrend);
-    const labels = rows.length > 0 ? rows.map(item => item?.label || item?.month || 'Unknown') : ['No Data'];
-    return {
-      labels,
-      datasets: [{
-        label: 'Transfers',
-        data: rows.length > 0 ? rows.map(item => safeNumber(item?.value)) : [0],
-        backgroundColor: '#8b5cf6',
-        borderRadius: 6
-      }]
-    };
-  }, [stats.transferTrend]);
-
-  const disposalChartData = useMemo(() => {
-    const rows = safeArray(stats.disposalTrend);
-    const labels = rows.length > 0 ? rows.map(item => item?.label || item?.month || 'Unknown') : ['No Data'];
-    return {
-      labels,
-      datasets: [{
-        label: 'Disposals',
-        data: rows.length > 0 ? rows.map(item => safeNumber(item?.value)) : [0],
-        backgroundColor: '#ef4444',
-        borderRadius: 6
-      }]
-    };
-  }, [stats.disposalTrend]);
-
-  // Chart options
-  const chartOptions = useMemo(() => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false,
-    animations: {
-      colors: false,
-      x: { duration: 0 },
-      y: { duration: 0 }
-    },
-    plugins: {
-      legend: { position: 'bottom', labels: { color: isDark ? '#c8dcf5' : '#1a365d', boxWidth: 12, padding: 16 } },
-      tooltip: { enabled: true }
-    },
-    scales: {
-      y: { beginAtZero: true, ticks: { color: isDark ? '#8896b0' : '#4a5568' }, grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' } },
-      x: { ticks: { color: isDark ? '#8896b0' : '#4a5568' }, grid: { color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' } }
-    }
-  }), [isDark]);
-
-  const statusChartOptions = useMemo(() => ({
-    ...chartOptions,
-    onClick: (_, elements) => {
-      const item = elements?.[0];
-      if (!item) return;
-      const status = statusChartData.labels[item.index];
-      if (statusRoutes[status]) navigate(statusRoutes[status]);
-    }
-  }), [chartOptions, statusChartData.labels, navigate]);
-
-  const lineChartOptions = useMemo(() => ({
-    ...chartOptions,
-    plugins: { ...chartOptions.plugins, legend: { ...chartOptions.plugins.legend, position: 'top' } }
-  }), [chartOptions]);
-
-  // Search
-  const normalizedSearch = searchQuery.trim().toLowerCase();
-  const searchResults = useMemo(() => {
-    if (!normalizedSearch) return [];
-    const assets = safeArray(stats.searchCatalog?.assets);
-    const users = safeArray(stats.searchCatalog?.users);
-    const departments = safeArray(stats.searchCatalog?.departments);
-    const activities = safeArray(stats.recentActivities);
-    
-    const assetResults = assets.filter(item => [item?.id, item?.name, item?.category, item?.department, item?.rfid, item?.status].some(v => String(v ?? '').toLowerCase().includes(normalizedSearch))).map(item => ({ ...item, kind: 'Asset' }));
-    const userResults = users.filter(item => [item?.id, item?.username, item?.name, item?.fullName, item?.role].some(v => String(v ?? '').toLowerCase().includes(normalizedSearch))).map(item => ({ ...item, kind: 'User' }));
-    const departmentResults = departments.filter(item => String(item?.name ?? '').toLowerCase().includes(normalizedSearch)).map(item => ({ ...item, kind: 'Department' }));
-    const activityResults = activities.filter(item => [item?.title, item?.description, item?.action, item?.module, item?.type].some(v => String(v ?? '').toLowerCase().includes(normalizedSearch))).map((item, index) => ({ ...item, id: item?.id || `activity-${index}`, kind: 'Activity' }));
-    return [...assetResults, ...userResults, ...departmentResults, ...activityResults].slice(0, 12);
-  }, [normalizedSearch, stats.searchCatalog, stats.recentActivities]);
-
-  // Export
-  const exportRows = useMemo(() => safeArray(stats.recentAssets).map(asset => ({
-    ID: asset?.id ?? '',
-    Name: asset?.name ?? '',
-    Category: asset?.category ?? '',
-    Department: asset?.department ?? '',
-    Status: asset?.status ?? '',
-    RFID: asset?.rfid ?? '',
-    Updated: asset?.updatedAt ? safeDate(asset.updatedAt) : ''
-  })), [stats.recentAssets]);
-
-  const exportHeaders = ['ID', 'Name', 'Category', 'Department', 'Status', 'RFID', 'Updated'];
-
-  const downloadCsv = () => {
-    try {
-      const rows = exportRows.length ? exportRows : [{ ID: '', Name: '', Category: '', Department: '', Status: '', RFID: '', Updated: '' }];
-      const csv = [exportHeaders, ...rows.map(row => exportHeaders.map(h => String(row[h] ?? '').replace(/"/g, '""')))].map(row => row.map(v => `"${v}"`).join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'admin-dashboard-assets.csv';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      toast.success(t.exportSuccess);
-    } catch (error) {
-      toast.error(error?.message || t.exportError);
-    }
-  };
-
-  const downloadExcel = async () => {
-    try {
-      const XLSX = await import('xlsx');
-      const rows = exportRows.length ? exportRows : [{ ID: '', Name: '', Category: '', Department: '', Status: '', RFID: '', Updated: '' }];
-      const workbook = XLSX.utils.book_new();
-      const worksheet = XLSX.utils.json_to_sheet(rows);
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Assets');
-      XLSX.writeFile(workbook, 'admin-dashboard-assets.xlsx');
-      toast.success(t.exportSuccess);
-    } catch (error) {
-      toast.error(error?.message || t.exportError);
-    }
-  };
-
-  const downloadPdf = async () => {
-    try {
-      const [jspdfModule, autoTableModule] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
-      const { jsPDF } = jspdfModule;
-      const autoTable = autoTableModule.default || autoTableModule;
-      const doc = new jsPDF();
-      const rows = exportRows.length ? exportRows : [{ ID: '', Name: '', Category: '', Department: '', Status: '', RFID: '', Updated: '' }];
-      doc.text(t.pdfTitle, 14, 16);
-      autoTable(doc, { head: [exportHeaders], body: rows.map(row => exportHeaders.map(h => row[h])), startY: 24 });
-      doc.save('admin-dashboard-assets.pdf');
-      toast.success(t.exportSuccess);
-    } catch (error) {
-      toast.error(error?.message || t.exportError);
-    }
-  };
-
-  // Calculations
-  const maintenanceTotal = Object.values(stats.maintenanceSummary).reduce((total, value) => total + safeNumber(value), 0);
-  const maintenanceCompletion = maintenanceTotal > 0 ? Math.round((stats.maintenanceSummary.completed / maintenanceTotal) * 100) : null;
-  const assetUtilization = stats.totalAssets > 0 ? Math.round((stats.assignedAssets / stats.totalAssets) * 100) : null;
-  const hasMaintenanceTrendData = safeArray(stats.maintenanceTrend).some((period) => safeNumber(period?.count) > 0);
-  const unreadNotifications = safeArray(notifications).filter(n => !n?.is_read && !n?.isRead);
-  const latestBackup = safeArray(backups)[0];
-
-  // Admin tasks
-  const adminTasks = useMemo(() => {
-    const tasks = [];
-    if (stats.missingAssets > 0) tasks.push({ id: 'missing-assets', icon: '⚠️', message: `${stats.missingAssets} ${t.missingAssets}`, path: '/admin/assets?status=missing' });
-    if (stats.damagedAssets > 0) tasks.push({ id: 'damaged-assets', icon: '🔧', message: `${stats.damagedAssets} ${t.damagedAssets}`, path: '/admin/assets?status=damaged' });
-    if (stats.pendingMaintenance > 0) tasks.push({ id: 'pending-maintenance', icon: '🛠️', message: `${stats.pendingMaintenance} ${t.pendingMaintenance}`, path: '/admin/maintenance' });
-    if (stats.overdueReturns > 0) tasks.push({ id: 'overdue-returns', icon: '⏰', message: `${stats.overdueReturns} ${t.overdueReturns}`, path: '/admin/assets' });
-    if (safeNumber(stats.rfidMetrics?.unknownAlerts) > 0) tasks.push({ id: 'rfid-alerts', icon: '📡', message: `${stats.rfidMetrics.unknownAlerts} ${t.rfidAlerts}`, path: '/admin/rfid' });
-    return tasks;
-  }, [stats.missingAssets, stats.damagedAssets, stats.pendingMaintenance, stats.overdueReturns, stats.rfidMetrics, t]);
-
-  // Quick actions aligned to the requested System Administrator dashboard view.
-  const dashboardActions = useMemo(() => {
-    return [
-      { icon: Users, label: 'Manage Users', path: '/admin/users' },
-      { icon: Building2, label: 'Manage Organization', path: '/admin/departments' },
-      { icon: Package, label: 'View Assets', path: '/admin/assets' },
-      { icon: FileText, label: 'View Reports', path: '/admin/reports' },
-      { icon: Settings, label: 'System Settings', path: '/admin/settings' }
-    ];
+    loadDashboard();
   }, []);
 
-  // Loading state
-  if (loading && !lastUpdated) {
+  const statCards = [
+    {
+      title: "Total Assets",
+      value: dashboard.assets.total,
+      icon: "📦",
+    },
+    {
+      title: "Active Assets",
+      value: dashboard.assets.active,
+      icon: "✓",
+    },
+    {
+      title: "Damaged Assets",
+      value: dashboard.assets.damaged,
+      icon: "⚠",
+    },
+    {
+      title: "Users",
+      value: dashboard.users,
+      icon: "👥",
+    },
+    {
+      title: "Colleges",
+      value: dashboard.colleges,
+      icon: "🏫",
+    },
+    {
+      title: "Departments",
+      value: dashboard.departments,
+      icon: "🏢",
+    },
+  ];
+
+  const maintenanceCards = [
+    {
+      title: "Submitted",
+      value: dashboard.maintenance.submitted,
+    },
+    {
+      title: "Scheduled",
+      value: dashboard.maintenance.scheduled,
+    },
+    {
+      title: "In Progress",
+      value: dashboard.maintenance.inProgress,
+    },
+    {
+      title: "Completed",
+      value: dashboard.maintenance.completed,
+    },
+    {
+      title: "Escalated",
+      value: dashboard.maintenance.escalated,
+    },
+  ];
+
+  const inventoryCards = [
+    {
+      title: "Low Stock",
+      value: dashboard.inventory.lowStock,
+    },
+    {
+      title: "Out of Stock",
+      value: dashboard.inventory.outOfStock,
+    },
+    {
+      title: "Expiring Chemicals",
+      value: dashboard.inventory.expiringChemicals,
+    },
+    {
+      title: "Expired Chemicals",
+      value: dashboard.inventory.expiredChemicals,
+    },
+    {
+      title: "Quarantined",
+      value: dashboard.inventory.quarantinedChemicals,
+    },
+  ];
+
+  if (loading) {
     return (
-      <div className="admin-dashboard-shell admin-dashboard-shell--loading" style={{ background: isDark ? '#0d1117' : '#f0f2f5', color: isDark ? '#e6edf3' : '#1a365d' }}>
-        <div className="admin-dashboard-skeleton admin-dashboard-skeleton--header" />
-        <div className="admin-dashboard-skeleton-grid">
-          {Array.from({ length: 8 }).map((_, index) => (
-            <div key={`sk-${index}`} className="admin-dashboard-skeleton admin-dashboard-skeleton--stat" />
-          ))}
-        </div>
-        <div className="admin-dashboard-skeleton-grid admin-dashboard-skeleton-grid--charts">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <div key={`chart-sk-${index}`} className="admin-dashboard-skeleton admin-dashboard-skeleton--chart" />
-          ))}
+      <div style={styles.page}>
+        <div style={styles.loadingCard}>
+          <div style={styles.spinner} />
+          <p style={styles.loadingText}>
+            Loading administrator dashboard...
+          </p>
         </div>
       </div>
     );
   }
 
-  // Main render
   return (
-    <div className="admin-dashboard-shell" style={{
-      width: '100%',
-      background: isDark ? '#0d1117' : '#f0f2f5',
-      color: isDark ? '#e6edf3' : '#1a365d'
-    }}>
-      {/* Header */}
-      <div className="admin-dashboard-header" style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: '24px',
-        flexWrap: 'wrap',
-        gap: '16px'
-      }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 700, margin: 0, color: isDark ? '#c8dcf5' : '#1a365d' }}>
-              Welcome, System Administrator
-            </h1>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: '999px', background: isDark ? '#243652' : '#ebf4ff', color: isDark ? '#c8dcf5' : '#2b6cb0', fontSize: '0.88rem', fontWeight: 700 }}>
-              <Bell size={14} />
-            </span>
-          </div>
-          <p style={{ margin: '4px 0 0 0', color: isDark ? '#8896b0' : '#4a5568' }}>Administration</p>
-          <p style={{ margin: '4px 0 0 0', color: isDark ? '#8896b0' : '#4a5568' }}>{lastUpdated ? lastUpdated.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '—'} • Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '—'}</p>
+    <div style={styles.page}>
+      <div style={styles.header}>
+        <div>
+          <h1 style={styles.title}>Administrator Dashboard</h1>
+          <p style={styles.subtitle}>
+            Central overview of university assets, maintenance,
+            inventory and system activity.
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative' }}>
-            <Search size={17} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: isDark ? '#8896b0' : '#718096' }} />
-            <input
-              type="text"
-              placeholder={t.searchPlaceholder}
-              style={{
-                padding: '10px 16px 10px 40px',
-                borderRadius: '8px',
-                border: `1px solid ${isDark ? '#32465f' : '#e2e8f0'}`,
-                background: isDark ? '#1a273a' : '#ffffff',
-                color: isDark ? '#c8dcf5' : '#1a365d',
-                fontSize: '0.9rem',
-                minWidth: '260px'
-              }}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+
+        <button
+          type="button"
+          onClick={loadDashboard}
+          style={styles.refreshButton}
+        >
+          ↻ Refresh
+        </button>
+      </div>
+
+      {error && (
+        <div style={styles.errorBox}>
+          <div>
+            <strong>Unable to load dashboard</strong>
+            <div style={styles.errorText}>{error}</div>
           </div>
+
           <button
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '10px 14px',
-              borderRadius: '8px',
-              border: `1px solid ${isDark ? '#4a6385' : '#cbd5e1'}`,
-              background: isDark ? '#243652' : '#ffffff',
-              color: isDark ? '#c8dcf5' : '#1a365d',
-              cursor: loading ? 'wait' : 'pointer',
-              fontWeight: 600,
-              fontSize: '0.9rem'
-            }}
-            onClick={fetchDashboardData}
-            disabled={loading}
+            type="button"
+            onClick={loadDashboard}
+            style={styles.retryButton}
           >
-            <RefreshCw size={16} style={{ animation: 'none' }} />
-            {t.refresh}
+            Retry
           </button>
         </div>
-      </div>
-
-      {/* Error */}
-      {apiError && (
-        <div style={{
-          padding: '14px',
-          borderRadius: '10px',
-          marginBottom: '20px',
-          background: isDark ? '#4a1a1a' : '#fed7d7',
-          color: isDark ? '#fc8181' : '#9b2c2c',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          flexWrap: 'wrap'
-        }}>
-          <span><AlertTriangle size={18} style={{ verticalAlign: 'middle', marginRight: '8px' }} /> {apiError}</span>
-          <button style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            background: isDark ? '#2b4a6b' : '#ebf4ff',
-            color: isDark ? '#c8dcf5' : '#2b6cb0',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '0.9rem',
-            fontWeight: 500,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '7px'
-          }} onClick={fetchDashboardData}>{t.retry}</button>
-        </div>
       )}
 
-      {/* Search Results */}
-      {normalizedSearch && (
-        <div style={{
-          background: isDark ? '#1e2d45' : '#ffffff',
-          padding: '20px',
-          borderRadius: '12px',
-          border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)',
-          marginBottom: '20px'
-        }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Search size={17} /> {t.searchResults}
-          </h3>
-          {searchResults.length > 0 ? (
-            searchResults.map((result, index) => {
-              const key = `${result.kind}-${result.id || index}`;
-              return (
-                <button
-                  key={key}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '12px',
-                    padding: '10px 14px',
-                    borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-                    width: '100%',
-                    border: 'none',
-                    background: 'transparent',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    color: isDark ? '#c8dcf5' : '#1a365d'
-                  }}
-                  onClick={() => {
-                    if (result.kind === 'Asset') navigate(`/admin/assets/${result.id}`);
-                    else if (result.kind === 'User') navigate('/admin/users');
-                    else if (result.kind === 'Department') navigate('/admin/departments');
-                    else navigate('/admin');
-                  }}
-                >
-                  <span><strong>{result.kind}</strong> {result.name || result.fullName || result.username || result.title || result.id}</span>
-                  <span>{result.status || result.role || ''}</span>
-                </button>
-              );
-            })
-          ) : (
-            <p style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noSearchResults}</p>
-          )}
-        </div>
-      )}
+      <section>
+        <h2 style={styles.sectionTitle}>Asset Overview</h2>
 
-      {/* Overview cards */}
-      <div className="admin-dashboard-stat-grid" style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: '16px',
-        marginBottom: '24px'
-      }}>
-        {[
-          { label: t.totalAssets, value: stats.totalAssets.toLocaleString(), icon: Package, color: colors.primary, path: '/admin/assets' },
-          { label: t.availableAssets, value: stats.availableAssets.toLocaleString(), icon: CheckCircle, color: colors.success, path: '/admin/assets?status=available' },
-          { label: t.totalUsers, value: stats.totalUsers.toLocaleString(), icon: Users, color: colors.purple, path: '/admin/users' },
-          { label: t.underMaintenance, value: stats.underMaintenance.toLocaleString(), icon: Wrench, color: colors.warning, path: '/admin/maintenance' },
-          { label: t.totalDepartments, value: stats.totalDepartments.toLocaleString(), icon: Building2, color: colors.secondary, path: '/admin/departments' },
-          { label: t.rfidActivity, value: stats.rfidActivity.toLocaleString(), icon: Radio, color: colors.teal, path: '/admin/rfid' },
-          { label: t.missingAssets, value: stats.missingAssets.toLocaleString(), icon: XCircle, color: colors.danger, path: '/admin/assets?status=missing' },
-          { label: t.totalValueLabel, value: '$' + safeNumber(stats.totalValue).toLocaleString(), icon: FileText, color: colors.success, path: '/admin/reports' }
-        ].map((stat, idx) => (
-          <div
-            key={idx}
-            className="admin-dashboard-stat-card"
-            style={{
-              background: isDark ? '#1e2d45' : '#ffffff',
-              padding: '16px 18px',
-              borderRadius: '12px',
-              border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-              boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '14px',
-              cursor: 'pointer',
-            }}
-            onClick={() => navigate(stat.path)}
-          >
-            <div style={{
-              background: stat.color,
-              borderRadius: '10px',
-              padding: '10px',
-              color: '#ffffff',
-              minWidth: '40px',
-              minHeight: '40px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>{React.createElement(stat.icon, { size: 22 })}</div>
-            <div>
-              <div style={{ fontSize: '1.35rem', fontWeight: 700, color: isDark ? '#c8dcf5' : '#1a365d', lineHeight: 1.2 }}>{stat.value}</div>
-              <div style={{ fontSize: '0.75rem', color: isDark ? '#8896b0' : '#4a5568' }}>{stat.label}</div>
-            </div>
-          </div>
-        ))}
-      </div>
+        <div style={styles.grid}>
+          {statCards.map((card) => (
+            <div key={card.title} style={styles.card}>
+              <div style={styles.cardIcon}>{card.icon}</div>
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1.4fr) minmax(300px, 0.8fr)',
-        gap: '20px',
-        marginBottom: '24px'
-      }}>
-        {stats.alerts.length > 0 && (
-          <div style={{
-            background: isDark ? '#1e2d45' : '#ffffff',
-            padding: '20px',
-            borderRadius: '12px',
-            border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-            boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)'
-          }}>
-            <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <AlertTriangle size={18} /> {t.alertCenter}
-            </h3>
-            {stats.alerts.slice(0, 4).map((alert, index) => (
-              <button
-                key={alert?.id || `alert-${index}`}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  marginBottom: '6px',
-                  width: '100%',
-                  border: 'none',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  background: alert?.type === 'danger' ? (isDark ? '#4a1a1a' : '#fed7d7') : alert?.type === 'warning' ? (isDark ? '#4a3a1a' : '#fefcbf') : (isDark ? '#1a2a4a' : '#bee3f8'),
-                  color: alert?.type === 'danger' ? (isDark ? '#fc8181' : '#9b2c2c') : alert?.type === 'warning' ? (isDark ? '#f6ad55' : '#744210') : (isDark ? '#63b3ed' : '#2a4365')
-                }}
-                onClick={() => {
-                  const type = String(alert?.type || alert?.category || '').toLowerCase();
-                  if (type.includes('rfid')) navigate('/admin/rfid');
-                  else if (type.includes('maintenance')) navigate('/admin/maintenance');
-                  else if (type.includes('missing')) navigate('/admin/assets?status=missing');
-                  else if (type.includes('damaged')) navigate('/admin/assets?status=damaged');
-                  else navigate('/admin/assets');
-                }}
-              >
-                {alert?.type === 'danger' ? '⚠️ ' : alert?.type === 'warning' ? '⚡ ' : 'ℹ️ '}
-                {alert?.count !== undefined && <strong>{alert.count} </strong>}
-                {alert?.message || alert?.title || t.systemAlert}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div style={{
-          background: isDark ? '#1e2d45' : '#ffffff',
-          padding: '20px',
-          borderRadius: '12px',
-          border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)'
-        }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Plus size={18} /> {t.quickActions}
-          </h3>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            {dashboardActions.map((action, index) => {
-              const Icon = action.icon;
-              return (
-                <button
-                  key={action?.path || `action-${index}`}
-                  style={{
-                    padding: '10px 16px',
-                    borderRadius: '8px',
-                    background: isDark ? '#2b4a6b' : '#ebf4ff',
-                    color: isDark ? '#c8dcf5' : '#2b6cb0',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem',
-                    fontWeight: 500,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '7px'
-                  }}
-                  onClick={() => navigate(action.path)}
-                >
-                  {Icon ? <Icon size={15} /> : <Plus size={15} />} <span>{action.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      <div className="admin-dashboard-chart-grid" style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-        gap: '20px',
-        marginBottom: '24px'
-      }}>
-        <div className="admin-dashboard-panel" style={{
-          background: isDark ? '#1e2d45' : '#ffffff',
-          padding: '20px',
-          borderRadius: '12px',
-          border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)'
-        }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {t.assetsByStatus}
-          </h3>
-          <div style={{ height: '260px', position: 'relative' }}>
-            {stats.assetByStatus.length ? <Doughnut data={statusChartData} options={statusChartOptions} /> : <p style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noData}</p>}
-          </div>
-        </div>
-        <div style={{
-          background: isDark ? '#1e2d45' : '#ffffff',
-          padding: '20px',
-          borderRadius: '12px',
-          border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)'
-        }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {t.maintenanceTrend}
-          </h3>
-          <div style={{ height: '260px', position: 'relative' }}>
-            {hasMaintenanceTrendData ? <Line data={trendChartData} options={lineChartOptions} /> : <p style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noData}</p>}
-          </div>
-        </div>
-        <div style={{
-          background: isDark ? '#1e2d45' : '#ffffff',
-          padding: '20px',
-          borderRadius: '12px',
-          border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)'
-        }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {t.assetsPurchased}
-          </h3>
-          <div style={{ height: '260px', position: 'relative' }}>
-            {stats.assetsPurchasedOverTime.length ? <Line data={purchasedChartData} options={lineChartOptions} /> : <p style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noData}</p>}
-          </div>
-        </div>
-      </div>
-
-      <div className="admin-dashboard-chart-grid admin-dashboard-chart-grid--secondary" style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-        gap: '20px',
-        marginBottom: '24px'
-      }}>
-        <div className="admin-dashboard-panel" style={{
-          background: isDark ? '#1e2d45' : '#ffffff',
-          padding: '20px',
-          borderRadius: '12px',
-          border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)'
-        }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Wrench size={18} /> {t.maintenanceSummary}
-          </h3>
-          {Object.entries(stats.maintenanceSummary).map(([key, value]) => (
-            <div key={key} style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '12px',
-              padding: '10px 14px',
-              borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-              color: isDark ? '#c8dcf5' : '#1a365d'
-            }}>
-              <span>{key.replace(/([A-Z])/g, ' $1')}</span>
-              <strong>{safeNumber(value)}</strong>
+              <div>
+                <div style={styles.cardLabel}>{card.title}</div>
+                <div style={styles.cardValue}>{card.value}</div>
+              </div>
             </div>
           ))}
-          <button style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            background: isDark ? '#2b4a6b' : '#ebf4ff',
-            color: isDark ? '#c8dcf5' : '#2b6cb0',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '0.9rem',
-            fontWeight: 500,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '7px',
-            marginTop: '12px'
-          }} onClick={() => navigate('/admin/maintenance')}><Wrench size={15} /> {t.viewMaintenance}</button>
+        </div>
+      </section>
+
+      <section style={styles.section}>
+        <h2 style={styles.sectionTitle}>Maintenance Overview</h2>
+
+        <div style={styles.grid}>
+          {maintenanceCards.map((card) => (
+            <div key={card.title} style={styles.card}>
+              <div style={styles.cardLabel}>{card.title}</div>
+              <div style={styles.cardValue}>{card.value}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section style={styles.section}>
+        <h2 style={styles.sectionTitle}>Inventory Alerts</h2>
+
+        <div style={styles.grid}>
+          {inventoryCards.map((card) => (
+            <div key={card.title} style={styles.card}>
+              <div style={styles.cardLabel}>{card.title}</div>
+              <div style={styles.cardValue}>{card.value}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <h2 style={styles.sectionTitle}>
+            Recent Activity
+          </h2>
         </div>
 
-        <div style={{
-          background: isDark ? '#1e2d45' : '#ffffff',
-          padding: '20px',
-          borderRadius: '12px',
-          border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)'
-        }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Radio size={18} /> {t.rfidSummary}
-          </h3>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            padding: '10px 14px',
-            borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-            color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.onlineDevices}</span><strong>{safeNumber(stats.rfidMetrics.onlineDevices)}</strong></div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            padding: '10px 14px',
-            borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-            color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.offlineDevices}</span><strong>{safeNumber(stats.rfidMetrics.offlineDevices)}</strong></div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            padding: '10px 14px',
-            borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-            color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.unknownAlerts}</span><strong>{safeNumber(stats.rfidMetrics.unknownAlerts)}</strong></div>
-          <button style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            background: isDark ? '#2b4a6b' : '#ebf4ff',
-            color: isDark ? '#c8dcf5' : '#2b6cb0',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '0.9rem',
-            fontWeight: 500,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '7px',
-            marginTop: '12px'
-          }} onClick={() => navigate('/admin/rfid')}><Radio size={15} /> {t.openRfid}</button>
-        </div>
-
-        <div style={{
-          background: isDark ? '#1e2d45' : '#ffffff',
-          padding: '20px',
-          borderRadius: '12px',
-          border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)'
-        }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Download size={18} /> {t.exportDashboard}
-          </h3>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <button style={{
-              padding: '10px 18px',
-              borderRadius: '8px',
-              background: isDark ? '#2b4a6b' : '#ebf4ff',
-              color: isDark ? '#c8dcf5' : '#2b6cb0',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '0.9rem',
-              fontWeight: 500,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '7px'
-            }} onClick={downloadPdf}><Download size={15} /> PDF</button>
-            <button style={{
-              padding: '10px 18px',
-              borderRadius: '8px',
-              background: isDark ? '#2b4a6b' : '#ebf4ff',
-              color: isDark ? '#c8dcf5' : '#2b6cb0',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '0.9rem',
-              fontWeight: 500,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '7px'
-            }} onClick={downloadExcel}><Download size={15} /> Excel</button>
-            <button style={{
-              padding: '10px 18px',
-              borderRadius: '8px',
-              background: isDark ? '#2b4a6b' : '#ebf4ff',
-              color: isDark ? '#c8dcf5' : '#2b6cb0',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '0.9rem',
-              fontWeight: 500,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '7px'
-            }} onClick={downloadCsv}><Download size={15} /> CSV</button>
-          </div>
-        </div>
-      </div>
-
-      <div className="admin-dashboard-chart-grid admin-dashboard-chart-grid--secondary" style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        gap: '20px',
-        marginBottom: '24px'
-      }}>
-        <div className="admin-dashboard-panel" style={{ background: isDark ? '#1e2d45' : '#ffffff', padding: '20px', borderRadius: '12px', border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)' }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>Assets by College</h3>
-          <div style={{ height: '260px', position: 'relative' }}>
-            {stats.assetByCollege.length ? <Bar data={collegeChartData} options={chartOptions} /> : <p style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noData}</p>}
-          </div>
-        </div>
-        <div className="admin-dashboard-panel" style={{ background: isDark ? '#1e2d45' : '#ffffff', padding: '20px', borderRadius: '12px', border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)' }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>Asset Condition</h3>
-          <div style={{ height: '260px', position: 'relative' }}>
-            {stats.assetCondition.length ? <Doughnut data={conditionChartData} options={chartOptions} /> : <p style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noData}</p>}
-          </div>
-        </div>
-        <div className="admin-dashboard-panel" style={{ background: isDark ? '#1e2d45' : '#ffffff', padding: '20px', borderRadius: '12px', border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)' }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>Monthly Acquisitions</h3>
-          <div style={{ height: '260px', position: 'relative' }}>
-            {stats.monthlyAcquisitions.length ? <Line data={monthlyAcquisitionChartData} options={lineChartOptions} /> : <p style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noData}</p>}
-          </div>
-        </div>
-      </div>
-
-      <div className="admin-dashboard-chart-grid admin-dashboard-chart-grid--secondary" style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        gap: '20px',
-        marginBottom: '24px'
-      }}>
-        <div className="admin-dashboard-panel" style={{ background: isDark ? '#1e2d45' : '#ffffff', padding: '20px', borderRadius: '12px', border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)' }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>Assets by Location</h3>
-          <div style={{ height: '260px', position: 'relative' }}>
-            {stats.assetByLocation.length ? <Bar data={locationChartData} options={chartOptions} /> : <p style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noData}</p>}
-          </div>
-        </div>
-        <div className="admin-dashboard-panel" style={{ background: isDark ? '#1e2d45' : '#ffffff', padding: '20px', borderRadius: '12px', border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)' }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>Transfer Activity</h3>
-          <div style={{ height: '260px', position: 'relative' }}>
-            {stats.transferTrend.length ? <Bar data={transferChartData} options={chartOptions} /> : <p style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noData}</p>}
-          </div>
-        </div>
-        <div className="admin-dashboard-panel" style={{ background: isDark ? '#1e2d45' : '#ffffff', padding: '20px', borderRadius: '12px', border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)' }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>Disposals</h3>
-          <div style={{ height: '260px', position: 'relative' }}>
-            {stats.disposalTrend.length ? <Bar data={disposalChartData} options={chartOptions} /> : <p style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noData}</p>}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Assets Table */}
-      <div style={{
-        background: isDark ? '#1e2d45' : '#ffffff',
-        padding: '20px',
-        borderRadius: '12px',
-        border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-        boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)',
-        marginBottom: '20px'
-      }}>
-        <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Package size={18} /> {t.recentAssets}
-        </h3>
-        {stats.recentAssets.length ? (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-              <thead>
-                <tr>
-                  {[t.id, t.name, t.category, t.department, t.status, t.rfid, t.lastUpdatedCol, t.actions].map(label => (
-                    <th key={label} style={{ textAlign: 'left', padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#8896b0' : '#4a5568', fontWeight: 600 }}>{label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {stats.recentAssets.map((asset, index) => (
-                  <tr key={asset?.id || `asset-${index}`}>
-                    <td style={{ padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#c8dcf5' : '#1a365d' }}>{asset?.id || '-'}</td>
-                    <td style={{ padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#c8dcf5' : '#1a365d' }}>{asset?.name || '-'}</td>
-                    <td style={{ padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#c8dcf5' : '#1a365d' }}>{asset?.category || '-'}</td>
-                    <td style={{ padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#c8dcf5' : '#1a365d' }}>{asset?.department || '-'}</td>
-                    <td style={{ padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#c8dcf5' : '#1a365d' }}>
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '2px 10px',
-                        borderRadius: '20px',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        color: '#ffffff',
-                        background: ['Available', 'Active'].includes(asset?.status) ? '#48bb78' : asset?.status === 'Missing' ? '#fc8181' : asset?.status === 'Damaged' ? '#ed8936' : ['Under-Maintenance', 'Maintenance'].includes(asset?.status) ? '#4299e1' : '#a0aec0'
-                      }}>{asset?.status || '-'}</span>
-                    </td>
-                    <td style={{ padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#c8dcf5' : '#1a365d' }}>{asset?.rfid || '-'}</td>
-                    <td style={{ padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#c8dcf5' : '#1a365d' }}>{safeDateOnly(asset?.updatedAt)}</td>
-                    <td style={{ padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#c8dcf5' : '#1a365d' }}>
-                      <button style={{
-                        padding: '6px 8px',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        background: 'transparent',
-                        color: '#4299e1'
-                      }} onClick={() => navigate(`/admin/assets/${asset.id}`)}><Eye size={15} /></button>
-                      <button style={{
-                        padding: '6px 8px',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        background: 'transparent',
-                        color: '#ed8936'
-                      }} onClick={() => navigate(`/admin/assets/${asset.id}/edit`)}><Pencil size={15} /></button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <p style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noData}</p>}
-      </div>
-
-      {/* Notifications */}
-      <div style={{
-        background: isDark ? '#1e2d45' : '#ffffff',
-        padding: '20px',
-        borderRadius: '12px',
-        border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-        boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)',
-        marginBottom: '20px'
-      }}>
-        <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Bell size={18} /> {t.notificationCenter}
-        </h3>
-        {notifications.length ? (
-          safeArray(notifications).slice(0, 5).map((notification, index) => (
-            <button key={notification?.id || `notification-${index}`} style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '12px',
-              padding: '10px 14px',
-              borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-              width: '100%',
-              border: 'none',
-              background: 'transparent',
-              textAlign: 'left',
-              cursor: 'pointer',
-              color: isDark ? '#c8dcf5' : '#1a365d'
-            }} onClick={() => navigate('/admin/notifications')}>
-              <span>{notification?.is_read || notification?.isRead ? '○' : '●'} <strong>{notification?.title || t.notification}</strong> {notification?.message || ''}</span>
-              <span>{notification?.is_read || notification?.isRead ? t.read : t.unread}</span>
-            </button>
-          ))
-        ) : <p style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noData}</p>}
-        <button style={{
-          padding: '10px 18px',
-          borderRadius: '8px',
-          background: isDark ? '#2b4a6b' : '#ebf4ff',
-          color: isDark ? '#c8dcf5' : '#2b6cb0',
-          border: 'none',
-          cursor: 'pointer',
-          fontSize: '0.9rem',
-          fontWeight: 500,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '7px',
-          marginTop: '12px'
-        }} onClick={() => navigate('/admin/notifications')}><Bell size={15} /> {t.viewAll}</button>
-      </div>
-
-      {/* System Performance & Weekly Summary */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))',
-        gap: '20px',
-        marginBottom: '24px'
-      }}>
-        <div style={{
-          background: isDark ? '#1e2d45' : '#ffffff',
-          padding: '20px',
-          borderRadius: '12px',
-          border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)',
-          marginBottom: '20px'
-        }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Activity size={18} /> {t.systemPerformance}
-          </h3>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            padding: '10px 14px',
-            borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-            color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>Dashboard Load</span><strong style={{ color: loadError ? '#fc8181' : '#48bb78' }}>{loadError ? 'Failed' : 'Success'}</strong></div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            padding: '10px 14px',
-            borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-            color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>API Connectivity</span><strong style={{ color: loadError ? '#fc8181' : '#48bb78' }}>{loadError ? 'Failed' : 'Connected'}</strong></div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            padding: '10px 14px',
-            borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-            color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.assetUtilization}</span><strong>{assetUtilization === null ? t.notAvailable : `${assetUtilization}%`}</strong></div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            padding: '10px 14px',
-            borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-            color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.maintenanceCompletion}</span><strong>{maintenanceCompletion === null ? t.notAvailable : `${maintenanceCompletion}%`}</strong></div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            padding: '10px 14px',
-            borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-            color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.notificationCenter}</span><strong>{unreadNotifications.length} {t.unread}</strong></div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            padding: '10px 14px',
-            borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-            color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.backupStatus}</span><strong>{latestBackup?.status || t.notAvailable}</strong></div>
-        </div>
-
-        <div style={{
-          background: isDark ? '#1e2d45' : '#ffffff',
-          padding: '20px',
-          borderRadius: '12px',
-          border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)',
-          marginBottom: '20px'
-        }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            📅 {t.weeklySummary}
-          </h3>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            padding: '10px 14px',
-            borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-            color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.assetsAdded}</span><strong>{safeNumber(stats.weeklySummary.newAssets)}</strong></div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            padding: '10px 14px',
-            borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-            color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.assignments}</span><strong>{safeNumber(stats.weeklySummary.assignments)}</strong></div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            padding: '10px 14px',
-            borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-            color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.maintenanceRequests}</span><strong>{safeNumber(stats.weeklySummary.maintenanceRequests)}</strong></div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            padding: '10px 14px',
-            borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-            color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.completedMaintenance}</span><strong>{safeNumber(stats.weeklySummary.completedMaintenance)}</strong></div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            padding: '10px 14px',
-            borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-            color: isDark ? '#c8dcf5' : '#1a365d'
-          }}><span>{t.rfidActivity}</span><strong>{safeNumber(stats.weeklySummary.rfidActivity)}</strong></div>
-        </div>
-
-        <div style={{
-          background: isDark ? '#1e2d45' : '#ffffff',
-          padding: '20px',
-          borderRadius: '12px',
-          border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)',
-          marginBottom: '20px'
-        }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            ✅ {t.adminTasks}
-          </h3>
-          {adminTasks.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>
-              <CheckCircle size={30} />
-              <p>{t.noTasks}</p>
+        <div style={styles.activityCard}>
+          {dashboard.recentActivity.length === 0 ? (
+            <div style={styles.emptyState}>
+              No recent activity available.
             </div>
           ) : (
-            adminTasks.map(task => (
-              <div key={task.id} style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '12px',
-                padding: '10px 14px',
-                borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-                color: isDark ? '#c8dcf5' : '#1a365d'
-              }}>
-                <span>{task.icon} {task.message}</span>
-                <button style={{
-                  padding: '5px 9px',
-                  borderRadius: '8px',
-                  background: isDark ? '#2b4a6b' : '#ebf4ff',
-                  color: isDark ? '#c8dcf5' : '#2b6cb0',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem',
-                  fontWeight: 500,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '7px'
-                }} onClick={() => navigate(task.path)}>{t.review}</button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+            dashboard.recentActivity.map((activity, index) => (
+              <div
+                key={
+                  activity.id ||
+                  activity.activityId ||
+                  `activity-${index}`
+                }
+                style={styles.activityRow}
+              >
+                <div style={styles.activityDot} />
 
-      {/* Quick Settings */}
-      <div style={{
-        background: isDark ? '#1e2d45' : '#ffffff',
-        padding: '20px',
-        borderRadius: '12px',
-        border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-        boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)',
-        marginBottom: '20px'
-      }}>
-        <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Settings size={18} /> {t.quickSettings}
-        </h3>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px' }}>
-          <button style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            background: isDark ? '#2b4a6b' : '#ebf4ff',
-            color: isDark ? '#c8dcf5' : '#2b6cb0',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '0.9rem',
-            fontWeight: 500,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '7px'
-          }} onClick={() => navigate('/admin/settings')}><Settings size={15} /> {t.settings}</button>
-          <button style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            background: isDark ? '#2b4a6b' : '#ebf4ff',
-            color: isDark ? '#c8dcf5' : '#2b6cb0',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '0.9rem',
-            fontWeight: 500,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '7px'
-          }} onClick={() => navigate('/admin/reports')}><FileText size={15} /> {t.quickReports}</button>
-          <button style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            background: isDark ? '#2b4a6b' : '#ebf4ff',
-            color: isDark ? '#c8dcf5' : '#2b6cb0',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '0.9rem',
-            fontWeight: 500,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '7px'
-          }} onClick={() => navigate('/admin/backup')}><Database size={15} /> {t.backupStatus}</button>
-          <button style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            background: isDark ? '#2b4a6b' : '#ebf4ff',
-            color: isDark ? '#c8dcf5' : '#2b6cb0',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '0.9rem',
-            fontWeight: 500,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '7px'
-          }} onClick={() => navigate('/contact')}>{t.helpSupport}</button>
-        </div>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          padding: '10px 14px',
-          borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          color: isDark ? '#c8dcf5' : '#1a365d',
-          marginTop: '16px',
-          paddingLeft: 0,
-          paddingRight: 0
-        }}>
-          <span>👤 {t.account}: {user?.fullName || user?.username || 'System Administrator'}</span>
-          <span>{t.adminRole}</span>
-        </div>
-      </div>
+                <div style={styles.activityContent}>
+                  <div style={styles.activityTitle}>
+                    {activity.title ||
+                      activity.action ||
+                      activity.description ||
+                      "System activity"}
+                  </div>
 
-      {/* Recent Activities & RFID Log */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))',
-        gap: '20px',
-        marginBottom: '24px'
-      }}>
-        <div style={{
-          background: isDark ? '#1e2d45' : '#ffffff',
-          padding: '20px',
-          borderRadius: '12px',
-          border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)',
-          marginBottom: '20px'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
-            <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Activity size={18} /> {t.recentActivities}
-            </h3>
-            <button style={{
-              padding: '6px 10px',
-              borderRadius: '8px',
-              background: isDark ? '#2b4a6b' : '#ebf4ff',
-              color: isDark ? '#c8dcf5' : '#2b6cb0',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '0.9rem',
-              fontWeight: 500,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '7px'
-            }} onClick={() => navigate('/admin')}>Dashboard</button>
-          </div>
-          {safeArray(stats.recentActivities).filter(a => String(a?.title || a?.description || a?.action || '').toLowerCase().includes(normalizedSearch)).length === 0 ? (
-            <p style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noRecentActivities}</p>
-          ) : (
-            safeArray(stats.recentActivities).filter(a => String(a?.title || a?.description || a?.action || '').toLowerCase().includes(normalizedSearch)).slice(0, 8).map((activity, index) => (
-              <div key={activity?.id || index} style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '12px',
-                padding: '10px 14px',
-                borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-                color: isDark ? '#c8dcf5' : '#1a365d'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span>{activity?.icon || '•'}</span>
-                  <span><strong>{activity?.module || activity?.type || 'System'}</strong> {activity?.action || ''} {activity?.description || activity?.title || ''}</span>
+                  {(activity.description ||
+                    activity.message) && (
+                    <div style={styles.activityDescription}>
+                      {activity.description ||
+                        activity.message}
+                    </div>
+                  )}
+
+                  {(activity.createdAt ||
+                    activity.date ||
+                    activity.timestamp) && (
+                    <div style={styles.activityDate}>
+                      {new Date(
+                        activity.createdAt ||
+                          activity.date ||
+                          activity.timestamp
+                      ).toLocaleString()}
+                    </div>
+                  )}
                 </div>
-                <span style={{ fontSize: '0.75rem', color: isDark ? '#8896b0' : '#4a5568' }}>{safeDate(activity?.time || activity?.createdAt || activity?.created_at)}</span>
               </div>
             ))
           )}
         </div>
-
-        <div style={{
-          background: isDark ? '#1e2d45' : '#ffffff',
-          padding: '20px',
-          borderRadius: '12px',
-          border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)',
-          marginBottom: '20px'
-        }}>
-          <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Radio size={18} /> {t.rfidActivityLog}
-          </h3>
-          <button style={{
-            padding: '10px 18px',
-            borderRadius: '8px',
-            background: isDark ? '#2b4a6b' : '#ebf4ff',
-            color: isDark ? '#c8dcf5' : '#2b6cb0',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '0.9rem',
-            fontWeight: 500,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '7px',
-            marginBottom: '12px'
-          }} onClick={() => navigate('/admin/rfid')}><Radio size={15} /> {t.openRfid}</button>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#8896b0' : '#4a5568', fontWeight: 600 }}>#</th>
-                  <th style={{ textAlign: 'left', padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#8896b0' : '#4a5568', fontWeight: 600 }}>{t.asset}</th>
-                  <th style={{ textAlign: 'left', padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#8896b0' : '#4a5568', fontWeight: 600 }}>{t.location}</th>
-                  <th style={{ textAlign: 'left', padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#8896b0' : '#4a5568', fontWeight: 600 }}>{t.timestamp}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.rfidActivityLog.length === 0 ? (
-                  <tr><td colSpan="4" style={{ textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }}>{t.noData}</td></tr>
-                ) : (
-                  stats.rfidActivityLog.slice(0, 6).map((log, index) => (
-                    <tr key={log?.id || index}>
-                      <td style={{ padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#c8dcf5' : '#1a365d' }}>{index + 1}</td>
-                      <td style={{ padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#c8dcf5' : '#1a365d' }}>{log?.asset || log?.assetName || '-'}</td>
-                      <td style={{ padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#c8dcf5' : '#1a365d' }}>{log?.location || '-'}</td>
-                      <td style={{ padding: '8px 12px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#c8dcf5' : '#1a365d' }}>{log?.timestamp ? safeDate(log.timestamp) : '-'}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {/* Backup Status */}
-      <div style={{
-        background: isDark ? '#1e2d45' : '#ffffff',
-        padding: '20px',
-        borderRadius: '12px',
-        border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-        boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)',
-        marginBottom: '20px'
-      }}>
-        <h3 style={{ color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1rem', marginBottom: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Database size={18} /> {t.backupStatus}
-        </h3>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          padding: '10px 14px',
-          borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          color: isDark ? '#c8dcf5' : '#1a365d'
-        }}><span>{t.latestBackup}</span><strong>{latestBackup?.status || t.notAvailable}</strong></div>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          padding: '10px 14px',
-          borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-          color: isDark ? '#c8dcf5' : '#1a365d'
-        }}><span>{t.backupDate}</span><strong>{safeDate(latestBackup?.created_at || latestBackup?.createdAt || latestBackup?.date)}</strong></div>
-        <button style={{
-          padding: '10px 18px',
-          borderRadius: '8px',
-          background: isDark ? '#2b4a6b' : '#ebf4ff',
-          color: isDark ? '#c8dcf5' : '#2b6cb0',
-          border: 'none',
-          cursor: 'pointer',
-          fontSize: '0.9rem',
-          fontWeight: 500,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '7px',
-          marginTop: '12px'
-        }} onClick={() => navigate('/admin/backup')}><Database size={15} /> {t.openBackup}</button>
-      </div>
+      </section>
     </div>
   );
+}
+
+const styles = {
+  page: {
+    minHeight: "100%",
+    padding: "24px",
+    background: "#F3F6F9",
+    boxSizing: "border-box",
+  },
+
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "16px",
+    marginBottom: "28px",
+    flexWrap: "wrap",
+  },
+
+  title: {
+    margin: 0,
+    color: "#111827",
+    fontSize: "28px",
+    fontWeight: 700,
+  },
+
+  subtitle: {
+    margin: "8px 0 0",
+    color: "#64748B",
+    fontSize: "14px",
+    lineHeight: 1.6,
+  },
+
+  refreshButton: {
+    border: "none",
+    borderRadius: "8px",
+    padding: "10px 16px",
+    background: "#2563EB",
+    color: "#FFFFFF",
+    cursor: "pointer",
+    fontWeight: 600,
+  },
+
+  errorBox: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "16px",
+    padding: "14px 16px",
+    marginBottom: "24px",
+    borderRadius: "10px",
+    border: "1px solid #FCA5A5",
+    background: "#FEF2F2",
+    color: "#991B1B",
+  },
+
+  errorText: {
+    marginTop: "4px",
+    fontSize: "13px",
+  },
+
+  retryButton: {
+    border: "1px solid #991B1B",
+    borderRadius: "7px",
+    padding: "8px 14px",
+    background: "#FFFFFF",
+    color: "#991B1B",
+    cursor: "pointer",
+    fontWeight: 600,
+  },
+
+  loadingCard: {
+    minHeight: "400px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#FFFFFF",
+    borderRadius: "12px",
+  },
+
+  spinner: {
+    width: "34px",
+    height: "34px",
+    border: "4px solid #E5E7EB",
+    borderTop: "4px solid #2563EB",
+    borderRadius: "50%",
+    animation: "spin 1s linear infinite",
+  },
+
+  loadingText: {
+    marginTop: "14px",
+    color: "#64748B",
+  },
+
+  section: {
+    marginTop: "30px",
+  },
+
+  sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: "14px",
+  },
+
+  sectionTitle: {
+    margin: "0 0 14px",
+    color: "#111827",
+    fontSize: "18px",
+    fontWeight: 700,
+  },
+
+  grid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: "16px",
+  },
+
+  card: {
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    minHeight: "100px",
+    padding: "18px",
+    background: "#FFFFFF",
+    borderRadius: "12px",
+    border: "1px solid #E5E7EB",
+    boxSizing: "border-box",
+  },
+
+  cardIcon: {
+    width: "44px",
+    height: "44px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "10px",
+    background: "#EFF6FF",
+    fontSize: "20px",
+  },
+
+  cardLabel: {
+    color: "#64748B",
+    fontSize: "13px",
+    fontWeight: 500,
+  },
+
+  cardValue: {
+    marginTop: "5px",
+    color: "#111827",
+    fontSize: "25px",
+    fontWeight: 700,
+  },
+
+  activityCard: {
+    background: "#FFFFFF",
+    border: "1px solid #E5E7EB",
+    borderRadius: "12px",
+    overflow: "hidden",
+  },
+
+  activityRow: {
+    display: "flex",
+    gap: "14px",
+    padding: "16px 18px",
+    borderBottom: "1px solid #F1F5F9",
+  },
+
+  activityDot: {
+    width: "9px",
+    height: "9px",
+    marginTop: "6px",
+    borderRadius: "50%",
+    background: "#2563EB",
+    flexShrink: 0,
+  },
+
+  activityContent: {
+    minWidth: 0,
+    flex: 1,
+  },
+
+  activityTitle: {
+    color: "#111827",
+    fontSize: "14px",
+    fontWeight: 600,
+  },
+
+  activityDescription: {
+    marginTop: "4px",
+    color: "#64748B",
+    fontSize: "13px",
+  },
+
+  activityDate: {
+    marginTop: "6px",
+    color: "#94A3B8",
+    fontSize: "12px",
+  },
+
+  emptyState: {
+    padding: "32px",
+    textAlign: "center",
+    color: "#64748B",
+    fontSize: "14px",
+  },
 };
 
-export default AdminDashboard;
+export default Dashboard;

@@ -1,211 +1,199 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { apiClient } from '../../utils/api';
-import { Activity, Check, ChevronRight, CircleOff, Eye, KeyRound, Pencil, Plus, RefreshCw, Search, ShieldCheck, Trash2, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from "react";
 
-const STATUS_OPTIONS = ['all', 'active', 'inactive'];
+const ROLES_API = "/api/roles";
+const PERMISSIONS_API = "/api/permissions";
 
-const formatPermissionLabel = (permission) =>
-  String(permission || '')
-    .split('.')
-    .filter(Boolean)
-    .map((part) => part.replace(/[_-]+/g, ' '))
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
+const getToken = () =>
+  localStorage.getItem("token") ||
+  localStorage.getItem("accessToken") ||
+  localStorage.getItem("authToken") ||
+  "";
 
-const formatDate = (value) => {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('en-ET', { year: 'numeric', month: 'short', day: 'numeric' });
+const getHeaders = (json = false) => {
+  const headers = {
+    Accept: "application/json",
+  };
+
+  if (json) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  const token = getToken();
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  return headers;
 };
 
-const normalizeStatus = (value) => {
-  const normalized = String(value || 'active').toLowerCase();
-  return normalized === 'inactive' ? 'inactive' : 'active';
+const normalizeArray = (data, keys = []) => {
+  if (Array.isArray(data)) return data;
+
+  for (const key of keys) {
+    if (Array.isArray(data?.[key])) {
+      return data[key];
+    }
+  }
+
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+
+  return [];
 };
 
-const styles = {
-  page: { padding: 24, maxWidth: 1400, margin: '0 auto' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20, marginBottom: 24 },
-  breadcrumb: { color: '#64748b', fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 },
-  title: { margin: 0, fontSize: 32, color: '#0f172a' },
-  subtitle: { margin: '8px 0 0', color: '#475569', fontSize: 15 },
-  actions: { display: 'flex', gap: 12, flexWrap: 'wrap' },
-  primaryBtn: { border: 'none', background: '#2563eb', color: '#fff', borderRadius: 10, padding: '10px 16px', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 },
-  secondaryBtn: { border: '1px solid #dbe3ee', background: '#fff', color: '#0f172a', borderRadius: 10, padding: '10px 16px', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 },
-  dangerBtn: { border: '1px solid #fecaca', background: '#fff1f2', color: '#b91c1c', borderRadius: 8, padding: '8px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
-  summaryGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 22 },
-  card: { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)', padding: 18 },
-  statCard: { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: 16, display: 'flex', alignItems: 'center', gap: 14 },
-  statIcon: { width: 44, height: 44, borderRadius: 12, background: '#eff6ff', color: '#1d4ed8', display: 'grid', placeItems: 'center' },
-  statValue: { fontSize: 26, fontWeight: 700, color: '#0f172a', lineHeight: 1 },
-  statLabel: { fontSize: 12, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' },
-  statMeta: { fontSize: 12, color: '#475569', marginTop: 4 },
-  toolbar: { display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 },
-  searchWrap: { position: 'relative', flex: 1, minWidth: 220 },
-  searchInput: { width: '100%', border: '1px solid #d9dfeb', borderRadius: 10, padding: '10px 14px 10px 38px', fontSize: 14, outline: 'none' },
-  iconLeft: { position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748b' },
-  select: { border: '1px solid #d9dfeb', borderRadius: 10, padding: '10px 12px', fontSize: 14, background: '#fff', minWidth: 150 },
-  tableWrap: { overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 14, background: '#fff' },
-  table: { width: '100%', borderCollapse: 'collapse', minWidth: 920 },
-  th: { textAlign: 'left', padding: '14px 16px', background: '#f8fafc', fontSize: 12, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e5e7eb' },
-  td: { padding: '16px', borderBottom: '1px solid #e5e7eb', color: '#0f172a', fontSize: 14, verticalAlign: 'top' },
-  roleName: { fontWeight: 700, color: '#0f172a', marginBottom: 4 },
-  roleMeta: { color: '#64748b', fontSize: 12 },
-  badge: { display: 'inline-flex', alignItems: 'center', padding: '5px 10px', borderRadius: 999, border: '1px solid #dbe3ee', fontWeight: 600, fontSize: 12, background: '#f8fafc' },
-  badgeActive: { background: '#ecfdf5', borderColor: '#bbf7d0', color: '#166534' },
-  badgeInactive: { background: '#fef2f2', borderColor: '#fecaca', color: '#991b1b' },
-  smallAction: { border: '1px solid #dbe3ee', background: '#fff', color: '#0f172a', borderRadius: 8, padding: '8px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600 },
-  actionGroup: { display: 'flex', gap: 8, flexWrap: 'wrap' },
-  panel: { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 20, marginTop: 20 },
-  panelHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 18 },
-  panelTitle: { margin: 0, fontSize: 22, color: '#0f172a' },
-  grid: { display: 'grid', gridTemplateColumns: 'minmax(240px, 1.2fr) minmax(240px, 2fr)', gap: 20 },
-  infoCard: { background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16 },
-  detailLabel: { color: '#64748b', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 },
-  detailValue: { color: '#0f172a', fontSize: 16, fontWeight: 600 },
-  permissionList: { display: 'grid', gap: 12 },
-  permissionSection: { border: '1px solid #e2e8f0', borderRadius: 12, background: '#f8fafc', padding: 14 },
-  sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, fontWeight: 700, color: '#0f172a' },
-  permissionRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderTop: '1px solid #e2e8f0', padding: '10px 0', color: '#0f172a' },
-  checkboxLabel: { display: 'flex', alignItems: 'center', gap: 12, flex: 1 },
-  checkbox: { width: 16, height: 16, accentColor: '#2563eb' },
-  unsaved: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginTop: 14, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '12px 14px', color: '#9a5b00', fontSize: 14 },
-  emptyState: { textAlign: 'center', padding: '40px 20px', color: '#64748b' },
-  modalBackdrop: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.3)', display: 'grid', placeItems: 'center', padding: 20, zIndex: 40 },
-  modal: { width: 'min(540px, 100%)', background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', padding: 24 },
-  modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
-  modalTitle: { margin: 0, fontSize: 23, color: '#0f172a' },
-  form: { display: 'grid', gap: 14 },
-  field: { display: 'grid', gap: 8 },
-  input: { width: '100%', border: '1px solid #d9dfeb', borderRadius: 10, padding: '10px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box' },
-  textarea: { width: '100%', minHeight: 96, border: '1px solid #d9dfeb', borderRadius: 10, padding: '10px 12px', fontSize: 14, resize: 'vertical', outline: 'none', boxSizing: 'border-box' },
-  modalActions: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 },
-  errorBox: { background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', padding: '12px 16px', borderRadius: 10, marginBottom: 18 },
+const getRoleId = (role) =>
+  role?.roleId ??
+  role?.role_id ??
+  role?.id;
+
+const getRoleName = (role) =>
+  role?.name ||
+  role?.roleName ||
+  role?.role_name ||
+  "Unnamed Role";
+
+const getPermissionId = (permission) =>
+  permission?.permissionId ??
+  permission?.permission_id ??
+  permission?.id;
+
+const getPermissionName = (permission) =>
+  permission?.name ||
+  permission?.permissionName ||
+  permission?.permission_name ||
+  "";
+
+const getPermissionGroup = (permission) =>
+  permission?.group ||
+  permission?.module ||
+  permission?.category ||
+  "General";
+
+const getRoleStatus = (role) => {
+  if (
+    role?.status === false ||
+    role?.isActive === false ||
+    role?.active === false
+  ) {
+    return "Inactive";
+  }
+
+  return "Active";
 };
 
-export default function AdminRolesPermissions() {
+const normalizePermissionIds = (role) => {
+  const values =
+    role?.permissionIds ||
+    role?.permission_ids ||
+    role?.permissions ||
+    [];
+
+  if (!Array.isArray(values)) return [];
+
+  return values
+    .map((permission) => {
+      if (
+        typeof permission === "string" ||
+        typeof permission === "number"
+      ) {
+        return String(permission);
+      }
+
+      const id = getPermissionId(permission);
+
+      return id !== undefined && id !== null
+        ? String(id)
+        : null;
+    })
+    .filter(Boolean);
+};
+
+export default function RolesPermissions() {
   const [roles, setRoles] = useState([]);
   const [permissions, setPermissions] = useState([]);
-  const [selectedRoleName, setSelectedRoleName] = useState('');
-  const [selectedPermissions, setSelectedPermissions] = useState([]);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [permissionSearch, setPermissionSearch] = useState('');
+
   const [loading, setLoading] = useState(true);
-  const [permissionsLoading, setPermissionsLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [savingPermissions, setSavingPermissions] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [form, setForm] = useState({ name: '', description: '', status: 'active' });
-  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const selectedRole = useMemo(
-    () => roles.find((role) => role.name === selectedRoleName) || null,
-    [roles, selectedRoleName]
-  );
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  const filteredRoles = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return roles.filter((role) => {
-      const matchesSearch = !query || [role.name, role.label, role.description].join(' ').toLowerCase().includes(query);
-      const matchesStatus = statusFilter === 'all' || normalizeStatus(role.status) === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [roles, search, statusFilter]);
+  const [search, setSearch] = useState("");
+  const [selectedRole, setSelectedRole] = useState(null);
 
-  const groupedPermissions = useMemo(() => {
-    const groups = new Map();
-    permissions.forEach((permission) => {
-      const [groupKey] = String(permission.name || permission.key || permission || '').split('.');
-      const key = groupKey || 'general';
-      if (!groups.has(key)) {
-        groups.set(key, []);
-      }
-      groups.get(key).push(permission);
-    });
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] =
+    useState(false);
 
-    return Array.from(groups.entries()).map(([groupKey, groupPermissions]) => ({
-      key: groupKey,
-      label: groupKey.split(/[_-]+/).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' '),
-      permissions: groupPermissions.filter((permission) => {
-        const label = String(permission.name || permission.key || permission).toLowerCase();
-        const query = permissionSearch.trim().toLowerCase();
-        return !query || label.includes(query) || formatPermissionLabel(permission.name || permission.key || permission).toLowerCase().includes(query);
-      }),
-    })).filter((group) => group.permissions.length > 0);
-  }, [permissions, permissionSearch]);
+  const [editingRole, setEditingRole] = useState(null);
 
-  const hasUnsavedChanges = useMemo(() => {
-    if (!selectedRole) return false;
-    const base = new Set((selectedRole.permissions || []).map((value) => String(value)));
-    const current = new Set(selectedPermissions.map((value) => String(value)));
-    if (base.size !== current.size) return true;
-    for (const value of base) {
-      if (!current.has(value)) return true;
-    }
-    return false;
-  }, [selectedPermissions, selectedRole]);
+  const [roleForm, setRoleForm] = useState({
+    name: "",
+    description: "",
+    status: "Active",
+  });
+
+  const [selectedPermissionIds, setSelectedPermissionIds] =
+    useState([]);
 
   const loadRoles = async () => {
-    setLoading(true);
-    setError('');
     try {
-      const response = await apiClient.get('/api/admin/roles');
-      const list = Array.isArray(response.data?.roles)
-        ? response.data.roles
-        : Array.isArray(response.data?.data)
-          ? response.data.data
-          : [];
-      setRoles(list);
-      if (!selectedRoleName && list[0]) {
-        setSelectedRoleName(list[0].name || list[0].id);
+      setLoading(true);
+      setError("");
+
+      const response = await fetch(ROLES_API, {
+        method: "GET",
+        headers: getHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Unable to load roles (${response.status})`
+        );
       }
-      if (selectedRoleName && !list.some((role) => (role.name || role.id) === selectedRoleName)) {
-        setSelectedRoleName(list[0]?.name || list[0]?.id || '');
-      }
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || 'Unable to load roles. Please try again.');
-      setRoles([]);
+
+      const data = await response.json();
+
+      setRoles(
+        normalizeArray(data, [
+          "roles",
+          "data",
+        ])
+      );
+    } catch (err) {
+      console.error("Roles load error:", err);
+      setError(err.message || "Unable to load roles.");
     } finally {
       setLoading(false);
     }
   };
 
   const loadPermissions = async () => {
-    setPermissionsLoading(true);
     try {
-      const response = await apiClient.get('/api/admin/permissions');
-      const list = Array.isArray(response.data?.permissions)
-        ? response.data.permissions
-        : Array.isArray(response.data?.data)
-          ? response.data.data
-          : [];
-      setPermissions(list);
-    } catch (requestError) {
-      setError((current) => current || (requestError.response?.data?.message || 'Unable to load permissions.'));
-      setPermissions([]);
-    } finally {
-      setPermissionsLoading(false);
-    }
-  };
+      const response = await fetch(PERMISSIONS_API, {
+        method: "GET",
+        headers: getHeaders(),
+      });
 
-  const loadSelectedPermissions = async (roleName) => {
-    if (!roleName) {
-      setSelectedPermissions([]);
-      return;
-    }
-    setPermissionsLoading(true);
-    try {
-      const response = await apiClient.get(`/api/admin/roles/${encodeURIComponent(roleName)}/permissions`);
-      const permissionsList = response.data?.permissions || response.data?.data?.permissions || [];
-      setSelectedPermissions(Array.isArray(permissionsList) ? permissionsList : []);
-    } catch (requestError) {
-      setSelectedPermissions([]);
-      setError((current) => current || (requestError.response?.data?.message || 'Unable to load role permissions.'));
-    } finally {
-      setPermissionsLoading(false);
+      if (!response.ok) {
+        console.warn(
+          `Unable to load permissions (${response.status})`
+        );
+        return;
+      }
+
+      const data = await response.json();
+
+      setPermissions(
+        normalizeArray(data, [
+          "permissions",
+          "data",
+        ])
+      );
+    } catch (err) {
+      console.warn("Permissions load error:", err);
     }
   };
 
@@ -214,435 +202,1944 @@ export default function AdminRolesPermissions() {
     loadPermissions();
   }, []);
 
-  useEffect(() => {
-    if (!selectedRoleName && roles.length) {
-      setSelectedRoleName(roles[0].name || roles[0].id);
-    }
-  }, [roles, selectedRoleName]);
+  const filteredRoles = useMemo(() => {
+    const query = search.trim().toLowerCase();
 
-  useEffect(() => {
-    if (selectedRoleName) {
-      loadSelectedPermissions(selectedRoleName);
-    }
-  }, [selectedRoleName]);
+    if (!query) return roles;
 
-  const handleCreateRole = async (event) => {
-    event.preventDefault();
-    setFormError('');
-    const trimmedName = String(form.name || '').trim();
-    if (!trimmedName) {
-      setFormError('Role name is required.');
-      return;
-    }
-    if (trimmedName.length > 100) {
-      setFormError('Role name must be 100 characters or fewer.');
-      return;
-    }
-    if (String(form.description || '').length > 500) {
-      setFormError('Role description must be 500 characters or fewer.');
-      return;
-    }
+    return roles.filter((role) => {
+      const name = getRoleName(role).toLowerCase();
 
-    try {
-      await apiClient.post('/api/admin/roles', {
-        name: trimmedName,
-        description: String(form.description || '').trim(),
-        status: normalizeStatus(form.status),
-      });
-      setShowCreateModal(false);
-      setForm({ name: '', description: '', status: 'active' });
-      await loadRoles();
-      const nextRoleName = trimmedName.toLowerCase();
-      setSelectedRoleName(nextRoleName);
-    } catch (requestError) {
-      const message = requestError.response?.data?.message || 'Unable to create role.';
-      setFormError(message === 'Role not found.' ? 'A role with this name already exists.' : message);
-    }
-  };
+      const description = String(
+        role?.description || ""
+      ).toLowerCase();
 
-  const handleEditRole = async (event) => {
-    event.preventDefault();
-    if (!selectedRole) return;
-    const trimmedName = String(form.name || '').trim();
-    if (!trimmedName) {
-      setFormError('Role name is required.');
-      return;
-    }
-
-    try {
-      await apiClient.put(`/api/admin/roles/${encodeURIComponent(selectedRole.name)}`, {
-        name: trimmedName,
-        description: String(form.description || '').trim(),
-        status: normalizeStatus(form.status),
-      });
-      setShowEditModal(false);
-      await loadRoles();
-      setSelectedRoleName(trimmedName.toLowerCase());
-    } catch (requestError) {
-      setFormError(requestError.response?.data?.message || 'Unable to update role.');
-    }
-  };
-
-  const openEditModal = () => {
-    if (!selectedRole) return;
-    setForm({
-      name: selectedRole.name || '',
-      description: selectedRole.description || '',
-      status: normalizeStatus(selectedRole.status),
+      return (
+        name.includes(query) ||
+        description.includes(query)
+      );
     });
-    setFormError('');
-    setShowEditModal(true);
-  };
+  }, [roles, search]);
 
-  const handleStatusToggle = async (roleName) => {
-    const role = roles.find((item) => (item.name || item.id) === roleName);
-    if (!role) return;
-    try {
-      const nextStatus = normalizeStatus(role.status) === 'active' ? 'inactive' : 'active';
-      await apiClient.patch(`/api/admin/roles/${encodeURIComponent(roleName)}/status`, { status: nextStatus });
-      await loadRoles();
-      if (selectedRoleName === roleName) {
-        const nextSelected = roles.find((item) => (item.name || item.id) === roleName);
-        if (nextSelected) setSelectedRoleName(nextSelected.name || nextSelected.id);
+  const permissionGroups = useMemo(() => {
+    const groups = {};
+
+    permissions.forEach((permission) => {
+      const group = getPermissionGroup(permission);
+
+      if (!groups[group]) {
+        groups[group] = [];
       }
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || 'Unable to update role status.');
-    }
+
+      groups[group].push(permission);
+    });
+
+    return groups;
+  }, [permissions]);
+
+  const activeRoles = roles.filter(
+    (role) => getRoleStatus(role) === "Active"
+  ).length;
+
+  const inactiveRoles = roles.filter(
+    (role) => getRoleStatus(role) === "Inactive"
+  ).length;
+
+  const openCreateRole = () => {
+    setEditingRole(null);
+
+    setRoleForm({
+      name: "",
+      description: "",
+      status: "Active",
+    });
+
+    setError("");
+    setSuccess("");
+    setShowRoleModal(true);
   };
 
-  const handleDeleteRole = async (roleName) => {
-    const role = roles.find((item) => (item.name || item.id) === roleName);
-    if (!role) return;
-    if ((role.users || 0) > 0) {
-      setError('Cannot delete this role because it is assigned to existing users.');
+  const openEditRole = (role) => {
+    setEditingRole(role);
+
+    setRoleForm({
+      name: getRoleName(role),
+      description: role?.description || "",
+      status: getRoleStatus(role),
+    });
+
+    setError("");
+    setSuccess("");
+    setShowRoleModal(true);
+  };
+
+  const openPermissionModal = (role) => {
+    setSelectedRole(role);
+    setSelectedPermissionIds(
+      normalizePermissionIds(role)
+    );
+
+    setError("");
+    setSuccess("");
+    setShowPermissionModal(true);
+  };
+
+  const closeRoleModal = () => {
+    if (saving) return;
+
+    setShowRoleModal(false);
+    setEditingRole(null);
+  };
+
+  const closePermissionModal = () => {
+    if (saving) return;
+
+    setShowPermissionModal(false);
+    setSelectedRole(null);
+    setSelectedPermissionIds([]);
+  };
+
+  const handleRoleChange = (event) => {
+    const { name, value } = event.target;
+
+    setRoleForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  };
+
+  const handleRoleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!roleForm.name.trim()) {
+      setError("Role name is required.");
       return;
     }
-    if (!window.confirm(`Delete role "${role.label || role.name}"?`)) return;
-    try {
-      await apiClient.delete(`/api/admin/roles/${encodeURIComponent(roleName)}`);
-      await loadRoles();
-      setSelectedRoleName('');
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || 'Unable to delete role.');
-    }
-  };
 
-  const handlePermissionSave = async () => {
-    if (!selectedRoleName) return;
-    setSavingPermissions(true);
-    setError('');
     try {
-      await apiClient.put(`/api/admin/roles/${encodeURIComponent(selectedRoleName)}/permissions`, {
-        permissions: selectedPermissions,
+      setSaving(true);
+      setError("");
+      setSuccess("");
+
+      const editing = Boolean(editingRole);
+      const roleId = getRoleId(editingRole);
+
+      const payload = {
+        name: roleForm.name.trim(),
+        description: roleForm.description.trim(),
+        status: roleForm.status,
+        isActive: roleForm.status === "Active",
+      };
+
+      const url = editing
+        ? `${ROLES_API}/${roleId}`
+        : ROLES_API;
+
+      const response = await fetch(url, {
+        method: editing ? "PUT" : "POST",
+        headers: getHeaders(true),
+        body: JSON.stringify(payload),
       });
+
+      const text = await response.text();
+
+      let data = null;
+
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            text ||
+            `Request failed (${response.status})`
+        );
+      }
+
+      setSuccess(
+        editing
+          ? "Role updated successfully."
+          : "Role created successfully."
+      );
+
+      setShowRoleModal(false);
+      setEditingRole(null);
+
       await loadRoles();
-      await loadSelectedPermissions(selectedRoleName);
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || 'Unable to update permissions. No changes were applied.');
+    } catch (err) {
+      console.error("Role save error:", err);
+      setError(err.message || "Unable to save role.");
     } finally {
-      setSavingPermissions(false);
+      setSaving(false);
     }
   };
 
-  const togglePermission = (permissionKey) => {
-    setSelectedPermissions((current) => {
-      const exists = current.includes(permissionKey);
-      return exists ? current.filter((permission) => permission !== permissionKey) : [...current, permissionKey];
+  const togglePermission = (permissionId) => {
+    const id = String(permissionId);
+
+    setSelectedPermissionIds((current) => {
+      if (current.includes(id)) {
+        return current.filter((item) => item !== id);
+      }
+
+      return [...current, id];
     });
   };
 
-  const clearFilters = () => {
-    setSearch('');
-    setStatusFilter('all');
-    setPermissionSearch('');
+  const togglePermissionGroup = (groupPermissions) => {
+    const ids = groupPermissions
+      .map(getPermissionId)
+      .filter((id) => id !== undefined && id !== null)
+      .map(String);
+
+    const allSelected = ids.every((id) =>
+      selectedPermissionIds.includes(id)
+    );
+
+    setSelectedPermissionIds((current) => {
+      if (allSelected) {
+        return current.filter((id) => !ids.includes(id));
+      }
+
+      return Array.from(
+        new Set([...current, ...ids])
+      );
+    });
   };
 
-  if (loading) {
-    return (
-      <div style={styles.page}>
-        <div style={styles.card}><div style={styles.emptyState}>Loading roles...</div></div>
-      </div>
+  const selectAllPermissions = () => {
+    const ids = permissions
+      .map(getPermissionId)
+      .filter((id) => id !== undefined && id !== null)
+      .map(String);
+
+    setSelectedPermissionIds(ids);
+  };
+
+  const clearAllPermissions = () => {
+    setSelectedPermissionIds([]);
+  };
+
+  const savePermissions = async () => {
+    if (!selectedRole) {
+      setError("No role selected.");
+      return;
+    }
+
+    const roleId = getRoleId(selectedRole);
+
+    if (!roleId) {
+      setError("Role ID is missing.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setSuccess("");
+
+      const payload = {
+        permissionIds: selectedPermissionIds,
+        permissions: selectedPermissionIds,
+      };
+
+      const response = await fetch(
+        `${ROLES_API}/${roleId}/permissions`,
+        {
+          method: "PUT",
+          headers: getHeaders(true),
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const text = await response.text();
+
+      let data = null;
+
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            text ||
+            `Unable to update permissions (${response.status})`
+        );
+      }
+
+      setSuccess("Role permissions updated successfully.");
+
+      setShowPermissionModal(false);
+
+      await loadRoles();
+    } catch (err) {
+      console.error("Permission save error:", err);
+      setError(
+        err.message ||
+          "Unable to update role permissions."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleRoleStatus = async (role) => {
+    const roleId = getRoleId(role);
+
+    if (!roleId) {
+      setError("Role ID is missing.");
+      return;
+    }
+
+    const currentStatus = getRoleStatus(role);
+
+    const newStatus =
+      currentStatus === "Active"
+        ? "Inactive"
+        : "Active";
+
+    const confirmed = window.confirm(
+      `${newStatus === "Active" ? "Activate" : "Deactivate"} "${getRoleName(
+        role
+      )}"?`
     );
-  }
+
+    if (!confirmed) return;
+
+    try {
+      setError("");
+      setSuccess("");
+
+      const response = await fetch(
+        `${ROLES_API}/${roleId}`,
+        {
+          method: "PUT",
+          headers: getHeaders(true),
+          body: JSON.stringify({
+            ...role,
+            status: newStatus,
+            isActive: newStatus === "Active",
+          }),
+        }
+      );
+
+      const text = await response.text();
+
+      let data = null;
+
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            text ||
+            `Unable to update role (${response.status})`
+        );
+      }
+
+      setSuccess(
+        `Role ${newStatus === "Active"
+          ? "activated"
+          : "deactivated"} successfully.`
+      );
+
+      await loadRoles();
+    } catch (err) {
+      console.error("Role status error:", err);
+      setError(
+        err.message ||
+          "Unable to update role status."
+      );
+    }
+  };
+
+  const deleteRole = async (role) => {
+    const roleId = getRoleId(role);
+
+    if (!roleId) {
+      setError("Role ID is missing.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete role "${getRoleName(role)}"?\n\nThis may fail if users are still assigned to this role.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setError("");
+      setSuccess("");
+
+      const response = await fetch(
+        `${ROLES_API}/${roleId}`,
+        {
+          method: "DELETE",
+          headers: getHeaders(),
+        }
+      );
+
+      const text = await response.text();
+
+      let data = null;
+
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            text ||
+            `Unable to delete role (${response.status})`
+        );
+      }
+
+      setSuccess("Role deleted successfully.");
+
+      await loadRoles();
+    } catch (err) {
+      console.error("Role delete error:", err);
+      setError(
+        err.message || "Unable to delete role."
+      );
+    }
+  };
 
   return (
     <div style={styles.page}>
       <div style={styles.header}>
         <div>
-          <div style={styles.breadcrumb}>Admin / Roles & Permissions</div>
-          <h1 style={styles.title}>Roles & Permissions</h1>
-          <p style={styles.subtitle}>Manage system roles and control which permissions are assigned to each role.</p>
+          <div style={styles.breadcrumb}>
+            Administration / Organization / Roles & Permissions
+          </div>
+
+          <h1 style={styles.title}>
+            Roles & Permissions
+          </h1>
+
+          <p style={styles.subtitle}>
+            Manage administrative roles and control which
+            system permissions are assigned to each role.
+          </p>
         </div>
-        <div style={styles.actions}>
-          <button type="button" style={styles.secondaryBtn} onClick={() => { loadRoles(); loadPermissions(); }}><RefreshCw size={16} /> Refresh</button>
-          <button type="button" style={styles.primaryBtn} onClick={() => { setForm({ name: '', description: '', status: 'active' }); setFormError(''); setShowCreateModal(true); }}><Plus size={16} /> Create Role</button>
-        </div>
+
+        <button
+          type="button"
+          onClick={openCreateRole}
+          style={styles.primaryButton}
+        >
+          <span style={styles.plus}>＋</span>
+          Add Role
+        </button>
       </div>
 
-      {error && <div style={styles.errorBox}>{error}</div>}
-
-      <div style={styles.summaryGrid}>
-        <div style={styles.statCard}>
-          <div style={styles.statIcon}><ShieldCheck size={20} /></div>
-          <div>
-            <div style={styles.statLabel}>Total Roles</div>
-            <div style={styles.statValue}>{roles.length}</div>
-            <div style={styles.statMeta}>Current registered roles</div>
-          </div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statIcon}><Check size={20} /></div>
-          <div>
-            <div style={styles.statLabel}>Active Roles</div>
-            <div style={styles.statValue}>{roles.filter((role) => normalizeStatus(role.status) === 'active').length}</div>
-            <div style={styles.statMeta}>Enabled in RBAC</div>
-          </div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statIcon}><CircleOff size={20} /></div>
-          <div>
-            <div style={styles.statLabel}>Inactive Roles</div>
-            <div style={styles.statValue}>{roles.filter((role) => normalizeStatus(role.status) !== 'active').length}</div>
-            <div style={styles.statMeta}>Disabled access</div>
-          </div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statIcon}><KeyRound size={20} /></div>
-          <div>
-            <div style={styles.statLabel}>Total Permissions</div>
-            <div style={styles.statValue}>{permissions.length}</div>
-            <div style={styles.statMeta}>Available permission records</div>
-          </div>
-        </div>
-      </div>
-
-      <div style={styles.toolbar}>
-        <div style={styles.searchWrap}>
-          <Search size={16} style={styles.iconLeft} />
-          <input style={styles.searchInput} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search roles by name or description" />
-        </div>
-        <select style={styles.select} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-          {STATUS_OPTIONS.map((status) => (
-            <option key={status} value={status}>{status === 'all' ? 'All Status' : status === 'active' ? 'Active' : 'Inactive'}</option>
-          ))}
-        </select>
-      </div>
-
-      {filteredRoles.length === 0 ? (
-        <div style={styles.card}>
-          <div style={styles.emptyState}>
-            <h3 style={{ margin: '0 0 8px', color: '#0f172a' }}>No roles match your current filters.</h3>
-            <button type="button" style={styles.primaryBtn} onClick={clearFilters}>Clear Filters</button>
-          </div>
-        </div>
-      ) : (
-        <div style={styles.tableWrap}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Role</th>
-                <th style={styles.th}>Description</th>
-                <th style={styles.th}>Users</th>
-                <th style={styles.th}>Permissions</th>
-                <th style={styles.th}>Status</th>
-                <th style={styles.th}>Created</th>
-                <th style={styles.th}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRoles.map((role) => {
-                const roleId = role.name || role.id;
-                const isActive = normalizeStatus(role.status) === 'active';
-                return (
-                  <tr key={roleId} onClick={() => setSelectedRoleName(roleId)} style={{ cursor: 'pointer' }}>
-                    <td style={styles.td}>
-                      <div style={styles.roleName}>{role.label || role.name || roleId}</div>
-                      <div style={styles.roleMeta}>{role.name || roleId}</div>
-                    </td>
-                    <td style={styles.td}>{role.description || 'No description provided.'}</td>
-                    <td style={styles.td}>{role.users ?? 0}</td>
-                    <td style={styles.td}>{role.permissionCount ?? role.permissions?.length ?? 0}</td>
-                    <td style={styles.td}><span style={{ ...styles.badge, ...(isActive ? styles.badgeActive : styles.badgeInactive) }}>{isActive ? 'Active' : 'Inactive'}</span></td>
-                    <td style={styles.td}>{formatDate(role.createdAt || role.created_at)}</td>
-                    <td style={styles.td}>
-                      <div style={styles.actionGroup} onClick={(event) => event.stopPropagation()}>
-                        <button type="button" style={styles.smallAction} onClick={() => setSelectedRoleName(roleId)}><Eye size={12} /> View</button>
-                        <button type="button" style={styles.smallAction} onClick={openEditModal}><Pencil size={12} /> Edit</button>
-                        <button type="button" style={styles.smallAction} onClick={() => setSelectedRoleName(roleId)}><KeyRound size={12} /> Permissions</button>
-                        <button type="button" style={styles.smallAction} onClick={() => handleStatusToggle(roleId)}>{isActive ? 'Deactivate' : 'Activate'}</button>
-                        {!role.protected && (
-                          <button type="button" style={styles.dangerBtn} onClick={() => handleDeleteRole(roleId)}><Trash2 size={12} /> Delete</button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      {error && (
+        <Alert
+          type="error"
+          message={error}
+          onClose={() => setError("")}
+        />
       )}
 
-      {selectedRole && (
-        <div style={styles.panel}>
-          <div style={styles.panelHeader}>
+      {success && (
+        <Alert
+          type="success"
+          message={success}
+          onClose={() => setSuccess("")}
+        />
+      )}
+
+      <div style={styles.statsGrid}>
+        <StatCard
+          label="Total Roles"
+          value={roles.length}
+          icon="♙"
+          accent="#2563EB"
+        />
+
+        <StatCard
+          label="Active Roles"
+          value={activeRoles}
+          icon="✓"
+          accent="#16A34A"
+        />
+
+        <StatCard
+          label="Inactive Roles"
+          value={inactiveRoles}
+          icon="◷"
+          accent="#DC2626"
+        />
+
+        <StatCard
+          label="Available Permissions"
+          value={permissions.length}
+          icon="◆"
+          accent="#F4C542"
+        />
+      </div>
+
+      <div style={styles.layout}>
+        <div style={styles.rolesCard}>
+          <div style={styles.cardHeader}>
             <div>
-              <div style={styles.breadcrumb}>Role Details</div>
-              <h2 style={styles.panelTitle}>{selectedRole.label || selectedRole.name}</h2>
+              <h2 style={styles.cardTitle}>System Roles</h2>
+
+              <p style={styles.cardSubtitle}>
+                Select a role to manage its access permissions.
+              </p>
             </div>
-            <button type="button" style={styles.primaryBtn} onClick={handlePermissionSave} disabled={!hasUnsavedChanges || savingPermissions}>
-              {savingPermissions ? 'Saving...' : 'Save Permissions'}
+
+            <button
+              type="button"
+              onClick={loadRoles}
+              style={styles.refreshButton}
+            >
+              ↻
             </button>
           </div>
 
-          <div style={styles.grid}>
-            <div style={styles.infoCard}>
-              <div style={{ ...styles.detailLabel, marginBottom: 8 }}>Description</div>
-              <div style={{ ...styles.detailValue, fontSize: 15, lineHeight: 1.6 }}>{selectedRole.description || 'No description provided.'}</div>
-              <div style={{ marginTop: 18, display: 'grid', gap: 14 }}>
-                <div>
-                  <div style={styles.detailLabel}>Status</div>
-                  <div><span style={{ ...styles.badge, ...(normalizeStatus(selectedRole.status) === 'active' ? styles.badgeActive : styles.badgeInactive) }}>{normalizeStatus(selectedRole.status) === 'active' ? 'Active' : 'Inactive'}</span></div>
-                </div>
-                <div>
-                  <div style={styles.detailLabel}>Users</div>
-                  <div style={styles.detailValue}>{selectedRole.users ?? 0}</div>
-                </div>
-                <div>
-                  <div style={styles.detailLabel}>Permissions</div>
-                  <div style={styles.detailValue}>{selectedRole.permissionCount ?? (selectedPermissions.length || 0)}</div>
-                </div>
-                <div>
-                  <div style={styles.detailLabel}>Created</div>
-                  <div style={styles.detailValue}>{formatDate(selectedRole.createdAt || selectedRole.created_at)}</div>
-                </div>
-                <div>
-                  <div style={styles.detailLabel}>Updated</div>
-                  <div style={styles.detailValue}>{formatDate(selectedRole.updatedAt || selectedRole.updated_at)}</div>
-                </div>
-              </div>
-            </div>
+          <div style={styles.searchBox}>
+            <span style={styles.searchIcon}>⌕</span>
 
-            <div>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14 }}>
-                <div style={styles.searchWrap}>
-                  <Search size={16} style={styles.iconLeft} />
-                  <input style={styles.searchInput} value={permissionSearch} onChange={(event) => setPermissionSearch(event.target.value)} placeholder="Search permissions..." />
-                </div>
-                <button type="button" style={styles.secondaryBtn} onClick={() => setSelectedPermissions((current) => Array.from(new Set([...current, ...permissions.map((permission) => permission.name || permission.key)])))}>Add All</button>
-              </div>
+            <input
+              value={search}
+              onChange={(event) =>
+                setSearch(event.target.value)
+              }
+              placeholder="Search roles..."
+              style={styles.searchInput}
+            />
+          </div>
 
-              {permissionsLoading ? (
-                <div style={styles.card}><div style={styles.emptyState}>Loading permissions...</div></div>
-              ) : (
-                <div style={styles.permissionList}>
-                  {groupedPermissions.length === 0 ? (
-                    <div style={styles.card}><div style={styles.emptyState}>No permissions assigned.</div></div>
-                  ) : (
-                    groupedPermissions.map((group) => (
-                      <div key={group.key} style={styles.permissionSection}>
-                        <div style={styles.sectionHeader}>
-                          <span>{group.label}</span>
-                          <span>{group.permissions.filter((permission) => selectedPermissions.includes(permission.name || permission.key)).length}/{group.permissions.length}</span>
-                        </div>
-                        {group.permissions.map((permission) => {
-                          const permissionKey = permission.name || permission.key;
-                          const checked = selectedPermissions.includes(permissionKey);
-                          return (
-                            <div key={permissionKey} style={styles.permissionRow}>
-                              <label style={styles.checkboxLabel}>
-                                <input checked={checked} type="checkbox" style={styles.checkbox} onChange={() => togglePermission(permissionKey)} />
-                                <span>{formatPermissionLabel(permissionKey)}</span>
-                              </label>
-                              <span style={{ color: checked ? '#166534' : '#64748b', fontWeight: 600 }}>{checked ? 'Assigned' : 'Unassigned'}</span>
-                            </div>
-                          );
-                        })}
+          <div style={styles.rolesList}>
+            {loading ? (
+              <div style={styles.centerState}>
+                <div style={styles.spinner} />
+                Loading roles...
+              </div>
+            ) : filteredRoles.length === 0 ? (
+              <div style={styles.centerState}>
+                <div style={styles.emptyIcon}>♙</div>
+                <strong>No roles found</strong>
+                <span>
+                  Create a role or change your search.
+                </span>
+              </div>
+            ) : (
+              filteredRoles.map((role, index) => {
+                const roleId =
+                  getRoleId(role) ?? index;
+
+                const isSelected =
+                  selectedRole &&
+                  String(getRoleId(selectedRole)) ===
+                    String(roleId);
+
+                const permissionCount =
+                  normalizePermissionIds(role).length;
+
+                return (
+                  <button
+                    type="button"
+                    key={String(roleId)}
+                    onClick={() => setSelectedRole(role)}
+                    style={{
+                      ...styles.roleItem,
+                      ...(isSelected
+                        ? styles.roleItemSelected
+                        : {}),
+                    }}
+                  >
+                    <div style={styles.roleIcon}>
+                      {getRoleName(role)
+                        .charAt(0)
+                        .toUpperCase()}
+                    </div>
+
+                    <div style={styles.roleInfo}>
+                      <div style={styles.roleName}>
+                        {getRoleName(role)}
                       </div>
-                    ))
-                  )}
-                </div>
-              )}
 
-              {hasUnsavedChanges && (
-                <div style={styles.unsaved}>
-                  <span>Unsaved changes</span>
-                  <div style={styles.actionGroup}>
-                    <button type="button" style={styles.secondaryBtn} onClick={() => loadSelectedPermissions(selectedRoleName)}>Cancel</button>
-                    <button type="button" style={styles.primaryBtn} onClick={handlePermissionSave}>Save Permissions</button>
+                      <div style={styles.roleMeta}>
+                        {permissionCount} permission
+                        {permissionCount === 1
+                          ? ""
+                          : "s"}
+                      </div>
+                    </div>
+
+                    <StatusBadge
+                      status={getRoleStatus(role)}
+                    />
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <div style={styles.permissionCard}>
+          {selectedRole ? (
+            <>
+              <div style={styles.cardHeader}>
+                <div>
+                  <div style={styles.selectedRoleTitle}>
+                    <div style={styles.selectedRoleIcon}>
+                      {getRoleName(selectedRole)
+                        .charAt(0)
+                        .toUpperCase()}
+                    </div>
+
+                    <div>
+                      <h2 style={styles.cardTitle}>
+                        {getRoleName(selectedRole)}
+                      </h2>
+
+                      <p style={styles.cardSubtitle}>
+                        {selectedRole?.description ||
+                          "No role description provided."}
+                      </p>
+                    </div>
                   </div>
                 </div>
+
+                <div style={styles.headerActions}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openEditRole(selectedRole)
+                    }
+                    style={styles.secondaryButton}
+                  >
+                    Edit
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openPermissionModal(selectedRole)
+                    }
+                    style={styles.primaryButton}
+                  >
+                    Manage Permissions
+                  </button>
+                </div>
+              </div>
+
+              <div style={styles.roleSummary}>
+                <SummaryItem
+                  label="Status"
+                  value={getRoleStatus(selectedRole)}
+                />
+
+                <SummaryItem
+                  label="Permissions"
+                  value={
+                    normalizePermissionIds(
+                      selectedRole
+                    ).length
+                  }
+                />
+
+                <SummaryItem
+                  label="Role ID"
+                  value={String(
+                    getRoleId(selectedRole) || "—"
+                  )}
+                />
+              </div>
+
+              <div style={styles.permissionSection}>
+                <div style={styles.sectionTitle}>
+                  Assigned Permissions
+                </div>
+
+                {permissions.length === 0 ? (
+                  <div style={styles.noPermissions}>
+                    No permissions are available from the
+                    permissions API.
+                  </div>
+                ) : (
+                  <div style={styles.permissionGroups}>
+                    {Object.entries(permissionGroups).map(
+                      ([group, groupPermissions]) => {
+                        const selectedIds =
+                          normalizePermissionIds(
+                            selectedRole
+                          );
+
+                        const assigned =
+                          groupPermissions.filter(
+                            (permission) =>
+                              selectedIds.includes(
+                                String(
+                                  getPermissionId(
+                                    permission
+                                  )
+                                )
+                              )
+                          ).length;
+
+                        return (
+                          <div
+                            key={group}
+                            style={styles.permissionGroup}
+                          >
+                            <div
+                              style={
+                                styles.permissionGroupHeader
+                              }
+                            >
+                              <div>
+                                <div
+                                  style={
+                                    styles.permissionGroupTitle
+                                  }
+                                >
+                                  {group}
+                                </div>
+
+                                <div
+                                  style={
+                                    styles.permissionGroupMeta
+                                  }
+                                >
+                                  {assigned} of{" "}
+                                  {groupPermissions.length}{" "}
+                                  assigned
+                                </div>
+                              </div>
+                            </div>
+
+                            <div
+                              style={
+                                styles.permissionGrid
+                              }
+                            >
+                              {groupPermissions.map(
+                                (
+                                  permission,
+                                  permissionIndex
+                                ) => {
+                                  const permissionId =
+                                    getPermissionId(
+                                      permission
+                                    ) ??
+                                    permissionIndex;
+
+                                  const checked =
+                                    selectedIds.includes(
+                                      String(
+                                        permissionId
+                                      )
+                                    );
+
+                                  return (
+                                    <div
+                                      key={String(
+                                        permissionId
+                                      )}
+                                      style={
+                                        styles.permissionItem
+                                      }
+                                    >
+                                      <span
+                                        style={{
+                                          ...styles.permissionCheck,
+                                          ...(checked
+                                            ? styles.permissionCheckActive
+                                            : {}),
+                                        }}
+                                      >
+                                        {checked
+                                          ? "✓"
+                                          : ""}
+                                      </span>
+
+                                      <span>
+                                        {getPermissionName(
+                                          permission
+                                        ) ||
+                                          "Unnamed permission"}
+                                      </span>
+                                    </div>
+                                  );
+                                }
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div style={styles.selectRoleState}>
+              <div style={styles.selectRoleIcon}>♙</div>
+
+              <h2 style={styles.selectRoleTitle}>
+                Select a Role
+              </h2>
+
+              <p style={styles.selectRoleText}>
+                Choose a role from the list to view its
+                permissions and manage access.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showRoleModal && (
+        <div
+          style={styles.modalOverlay}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeRoleModal();
+            }
+          }}
+        >
+          <div style={styles.modal}>
+            <div style={styles.modalHeader}>
+              <div>
+                <h2 style={styles.modalTitle}>
+                  {editingRole
+                    ? "Edit Role"
+                    : "Create Role"}
+                </h2>
+
+                <p style={styles.modalSubtitle}>
+                  Configure the basic role information.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeRoleModal}
+                style={styles.modalClose}
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleRoleSubmit}>
+              <div style={styles.formBody}>
+                <label style={styles.formField}>
+                  <span style={styles.formLabel}>
+                    Role Name <b>*</b>
+                  </span>
+
+                  <input
+                    name="name"
+                    value={roleForm.name}
+                    onChange={handleRoleChange}
+                    placeholder="e.g. Asset Manager"
+                    style={styles.input}
+                    required
+                  />
+                </label>
+
+                <label style={styles.formField}>
+                  <span style={styles.formLabel}>
+                    Description
+                  </span>
+
+                  <textarea
+                    name="description"
+                    value={roleForm.description}
+                    onChange={handleRoleChange}
+                    placeholder="Describe the responsibilities of this role..."
+                    rows="4"
+                    style={{
+                      ...styles.input,
+                      resize: "vertical",
+                    }}
+                  />
+                </label>
+
+                <label style={styles.formField}>
+                  <span style={styles.formLabel}>
+                    Status
+                  </span>
+
+                  <select
+                    name="status"
+                    value={roleForm.status}
+                    onChange={handleRoleChange}
+                    style={styles.input}
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">
+                      Inactive
+                    </option>
+                  </select>
+                </label>
+              </div>
+
+              <div style={styles.modalFooter}>
+                <button
+                  type="button"
+                  onClick={closeRoleModal}
+                  style={styles.cancelButton}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  style={styles.primaryButton}
+                  disabled={saving}
+                >
+                  {saving
+                    ? "Saving..."
+                    : editingRole
+                    ? "Update Role"
+                    : "Create Role"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showPermissionModal && selectedRole && (
+        <div
+          style={styles.modalOverlay}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closePermissionModal();
+            }
+          }}
+        >
+          <div style={styles.permissionModal}>
+            <div style={styles.modalHeader}>
+              <div>
+                <h2 style={styles.modalTitle}>
+                  Manage Permissions
+                </h2>
+
+                <p style={styles.modalSubtitle}>
+                  Assign permissions to{" "}
+                  <strong>
+                    {getRoleName(selectedRole)}
+                  </strong>
+                  .
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closePermissionModal}
+                style={styles.modalClose}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={styles.permissionToolbar}>
+              <span>
+                <strong>
+                  {selectedPermissionIds.length}
+                </strong>{" "}
+                selected
+              </span>
+
+              <div style={styles.permissionToolbarActions}>
+                <button
+                  type="button"
+                  onClick={selectAllPermissions}
+                  style={styles.linkButton}
+                >
+                  Select all
+                </button>
+
+                <button
+                  type="button"
+                  onClick={clearAllPermissions}
+                  style={styles.linkButton}
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+
+            <div style={styles.permissionModalBody}>
+              {permissions.length === 0 ? (
+                <div style={styles.noPermissions}>
+                  No permissions are available.
+                </div>
+              ) : (
+                Object.entries(permissionGroups).map(
+                  ([group, groupPermissions]) => {
+                    const ids = groupPermissions
+                      .map(getPermissionId)
+                      .filter(
+                        (id) =>
+                          id !== undefined &&
+                          id !== null
+                      )
+                      .map(String);
+
+                    const allSelected =
+                      ids.length > 0 &&
+                      ids.every((id) =>
+                        selectedPermissionIds.includes(
+                          id
+                        )
+                      );
+
+                    return (
+                      <div
+                        key={group}
+                        style={styles.modalPermissionGroup}
+                      >
+                        <div
+                          style={
+                            styles.modalPermissionHeader
+                          }
+                        >
+                          <div>
+                            <div
+                              style={
+                                styles.permissionGroupTitle
+                              }
+                            >
+                              {group}
+                            </div>
+
+                            <div
+                              style={
+                                styles.permissionGroupMeta
+                              }
+                            >
+                              {groupPermissions.length}{" "}
+                              permission
+                              {groupPermissions.length === 1
+                                ? ""
+                                : "s"}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              togglePermissionGroup(
+                                groupPermissions
+                              )
+                            }
+                            style={styles.smallButton}
+                          >
+                            {allSelected
+                              ? "Clear group"
+                              : "Select group"}
+                          </button>
+                        </div>
+
+                        <div
+                          style={styles.modalPermissionGrid}
+                        >
+                          {groupPermissions.map(
+                            (
+                              permission,
+                              index
+                            ) => {
+                              const permissionId =
+                                getPermissionId(
+                                  permission
+                                ) ?? index;
+
+                              const id = String(
+                                permissionId
+                              );
+
+                              const checked =
+                                selectedPermissionIds.includes(
+                                  id
+                                );
+
+                              return (
+                                <label
+                                  key={id}
+                                  style={{
+                                    ...styles.checkboxRow,
+                                    ...(checked
+                                      ? styles.checkboxRowActive
+                                      : {}),
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() =>
+                                      togglePermission(
+                                        permissionId
+                                      )
+                                    }
+                                    style={
+                                      styles.checkbox
+                                    }
+                                  />
+
+                                  <span>
+                                    {getPermissionName(
+                                      permission
+                                    ) ||
+                                      "Unnamed permission"}
+                                  </span>
+                                </label>
+                              );
+                            }
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+                )
               )}
             </div>
-          </div>
-        </div>
-      )}
 
-      {showCreateModal && (
-        <div style={styles.modalBackdrop} onClick={() => setShowCreateModal(false)}>
-          <div style={styles.modal} onClick={(event) => event.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>Create Role</h3>
-              <button type="button" style={{ ...styles.smallAction, border: 'none', background: 'transparent', padding: 0 }} onClick={() => setShowCreateModal(false)}><X size={18} /></button>
-            </div>
-            <form style={styles.form} onSubmit={handleCreateRole}>
-              <div style={styles.field}>
-                <label style={{ fontWeight: 600, color: '#0f172a' }}>Role Name *</label>
-                <input style={styles.input} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="System Administrator" />
-              </div>
-              <div style={styles.field}>
-                <label style={{ fontWeight: 600, color: '#0f172a' }}>Description</label>
-                <textarea style={styles.textarea} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Describe the operational purpose of this role." />
-              </div>
-              <div style={styles.field}>
-                <label style={{ fontWeight: 600, color: '#0f172a' }}>Status</label>
-                <select style={styles.select} value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </div>
-              {formError && <div style={styles.errorBox}>{formError}</div>}
-              <div style={styles.modalActions}>
-                <button type="button" style={styles.secondaryBtn} onClick={() => setShowCreateModal(false)}>Cancel</button>
-                <button type="submit" style={styles.primaryBtn}>Create Role</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <div style={styles.modalFooter}>
+              <button
+                type="button"
+                onClick={closePermissionModal}
+                style={styles.cancelButton}
+                disabled={saving}
+              >
+                Cancel
+              </button>
 
-      {showEditModal && selectedRole && (
-        <div style={styles.modalBackdrop} onClick={() => setShowEditModal(false)}>
-          <div style={styles.modal} onClick={(event) => event.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>Edit Role</h3>
-              <button type="button" style={{ ...styles.smallAction, border: 'none', background: 'transparent', padding: 0 }} onClick={() => setShowEditModal(false)}><X size={18} /></button>
+              <button
+                type="button"
+                onClick={savePermissions}
+                style={styles.primaryButton}
+                disabled={saving}
+              >
+                {saving
+                  ? "Saving..."
+                  : "Save Permissions"}
+              </button>
             </div>
-            <form style={styles.form} onSubmit={handleEditRole}>
-              <div style={styles.field}>
-                <label style={{ fontWeight: 600, color: '#0f172a' }}>Role Name *</label>
-                <input style={styles.input} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-              </div>
-              <div style={styles.field}>
-                <label style={{ fontWeight: 600, color: '#0f172a' }}>Description</label>
-                <textarea style={styles.textarea} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
-              </div>
-              <div style={styles.field}>
-                <label style={{ fontWeight: 600, color: '#0f172a' }}>Status</label>
-                <select style={styles.select} value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </div>
-              {formError && <div style={styles.errorBox}>{formError}</div>}
-              <div style={styles.modalActions}>
-                <button type="button" style={styles.secondaryBtn} onClick={() => setShowEditModal(false)}>Cancel</button>
-                <button type="submit" style={styles.primaryBtn}>Save Changes</button>
-              </div>
-            </form>
           </div>
         </div>
       )}
     </div>
   );
 }
+
+function Alert({ type, message, onClose }) {
+  const isError = type === "error";
+
+  return (
+    <div
+      style={{
+        ...styles.alert,
+        background: isError ? "#FEF2F2" : "#F0FDF4",
+        color: isError ? "#991B1B" : "#166534",
+        borderColor: isError ? "#FECACA" : "#BBF7D0",
+      }}
+    >
+      <span>{isError ? "⚠" : "✓"}</span>
+      <span>{message}</span>
+
+      <button
+        type="button"
+        onClick={onClose}
+        style={styles.alertClose}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+function StatCard({ label, value, icon, accent }) {
+  return (
+    <div style={styles.statCard}>
+      <div
+        style={{
+          ...styles.statIcon,
+          background: `${accent}18`,
+          color: accent,
+        }}
+      >
+        {icon}
+      </div>
+
+      <div>
+        <div style={styles.statLabel}>{label}</div>
+        <div style={styles.statValue}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ status }) {
+  const active = status === "Active";
+
+  return (
+    <span
+      style={{
+        ...styles.statusBadge,
+        background: active ? "#DCFCE7" : "#FEE2E2",
+        color: active ? "#15803D" : "#B91C1C",
+      }}
+    >
+      <span
+        style={{
+          ...styles.statusDot,
+          background: active ? "#16A34A" : "#DC2626",
+        }}
+      />
+      {status}
+    </span>
+  );
+}
+
+function SummaryItem({ label, value }) {
+  return (
+    <div style={styles.summaryItem}>
+      <div style={styles.summaryLabel}>{label}</div>
+      <div style={styles.summaryValue}>{value}</div>
+    </div>
+  );
+}
+
+const styles = {
+  page: {
+    minHeight: "100%",
+    padding: "28px",
+    background: "#F3F6F9",
+    color: "#111827",
+    boxSizing: "border-box",
+    fontFamily:
+      "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  },
+
+  header: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: "20px",
+    marginBottom: "24px",
+  },
+
+  breadcrumb: {
+    color: "#64748B",
+    fontSize: "13px",
+    marginBottom: "8px",
+  },
+
+  title: {
+    margin: 0,
+    fontSize: "28px",
+    lineHeight: 1.2,
+    fontWeight: 750,
+  },
+
+  subtitle: {
+    margin: "8px 0 0",
+    color: "#64748B",
+    fontSize: "14px",
+    lineHeight: 1.6,
+    maxWidth: "720px",
+  },
+
+  primaryButton: {
+    border: "none",
+    borderRadius: "9px",
+    background: "#2563EB",
+    color: "#FFFFFF",
+    padding: "11px 16px",
+    minHeight: "42px",
+    fontSize: "14px",
+    fontWeight: 700,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "7px",
+    whiteSpace: "nowrap",
+  },
+
+  plus: {
+    fontSize: "18px",
+  },
+
+  alert: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "12px 14px",
+    marginBottom: "16px",
+    border: "1px solid",
+    borderRadius: "9px",
+    fontSize: "14px",
+  },
+
+  alertClose: {
+    marginLeft: "auto",
+    border: "none",
+    background: "transparent",
+    color: "inherit",
+    cursor: "pointer",
+    fontSize: "20px",
+  },
+
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(210px, 1fr))",
+    gap: "16px",
+    marginBottom: "20px",
+  },
+
+  statCard: {
+    background: "#FFFFFF",
+    border: "1px solid #E5E7EB",
+    borderRadius: "12px",
+    padding: "18px",
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    boxShadow:
+      "0 2px 7px rgba(15, 23, 42, 0.04)",
+  },
+
+  statIcon: {
+    width: "44px",
+    height: "44px",
+    borderRadius: "10px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "20px",
+    fontWeight: 700,
+    flexShrink: 0,
+  },
+
+  statLabel: {
+    color: "#64748B",
+    fontSize: "12px",
+    fontWeight: 600,
+    marginBottom: "4px",
+  },
+
+  statValue: {
+    color: "#111827",
+    fontSize: "24px",
+    fontWeight: 750,
+  },
+
+  layout: {
+    display: "grid",
+    gridTemplateColumns:
+      "minmax(270px, 340px) minmax(0, 1fr)",
+    gap: "18px",
+    alignItems: "start",
+  },
+
+  rolesCard: {
+    background: "#FFFFFF",
+    border: "1px solid #E5E7EB",
+    borderRadius: "12px",
+    overflow: "hidden",
+    boxShadow:
+      "0 2px 7px rgba(15, 23, 42, 0.04)",
+  },
+
+  permissionCard: {
+    background: "#FFFFFF",
+    border: "1px solid #E5E7EB",
+    borderRadius: "12px",
+    minHeight: "500px",
+    overflow: "hidden",
+    boxShadow:
+      "0 2px 7px rgba(15, 23, 42, 0.04)",
+  },
+
+  cardHeader: {
+    padding: "18px",
+    borderBottom: "1px solid #E5E7EB",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "15px",
+    flexWrap: "wrap",
+  },
+
+  cardTitle: {
+    margin: 0,
+    color: "#111827",
+    fontSize: "17px",
+    fontWeight: 750,
+  },
+
+  cardSubtitle: {
+    margin: "5px 0 0",
+    color: "#64748B",
+    fontSize: "12px",
+    lineHeight: 1.5,
+  },
+
+  refreshButton: {
+    width: "36px",
+    height: "36px",
+    border: "1px solid #CBD5E1",
+    background: "#FFFFFF",
+    borderRadius: "8px",
+    color: "#475569",
+    cursor: "pointer",
+    fontSize: "18px",
+  },
+
+  searchBox: {
+    margin: "14px",
+    position: "relative",
+  },
+
+  searchIcon: {
+    position: "absolute",
+    left: "11px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    color: "#94A3B8",
+    fontSize: "20px",
+  },
+
+  searchInput: {
+    width: "100%",
+    height: "40px",
+    boxSizing: "border-box",
+    border: "1px solid #CBD5E1",
+    borderRadius: "8px",
+    padding: "0 11px 0 35px",
+    outline: "none",
+    fontSize: "13px",
+  },
+
+  rolesList: {
+    borderTop: "1px solid #F1F5F9",
+  },
+
+  roleItem: {
+    width: "100%",
+    border: "none",
+    borderBottom: "1px solid #F1F5F9",
+    background: "#FFFFFF",
+    padding: "12px 14px",
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+
+  roleItemSelected: {
+    background: "#EFF6FF",
+    boxShadow: "inset 3px 0 0 #2563EB",
+  },
+
+  roleIcon: {
+    width: "36px",
+    height: "36px",
+    borderRadius: "8px",
+    background: "#E0F2FE",
+    color: "#0369A1",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 800,
+    flexShrink: 0,
+  },
+
+  roleInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  roleName: {
+    color: "#1E293B",
+    fontSize: "13px",
+    fontWeight: 700,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  roleMeta: {
+    color: "#94A3B8",
+    fontSize: "11px",
+    marginTop: "3px",
+  },
+
+  statusBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    borderRadius: "999px",
+    padding: "5px 8px",
+    fontSize: "10px",
+    fontWeight: 750,
+    whiteSpace: "nowrap",
+  },
+
+  statusDot: {
+    width: "6px",
+    height: "6px",
+    borderRadius: "50%",
+  },
+
+  centerState: {
+    minHeight: "300px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "7px",
+    color: "#64748B",
+    fontSize: "13px",
+    textAlign: "center",
+    padding: "20px",
+  },
+
+  spinner: {
+    width: "18px",
+    height: "18px",
+    border: "2px solid #DBEAFE",
+    borderTopColor: "#2563EB",
+    borderRadius: "50%",
+    marginBottom: "4px",
+  },
+
+  emptyIcon: {
+    width: "48px",
+    height: "48px",
+    borderRadius: "12px",
+    background: "#F1F5F9",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#94A3B8",
+    fontSize: "22px",
+    marginBottom: "5px",
+  },
+
+  selectedRoleTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: "11px",
+  },
+
+  selectedRoleIcon: {
+    width: "42px",
+    height: "42px",
+    borderRadius: "9px",
+    background: "#E0F2FE",
+    color: "#0369A1",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "17px",
+    fontWeight: 800,
+  },
+
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
+
+  secondaryButton: {
+    minHeight: "40px",
+    border: "1px solid #CBD5E1",
+    borderRadius: "8px",
+    background: "#FFFFFF",
+    color: "#334155",
+    padding: "0 13px",
+    fontSize: "13px",
+    fontWeight: 650,
+    cursor: "pointer",
+  },
+
+  roleSummary: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(3, minmax(0, 1fr))",
+    borderBottom: "1px solid #E5E7EB",
+  },
+
+  summaryItem: {
+    padding: "14px 18px",
+    borderRight: "1px solid #E5E7EB",
+  },
+
+  summaryLabel: {
+    color: "#64748B",
+    fontSize: "10px",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    fontWeight: 750,
+    marginBottom: "5px",
+  },
+
+  summaryValue: {
+    color: "#1E293B",
+    fontSize: "14px",
+    fontWeight: 700,
+  },
+
+  permissionSection: {
+    padding: "18px",
+  },
+
+  sectionTitle: {
+    color: "#1E293B",
+    fontSize: "14px",
+    fontWeight: 750,
+    marginBottom: "14px",
+  },
+
+  permissionGroups: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+  },
+
+  permissionGroup: {
+    border: "1px solid #E2E8F0",
+    borderRadius: "9px",
+    overflow: "hidden",
+  },
+
+  permissionGroupHeader: {
+    padding: "11px 13px",
+    background: "#F8FAFC",
+    borderBottom: "1px solid #E2E8F0",
+  },
+
+  permissionGroupTitle: {
+    color: "#334155",
+    fontSize: "12px",
+    fontWeight: 750,
+  },
+
+  permissionGroupMeta: {
+    color: "#94A3B8",
+    fontSize: "10px",
+    marginTop: "3px",
+  },
+
+  permissionGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: "1px",
+    background: "#E2E8F0",
+  },
+
+  permissionItem: {
+    background: "#FFFFFF",
+    minHeight: "42px",
+    padding: "10px 12px",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    color: "#475569",
+    fontSize: "12px",
+  },
+
+  permissionCheck: {
+    width: "17px",
+    height: "17px",
+    borderRadius: "4px",
+    border: "1px solid #CBD5E1",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#FFFFFF",
+    fontSize: "11px",
+    fontWeight: 800,
+    flexShrink: 0,
+  },
+
+  permissionCheckActive: {
+    background: "#2563EB",
+    borderColor: "#2563EB",
+  },
+
+  selectRoleState: {
+    minHeight: "500px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
+    padding: "30px",
+  },
+
+  selectRoleIcon: {
+    width: "64px",
+    height: "64px",
+    borderRadius: "16px",
+    background: "#EFF6FF",
+    color: "#2563EB",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "28px",
+    marginBottom: "15px",
+  },
+
+  selectRoleTitle: {
+    margin: 0,
+    fontSize: "18px",
+    color: "#1E293B",
+  },
+
+  selectRoleText: {
+    maxWidth: "400px",
+    color: "#64748B",
+    fontSize: "13px",
+    lineHeight: 1.6,
+    margin: "7px 0 0",
+  },
+
+  noPermissions: {
+    padding: "25px",
+    textAlign: "center",
+    background: "#F8FAFC",
+    border: "1px dashed #CBD5E1",
+    borderRadius: "9px",
+    color: "#64748B",
+    fontSize: "13px",
+  },
+
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 1000,
+    background: "rgba(15, 23, 42, 0.55)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "20px",
+    overflowY: "auto",
+  },
+
+  modal: {
+    width: "min(520px, 100%)",
+    background: "#FFFFFF",
+    borderRadius: "14px",
+    boxShadow:
+      "0 24px 70px rgba(15, 23, 42, 0.25)",
+  },
+
+  permissionModal: {
+    width: "min(900px, 100%)",
+    maxHeight: "calc(100vh - 40px)",
+    background: "#FFFFFF",
+    borderRadius: "14px",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+    boxShadow:
+      "0 24px 70px rgba(15, 23, 42, 0.25)",
+  },
+
+  modalHeader: {
+    padding: "19px 21px",
+    borderBottom: "1px solid #E5E7EB",
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: "15px",
+  },
+
+  modalTitle: {
+    margin: 0,
+    color: "#111827",
+    fontSize: "19px",
+    fontWeight: 750,
+  },
+
+  modalSubtitle: {
+    margin: "5px 0 0",
+    color: "#64748B",
+    fontSize: "12px",
+  },
+
+  modalClose: {
+    width: "34px",
+    height: "34px",
+    border: "none",
+    borderRadius: "8px",
+    background: "#F1F5F9",
+    color: "#475569",
+    cursor: "pointer",
+    fontSize: "20px",
+  },
+
+  formBody: {
+    padding: "21px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "17px",
+  },
+
+  formField: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "7px",
+  },
+
+  formLabel: {
+    color: "#334155",
+    fontSize: "12px",
+    fontWeight: 700,
+  },
+
+  input: {
+    width: "100%",
+    minHeight: "41px",
+    boxSizing: "border-box",
+    border: "1px solid #CBD5E1",
+    borderRadius: "8px",
+    padding: "9px 11px",
+    outline: "none",
+    color: "#111827",
+    fontSize: "13px",
+    background: "#FFFFFF",
+  },
+
+  modalFooter: {
+    padding: "14px 21px",
+    borderTop: "1px solid #E5E7EB",
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "8px",
+  },
+
+  cancelButton: {
+    minHeight: "42px",
+    border: "1px solid #CBD5E1",
+    background: "#FFFFFF",
+    color: "#475569",
+    borderRadius: "8px",
+    padding: "0 15px",
+    fontSize: "13px",
+    fontWeight: 650,
+    cursor: "pointer",
+  },
+
+  permissionToolbar: {
+    padding: "12px 18px",
+    background: "#F8FAFC",
+    borderBottom: "1px solid #E5E7EB",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "10px",
+    color: "#64748B",
+    fontSize: "12px",
+  },
+
+  permissionToolbarActions: {
+    display: "flex",
+    gap: "10px",
+  },
+
+  linkButton: {
+    border: "none",
+    background: "transparent",
+    color: "#2563EB",
+    fontSize: "12px",
+    fontWeight: 650,
+    cursor: "pointer",
+  },
+
+  permissionModalBody: {
+    padding: "16px 18px",
+    overflowY: "auto",
+    flex: 1,
+  },
+
+  modalPermissionGroup: {
+    border: "1px solid #E2E8F0",
+    borderRadius: "9px",
+    marginBottom: "12px",
+    overflow: "hidden",
+  },
+
+  modalPermissionHeader: {
+    padding: "11px 13px",
+    background: "#F8FAFC",
+    borderBottom: "1px solid #E2E8F0",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "10px",
+  },
+
+  smallButton: {
+    border: "1px solid #CBD5E1",
+    background: "#FFFFFF",
+    color: "#475569",
+    borderRadius: "6px",
+    padding: "6px 9px",
+    fontSize: "11px",
+    fontWeight: 650,
+    cursor: "pointer",
+  },
+
+  modalPermissionGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(210px, 1fr))",
+  },
+
+  checkboxRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "9px",
+    padding: "10px 12px",
+    borderBottom: "1px solid #F1F5F9",
+    color: "#475569",
+    fontSize: "12px",
+    cursor: "pointer",
+  },
+
+  checkboxRowActive: {
+    background: "#EFF6FF",
+    color: "#1E40AF",
+  },
+
+  checkbox: {
+    width: "15px",
+    height: "15px",
+    accentColor: "#2563EB",
+    cursor: "pointer",
+    flexShrink: 0,
+  },
+};

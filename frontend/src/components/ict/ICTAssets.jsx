@@ -1,1160 +1,4223 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  AlertCircle,
   AlertTriangle,
   ArrowRightLeft,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  CircleUserRound,
   Download,
+  Edit3,
   Eye,
+  FileText,
+  Filter,
   History,
-  MapPinOff,
-  MonitorSmartphone,
+  Loader2,
   MoreHorizontal,
   Package,
-  Pencil,
   Plus,
+  QrCode,
   RefreshCw,
-  ScanLine,
   Search,
-  SlidersHorizontal,
   Trash2,
-  UserCheck,
+  UserPlus,
   Wrench,
   X,
 } from "lucide-react";
-import { toast } from "react-toastify";
-import apiClient from "../../services/apiClient";
-import { useAuth } from "../../contexts/AuthContext";
-import "./ICTAssets.css";
 
-const emptyFilters = {
-  search: "",
+/*
+|--------------------------------------------------------------------------
+| ICT Assets
+|--------------------------------------------------------------------------
+| Route:
+|   /ict/assets
+|
+| Main permission:
+|   ict.assets.view
+|
+| Related permissions:
+|   ict.assets.create
+|   ict.assets.update
+|   ict.assets.assign
+|   ict.assets.transfer
+|   ict.assets.qr
+|   ict.assets.rfid
+|   ict.assets.export
+|   ict.assets.retire
+|   ict.assets.delete
+|   ict.assets.restore
+|
+| API:
+|   /api/ict/assets
+|--------------------------------------------------------------------------
+*/
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+
+const API_URL = `${API_BASE_URL}/ict/assets`;
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
+const STATUS_OPTIONS = [
+  "Available",
+  "Assigned",
+  "Under Maintenance",
+  "In Transit",
+  "Retired",
+  "Disposed",
+];
+
+const CONDITION_OPTIONS = [
+  "Functional",
+  "Needs Repair",
+  "Damaged",
+  "Missing",
+  "Expired",
+  "Replaced",
+];
+
+const CATEGORY_OPTIONS = [
+  "Desktop Computer",
+  "Laptop",
+  "Workstation",
+  "Server",
+  "Tablet",
+  "Router",
+  "Switch",
+  "Access Point",
+  "Firewall",
+  "Network Controller",
+  "Printer",
+  "Scanner",
+  "Photocopier",
+  "Projector",
+  "Monitor",
+  "Interactive Display",
+  "UPS",
+  "Inverter",
+  "Power Backup",
+  "NAS",
+  "External Storage",
+  "Storage Server",
+  "IP Phone",
+  "Telephone Equipment",
+  "Video Conferencing Equipment",
+];
+
+const EMPTY_FORM = {
+  assetId: "",
+  digitalId: "",
+  assetName: "",
   category: "",
-  status: "",
-  condition: "",
+  subcategory: "",
+  serialNumber: "",
+  quantity: 1,
+  qrCode: "",
+  rfid: "",
+
+  purchaseDate: "",
+  purchaseCost: "",
+  supplier: "",
+  warrantyStart: "",
+  warrantyExpiry: "",
+  researchGrant: "",
+  warrantyDocument: "",
+  manual: "",
+
+  status: "Available",
+  condition: "Functional",
+
+  campus: "",
+  college: "",
   department: "",
-  location: "",
-  assignmentStatus: "",
-  sortBy: "updatedAt",
-  sortOrder: "DESC",
+  laboratory: "",
+  building: "",
+  room: "",
+  custodian: "",
+  assignedUser: "",
+
+  cpu: "",
+  ram: "",
+  storage: "",
+  storageType: "",
+  operatingSystem: "",
+  gpu: "",
+  macAddress: "",
+  ipAddress: "",
+  hostname: "",
 };
-const valueOrDash = (value) =>
-  value === null || value === undefined || value === "" ? "—" : value;
-const formatDate = (value) =>
-  value ? new Date(value).toLocaleDateString() : "—";
-const normalize = (value) =>
-  String(value || "")
+
+function normalize(value) {
+  return String(value || "")
+    .trim()
     .toLowerCase()
-    .replace(/[_ ]/g, "-");
-const apiErrorMessage = (error) => {
-  const status = error.response?.status;
-  if (status === 401) return "Session expired. Please sign in again.";
-  if (status === 403) return "You do not have permission to view ICT assets.";
-  if (status === 404) return "The ICT assets endpoint was not found.";
-  if (status === 409) return "The ICT asset request conflicts with existing data.";
-  if (status === 422) return "The ICT asset request failed validation.";
-  if (status >= 500) return "The server could not load ICT assets.";
-  if (!error.response) return "The backend is unavailable. Check the connection and try again.";
-  return error.response.data?.message || "Unable to load ICT assets.";
-};
+    .replace(/\s+/g, "_");
+}
 
-const statusClass = (status) => {
-  const normalized = normalize(status);
-  if (normalized === "available") return "status-available";
-  if (normalized === "assigned" || normalized === "in-use")
-    return "status-assigned";
-  if (normalized === "maintenance" || normalized === "under-maintenance")
-    return "status-maintenance";
-  if (
-    normalized === "missing" ||
-    normalized === "faulty" ||
-    normalized === "damaged"
-  )
-    return "status-danger";
-  return "status-neutral";
-};
+function formatNumber(value) {
+  return new Intl.NumberFormat().format(Number(value || 0));
+}
 
-const ICTAssets = () => {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const canEdit = ["admin", "ict_officer"].includes(
-    String(user?.role || "").toLowerCase(),
+function formatCurrency(value) {
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value));
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+function statusClass(value) {
+  switch (normalize(value)) {
+    case "available":
+    case "functional":
+      return "success";
+
+    case "assigned":
+    case "in_transit":
+      return "info";
+
+    case "under_maintenance":
+    case "needs_repair":
+      return "warning";
+
+    case "damaged":
+    case "missing":
+      return "danger";
+
+    case "retired":
+    case "disposed":
+    case "expired":
+    case "replaced":
+      return "neutral";
+
+    default:
+      return "neutral";
+  }
+}
+
+function StatusBadge({ value }) {
+  return (
+    <span className={`status-badge ${statusClass(value)}`}>
+      {value || "Unknown"}
+    </span>
   );
+}
+
+function Modal({ open, title, children, onClose, width = "760px" }) {
+  if (!open) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div
+        className="modal-container"
+        style={{ maxWidth: width }}
+      >
+        <div className="modal-header">
+          <div>
+            <h2>{title}</h2>
+          </div>
+
+          <button
+            type="button"
+            className="icon-button"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={19} />
+          </button>
+        </div>
+
+        <div className="modal-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function FormField({
+  label,
+  children,
+  required = false,
+  hint,
+  className = "",
+}) {
+  return (
+    <div className={`form-field ${className}`}>
+      <label>
+        {label}
+        {required && <span className="required">*</span>}
+      </label>
+
+      {children}
+
+      {hint && <small className="field-hint">{hint}</small>}
+    </div>
+  );
+}
+
+function EmptyState({ text }) {
+  return (
+    <div className="empty-state">
+      <Package size={38} />
+      <p>{text}</p>
+    </div>
+  );
+}
+
+export default function ICTAssets() {
   const [assets, setAssets] = useState([]);
-  const [filters, setFilters] = useState(emptyFilters);
-  const [statusTab, setStatusTab] = useState("all");
-  const [options, setOptions] = useState({
-    categories: [],
-    departments: [],
-    statuses: [],
-    conditions: [],
-  });
-  const [summary, setSummary] = useState(null);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 25,
-    total: 0,
-    pages: 0,
-  });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [selected, setSelected] = useState(null);
-  const [editing, setEditing] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [openMenu, setOpenMenu] = useState(null);
-  const [verifying, setVerifying] = useState(null);
-  const [verificationForm, setVerificationForm] = useState({ state: "", notes: "" });
-  const [transferTarget, setTransferTarget] = useState(null);
-  const [transferForm, setTransferForm] = useState({ departmentId: "", location: "", reason: "" });
+  const [refreshing, setRefreshing] = useState(false);
 
-  const requestParams = useMemo(
-    () =>
-      Object.fromEntries(
-        Object.entries({
-          ...filters,
-          statusTab: statusTab === "all" ? "" : statusTab,
-          page: pagination.page,
-          limit: pagination.limit,
-        }).filter(([, value]) => value !== ""),
-      ),
-    [filters, pagination.page, pagination.limit, statusTab],
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const [search, setSearch] = useState("");
+
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const [filters, setFilters] = useState({
+    category: "",
+    status: "",
+    condition: "",
+    campus: "",
+    college: "",
+    department: "",
+    laboratory: "",
+    building: "",
+    room: "",
+    assignedUser: "",
+    rfid: "",
+    purchaseDateFrom: "",
+    purchaseDateTo: "",
+    warrantyStatus: "",
+  });
+
+  const [sort, setSort] = useState({
+    field: "createdAt",
+    direction: "desc",
+  });
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const [total, setTotal] = useState(0);
+
+  const [selectedAsset, setSelectedAsset] = useState(null);
+
+  const [modal, setModal] = useState(null);
+
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  const [saving, setSaving] = useState(false);
+
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const token =
+    localStorage.getItem("token") ||
+    localStorage.getItem("accessToken");
+
+  const authHeaders = useMemo(
+    () => ({
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(token
+        ? {
+            Authorization: `Bearer ${token}`,
+          }
+        : {}),
+    }),
+    [token]
   );
 
-  const visibleAssets = assets;
-  const hasActiveFilters = statusTab !== "all" || [
-    filters.search,
-    filters.category,
-    filters.status,
-    filters.condition,
-    filters.department,
-    filters.location,
-    filters.assignmentStatus,
-  ].some(Boolean);
-
-  const summaryCards = useMemo(() => {
-    const value = (key) => summary ? Number(summary[key]) : "—";
-
-    return [
-      { label: "Total Assets", value: value("total"), icon: Package, tone: "blue" },
-      { label: "Assigned", value: value("assigned"), icon: UserCheck, tone: "green" },
-      { label: "Available", value: value("available"), icon: CheckCircle2, tone: "teal" },
-      { label: "Maintenance", value: value("maintenance"), icon: Wrench, tone: "amber" },
-      { label: "Missing", value: value("missing"), icon: AlertTriangle, tone: "red" },
-    ];
-  }, [summary]);
-
-  const loadAssets = useCallback(async (signal) => {
-    setLoading(true);
-    setError("");
+  const fetchAssets = async ({
+    initial = false,
+    customPage = page,
+  } = {}) => {
     try {
-      const { data } = await apiClient.get("/api/ict/assets", {
-        params: requestParams,
-        signal,
-      });
-      const summaryFields = ["total", "assigned", "available", "maintenance", "missing"];
-      const pageCount = data?.pagination?.totalPages ?? data?.pagination?.pages;
-      if (
-        data?.success !== true ||
-        !Array.isArray(data.assets) ||
-        !Number.isFinite(Number(data.total)) ||
-        !data.summary ||
-        !summaryFields.every((field) => Number.isFinite(Number(data.summary[field]))) ||
-        !Number.isFinite(Number(data.pagination?.page)) ||
-        !Number.isFinite(Number(data.pagination?.limit)) ||
-        !Number.isFinite(Number(pageCount))
-      ) {
-        throw new Error("The ICT assets API returned an invalid response.");
+      if (initial) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
       }
-      setAssets(Array.isArray(data?.assets) ? data.assets : []);
-      setSummary(data.summary);
-      setPagination((current) => ({
-        ...current,
-        ...(data?.pagination || {}),
-        total: Number(data.pagination.total ?? data.total),
-        pages: Number(pageCount),
-      }));
-    } catch (requestError) {
-      if (requestError.code === "ERR_CANCELED") return;
-      const message = requestError.response
-        ? apiErrorMessage(requestError)
-        : requestError instanceof Error
-          ? requestError.message
-          : apiErrorMessage(requestError);
-      setError(message);
-      toast.error(message);
+
+      setError("");
+
+      const params = new URLSearchParams();
+
+      params.set("page", customPage);
+      params.set("limit", pageSize);
+
+      if (search.trim()) {
+        params.set("search", search.trim());
+      }
+
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== null && value !== undefined && value !== "") {
+          params.set(key, value);
+        }
+      });
+
+      if (sort.field) {
+        params.set("sortBy", sort.field);
+        params.set("sortOrder", sort.direction);
+      }
+
+      const response = await fetch(
+        `${API_URL}?${params.toString()}`,
+        {
+          headers: authHeaders,
+        }
+      );
+
+      if (response.status === 401) {
+        throw new Error(
+          "Your session has expired. Please log in again."
+        );
+      }
+
+      if (response.status === 403) {
+        throw new Error(
+          "You do not have permission to view ICT assets."
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error("Unable to load ICT assets.");
+      }
+
+      const result = await response.json();
+
+      const data = result?.data || result;
+
+      const rows =
+        data?.items ||
+        data?.assets ||
+        data?.rows ||
+        [];
+
+      setAssets(Array.isArray(rows) ? rows : []);
+
+      setTotal(
+        Number(
+          data?.total ??
+            data?.pagination?.total ??
+            rows.length
+        )
+      );
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        err?.message ||
+          "Unable to load ICT assets. Please try again."
+      );
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [requestParams]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = setTimeout(
-      () => loadAssets(controller.signal),
-      filters.search ? 350 : 0,
-    );
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [filters.search, loadAssets, requestParams]);
-
-  useEffect(() => {
-    apiClient
-      .get("/api/ict/assets/options")
-      .then(({ data }) =>
-        setOptions({
-          categories: Array.isArray(data?.categories) ? data.categories : [],
-          departments: Array.isArray(data?.departments) ? data.departments : [],
-          statuses: Array.isArray(data?.statuses) ? data.statuses : [],
-          conditions: Array.isArray(data?.conditions) ? data.conditions : [],
-        }),
-      )
-      .catch(() => toast.error("Unable to load asset filter options."));
-  }, []);
-
-  const updateFilter = (name, value) => {
-    setFilters((current) => ({ ...current, [name]: value }));
-    setPagination((current) => ({ ...current, page: 1 }));
   };
 
-  const openDetails = async (asset) => {
-    setOpenMenu(null);
-    try {
-      const { data } = await apiClient.get(`/api/ict/assets/${asset.id}`);
-      setSelected(data?.asset ? {
-        ...data.asset,
-        maintenance: data.maintenance || [],
-        history: data.history || [],
-        assignmentHistory: data.assignmentHistory || [],
-        transfers: data.transfers || [],
-        verification: data.verification || [],
-      } : null);
-    } catch (requestError) {
-      toast.error(
-        requestError.response?.data?.message || "Unable to load asset details.",
-      );
-    }
+  useEffect(() => {
+    fetchAssets({ initial: true });
+  }, [
+    page,
+    pageSize,
+    search,
+    filters,
+    sort.field,
+    sort.direction,
+  ]);
+
+  useEffect(() => {
+    if (!success) return;
+
+    const timeout = setTimeout(() => {
+      setSuccess("");
+    }, 3500);
+
+    return () => clearTimeout(timeout);
+  }, [success]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(total / pageSize)
+  );
+
+  const firstRow =
+    total === 0 ? 0 : (page - 1) * pageSize + 1;
+
+  const lastRow = Math.min(
+    page * pageSize,
+    total
+  );
+
+  const updateFilter = (name, value) => {
+    setPage(1);
+
+    setFilters((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const clearFilters = () => {
+    setPage(1);
+
+    setFilters({
+      category: "",
+      status: "",
+      condition: "",
+      campus: "",
+      college: "",
+      department: "",
+      laboratory: "",
+      building: "",
+      room: "",
+      assignedUser: "",
+      rfid: "",
+      purchaseDateFrom: "",
+      purchaseDateTo: "",
+      warrantyStatus: "",
+    });
+  };
+
+  const openCreate = () => {
+    setForm({
+      ...EMPTY_FORM,
+      quantity: 1,
+      status: "Available",
+      condition: "Functional",
+    });
+
+    setModal("create");
+  };
+
+  const openEdit = (asset) => {
+    setSelectedAsset(asset);
+
+    setForm({
+      ...EMPTY_FORM,
+      ...asset,
+      assetId: asset.assetId || asset.id || "",
+      quantity: asset.quantity || 1,
+    });
+
+    setModal("edit");
+  };
+
+  const openView = (asset) => {
+    setSelectedAsset(asset);
+    setModal("view");
+  };
+
+  const openAssign = (asset) => {
+    setSelectedAsset(asset);
+
+    setModal("assign");
+  };
+
+  const openTransfer = (asset) => {
+    setSelectedAsset(asset);
+
+    setModal("transfer");
+  };
+
+  const openMaintenance = (asset) => {
+    setSelectedAsset(asset);
+
+    setModal("maintenance");
+  };
+
+  const openHistory = (asset) => {
+    setSelectedAsset(asset);
+
+    setModal("history");
+  };
+
+  const openQR = (asset) => {
+    setSelectedAsset(asset);
+
+    setModal("qr");
+  };
+
+  const openDelete = (asset) => {
+    setSelectedAsset(asset);
+
+    setModal("delete");
+  };
+
+  const updateForm = (name, value) => {
+    setForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
   };
 
   const saveAsset = async (event) => {
     event.preventDefault();
-    setSaving(true);
-    try {
-      await apiClient.patch(`/api/ict/assets/${editing.id}`, editing);
-      toast.success("Asset updated successfully.");
-      setEditing(null);
-      await loadAssets();
-    } catch (requestError) {
-      toast.error(
-        requestError.response?.data?.message || "Unable to update asset.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
 
-  const updateStatus = async (asset, status) => {
-    setOpenMenu(null);
     try {
-      await apiClient.patch(`/api/ict/assets/${asset.id}`, { status });
-      toast.success(`Asset marked as ${status}.`);
-      await loadAssets();
-    } catch (requestError) {
-      toast.error(
-        requestError.response?.status === 403
-          ? "You do not have permission to change this asset."
-          : requestError.response?.data?.message || "Unable to update asset status.",
-      );
-    }
-  };
+      setSaving(true);
+      setError("");
 
-  const returnAsset = async (asset) => {
-    if (!canEdit || !asset.assignmentId) return;
-    if (!window.confirm(`Confirm return of ${asset.name || "this asset"}?`)) return;
-    setOpenMenu(null);
-    try {
-      await apiClient.post(`/api/assignments/${asset.assignmentId}/return`, {
-        notes: "Returned from ICT asset register",
+      const isEdit = modal === "edit";
+
+      const endpoint = isEdit
+        ? `${API_URL}/${selectedAsset?.id || selectedAsset?.assetId}`
+        : API_URL;
+
+      const response = await fetch(endpoint, {
+        method: isEdit ? "PUT" : "POST",
+        headers: authHeaders,
+        body: JSON.stringify(form),
       });
-      toast.success("Asset returned successfully.");
-      await loadAssets();
-    } catch (requestError) {
-      toast.error(requestError.response?.data?.message || "Unable to return this asset.");
-    }
-  };
 
-  const requestMaintenance = async (asset) => {
-    if (!canEdit) return;
-    const description = window.prompt(`Describe the maintenance needed for ${asset.name || "this asset"}.`);
-    if (description === null || !description.trim()) return;
-    setOpenMenu(null);
-    try {
-      await apiClient.post(`/api/ict/assets/${asset.id}/maintenance`, {
-        title: `ICT maintenance: ${asset.name || asset.assetCode || asset.id}`,
-        description: description.trim(),
-        priority: "medium",
-      });
-      toast.success("Maintenance request created.");
-      await loadAssets();
-    } catch (requestError) {
-      toast.error(requestError.response?.data?.message || "Unable to create maintenance request.");
-    }
-  };
+      const result = await response.json().catch(() => ({}));
 
-  const submitVerification = async (event) => {
-    event.preventDefault();
-    if (!verifying || !verificationForm.state) return;
-    setSaving(true);
-    try {
-      const sessionResponse = await apiClient.post("/api/ict/verification", {
-        name: `Asset verification ${verifying.assetCode || verifying.id} ${new Date().toISOString()}`,
-        department_id: verifying.departmentId || undefined,
-      });
-      const sessionId = sessionResponse.data?.data?.id;
-      if (!sessionId) throw new Error("Verification session was not returned by the server.");
-      await apiClient.post(`/api/ict/verification/${sessionId}/items`, {
-        asset_id: verifying.id,
-        state: verificationForm.state,
-        notes: verificationForm.notes.trim(),
-      });
-      await apiClient.post(`/api/ict/verification/${sessionId}/submit`);
-      await apiClient.post(`/api/ict/verification/${sessionId}/finalize`);
-      toast.success("Asset verification recorded.");
-      setVerifying(null);
-      setVerificationForm({ state: "", notes: "" });
-      await loadAssets();
-    } catch (requestError) {
-      toast.error(requestError.response?.data?.message || requestError.message || "Unable to record verification.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const submitTransfer = async (event) => {
-    event.preventDefault();
-    if (!transferTarget || !transferForm.departmentId || !transferForm.location.trim() || !transferForm.reason.trim()) return;
-    setSaving(true);
-    try {
-      await apiClient.post("/api/transfers", {
-        asset_id: transferTarget.id,
-        destination_department_id: Number(transferForm.departmentId),
-        new_location: transferForm.location.trim(),
-        transfer_reason: transferForm.reason.trim(),
-      });
-      toast.success("Transfer request created.");
-      setTransferTarget(null);
-      setTransferForm({ departmentId: "", location: "", reason: "" });
-      await loadAssets();
-    } catch (requestError) {
-      toast.error(requestError.response?.data?.message || "Unable to create transfer request.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const deleteAsset = async (asset) => {
-    if (!canEdit || !window.confirm(`Retire ${asset.name || "this asset"}?`)) return;
-    setOpenMenu(null);
-    try {
-      await apiClient.patch(`/api/ict/equipment/${asset.id}/retire`, { reason: "Retired from ICT asset register" });
-      toast.success("Asset retired successfully.");
-      await loadAssets();
-    } catch (requestError) {
-      toast.error(
-        requestError.response?.status === 403
-          ? "You do not have permission to dispose assets."
-          : requestError.response?.data?.message || "Unable to dispose asset.",
-      );
-    }
-  };
-
-  const exportCsv = async () => {
-    if (!pagination.total) {
-      toast.info("There are no equipment records to export.");
-      return;
-    }
-    const columns = ["assetCode", "name", "category", "serialNumber", "manufacturer", "model", "department", "location", "assignedTo", "condition", "status", "purchaseDate", "purchasePrice", "updatedAt"];
-    const escape = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
-    try {
-      const exportAssets = [];
-      let page = 1;
-      let pageCount = 1;
-      while (page <= pageCount) {
-        const { data } = await apiClient.get("/api/ict/assets", {
-          params: { ...requestParams, page, limit: 100 },
-        });
-        pageCount = Number(data?.pagination?.totalPages ?? data?.pagination?.pages);
-        if (data?.success !== true || !Array.isArray(data.assets) || !Number.isFinite(pageCount)) {
-          throw new Error("The ICT assets API returned an invalid export response.");
-        }
-        exportAssets.push(...data.assets);
-        page += 1;
+      if (!response.ok) {
+        throw new Error(
+          result?.message ||
+            `Unable to ${isEdit ? "update" : "create"} asset.`
+        );
       }
-      const rows = exportAssets.map((asset) => columns.map((column) => escape(asset[column])).join(","));
-      const csv = [columns.map(escape).join(","), ...rows].join("\n");
-      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "ict-assets.csv";
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (requestError) {
-      toast.error(requestError.response?.data?.message || "Unable to export ICT assets.");
+
+      setModal(null);
+
+      setSuccess(
+        isEdit
+          ? "Asset updated successfully."
+          : "Asset registered successfully."
+      );
+
+      await fetchAssets();
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        err?.message ||
+          "Unable to save ICT asset."
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (!user || !["ict_officer", "admin"].includes(user.role)) return null;
+  const assignAsset = async (event) => {
+    event.preventDefault();
+
+    if (!selectedAsset) return;
+
+    try {
+      setActionLoading(true);
+      setError("");
+
+      const formData = new FormData(event.currentTarget);
+
+      const payload = {
+        assignedTo: formData.get("assignedTo"),
+        department: formData.get("department"),
+        location: formData.get("location"),
+        assignmentDate: formData.get("assignmentDate"),
+        expectedReturnDate: formData.get(
+          "expectedReturnDate"
+        ),
+        condition: formData.get("condition"),
+        notes: formData.get("notes"),
+      };
+
+      const id =
+        selectedAsset.id ||
+        selectedAsset.assetId;
+
+      const response = await fetch(
+        `${API_URL}/${id}/assign`,
+        {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const result = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          result?.message ||
+            "Unable to assign asset."
+        );
+      }
+
+      setModal(null);
+
+      setSuccess(
+        "Asset assigned successfully."
+      );
+
+      await fetchAssets();
+    } catch (err) {
+      setError(
+        err?.message ||
+          "Unable to assign asset."
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const transferAsset = async (event) => {
+    event.preventDefault();
+
+    if (!selectedAsset) return;
+
+    try {
+      setActionLoading(true);
+      setError("");
+
+      const formData = new FormData(event.currentTarget);
+
+      const payload = {
+        fromLocation:
+          selectedAsset.room ||
+          selectedAsset.location ||
+          "",
+        toCampus: formData.get("toCampus"),
+        toCollege: formData.get("toCollege"),
+        toDepartment: formData.get(
+          "toDepartment"
+        ),
+        toLaboratory: formData.get(
+          "toLaboratory"
+        ),
+        toBuilding: formData.get(
+          "toBuilding"
+        ),
+        toRoom: formData.get("toRoom"),
+        requestedBy: formData.get(
+          "requestedBy"
+        ),
+        reason: formData.get("reason"),
+        receivingOfficer: formData.get(
+          "receivingOfficer"
+        ),
+      };
+
+      const id =
+        selectedAsset.id ||
+        selectedAsset.assetId;
+
+      const response = await fetch(
+        `${API_URL}/${id}/transfer`,
+        {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const result = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          result?.message ||
+            "Unable to transfer asset."
+        );
+      }
+
+      setModal(null);
+
+      setSuccess(
+        "Asset transfer request created successfully."
+      );
+
+      await fetchAssets();
+    } catch (err) {
+      setError(
+        err?.message ||
+          "Unable to transfer asset."
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const sendToMaintenance = async () => {
+    if (!selectedAsset) return;
+
+    try {
+      setActionLoading(true);
+      setError("");
+
+      const id =
+        selectedAsset.id ||
+        selectedAsset.assetId;
+
+      const response = await fetch(
+        `${API_URL}/${id}/maintenance`,
+        {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({
+            reason:
+              document.getElementById(
+                "maintenanceReason"
+              )?.value || "",
+          }),
+        }
+      );
+
+      const result = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          result?.message ||
+            "Unable to send asset to maintenance."
+        );
+      }
+
+      setModal(null);
+
+      setSuccess(
+        "Asset sent to maintenance successfully."
+      );
+
+      await fetchAssets();
+    } catch (err) {
+      setError(
+        err?.message ||
+          "Unable to update maintenance status."
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const deleteAsset = async () => {
+    if (!selectedAsset) return;
+
+    try {
+      setActionLoading(true);
+      setError("");
+
+      const id =
+        selectedAsset.id ||
+        selectedAsset.assetId;
+
+      const response = await fetch(
+        `${API_URL}/${id}`,
+        {
+          method: "DELETE",
+          headers: authHeaders,
+          body: JSON.stringify({
+            reason:
+              document.getElementById(
+                "deleteReason"
+              )?.value || "",
+          }),
+        }
+      );
+
+      const result = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          result?.message ||
+            "Unable to delete asset."
+        );
+      }
+
+      setModal(null);
+
+      setSuccess(
+        "Asset deleted successfully."
+      );
+
+      await fetchAssets();
+    } catch (err) {
+      setError(
+        err?.message ||
+          "Unable to delete asset."
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const exportAssets = async () => {
+    try {
+      setActionLoading(true);
+      setError("");
+
+      const params = new URLSearchParams();
+
+      if (search.trim()) {
+        params.set("search", search.trim());
+      }
+
+      Object.entries(filters).forEach(
+        ([key, value]) => {
+          if (value) {
+            params.set(key, value);
+          }
+        }
+      );
+
+      const response = await fetch(
+        `${API_URL}/export?${params.toString()}`,
+        {
+          headers: {
+            Accept: "application/octet-stream",
+            ...(token
+              ? {
+                  Authorization: `Bearer ${token}`,
+                }
+              : {}),
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          "Unable to export ICT assets."
+        );
+      }
+
+      const blob = await response.blob();
+
+      const url = URL.createObjectURL(blob);
+
+      const anchor = document.createElement("a");
+
+      anchor.href = url;
+
+      anchor.download =
+        `ict-assets-${new Date()
+          .toISOString()
+          .slice(0, 10)}.xlsx`;
+
+      document.body.appendChild(anchor);
+
+      anchor.click();
+
+      anchor.remove();
+
+      URL.revokeObjectURL(url);
+
+      setSuccess(
+        "ICT assets exported successfully."
+      );
+    } catch (err) {
+      setError(
+        err?.message ||
+          "Unable to export ICT assets."
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const toggleSort = (field) => {
+    setPage(1);
+
+    setSort((previous) => ({
+      field,
+      direction:
+        previous.field === field &&
+        previous.direction === "asc"
+          ? "desc"
+          : "asc",
+    }));
+  };
 
   return (
-    <main className="ict-assets-page">
-      <header className="ict-assets-header">
-        <div className="page-heading">
-          <div className="heading-icon">
-            <MonitorSmartphone size={22} />
+    <div className="ict-assets-page">
+      {/* -------------------------------------------------------------- */}
+      {/* Header                                                          */}
+      {/* -------------------------------------------------------------- */}
+
+      <div className="page-header">
+        <div>
+          <div className="breadcrumb">
+            <span>ICT Officer</span>
+            <span>/</span>
+            <strong>ICT Assets</strong>
           </div>
-          <div>
-            <p className="eyebrow">ICT ASSETS</p>
-            <h1>ICT Assets</h1>
-            <p className="subtitle">
-              Manage, track, assign, transfer, maintain, and verify university ICT assets.
-            </p>
-          </div>
+
+          <h1>ICT Assets</h1>
+
+          <p>
+            Register, search, assign, transfer and manage
+            ICT assets throughout their lifecycle.
+          </p>
         </div>
+
         <div className="header-actions">
           <button
-            className="quiet-button"
-            onClick={() => loadAssets()}
-            disabled={loading}
-          >
-            <RefreshCw size={16} className={loading ? "spin" : ""} /> Refresh
-          </button>
-          <button className="quiet-button" onClick={exportCsv} disabled={loading || !assets.length}>
-            <Download size={16} /> Export
-          </button>
-          {canEdit && (
-            <button className="primary-button" onClick={() => navigate("/ict/assets/create")}>
-              <Plus size={16} /> Add ICT Asset
-            </button>
-          )}
-        </div>
-      </header>
-
-      <section className="summary-grid" aria-label="ICT asset summary">
-        {summaryCards.map(({ label, value, icon: Icon, tone }) => (
-          <article className={`summary-card summary-card--${tone}`} key={label}>
-            <div className="summary-card__header">
-              <span className="summary-card__icon">
-                <Icon size={18} />
-              </span>
-              <span className="summary-card__label">{label}</span>
-            </div>
-            <strong className="summary-card__value">{value}</strong>
-          </article>
-        ))}
-      </section>
-
-      <section className="filter-panel">
-        <div className="filter-title">
-          <SlidersHorizontal size={17} /> Search and filters
-        </div>
-        <div className="filter-controls">
-          <label className="search-field">
-            <Search size={17} />
-            <input
-              value={filters.search}
-              onChange={(event) => updateFilter("search", event.target.value)}
-              placeholder="Search asset ID, tag, name, serial, brand, model..."
-              aria-label="Search ICT assets"
-            />
-          </label>
-          <select
-            value={filters.category}
-            onChange={(event) => updateFilter("category", event.target.value)}
-          >
-            <option value="">All categories</option>
-            {options.categories.map((item) => (
-              <option key={item.id} value={item.name}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filters.status}
-            onChange={(event) => updateFilter("status", event.target.value)}
-          >
-            <option value="">All statuses</option>
-            {options.statuses.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filters.condition}
-            onChange={(event) => updateFilter("condition", event.target.value)}
-          >
-            <option value="">All conditions</option>
-            {options.conditions.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filters.department}
-            onChange={(event) => updateFilter("department", event.target.value)}
-          >
-            <option value="">All departments</option>
-            {options.departments.map((item) => (
-              <option key={item.id} value={item.name}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filters.assignmentStatus}
-            onChange={(event) =>
-              updateFilter("assignmentStatus", event.target.value)
-            }
-          >
-            <option value="">All assignments</option>
-            <option value="assigned">Assigned</option>
-            <option value="unassigned">Unassigned</option>
-          </select>
-          <select
-            value={filters.sortBy}
-            onChange={(event) => updateFilter("sortBy", event.target.value)}
-            aria-label="Sort ICT assets by"
-          >
-            <option value="updatedAt">Sort: recent</option>
-            <option value="name">Sort: name</option>
-            <option value="assetCode">Sort: asset ID</option>
-            <option value="category">Sort: category</option>
-            <option value="department">Sort: department</option>
-            <option value="location">Sort: location</option>
-            <option value="purchaseDate">Sort: purchase date</option>
-            <option value="cost">Sort: cost</option>
-            <option value="status">Sort: status</option>
-          </select>
-          <select
-            value={filters.sortOrder}
-            onChange={(event) => updateFilter("sortOrder", event.target.value)}
-            aria-label="Sort direction"
-          >
-            <option value="DESC">Descending</option>
-            <option value="ASC">Ascending</option>
-          </select>
-          <input
-            value={filters.location}
-            onChange={(event) => updateFilter("location", event.target.value)}
-            placeholder="Location"
-            aria-label="Filter by location"
-          />
-          {Object.values(filters).some((value) => value !== "" && value !== "updatedAt" && value !== "DESC") && (
-            <button
-              className="link-button"
-              onClick={() => {
-                setFilters(emptyFilters);
-                setPagination((current) => ({ ...current, page: 1 }));
-              }}
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-      </section>
-
-      <div className="asset-tabs" role="tablist" aria-label="Asset status quick filters">
-        {[
-          { value: "all", label: "All" },
-          { value: "assigned", label: "Assigned" },
-          { value: "available", label: "Available" },
-          { value: "maintenance", label: "Maintenance" },
-          { value: "missing", label: "Missing" },
-        ].map((tab) => (
-          <button
-            key={tab.value}
             type="button"
-            role="tab"
-            aria-selected={statusTab === tab.value}
-            className={`asset-tab${statusTab === tab.value ? " active" : ""}`}
-            onClick={() => {
-              setStatusTab(tab.value);
-              setPagination((current) => ({ ...current, page: 1 }));
-            }}
+            className="secondary-button"
+            onClick={() =>
+              fetchAssets({ initial: false })
+            }
+            disabled={refreshing}
           >
-            {tab.label}
+            <RefreshCw
+              size={16}
+              className={
+                refreshing ? "spin" : ""
+              }
+            />
+            Refresh
           </button>
-        ))}
+
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={exportAssets}
+            disabled={actionLoading}
+          >
+            <Download size={16} />
+            Export
+          </button>
+
+          <button
+            type="button"
+            className="primary-button"
+            onClick={openCreate}
+          >
+            <Plus size={17} />
+            Register Asset
+          </button>
+        </div>
       </div>
 
+      {/* -------------------------------------------------------------- */}
+      {/* Alerts                                                           */}
+      {/* -------------------------------------------------------------- */}
+
       {error && (
-        <div className="error-banner">
-          <AlertCircle size={18} />
+        <div className="alert alert-error">
+          <AlertTriangle size={18} />
+
           <span>{error}</span>
-          <button className="quiet-button" onClick={() => loadAssets()}>
-            Retry
+
+          <button
+            type="button"
+            onClick={() => setError("")}
+          >
+            <X size={16} />
           </button>
         </div>
       )}
 
-      <section className="table-panel">
-        <div className="table-heading">
-          <div>
-            <h2>Asset register</h2>
-            <span>{pagination.total} records in your authorized scope</span>
-          </div>
-          {loading && (
-            <RefreshCw className="spin" size={18} aria-label="Loading" />
-          )}
-        </div>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Asset</th>
-                <th>Category</th>
-                <th>Serial number</th>
-                <th>Department</th>
-                <th>Location</th>
-                <th>Custodian</th>
-                <th>Condition</th>
-                <th>Status</th>
-                <th>Updated</th>
-                <th aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {loading && !assets.length ? (
-                Array.from({ length: 5 }, (_, index) => (
-                  <tr className="skeleton-row" key={index}>
-                    <td colSpan="10">
-                      <span />
-                    </td>
-                  </tr>
-                ))
-              ) : error && !assets.length ? (
-                <tr>
-                  <td colSpan="10" className="empty-cell">
-                    The asset register could not be loaded.
-                  </td>
-                </tr>
-              ) : visibleAssets.length > 0 ? (
-                visibleAssets.map((asset) => (
-                  <tr key={asset.id}>
-                    <td>
-                      <button
-                        className="asset-identity"
-                        onClick={() => openDetails(asset)}
-                      >
-                        <strong>{valueOrDash(asset.name)}</strong>
-                        <span>
-                          ID: {valueOrDash(asset.id)}
-                        </span>
-                        <span>Tag: {valueOrDash(asset.assetTag || asset.assetCode)}</span>
-                      </button>
-                    </td>
-                    <td>{valueOrDash(asset.category)}</td>
-                    <td>{valueOrDash(asset.serialNumber)}</td>
-                    <td>{valueOrDash(asset.department)}</td>
-                    <td>{valueOrDash(asset.location)}</td>
-                    <td>
-                      {asset.assignedTo ? (
-                        <span className="person">
-                          <CircleUserRound size={15} />
-                          {asset.assignedTo}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td>{valueOrDash(asset.condition)}</td>
-                    <td>
-                      <span
-                        className={`status-badge ${statusClass(asset.status)}`}
-                      >
-                        <CheckCircle2 size={13} />
-                        {valueOrDash(asset.status)}
-                      </span>
-                    </td>
-                    <td>{formatDate(asset.updatedAt)}</td>
-                    <td className="actions">
-                      <button
-                        className="icon-button"
-                        title="More asset actions"
-                        aria-label={`More actions for ${asset.name || "asset"}`}
-                        onClick={() =>
-                          setOpenMenu(openMenu === asset.id ? null : asset.id)
-                        }
-                      >
-                        <MoreHorizontal size={18} />
-                      </button>
-                      {openMenu === asset.id && (
-                        <div className="action-menu">
-                          <button onClick={() => openDetails(asset)}>
-                            <Eye size={15} /> View details
-                          </button>
-                          <button
-                            disabled={!canEdit}
-                            onClick={() => {
-                              setOpenMenu(null);
-                              setEditing({ ...asset });
-                            }}
-                          >
-                            <Pencil size={15} /> Edit
-                          </button>
-                          <button
-                            disabled={!canEdit}
-                            onClick={() => navigate(`/ict/assignments?assetId=${asset.id}`)}
-                          >
-                            <UserCheck size={15} /> Assign
-                          </button>
-                          <button onClick={() => navigate("/ict/maintenance")}>
-                            <Wrench size={15} /> Maintenance
-                          </button>
-                          <button
-                            disabled={!canEdit}
-                            onClick={() => requestMaintenance(asset)}
-                          >
-                            <Wrench size={15} /> Request maintenance
-                          </button>
-                          {asset.assignedTo && asset.assignmentId && <button
-                            disabled={!canEdit}
-                            onClick={() => returnAsset(asset)}
-                          >
-                            <Package size={15} /> Return asset
-                          </button>}
-                          <button
-                            disabled={!canEdit}
-                            onClick={() => {
-                              setOpenMenu(null);
-                              setVerificationForm({ state: "", notes: "" });
-                              setVerifying(asset);
-                            }}
-                          >
-                            <CheckCircle2 size={15} /> Verify asset
-                          </button>
-                          {normalize(asset.status) !== "lost" && <button
-                            disabled={!canEdit}
-                            onClick={() => updateStatus(asset, "lost")}
-                          >
-                            <MapPinOff size={15} /> Mark lost
-                          </button>}
-                          {canEdit && <button onClick={() => deleteAsset(asset)}>
-                            <Trash2 size={15} /> Retire asset
-                          </button>}
-                          <button
-                            onClick={() => navigate(`/ict/asset-history?assetId=${asset.id}`)}
-                          >
-                            <History size={15} /> View history
-                          </button>
-                          <button onClick={() => navigate("/ict/rfid")}>
-                            <ScanLine size={15} /> RFID / QR
-                          </button>
-                          <button disabled={!canEdit} onClick={() => {
-                            setOpenMenu(null);
-                            setTransferForm({ departmentId: "", location: "", reason: "" });
-                            setTransferTarget(asset);
-                          }}>
-                            <ArrowRightLeft size={15} /> Transfer
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="10" className="empty-cell">
-                    <div className="empty-icon">
-                      <MonitorSmartphone size={22} />
-                    </div>
-                    <strong>No ICT assets found</strong>
-                    <span>
-                      {hasActiveFilters
-                        ? "Try changing your filters or search terms."
-                        : "No ICT assets are available in your authorized scope."}
-                    </span>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <footer className="pagination">
-          <span>
-            {pagination.total
-              ? `${(pagination.page - 1) * pagination.limit + 1}-${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total}`
-              : "0 records"}
-          </span>
-          <div className="pagination-controls">
-            <label className="rows-per-page">
-              <span>Rows per page</span>
-              <select
-                value={pagination.limit}
-                onChange={(event) => {
-                  const nextLimit = Number(event.target.value) || 25;
-                  setPagination((current) => ({ ...current, limit: nextLimit, page: 1 }));
-                }}
-                aria-label="Rows per page"
-              >
-                {[10, 25, 50, 100].map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              className="icon-button"
-              disabled={pagination.page <= 1 || loading}
-              onClick={() =>
-                setPagination((current) => ({
-                  ...current,
-                  page: current.page - 1,
-                }))
-              }
-              aria-label="Previous page"
-            >
-              <ChevronLeft size={17} />
-            </button>
-            <span>Page {pagination.page} of {pagination.pages}</span>
-            <button
-              className="icon-button"
-              disabled={pagination.page >= pagination.pages || loading}
-              onClick={() =>
-                setPagination((current) => ({
-                  ...current,
-                  page: current.page + 1,
-                }))
-              }
-              aria-label="Next page"
-            >
-              <ChevronRight size={17} />
-            </button>
-          </div>
-        </footer>
-      </section>
+      {success && (
+        <div className="alert alert-success">
+          <span>{success}</span>
 
-      {selected && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => setSelected(null)}
-        >
-          <div
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            onClick={(event) => event.stopPropagation()}
+          <button
+            type="button"
+            onClick={() => setSuccess("")}
           >
-            <div className="modal-title">
-              <div>
-                <p className="eyebrow">ASSET DETAILS</p>
-                <h2>{valueOrDash(selected.name)}</h2>
-                <span>
-                  {valueOrDash(selected.assetTag || selected.assetCode)}
-                </span>
-              </div>
-              <button
-                className="icon-button"
-                onClick={() => setSelected(null)}
-                aria-label="Close"
-              >
-                <X size={19} />
-              </button>
-            </div>
-            <div className="detail-grid">
-              {[
-                ["Asset ID", selected.id],
-                ["Asset tag", selected.assetTag || selected.assetCode],
-                ["Category", selected.category],
-                ["Manufacturer", selected.manufacturer],
-                ["Model", selected.model],
-                ["Serial number", selected.serialNumber],
-                ["Status", selected.status],
-                ["Condition", selected.condition],
-                ["Assigned to", selected.assignedTo],
-                ["Department", selected.department],
-                ["Location", selected.location],
-                ["Purchase date", formatDate(selected.purchaseDate)],
-                ["Warranty expiry", formatDate(selected.warrantyExpiry)],
-                ["Created", formatDate(selected.createdAt)],
-                ["Purchase cost", selected.purchasePrice == null ? "—" : selected.purchasePrice],
-                ["Supplier", selected.supplier],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <dt>{label}</dt>
-                  <dd>{valueOrDash(value)}</dd>
-                </div>
-              ))}
-            </div>
-            <h3>Maintenance</h3>
-            {selected.maintenance?.length ? (
-              selected.maintenance.map((item) => (
-                <p className="history-item" key={item.id}>
-                  {valueOrDash(item.title)}{" "}
-                  <span>
-                    {valueOrDash(item.status)} · {formatDate(item.createdAt)}
-                  </span>
-                </p>
-              ))
-            ) : (
-              <p className="muted">No maintenance records.</p>
-            )}
-            <h3>History</h3>
-            {selected.history?.length ? (
-              selected.history.map((item, index) => (
-                <p
-                  className="history-item"
-                  key={`${item.createdAt || item.date}-${index}`}
-                >
-                  {valueOrDash(item.action)}{" "}
-                  <span>{formatDate(item.createdAt || item.date)}</span>
-                </p>
-              ))
-            ) : (
-              <p className="muted">No audit history.</p>
-            )}
-            <h3>Assignment history</h3>
-            {selected.assignmentHistory?.length ? selected.assignmentHistory.map((item) => (
-              <p className="history-item" key={`assignment-${item.id}`}>
-                {item.status === "returned" ? "Asset returned" : "Asset assigned"}
-                <span>{item.User?.fullName || item.User?.username || "Assignment"} · {formatDate(item.updatedAt || item.createdAt)}</span>
-              </p>
-            )) : <p className="muted">No assignment records.</p>}
-            <h3>Transfer history</h3>
-            {selected.transfers?.length ? selected.transfers.map((item) => (
-              <p className="history-item" key={`transfer-${item.id}`}>
-                {valueOrDash(item.status)}: {valueOrDash(item.destinationDepartment)}
-                <span>{valueOrDash(item.newLocation)} · {formatDate(item.createdAt)}</span>
-              </p>
-            )) : <p className="muted">No transfer records.</p>}
-            <h3>Verification history</h3>
-            {selected.verification?.length ? selected.verification.map((item) => (
-              <p className="history-item" key={`verification-${item.id}`}>
-                {valueOrDash(item.state)}
-                <span>{valueOrDash(item.notes)} · {formatDate(item.updatedAt || item.createdAt)}</span>
-              </p>
-            )) : <p className="muted">No verification records.</p>}
-          </div>
+            <X size={16} />
+          </button>
         </div>
       )}
-      {editing && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => setEditing(null)}
+
+      {/* -------------------------------------------------------------- */}
+      {/* Search + Filters                                                 */}
+      {/* -------------------------------------------------------------- */}
+
+      <section className="toolbar-card">
+        <div className="search-wrapper">
+          <Search size={18} />
+
+          <input
+            type="search"
+            placeholder="Search Asset ID, serial number, asset name..."
+            value={search}
+            onChange={(event) => {
+              setPage(1);
+              setSearch(event.target.value);
+            }}
+          />
+
+          {search && (
+            <button
+              type="button"
+              className="clear-search"
+              onClick={() => {
+                setPage(1);
+                setSearch("");
+              }}
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className={`filter-button ${
+            filtersOpen ? "active" : ""
+          }`}
+          onClick={() =>
+            setFiltersOpen((value) => !value)
+          }
         >
-          <form
-            className="modal edit-modal"
-            onSubmit={saveAsset}
-            onClick={(event) => event.stopPropagation()}
+          <Filter size={17} />
+          Filters
+
+          {Object.values(filters).filter(Boolean)
+            .length > 0 && (
+            <span className="filter-count">
+              {
+                Object.values(filters).filter(
+                  Boolean
+                ).length
+              }
+            </span>
+          )}
+        </button>
+
+        {Object.values(filters).filter(Boolean)
+          .length > 0 && (
+          <button
+            type="button"
+            className="clear-filter-button"
+            onClick={clearFilters}
           >
-            <div className="modal-title">
-              <div>
-                <p className="eyebrow">ASSET UPDATE</p>
-                <h2>Edit ICT asset</h2>
-              </div>
+            Clear Filters
+          </button>
+        )}
+      </section>
+
+      {filtersOpen && (
+        <section className="filter-panel">
+          <div className="filter-grid">
+            <FormField label="Category">
+              <select
+                value={filters.category}
+                onChange={(event) =>
+                  updateFilter(
+                    "category",
+                    event.target.value
+                  )
+                }
+              >
+                <option value="">
+                  All Categories
+                </option>
+
+                {CATEGORY_OPTIONS.map(
+                  (category) => (
+                    <option
+                      value={category}
+                      key={category}
+                    >
+                      {category}
+                    </option>
+                  )
+                )}
+              </select>
+            </FormField>
+
+            <FormField label="Status">
+              <select
+                value={filters.status}
+                onChange={(event) =>
+                  updateFilter(
+                    "status",
+                    event.target.value
+                  )
+                }
+              >
+                <option value="">
+                  All Statuses
+                </option>
+
+                {STATUS_OPTIONS.map(
+                  (status) => (
+                    <option
+                      value={status}
+                      key={status}
+                    >
+                      {status}
+                    </option>
+                  )
+                )}
+              </select>
+            </FormField>
+
+            <FormField label="Condition">
+              <select
+                value={filters.condition}
+                onChange={(event) =>
+                  updateFilter(
+                    "condition",
+                    event.target.value
+                  )
+                }
+              >
+                <option value="">
+                  All Conditions
+                </option>
+
+                {CONDITION_OPTIONS.map(
+                  (condition) => (
+                    <option
+                      value={condition}
+                      key={condition}
+                    >
+                      {condition}
+                    </option>
+                  )
+                )}
+              </select>
+            </FormField>
+
+            <FormField label="Campus">
+              <input
+                value={filters.campus}
+                onChange={(event) =>
+                  updateFilter(
+                    "campus",
+                    event.target.value
+                  )
+                }
+                placeholder="Campus"
+              />
+            </FormField>
+
+            <FormField label="College">
+              <input
+                value={filters.college}
+                onChange={(event) =>
+                  updateFilter(
+                    "college",
+                    event.target.value
+                  )
+                }
+                placeholder="College"
+              />
+            </FormField>
+
+            <FormField label="Department">
+              <input
+                value={filters.department}
+                onChange={(event) =>
+                  updateFilter(
+                    "department",
+                    event.target.value
+                  )
+                }
+                placeholder="Department"
+              />
+            </FormField>
+
+            <FormField label="Laboratory">
+              <input
+                value={filters.laboratory}
+                onChange={(event) =>
+                  updateFilter(
+                    "laboratory",
+                    event.target.value
+                  )
+                }
+                placeholder="Laboratory"
+              />
+            </FormField>
+
+            <FormField label="Building">
+              <input
+                value={filters.building}
+                onChange={(event) =>
+                  updateFilter(
+                    "building",
+                    event.target.value
+                  )
+                }
+                placeholder="Building"
+              />
+            </FormField>
+
+            <FormField label="Room">
+              <input
+                value={filters.room}
+                onChange={(event) =>
+                  updateFilter(
+                    "room",
+                    event.target.value
+                  )
+                }
+                placeholder="Room"
+              />
+            </FormField>
+
+            <FormField label="Assigned User">
+              <input
+                value={filters.assignedUser}
+                onChange={(event) =>
+                  updateFilter(
+                    "assignedUser",
+                    event.target.value
+                  )
+                }
+                placeholder="Assigned user"
+              />
+            </FormField>
+
+            <FormField label="RFID">
+              <input
+                value={filters.rfid}
+                onChange={(event) =>
+                  updateFilter(
+                    "rfid",
+                    event.target.value
+                  )
+                }
+                placeholder="RFID identifier"
+              />
+            </FormField>
+
+            <FormField label="Warranty">
+              <select
+                value={filters.warrantyStatus}
+                onChange={(event) =>
+                  updateFilter(
+                    "warrantyStatus",
+                    event.target.value
+                  )
+                }
+              >
+                <option value="">
+                  All Warranty Statuses
+                </option>
+
+                <option value="active">
+                  Active
+                </option>
+
+                <option value="expiring">
+                  Expiring Soon
+                </option>
+
+                <option value="expired">
+                  Expired
+                </option>
+              </select>
+            </FormField>
+
+            <FormField label="Purchase Date From">
+              <input
+                type="date"
+                value={filters.purchaseDateFrom}
+                onChange={(event) =>
+                  updateFilter(
+                    "purchaseDateFrom",
+                    event.target.value
+                  )
+                }
+              />
+            </FormField>
+
+            <FormField label="Purchase Date To">
+              <input
+                type="date"
+                value={filters.purchaseDateTo}
+                onChange={(event) =>
+                  updateFilter(
+                    "purchaseDateTo",
+                    event.target.value
+                  )
+                }
+              />
+            </FormField>
+          </div>
+        </section>
+      )}
+
+      {/* -------------------------------------------------------------- */}
+      {/* Table                                                           */}
+      {/* -------------------------------------------------------------- */}
+
+      <section className="table-card">
+        <div className="table-header">
+          <div>
+            <h2>Registered ICT Assets</h2>
+
+            <p>
+              {formatNumber(total)} assets found
+            </p>
+          </div>
+
+          <div className="page-size">
+            <span>Rows:</span>
+
+            <select
+              value={pageSize}
+              onChange={(event) => {
+                setPage(1);
+                setPageSize(
+                  Number(event.target.value)
+                );
+              }}
+            >
+              {PAGE_SIZE_OPTIONS.map(
+                (size) => (
+                  <option
+                    value={size}
+                    key={size}
+                  >
+                    {size}
+                  </option>
+                )
+              )}
+            </select>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="loading-state">
+            <Loader2
+              size={36}
+              className="spin"
+            />
+
+            <p>Loading ICT assets...</p>
+          </div>
+        ) : assets.length === 0 ? (
+          <EmptyState text="No ICT assets found." />
+        ) : (
+          <div className="table-wrapper">
+            <table className="assets-table">
+              <thead>
+                <tr>
+                  <th
+                    onClick={() =>
+                      toggleSort("assetId")
+                    }
+                  >
+                    Asset ID
+                    <SortIndicator
+                      field="assetId"
+                      sort={sort}
+                    />
+                  </th>
+
+                  <th>Asset</th>
+
+                  <th>Category</th>
+
+                  <th>Serial Number</th>
+
+                  <th
+                    onClick={() =>
+                      toggleSort("status")
+                    }
+                  >
+                    Status
+                    <SortIndicator
+                      field="status"
+                      sort={sort}
+                    />
+                  </th>
+
+                  <th>Condition</th>
+
+                  <th>Location</th>
+
+                  <th>Assigned To</th>
+
+                  <th
+                    onClick={() =>
+                      toggleSort("purchaseDate")
+                    }
+                  >
+                    Purchase Date
+                    <SortIndicator
+                      field="purchaseDate"
+                      sort={sort}
+                    />
+                  </th>
+
+                  <th className="actions-column">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {assets.map((asset) => (
+                  <AssetRow
+                    key={
+                      asset.id ||
+                      asset.assetId
+                    }
+                    asset={asset}
+                    onView={() =>
+                      openView(asset)
+                    }
+                    onEdit={() =>
+                      openEdit(asset)
+                    }
+                    onAssign={() =>
+                      openAssign(asset)
+                    }
+                    onTransfer={() =>
+                      openTransfer(asset)
+                    }
+                    onMaintenance={() =>
+                      openMaintenance(asset)
+                    }
+                    onQR={() =>
+                      openQR(asset)
+                    }
+                    onHistory={() =>
+                      openHistory(asset)
+                    }
+                    onDelete={() =>
+                      openDelete(asset)
+                    }
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && assets.length > 0 && (
+          <div className="pagination">
+            <div className="pagination-info">
+              Showing{" "}
+              <strong>{firstRow}</strong>–
+              <strong>{lastRow}</strong> of{" "}
+              <strong>{formatNumber(total)}</strong>
+            </div>
+
+            <div className="pagination-controls">
               <button
                 type="button"
-                className="icon-button"
-                onClick={() => setEditing(null)}
-                aria-label="Close"
+                disabled={page <= 1}
+                onClick={() =>
+                  setPage((value) =>
+                    Math.max(1, value - 1)
+                  )
+                }
               >
-                <X size={19} />
+                <ChevronLeft size={17} />
+              </button>
+
+              <span>
+                Page <strong>{page}</strong> of{" "}
+                <strong>{totalPages}</strong>
+              </span>
+
+              <button
+                type="button"
+                disabled={
+                  page >= totalPages
+                }
+                onClick={() =>
+                  setPage((value) =>
+                    Math.min(
+                      totalPages,
+                      value + 1
+                    )
+                  )
+                }
+              >
+                <ChevronRight size={17} />
               </button>
             </div>
-            <label>
-              Asset code
-              <input
-                required
-                value={editing.assetCode || ""}
-                onChange={(event) => setEditing({ ...editing, assetCode: event.target.value })}
-              />
-            </label>
-            <label>
-              Asset name
-              <input
-                required
-                value={editing.name || ""}
-                onChange={(event) =>
-                  setEditing({ ...editing, name: event.target.value })
-                }
-              />
-            </label>
-            <label>
-              Serial number
-              <input
-                value={editing.serialNumber || ""}
-                onChange={(event) => setEditing({ ...editing, serialNumber: event.target.value })}
-              />
-            </label>
-            <label>
-              Category
-              <select
-                value={editing.category || ""}
-                onChange={(event) => setEditing({ ...editing, category: event.target.value })}
-              >
-                {options.categories.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}
-              </select>
-            </label>
-            <label>
-              Department
-              <select
-                value={editing.department || ""}
-                onChange={(event) => setEditing({ ...editing, department: event.target.value })}
-              >
-                {options.departments.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}
-              </select>
-            </label>
-            <label>
-              Status
-              <select
-                value={editing.status || ""}
-                onChange={(event) =>
-                  setEditing({ ...editing, status: event.target.value })
-                }
-              >
-                {options.statuses.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Condition
-              <select
-                value={editing.condition || ""}
-                onChange={(event) =>
-                  setEditing({ ...editing, condition: event.target.value })
-                }
-              >
-                {options.conditions.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Location
-              <input
-                value={editing.location || ""}
-                onChange={(event) =>
-                  setEditing({ ...editing, location: event.target.value })
-                }
-              />
-            </label>
-            <label>
-              Manufacturer
-              <input value={editing.manufacturer || ""} onChange={(event) => setEditing({ ...editing, manufacturer: event.target.value })} />
-            </label>
-            <label>
-              Model
-              <input value={editing.model || ""} onChange={(event) => setEditing({ ...editing, model: event.target.value })} />
-            </label>
-            <label>
-              Purchase date
-              <input type="date" value={editing.purchaseDate ? String(editing.purchaseDate).slice(0, 10) : ""} onChange={(event) => setEditing({ ...editing, purchaseDate: event.target.value })} />
-            </label>
-            <label>
-              Purchase cost
-              <input type="number" min="0" step="0.01" value={editing.purchasePrice ?? ""} onChange={(event) => setEditing({ ...editing, purchasePrice: event.target.value })} />
-            </label>
-            <label>
-              Description
+          </div>
+        )}
+      </section>
+
+      {/* -------------------------------------------------------------- */}
+      {/* View Modal                                                       */}
+      {/* -------------------------------------------------------------- */}
+
+      <Modal
+        open={modal === "view"}
+        title="Asset Details"
+        onClose={() => setModal(null)}
+        width="900px"
+      >
+        {selectedAsset && (
+          <AssetDetails
+            asset={selectedAsset}
+            onEdit={() =>
+              openEdit(selectedAsset)
+            }
+            onClose={() => setModal(null)}
+          />
+        )}
+      </Modal>
+
+      {/* -------------------------------------------------------------- */}
+      {/* Create / Edit                                                    */}
+      {/* -------------------------------------------------------------- */}
+
+      <Modal
+        open={
+          modal === "create" ||
+          modal === "edit"
+        }
+        title={
+          modal === "edit"
+            ? "Edit ICT Asset"
+            : "Register ICT Asset"
+        }
+        onClose={() => setModal(null)}
+        width="1000px"
+      >
+        <AssetForm
+          form={form}
+          updateForm={updateForm}
+          onSubmit={saveAsset}
+          saving={saving}
+          editing={modal === "edit"}
+          onCancel={() => setModal(null)}
+        />
+      </Modal>
+
+      {/* -------------------------------------------------------------- */}
+      {/* Assign                                                           */}
+      {/* -------------------------------------------------------------- */}
+
+      <Modal
+        open={modal === "assign"}
+        title="Assign ICT Asset"
+        onClose={() => setModal(null)}
+      >
+        {selectedAsset && (
+          <AssignmentForm
+            asset={selectedAsset}
+            onSubmit={assignAsset}
+            loading={actionLoading}
+            onCancel={() => setModal(null)}
+          />
+        )}
+      </Modal>
+
+      {/* -------------------------------------------------------------- */}
+      {/* Transfer                                                         */}
+      {/* -------------------------------------------------------------- */}
+
+      <Modal
+        open={modal === "transfer"}
+        title="Transfer ICT Asset"
+        onClose={() => setModal(null)}
+      >
+        {selectedAsset && (
+          <TransferForm
+            asset={selectedAsset}
+            onSubmit={transferAsset}
+            loading={actionLoading}
+            onCancel={() => setModal(null)}
+          />
+        )}
+      </Modal>
+
+      {/* -------------------------------------------------------------- */}
+      {/* Maintenance                                                      */}
+      {/* -------------------------------------------------------------- */}
+
+      <Modal
+        open={modal === "maintenance"}
+        title="Send Asset to Maintenance"
+        onClose={() => setModal(null)}
+      >
+        {selectedAsset && (
+          <div>
+            <div className="confirmation-box">
+              <Wrench size={25} />
+
+              <div>
+                <strong>
+                  {selectedAsset.assetName ||
+                    selectedAsset.name}
+                </strong>
+
+                <p>
+                  {selectedAsset.assetId ||
+                    selectedAsset.id}
+                </p>
+              </div>
+            </div>
+
+            <FormField label="Reason">
               <textarea
-                value={editing.description || ""}
-                onChange={(event) =>
-                  setEditing({ ...editing, description: event.target.value })
-                }
+                id="maintenanceReason"
+                rows={4}
+                placeholder="Describe the maintenance reason..."
               />
-            </label>
+            </FormField>
+
             <div className="modal-actions">
               <button
                 type="button"
-                className="quiet-button"
-                onClick={() => setEditing(null)}
+                className="secondary-button"
+                onClick={() =>
+                  setModal(null)
+                }
               >
                 Cancel
               </button>
+
               <button
-                type="submit"
+                type="button"
                 className="primary-button"
-                disabled={saving}
+                onClick={sendToMaintenance}
+                disabled={actionLoading}
               >
-                {saving ? "Saving..." : "Save changes"}
+                {actionLoading && (
+                  <Loader2
+                    size={16}
+                    className="spin"
+                  />
+                )}
+
+                Send to Maintenance
               </button>
             </div>
-          </form>
-        </div>
-      )}
-      {verifying && (
-        <div className="modal-backdrop" role="presentation" onClick={() => !saving && setVerifying(null)}>
-          <form className="modal edit-modal" onSubmit={submitVerification} onClick={(event) => event.stopPropagation()}>
-            <div className="modal-title">
-              <div><p className="eyebrow">ASSET VERIFICATION</p><h2>{verifying.name}</h2></div>
-              <button type="button" className="icon-button" onClick={() => setVerifying(null)} aria-label="Close verification"><X size={19} /></button>
-            </div>
-            <label>
-              Verification result
-              <select required value={verificationForm.state} onChange={(event) => setVerificationForm({ ...verificationForm, state: event.target.value })}>
-                <option value="">Select a result</option>
-                <option value="verified">Verified</option>
-                <option value="missing">Missing</option>
-                <option value="wrong_location">Wrong location</option>
-                <option value="damaged">Damaged</option>
-                <option value="unidentified">Unidentified</option>
-                <option value="needs_review">Needs review</option>
-              </select>
-            </label>
-            <label>
-              Notes
-              <textarea value={verificationForm.notes} onChange={(event) => setVerificationForm({ ...verificationForm, notes: event.target.value })} maxLength="1000" />
-            </label>
-            <div className="modal-actions">
-              <button type="button" className="quiet-button" onClick={() => setVerifying(null)} disabled={saving}>Cancel</button>
-              <button type="submit" className="primary-button" disabled={saving || !verificationForm.state}>{saving ? "Recording..." : "Record verification"}</button>
-            </div>
-          </form>
-        </div>
-      )}
-      {transferTarget && (
-        <div className="modal-backdrop" role="presentation" onClick={() => !saving && setTransferTarget(null)}>
-          <form className="modal edit-modal" onSubmit={submitTransfer} onClick={(event) => event.stopPropagation()}>
-            <div className="modal-title">
-              <div><p className="eyebrow">ASSET TRANSFER</p><h2>{transferTarget.name}</h2></div>
-              <button type="button" className="icon-button" onClick={() => setTransferTarget(null)} aria-label="Close transfer"><X size={19} /></button>
-            </div>
-            <label>
-              Destination department
-              <select required value={transferForm.departmentId} onChange={(event) => setTransferForm({ ...transferForm, departmentId: event.target.value })}>
-                <option value="">Select department</option>
-                {options.departments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
-            </label>
-            <label>
-              Destination location
-              <input required value={transferForm.location} onChange={(event) => setTransferForm({ ...transferForm, location: event.target.value })} />
-            </label>
-            <label>
-              Transfer reason
-              <textarea required value={transferForm.reason} onChange={(event) => setTransferForm({ ...transferForm, reason: event.target.value })} maxLength="1000" />
-            </label>
-            <div className="modal-actions">
-              <button type="button" className="quiet-button" onClick={() => setTransferTarget(null)} disabled={saving}>Cancel</button>
-              <button type="submit" className="primary-button" disabled={saving}>{saving ? "Submitting..." : "Submit transfer request"}</button>
-            </div>
-          </form>
-        </div>
-      )}
-    </main>
-  );
-};
+          </div>
+        )}
+      </Modal>
 
-export default ICTAssets;
+      {/* -------------------------------------------------------------- */}
+      {/* QR                                                               */}
+      {/* -------------------------------------------------------------- */}
+
+      <Modal
+        open={modal === "qr"}
+        title="Asset QR Code"
+        onClose={() => setModal(null)}
+      >
+        {selectedAsset && (
+          <QRCodePanel asset={selectedAsset} />
+        )}
+      </Modal>
+
+      {/* -------------------------------------------------------------- */}
+      {/* History                                                          */}
+      {/* -------------------------------------------------------------- */}
+
+      <Modal
+        open={modal === "history"}
+        title="Asset History"
+        onClose={() => setModal(null)}
+        width="900px"
+      >
+        {selectedAsset && (
+          <AssetHistory
+            asset={selectedAsset}
+            token={token}
+          />
+        )}
+      </Modal>
+
+      {/* -------------------------------------------------------------- */}
+      {/* Delete                                                           */}
+      {/* -------------------------------------------------------------- */}
+
+      <Modal
+        open={modal === "delete"}
+        title="Delete ICT Asset"
+        onClose={() => setModal(null)}
+      >
+        {selectedAsset && (
+          <div>
+            <div className="danger-confirmation">
+              <Trash2 size={25} />
+
+              <div>
+                <strong>
+                  Delete this asset?
+                </strong>
+
+                <p>
+                  {selectedAsset.assetName ||
+                    selectedAsset.name}
+                  {" — "}
+                  {selectedAsset.assetId ||
+                    selectedAsset.id}
+                </p>
+
+                <small>
+                  Important asset records use
+                  soft deletion according to
+                  the system policy.
+                </small>
+              </div>
+            </div>
+
+            <FormField label="Deletion Reason">
+              <textarea
+                id="deleteReason"
+                rows={4}
+                placeholder="Enter the reason for deletion..."
+              />
+            </FormField>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() =>
+                  setModal(null)
+                }
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="danger-button"
+                onClick={deleteAsset}
+                disabled={actionLoading}
+              >
+                {actionLoading && (
+                  <Loader2
+                    size={16}
+                    className="spin"
+                  />
+                )}
+
+                Delete Asset
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* -------------------------------------------------------------- */}
+      {/* Styles                                                           */}
+      {/* -------------------------------------------------------------- */}
+
+      <style>{`
+        .ict-assets-page {
+          min-height: 100%;
+          padding: 24px;
+          background: #F3F6F9;
+          color: #111827;
+        }
+
+        .page-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 20px;
+          margin-bottom: 20px;
+        }
+
+        .breadcrumb {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: #6B7280;
+          font-size: 13px;
+          margin-bottom: 7px;
+        }
+
+        .breadcrumb strong {
+          color: #2563EB;
+        }
+
+        .page-header h1 {
+          margin: 0;
+          font-size: 27px;
+          font-weight: 700;
+        }
+
+        .page-header p {
+          margin: 7px 0 0;
+          color: #6B7280;
+          font-size: 14px;
+        }
+
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          flex-wrap: wrap;
+        }
+
+        button {
+          font-family: inherit;
+        }
+
+        .primary-button,
+        .secondary-button,
+        .danger-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          min-height: 38px;
+          padding: 8px 13px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 600;
+          border: 1px solid transparent;
+        }
+
+        .primary-button {
+          color: #FFFFFF;
+          background: #2563EB;
+          border-color: #2563EB;
+        }
+
+        .primary-button:hover {
+          background: #1D4ED8;
+        }
+
+        .secondary-button {
+          color: #374151;
+          background: #FFFFFF;
+          border-color: #D1D5DB;
+        }
+
+        .secondary-button:hover {
+          color: #2563EB;
+          border-color: #2563EB;
+        }
+
+        .danger-button {
+          color: #FFFFFF;
+          background: #DC2626;
+          border-color: #DC2626;
+        }
+
+        .danger-button:hover {
+          background: #B91C1C;
+        }
+
+        button:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+        }
+
+        .alert {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 14px;
+          border-radius: 9px;
+          margin-bottom: 15px;
+          font-size: 13px;
+        }
+
+        .alert span {
+          flex: 1;
+        }
+
+        .alert button {
+          border: 0;
+          background: transparent;
+          cursor: pointer;
+          display: flex;
+        }
+
+        .alert-error {
+          color: #991B1B;
+          background: #FEF2F2;
+          border: 1px solid #FECACA;
+        }
+
+        .alert-success {
+          color: #166534;
+          background: #F0FDF4;
+          border: 1px solid #BBF7D0;
+        }
+
+        .toolbar-card,
+        .filter-panel,
+        .table-card {
+          background: #FFFFFF;
+          border: 1px solid #E5E7EB;
+          border-radius: 11px;
+          box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
+        }
+
+        .toolbar-card {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 13px;
+          margin-bottom: 10px;
+        }
+
+        .search-wrapper {
+          flex: 1;
+          min-width: 250px;
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          border: 1px solid #D1D5DB;
+          border-radius: 8px;
+          padding: 0 11px;
+          height: 40px;
+          color: #9CA3AF;
+        }
+
+        .search-wrapper:focus-within {
+          border-color: #2563EB;
+          box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.08);
+        }
+
+        .search-wrapper input {
+          width: 100%;
+          height: 100%;
+          border: 0;
+          outline: 0;
+          color: #111827;
+          font-size: 13px;
+          background: transparent;
+        }
+
+        .clear-search {
+          border: 0;
+          background: transparent;
+          color: #9CA3AF;
+          cursor: pointer;
+          display: flex;
+        }
+
+        .filter-button,
+        .clear-filter-button {
+          height: 40px;
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          padding: 0 12px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 600;
+        }
+
+        .filter-button {
+          border: 1px solid #D1D5DB;
+          color: #374151;
+          background: #FFFFFF;
+        }
+
+        .filter-button.active {
+          border-color: #2563EB;
+          color: #2563EB;
+          background: #EFF6FF;
+        }
+
+        .filter-count {
+          min-width: 19px;
+          height: 19px;
+          padding: 0 5px;
+          border-radius: 999px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          background: #2563EB;
+          color: #FFFFFF;
+          font-size: 10px;
+        }
+
+        .clear-filter-button {
+          border: 0;
+          color: #DC2626;
+          background: #FEF2F2;
+        }
+
+        .filter-panel {
+          padding: 16px;
+          margin-bottom: 15px;
+        }
+
+        .filter-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 13px;
+        }
+
+        .form-field {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          margin-bottom: 14px;
+        }
+
+        .form-field label {
+          color: #374151;
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        .required {
+          color: #DC2626;
+          margin-left: 3px;
+        }
+
+        .form-field input,
+        .form-field select,
+        .form-field textarea {
+          width: 100%;
+          box-sizing: border-box;
+          border: 1px solid #D1D5DB;
+          border-radius: 7px;
+          background: #FFFFFF;
+          color: #111827;
+          padding: 9px 10px;
+          outline: none;
+          font-size: 13px;
+          font-family: inherit;
+        }
+
+        .form-field textarea {
+          resize: vertical;
+        }
+
+        .form-field input:focus,
+        .form-field select:focus,
+        .form-field textarea:focus {
+          border-color: #2563EB;
+          box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.08);
+        }
+
+        .field-hint {
+          color: #9CA3AF;
+          font-size: 10px;
+        }
+
+        .table-card {
+          overflow: hidden;
+        }
+
+        .table-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 15px;
+          padding: 17px 18px;
+          border-bottom: 1px solid #E5E7EB;
+        }
+
+        .table-header h2 {
+          margin: 0;
+          font-size: 16px;
+        }
+
+        .table-header p {
+          margin: 4px 0 0;
+          color: #9CA3AF;
+          font-size: 11px;
+        }
+
+        .page-size {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          color: #6B7280;
+          font-size: 12px;
+        }
+
+        .page-size select {
+          border: 1px solid #D1D5DB;
+          border-radius: 6px;
+          padding: 5px 7px;
+          background: #FFFFFF;
+        }
+
+        .table-wrapper {
+          width: 100%;
+          overflow-x: auto;
+        }
+
+        .assets-table {
+          width: 100%;
+          min-width: 1350px;
+          border-collapse: collapse;
+        }
+
+        .assets-table th {
+          padding: 11px 12px;
+          text-align: left;
+          white-space: nowrap;
+          background: #F9FAFB;
+          border-bottom: 1px solid #E5E7EB;
+          color: #6B7280;
+          font-size: 10px;
+          font-weight: 700;
+          cursor: pointer;
+          user-select: none;
+        }
+
+        .assets-table th.actions-column {
+          cursor: default;
+          text-align: right;
+        }
+
+        .assets-table td {
+          padding: 12px;
+          border-bottom: 1px solid #F3F4F6;
+          color: #4B5563;
+          font-size: 12px;
+          vertical-align: middle;
+        }
+
+        .assets-table tbody tr:hover {
+          background: #F9FAFB;
+        }
+
+        .asset-id {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+        }
+
+        .asset-id strong {
+          color: #2563EB;
+          font-size: 12px;
+        }
+
+        .asset-id small {
+          color: #9CA3AF;
+          font-size: 9px;
+        }
+
+        .asset-name {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 170px;
+        }
+
+        .asset-icon {
+          width: 30px;
+          height: 30px;
+          flex: 0 0 30px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 7px;
+          background: #EFF6FF;
+          color: #2563EB;
+        }
+
+        .asset-name strong {
+          display: block;
+          color: #111827;
+          font-size: 12px;
+        }
+
+        .asset-name small {
+          display: block;
+          margin-top: 2px;
+          color: #9CA3AF;
+          font-size: 9px;
+        }
+
+        .status-badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 4px 8px;
+          border-radius: 999px;
+          font-size: 9px;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+
+        .status-badge.success {
+          color: #166534;
+          background: #DCFCE7;
+        }
+
+        .status-badge.info {
+          color: #1D4ED8;
+          background: #DBEAFE;
+        }
+
+        .status-badge.warning {
+          color: #92400E;
+          background: #FEF3C7;
+        }
+
+        .status-badge.danger {
+          color: #991B1B;
+          background: #FEE2E2;
+        }
+
+        .status-badge.neutral {
+          color: #4B5563;
+          background: #F3F4F6;
+        }
+
+        .location-cell {
+          min-width: 130px;
+        }
+
+        .location-cell strong {
+          display: block;
+          color: #374151;
+          font-size: 11px;
+        }
+
+        .location-cell small {
+          display: block;
+          color: #9CA3AF;
+          margin-top: 2px;
+          font-size: 9px;
+        }
+
+        .actions-column-cell {
+          text-align: right;
+        }
+
+        .row-actions {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+        }
+
+        .row-action {
+          width: 29px;
+          height: 29px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 0;
+          border-radius: 6px;
+          background: transparent;
+          color: #6B7280;
+          cursor: pointer;
+        }
+
+        .row-action:hover {
+          color: #2563EB;
+          background: #EFF6FF;
+        }
+
+        .row-action.danger:hover {
+          color: #DC2626;
+          background: #FEF2F2;
+        }
+
+        .action-menu {
+          position: relative;
+        }
+
+        .action-dropdown {
+          position: absolute;
+          z-index: 20;
+          right: 0;
+          top: 34px;
+          width: 185px;
+          padding: 5px;
+          background: #FFFFFF;
+          border: 1px solid #E5E7EB;
+          border-radius: 8px;
+          box-shadow: 0 10px 25px rgba(17, 24, 39, 0.12);
+        }
+
+        .action-dropdown button {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          border: 0;
+          background: transparent;
+          color: #374151;
+          padding: 8px;
+          border-radius: 6px;
+          text-align: left;
+          font-size: 11px;
+          cursor: pointer;
+        }
+
+        .action-dropdown button:hover {
+          background: #F3F4F6;
+        }
+
+        .action-dropdown button.danger {
+          color: #DC2626;
+        }
+
+        .loading-state {
+          min-height: 360px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          color: #6B7280;
+        }
+
+        .loading-state p {
+          margin: 0;
+          font-size: 13px;
+        }
+
+        .empty-state {
+          min-height: 300px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          color: #9CA3AF;
+          gap: 9px;
+        }
+
+        .empty-state p {
+          margin: 0;
+          font-size: 13px;
+        }
+
+        .pagination {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 15px;
+          padding: 13px 17px;
+          border-top: 1px solid #E5E7EB;
+        }
+
+        .pagination-info {
+          color: #6B7280;
+          font-size: 11px;
+        }
+
+        .pagination-info strong {
+          color: #374151;
+        }
+
+        .pagination-controls {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: #6B7280;
+          font-size: 11px;
+        }
+
+        .pagination-controls button {
+          width: 30px;
+          height: 30px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid #D1D5DB;
+          background: #FFFFFF;
+          border-radius: 6px;
+          cursor: pointer;
+          color: #374151;
+        }
+
+        .pagination-controls button:disabled {
+          opacity: 0.45;
+          cursor: not-allowed;
+        }
+
+        .pagination-controls button:not(:disabled):hover {
+          color: #2563EB;
+          border-color: #2563EB;
+        }
+
+        .modal-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 1000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          background: rgba(17, 24, 39, 0.55);
+          overflow-y: auto;
+        }
+
+        .modal-container {
+          width: 100%;
+          max-height: calc(100vh - 40px);
+          background: #FFFFFF;
+          border-radius: 12px;
+          box-shadow: 0 25px 60px rgba(17, 24, 39, 0.22);
+          overflow: hidden;
+        }
+
+        .modal-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 17px 20px;
+          border-bottom: 1px solid #E5E7EB;
+        }
+
+        .modal-header h2 {
+          margin: 0;
+          font-size: 17px;
+        }
+
+        .icon-button {
+          width: 34px;
+          height: 34px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 0;
+          border-radius: 7px;
+          background: transparent;
+          color: #6B7280;
+          cursor: pointer;
+        }
+
+        .icon-button:hover {
+          background: #F3F4F6;
+          color: #111827;
+        }
+
+        .modal-body {
+          max-height: calc(100vh - 115px);
+          overflow-y: auto;
+          padding: 20px;
+        }
+
+        .asset-form-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 3px 14px;
+        }
+
+        .form-section-title {
+          grid-column: 1 / -1;
+          margin: 15px 0 9px;
+          padding-bottom: 7px;
+          border-bottom: 1px solid #E5E7EB;
+          color: #111827;
+          font-size: 13px;
+          font-weight: 700;
+        }
+
+        .form-section-title:first-child {
+          margin-top: 0;
+        }
+
+        .modal-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 9px;
+          margin-top: 10px;
+          padding-top: 15px;
+          border-top: 1px solid #E5E7EB;
+        }
+
+        .confirmation-box,
+        .danger-confirmation {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          padding: 14px;
+          margin-bottom: 17px;
+          border-radius: 9px;
+        }
+
+        .confirmation-box {
+          background: #EFF6FF;
+          color: #2563EB;
+          border: 1px solid #BFDBFE;
+        }
+
+        .danger-confirmation {
+          background: #FEF2F2;
+          color: #DC2626;
+          border: 1px solid #FECACA;
+        }
+
+        .confirmation-box strong,
+        .danger-confirmation strong {
+          display: block;
+          color: #111827;
+          font-size: 13px;
+        }
+
+        .confirmation-box p,
+        .danger-confirmation p {
+          margin: 4px 0;
+          color: #6B7280;
+          font-size: 11px;
+        }
+
+        .danger-confirmation small {
+          color: #9CA3AF;
+          font-size: 10px;
+        }
+
+        .details-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 13px;
+        }
+
+        .detail-item {
+          padding: 11px;
+          border: 1px solid #E5E7EB;
+          border-radius: 8px;
+          background: #F9FAFB;
+        }
+
+        .detail-item label {
+          display: block;
+          color: #9CA3AF;
+          font-size: 10px;
+          margin-bottom: 5px;
+        }
+
+        .detail-item strong {
+          color: #374151;
+          font-size: 12px;
+          word-break: break-word;
+        }
+
+        .detail-full {
+          grid-column: 1 / -1;
+        }
+
+        .qr-panel {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+          gap: 13px;
+        }
+
+        .qr-placeholder {
+          width: 220px;
+          height: 220px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 2px dashed #D1D5DB;
+          border-radius: 10px;
+          color: #9CA3AF;
+          background:
+            linear-gradient(45deg, #F9FAFB 25%, transparent 25%),
+            linear-gradient(-45deg, #F9FAFB 25%, transparent 25%),
+            linear-gradient(45deg, transparent 75%, #F9FAFB 75%),
+            linear-gradient(-45deg, transparent 75%, #F9FAFB 75%);
+          background-size: 18px 18px;
+          background-position:
+            0 0,
+            0 9px,
+            9px -9px,
+            -9px 0;
+        }
+
+        .qr-panel strong {
+          color: #111827;
+          font-size: 14px;
+        }
+
+        .qr-panel p {
+          margin: 0;
+          color: #6B7280;
+          font-size: 12px;
+        }
+
+        .history-list {
+          display: flex;
+          flex-direction: column;
+          gap: 0;
+        }
+
+        .history-item {
+          display: grid;
+          grid-template-columns: 125px 1fr;
+          gap: 16px;
+          padding: 14px 0;
+          border-bottom: 1px solid #E5E7EB;
+        }
+
+        .history-item:last-child {
+          border-bottom: 0;
+        }
+
+        .history-date {
+          color: #6B7280;
+          font-size: 10px;
+        }
+
+        .history-content strong {
+          display: block;
+          color: #111827;
+          font-size: 12px;
+        }
+
+        .history-content p {
+          margin: 4px 0 0;
+          color: #6B7280;
+          font-size: 11px;
+        }
+
+        .spin {
+          animation: spin 0.9s linear infinite;
+        }
+
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        @media (max-width: 1200px) {
+          .filter-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+
+          .asset-form-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .details-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+
+        @media (max-width: 800px) {
+          .ict-assets-page {
+            padding: 15px;
+          }
+
+          .page-header {
+            flex-direction: column;
+          }
+
+          .header-actions {
+            width: 100%;
+          }
+
+          .header-actions button {
+            flex: 1;
+          }
+
+          .toolbar-card {
+            flex-wrap: wrap;
+          }
+
+          .search-wrapper {
+            width: 100%;
+            flex-basis: 100%;
+          }
+
+          .filter-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .details-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .detail-full {
+            grid-column: auto;
+          }
+
+          .pagination {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+        }
+
+        @media (max-width: 560px) {
+          .filter-grid,
+          .asset-form-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .header-actions {
+            flex-direction: column;
+          }
+
+          .header-actions button {
+            width: 100%;
+          }
+
+          .modal-overlay {
+            padding: 8px;
+          }
+
+          .modal-container {
+            max-height: calc(100vh - 16px);
+          }
+
+          .modal-body {
+            padding: 14px;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/* ====================================================================== */
+/* Asset Row                                                              */
+/* ====================================================================== */
+
+function AssetRow({
+  asset,
+  onView,
+  onEdit,
+  onAssign,
+  onTransfer,
+  onMaintenance,
+  onQR,
+  onHistory,
+  onDelete,
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const assetId =
+    asset.assetId ||
+    asset.id ||
+    "—";
+
+  const assetName =
+    asset.assetName ||
+    asset.name ||
+    "Unnamed Asset";
+
+  const category =
+    asset.category ||
+    asset.subcategory ||
+    "—";
+
+  const serial =
+    asset.serialNumber ||
+    "—";
+
+  const location =
+    asset.room ||
+    asset.building ||
+    asset.department ||
+    asset.campus ||
+    "—";
+
+  const assigned =
+    asset.assignedUser ||
+    asset.assignedTo ||
+    asset.custodian ||
+    "Unassigned";
+
+  return (
+    <tr>
+      <td>
+        <div className="asset-id">
+          <strong>{assetId}</strong>
+
+          {asset.digitalId &&
+            asset.digitalId !== assetId && (
+              <small>
+                Digital: {asset.digitalId}
+              </small>
+            )}
+        </div>
+      </td>
+
+      <td>
+        <div className="asset-name">
+          <div className="asset-icon">
+            <Package size={16} />
+          </div>
+
+          <div>
+            <strong>{assetName}</strong>
+
+            {asset.hostname && (
+              <small>
+                {asset.hostname}
+              </small>
+            )}
+          </div>
+        </div>
+      </td>
+
+      <td>{category}</td>
+
+      <td>{serial}</td>
+
+      <td>
+        <StatusBadge
+          value={
+            asset.status || "Unknown"
+          }
+        />
+      </td>
+
+      <td>
+        <StatusBadge
+          value={
+            asset.condition || "Unknown"
+          }
+        />
+      </td>
+
+      <td>
+        <div className="location-cell">
+          <strong>{location}</strong>
+
+          {asset.campus &&
+            location !== asset.campus && (
+              <small>
+                {asset.campus}
+              </small>
+            )}
+        </div>
+      </td>
+
+      <td>{assigned}</td>
+
+      <td>
+        {formatDate(asset.purchaseDate)}
+      </td>
+
+      <td className="actions-column-cell">
+        <div className="row-actions">
+          <button
+            type="button"
+            className="row-action"
+            title="View"
+            onClick={onView}
+          >
+            <Eye size={15} />
+          </button>
+
+          <button
+            type="button"
+            className="row-action"
+            title="Edit"
+            onClick={onEdit}
+          >
+            <Edit3 size={15} />
+          </button>
+
+          <div className="action-menu">
+            <button
+              type="button"
+              className="row-action"
+              title="More actions"
+              onClick={() =>
+                setMenuOpen(
+                  (value) => !value
+                )
+              }
+            >
+              <MoreHorizontal
+                size={16}
+              />
+            </button>
+
+            {menuOpen && (
+              <div className="action-dropdown">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onAssign();
+                  }}
+                >
+                  <UserPlus size={14} />
+                  Assign Asset
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onTransfer();
+                  }}
+                >
+                  <ArrowRightLeft
+                    size={14}
+                  />
+                  Transfer Asset
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onMaintenance();
+                  }}
+                >
+                  <Wrench size={14} />
+                  Send to Maintenance
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onQR();
+                  }}
+                >
+                  <QrCode size={14} />
+                  QR Code
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onHistory();
+                  }}
+                >
+                  <History size={14} />
+                  Asset History
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onDelete();
+                  }}
+                  className="danger"
+                >
+                  <Trash2 size={14} />
+                  Delete Asset
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/* ====================================================================== */
+/* Sort Indicator                                                         */
+/* ====================================================================== */
+
+function SortIndicator({ field, sort }) {
+  if (sort.field !== field) {
+    return (
+      <span
+        style={{
+          marginLeft: 5,
+          opacity: 0.35,
+        }}
+      >
+        ↕
+      </span>
+    );
+  }
+
+  return (
+    <span
+      style={{
+        marginLeft: 5,
+        color: "#2563EB",
+      }}
+    >
+      {sort.direction === "asc"
+        ? "↑"
+        : "↓"}
+    </span>
+  );
+}
+
+/* ====================================================================== */
+/* Asset Form                                                             */
+/* ====================================================================== */
+
+function AssetForm({
+  form,
+  updateForm,
+  onSubmit,
+  saving,
+  editing,
+  onCancel,
+}) {
+  return (
+    <form onSubmit={onSubmit}>
+      <div className="asset-form-grid">
+        <div className="form-section-title">
+          Asset Identity
+        </div>
+
+        <FormField label="Asset ID">
+          <input
+            value={form.assetId}
+            onChange={(event) =>
+              updateForm(
+                "assetId",
+                event.target.value
+              )
+            }
+            placeholder="ICT-2026-000001"
+            disabled={editing}
+            hint="Leave blank if generated by backend."
+          />
+        </FormField>
+
+        <FormField label="Digital ID">
+          <input
+            value={form.digitalId}
+            onChange={(event) =>
+              updateForm(
+                "digitalId",
+                event.target.value
+              )
+            }
+            placeholder="Digital label ID"
+          />
+        </FormField>
+
+        <FormField
+          label="Asset Name"
+          required
+        >
+          <input
+            value={form.assetName}
+            onChange={(event) =>
+              updateForm(
+                "assetName",
+                event.target.value
+              )
+            }
+            placeholder="Laptop Dell Latitude"
+            required
+          />
+        </FormField>
+
+        <FormField
+          label="Category"
+          required
+        >
+          <select
+            value={form.category}
+            onChange={(event) =>
+              updateForm(
+                "category",
+                event.target.value
+              )
+            }
+            required
+          >
+            <option value="">
+              Select category
+            </option>
+
+            {CATEGORY_OPTIONS.map(
+              (category) => (
+                <option
+                  key={category}
+                  value={category}
+                >
+                  {category}
+                </option>
+              )
+            )}
+          </select>
+        </FormField>
+
+        <FormField label="Subcategory">
+          <input
+            value={form.subcategory}
+            onChange={(event) =>
+              updateForm(
+                "subcategory",
+                event.target.value
+              )
+            }
+            placeholder="Subcategory"
+          />
+        </FormField>
+
+        <FormField label="Serial Number">
+          <input
+            value={form.serialNumber}
+            onChange={(event) =>
+              updateForm(
+                "serialNumber",
+                event.target.value
+              )
+            }
+            placeholder="Serial number"
+          />
+        </FormField>
+
+        <FormField label="Quantity">
+          <input
+            type="number"
+            min="1"
+            value={form.quantity}
+            onChange={(event) =>
+              updateForm(
+                "quantity",
+                Number(event.target.value)
+              )
+            }
+          />
+        </FormField>
+
+        <FormField label="QR Code">
+          <input
+            value={form.qrCode}
+            onChange={(event) =>
+              updateForm(
+                "qrCode",
+                event.target.value
+              )
+            }
+            placeholder="Generated QR identifier"
+          />
+        </FormField>
+
+        <FormField label="RFID">
+          <input
+            value={form.rfid}
+            onChange={(event) =>
+              updateForm(
+                "rfid",
+                event.target.value
+              )
+            }
+            placeholder="RFID identifier"
+          />
+        </FormField>
+
+        <div className="form-section-title">
+          Purchase & Warranty
+        </div>
+
+        <FormField label="Purchase Date">
+          <input
+            type="date"
+            value={form.purchaseDate}
+            onChange={(event) =>
+              updateForm(
+                "purchaseDate",
+                event.target.value
+              )
+            }
+          />
+        </FormField>
+
+        <FormField label="Purchase Cost">
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.purchaseCost}
+            onChange={(event) =>
+              updateForm(
+                "purchaseCost",
+                event.target.value
+              )
+            }
+            placeholder="0.00"
+          />
+        </FormField>
+
+        <FormField label="Supplier">
+          <input
+            value={form.supplier}
+            onChange={(event) =>
+              updateForm(
+                "supplier",
+                event.target.value
+              )
+            }
+            placeholder="Supplier"
+          />
+        </FormField>
+
+        <FormField label="Warranty Start">
+          <input
+            type="date"
+            value={form.warrantyStart}
+            onChange={(event) =>
+              updateForm(
+                "warrantyStart",
+                event.target.value
+              )
+            }
+          />
+        </FormField>
+
+        <FormField label="Warranty Expiry">
+          <input
+            type="date"
+            value={form.warrantyExpiry}
+            onChange={(event) =>
+              updateForm(
+                "warrantyExpiry",
+                event.target.value
+              )
+            }
+          />
+        </FormField>
+
+        <FormField label="Research Grant">
+          <input
+            value={form.researchGrant}
+            onChange={(event) =>
+              updateForm(
+                "researchGrant",
+                event.target.value
+              )
+            }
+            placeholder="Research grant reference"
+          />
+        </FormField>
+
+        <FormField label="Warranty Document">
+          <input
+            value={form.warrantyDocument}
+            onChange={(event) =>
+              updateForm(
+                "warrantyDocument",
+                event.target.value
+              )
+            }
+            placeholder="Document reference"
+          />
+        </FormField>
+
+        <FormField label="Manual">
+          <input
+            value={form.manual}
+            onChange={(event) =>
+              updateForm(
+                "manual",
+                event.target.value
+              )
+            }
+            placeholder="Manual document reference"
+          />
+        </FormField>
+
+        <div className="form-section-title">
+          State
+        </div>
+
+        <FormField label="Status">
+          <select
+            value={form.status}
+            onChange={(event) =>
+              updateForm(
+                "status",
+                event.target.value
+              )
+            }
+          >
+            {STATUS_OPTIONS.map(
+              (status) => (
+                <option
+                  value={status}
+                  key={status}
+                >
+                  {status}
+                </option>
+              )
+            )}
+          </select>
+        </FormField>
+
+        <FormField label="Condition">
+          <select
+            value={form.condition}
+            onChange={(event) =>
+              updateForm(
+                "condition",
+                event.target.value
+              )
+            }
+          >
+            {CONDITION_OPTIONS.map(
+              (condition) => (
+                <option
+                  value={condition}
+                  key={condition}
+                >
+                  {condition}
+                </option>
+              )
+            )}
+          </select>
+        </FormField>
+
+        <div className="form-section-title">
+          Location & Custody
+        </div>
+
+        <FormField label="Campus">
+          <input
+            value={form.campus}
+            onChange={(event) =>
+              updateForm(
+                "campus",
+                event.target.value
+              )
+            }
+            placeholder="Campus"
+          />
+        </FormField>
+
+        <FormField label="College">
+          <input
+            value={form.college}
+            onChange={(event) =>
+              updateForm(
+                "college",
+                event.target.value
+              )
+            }
+            placeholder="College"
+          />
+        </FormField>
+
+        <FormField label="Department">
+          <input
+            value={form.department}
+            onChange={(event) =>
+              updateForm(
+                "department",
+                event.target.value
+              )
+            }
+            placeholder="Department"
+          />
+        </FormField>
+
+        <FormField label="Laboratory">
+          <input
+            value={form.laboratory}
+            onChange={(event) =>
+              updateForm(
+                "laboratory",
+                event.target.value
+              )
+            }
+            placeholder="Laboratory"
+          />
+        </FormField>
+
+        <FormField label="Building">
+          <input
+            value={form.building}
+            onChange={(event) =>
+              updateForm(
+                "building",
+                event.target.value
+              )
+            }
+            placeholder="Building"
+          />
+        </FormField>
+
+        <FormField label="Room">
+          <input
+            value={form.room}
+            onChange={(event) =>
+              updateForm(
+                "room",
+                event.target.value
+              )
+            }
+            placeholder="Room"
+          />
+        </FormField>
+
+        <FormField label="Custodian">
+          <input
+            value={form.custodian}
+            onChange={(event) =>
+              updateForm(
+                "custodian",
+                event.target.value
+              )
+            }
+            placeholder="Custodian"
+          />
+        </FormField>
+
+        <FormField label="Assigned User">
+          <input
+            value={form.assignedUser}
+            onChange={(event) =>
+              updateForm(
+                "assignedUser",
+                event.target.value
+              )
+            }
+            placeholder="Assigned user"
+          />
+        </FormField>
+
+        <div className="form-section-title">
+          Technical Information
+        </div>
+
+        <FormField label="CPU">
+          <input
+            value={form.cpu}
+            onChange={(event) =>
+              updateForm(
+                "cpu",
+                event.target.value
+              )
+            }
+            placeholder="Intel Core i7"
+          />
+        </FormField>
+
+        <FormField label="RAM">
+          <input
+            value={form.ram}
+            onChange={(event) =>
+              updateForm(
+                "ram",
+                event.target.value
+              )
+            }
+            placeholder="16 GB"
+          />
+        </FormField>
+
+        <FormField label="Storage">
+          <input
+            value={form.storage}
+            onChange={(event) =>
+              updateForm(
+                "storage",
+                event.target.value
+              )
+            }
+            placeholder="512 GB"
+          />
+        </FormField>
+
+        <FormField label="Storage Type">
+          <input
+            value={form.storageType}
+            onChange={(event) =>
+              updateForm(
+                "storageType",
+                event.target.value
+              )
+            }
+            placeholder="SSD / HDD"
+          />
+        </FormField>
+
+        <FormField label="Operating System">
+          <input
+            value={form.operatingSystem}
+            onChange={(event) =>
+              updateForm(
+                "operatingSystem",
+                event.target.value
+              )
+            }
+            placeholder="Windows 11"
+          />
+        </FormField>
+
+        <FormField label="GPU">
+          <input
+            value={form.gpu}
+            onChange={(event) =>
+              updateForm(
+                "gpu",
+                event.target.value
+              )
+            }
+            placeholder="Graphics processor"
+          />
+        </FormField>
+
+        <FormField label="MAC Address">
+          <input
+            value={form.macAddress}
+            onChange={(event) =>
+              updateForm(
+                "macAddress",
+                event.target.value
+              )
+            }
+            placeholder="00:00:00:00:00:00"
+          />
+        </FormField>
+
+        <FormField label="IP Address">
+          <input
+            value={form.ipAddress}
+            onChange={(event) =>
+              updateForm(
+                "ipAddress",
+                event.target.value
+              )
+            }
+            placeholder="192.168.1.10"
+          />
+        </FormField>
+
+        <FormField label="Hostname">
+          <input
+            value={form.hostname}
+            onChange={(event) =>
+              updateForm(
+                "hostname",
+                event.target.value
+              )
+            }
+            placeholder="ICT-PC-001"
+          />
+        </FormField>
+      </div>
+
+      <div className="modal-actions">
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={onCancel}
+          disabled={saving}
+        >
+          Cancel
+        </button>
+
+        <button
+          type="submit"
+          className="primary-button"
+          disabled={saving}
+        >
+          {saving && (
+            <Loader2
+              size={16}
+              className="spin"
+            />
+          )}
+
+          {editing
+            ? "Update Asset"
+            : "Register Asset"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/* ====================================================================== */
+/* Assignment Form                                                        */
+/* ====================================================================== */
+
+function AssignmentForm({
+  asset,
+  onSubmit,
+  loading,
+  onCancel,
+}) {
+  return (
+    <form onSubmit={onSubmit}>
+      <div className="confirmation-box">
+        <UserPlus size={23} />
+
+        <div>
+          <strong>
+            {asset.assetName ||
+              asset.name}
+          </strong>
+
+          <p>
+            {asset.assetId ||
+              asset.id}
+          </p>
+        </div>
+      </div>
+
+      <FormField
+        label="Assigned To"
+        required
+      >
+        <input
+          name="assignedTo"
+          required
+          placeholder="Staff member / authorized user"
+        />
+      </FormField>
+
+      <FormField label="Department">
+        <input
+          name="department"
+          placeholder="Department"
+        />
+      </FormField>
+
+      <FormField label="Location">
+        <input
+          name="location"
+          placeholder="Office / laboratory / workstation"
+        />
+      </FormField>
+
+      <FormField
+        label="Assignment Date"
+        required
+      >
+        <input
+          name="assignmentDate"
+          type="date"
+          required
+          defaultValue={
+            new Date()
+              .toISOString()
+              .split("T")[0]
+          }
+        />
+      </FormField>
+
+      <FormField label="Expected Return Date">
+        <input
+          name="expectedReturnDate"
+          type="date"
+        />
+      </FormField>
+
+      <FormField label="Condition">
+        <select
+          name="condition"
+          defaultValue={
+            asset.condition ||
+            "Functional"
+          }
+        >
+          {CONDITION_OPTIONS.map(
+            (condition) => (
+              <option
+                key={condition}
+                value={condition}
+              >
+                {condition}
+              </option>
+            )
+          )}
+        </select>
+      </FormField>
+
+      <FormField label="Notes">
+        <textarea
+          name="notes"
+          rows={4}
+          placeholder="Assignment notes..."
+        />
+      </FormField>
+
+      <div className="modal-actions">
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+
+        <button
+          type="submit"
+          className="primary-button"
+          disabled={loading}
+        >
+          {loading && (
+            <Loader2
+              size={16}
+              className="spin"
+            />
+          )}
+
+          Assign Asset
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/* ====================================================================== */
+/* Transfer Form                                                          */
+/* ====================================================================== */
+
+function TransferForm({
+  asset,
+  onSubmit,
+  loading,
+  onCancel,
+}) {
+  return (
+    <form onSubmit={onSubmit}>
+      <div className="confirmation-box">
+        <ArrowRightLeft size={23} />
+
+        <div>
+          <strong>
+            {asset.assetName ||
+              asset.name}
+          </strong>
+
+          <p>
+            Current location:{" "}
+            {asset.room ||
+              asset.building ||
+              asset.department ||
+              asset.campus ||
+              "Not specified"}
+          </p>
+        </div>
+      </div>
+
+      <FormField label="To Campus">
+        <input
+          name="toCampus"
+          placeholder="Destination campus"
+        />
+      </FormField>
+
+      <FormField label="To College">
+        <input
+          name="toCollege"
+          placeholder="Destination college"
+        />
+      </FormField>
+
+      <FormField label="To Department">
+        <input
+          name="toDepartment"
+          placeholder="Destination department"
+        />
+      </FormField>
+
+      <FormField label="To Laboratory">
+        <input
+          name="toLaboratory"
+          placeholder="Destination laboratory"
+        />
+      </FormField>
+
+      <FormField label="To Building">
+        <input
+          name="toBuilding"
+          placeholder="Destination building"
+        />
+      </FormField>
+
+      <FormField label="To Room">
+        <input
+          name="toRoom"
+          placeholder="Destination room"
+        />
+      </FormField>
+
+      <FormField label="Requested By">
+        <input
+          name="requestedBy"
+          placeholder="Requester"
+        />
+      </FormField>
+
+      <FormField label="Receiving Officer">
+        <input
+          name="receivingOfficer"
+          placeholder="Receiving officer"
+        />
+      </FormField>
+
+      <FormField label="Reason" required>
+        <textarea
+          name="reason"
+          rows={4}
+          required
+          placeholder="Reason for transfer..."
+        />
+      </FormField>
+
+      <div className="modal-actions">
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+
+        <button
+          type="submit"
+          className="primary-button"
+          disabled={loading}
+        >
+          {loading && (
+            <Loader2
+              size={16}
+              className="spin"
+            />
+          )}
+
+          Create Transfer
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/* ====================================================================== */
+/* Asset Details                                                          */
+/* ====================================================================== */
+
+function AssetDetails({
+  asset,
+  onEdit,
+  onClose,
+}) {
+  const details = [
+    ["Asset ID", asset.assetId || asset.id],
+    ["Digital ID", asset.digitalId],
+    ["Asset Name", asset.assetName || asset.name],
+    ["Category", asset.category],
+    ["Subcategory", asset.subcategory],
+    ["Serial Number", asset.serialNumber],
+    ["Quantity", asset.quantity],
+    ["QR Code", asset.qrCode],
+    ["RFID", asset.rfid],
+    ["Purchase Date", formatDate(asset.purchaseDate)],
+    [
+      "Purchase Cost",
+      formatCurrency(asset.purchaseCost),
+    ],
+    ["Supplier", asset.supplier],
+    [
+      "Warranty Start",
+      formatDate(asset.warrantyStart),
+    ],
+    [
+      "Warranty Expiry",
+      formatDate(asset.warrantyExpiry),
+    ],
+    ["Campus", asset.campus],
+    ["College", asset.college],
+    ["Department", asset.department],
+    ["Laboratory", asset.laboratory],
+    ["Building", asset.building],
+    ["Room", asset.room],
+    ["Custodian", asset.custodian],
+    ["Assigned User", asset.assignedUser],
+    ["CPU", asset.cpu],
+    ["RAM", asset.ram],
+    ["Storage", asset.storage],
+    ["Storage Type", asset.storageType],
+    [
+      "Operating System",
+      asset.operatingSystem,
+    ],
+    ["GPU", asset.gpu],
+    ["MAC Address", asset.macAddress],
+    ["IP Address", asset.ipAddress],
+    ["Hostname", asset.hostname],
+  ];
+
+  return (
+    <div>
+      <div className="details-grid">
+        <div className="detail-item">
+          <label>Status</label>
+
+          <StatusBadge
+            value={
+              asset.status || "Unknown"
+            }
+          />
+        </div>
+
+        <div className="detail-item">
+          <label>Condition</label>
+
+          <StatusBadge
+            value={
+              asset.condition || "Unknown"
+            }
+          />
+        </div>
+
+        {details.map(
+          ([label, value]) => (
+            <div
+              className="detail-item"
+              key={label}
+            >
+              <label>{label}</label>
+
+              <strong>
+                {value === null ||
+                value === undefined ||
+                value === ""
+                  ? "—"
+                  : String(value)}
+              </strong>
+            </div>
+          )
+        )}
+      </div>
+
+      <div className="modal-actions">
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={onClose}
+        >
+          Close
+        </button>
+
+        <button
+          type="button"
+          className="primary-button"
+          onClick={onEdit}
+        >
+          <Edit3 size={16} />
+          Edit Asset
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ====================================================================== */
+/* QR Panel                                                               */
+/* ====================================================================== */
+
+function QRCodePanel({ asset }) {
+  const value =
+    asset.qrCode ||
+    asset.digitalId ||
+    asset.assetId ||
+    asset.id;
+
+  return (
+    <div className="qr-panel">
+      <div className="qr-placeholder">
+        <QrCode size={80} />
+      </div>
+
+      <strong>{value}</strong>
+
+      <p>
+        QR generation should use the backend
+        asset QR endpoint:
+        <br />
+        <code>
+          /api/ict/assets/:id/qr
+        </code>
+      </p>
+
+      <div className="modal-actions">
+        <button
+          type="button"
+          className="primary-button"
+          onClick={() =>
+            window.open(
+              `${API_URL}/${
+                asset.id ||
+                asset.assetId
+              }/qr`,
+              "_blank"
+            )
+          }
+        >
+          <QrCode size={16} />
+          Generate QR
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ====================================================================== */
+/* Asset History                                                          */
+/* ====================================================================== */
+
+function AssetHistory({
+  asset,
+  token,
+}) {
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] =
+    useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        setLoading(true);
+
+        const id =
+          asset.id ||
+          asset.assetId;
+
+        const response = await fetch(
+          `${API_URL}/${id}/history`,
+          {
+            headers: {
+              Accept:
+                "application/json",
+              ...(token
+                ? {
+                    Authorization: `Bearer ${token}`,
+                  }
+                : {}),
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            "Unable to load asset history."
+          );
+        }
+
+        const result =
+          await response.json();
+
+        const data =
+          result?.data ||
+          result;
+
+        setHistory(
+          Array.isArray(data)
+            ? data
+            : data?.history || []
+        );
+      } catch (err) {
+        setError(
+          err?.message ||
+            "Unable to load asset history."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadHistory();
+  }, [asset, token]);
+
+  if (loading) {
+    return (
+      <div className="loading-state">
+        <Loader2
+          size={32}
+          className="spin"
+        />
+        <p>
+          Loading asset history...
+        </p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="alert alert-error">
+        <AlertTriangle size={17} />
+        <span>{error}</span>
+      </div>
+    );
+  }
+
+  if (history.length === 0) {
+    return (
+      <EmptyState text="No asset history found." />
+    );
+  }
+
+  return (
+    <div className="history-list">
+      {history.map((item, index) => (
+        <div
+          className="history-item"
+          key={
+            item.id ||
+            `history-${index}`
+          }
+        >
+          <div className="history-date">
+            {formatDate(
+              item.timestamp ||
+                item.createdAt ||
+                item.date
+            )}
+          </div>
+
+          <div className="history-content">
+            <strong>
+              {item.action ||
+                "Asset Updated"}
+            </strong>
+
+            <p>
+              User:{" "}
+              {item.userName ||
+                item.user ||
+                "—"}
+            </p>
+
+            {item.reason && (
+              <p>
+                Reason: {item.reason}
+              </p>
+            )}
+
+            {item.oldValue !==
+              undefined && (
+              <p>
+                Old value:{" "}
+                {String(
+                  item.oldValue
+                )}
+              </p>
+            )}
+
+            {item.newValue !==
+              undefined && (
+              <p>
+                New value:{" "}
+                {String(
+                  item.newValue
+                )}
+              </p>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

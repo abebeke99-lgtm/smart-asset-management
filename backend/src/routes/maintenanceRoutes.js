@@ -1,13 +1,14 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { getAllMaintenance, getPreventiveMaintenance, getPreventiveMaintenanceById, createPreventiveMaintenance, startPreventiveMaintenance, pausePreventiveMaintenance, resumePreventiveMaintenance, assignPreventiveMaintenance, updatePreventiveChecklist, updatePreventiveFindings, completePreventiveMaintenance, getMaintenanceHistory, createMaintenance, updateMaintenance, setStatus, approve, reject, start, complete, assign, removeMaintenance, dashboard, getMaintenanceCalendar, getTechnicianDirectory, getMaintenanceWorkOrders, getMaintenanceWorkOrder, getMaintenanceWorkOrderOptions, createMaintenanceWorkOrder, updateMaintenanceWorkOrder, updateMaintenanceWorkOrderStatus, assignMaintenanceWorkOrder, getRepairHistory, getRepairDetails, createRepair, updateRepair, getSpareParts, getSparePartDetail, listMaintenanceVendors, getMaintenanceVendor, createMaintenanceVendor, updateMaintenanceVendor, setMaintenanceVendorStatus, getMaintenanceReportsSummary, getMaintenanceReportsActivity, getMaintenanceReportsHistory, getMaintenanceReportsWorkOrders, getMaintenanceReportsRepairs, getMaintenanceReportsPreventive, getMaintenanceReportsAssets, getMaintenanceReportsTechnicians, getMaintenanceReportsVendors, getMaintenanceReportsTesting, getMaintenanceReportsCosts, getMaintenanceReportsDowntime, getMaintenanceReportsDepartments } = require('../controllers/maintenanceController');
+const { getAllMaintenance, getPreventiveMaintenance, getPreventiveMaintenanceById, createPreventiveMaintenance, updatePreventiveMaintenance, deletePreventiveMaintenance, activatePreventiveMaintenance, startPreventiveMaintenance, pausePreventiveMaintenance, resumePreventiveMaintenance, assignPreventiveMaintenance, updatePreventiveChecklist, updatePreventiveFindings, completePreventiveMaintenance, getMaintenanceHistory, createMaintenance, updateMaintenance, setStatus, approve, reject, start, complete, assign, removeMaintenance, dashboard, getMaintenanceCalendar, getTechnicianDirectory, getMaintenanceWorkOrders, getMaintenanceWorkOrder, getMaintenanceWorkOrderOptions, createMaintenanceWorkOrder, updateMaintenanceWorkOrder, updateMaintenanceWorkOrderStatus, assignMaintenanceWorkOrder, getRepairHistory, getRepairDetails, createRepair, updateRepair, getSpareParts, getSparePartDetail, listMaintenanceVendors, getMaintenanceVendor, createMaintenanceVendor, updateMaintenanceVendor, setMaintenanceVendorStatus, getMaintenanceReportsSummary, getMaintenanceReportsActivity, getMaintenanceReportsHistory, getMaintenanceReportsWorkOrders, getMaintenanceReportsRepairs, getMaintenanceReportsPreventive, getMaintenanceReportsAssets, getMaintenanceReportsTechnicians, getMaintenanceReportsVendors, getMaintenanceReportsTesting, getMaintenanceReportsCosts, getMaintenanceReportsDowntime, getMaintenanceReportsDepartments } = require('../controllers/maintenanceController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const inspectionController = require('../controllers/maintenanceInspectionController');
 const testingController = require('../controllers/maintenanceTestingController');
-const { sequelize, Config, Notification, AuditLog, MaintenanceQualityControl, MaintenanceQualityControlItem, MaintenanceTest, MaintenanceWorkOrder, Asset, Maintenance, User } = require('../models');
+const { sequelize, Config, Notification, AuditLog, MaintenanceHistory, MaintenanceQualityControl, MaintenanceQualityControlItem, MaintenanceTest, MaintenanceWorkOrder, Asset, Maintenance, User } = require('../models');
 const { Op } = require('sequelize');
-const { validateQcDecision, normalizeQcStatus, isTestEligibleForQualityControl } = require('../utils/maintenanceQualityControl');
+const { validateQcDecision, normalizeQcStatus, resolveQcStatusForDecision, isTestEligibleForQualityControl } = require('../utils/maintenanceQualityControl');
+const notificationService = require('../services/notificationService');
 
 const router = express.Router();
 
@@ -25,6 +26,9 @@ router.get('/assets-under-maintenance/:id/timeline', ...maintenanceReadAccess, a
 router.get('/preventive', ...maintenanceReadAccess, getPreventiveMaintenance);
 router.get('/preventive/:id', ...maintenanceReadAccess, getPreventiveMaintenanceById);
 router.post('/preventive', ...maintenanceReadAccess, createPreventiveMaintenance);
+router.put('/preventive/:id', ...maintenanceReadAccess, updatePreventiveMaintenance);
+router.delete('/preventive/:id', ...maintenanceReadAccess, deletePreventiveMaintenance);
+router.patch('/preventive/:id/activate', ...maintenanceReadAccess, activatePreventiveMaintenance);
 router.patch('/preventive/:id/start', ...maintenanceReadAccess, startPreventiveMaintenance);
 router.patch('/preventive/:id/pause', ...maintenanceReadAccess, pausePreventiveMaintenance);
 router.patch('/preventive/:id/resume', ...maintenanceReadAccess, resumePreventiveMaintenance);
@@ -183,17 +187,25 @@ router.post('/quality-control', ...qualityControlAccess, async (req, res, next) 
     return res.status(201).json({ success: true, data: entry.toJSON() });
   } catch (error) { next(error); }
 });
-router.patch('/quality-control/:id/decision', ...qualityControlAccess, async (req, res, next) => {
+const decideQualityControl = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
   try {
-    const review = await MaintenanceQualityControl.findByPk(req.params.id, { include: [{ model: MaintenanceQualityControlItem, as: 'ChecklistItems' }] });
-    if (!review) return res.status(404).json({ success: false, message: 'Quality control review not found' });
-    const testRecord = review.testId ? await MaintenanceTest.findByPk(review.testId) : null;
+    const review = await MaintenanceQualityControl.findByPk(req.params.id, { include: [{ model: MaintenanceQualityControlItem, as: 'ChecklistItems' }], transaction, lock: transaction.LOCK.UPDATE });
+    if (!review) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Quality control review not found' }); }
+    if (['approved', 'rejected'].includes(String(review.decision || '').toLowerCase())) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'This quality control review already has a final decision' }); }
+    const testRecord = review.testId ? await MaintenanceTest.findByPk(review.testId, { transaction, lock: transaction.LOCK.UPDATE }) : null;
     const validation = validateQcDecision(req.body.decision, req.body, testRecord || { maintenanceId: review.maintenanceId, assetId: review.assetId, status: 'completed', overallResult: 'Passed' });
-    if (validation.message) return res.status(422).json({ success: false, message: validation.message });
+    if (validation.message) { await transaction.rollback(); return res.status(422).json({ success: false, message: validation.message }); }
+    const maintenance = await Maintenance.findByPk(review.maintenanceId, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!maintenance) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Maintenance request not found' }); }
+    const asset = validation.decision === 'rejected' ? await Asset.findByPk(review.assetId, { transaction, lock: transaction.LOCK.UPDATE }) : null;
+    if (validation.decision === 'rejected' && !asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
+    const previousValue = { status: review.status, decision: review.decision, readyForReturn: review.readyForReturn };
+    const previousMaintenanceStatus = maintenance.status;
     const updates = {
       reviewerId: req.body.reviewerId ?? req.body.reviewer_id ?? review.reviewerId ?? req.user.id,
       decision: validation.decision,
-      status: normalizeQcStatus(req.body.status || 'in-review'),
+      status: resolveQcStatusForDecision(validation.decision, req.body.status),
       findings: req.body.findings || review.findings || '',
       rejectionReason: req.body.rejectionReason || review.rejectionReason || '',
       failedRequirement: req.body.failedRequirement || review.failedRequirement || '',
@@ -205,11 +217,48 @@ router.patch('/quality-control/:id/decision', ...qualityControlAccess, async (re
       requiredChecklistCompleted: true,
       documentationComplete: req.body.documentationComplete !== undefined ? Boolean(req.body.documentationComplete) : review.documentationComplete,
     };
-    await review.update(updates);
-    await AuditLog.create({ userId: req.user.id, action: 'QC_DECISION', entity: `quality_control:${review.id}`, details: JSON.stringify({ decision: validation.decision, status: updates.status }) });
+    await review.update(updates, { transaction });
+    if (testRecord) {
+      await testRecord.update({ qualityStatus: validation.decision, reviewerId: req.user.id, reviewedAt: updates.reviewDate, rejectionReason: updates.rejectionReason, correctiveAction: updates.correctiveAction }, { transaction });
+    }
+    if (validation.decision === 'rejected') {
+      await maintenance.update({ status: 'in-progress' }, { transaction });
+      await asset.update({ status: 'under-maintenance' }, { transaction });
+      await MaintenanceHistory.create({
+        assetId: review.assetId,
+        maintenanceId: maintenance.id,
+        userId: req.user.id,
+        actionType: 'qc_failed',
+        actionDate: updates.reviewDate,
+        previousStatus: previousMaintenanceStatus,
+        newStatus: 'in-progress',
+        description: `Quality control failed: ${updates.rejectionReason}`,
+        details: { qualityControlId: review.id, failedRequirement: updates.failedRequirement, correctiveAction: updates.correctiveAction },
+      }, { transaction });
+    }
+    const nextValue = { status: updates.status, decision: validation.decision, readyForReturn: updates.readyForReturn, maintenanceStatus: validation.decision === 'rejected' ? 'in-progress' : previousMaintenanceStatus, assetStatus: validation.decision === 'rejected' ? 'under-maintenance' : undefined };
+    await AuditLog.create({ userId: req.user.id, action: 'QC_DECISION', entity: `quality_control:${review.id}`, details: JSON.stringify({ actorRole: req.user.role, testId: review.testId, previousValue, newValue: nextValue, reason: updates.rejectionReason, failedRequirement: updates.failedRequirement, correctiveAction: updates.correctiveAction }) }, { transaction });
+    await transaction.commit();
+    try {
+      await notificationService.createEventNotification({
+        event: 'maintenance_qc_decision',
+        eventKey: `maintenance_qc_decision:${review.id}:${validation.decision}`,
+        entityId: review.id,
+        userIds: [review.technicianId, review.testerId, maintenance?.requestedBy].filter(Boolean),
+        senderId: req.user.id,
+        assetId: review.assetId,
+        type: 'maintenance',
+        title: `Quality control ${validation.decision}`,
+        message: `Quality review ${review.id} for maintenance request ${review.maintenanceId} was ${validation.decision}.`,
+      });
+    } catch (notificationError) { console.error('Maintenance QC decision notification failed:', notificationError.message); }
     return res.json({ success: true, data: review.toJSON() });
-  } catch (error) { next(error); }
-});
+  } catch (error) {
+    if (!transaction.finished) await transaction.rollback();
+    next(error);
+  }
+};
+router.patch('/quality-control/:id/decision', ...qualityControlAccess, decideQualityControl);
 router.patch('/quality-control/:id/start', ...qualityControlAccess, async (req, res, next) => {
   try {
     const item = await MaintenanceQualityControl.findByPk(req.params.id);
@@ -218,26 +267,13 @@ router.patch('/quality-control/:id/start', ...qualityControlAccess, async (req, 
     return res.json({ success: true, data: item.toJSON() });
   } catch (error) { next(error); }
 });
-router.patch('/quality-control/:id/approve', ...qualityControlAccess, async (req, res, next) => {
-  try {
-    const item = await MaintenanceQualityControl.findByPk(req.params.id);
-    if (!item) return res.status(404).json({ success: false, message: 'Quality control review not found' });
-    const testRecord = item.testId ? await MaintenanceTest.findByPk(item.testId) : null;
-    if (!isTestEligibleForQualityControl(testRecord || { maintenanceId: item.maintenanceId, assetId: item.assetId, status: 'completed', overallResult: 'Passed' })) {
-      return res.status(422).json({ success: false, message: 'Approval requires a completed test with a passing result.' });
-    }
-    await item.update({ status: 'approved', decision: 'approved', reviewerId: req.user.id, readyForReturn: true, reviewDate: new Date() });
-    return res.json({ success: true, data: item.toJSON() });
-  } catch (error) { next(error); }
+router.patch('/quality-control/:id/approve', ...qualityControlAccess, (req, res, next) => {
+  req.body = { ...req.body, decision: 'approved' };
+  return decideQualityControl(req, res, next);
 });
-router.patch('/quality-control/:id/reject', ...qualityControlAccess, async (req, res, next) => {
-  try {
-    const item = await MaintenanceQualityControl.findByPk(req.params.id);
-    if (!item) return res.status(404).json({ success: false, message: 'Quality control review not found' });
-    if (!String(req.body.rejectionReason || '').trim()) return res.status(422).json({ success: false, message: 'Provide a rejection reason.' });
-    await item.update({ status: 'rejected', decision: 'rejected', reviewerId: req.user.id, rejectionReason: req.body.rejectionReason || '', failedRequirement: req.body.failedRequirement || '', correctiveAction: req.body.correctiveAction || '', reviewDate: new Date() });
-    return res.json({ success: true, data: item.toJSON() });
-  } catch (error) { next(error); }
+router.patch('/quality-control/:id/reject', ...qualityControlAccess, (req, res, next) => {
+  req.body = { ...req.body, decision: 'rejected' };
+  return decideQualityControl(req, res, next);
 });
 router.patch('/quality-control/:id/retest', ...qualityControlAccess, async (req, res, next) => {
   try {
@@ -248,15 +284,42 @@ router.patch('/quality-control/:id/retest', ...qualityControlAccess, async (req,
   } catch (error) { next(error); }
 });
 router.patch('/quality-control/:id/return-to-service', ...qualityControlAccess, async (req, res, next) => {
+  const transaction = await sequelize.transaction();
   try {
-    const item = await MaintenanceQualityControl.findByPk(req.params.id);
-    if (!item) return res.status(404).json({ success: false, message: 'Quality control review not found' });
-    if (item.decision !== 'approved') return res.status(409).json({ success: false, message: 'Only approved items can be returned to service' });
-    const asset = await Asset.findByPk(item.assetId);
-    if (asset) await asset.update({ status: 'available' });
-    await item.update({ readyForReturn: true, status: 'approved' });
+    const item = await MaintenanceQualityControl.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Quality control review not found' }); }
+    if (item.decision !== 'approved') { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Only approved items can be returned to service' }); }
+    const maintenance = await Maintenance.findByPk(item.maintenanceId, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!maintenance) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Maintenance request not found' }); }
+    if (normalizeQcStatus(maintenance.status) === 'completed' || item.readyForReturn) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'This maintenance request has already been returned to service' }); }
+    const asset = await Asset.findByPk(item.assetId, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
+    const previousMaintenanceStatus = maintenance.status;
+    const previousAssetStatus = asset.status;
+    await asset.update({ status: 'available' }, { transaction });
+    await maintenance.update({ status: 'completed' }, { transaction });
+    await item.update({ readyForReturn: true, status: 'approved' }, { transaction });
+    await MaintenanceHistory.create({ assetId: item.assetId, maintenanceId: maintenance.id, userId: req.user.id, actionType: 'returned_to_service', actionDate: new Date(), previousStatus: previousMaintenanceStatus, newStatus: 'completed', description: 'Asset returned to service after quality approval', details: { qualityControlId: item.id, previousAssetStatus, newAssetStatus: 'available' } }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'MAINTENANCE_RETURNED_TO_SERVICE', entity: `maintenance:${maintenance.id}`, details: JSON.stringify({ actorRole: req.user.role, qualityControlId: item.id, previousMaintenanceStatus, newMaintenanceStatus: 'completed', previousAssetStatus, newAssetStatus: 'available' }) }, { transaction });
+    await transaction.commit();
+    try {
+      await notificationService.createEventNotification({
+        event: 'maintenance_completed',
+        eventKey: `maintenance_completed:${maintenance.id}`,
+        entityId: maintenance.id,
+        userIds: [...new Set([maintenance.requestedBy, maintenance.assignedTo, item.technicianId].filter(Boolean))],
+        senderId: req.user.id,
+        assetId: item.assetId,
+        type: 'maintenance',
+        title: 'Maintenance completed',
+        message: `Asset ${item.assetId} passed quality control and was returned to service.`,
+      });
+    } catch (notificationError) { console.error('Maintenance completion notification failed:', notificationError.message); }
     return res.json({ success: true, data: item.toJSON() });
-  } catch (error) { next(error); }
+  } catch (error) {
+    if (!transaction.finished) await transaction.rollback();
+    next(error);
+  }
 });
 const vendorAccess = [requireAuth, requireRole('admin', 'maintenance', 'store_manager', 'finance')];
 router.get('/vendors', ...vendorAccess, listMaintenanceVendors);

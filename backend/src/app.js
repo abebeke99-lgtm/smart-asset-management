@@ -44,6 +44,7 @@ const cleaningRoutes = require('./routes/cleaningRoutes');
 const softwareLicenseRoutes = require('./routes/softwareLicenseRoutes');
 const technicalSupportRoutes = require('./routes/technicalSupportRoutes');
 const incidentRoutes = require('./routes/incidentRoutes');
+const searchRoutes = require('./routes/searchRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const backupService = require('./services/backupService');
 const { requestMetricsMiddleware } = require('./middlewares/requestMetrics');
@@ -148,6 +149,7 @@ app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 
 app.use('/api/auth', authRoutes);
+app.use('/api/search', searchRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/uploads', express.static(uploadRoot, { index: false, dotfiles: 'ignore' }));
 app.use('/api/users', userRoutes);
@@ -214,7 +216,7 @@ async function startServer() {
   for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
     if (await testConnection() && await syncDatabase()) {
       if (process.env.NODE_ENV !== 'production') {
-        if (process.env.SEED_DEMO_DATA === 'true' || process.env.SEED_DEMO_DATA === undefined) {
+        if (process.env.SEED_DEMO_DATA === 'true') {
           await seedDatabase();
         }
       }

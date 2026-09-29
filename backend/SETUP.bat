@@ -35,8 +35,6 @@ echo 1. Create MySQL database (see MYSQL_SETUP.md)
 echo 2. Run: npm run dev
 echo 3. API will be available at http://localhost:5000
 echo.
-echo Default admin login:
-echo Username: admin
-echo Password: Admin@123
+echo Create an administrator through the configured secure account setup flow.
 echo.
 pause

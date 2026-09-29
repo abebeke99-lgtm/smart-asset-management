@@ -1,1166 +1,2398 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useLanguage } from '../../contexts/UiContext';
-import { useAuth } from '../../contexts/AuthContext';
-import { toast } from 'react-toastify';
-import axios from 'axios';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Download,
+  Eye,
+  Filter,
+  MapPin,
+  Monitor,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings,
+  Trash2,
+  User,
+  Wrench,
+  X,
+} from "lucide-react";
 
-const ICTMaintenance = () => {
-  const { user } = useAuth();
-  const { language, theme } = useLanguage();
-  
-  // State
-  const [maintenanceRequests, setMaintenanceRequests] = useState([]);
-  const [assets, setAssets] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState(null);
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterPriority, setFilterPriority] = useState('all');
-  const [filterDate, setFilterDate] = useState('all');
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
-  // Form Data
-  const [formData, setFormData] = useState({
-    asset_id: '',
-    problem: '',
-    priority: 'Medium',
-    reported_by: '',
-    department: '',
-    assigned_to: '',
-    status: 'Pending',
-    diagnosis: '',
-    repair: '',
-    parts_used: '',
-    cost: '',
-    remarks: '',
-    scheduled_date: '',
-    completion_date: '',
-    maintenance_type: 'Corrective'
+const PAGE_SIZE = 10;
+
+const STATUS_OPTIONS = [
+  "Scheduled",
+  "Pending",
+  "In Progress",
+  "Completed",
+  "Cancelled",
+  "Overdue",
+];
+
+const MAINTENANCE_TYPES = [
+  "Preventive",
+  "Corrective",
+  "Emergency",
+  "Inspection",
+  "Upgrade",
+  "Calibration",
+  "Cleaning",
+  "Other",
+];
+
+const PRIORITY_OPTIONS = [
+  "Low",
+  "Medium",
+  "High",
+  "Critical",
+];
+
+const initialForm = {
+  maintenanceNumber: "",
+  assetTag: "",
+  assetName: "",
+  assetCategory: "",
+  maintenanceType: "Preventive",
+  priority: "Medium",
+  status: "Scheduled",
+  requestedBy: "",
+  assignedTechnician: "",
+  department: "",
+  location: "",
+  scheduledDate: "",
+  startDate: "",
+  completionDate: "",
+  nextMaintenanceDate: "",
+  estimatedCost: "",
+  actualCost: "",
+  downtime: "",
+  issueDescription: "",
+  workPerformed: "",
+  partsUsed: "",
+  findings: "",
+  recommendations: "",
+  notes: "",
+};
+
+async function apiRequest(url, options = {}) {
+  const response = await fetch(`${API_BASE_URL}${url}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
   });
 
-  // Statistics
-  const [stats, setStats] = useState({
-    total: 0,
-    pending: 0,
-    inProgress: 0,
-    completed: 0,
-    rejected: 0,
-    overdue: 0
-  });
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
 
-  const isDark = theme === 'dark';
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
-
-  // Fetch data
-  const fetchData = useCallback(async () => {
-    setLoading(true);
     try {
-      const [maintenanceRes, assetsRes, usersRes] = await Promise.all([
-        axios.get('/api/maintenance', { params: { limit: 1000 } }),
-        axios.get('/api/assets', { params: { limit: 1000 } }),
-        axios.get('/api/users', { params: { limit: 1000 } })
-      ]);
-
-      setMaintenanceRequests(maintenanceRes.data.requests || []);
-      setAssets(assetsRes.data.assets || []);
-      setUsers(usersRes.data.users || []);
-      
-      // Calculate statistics
-      const requests = maintenanceRes.data.requests || [];
-      const now = new Date();
-      const overdue = requests.filter(r => 
-        r.status !== 'Completed' && 
-        r.status !== 'Rejected' && 
-        r.status !== 'Cancelled' &&
-        r.scheduled_date && 
-        new Date(r.scheduled_date) < now
-      ).length;
-
-      setStats({
-        total: requests.length,
-        pending: requests.filter(r => r.status === 'Pending').length,
-        inProgress: requests.filter(r => r.status === 'In Progress' || r.status === 'Assigned').length,
-        completed: requests.filter(r => r.status === 'Completed').length,
-        rejected: requests.filter(r => r.status === 'Rejected' || r.status === 'Cancelled').length,
-        overdue: overdue
-      });
-    } catch (error) {
-      console.error('Fetch error:', error);
-      toast.error(t.fetchError);
+      const error = await response.json();
+      message =
+        error?.message ||
+        error?.error ||
+        message;
+    } catch {
+      // Ignore invalid error body.
     }
-    setLoading(false);
+
+    throw new Error(message);
+  }
+
+  if (response.status === 204) return null;
+
+  return response.json();
+}
+
+function extractArray(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.maintenance)) return data.maintenance;
+  if (Array.isArray(data?.maintenances))
+    return data.maintenances;
+  if (Array.isArray(data?.results)) return data.results;
+
+  return [];
+}
+
+function normalizeMaintenance(item, index) {
+  return {
+    id:
+      item.id ??
+      item._id ??
+      item.maintenanceId ??
+      item.maintenance_id ??
+      `MNT-${String(index + 1).padStart(5, "0")}`,
+
+    maintenanceNumber:
+      item.maintenanceNumber ??
+      item.maintenance_number ??
+      item.referenceNumber ??
+      item.reference_number ??
+      `MNT-${String(index + 1).padStart(5, "0")}`,
+
+    assetTag:
+      item.assetTag ??
+      item.asset_tag ??
+      item.asset?.assetTag ??
+      item.asset?.asset_tag ??
+      "",
+
+    assetName:
+      item.assetName ??
+      item.asset_name ??
+      item.asset?.name ??
+      item.asset?.assetName ??
+      "",
+
+    assetCategory:
+      item.assetCategory ??
+      item.asset_category ??
+      item.asset?.category ??
+      "",
+
+    maintenanceType:
+      item.maintenanceType ??
+      item.maintenance_type ??
+      item.type ??
+      "Preventive",
+
+    priority: item.priority ?? "Medium",
+
+    status: item.status ?? "Scheduled",
+
+    requestedBy:
+      item.requestedBy ??
+      item.requested_by ??
+      item.requester?.name ??
+      "",
+
+    assignedTechnician:
+      item.assignedTechnician ??
+      item.assigned_technician ??
+      item.technicianName ??
+      item.technician?.name ??
+      "",
+
+    department:
+      item.department ??
+      item.departmentName ??
+      item.department_name ??
+      "",
+
+    location:
+      item.location ??
+      item.locationName ??
+      "",
+
+    scheduledDate:
+      item.scheduledDate ??
+      item.scheduled_date ??
+      "",
+
+    startDate:
+      item.startDate ??
+      item.start_date ??
+      "",
+
+    completionDate:
+      item.completionDate ??
+      item.completion_date ??
+      item.completedAt ??
+      "",
+
+    nextMaintenanceDate:
+      item.nextMaintenanceDate ??
+      item.next_maintenance_date ??
+      "",
+
+    estimatedCost:
+      item.estimatedCost ??
+      item.estimated_cost ??
+      0,
+
+    actualCost:
+      item.actualCost ??
+      item.actual_cost ??
+      0,
+
+    downtime:
+      item.downtime ??
+      item.downtimeHours ??
+      item.downtime_hours ??
+      0,
+
+    issueDescription:
+      item.issueDescription ??
+      item.issue_description ??
+      item.description ??
+      "",
+
+    workPerformed:
+      item.workPerformed ??
+      item.work_performed ??
+      "",
+
+    partsUsed:
+      item.partsUsed ??
+      item.parts_used ??
+      "",
+
+    findings: item.findings ?? "",
+
+    recommendations:
+      item.recommendations ??
+      "",
+
+    notes: item.notes ?? "",
+
+    createdAt:
+      item.createdAt ??
+      item.created_at ??
+      "",
+
+    updatedAt:
+      item.updatedAt ??
+      item.updated_at ??
+      "",
+
+    raw: item,
+  };
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatCurrency(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) return "ETB 0.00";
+
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "ETB",
+    minimumFractionDigits: 2,
+  }).format(number);
+}
+
+function getStatusClasses(status) {
+  switch (String(status).toLowerCase()) {
+    case "scheduled":
+      return "border-blue-200 bg-blue-50 text-blue-700";
+
+    case "pending":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+
+    case "in progress":
+      return "border-violet-200 bg-violet-50 text-violet-700";
+
+    case "completed":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+
+    case "cancelled":
+      return "border-red-200 bg-red-50 text-red-700";
+
+    case "overdue":
+      return "border-orange-200 bg-orange-50 text-orange-700";
+
+    default:
+      return "border-slate-200 bg-slate-100 text-slate-600";
+  }
+}
+
+function getPriorityClasses(priority) {
+  switch (String(priority).toLowerCase()) {
+    case "critical":
+      return "border-red-200 bg-red-50 text-red-700";
+
+    case "high":
+      return "border-orange-200 bg-orange-50 text-orange-700";
+
+    case "medium":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+
+    case "low":
+      return "border-slate-200 bg-slate-100 text-slate-600";
+
+    default:
+      return "border-slate-200 bg-slate-100 text-slate-600";
+  }
+}
+
+function SummaryCard({
+  title,
+  value,
+  icon: Icon,
+  iconClass,
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-500">
+            {title}
+          </p>
+
+          <p className="mt-2 text-2xl font-bold text-slate-900">
+            {value}
+          </p>
+        </div>
+
+        <div
+          className={`flex h-11 w-11 items-center justify-center rounded-xl ${iconClass}`}
+        >
+          <Icon size={21} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Modal({
+  title,
+  icon: Icon,
+  children,
+  onClose,
+  large = false,
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-slate-950/50 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+
+      <div
+        className={`relative flex max-h-[92vh] w-full ${
+          large ? "max-w-5xl" : "max-w-2xl"
+        } flex-col overflow-hidden rounded-2xl bg-white shadow-2xl`}
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+              <Icon size={18} />
+            </div>
+
+            <h2 className="text-lg font-semibold text-slate-900">
+              {title}
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          >
+            <X size={19} />
+          </button>
+        </div>
+
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function InputField({
+  label,
+  name,
+  value,
+  onChange,
+  type = "text",
+  placeholder,
+  required = false,
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+        {label}
+
+        {required && (
+          <span className="ml-1 text-red-500">
+            *
+          </span>
+        )}
+      </label>
+
+      <input
+        type={type}
+        name={name}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        required={required}
+        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      />
+    </div>
+  );
+}
+
+function SelectField({
+  label,
+  name,
+  value,
+  onChange,
+  options,
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+        {label}
+      </label>
+
+      <select
+        name={name}
+        value={value}
+        onChange={onChange}
+        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      >
+        {options.map((option) => (
+          <option
+            key={option}
+            value={option}
+          >
+            {option}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function TextAreaField({
+  label,
+  name,
+  value,
+  onChange,
+  placeholder,
+  rows = 3,
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+        {label}
+      </label>
+
+      <textarea
+        name={name}
+        value={value}
+        onChange={onChange}
+        rows={rows}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      />
+    </div>
+  );
+}
+
+function DetailItem({
+  label,
+  value,
+  icon: Icon,
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-400">
+        {Icon && <Icon size={13} />}
+        {label}
+      </div>
+
+      <div className="mt-1 break-words text-sm font-medium text-slate-800">
+        {value || "—"}
+      </div>
+    </div>
+  );
+}
+
+export default function ICTMaintenance() {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] =
+    useState("All");
+  const [typeFilter, setTypeFilter] =
+    useState("All");
+  const [priorityFilter, setPriorityFilter] =
+    useState("All");
+
+  const [page, setPage] = useState(1);
+
+  const [showForm, setShowForm] = useState(false);
+  const [showDetails, setShowDetails] =
+    useState(false);
+
+  const [editingRecord, setEditingRecord] =
+    useState(null);
+
+  const [selectedRecord, setSelectedRecord] =
+    useState(null);
+
+  const [form, setForm] = useState(initialForm);
+
+  const loadMaintenance = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      let data;
+
+      try {
+        data = await apiRequest(
+          "/ict-maintenance"
+        );
+      } catch {
+        try {
+          data = await apiRequest(
+            "/ictMaintenance"
+          );
+        } catch {
+          try {
+            data = await apiRequest(
+              "/maintenance"
+            );
+          } catch {
+            data = await apiRequest(
+              "/maintenance-records"
+            );
+          }
+        }
+      }
+
+      setRecords(
+        extractArray(data).map(
+          normalizeMaintenance
+        )
+      );
+    } catch (err) {
+      setError(
+        err.message ||
+          "Unable to load ICT maintenance records."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMaintenance();
   }, []);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    setPage(1);
+  }, [
+    search,
+    statusFilter,
+    typeFilter,
+    priorityFilter,
+  ]);
 
-  // Get filtered requests
-  const getFilteredRequests = () => {
-    let filtered = maintenanceRequests;
-    
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(r => r.status === filterStatus);
-    }
-    
-    if (filterPriority !== 'all') {
-      filtered = filtered.filter(r => r.priority === filterPriority);
-    }
-    
-    if (filterDate === 'today') {
-      const today = new Date().toISOString().split('T')[0];
-      filtered = filtered.filter(r => r.created_at?.startsWith(today));
-    } else if (filterDate === 'week') {
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      filtered = filtered.filter(r => new Date(r.created_at) >= weekAgo);
-    } else if (filterDate === 'month') {
-      const monthAgo = new Date();
-      monthAgo.setMonth(monthAgo.getMonth() - 1);
-      filtered = filtered.filter(r => new Date(r.created_at) >= monthAgo);
-    }
-    
-    return filtered;
-  };
+  const statistics = useMemo(() => {
+    const total = records.length;
 
-  // Handle create request
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    try {
-      const payload = {
-        ...formData,
-        title: formData.problem,
-        description: formData.problem,
-        reported_by: user?.id || formData.reported_by,
-        created_at: new Date().toISOString()
-      };
-      
-      const response = await axios.post('/api/maintenance', payload);
-      toast.success(t.requestCreated);
-      setShowCreateModal(false);
-      resetForm();
-      fetchData();
-    } catch (error) {
-      toast.error(error.response?.data?.message || t.createError);
-    }
-  };
+    const scheduled = records.filter(
+      (item) =>
+        item.status === "Scheduled"
+    ).length;
 
-  // Handle update request
-  const handleUpdate = async (e) => {
-    e.preventDefault();
-    try {
-      await axios.put(`/api/maintenance/${selectedRequest.id}`, formData);
-      toast.success(t.requestUpdated);
-      setShowEditModal(false);
-      fetchData();
-    } catch (error) {
-      toast.error(t.updateError);
-    }
-  };
+    const inProgress = records.filter(
+      (item) =>
+        item.status === "In Progress"
+    ).length;
 
-  // Handle status change
-  const handleStatusChange = async (id, status) => {
-    try {
-      await axios.patch(`/api/maintenance/${id}/status`, { status });
-      toast.success(t.statusUpdated);
-      fetchData();
-    } catch (error) {
-      toast.error(t.statusError);
-    }
-  };
+    const completed = records.filter(
+      (item) =>
+        item.status === "Completed"
+    ).length;
 
-  // Handle delete request
-  const handleDelete = async (id) => {
-    if (!window.confirm(t.confirmDelete)) return;
-    try {
-      await axios.delete(`/api/maintenance/${id}`);
-      toast.success(t.requestDeleted);
-      fetchData();
-    } catch (error) {
-      toast.error(t.deleteError);
-    }
-  };
+    const overdue = records.filter(
+      (item) =>
+        item.status === "Overdue"
+    ).length;
 
-  // Reset form
-  const resetForm = () => {
-    setFormData({
-      asset_id: '',
-      problem: '',
-      priority: 'Medium',
-      reported_by: '',
-      department: '',
-      assigned_to: '',
-      status: 'Pending',
-      diagnosis: '',
-      repair: '',
-      parts_used: '',
-      cost: '',
-      remarks: '',
-      scheduled_date: '',
-      completion_date: '',
-      maintenance_type: 'Corrective'
+    const totalCost = records.reduce(
+      (sum, item) =>
+        sum + Number(item.actualCost || 0),
+      0
+    );
+
+    return {
+      total,
+      scheduled,
+      inProgress,
+      completed,
+      overdue,
+      totalCost,
+    };
+  }, [records]);
+
+  const filteredRecords = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return records.filter((item) => {
+      const searchable = [
+        item.maintenanceNumber,
+        item.assetTag,
+        item.assetName,
+        item.assetCategory,
+        item.maintenanceType,
+        item.priority,
+        item.status,
+        item.requestedBy,
+        item.assignedTechnician,
+        item.department,
+        item.location,
+        item.issueDescription,
+        item.workPerformed,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      const matchesSearch =
+        !query || searchable.includes(query);
+
+      const matchesStatus =
+        statusFilter === "All" ||
+        item.status.toLowerCase() ===
+          statusFilter.toLowerCase();
+
+      const matchesType =
+        typeFilter === "All" ||
+        item.maintenanceType.toLowerCase() ===
+          typeFilter.toLowerCase();
+
+      const matchesPriority =
+        priorityFilter === "All" ||
+        item.priority.toLowerCase() ===
+          priorityFilter.toLowerCase();
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesType &&
+        matchesPriority
+      );
     });
-  };
+  }, [
+    records,
+    search,
+    statusFilter,
+    typeFilter,
+    priorityFilter,
+  ]);
 
-  // Edit request
-  const handleEdit = (request) => {
-    setSelectedRequest(request);
-    setFormData({
-      asset_id: request.asset_id,
-      problem: request.problem,
-      priority: request.priority || 'Medium',
-      reported_by: request.reported_by_name || '',
-      department: request.department || '',
-      assigned_to: request.assigned_to || '',
-      status: request.status,
-      diagnosis: request.diagnosis || '',
-      repair: request.repair || '',
-      parts_used: request.parts_used || '',
-      cost: request.cost || '',
-      remarks: request.remarks || '',
-      scheduled_date: request.scheduled_date?.split('T')[0] || '',
-      completion_date: request.completion_date?.split('T')[0] || '',
-      maintenance_type: request.maintenance_type || 'Corrective'
-    });
-    setShowEditModal(true);
-  };
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      filteredRecords.length / PAGE_SIZE
+    )
+  );
 
-  // Export to PDF
-  const exportToPDF = () => {
-    const doc = new jsPDF();
-    doc.text('ICT Maintenance Report', 14, 15);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 25);
-    
-    const tableData = getFilteredRequests().map(r => [
-      r.id,
-      r.asset_name || 'N/A',
-      r.problem?.substring(0, 30) || 'N/A',
-      r.priority || 'N/A',
-      r.status,
-      r.assigned_to_name || 'Unassigned'
-    ]);
+  const paginatedRecords = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
 
-    doc.autoTable({
-      head: [['ID', 'Asset', 'Problem', 'Priority', 'Status', 'Technician']],
-      body: tableData,
-      startY: 35
+    return filteredRecords.slice(
+      start,
+      start + PAGE_SIZE
+    );
+  }, [filteredRecords, page]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const openCreate = () => {
+    setEditingRecord(null);
+
+    setForm({
+      ...initialForm,
+      maintenanceNumber: `MNT-${Date.now()
+        .toString()
+        .slice(-8)}`,
+      scheduledDate: new Date()
+        .toISOString()
+        .slice(0, 10),
     });
 
-    doc.save(`ICT_Maintenance_${new Date().toISOString().split('T')[0]}.pdf`);
-    toast.success(t.exportSuccess);
+    setShowForm(true);
   };
 
-  // Styles
-  const styles = {
-    container: { padding: '20px', maxWidth: '1400px', margin: '0 auto' },
-    header: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '24px',
-      flexWrap: 'wrap',
-      gap: '16px'
-    },
-    title: {
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontSize: '1.75rem',
-      fontWeight: 700,
-      margin: 0
-    },
-    subtitle: {
-      color: isDark ? '#8896b0' : '#4a5568',
-      margin: '4px 0 0 0'
-    },
-    statsRow: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-      gap: '16px',
-      marginBottom: '24px'
-    },
-    statCard: {
-      background: isDark ? '#1e2d45' : '#ffffff',
-      padding: '16px 20px',
-      borderRadius: '12px',
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)',
-      textAlign: 'center'
-    },
-    statNumber: {
-      fontSize: '1.75rem',
-      fontWeight: 700,
-      color: isDark ? '#c8dcf5' : '#1a365d'
-    },
-    statLabel: {
-      fontSize: '0.85rem',
-      color: isDark ? '#8896b0' : '#4a5568'
-    },
-    filters: {
-      display: 'flex',
-      gap: '12px',
-      flexWrap: 'wrap',
-      marginBottom: '24px',
-      background: isDark ? '#1e2d45' : '#ffffff',
-      padding: '16px 20px',
-      borderRadius: '12px',
-      border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`
-    },
-    select: {
-      padding: '8px 12px',
-      borderRadius: '8px',
-      border: isDark ? '1px solid #32465f' : '1px solid #d0d8e8',
-      background: isDark ? '#0d1b2a' : '#f7fafc',
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontSize: '14px',
-      cursor: 'pointer',
-      minWidth: '140px'
-    },
-    button: (bg = 'linear-gradient(135deg, #1a365d, #2b6cb0)') => ({
-      padding: '10px 20px',
-      borderRadius: '8px',
-      border: 'none',
-      background: bg,
-      color: 'white',
-      fontWeight: 600,
-      cursor: 'pointer',
-      transition: 'all 0.2s ease'
-    }),
-    table: {
-      width: '100%',
-      borderCollapse: 'collapse',
-      background: isDark ? '#1e2d45' : '#ffffff',
-      borderRadius: '12px',
-      overflow: 'hidden',
-      boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)'
-    },
-    th: {
-      padding: '12px 16px',
-      textAlign: 'left',
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontWeight: 600,
-      borderBottom: `2px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      background: isDark ? '#141e2d' : '#f7fafc',
-      fontSize: '12px',
-      textTransform: 'uppercase',
-      letterSpacing: '0.3px'
-    },
-    td: {
-      padding: '12px 16px',
-      borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontSize: '14px'
-    },
-    statusBadge: (status) => {
-      const colors = {
-        'Pending': { bg: 'rgba(237, 137, 54, 0.15)', text: '#ed8936' },
-        'Approved': { bg: 'rgba(43, 108, 176, 0.15)', text: '#4299e1' },
-        'Assigned': { bg: 'rgba(43, 108, 176, 0.15)', text: '#4299e1' },
-        'In Progress': { bg: 'rgba(237, 137, 54, 0.15)', text: '#ed8936' },
-        'Waiting for Parts': { bg: 'rgba(237, 137, 54, 0.15)', text: '#ed8936' },
-        'Completed': { bg: 'rgba(72, 187, 120, 0.15)', text: '#48bb78' },
-        'Rejected': { bg: 'rgba(252, 129, 129, 0.15)', text: '#fc8181' },
-        'Cancelled': { bg: 'rgba(252, 129, 129, 0.15)', text: '#fc8181' }
-      };
-      const color = colors[status] || { bg: 'rgba(128, 90, 213, 0.15)', text: '#805ad5' };
-      return {
-        display: 'inline-block',
-        padding: '4px 12px',
-        borderRadius: '20px',
-        fontSize: '12px',
-        fontWeight: 600,
-        background: color.bg,
-        color: color.text,
-        border: `1px solid ${color.text}40`
-      };
-    },
-    priorityBadge: (priority) => {
-      const colors = {
-        'Critical': { bg: 'rgba(252, 129, 129, 0.15)', text: '#fc8181' },
-        'High': { bg: 'rgba(237, 137, 54, 0.15)', text: '#ed8936' },
-        'Medium': { bg: 'rgba(43, 108, 176, 0.15)', text: '#4299e1' },
-        'Low': { bg: 'rgba(72, 187, 120, 0.15)', text: '#48bb78' }
-      };
-      const color = colors[priority] || colors['Medium'];
-      return {
-        display: 'inline-block',
-        padding: '2px 10px',
-        borderRadius: '12px',
-        fontSize: '11px',
-        fontWeight: 700,
-        background: color.bg,
-        color: color.text
-      };
-    },
-    modal: {
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0,0,0,0.6)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 9999,
-      backdropFilter: 'blur(4px)',
-      padding: '20px'
-    },
-    modalContent: {
-      background: isDark ? '#1e2d45' : '#ffffff',
-      borderRadius: '16px',
-      padding: '30px',
-      maxWidth: '800px',
-      width: '100%',
-      maxHeight: '90vh',
-      overflowY: 'auto'
-    },
-    modalHeader: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '20px',
-      borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      paddingBottom: '16px'
-    },
-    modalTitle: {
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontSize: '1.25rem',
-      fontWeight: 700
-    },
-    modalClose: {
-      background: 'none',
-      border: 'none',
-      fontSize: '1.5rem',
-      cursor: 'pointer',
-      color: isDark ? '#8896b0' : '#4a5568'
-    },
-    grid: {
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: '16px'
-    },
-    fullWidth: {
-      gridColumn: '1 / -1'
-    },
-    label: {
-      display: 'block',
-      marginBottom: '4px',
-      color: isDark ? '#c8dcf5' : '#2d3748',
-      fontWeight: 600,
-      fontSize: '0.85rem'
-    },
-    input: {
-      width: '100%',
-      padding: '10px 14px',
-      borderRadius: '8px',
-      border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`,
-      background: isDark ? '#0d1b2a' : '#f7fafc',
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontSize: '0.95rem',
-      marginBottom: '4px'
-    },
-    textarea: {
-      width: '100%',
-      padding: '10px 14px',
-      borderRadius: '8px',
-      border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`,
-      background: isDark ? '#0d1b2a' : '#f7fafc',
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontSize: '0.95rem',
-      minHeight: '60px',
-      resize: 'vertical',
-      marginBottom: '4px'
-    },
-    select: {
-      width: '100%',
-      padding: '10px 14px',
-      borderRadius: '8px',
-      border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`,
-      background: isDark ? '#0d1b2a' : '#f7fafc',
-      color: isDark ? '#c8dcf5' : '#1a365d',
-      fontSize: '0.95rem',
-      cursor: 'pointer',
-      marginBottom: '4px'
-    },
-    actionButton: (color) => ({
-      padding: '4px 10px',
-      borderRadius: '4px',
-      border: 'none',
-      cursor: 'pointer',
-      fontSize: '12px',
-      background: color,
-      color: 'white',
-      marginRight: '4px'
-    }),
-    emptyState: {
-      textAlign: 'center',
-      padding: '40px',
-      color: isDark ? '#8896b0' : '#4a5568'
+  const openEdit = (record) => {
+    setEditingRecord(record);
+
+    const dateOnly = (value) =>
+      value?.slice?.(0, 10) || "";
+
+    setForm({
+      maintenanceNumber:
+        record.maintenanceNumber || "",
+      assetTag: record.assetTag || "",
+      assetName: record.assetName || "",
+      assetCategory:
+        record.assetCategory || "",
+      maintenanceType:
+        record.maintenanceType ||
+        "Preventive",
+      priority:
+        record.priority || "Medium",
+      status:
+        record.status || "Scheduled",
+      requestedBy:
+        record.requestedBy || "",
+      assignedTechnician:
+        record.assignedTechnician || "",
+      department:
+        record.department || "",
+      location:
+        record.location || "",
+      scheduledDate: dateOnly(
+        record.scheduledDate
+      ),
+      startDate: dateOnly(
+        record.startDate
+      ),
+      completionDate: dateOnly(
+        record.completionDate
+      ),
+      nextMaintenanceDate: dateOnly(
+        record.nextMaintenanceDate
+      ),
+      estimatedCost:
+        record.estimatedCost ?? "",
+      actualCost:
+        record.actualCost ?? "",
+      downtime:
+        record.downtime ?? "",
+      issueDescription:
+        record.issueDescription || "",
+      workPerformed:
+        record.workPerformed || "",
+      partsUsed:
+        record.partsUsed || "",
+      findings:
+        record.findings || "",
+      recommendations:
+        record.recommendations || "",
+      notes:
+        record.notes || "",
+    });
+
+    setShowForm(true);
+  };
+
+  const openDetails = (record) => {
+    setSelectedRecord(record);
+    setShowDetails(true);
+  };
+
+  const closeModals = () => {
+    if (saving) return;
+
+    setShowForm(false);
+    setShowDetails(false);
+    setEditingRecord(null);
+    setSelectedRecord(null);
+  };
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  };
+
+  const saveMaintenance = async (event) => {
+    event.preventDefault();
+
+    if (!form.assetTag.trim()) {
+      setError("Asset tag is required.");
+      return;
+    }
+
+    if (!form.assignedTechnician.trim()) {
+      setError(
+        "Assigned technician is required."
+      );
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    const payload = {
+      maintenanceNumber:
+        form.maintenanceNumber,
+      assetTag: form.assetTag,
+      assetName: form.assetName,
+      assetCategory:
+        form.assetCategory,
+      maintenanceType:
+        form.maintenanceType,
+      priority: form.priority,
+      status: form.status,
+      requestedBy:
+        form.requestedBy,
+      assignedTechnician:
+        form.assignedTechnician,
+      department:
+        form.department,
+      location:
+        form.location,
+      scheduledDate:
+        form.scheduledDate,
+      startDate:
+        form.startDate,
+      completionDate:
+        form.completionDate,
+      nextMaintenanceDate:
+        form.nextMaintenanceDate,
+      estimatedCost:
+        Number(form.estimatedCost) || 0,
+      actualCost:
+        Number(form.actualCost) || 0,
+      downtime:
+        Number(form.downtime) || 0,
+      issueDescription:
+        form.issueDescription,
+      workPerformed:
+        form.workPerformed,
+      partsUsed:
+        form.partsUsed,
+      findings:
+        form.findings,
+      recommendations:
+        form.recommendations,
+      notes:
+        form.notes,
+    };
+
+    try {
+      if (editingRecord) {
+        let response;
+
+        try {
+          response = await apiRequest(
+            `/ict-maintenance/${editingRecord.id}`,
+            {
+              method: "PUT",
+              body: JSON.stringify(payload),
+            }
+          );
+        } catch {
+          try {
+            response = await apiRequest(
+              `/ictMaintenance/${editingRecord.id}`,
+              {
+                method: "PUT",
+                body: JSON.stringify(payload),
+              }
+            );
+          } catch {
+            response = await apiRequest(
+              `/maintenance/${editingRecord.id}`,
+              {
+                method: "PUT",
+                body: JSON.stringify(payload),
+              }
+            );
+          }
+        }
+
+        const updated = normalizeMaintenance(
+          response?.data ||
+            response ||
+            payload,
+          0
+        );
+
+        setRecords((current) =>
+          current.map((item) =>
+            item.id === editingRecord.id
+              ? {
+                  ...item,
+                  ...updated,
+                  id: editingRecord.id,
+                }
+              : item
+          )
+        );
+      } else {
+        let response;
+
+        try {
+          response = await apiRequest(
+            "/ict-maintenance",
+            {
+              method: "POST",
+              body: JSON.stringify(payload),
+            }
+          );
+        } catch {
+          try {
+            response = await apiRequest(
+              "/ictMaintenance",
+              {
+                method: "POST",
+                body: JSON.stringify(payload),
+              }
+            );
+          } catch {
+            response = await apiRequest(
+              "/maintenance",
+              {
+                method: "POST",
+                body: JSON.stringify(payload),
+              }
+            );
+          }
+        }
+
+        const created = normalizeMaintenance(
+          response?.data ||
+            response ||
+            payload,
+          records.length
+        );
+
+        setRecords((current) => [
+          created,
+          ...current,
+        ]);
+      }
+
+      setForm(initialForm);
+      setEditingRecord(null);
+      setShowForm(false);
+    } catch (err) {
+      setError(
+        err.message ||
+          "Unable to save maintenance record."
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
-  const filteredRequests = getFilteredRequests();
+  const deleteMaintenance = async (record) => {
+    const confirmed = window.confirm(
+      `Delete maintenance record ${record.maintenanceNumber}?`
+    );
 
-  if (loading) {
-    return <div style={styles.emptyState}>⏳ {t.loading}</div>;
-  }
+    if (!confirmed) return;
+
+    setError("");
+
+    try {
+      try {
+        await apiRequest(
+          `/ict-maintenance/${record.id}`,
+          {
+            method: "DELETE",
+          }
+        );
+      } catch {
+        try {
+          await apiRequest(
+            `/ictMaintenance/${record.id}`,
+            {
+              method: "DELETE",
+            }
+          );
+        } catch {
+          await apiRequest(
+            `/maintenance/${record.id}`,
+            {
+              method: "DELETE",
+            }
+          );
+        }
+      }
+
+      setRecords((current) =>
+        current.filter(
+          (item) => item.id !== record.id
+        )
+      );
+
+      if (
+        selectedRecord?.id === record.id
+      ) {
+        setSelectedRecord(null);
+        setShowDetails(false);
+      }
+    } catch (err) {
+      setError(
+        err.message ||
+          "Unable to delete maintenance record."
+      );
+    }
+  };
+
+  const exportCSV = () => {
+    if (!filteredRecords.length) return;
+
+    const headers = [
+      "Maintenance Number",
+      "Asset Tag",
+      "Asset Name",
+      "Asset Category",
+      "Maintenance Type",
+      "Priority",
+      "Status",
+      "Requested By",
+      "Assigned Technician",
+      "Department",
+      "Location",
+      "Scheduled Date",
+      "Start Date",
+      "Completion Date",
+      "Next Maintenance Date",
+      "Estimated Cost",
+      "Actual Cost",
+      "Downtime",
+      "Issue Description",
+      "Work Performed",
+      "Parts Used",
+      "Findings",
+      "Recommendations",
+    ];
+
+    const rows = filteredRecords.map(
+      (item) => [
+        item.maintenanceNumber,
+        item.assetTag,
+        item.assetName,
+        item.assetCategory,
+        item.maintenanceType,
+        item.priority,
+        item.status,
+        item.requestedBy,
+        item.assignedTechnician,
+        item.department,
+        item.location,
+        item.scheduledDate,
+        item.startDate,
+        item.completionDate,
+        item.nextMaintenanceDate,
+        item.estimatedCost,
+        item.actualCost,
+        item.downtime,
+        item.issueDescription,
+        item.workPerformed,
+        item.partsUsed,
+        item.findings,
+        item.recommendations,
+      ]
+    );
+
+    const escapeCSV = (value) => {
+      const text = String(value ?? "");
+
+      if (
+        text.includes(",") ||
+        text.includes('"') ||
+        text.includes("\n")
+      ) {
+        return `"${text.replace(
+          /"/g,
+          '""'
+        )}"`;
+      }
+
+      return text;
+    };
+
+    const csv = [headers, ...rows]
+      .map((row) =>
+        row.map(escapeCSV).join(",")
+      )
+      .join("\n");
+
+    const blob = new Blob([csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `ict-maintenance-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <div style={styles.container}>
-      {/* Header */}
-      <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>🔧 {t.maintenance}</h1>
-          <p style={styles.subtitle}>{t.maintenanceDesc}</p>
-        </div>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button style={styles.button()} onClick={() => setShowCreateModal(true)}>
-            ➕ {t.newRequest}
-          </button>
-          <button style={styles.button('linear-gradient(135deg, #48bb78, #68d391)')} onClick={exportToPDF}>
-            📊 {t.exportPDF}
-          </button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6">
+      <div className="mx-auto max-w-[1600px] space-y-6">
+        {/* Header */}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-sm text-slate-500">
+              <Settings size={16} />
 
-      {/* Stats */}
-      <div style={styles.statsRow}>
-        <div style={styles.statCard}>
-          <div style={styles.statNumber}>{stats.total}</div>
-          <div style={styles.statLabel}>{t.totalRequests}</div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statNumber}>{stats.pending}</div>
-          <div style={styles.statLabel}>{t.pending}</div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statNumber}>{stats.inProgress}</div>
-          <div style={styles.statLabel}>{t.inProgress}</div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statNumber}>{stats.completed}</div>
-          <div style={styles.statLabel}>{t.completed}</div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statNumber}>{stats.overdue}</div>
-          <div style={styles.statLabel}>{t.overdue}</div>
-        </div>
-        <div style={styles.statCard}>
-          <div style={styles.statNumber}>{stats.rejected}</div>
-          <div style={styles.statLabel}>{t.rejected}</div>
-        </div>
-      </div>
+              <span>ICT Operations</span>
 
-      {/* Filters */}
-      <div style={styles.filters}>
-        <select style={styles.select} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-          <option value="all">{t.allStatus}</option>
-          <option value="Pending">{t.pending}</option>
-          <option value="Approved">{t.approved}</option>
-          <option value="Assigned">{t.assigned}</option>
-          <option value="In Progress">{t.inProgress}</option>
-          <option value="Waiting for Parts">{t.waitingForParts}</option>
-          <option value="Completed">{t.completed}</option>
-          <option value="Rejected">{t.rejected}</option>
-          <option value="Cancelled">{t.cancelled}</option>
-        </select>
+              <span>/</span>
 
-        <select style={styles.select} value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
-          <option value="all">{t.allPriority}</option>
-          <option value="Critical">{t.critical}</option>
-          <option value="High">{t.high}</option>
-          <option value="Medium">{t.medium}</option>
-          <option value="Low">{t.low}</option>
-        </select>
+              <span className="text-slate-700">
+                ICT Maintenance
+              </span>
+            </div>
 
-        <select style={styles.select} value={filterDate} onChange={(e) => setFilterDate(e.target.value)}>
-          <option value="all">{t.allDates}</option>
-          <option value="today">{t.today}</option>
-          <option value="week">{t.thisWeek}</option>
-          <option value="month">{t.thisMonth}</option>
-        </select>
-      </div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+              ICT Maintenance
+            </h1>
 
-      {/* Table */}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>#</th>
-              <th style={styles.th}>{t.asset}</th>
-              <th style={styles.th}>{t.problem}</th>
-              <th style={styles.th}>{t.priority}</th>
-              <th style={styles.th}>{t.status}</th>
-              <th style={styles.th}>{t.technician}</th>
-              <th style={styles.th}>{t.requestDate}</th>
-              <th style={styles.th}>{t.actions}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredRequests.length === 0 ? (
-              <tr>
-                <td colSpan="8" style={{...styles.td, textAlign: 'center', padding: '40px'}}>
-                  {t.noRequests}
-                </td>
-              </tr>
-            ) : (
-              filteredRequests.map((req, index) => (
-                <tr key={req.id}>
-                  <td style={styles.td}>{index + 1}</td>
-                  <td style={styles.td}>
-                    <strong>{req.asset_name || 'N/A'}</strong>
-                    <br />
-                    <span style={{ fontSize: '12px', color: isDark ? '#8896b0' : '#4a5568' }}>
-                      {req.asset_tag || ''}
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    <div style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {req.problem || 'N/A'}
-                    </div>
-                  </td>
-                  <td style={styles.td}>
-                    <span style={styles.priorityBadge(req.priority)}>
-                      {req.priority || 'Medium'}
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    <span style={styles.statusBadge(req.status)}>
-                      {req.status || 'Pending'}
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    {req.assigned_to_name || 'Unassigned'}
-                  </td>
-                  <td style={styles.td}>
-                    {req.created_at ? new Date(req.created_at).toLocaleDateString() : 'N/A'}
-                  </td>
-                  <td style={styles.td}>
-                    <button 
-                      style={styles.actionButton('#4299e1')}
-                      onClick={() => {
-                        setSelectedRequest(req);
-                        setShowDetailModal(true);
-                      }}
-                    >
-                      👁️
-                    </button>
-                    <button 
-                      style={styles.actionButton('#ed8936')}
-                      onClick={() => handleEdit(req)}
-                    >
-                      ✏️
-                    </button>
-                    <button 
-                      style={styles.actionButton('#fc8181')}
-                      onClick={() => handleDelete(req.id)}
-                    >
-                      🗑️
-                    </button>
-                    {req.status !== 'Completed' && req.status !== 'Rejected' && req.status !== 'Cancelled' && (
-                      <select 
-                        style={{...styles.select, padding: '4px 8px', fontSize: '11px', width: '100px'}}
-                        onChange={(e) => handleStatusChange(req.id, e.target.value)}
-                        value={req.status}
-                      >
-                        <option value="Pending">{t.pending}</option>
-                        <option value="Approved">{t.approved}</option>
-                        <option value="Assigned">{t.assigned}</option>
-                        <option value="In Progress">{t.inProgress}</option>
-                        <option value="Waiting for Parts">{t.waitingForParts}</option>
-                        <option value="Completed">{t.completed}</option>
-                        <option value="Rejected">{t.rejected}</option>
-                        <option value="Cancelled">{t.cancelled}</option>
-                      </select>
+            <p className="mt-1 text-sm text-slate-500">
+              Plan, assign, track, and document preventive
+              and corrective maintenance for ICT assets.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={loadMaintenance}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+            >
+              <RefreshCw
+                size={17}
+                className={
+                  loading
+                    ? "animate-spin"
+                    : ""
+                }
+              />
+              Refresh
+            </button>
+
+            <button
+              type="button"
+              onClick={exportCSV}
+              disabled={!filteredRecords.length}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Download size={17} />
+              Export
+            </button>
+
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+            >
+              <Plus size={18} />
+              Schedule Maintenance
+            </button>
+          </div>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="flex items-start justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="flex gap-3">
+              <AlertTriangle
+                size={18}
+                className="mt-0.5 shrink-0"
+              />
+
+              <div>
+                <p className="font-semibold">
+                  Operation failed
+                </p>
+
+                <p className="mt-0.5">
+                  {error}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setError("")}
+              className="rounded-md p-1 hover:bg-red-100"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
+        {/* Summary */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <SummaryCard
+            title="Total Maintenance"
+            value={statistics.total}
+            icon={Wrench}
+            iconClass="bg-blue-50 text-blue-600"
+          />
+
+          <SummaryCard
+            title="Scheduled"
+            value={statistics.scheduled}
+            icon={CalendarDays}
+            iconClass="bg-indigo-50 text-indigo-600"
+          />
+
+          <SummaryCard
+            title="In Progress"
+            value={statistics.inProgress}
+            icon={Activity}
+            iconClass="bg-violet-50 text-violet-600"
+          />
+
+          <SummaryCard
+            title="Completed"
+            value={statistics.completed}
+            icon={CheckCircle2}
+            iconClass="bg-emerald-50 text-emerald-600"
+          />
+
+          <SummaryCard
+            title="Overdue"
+            value={statistics.overdue}
+            icon={AlertTriangle}
+            iconClass="bg-orange-50 text-orange-600"
+          />
+        </div>
+
+        {/* Cost Summary */}
+        <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                <Activity size={19} />
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-slate-500">
+                  Total Recorded Maintenance Cost
+                </p>
+
+                <p className="text-lg font-bold text-slate-900">
+                  {formatCurrency(
+                    statistics.totalCost
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="text-sm text-slate-500">
+              Based on{" "}
+              <span className="font-semibold text-slate-700">
+                {statistics.completed}
+              </span>{" "}
+              completed maintenance records
+            </div>
+          </div>
+        </div>
+
+        {/* Main Table */}
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          {/* Filters */}
+          <div className="border-b border-slate-200 p-4">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="relative w-full xl:max-w-md">
+                <Search
+                  size={18}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(event) =>
+                    setSearch(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Search asset, technician, maintenance..."
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <div className="relative">
+                  <Filter
+                    size={16}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                  <select
+                    value={statusFilter}
+                    onChange={(event) =>
+                      setStatusFilter(
+                        event.target.value
+                      )
+                    }
+                    className="h-10 min-w-[145px] appearance-none rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="All">
+                      All Statuses
+                    </option>
+
+                    {STATUS_OPTIONS.map(
+                      (option) => (
+                        <option
+                          key={option}
+                          value={option}
+                        >
+                          {option}
+                        </option>
+                      )
                     )}
-                  </td>
+                  </select>
+                </div>
+
+                <select
+                  value={typeFilter}
+                  onChange={(event) =>
+                    setTypeFilter(
+                      event.target.value
+                    )
+                  }
+                  className="h-10 min-w-[150px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="All">
+                    All Types
+                  </option>
+
+                  {MAINTENANCE_TYPES.map(
+                    (option) => (
+                      <option
+                        key={option}
+                        value={option}
+                      >
+                        {option}
+                      </option>
+                    )
+                  )}
+                </select>
+
+                <select
+                  value={priorityFilter}
+                  onChange={(event) =>
+                    setPriorityFilter(
+                      event.target.value
+                    )
+                  }
+                  className="h-10 min-w-[140px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="All">
+                    All Priorities
+                  </option>
+
+                  {PRIORITY_OPTIONS.map(
+                    (option) => (
+                      <option
+                        key={option}
+                        value={option}
+                      >
+                        {option}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1450px] text-left">
+              <thead className="bg-slate-50">
+                <tr className="border-b border-slate-200">
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Maintenance
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Asset
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Type
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Priority
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Technician
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Scheduled
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Cost
+                  </th>
+
+                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Status
+                  </th>
+
+                  <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Actions
+                  </th>
                 </tr>
-              ))
+              </thead>
+
+              <tbody className="divide-y divide-slate-100">
+                {loading ? (
+                  Array.from({ length: 7 }).map(
+                    (_, rowIndex) => (
+                      <tr key={rowIndex}>
+                        {Array.from({
+                          length: 9,
+                        }).map(
+                          (_, cellIndex) => (
+                            <td
+                              key={cellIndex}
+                              className="px-5 py-5"
+                            >
+                              <div className="h-4 animate-pulse rounded bg-slate-100" />
+                            </td>
+                          )
+                        )}
+                      </tr>
+                    )
+                  )
+                ) : paginatedRecords.length ===
+                  0 ? (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="px-6 py-16 text-center"
+                    >
+                      <div className="mx-auto flex max-w-sm flex-col items-center">
+                        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                          <Wrench size={27} />
+                        </div>
+
+                        <h3 className="text-base font-semibold text-slate-900">
+                          No maintenance records found
+                        </h3>
+
+                        <p className="mt-1 text-sm text-slate-500">
+                          Change your filters or
+                          schedule a new maintenance task.
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={openCreate}
+                          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                        >
+                          <Plus size={16} />
+                          Schedule Maintenance
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedRecords.map(
+                    (record) => (
+                      <tr
+                        key={record.id}
+                        className="group transition hover:bg-slate-50/80"
+                      >
+                        <td className="px-5 py-4">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openDetails(record)
+                            }
+                            className="font-semibold text-blue-600 hover:text-blue-700"
+                          >
+                            {
+                              record.maintenanceNumber
+                            }
+                          </button>
+
+                          <div className="mt-1 max-w-[230px] truncate text-sm font-medium text-slate-800">
+                            {record.issueDescription ||
+                              "Routine maintenance"}
+                          </div>
+
+                          <div className="mt-1 text-xs text-slate-400">
+                            {record.department ||
+                              "No department"}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                              <Monitor size={15} />
+                            </div>
+
+                            <div>
+                              <div className="text-sm font-semibold text-slate-800">
+                                {record.assetTag ||
+                                  "No asset tag"}
+                              </div>
+
+                              <div className="mt-0.5 max-w-[180px] truncate text-xs text-slate-400">
+                                {record.assetName ||
+                                  "ICT Asset"}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="text-sm font-medium text-slate-700">
+                            {
+                              record.maintenanceType
+                            }
+                          </div>
+
+                          <div className="mt-1 text-xs text-slate-400">
+                            {record.assetCategory ||
+                              "ICT equipment"}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getPriorityClasses(
+                              record.priority
+                            )}`}
+                          >
+                            {record.priority}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2 text-sm text-slate-700">
+                            <User
+                              size={15}
+                              className="text-slate-400"
+                            />
+
+                            {record.assignedTechnician ||
+                              "Unassigned"}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2 text-sm text-slate-700">
+                            <CalendarDays
+                              size={15}
+                              className="text-slate-400"
+                            />
+
+                            {formatDate(
+                              record.scheduledDate
+                            )}
+                          </div>
+
+                          {record.nextMaintenanceDate && (
+                            <div className="mt-1 text-xs text-slate-400">
+                              Next:{" "}
+                              {formatDate(
+                                record.nextMaintenanceDate
+                              )}
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="text-sm font-semibold text-slate-700">
+                            {formatCurrency(
+                              record.actualCost
+                            )}
+                          </div>
+
+                          <div className="mt-1 text-xs text-slate-400">
+                            Est.{" "}
+                            {formatCurrency(
+                              record.estimatedCost
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getStatusClasses(
+                              record.status
+                            )}`}
+                          >
+                            {record.status}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="flex justify-end gap-1">
+                            <button
+                              type="button"
+                              title="View maintenance"
+                              onClick={() =>
+                                openDetails(record)
+                              }
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                            >
+                              <Eye size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              title="Edit maintenance"
+                              onClick={() =>
+                                openEdit(record)
+                              }
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                            >
+                              <Pencil size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              title="Delete maintenance"
+                              onClick={() =>
+                                deleteMaintenance(
+                                  record
+                                )
+                              }
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {!loading &&
+            filteredRecords.length > 0 && (
+              <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-500">
+                  Showing{" "}
+                  <span className="font-medium text-slate-700">
+                    {(page - 1) *
+                      PAGE_SIZE +
+                      1}
+                  </span>{" "}
+                  to{" "}
+                  <span className="font-medium text-slate-700">
+                    {Math.min(
+                      page * PAGE_SIZE,
+                      filteredRecords.length
+                    )}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-medium text-slate-700">
+                    {filteredRecords.length}
+                  </span>{" "}
+                  maintenance records
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={page === 1}
+                    onClick={() =>
+                      setPage(
+                        (current) =>
+                          current - 1
+                      )
+                    }
+                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    <ChevronLeft size={16} />
+                    Previous
+                  </button>
+
+                  <div className="flex h-9 min-w-9 items-center justify-center rounded-lg bg-blue-600 px-3 text-sm font-semibold text-white">
+                    {page}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() =>
+                      setPage(
+                        (current) =>
+                          current + 1
+                      )
+                    }
+                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    Next
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
             )}
-          </tbody>
-        </table>
+        </div>
       </div>
 
-      {/* Create Modal */}
-      {showCreateModal && (
-        <div style={styles.modal} onClick={() => setShowCreateModal(false)}>
-          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>➕ {t.newRequest}</h3>
-              <button style={styles.modalClose} onClick={() => setShowCreateModal(false)}>✕</button>
-            </div>
-            
-            <form onSubmit={handleCreate}>
-              <div style={styles.grid}>
-                <div>
-                  <label style={styles.label}>{t.asset} *</label>
-                  <select 
-                    style={styles.select}
-                    value={formData.asset_id}
-                    onChange={(e) => setFormData({...formData, asset_id: e.target.value})}
-                    required
-                  >
-                    <option value="">{t.selectAsset}</option>
-                    {assets.map(a => (
-                      <option key={a.id} value={a.id}>{a.name} ({a.asset_tag})</option>
-                    ))}
-                  </select>
-                </div>
+      {/* Create / Edit Modal */}
+      {showForm && (
+        <Modal
+          title={
+            editingRecord
+              ? "Edit Maintenance Record"
+              : "Schedule ICT Maintenance"
+          }
+          icon={
+            editingRecord
+              ? Pencil
+              : Wrench
+          }
+          onClose={closeModals}
+          large
+        >
+          <form onSubmit={saveMaintenance}>
+            <div className="max-h-[70vh] overflow-y-auto px-6 py-5">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <InputField
+                  label="Maintenance Number"
+                  name="maintenanceNumber"
+                  value={
+                    form.maintenanceNumber
+                  }
+                  onChange={handleChange}
+                  placeholder="MNT-00001"
+                />
 
-                <div>
-                  <label style={styles.label}>{t.maintenanceType}</label>
-                  <select 
-                    style={styles.select}
-                    value={formData.maintenance_type}
-                    onChange={(e) => setFormData({...formData, maintenance_type: e.target.value})}
-                  >
-                    <option value="Corrective">{t.corrective}</option>
-                    <option value="Preventive">{t.preventive}</option>
-                    <option value="Emergency">{t.emergency}</option>
-                  </select>
-                </div>
+                <InputField
+                  label="Asset Tag"
+                  name="assetTag"
+                  value={form.assetTag}
+                  onChange={handleChange}
+                  placeholder="ICT-00001"
+                  required
+                />
 
-                <div style={styles.fullWidth}>
-                  <label style={styles.label}>{t.problem} *</label>
-                  <textarea 
-                    style={styles.textarea}
-                    value={formData.problem}
-                    onChange={(e) => setFormData({...formData, problem: e.target.value})}
-                    placeholder={t.problemPlaceholder}
-                    required
+                <InputField
+                  label="Asset Name"
+                  name="assetName"
+                  value={form.assetName}
+                  onChange={handleChange}
+                  placeholder="Desktop Computer"
+                />
+
+                <InputField
+                  label="Asset Category"
+                  name="assetCategory"
+                  value={
+                    form.assetCategory
+                  }
+                  onChange={handleChange}
+                  placeholder="Computer / Network / Printer"
+                />
+
+                <SelectField
+                  label="Maintenance Type"
+                  name="maintenanceType"
+                  value={
+                    form.maintenanceType
+                  }
+                  onChange={handleChange}
+                  options={
+                    MAINTENANCE_TYPES
+                  }
+                />
+
+                <SelectField
+                  label="Priority"
+                  name="priority"
+                  value={form.priority}
+                  onChange={handleChange}
+                  options={
+                    PRIORITY_OPTIONS
+                  }
+                />
+
+                <SelectField
+                  label="Status"
+                  name="status"
+                  value={form.status}
+                  onChange={handleChange}
+                  options={
+                    STATUS_OPTIONS
+                  }
+                />
+
+                <InputField
+                  label="Requested By"
+                  name="requestedBy"
+                  value={
+                    form.requestedBy
+                  }
+                  onChange={handleChange}
+                  placeholder="Requester name"
+                />
+
+                <InputField
+                  label="Assigned Technician"
+                  name="assignedTechnician"
+                  value={
+                    form.assignedTechnician
+                  }
+                  onChange={handleChange}
+                  placeholder="Technician name"
+                  required
+                />
+
+                <InputField
+                  label="Department"
+                  name="department"
+                  value={
+                    form.department
+                  }
+                  onChange={handleChange}
+                  placeholder="Department / College"
+                />
+
+                <InputField
+                  label="Location"
+                  name="location"
+                  value={form.location}
+                  onChange={handleChange}
+                  placeholder="Building / Room"
+                />
+
+                <InputField
+                  label="Scheduled Date"
+                  name="scheduledDate"
+                  type="date"
+                  value={
+                    form.scheduledDate
+                  }
+                  onChange={handleChange}
+                />
+
+                <InputField
+                  label="Start Date"
+                  name="startDate"
+                  type="date"
+                  value={form.startDate}
+                  onChange={handleChange}
+                />
+
+                <InputField
+                  label="Completion Date"
+                  name="completionDate"
+                  type="date"
+                  value={
+                    form.completionDate
+                  }
+                  onChange={handleChange}
+                />
+
+                <InputField
+                  label="Next Maintenance Date"
+                  name="nextMaintenanceDate"
+                  type="date"
+                  value={
+                    form.nextMaintenanceDate
+                  }
+                  onChange={handleChange}
+                />
+
+                <InputField
+                  label="Estimated Cost"
+                  name="estimatedCost"
+                  type="number"
+                  value={
+                    form.estimatedCost
+                  }
+                  onChange={handleChange}
+                  placeholder="0.00"
+                />
+
+                <InputField
+                  label="Actual Cost"
+                  name="actualCost"
+                  type="number"
+                  value={form.actualCost}
+                  onChange={handleChange}
+                  placeholder="0.00"
+                />
+
+                <InputField
+                  label="Downtime (Hours)"
+                  name="downtime"
+                  type="number"
+                  value={form.downtime}
+                  onChange={handleChange}
+                  placeholder="0"
+                />
+
+                <div className="md:col-span-2">
+                  <TextAreaField
+                    label="Issue / Maintenance Description"
+                    name="issueDescription"
+                    value={
+                      form.issueDescription
+                    }
+                    onChange={handleChange}
+                    placeholder="Describe the issue or preventive maintenance task..."
+                    rows={4}
                   />
                 </div>
 
-                <div>
-                  <label style={styles.label}>{t.priority}</label>
-                  <select 
-                    style={styles.select}
-                    value={formData.priority}
-                    onChange={(e) => setFormData({...formData, priority: e.target.value})}
-                  >
-                    <option value="Critical">{t.critical}</option>
-                    <option value="High">{t.high}</option>
-                    <option value="Medium">{t.medium}</option>
-                    <option value="Low">{t.low}</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={styles.label}>{t.department}</label>
-                  <input 
-                    type="text"
-                    style={styles.input}
-                    value={formData.department}
-                    onChange={(e) => setFormData({...formData, department: e.target.value})}
+                <div className="md:col-span-2">
+                  <TextAreaField
+                    label="Work Performed"
+                    name="workPerformed"
+                    value={
+                      form.workPerformed
+                    }
+                    onChange={handleChange}
+                    placeholder="Describe the maintenance activities performed..."
+                    rows={4}
                   />
                 </div>
 
-                <div>
-                  <label style={styles.label}>{t.scheduledDate}</label>
-                  <input 
-                    type="date"
-                    style={styles.input}
-                    value={formData.scheduled_date}
-                    onChange={(e) => setFormData({...formData, scheduled_date: e.target.value})}
+                <div className="md:col-span-2">
+                  <TextAreaField
+                    label="Parts / Materials Used"
+                    name="partsUsed"
+                    value={form.partsUsed}
+                    onChange={handleChange}
+                    placeholder="List replaced parts, consumables, or materials..."
                   />
                 </div>
 
-                <div style={styles.fullWidth}>
-                  <label style={styles.label}>{t.remarks}</label>
-                  <textarea 
-                    style={styles.textarea}
-                    value={formData.remarks}
-                    onChange={(e) => setFormData({...formData, remarks: e.target.value})}
-                    placeholder={t.remarksPlaceholder}
+                <div className="md:col-span-2">
+                  <TextAreaField
+                    label="Findings"
+                    name="findings"
+                    value={form.findings}
+                    onChange={handleChange}
+                    placeholder="Record inspection findings and technical observations..."
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <TextAreaField
+                    label="Recommendations"
+                    name="recommendations"
+                    value={
+                      form.recommendations
+                    }
+                    onChange={handleChange}
+                    placeholder="Recommended follow-up, replacement, upgrade, or preventive actions..."
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <TextAreaField
+                    label="Notes"
+                    name="notes"
+                    value={form.notes}
+                    onChange={handleChange}
+                    placeholder="Additional internal notes..."
                   />
                 </div>
               </div>
+            </div>
 
-              <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
-                <button type="submit" style={styles.button()}>
-                  ✅ {t.submitRequest}
-                </button>
-                <button 
-                  type="button" 
-                  style={styles.button('linear-gradient(135deg, #718096, #4a5568)')}
-                  onClick={() => setShowCreateModal(false)}
+            <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+              <button
+                type="button"
+                onClick={closeModals}
+                disabled={saving}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {saving && (
+                  <RefreshCw
+                    size={16}
+                    className="animate-spin"
+                  />
+                )}
+
+                {editingRecord
+                  ? "Save Changes"
+                  : "Schedule Maintenance"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Details Modal */}
+      {showDetails &&
+        selectedRecord && (
+          <Modal
+            title="Maintenance Details"
+            icon={Wrench}
+            onClose={closeModals}
+            large
+          >
+            <div className="max-h-[78vh] overflow-y-auto">
+              <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                      {
+                        selectedRecord.maintenanceNumber
+                      }
+                    </div>
+
+                    <h2 className="mt-1 text-xl font-bold text-slate-900">
+                      {selectedRecord.assetName ||
+                        selectedRecord.assetTag ||
+                        "ICT Asset Maintenance"}
+                    </h2>
+
+                    <p className="mt-1 text-sm text-slate-500">
+                      {
+                        selectedRecord.maintenanceType
+                      }{" "}
+                      maintenance •{" "}
+                      {
+                        selectedRecord.assetTag
+                      }
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <span
+                      className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold ${getPriorityClasses(
+                        selectedRecord.priority
+                      )}`}
+                    >
+                      {
+                        selectedRecord.priority
+                      }
+                    </span>
+
+                    <span
+                      className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold ${getStatusClasses(
+                        selectedRecord.status
+                      )}`}
+                    >
+                      {selectedRecord.status}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6 px-6 py-6">
+                {/* Asset */}
+                <section>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                    Asset & Location
+                  </h3>
+
+                  <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-4">
+                    <DetailItem
+                      label="Asset Tag"
+                      value={
+                        selectedRecord.assetTag
+                      }
+                      icon={Monitor}
+                    />
+
+                    <DetailItem
+                      label="Asset Name"
+                      value={
+                        selectedRecord.assetName
+                      }
+                      icon={Monitor}
+                    />
+
+                    <DetailItem
+                      label="Category"
+                      value={
+                        selectedRecord.assetCategory
+                      }
+                    />
+
+                    <DetailItem
+                      label="Location"
+                      value={
+                        selectedRecord.location
+                      }
+                      icon={MapPin}
+                    />
+
+                    <DetailItem
+                      label="Department"
+                      value={
+                        selectedRecord.department
+                      }
+                    />
+
+                    <DetailItem
+                      label="Requested By"
+                      value={
+                        selectedRecord.requestedBy
+                      }
+                      icon={User}
+                    />
+
+                    <DetailItem
+                      label="Assigned Technician"
+                      value={
+                        selectedRecord.assignedTechnician
+                      }
+                      icon={Wrench}
+                    />
+
+                    <DetailItem
+                      label="Maintenance Type"
+                      value={
+                        selectedRecord.maintenanceType
+                      }
+                      icon={Settings}
+                    />
+                  </div>
+                </section>
+
+                {/* Schedule */}
+                <section>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                    Maintenance Schedule
+                  </h3>
+
+                  <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-4">
+                    <DetailItem
+                      label="Scheduled"
+                      value={formatDate(
+                        selectedRecord.scheduledDate
+                      )}
+                      icon={CalendarDays}
+                    />
+
+                    <DetailItem
+                      label="Started"
+                      value={formatDate(
+                        selectedRecord.startDate
+                      )}
+                      icon={Clock3}
+                    />
+
+                    <DetailItem
+                      label="Completed"
+                      value={formatDate(
+                        selectedRecord.completionDate
+                      )}
+                      icon={CheckCircle2}
+                    />
+
+                    <DetailItem
+                      label="Next Maintenance"
+                      value={formatDate(
+                        selectedRecord.nextMaintenanceDate
+                      )}
+                      icon={CalendarDays}
+                    />
+                  </div>
+                </section>
+
+                {/* Financial */}
+                <section>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                    Cost & Downtime
+                  </h3>
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Estimated Cost
+                      </div>
+
+                      <div className="mt-1 text-lg font-bold text-slate-900">
+                        {formatCurrency(
+                          selectedRecord.estimatedCost
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-emerald-50 p-4">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
+                        Actual Cost
+                      </div>
+
+                      <div className="mt-1 text-lg font-bold text-slate-900">
+                        {formatCurrency(
+                          selectedRecord.actualCost
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-amber-50 p-4">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">
+                        Downtime
+                      </div>
+
+                      <div className="mt-1 text-lg font-bold text-slate-900">
+                        {selectedRecord.downtime
+                          ? `${selectedRecord.downtime} hours`
+                          : "0 hours"}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Issue */}
+                <section>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                    Maintenance Description
+                  </h3>
+
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                      {selectedRecord.issueDescription ||
+                        "No maintenance description recorded."}
+                    </p>
+                  </div>
+                </section>
+
+                {/* Work */}
+                <section>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                    Work Performed
+                  </h3>
+
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                      {selectedRecord.workPerformed ||
+                        "No work details recorded."}
+                    </p>
+                  </div>
+                </section>
+
+                {/* Parts */}
+                <section>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                    Parts & Materials
+                  </h3>
+
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                      {selectedRecord.partsUsed ||
+                        "No parts or materials recorded."}
+                    </p>
+                  </div>
+                </section>
+
+                {/* Findings */}
+                <section>
+                  <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                    Findings & Recommendations
+                  </h3>
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 p-4">
+                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Findings
+                      </div>
+
+                      <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                        {selectedRecord.findings ||
+                          "No findings recorded."}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
+                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-blue-600">
+                        Recommendations
+                      </div>
+
+                      <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                        {selectedRecord.recommendations ||
+                          "No recommendations recorded."}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                {selectedRecord.notes && (
+                  <section>
+                    <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                      Notes
+                    </h3>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+                      {selectedRecord.notes}
+                    </div>
+                  </section>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDetails(false);
+                    openEdit(
+                      selectedRecord
+                    );
+                  }}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
-                  ❌ {t.cancel}
+                  <Pencil size={16} />
+                  Edit Maintenance
                 </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
-      {/* Detail Modal */}
-      {showDetailModal && selectedRequest && (
-        <div style={styles.modal} onClick={() => setShowDetailModal(false)}>
-          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>📋 {t.requestDetails}</h3>
-              <button style={styles.modalClose} onClick={() => setShowDetailModal(false)}>✕</button>
-            </div>
-            
-            <div style={styles.grid}>
-              <div>
-                <label style={styles.label}>{t.requestId}</label>
-                <div style={{ ...styles.input, background: isDark ? '#0d1b2a' : '#f7fafc' }}>
-                  #{selectedRequest.id}
-                </div>
-              </div>
-              <div>
-                <label style={styles.label}>{t.asset}</label>
-                <div style={{ ...styles.input, background: isDark ? '#0d1b2a' : '#f7fafc' }}>
-                  {selectedRequest.asset_name} ({selectedRequest.asset_tag})
-                </div>
-              </div>
-              <div style={styles.fullWidth}>
-                <label style={styles.label}>{t.problem}</label>
-                <div style={{ ...styles.input, background: isDark ? '#0d1b2a' : '#f7fafc', minHeight: '40px' }}>
-                  {selectedRequest.problem}
-                </div>
-              </div>
-              <div>
-                <label style={styles.label}>{t.priority}</label>
-                <div style={{ ...styles.input, background: isDark ? '#0d1b2a' : '#f7fafc' }}>
-                  <span style={styles.priorityBadge(selectedRequest.priority)}>
-                    {selectedRequest.priority}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <label style={styles.label}>{t.status}</label>
-                <div style={{ ...styles.input, background: isDark ? '#0d1b2a' : '#f7fafc' }}>
-                  <span style={styles.statusBadge(selectedRequest.status)}>
-                    {selectedRequest.status}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <label style={styles.label}>{t.technician}</label>
-                <div style={{ ...styles.input, background: isDark ? '#0d1b2a' : '#f7fafc' }}>
-                  {selectedRequest.assigned_to_name || 'Unassigned'}
-                </div>
-              </div>
-              <div>
-                <label style={styles.label}>{t.requestDate}</label>
-                <div style={{ ...styles.input, background: isDark ? '#0d1b2a' : '#f7fafc' }}>
-                  {selectedRequest.created_at ? new Date(selectedRequest.created_at).toLocaleDateString() : 'N/A'}
-                </div>
-              </div>
-              <div>
-                <label style={styles.label}>{t.completionDate}</label>
-                <div style={{ ...styles.input, background: isDark ? '#0d1b2a' : '#f7fafc' }}>
-                  {selectedRequest.completion_date ? new Date(selectedRequest.completion_date).toLocaleDateString() : 'N/A'}
-                </div>
-              </div>
-              {selectedRequest.diagnosis && (
-                <div style={styles.fullWidth}>
-                  <label style={styles.label}>{t.diagnosis}</label>
-                  <div style={{ ...styles.input, background: isDark ? '#0d1b2a' : '#f7fafc', minHeight: '40px' }}>
-                    {selectedRequest.diagnosis}
-                  </div>
-                </div>
-              )}
-              {selectedRequest.repair && (
-                <div style={styles.fullWidth}>
-                  <label style={styles.label}>{t.repair}</label>
-                  <div style={{ ...styles.input, background: isDark ? '#0d1b2a' : '#f7fafc', minHeight: '40px' }}>
-                    {selectedRequest.repair}
-                  </div>
-                </div>
-              )}
-              {selectedRequest.parts_used && (
-                <div>
-                  <label style={styles.label}>{t.partsUsed}</label>
-                  <div style={{ ...styles.input, background: isDark ? '#0d1b2a' : '#f7fafc' }}>
-                    {selectedRequest.parts_used}
-                  </div>
-                </div>
-              )}
-              {selectedRequest.cost && (
-                <div>
-                  <label style={styles.label}>{t.cost}</label>
-                  <div style={{ ...styles.input, background: isDark ? '#0d1b2a' : '#f7fafc' }}>
-                    ${selectedRequest.cost}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Modal */}
-      {showEditModal && selectedRequest && (
-        <div style={styles.modal} onClick={() => setShowEditModal(false)}>
-          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>✏️ {t.editRequest}</h3>
-              <button style={styles.modalClose} onClick={() => setShowEditModal(false)}>✕</button>
-            </div>
-            
-            <form onSubmit={handleUpdate}>
-              <div style={styles.grid}>
-                <div>
-                  <label style={styles.label}>{t.asset}</label>
-                  <select 
-                    style={styles.select}
-                    value={formData.asset_id}
-                    onChange={(e) => setFormData({...formData, asset_id: e.target.value})}
-                  >
-                    <option value="">{t.selectAsset}</option>
-                    {assets.map(a => (
-                      <option key={a.id} value={a.id}>{a.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={styles.label}>{t.technician}</label>
-                  <select 
-                    style={styles.select}
-                    value={formData.assigned_to}
-                    onChange={(e) => setFormData({...formData, assigned_to: e.target.value})}
-                  >
-                    <option value="">{t.selectTechnician}</option>
-                    {users.map(u => (
-                      <option key={u.id} value={u.id}>{u.full_name || u.username}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={styles.fullWidth}>
-                  <label style={styles.label}>{t.problem} *</label>
-                  <textarea 
-                    style={styles.textarea}
-                    value={formData.problem}
-                    onChange={(e) => setFormData({...formData, problem: e.target.value})}
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label style={styles.label}>{t.diagnosis}</label>
-                  <textarea 
-                    style={styles.textarea}
-                    value={formData.diagnosis}
-                    onChange={(e) => setFormData({...formData, diagnosis: e.target.value})}
-                  />
-                </div>
-
-                <div>
-                  <label style={styles.label}>{t.repair}</label>
-                  <textarea 
-                    style={styles.textarea}
-                    value={formData.repair}
-                    onChange={(e) => setFormData({...formData, repair: e.target.value})}
-                  />
-                </div>
-
-                <div>
-                  <label style={styles.label}>{t.partsUsed}</label>
-                  <input 
-                    type="text"
-                    style={styles.input}
-                    value={formData.parts_used}
-                    onChange={(e) => setFormData({...formData, parts_used: e.target.value})}
-                  />
-                </div>
-
-                <div>
-                  <label style={styles.label}>{t.cost}</label>
-                  <input 
-                    type="number"
-                    style={styles.input}
-                    value={formData.cost}
-                    onChange={(e) => setFormData({...formData, cost: e.target.value})}
-                    step="0.01"
-                    min="0"
-                  />
-                </div>
-
-                <div>
-                  <label style={styles.label}>{t.completionDate}</label>
-                  <input 
-                    type="date"
-                    style={styles.input}
-                    value={formData.completion_date}
-                    onChange={(e) => setFormData({...formData, completion_date: e.target.value})}
-                  />
-                </div>
-
-                <div style={styles.fullWidth}>
-                  <label style={styles.label}>{t.remarks}</label>
-                  <textarea 
-                    style={styles.textarea}
-                    value={formData.remarks}
-                    onChange={(e) => setFormData({...formData, remarks: e.target.value})}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
-                <button type="submit" style={styles.button()}>
-                  💾 {t.updateRequest}
-                </button>
-                <button 
-                  type="button" 
-                  style={styles.button('linear-gradient(135deg, #718096, #4a5568)')}
-                  onClick={() => setShowEditModal(false)}
+                <button
+                  type="button"
+                  onClick={closeModals}
+                  className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
                 >
-                  ❌ {t.cancel}
+                  Close
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>
+          </Modal>
+        )}
     </div>
   );
-};
-
-// Translations
-const englishTranslations = {
-  maintenance: 'ICT Maintenance',
-  maintenanceDesc: 'Manage maintenance requests for ICT assets',
-  newRequest: 'New Request',
-  exportPDF: 'Export PDF',
-  totalRequests: 'Total Requests',
-  pending: 'Pending',
-  inProgress: 'In Progress',
-  completed: 'Completed',
-  overdue: 'Overdue',
-  rejected: 'Rejected',
-  allStatus: 'All Status',
-  allPriority: 'All Priority',
-  allDates: 'All Dates',
-  today: 'Today',
-  thisWeek: 'This Week',
-  thisMonth: 'This Month',
-  asset: 'Asset',
-  problem: 'Problem',
-  priority: 'Priority',
-  status: 'Status',
-  technician: 'Technician',
-  requestDate: 'Request Date',
-  actions: 'Actions',
-  noRequests: 'No maintenance requests found',
-  loading: 'Loading...',
-  fetchError: 'Failed to load data',
-  requestCreated: 'Maintenance request created successfully',
-  requestUpdated: 'Maintenance request updated successfully',
-  requestDeleted: 'Maintenance request deleted',
-  statusUpdated: 'Status updated successfully',
-  createError: 'Failed to create request',
-  updateError: 'Failed to update request',
-  statusError: 'Failed to update status',
-  deleteError: 'Failed to delete request',
-  exportSuccess: 'Report exported successfully',
-  confirmDelete: 'Are you sure you want to delete this request?',
-  newRequest: 'New Maintenance Request',
-  selectAsset: 'Select Asset',
-  selectTechnician: 'Select Technician',
-  problemPlaceholder: 'Describe the problem in detail',
-  remarksPlaceholder: 'Additional remarks or notes',
-  submitRequest: 'Submit Request',
-  cancel: 'Cancel',
-  editRequest: 'Edit Request',
-  updateRequest: 'Update Request',
-  requestDetails: 'Request Details',
-  requestId: 'Request ID',
-  maintenanceType: 'Maintenance Type',
-  corrective: 'Corrective',
-  preventive: 'Preventive',
-  emergency: 'Emergency',
-  scheduledDate: 'Scheduled Date',
-  completionDate: 'Completion Date',
-  diagnosis: 'Diagnosis',
-  repair: 'Repair',
-  partsUsed: 'Parts Used',
-  cost: 'Cost',
-  remarks: 'Remarks',
-  critical: 'Critical',
-  high: 'High',
-  medium: 'Medium',
-  low: 'Low',
-  approved: 'Approved',
-  assigned: 'Assigned',
-  waitingForParts: 'Waiting for Parts',
-  cancelled: 'Cancelled'
-};
-
-const amharicTranslations = {
-  maintenance: 'የICT ጥገና',
-  maintenanceDesc: 'የICT ንብረቶች ጥገና ጥያቄዎችን ያስተዳድሩ',
-  newRequest: 'አዲስ ጥያቄ',
-  exportPDF: 'PDF ወጣ',
-  totalRequests: 'ጠቅላላ ጥያቄዎች',
-  pending: 'በመጠባበቅ ላይ',
-  inProgress: 'በሂደት ላይ',
-  completed: 'ተጠናቅቋል',
-  overdue: 'የዘገየ',
-  rejected: 'የተሰረዘ',
-  allStatus: 'ሁሉም ሁኔታዎች',
-  allPriority: 'ሁሉም ቅድሚያዎች',
-  allDates: 'ሁሉም ቀናት',
-  today: 'ዛሬ',
-  thisWeek: 'ይህ ሳምንት',
-  thisMonth: 'ይህ ወር',
-  asset: 'ንብረት',
-  problem: 'ችግር',
-  priority: 'ቅድሚያ',
-  status: 'ሁኔታ',
-  technician: 'ቴክኒሻን',
-  requestDate: 'የጥያቄ ቀን',
-  actions: 'ተግባራት',
-  noRequests: 'ምንም የጥገና ጥያቄዎች አልተገኙም',
-  loading: 'በመጫን ላይ...',
-  fetchError: 'መረጃ መጫን አልተሳካም',
-  requestCreated: 'የጥገና ጥያቄ በተሳካ ሁኔታ ተፈጥሯል',
-  requestUpdated: 'የጥገና ጥያቄ በተሳካ ሁኔታ ተሻሽሏል',
-  requestDeleted: 'የጥገና ጥያቄ ተሰርዟል',
-  statusUpdated: 'ሁኔታ በተሳካ ሁኔታ ተሻሽሏል',
-  createError: 'ጥያቄ መፍጠር አልተሳካም',
-  updateError: 'ጥያቄ ማሻሻል አልተሳካም',
-  statusError: 'ሁኔታ ማሻሻል አልተሳካም',
-  deleteError: 'ጥያቄ መሰረዝ አልተሳካም',
-  exportSuccess: 'ሪፖርት በተሳካ ሁኔታ ወጥቷል',
-  confirmDelete: 'ይህን ጥያቄ መሰረዝ እንደሚፈልጉ እርግጠኛ ነዎት?',
-  newRequest: 'አዲስ የጥገና ጥያቄ',
-  selectAsset: 'ንብረት ይምረጡ',
-  selectTechnician: 'ቴክኒሻን ይምረጡ',
-  problemPlaceholder: 'ችግሩን በዝርዝር ይግለጹ',
-  remarksPlaceholder: 'ተጨማሪ ማስታወሻዎች',
-  submitRequest: 'ጥያቄ አስገባ',
-  cancel: 'ሰርዝ',
-  editRequest: 'ጥያቄ አርትዕ',
-  updateRequest: 'ጥያቄ አሻሽል',
-  requestDetails: 'የጥያቄ ዝርዝሮች',
-  requestId: 'የጥያቄ መለያ',
-  maintenanceType: 'የጥገና አይነት',
-  corrective: 'ማስተካከያ',
-  preventive: 'መከላከያ',
-  emergency: 'ድንገተኛ',
-  scheduledDate: 'የታቀደ ቀን',
-  completionDate: 'የማጠናቀቂያ ቀን',
-  diagnosis: 'ምርመራ',
-  repair: 'ጥገና',
-  partsUsed: 'የተጠቀሙት ክፍሎች',
-  cost: 'ወጪ',
-  remarks: 'ማስታወሻዎች',
-  critical: 'አስቸኳይ',
-  high: 'ከፍተኛ',
-  medium: 'መካከለኛ',
-  low: 'ዝቅተኛ',
-  approved: 'የጸደቀ',
-  assigned: 'የተመደበ',
-  waitingForParts: 'ክፍሎችን በመጠባበቅ ላይ',
-  cancelled: 'የተሰረዘ'
-};
-
-export default ICTMaintenance;
+}

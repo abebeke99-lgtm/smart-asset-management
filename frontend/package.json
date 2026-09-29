@@ -20,7 +20,6 @@
   "scripts": {
     "start": "react-scripts start --host localhost --port 3000",
     "dev": "react-scripts start --host localhost --port 3000",
-    "mysql": "node server.mysql.js",
     "build": "react-scripts build",
     "test": "react-scripts test --watch=false",
     "eject": "react-scripts eject"
