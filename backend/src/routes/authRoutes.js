@@ -16,6 +16,14 @@ const { requireAuth } = require('../middlewares/auth');
 
 const router = express.Router();
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many login attempts. Please try again later.' },
+});
+
 const forgotPasswordLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 5,
@@ -40,11 +48,14 @@ const resetLimiter = rateLimit({
   message: { success: false, message: 'Too many password reset attempts. Please try again later.' },
 });
 
-router.post('/login', login);
+router.post('/login', loginLimiter, login);
 router.post('/register', register);
 router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
+router.post('/forgot-password/request', forgotPasswordLimiter, requestForgotPasswordOtp);
 router.post('/forgot-password/request-otp', forgotPasswordLimiter, requestForgotPasswordOtp);
+router.post('/forgot-password/verify', otpLimiter, verifyForgotPassword);
 router.post('/forgot-password/verify-otp', otpLimiter, verifyForgotPasswordOtp);
+router.post('/forgot-password/reset', resetLimiter, resetPasswordWithOtp);
 router.post('/forgot-password/reset-password', resetLimiter, resetPasswordWithOtp);
 router.post('/verify-reset-otp', otpLimiter, verifyResetOtp);
 router.post('/reset-password', resetLimiter, resetPassword);

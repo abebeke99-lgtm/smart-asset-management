@@ -1,0 +1,286 @@
+.ict-theme-dashboard {
+  --module-primary: #123b63;
+  --module-accent: #0f766e;
+  --module-soft: #e6fffb;
+  --module-focus: rgba(15, 118, 110, 0.3);
+}
+
+.ict-theme-inventory {
+  --module-primary: #2563eb;
+  --module-accent: #1d4ed8;
+  --module-soft: #dbeafe;
+  --module-focus: rgba(37, 99, 235, 0.3);
+}
+
+.ict-theme-equipment {
+  --module-primary: #0891b2;
+  --module-accent: #0e7490;
+  --module-soft: #cffafe;
+  --module-focus: rgba(8, 145, 178, 0.3);
+}
+
+.ict-theme-software-licenses {
+  --module-primary: #7c3aed;
+  --module-accent: #6d28d9;
+  --module-soft: #ede9fe;
+  --module-focus: rgba(124, 58, 237, 0.3);
+}
+
+.ict-theme-support {
+  --module-primary: #059669;
+  --module-accent: #047857;
+  --module-soft: #d1fae5;
+  --module-focus: rgba(5, 150, 105, 0.3);
+}
+
+.ict-theme-incidents {
+  --module-primary: #dc2626;
+  --module-accent: #b91c1c;
+  --module-soft: #fee2e2;
+  --module-focus: rgba(220, 38, 38, 0.3);
+}
+
+.ict-theme-maintenance {
+  --module-primary: #d97706;
+  --module-accent: #b45309;
+  --module-soft: #fef3c7;
+  --module-focus: rgba(217, 119, 6, 0.32);
+}
+
+.ict-theme-device-health {
+  --module-primary: #0d9488;
+  --module-accent: #0f766e;
+  --module-soft: #ccfbf1;
+  --module-focus: rgba(13, 148, 136, 0.3);
+}
+
+.ict-theme-reports {
+  --module-primary: #4f46e5;
+  --module-accent: #4338ca;
+  --module-soft: #e0e7ff;
+  --module-focus: rgba(79, 70, 229, 0.3);
+}
+
+.ict-module-theme {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ict-module-theme [class~="bg-blue-600"] {
+  background-color: var(--module-primary) !important;
+}
+
+.ict-module-theme [class~="hover:bg-blue-700"]:hover {
+  background-color: var(--module-accent) !important;
+}
+
+.ict-module-theme [class~="bg-blue-50"],
+.ict-module-theme [class~="bg-blue-100"] {
+  background-color: var(--module-soft) !important;
+}
+
+.ict-module-theme [class~="text-blue-600"],
+.ict-module-theme [class~="text-blue-700"] {
+  color: var(--module-primary) !important;
+}
+
+.ict-module-theme [class~="border-blue-500"],
+.ict-module-theme [class~="border-blue-600"] {
+  border-color: var(--module-primary) !important;
+}
+
+.ict-module-theme [class~="focus:border-blue-500"]:focus {
+  border-color: var(--module-primary) !important;
+}
+
+.ict-module-theme [class~="focus:ring-blue-100"]:focus {
+  --tw-ring-color: var(--module-focus) !important;
+}
+
+.ict-module-theme :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--module-primary);
+  outline-offset: 2px;
+}
+
+.ict-module-theme .ict-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.045);
+}
+
+.ict-module-theme .ict-page-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: #0f172a;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.ict-module-theme .ict-page-title::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 24px;
+  flex: 0 0 4px;
+  border-radius: 999px;
+  background: var(--module-primary);
+}
+
+.ict-module-theme [class~="rounded-xl"][class~="bg-white"][class~="border"] {
+  border-color: #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.045);
+}
+
+.ict-module-theme [class~="rounded-xl"][class~="p-5"][class~="shadow-sm"] {
+  position: relative;
+  overflow: hidden;
+}
+
+.ict-module-theme [class~="rounded-xl"][class~="p-5"][class~="shadow-sm"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--module-primary);
+}
+
+.ict-module-theme [class~="border-b"][class~="p-4"].ict-filter-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+  background: #fff;
+}
+
+.ict-module-theme input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.ict-module-theme select,
+.ict-module-theme textarea {
+  max-width: 100%;
+  border-radius: 9px;
+}
+
+.ict-module-theme textarea {
+  width: 100%;
+}
+
+.ict-module-theme input:focus,
+.ict-module-theme select:focus,
+.ict-module-theme textarea:focus {
+  border-color: var(--module-primary) !important;
+  box-shadow: 0 0 0 3px var(--module-focus);
+}
+
+.ict-module-theme [class~="overflow-x-auto"] {
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+}
+
+.ict-module-theme table {
+  color: #334155;
+}
+
+.ict-module-theme thead th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ict-module-theme tbody tr {
+  border-top: 1px solid #e2e8f0;
+  transition: background-color 140ms ease;
+}
+
+.ict-module-theme tbody tr:hover {
+  background: var(--module-soft);
+}
+
+.ict-sidebar {
+  --ict-sidebar-primary: #123b63;
+  --ict-sidebar-soft: #e6fffb;
+}
+
+.ict-sidebar .admin-nav-link.is-active {
+  color: var(--ict-sidebar-primary);
+  background: var(--ict-sidebar-soft);
+}
+
+.ict-sidebar .admin-nav-link.is-active::before {
+  width: 3px;
+  background: #0f766e;
+}
+
+.ict-theme-dashboard .breadcrumb strong,
+.ict-theme-dashboard .section-link,
+.ict-theme-dashboard .refresh-button:hover {
+  color: var(--module-primary);
+}
+
+.ict-theme-dashboard .refresh-button:hover {
+  border-color: var(--module-primary);
+}
+
+.ict-theme-dashboard .progress-bar.status-info {
+  background-color: var(--module-primary);
+}
+
+.ict-theme-dashboard .kpi-icon.blue {
+  background: var(--module-soft);
+  color: var(--module-primary);
+}
+
+.ict-theme-dashboard .ict-module-card:focus-visible {
+  outline-color: var(--module-focus);
+}
+
+.ict-theme-inventory .primary-button {
+  background: var(--module-primary);
+  border-color: var(--module-primary);
+}
+
+.ict-theme-inventory .primary-button:hover {
+  background: var(--module-accent);
+  border-color: var(--module-accent);
+}
+
+@media (max-width: 768px) {
+  .ict-module-theme .ict-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 1rem;
+  }
+
+  .ict-module-theme .ict-page-title {
+    font-size: 1.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .ict-module-theme {
+    width: 100%;
+  }
+
+  .ict-module-theme .ict-page-header {
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .ict-module-theme .ict-filter-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

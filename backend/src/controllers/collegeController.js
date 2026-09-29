@@ -6,7 +6,7 @@ const sqlQualifiedColumn = (model, field) => col(`${model.name}.${snakeCaseColum
 // Sequelize does not apply attribute-to-column mapping inside `$association.attribute$` where paths,
 // so those paths must reference the real (snake_cased) database column.
 const joinedColumn = (association, field) => `$${association}.${snakeCaseColumn(field)}$`;
-const { Asset, User, Department, Maintenance, Approval, Transfer, AuditLog, College, AssetReturn, VerificationSession, VerificationItem, Assignment, Category, AssetMovement, RFIDLog } = require('../models');
+const { Asset, User, Department, Maintenance, Approval, Transfer, AuditLog, College, AssetReturn, VerificationSession, VerificationItem, Assignment, Category, AssetMovement, RFIDLog, Campus, Building, Room } = require('../models');
 const { createAuditLog } = require('../services/auditLogService');
 
 const collegeScope = (req) => String(req.user?.department || '').trim();
@@ -551,7 +551,42 @@ const getCollegeDashboard = async (req, res, next) => {
     const totalAssignedAssets = new Set(assignmentCountRows.filter((record) => String(record.status || '').toLowerCase() !== 'cancelled').map((record) => Number(record.assetId)).filter(Boolean)).size;
     const availableAssets = assets.filter((asset) => ['available', 'ready', 'idle'].includes(normalizeStatus(asset.status))).length;
     const maintenanceAssets = assets.filter((asset) => ['maintenance', 'under-maintenance', 'in-repair', 'repair'].includes(normalizeStatus(asset.status))).length;
+    const activeAssets = assets.filter((asset) => ['available', 'assigned'].includes(normalizeStatus(asset.status))).length;
+    const damagedAssets = assets.filter((asset) => ['damaged', 'broken', 'poor', 'critical'].includes(normalizeStatus(asset.condition))).length;
+    const openMaintenanceCount = maintenanceCountRows.filter((record) => !['completed', 'resolved', 'closed'].includes(normalizeStatus(record.status))).length;
+    const verificationTotal = verificationCountRows.length;
+    const verifiedAssets = verificationCountRows.filter((item) => normalizeStatus(item.state) === 'verified').length;
     const verificationRequired = verificationItems.filter((item) => ['needs-review', 'needs_review', 'needsreview', 'pending', 'missing', 'wrong-location', 'damaged', 'unidentified'].includes(normalizeStatus(item.state))).length;
+    const verificationPercentage = verificationTotal ? Math.round((verifiedAssets / verificationTotal) * 100) : 0;
+
+    const statusOrder = ['available', 'assigned', 'under-maintenance', 'in-transit', 'retired', 'disposed'];
+    const conditionOrder = ['functional', 'needs-repair', 'damaged', 'missing', 'expired', 'replaced'];
+    const statusCounts = new Map();
+    const conditionCounts = new Map();
+
+    for (const asset of assets) {
+      const normalizedStatus = normalizeStatus(asset.status);
+      const normalizedCondition = (() => {
+        const conditionValue = String(asset.condition || '').trim().toLowerCase();
+        if (['good', 'functional', 'working', 'operational'].includes(conditionValue)) return 'functional';
+        if (['repair', 'needs-repair', 'needs repair', 'requires repair'].includes(conditionValue)) return 'needs-repair';
+        if (['damaged', 'broken', 'faulty', 'critical'].includes(conditionValue)) return 'damaged';
+        if (['missing', 'lost', 'unassigned'].includes(conditionValue)) return 'missing';
+        if (['expired', 'expired-lost', 'obsolete'].includes(conditionValue)) return 'expired';
+        if (['replaced', 'replacement', 'new'].includes(conditionValue)) return 'replaced';
+        return conditionValue || 'functional';
+      })();
+
+      if (normalizedStatus) {
+        statusCounts.set(normalizedStatus, (statusCounts.get(normalizedStatus) || 0) + 1);
+      }
+      if (normalizedCondition) {
+        conditionCounts.set(normalizedCondition, (conditionCounts.get(normalizedCondition) || 0) + 1);
+      }
+    }
+
+    const assetStatusWithCounts = statusOrder.map((status) => ({ label: status, value: statusCounts.get(status) || 0 })).filter((item) => item.value > 0 || statusOrder.includes(item.label));
+    const assetConditionSummary = conditionOrder.map((condition) => ({ label: condition, value: conditionCounts.get(condition) || 0 })).filter((item) => item.value > 0 || conditionOrder.includes(item.label));
 
     const responseData = {
       college: {
@@ -562,22 +597,33 @@ const getCollegeDashboard = async (req, res, next) => {
       },
       summary: {
         totalAssets: assets.length,
+        activeAssets,
         availableAssets,
         assignedAssets: totalAssignedAssets,
+        damagedAssets,
+        underMaintenance: maintenanceAssets,
         maintenanceAssets,
         departments: departments.length,
         staff: staff.length,
         pendingRequests: pendingApprovalCount,
+        pendingApprovals: pendingApprovalCount,
+        openMaintenance: openMaintenanceCount,
         verificationRequired,
+        verificationTotal,
+        verifiedAssets,
+        verificationProgress: verificationTotal ? `${verifiedAssets} / ${verificationTotal}` : '0 / 0',
+        verificationPercentage,
       },
-      assetStatus,
+      assetStatus: assetStatusWithCounts.length ? assetStatusWithCounts : assetStatus,
+      assetCondition: assetConditionSummary.length ? assetConditionSummary : [],
+      conditionDistribution: assetConditionSummary.length ? assetConditionSummary : [],
       departmentDistribution,
       pendingRequests,
       recentAssignments,
       recentTransfers,
       recentReturns,
-      maintenance: maintenanceSummary,
-      verification: verificationSummary,
+      maintenance: { ...maintenanceSummary, open: openMaintenanceCount, pending: openMaintenanceCount, total: maintenanceCountRows.length },
+      verification: { ...verificationSummary, verified: verifiedAssets, total: verificationTotal, progress: verificationPercentage, progressLabel: verificationTotal ? `${verifiedAssets} / ${verificationTotal}` : '0 / 0' },
       recentActivity,
     };
 
@@ -1074,19 +1120,53 @@ const updateCollegeProfile = async (req, res, next) => {
   try {
     const college = await College.findByPk(req.organizationScope.collegeId);
     if (!college) return res.status(404).json({ success: false, message: 'College profile information is not available' });
-    const name = String(req.body.collegeName ?? req.body.name ?? college.collegeName).trim();
-    if (!name) return res.status(400).json({ success: false, message: 'College name is required' });
+
+    const allowedFields = new Set(['collegeName', 'description', 'location', 'phone', 'email']);
+    const submittedKeys = Object.keys(req.body || {}).filter((key) => Object.prototype.hasOwnProperty.call(req.body, key));
+    const rejectedFields = submittedKeys.filter((key) => !allowedFields.has(key));
+    if (rejectedFields.length > 0) {
+      return res.status(400).json({ success: false, message: 'Unsupported college profile fields were supplied.' });
+    }
+
+    const nextName = String(req.body.collegeName ?? college.collegeName ?? '').trim();
+    if (!nextName) return res.status(400).json({ success: false, message: 'College name is required' });
+
+    const phone = String(req.body.phone ?? college.phone ?? '').trim();
+    const email = String(req.body.email ?? college.email ?? '').trim();
+    if (phone && !/^[+()\-\s0-9]{7,25}$/.test(phone)) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid phone number.' });
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+    }
+
+    const before = college.toJSON();
     const editableFields = {
-      collegeName: name,
+      collegeName: nextName,
       description: String(req.body.description ?? college.description ?? '').trim(),
       location: String(req.body.location ?? college.location ?? '').trim(),
-      phone: String(req.body.phone ?? college.phone ?? '').trim(),
-      email: String(req.body.email ?? college.email ?? '').trim(),
+      phone,
+      email,
     };
-    const before = college.toJSON();
+
     await college.update(editableFields);
-    await AuditLog.create({ userId: req.user.id, action: 'COLLEGE_PROFILE_UPDATED', entity: `college:${college.id}`, details: JSON.stringify({ before, after: college.toJSON() }) });
-    res.json({ success: true, message: 'College profile updated successfully', data: college });
+    const after = college.toJSON();
+    await createAuditLog({
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'COLLEGE_PROFILE_UPDATED',
+      entity: `college:${college.id}`,
+      entityId: college.id,
+      oldValue: before,
+      newValue: after,
+      details: {
+        collegeId: college.id,
+        changedFields: Object.keys(editableFields),
+        legacyAction: 'COLLEGE_PROFILE_UPDATED',
+      },
+    });
+
+    res.json({ success: true, message: 'College profile updated successfully', data: after });
   } catch (error) { next(error); }
 };
 
@@ -1497,16 +1577,64 @@ const getCollegeDepartmentPerformance = async (req, res, next) => {
   }
 };
 
+const getCollegeStaffMember = async (req, res, next) => {
+  try {
+    const collegeId = Number(req.organizationScope?.collegeId);
+    if (!collegeId) {
+      return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+    }
+
+    const staff = await User.findOne({
+      where: { id: req.params.id, collegeId },
+      attributes: { exclude: ['password'] },
+      include: [{ model: Department, as: 'DepartmentRecord', attributes: ['id', 'name', 'code'], required: false }],
+    });
+
+    if (!staff) {
+      return res.status(404).json({ success: false, message: 'Staff member not found in this college' });
+    }
+
+    return res.json({ success: true, data: { ...staff.toJSON(), departmentRecord: staff.DepartmentRecord || null } });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const listCollegeStaff = async (req, res, next) => {
   try {
     const { page, limit, offset } = pagination(req.query);
-    const collegeId = req.organizationScope.collegeId;
+    const collegeId = Number(req.organizationScope?.collegeId);
+    if (!collegeId) {
+      return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+    }
+
     const where = { collegeId };
-    if (req.query.departmentId || req.query.department) where.departmentId = Number(req.query.departmentId || req.query.department);
-    if (req.query.role) where.role = String(req.query.role);
-    if (req.query.active !== undefined || req.query.status) where.active = String(req.query.active ?? req.query.status).toLowerCase() === 'active' || String(req.query.active ?? req.query.status).toLowerCase() === 'true';
+    const departmentId = Number(req.query.departmentId || req.query.department || 0);
+    if (req.query.departmentId || req.query.department) {
+      const validDepartment = await Department.findOne({ where: { id: departmentId, collegeId }, attributes: ['id'] });
+      if (!validDepartment) {
+        return res.status(400).json({ success: false, message: 'Department is not part of your college' });
+      }
+      where.departmentId = departmentId;
+    }
+
+    const rawRole = String(req.query.role || '').trim();
+    if (rawRole) {
+      where.role = rawRole;
+    }
+
+    const statusValue = req.query.active !== undefined ? req.query.active : req.query.status;
+    if (statusValue !== undefined && statusValue !== null && String(statusValue).trim() !== '') {
+      const normalizedStatus = String(statusValue).trim().toLowerCase();
+      if (!['active', 'inactive', 'true', 'false', '1', '0'].includes(normalizedStatus)) {
+        return res.status(400).json({ success: false, message: 'Status filter is invalid for this college' });
+      }
+      where.active = ['active', 'true', '1'].includes(normalizedStatus);
+    }
+
     const search = String(req.query.search || '').trim();
     if (search) where[Op.or] = [{ username: { [Op.like]: `%${search}%` } }, { fullName: { [Op.like]: `%${search}%` } }, { email: { [Op.like]: `%${search}%` } }, { phone: { [Op.like]: `%${search}%` } }];
+
     const [result, totalStaff, activeStaff, staffWithDepartments] = await Promise.all([
       User.findAndCountAll({ where, attributes: { exclude: ['password'] }, include: [{ model: Department, as: 'DepartmentRecord', attributes: ['id', 'name', 'code'], required: false }], order: [['fullName', 'ASC'], ['id', 'ASC']], limit, offset }),
       User.count({ where: { collegeId } }),
@@ -1680,69 +1808,277 @@ const listCollegeRFIDTracking = async (req, res, next) => {
   }
 };
 
+const ensureCollegeLocationAccess = async (collegeId, type, id) => {
+  const scopeWhere = { collegeId };
+
+  if (type === 'campus') {
+    const campus = await Campus.findByPk(id, { attributes: ['id', 'campusName', 'campusCode', 'status', 'description'] });
+    if (!campus) return { error: true, status: 404, message: 'Campus not found' };
+    const assetCount = await Asset.count({ where: { ...scopeWhere, campusId: campus.id } });
+    if (!assetCount) return { error: true, status: 404, message: 'Campus not found in your college scope' };
+    return { error: false, item: campus };
+  }
+
+  if (type === 'building') {
+    const building = await Building.findByPk(id, { attributes: ['id', 'campusId', 'buildingName', 'buildingCode', 'status', 'description', 'floorCount'] });
+    if (!building) return { error: true, status: 404, message: 'Building not found' };
+    const assetCount = await Asset.count({ where: { ...scopeWhere, buildingId: building.id } });
+    if (!assetCount) return { error: true, status: 404, message: 'Building not found in your college scope' };
+    return { error: false, item: building };
+  }
+
+  if (type === 'room') {
+    const room = await Room.findByPk(id, { attributes: ['id', 'buildingId', 'campusId', 'roomName', 'roomCode', 'status', 'description', 'roomType', 'floor', 'capacity'] });
+    if (!room) return { error: true, status: 404, message: 'Room not found' };
+    const assetCount = await Asset.count({ where: { ...scopeWhere, roomId: room.id } });
+    if (!assetCount) return { error: true, status: 404, message: 'Room not found in your college scope' };
+    return { error: false, item: room };
+  }
+
+  return { error: true, status: 400, message: 'Unsupported location type' };
+};
+
+const buildCollegeLocationTree = async (collegeId, filters = {}) => {
+  const assetWhere = { collegeId };
+  if (filters.search) {
+    assetWhere[Op.or] = [
+      { location: { [Op.like]: `%${filters.search}%` } },
+      { '$CampusRecord.campusName$': { [Op.like]: `%${filters.search}%` } },
+      { '$BuildingRecord.buildingName$': { [Op.like]: `%${filters.search}%` } },
+      { '$RoomRecord.roomName$': { [Op.like]: `%${filters.search}%` } },
+    ];
+  }
+
+  const assets = await Asset.findAll({
+    where: assetWhere,
+    attributes: ['id', 'campusId', 'buildingId', 'roomId', 'location', 'status', 'department', 'departmentId'],
+    include: [
+      { model: Campus, as: 'CampusRecord', attributes: ['id', 'campusName', 'campusCode', 'status'], required: false },
+      { model: Building, as: 'BuildingRecord', attributes: ['id', 'buildingName', 'buildingCode', 'status'], required: false },
+      { model: Room, as: 'RoomRecord', attributes: ['id', 'roomName', 'roomCode', 'status', 'roomType'], required: false },
+    ],
+    raw: true,
+    nest: true,
+    order: [['campusId', 'ASC'], ['buildingId', 'ASC'], ['roomId', 'ASC']],
+  });
+
+  const campusIds = [...new Set(assets.map((asset) => Number(asset.campusId)).filter(Number.isInteger))];
+  const campusRecords = campusIds.length ? await Campus.findAll({ where: { id: { [Op.in]: campusIds } }, order: [['campusName', 'ASC']], raw: true }) : [];
+
+  const byCampus = new Map();
+  campusRecords.forEach((campus) => byCampus.set(String(campus.id), { id: campus.id, type: 'campus', name: campus.campusName, code: campus.campusCode, status: campus.status, description: campus.description || '', children: [] }));
+
+  const buildingIds = [...new Set(assets.map((asset) => Number(asset.buildingId)).filter(Number.isInteger))];
+  const buildingRecords = buildingIds.length ? await Building.findAll({ where: { id: { [Op.in]: buildingIds } }, order: [['buildingName', 'ASC']], raw: true }) : [];
+  const byBuilding = new Map();
+  buildingRecords.forEach((building) => {
+    const campusNode = byCampus.get(String(building.campusId));
+    const buildingNode = { id: building.id, type: 'building', name: building.buildingName, code: building.buildingCode, status: building.status, description: building.description || '', campusId: building.campusId, children: [] };
+    byBuilding.set(String(building.id), buildingNode);
+    if (campusNode) campusNode.children.push(buildingNode);
+  });
+
+  const roomIds = [...new Set(assets.map((asset) => Number(asset.roomId)).filter(Number.isInteger))];
+  const roomRecords = roomIds.length ? await Room.findAll({ where: { id: { [Op.in]: roomIds } }, order: [['roomName', 'ASC']], raw: true }) : [];
+  roomRecords.forEach((room) => {
+    const buildingNode = byBuilding.get(String(room.buildingId));
+    const roomNode = { id: room.id, type: 'room', name: room.roomName, code: room.roomCode, status: room.status, description: room.description || '', roomType: room.roomType || 'laboratory', buildingId: room.buildingId, campusId: room.campusId, children: [] };
+    if (buildingNode) buildingNode.children.push(roomNode);
+    else {
+      const fallbackCampus = byCampus.get(String(room.campusId));
+      if (fallbackCampus) fallbackCampus.children.push(roomNode);
+    }
+  });
+
+  const campuses = Array.from(byCampus.values());
+  const totalLocations = campuses.reduce((count, campus) => count + 1 + campus.children.reduce((subCount, child) => subCount + 1 + (Array.isArray(child.children) ? child.children.length : 0), 0), 0);
+
+  return { campuses, totalLocations, uniqueCampusIds: campusIds, uniqueBuildingIds: buildingIds, uniqueRoomIds: roomIds };
+};
+
 const listCollegeLocations = async (req, res, next) => {
   try {
-    const { page, limit } = pagination(req.query);
-    const collegeId = req.organizationScope.collegeId;
-    const where = { collegeId, location: { [Op.ne]: '' } };
+    const collegeId = Number(req.organizationScope?.collegeId);
+    if (!collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+
+    const { page, limit } = pagination(req.query, 20);
     const search = String(req.query.search || '').trim();
-    const filters = [];
+    const status = String(req.query.status || '').trim();
+    const campusId = req.query.campusId ? Number(req.query.campusId) : null;
+    const buildingId = req.query.buildingId ? Number(req.query.buildingId) : null;
 
-    if (search) {
-      filters.push({ [Op.or]: [
-        { location: { [Op.like]: `%${search}%` } },
-        { name: { [Op.like]: `%${search}%` } },
-        { description: { [Op.like]: `%${search}%` } },
-        { department: { [Op.like]: `%${search}%` } },
-      ] });
+    const scope = await buildCollegeLocationTree(collegeId, { search });
+    let campuses = scope.campuses;
+
+    if (campusId) {
+      campuses = campuses.filter((campus) => Number(campus.id) === Number(campusId));
     }
 
-    if (req.query.departmentId) {
-      const department = await Department.findOne({ where: { id: req.query.departmentId, collegeId }, attributes: ['id', 'name'] });
-      if (!department) return res.status(400).json({ success: false, message: 'Department is not part of your college' });
-      filters.push({ [Op.or]: [
-        { departmentId: department.id },
-        { department: department.name },
-      ] });
+    if (status) {
+      campuses = campuses.map((campus) => ({ ...campus, children: campus.children.filter((child) => String(child.status || '').toLowerCase() === status.toLowerCase() || String(campus.status || '').toLowerCase() === status.toLowerCase()) }))
+        .filter((campus) => campus.children.length || String(campus.status || '').toLowerCase() === status.toLowerCase());
     }
 
-    if (filters.length) where[Op.and] = filters;
-
-    const assets = await Asset.findAll({
-      where,
-      attributes: ['location', 'department', 'departmentId', 'createdAt', 'updatedAt'],
-      order: [['location', 'ASC'], ['id', 'ASC']],
-      raw: true,
-    });
-    const locationsByName = new Map();
-    assets.forEach((asset) => {
-      const name = String(asset.location || '').trim();
-      if (!name) return;
-      const current = locationsByName.get(name) || { name, assetCount: 0, departments: new Map(), createdAt: asset.createdAt, updatedAt: asset.updatedAt };
-      current.assetCount += 1;
-      if (asset.department || asset.departmentId) current.departments.set(String(asset.departmentId || asset.department), asset.department || `Department ${asset.departmentId}`);
-      if (new Date(asset.createdAt || 0) < new Date(current.createdAt || 0)) current.createdAt = asset.createdAt;
-      if (new Date(asset.updatedAt || 0) > new Date(current.updatedAt || 0)) current.updatedAt = asset.updatedAt;
-      locationsByName.set(name, current);
+    const flattened = campuses.flatMap((campus) => {
+      const rows = [{ ...campus, type: 'campus', parentId: null, parentName: null }];
+      const buildings = (campus.children || []).filter((child) => child.type === 'building');
+      buildings.forEach((building) => {
+        rows.push({ ...building, type: 'building', parentId: campus.id, parentName: campus.name });
+        const rooms = (building.children || []).filter((room) => room.type === 'room');
+        rooms.forEach((room) => rows.push({ ...room, type: 'room', parentId: building.id, parentName: building.name }));
+      });
+      const orphanRooms = (campus.children || []).filter((child) => child.type === 'room');
+      orphanRooms.forEach((room) => rows.push({ ...room, type: 'room', parentId: campus.id, parentName: campus.name }));
+      return rows;
     });
 
-    const allLocations = Array.from(locationsByName.values()).map((location) => ({
-      id: null,
-      name: location.name,
-      assetCount: location.assetCount,
-      departments: Array.from(location.departments.values()),
-      createdAt: location.createdAt,
-      updatedAt: location.updatedAt,
-    }));
-    const total = allLocations.length;
-    const rows = allLocations.slice((page - 1) * limit, page * limit);
+    const filtered = buildingId ? flattened.filter((item) => item.type === 'room' ? Number(item.buildingId) === Number(buildingId) : Number(item.id) === Number(buildingId) || (item.type === 'campus' && !buildingId)) : flattened;
+
+    const start = (page - 1) * limit;
+    const rows = filtered.slice(start, start + limit);
+
     return res.json({
       success: true,
       data: rows,
+      campuses,
       college: { id: req.organizationScope.college.id, name: req.organizationScope.college.collegeName, code: req.organizationScope.college.collegeCode },
-      summary: { total, locationsWithAssets: total },
-      pagination: { page, limit, total, pages: Math.ceil(total / limit), totalPages: Math.ceil(total / limit) },
+      summary: { total: filtered.length, campuses: scope.campuses.length, buildings: scope.uniqueBuildingIds.length, rooms: scope.uniqueRoomIds.length },
+      pagination: { page, limit, total: filtered.length, pages: Math.max(1, Math.ceil(filtered.length / limit)), totalPages: Math.max(1, Math.ceil(filtered.length / limit)) },
     });
+  } catch (error) { next(error); }
+};
+
+const getCollegeLocation = async (req, res, next) => {
+  try {
+    const collegeId = Number(req.organizationScope?.collegeId);
+    if (!collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+    const targetId = Number(req.params.id);
+    const requestedType = String(req.query.type || req.body?.type || req.body?.locationType || '').trim().toLowerCase();
+
+    let match = null;
+    if (requestedType && ['campus', 'building', 'room'].includes(requestedType)) {
+      const access = await ensureCollegeLocationAccess(collegeId, requestedType, targetId);
+      if (access.error) return res.status(access.status).json({ success: false, message: access.message });
+      match = { type: requestedType, item: access.item };
+    } else {
+      const candidates = [
+        ['campus', await Campus.findByPk(targetId)],
+        ['building', await Building.findByPk(targetId)],
+        ['room', await Room.findByPk(targetId)],
+      ];
+      for (const [type, item] of candidates) {
+        if (!item) continue;
+        const access = await ensureCollegeLocationAccess(collegeId, type, targetId);
+        if (!access.error) {
+          match = { type, item: access.item };
+          break;
+        }
+      }
+    }
+
+    if (!match) return res.status(404).json({ success: false, message: 'Location not found in your college scope' });
+    return res.json({ success: true, data: { type: match.type, ...match.item.toJSON ? match.item.toJSON() : match.item }, college: { id: req.organizationScope.college.id, name: req.organizationScope.college.collegeName, code: req.organizationScope.college.collegeCode } });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const createCollegeLocation = async (req, res, next) => {
+  try {
+    const collegeId = Number(req.organizationScope?.collegeId);
+    if (!collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+
+    const type = String(req.body.type || req.body.locationType || '').trim().toLowerCase() || 'building';
+    if (!['building', 'room'].includes(type)) {
+      return res.status(400).json({ success: false, message: 'Supported location types are building and room.' });
+    }
+
+    if (type === 'building') {
+      const campusId = Number(req.body.campusId ?? req.body.campus_id);
+      if (!Number.isInteger(campusId)) return res.status(400).json({ success: false, message: 'A valid campus is required' });
+      const campus = await Campus.findByPk(campusId);
+      if (!campus) return res.status(404).json({ success: false, message: 'Campus not found' });
+      const campusScope = await ensureCollegeLocationAccess(collegeId, 'campus', campus.id);
+      if (campusScope.error) return res.status(campusScope.status).json({ success: false, message: campusScope.message });
+      const name = String(req.body.name || req.body.buildingName || '').trim();
+      const code = String(req.body.code || req.body.buildingCode || '').trim() || `BLD-${Date.now()}`.slice(-8);
+      if (!name) return res.status(400).json({ success: false, message: 'Building name is required' });
+      const duplicate = await Building.findOne({ where: { [Op.or]: [{ buildingName: name }, { buildingCode: code }] } });
+      if (duplicate) return res.status(409).json({ success: false, message: 'A building with this name or code already exists' });
+      const building = await Building.create({ campusId: campus.id, buildingName: name, buildingCode: code.toUpperCase(), floorCount: Number(req.body.floorCount || req.body.floors || 1) || 1, description: String(req.body.description || ''), status: ['active', 'inactive'].includes(String(req.body.status || '').toLowerCase()) ? String(req.body.status).toLowerCase() : 'active' });
+      await AuditLog.create({ userId: req.user.id, action: 'CREATE_COLLEGE_BUILDING', entity: `building:${building.id}`, details: JSON.stringify({ collegeId, campusId: campus.id, name, code: building.buildingCode }) });
+      return res.status(201).json({ success: true, data: building, message: 'Building created successfully' });
+    }
+
+    const buildingId = Number(req.body.buildingId ?? req.body.building_id);
+    if (!Number.isInteger(buildingId)) return res.status(400).json({ success: false, message: 'A valid building is required' });
+    const building = await Building.findByPk(buildingId);
+    if (!building) return res.status(404).json({ success: false, message: 'Building not found' });
+    const buildingScope = await ensureCollegeLocationAccess(collegeId, 'building', building.id);
+    if (buildingScope.error) return res.status(buildingScope.status).json({ success: false, message: buildingScope.message });
+    const name = String(req.body.name || req.body.roomName || '').trim();
+    const code = String(req.body.code || req.body.roomCode || '').trim() || `RM-${Date.now()}`.slice(-8);
+    if (!name) return res.status(400).json({ success: false, message: 'Room name is required' });
+    const duplicate = await Room.findOne({ where: { [Op.or]: [{ roomName: name }, { roomCode: code }] } });
+    if (duplicate) return res.status(409).json({ success: false, message: 'A room with this name or code already exists' });
+    const room = await Room.create({ campusId: building.campusId, buildingId: building.id, roomName: name, roomCode: code.toUpperCase(), roomType: String(req.body.roomType || req.body.type || 'laboratory'), floor: Number.isInteger(Number(req.body.floor)) ? Number(req.body.floor) : null, capacity: Number.isInteger(Number(req.body.capacity)) ? Number(req.body.capacity) : null, description: String(req.body.description || ''), status: ['active', 'inactive'].includes(String(req.body.status || '').toLowerCase()) ? String(req.body.status).toLowerCase() : 'active' });
+    await AuditLog.create({ userId: req.user.id, action: 'CREATE_COLLEGE_ROOM', entity: `room:${room.id}`, details: JSON.stringify({ collegeId, buildingId: building.id, name, code: room.roomCode }) });
+    return res.status(201).json({ success: true, data: room, message: 'Room created successfully' });
+  } catch (error) { next(error); }
+};
+
+const updateCollegeLocation = async (req, res, next) => {
+  try {
+    const collegeId = Number(req.organizationScope?.collegeId);
+    const type = String(req.params.type || req.body.type || req.body.locationType || '').trim().toLowerCase() || 'building';
+
+    if (!['campus', 'building', 'room'].includes(type)) {
+      return res.status(400).json({ success: false, message: 'Unsupported location type' });
+    }
+
+    const access = await ensureCollegeLocationAccess(collegeId, type, Number(req.params.id));
+    if (access.error) return res.status(access.status).json({ success: false, message: access.message });
+
+    if (type === 'campus') {
+      const campus = access.item;
+      const data = { campusName: String(req.body.name || req.body.campusName || campus.campusName).trim(), campusCode: String(req.body.code || req.body.campusCode || campus.campusCode).trim().toUpperCase(), description: req.body.description !== undefined ? String(req.body.description) : campus.description, status: ['active', 'inactive'].includes(String(req.body.status || campus.status || '').toLowerCase()) ? String(req.body.status || campus.status).toLowerCase() : campus.status };
+      await campus.update(data);
+      await AuditLog.create({ userId: req.user.id, action: 'UPDATE_COLLEGE_CAMPUS', entity: `campus:${campus.id}`, details: JSON.stringify({ collegeId, previous: { name: campus.campusName, code: campus.campusCode, status: campus.status }, next: data }) });
+      return res.json({ success: true, data: campus, message: 'Campus updated successfully' });
+    }
+    if (type === 'building') {
+      const building = access.item;
+      const data = { buildingName: String(req.body.name || req.body.buildingName || building.buildingName).trim(), buildingCode: String(req.body.code || req.body.buildingCode || building.buildingCode).trim().toUpperCase(), description: req.body.description !== undefined ? String(req.body.description) : building.description, floorCount: Number.isInteger(Number(req.body.floorCount || req.body.floors)) ? Number(req.body.floorCount || req.body.floors) : building.floorCount, status: ['active', 'inactive'].includes(String(req.body.status || building.status || '').toLowerCase()) ? String(req.body.status || building.status).toLowerCase() : building.status };
+      await building.update(data);
+      await AuditLog.create({ userId: req.user.id, action: 'UPDATE_COLLEGE_BUILDING', entity: `building:${building.id}`, details: JSON.stringify({ collegeId, previous: { name: building.buildingName, code: building.buildingCode, status: building.status }, next: data }) });
+      return res.json({ success: true, data: building, message: 'Building updated successfully' });
+    }
+    const room = access.item;
+    const data = { roomName: String(req.body.name || req.body.roomName || room.roomName).trim(), roomCode: String(req.body.code || req.body.roomCode || room.roomCode).trim().toUpperCase(), description: req.body.description !== undefined ? String(req.body.description) : room.description, roomType: String(req.body.roomType || req.body.type || room.roomType || 'laboratory').trim(), floor: Number.isInteger(Number(req.body.floor)) ? Number(req.body.floor) : room.floor, capacity: Number.isInteger(Number(req.body.capacity)) ? Number(req.body.capacity) : room.capacity, status: ['active', 'inactive'].includes(String(req.body.status || room.status || '').toLowerCase()) ? String(req.body.status || room.status).toLowerCase() : room.status };
+    await room.update(data);
+    await AuditLog.create({ userId: req.user.id, action: 'UPDATE_COLLEGE_ROOM', entity: `room:${room.id}`, details: JSON.stringify({ collegeId, previous: { name: room.roomName, code: room.roomCode, status: room.status }, next: data }) });
+    return res.json({ success: true, data: room, message: 'Room updated successfully' });
+  } catch (error) { next(error); }
+};
+
+const deleteCollegeLocation = async (req, res, next) => {
+  try {
+    const collegeId = Number(req.organizationScope?.collegeId);
+    const type = String(req.params.type || req.body.type || req.body.locationType || 'building').trim().toLowerCase();
+    const access = await ensureCollegeLocationAccess(collegeId, type, Number(req.params.id));
+    if (access.error) return res.status(access.status).json({ success: false, message: access.message });
+
+    const item = access.item;
+    const assetCount = await Asset.count({ where: { collegeId, ...(type === 'campus' ? { campusId: item.id } : type === 'building' ? { buildingId: item.id } : { roomId: item.id }) } });
+    if (assetCount > 0) {
+      await item.update({ status: 'inactive' });
+      await AuditLog.create({ userId: req.user.id, action: 'DEACTIVATE_COLLEGE_LOCATION', entity: `${type}:${item.id}`, details: JSON.stringify({ collegeId, entity: type, assetCount, status: 'inactive' }) });
+      return res.json({ success: true, data: item, message: 'Location deactivated because it is still referenced by assets.' });
+    }
+
+    await item.destroy();
+    await AuditLog.create({ userId: req.user.id, action: 'DELETE_COLLEGE_LOCATION', entity: `${type}:${item.id}`, details: JSON.stringify({ collegeId, entity: type }) });
+    return res.json({ success: true, message: 'Location deleted successfully' });
   } catch (error) { next(error); }
 };
 
@@ -2863,11 +3199,16 @@ module.exports = {
   getCollegeDepartmentPerformance,
   getCollegeDepartmentReports,
   listCollegeStaff,
+  getCollegeStaffMember,
   listCollegeAssets,
   getCollegeInventory,
   getCollegeAsset,
   listCollegeRFIDTracking,
+  getCollegeLocation,
   listCollegeLocations,
+  createCollegeLocation,
+  updateCollegeLocation,
+  deleteCollegeLocation,
   createCollegeDepartment,
   updateCollegeDepartment,
   updateCollegeDepartmentStatus,

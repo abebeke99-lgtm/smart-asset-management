@@ -91,6 +91,7 @@ export const ROUTES = {
   DEPT_RFID: '/college/rfid',
   DEPT_VERIFICATION: '/college/verification',
   DEPT_REPORTS: '/college/reports',
+  DEPT_ANALYTICS: '/college/analytics',
   DEPT_ASSET_ANALYTICS: '/college/analytics/assets',
   DEPT_DEPARTMENT_REPORTS: '/college/analytics/departments',
   DEPT_DEPARTMENT_OVERVIEW: '/college/department-overview',

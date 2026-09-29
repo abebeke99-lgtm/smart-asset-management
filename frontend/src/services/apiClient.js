@@ -2,11 +2,12 @@ import axios from 'axios';
 
 const configuredApiUrl = [
   process.env.REACT_APP_API_URL,
-  process.env.VITE_API_URL,
   process.env.API_BASE_URL
 ].find((value) => typeof value === 'string' && value.trim()) || '';
 
-const defaultApiOrigin = typeof window !== 'undefined' && window.location?.hostname
+const defaultApiOrigin = process.env.NODE_ENV === 'production'
+  ? ''
+  : typeof window !== 'undefined' && window.location?.hostname
   ? `${window.location.protocol || 'http:'}//${window.location.hostname}:5000`
   : 'http://localhost:5000';
 

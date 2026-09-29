@@ -124,6 +124,22 @@ async function createMissingTables() {
   return missing.length;
 }
 
+async function ensurePasswordRecoveryIndexes() {
+  const queryInterface = sequelize.getQueryInterface();
+  const table = 'password_recoveries';
+  const indexes = [
+    { name: 'password_recoveries_user_id_idx', fields: ['user_id'] },
+    { name: 'password_recoveries_destination_idx', fields: ['destination'] },
+    { name: 'password_recoveries_expires_at_idx', fields: ['expires_at'] },
+    { name: 'password_recoveries_reset_token_hash_idx', fields: ['reset_token_hash'] },
+  ];
+  const existing = await queryInterface.showIndex(table);
+  for (const index of indexes) {
+    const present = existing.some((entry) => entry.fields.map((field) => field.attribute || field.name || field).join('|') === index.fields.join('|'));
+    if (!present) await queryInterface.addIndex(table, index.fields, { name: index.name });
+  }
+}
+
 async function syncDatabase() {
   try {
     const ensureColumn = async (tableName, columnName, definition) => {
@@ -136,6 +152,7 @@ async function syncDatabase() {
 
     // Create only missing tables; existing tables are left untouched by sync.
     await createMissingTables();
+    await ensurePasswordRecoveryIndexes();
 
     for (const [column, definition] of Object.entries({
       digital_id: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
@@ -408,4 +425,4 @@ async function syncDatabase() {
   }
 }
 
-module.exports = { syncDatabase, repairDuplicateIndexes, createMissingTables };
+module.exports = { syncDatabase, repairDuplicateIndexes, createMissingTables, ensurePasswordRecoveryIndexes };

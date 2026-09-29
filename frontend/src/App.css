@@ -197,6 +197,14 @@ body {
   min-width: 0;
 }
 
+.dashboard-header-search {
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 12px;
+}
+
 .dashboard-icon-button,
 .dashboard-language-button,
 .dashboard-profile-button {
@@ -796,11 +804,13 @@ body {
    #2563EB links. No accent colour, no gradients.
    ========================================== */
 .public-site-footer {
-  --color-text-primary: #FFFFFF;
-  --color-text-muted: rgba(255, 255, 255, 0.82);
-  --color-text-secondary: #FFFFFF;
-  --color-surface: rgba(255, 255, 255, 0.12);
-  --color-surface-muted: rgba(255, 255, 255, 0.12);
+  --color-footer-text: #000000;
+  --color-footer-link: #111827;
+  --color-text-primary: var(--color-footer-text);
+  --color-text-muted: var(--color-footer-text);
+  --color-text-secondary: var(--color-footer-text);
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #F9FAFB;
   margin-top: auto;
   padding: 2rem 1.25rem 1rem;
   background: var(--color-footer-background);
@@ -977,7 +987,7 @@ body {
 .public-site-footer .footer-link:hover,
 .public-site-footer .footer-link:focus-visible,
 .public-site-footer .footer-link[aria-current='page'] {
-  color: var(--color-footer-link);
+  color: var(--color-brand-blue-dark);
   text-decoration: underline;
 }
 
@@ -1085,16 +1095,26 @@ body {
 }
 
 body.dark .public-site-footer {
-  --color-footer-background: #517B97;
-  --color-footer-border: rgba(255, 255, 255, 0.28);
-  --color-footer-text: #FFFFFF;
-  --color-footer-link: #FFFFFF;
-  --color-text-primary: #FFFFFF;
-  --color-text-muted: rgba(255, 255, 255, 0.82);
-  --color-text-secondary: #FFFFFF;
-  --color-surface: rgba(255, 255, 255, 0.12);
-  --color-surface-muted: rgba(255, 255, 255, 0.12);
+  --color-footer-background: #FFFFFF;
+  --color-footer-border: #E5E7EB;
+  --color-footer-text: #6B7280;
+  --color-footer-link: #2563EB;
+  --color-text-primary: #6B7280;
+  --color-text-muted: #6B7280;
+  --color-text-secondary: #6B7280;
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #F9FAFB;
   border-top-color: var(--color-footer-border);
+}
+
+@media (max-width: 640px) {
+  .dashboard-header { gap: 8px; padding: 0 10px; }
+  .dashboard-header-search { flex: 0 0 auto; padding: 0; }
+  .dashboard-header-actions { gap: 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-nav-link { transition: none; }
 }
 
 .public-site-header + .app-public-content {
@@ -1440,12 +1460,14 @@ body.dark .sidebar-section-label {
   min-height: 42px;
   padding: 9px 12px;
   color: var(--color-sidebar-text);
-  border-radius: 10px;
+  border-radius: 8px;
   text-decoration: none;
   font-size: 13px;
   font-weight: 500;
-  transition: none;
+  transition: color 150ms ease, background-color 150ms ease;
 }
+
+.admin-nav-link > svg { color: currentColor; }
 
 .admin-nav-link > svg {
   flex: 0 0 17px;

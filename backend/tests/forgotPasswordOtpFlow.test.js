@@ -13,8 +13,12 @@ test('otp recovery support exposes the new request and verification functions', 
 
 test('phone normalization handles Ethiopian formats consistently', () => {
   assert.equal(normalizePhoneNumber('0912345678'), '+251912345678');
+  assert.equal(normalizePhoneNumber('0712345678'), '+251712345678');
   assert.equal(normalizePhoneNumber('+251912345678'), '+251912345678');
+  assert.equal(normalizePhoneNumber('+251712345678'), '+251712345678');
   assert.equal(normalizePhoneNumber('251912345678'), '+251912345678');
+  assert.equal(normalizePhoneNumber('251712345678'), '+251712345678');
+  assert.equal(normalizePhoneNumber('712345678'), '+251712345678');
   assert.equal(normalizePhoneNumber('invalid'), null);
 });
 

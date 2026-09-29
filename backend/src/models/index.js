@@ -1,5 +1,6 @@
 const { sequelize } = require('../config/database');
 const User = require('./User');
+const PasswordRecovery = require('./PasswordRecovery');
 const College = require('./College');
 const Asset = require('./Asset');
 const Infrastructure = require('./Infrastructure')(sequelize);
@@ -313,6 +314,8 @@ User.hasMany(MaintenanceHistory, { foreignKey: 'userId' });
 MaintenanceHistory.belongsTo(User, { foreignKey: 'userId' });
 
 // RFID and Audit Relationships
+User.hasMany(PasswordRecovery, { foreignKey: 'userId', onDelete: 'CASCADE' });
+PasswordRecovery.belongsTo(User, { foreignKey: 'userId' });
 Asset.hasMany(RFIDLog, { foreignKey: 'assetId' });
 RFIDLog.belongsTo(Asset, { foreignKey: 'assetId' });
 User.hasMany(AuditLog, { foreignKey: 'userId' });
@@ -439,6 +442,7 @@ IncidentAttachment.belongsTo(User, { foreignKey: 'uploadedBy', as: 'Uploader' })
 module.exports = {
   sequelize,
   User,
+  PasswordRecovery,
   College,
   Asset,
   CapitalizationRecord,

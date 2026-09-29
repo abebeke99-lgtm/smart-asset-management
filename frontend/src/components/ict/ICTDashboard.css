@@ -19,6 +19,187 @@
   font-family: Inter, "Segoe UI", sans-serif;
 }
 
+.dashboard-page {
+  --ict-module-primary: #123b63;
+  --ict-module-teal: #0f766e;
+  --ict-module-green: #15803d;
+  --ict-module-amber: #b45309;
+  --ict-module-red: #b91c1c;
+  --ict-module-purple: #6d28d9;
+}
+
+.dashboard-page .ict-module-section {
+  margin: 0 0 24px;
+}
+
+.dashboard-page .ict-module-section-header {
+  margin-bottom: 14px;
+}
+
+.dashboard-page .ict-module-section-header h2 {
+  margin: 0;
+  color: #172033;
+  font-size: 19px;
+  line-height: 1.3;
+}
+
+.dashboard-page .ict-module-section-header p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.dashboard-page .ict-module-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.dashboard-page .ict-module-card {
+  display: flex;
+  min-width: 0;
+  min-height: 218px;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 20px;
+  border: 1px solid #dbe3ec;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(18, 59, 99, 0.05);
+  color: #172033;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.dashboard-page .ict-module-card:hover {
+  transform: translateY(-3px);
+  border-color: #8ba9c4;
+  box-shadow: 0 10px 24px rgba(18, 59, 99, 0.11);
+}
+
+.dashboard-page .ict-module-card:focus-visible {
+  outline: 3px solid rgba(15, 118, 110, 0.55);
+  outline-offset: 3px;
+}
+
+.dashboard-page .ict-module-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  place-items: center;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.dashboard-page .ict-module-icon-blue { background: #e8eff6; color: var(--ict-module-primary); }
+.dashboard-page .ict-module-icon-cyan { background: #e0f2f1; color: var(--ict-module-teal); }
+.dashboard-page .ict-module-icon-purple { background: #f1eafb; color: var(--ict-module-purple); }
+.dashboard-page .ict-module-icon-green { background: #e7f4eb; color: var(--ict-module-green); }
+.dashboard-page .ict-module-icon-red { background: #fcebea; color: var(--ict-module-red); }
+.dashboard-page .ict-module-icon-amber { background: #fff3df; color: var(--ict-module-amber); }
+
+.dashboard-page .ict-module-card:hover .ict-module-icon {
+  background: var(--ict-module-primary);
+  color: #fff;
+}
+
+.dashboard-page .ict-module-title {
+  color: #172033;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.dashboard-page .ict-module-description {
+  margin-top: 7px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.dashboard-page .ict-module-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 17px;
+  color: var(--ict-module-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dashboard-page .ict-module-link svg {
+  transition: transform 0.2s ease;
+}
+
+.dashboard-page .ict-module-card:hover .ict-module-link svg {
+  transform: translateX(3px);
+}
+
+.dashboard-page .ict-module-card[data-module="inventory"] {
+  --ict-card-primary: #2563eb;
+  --ict-card-soft: #dbeafe;
+}
+
+.dashboard-page .ict-module-card[data-module="equipment"] {
+  --ict-card-primary: #0891b2;
+  --ict-card-soft: #cffafe;
+}
+
+.dashboard-page .ict-module-card[data-module="software-licenses"] {
+  --ict-card-primary: #7c3aed;
+  --ict-card-soft: #ede9fe;
+}
+
+.dashboard-page .ict-module-card[data-module="support"] {
+  --ict-card-primary: #059669;
+  --ict-card-soft: #d1fae5;
+}
+
+.dashboard-page .ict-module-card[data-module="incidents"] {
+  --ict-card-primary: #dc2626;
+  --ict-card-soft: #fee2e2;
+}
+
+.dashboard-page .ict-module-card[data-module="maintenance"] {
+  --ict-card-primary: #d97706;
+  --ict-card-soft: #fef3c7;
+}
+
+.dashboard-page .ict-module-card[data-module="device-health"] {
+  --ict-card-primary: #0d9488;
+  --ict-card-soft: #ccfbf1;
+}
+
+.dashboard-page .ict-module-card[data-module="reports"] {
+  --ict-card-primary: #4f46e5;
+  --ict-card-soft: #e0e7ff;
+}
+
+.dashboard-page .ict-module-card[data-module] .ict-module-icon {
+  background: var(--ict-card-soft);
+  color: var(--ict-card-primary);
+}
+
+.dashboard-page .ict-module-card[data-module]:hover {
+  border-color: var(--ict-card-primary);
+}
+
+.dashboard-page .ict-module-card[data-module]:hover .ict-module-icon {
+  background: var(--ict-card-primary);
+  color: #fff;
+}
+
+.dashboard-page .ict-module-card[data-module] .ict-module-link {
+  color: var(--ict-card-primary);
+}
+
+.dashboard-page .ict-module-card[data-module]:focus-visible {
+  outline-color: var(--ict-card-primary);
+}
+
 .ict-dashboard * { box-sizing: border-box; }
 
 .ict-dashboard-header {
@@ -406,6 +587,12 @@
   }
 }
 
+@media (max-width: 1200px) {
+  .dashboard-page .ict-module-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 640px) {
   .ict-dashboard {
     padding: 20px;
@@ -435,5 +622,17 @@
   .ict-activity-item time {
     grid-column: 2;
     justify-self: start;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-page .ict-module-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .dashboard-page .ict-module-card {
+    min-height: 196px;
+    padding: 18px;
   }
 }

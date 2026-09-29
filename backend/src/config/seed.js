@@ -33,10 +33,10 @@ const DEMO_USERS = [
     active: true,
   },
   {
-    username: 'college',
+    username: 'college_manager',
     email: 'college@bekelei.com',
     fullName: 'College Manager',
-    role: 'college',
+    role: 'college_manager',
     department: 'Engineering',
     phone: '0922345678',
     active: true,
@@ -91,7 +91,7 @@ const DEMO_USERS = [
 const LEGACY_USERNAME_ALIASES = {
   admin: ['admin'],
   ict_officer: ['ict_officer', 'ict officer', 'ict-officer', 'ict'],
-  college: ['college'],
+  college_manager: ['college_manager', 'college', 'college manager', 'college-manager'],
   department_head: ['department_head', 'dept_head', 'department head', 'department'],
   finance: ['finance'],
   store_manager: ['store_manager', 'store manager', 'store-manager', 'store'],
@@ -104,8 +104,14 @@ function resolveDemoUsers() {
   return DEMO_USERS.map((userData) => ({ ...userData, password }));
 }
 
+const normalizeCollegeRole = (role) => {
+  const value = String(role || '').trim().toLowerCase();
+  if (['college', 'college manager', 'college-manager', 'college_manager'].includes(value)) return 'college_manager';
+  return value;
+};
+
 async function ensureCollegeScopeForUser(userRecord) {
-  if (!userRecord || userRecord.role !== 'college') return;
+  if (!userRecord || normalizeCollegeRole(userRecord.role) !== 'college_manager') return;
 
   const departmentName = String(userRecord.department || 'Engineering').trim() || 'Engineering';
   let college = await College.findOne({ where: { managerId: userRecord.id, status: 'active' } });
@@ -192,7 +198,7 @@ async function ensureDemoUser(userData) {
       username: userData.username,
       password: hashedPassword,
     });
-    if (userData.role === 'college') {
+    if (normalizeCollegeRole(userData.role) === 'college') {
       await ensureCollegeScopeForUser(createdUser);
     }
     if (userData.role === 'department_head') {
@@ -219,7 +225,7 @@ async function ensureDemoUser(userData) {
     lockoutUntil: null,
   });
 
-  if (userData.role === 'college') {
+  if (normalizeCollegeRole(userData.role) === 'college') {
     await ensureCollegeScopeForUser(existingUser);
   }
   if (userData.role === 'department_head') {
@@ -259,7 +265,7 @@ async function seedDatabase() {
           ...userData,
           password: hashedPassword,
         });
-        if (userData.role === 'college') await ensureCollegeScopeForUser(createdUser);
+        if (normalizeCollegeRole(userData.role) === 'college') await ensureCollegeScopeForUser(createdUser);
         if (userData.role === 'department_head') await ensureDepartmentScopeForUser(createdUser);
       }
       console.log('✅ Seeded all demo accounts with role-scoped access');

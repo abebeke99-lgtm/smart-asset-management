@@ -2,9 +2,9 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { Op } = require('sequelize');
-const { User, AuditLog, Config } = require('../models');
+const { sequelize, User, PasswordRecovery, AuditLog, Config } = require('../models');
 const { normalizePhoneNumber, sendOtpSms, isSmsConfigured } = require('../services/smsService');
-const { validateEmailConfiguration, sendPasswordResetEmail } = require('../services/emailService');
+const { validateEmailConfiguration, sendPasswordResetEmail, sendOtpEmail } = require('../services/emailService');
 const { isValidEmail, isValidUsername } = require('../utils/validators');
 const { getJwtSecret } = require('../config/jwt');
 const { getRequestContext, getClientIp } = require('../middlewares/requestContext');
@@ -12,7 +12,7 @@ const { getRequestContext, getClientIp } = require('../middlewares/requestContex
 const LOGIN_ALIASES = {
   admin: ['admin'],
   ict_officer: ['ict_officer', 'ict-officer', 'ict'],
-  college: ['college'],
+  college: ['college', 'college_manager', 'college manager', 'college-manager'],
   department_head: ['department_head', 'dept_head', 'department head', 'department'],
   finance: ['finance'],
   store_manager: ['store_manager', 'store-manager'],
@@ -122,7 +122,7 @@ const recordAuthEvent = async ({ userId = null, action, result, req }) => {
       }),
     });
   } catch (error) {
-    console.error('Authentication audit event failed:', error.message);
+    console.error('Authentication audit event failed.');
   }
 };
 
@@ -269,15 +269,18 @@ const changePassword = async (req, res) => {
 };
 
 const logout = async (req, res) => {
+  await req.user.update({ sessionVersion: Number(req.user.sessionVersion || 0) + 1 });
   await recordAuthEvent({ userId: req.user.id, action: 'LOGOUT', result: 'Success', req });
   res.json({ success: true });
 };
 
 const genericResetMessage = 'If an eligible account exists, password reset instructions will be sent.';
-const GENERIC_OTP_MESSAGE = 'If this phone number is registered, a verification code has been sent.';
+const getGenericOtpMessage = (method = 'phone') => (method === 'email'
+  ? 'If this email address is registered, a verification code has been sent.'
+  : 'If this phone number is registered, a verification code has been sent.');
 const RESET_TOKEN_TTL_MINUTES = Math.min(30, Math.max(15, Number(process.env.PASSWORD_RESET_TTL_MINUTES) || 20));
 const RESET_OTP_TTL_MINUTES = Math.min(15, Math.max(5, Number(process.env.PASSWORD_RESET_OTP_TTL_MINUTES) || 5));
-const RESET_OTP_MAX_ATTEMPTS = Math.max(3, Number(process.env.PASSWORD_RESET_OTP_MAX_ATTEMPTS) || 5);
+const RESET_OTP_MAX_ATTEMPTS = Math.min(5, Math.max(1, Number(process.env.PASSWORD_RESET_OTP_MAX_ATTEMPTS) || 5));
 const OTP_REQUEST_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const OTP_REQUEST_RATE_LIMIT_PER_PHONE = 4;
 const OTP_REQUEST_RATE_LIMIT_PER_IP = 8;
@@ -325,14 +328,21 @@ const getRateLimitState = (bucket, key, maxRequests, windowMs) => {
   return { isBlocked, remaining: Math.max(0, maxRequests - recent.length), retryAfterMs: windowMs };
 };
 
-const checkForOtpRateLimit = (phoneNumber, ipAddress) => {
-  const normalizedPhone = normalizePhoneNumber(phoneNumber || '');
+const checkForOtpRateLimit = (destination, ipAddress, method = 'phone') => {
+  const normalizedDestination = method === 'email'
+    ? String(destination || '').trim().toLowerCase()
+    : normalizePhoneNumber(destination || '');
   const safeIp = String(ipAddress || 'unknown').trim();
-  const phoneState = getRateLimitState(otpRequestBuckets, normalizedPhone || 'unknown-phone', OTP_REQUEST_RATE_LIMIT_PER_PHONE, OTP_REQUEST_RATE_LIMIT_WINDOW_MS);
+  const destinationState = getRateLimitState(
+    otpRequestBuckets,
+    normalizedDestination || (method === 'email' ? 'unknown-email' : 'unknown-phone'),
+    method === 'email' ? OTP_REQUEST_RATE_LIMIT_PER_IP : OTP_REQUEST_RATE_LIMIT_PER_PHONE,
+    OTP_REQUEST_RATE_LIMIT_WINDOW_MS,
+  );
   const ipState = getRateLimitState(otpRequestIpBuckets, safeIp, OTP_REQUEST_RATE_LIMIT_PER_IP, OTP_REQUEST_RATE_LIMIT_WINDOW_MS);
   return {
-    blocked: phoneState.isBlocked || ipState.isBlocked,
-    reason: phoneState.isBlocked ? 'phone' : ipState.isBlocked ? 'ip' : null,
+    blocked: destinationState.isBlocked || ipState.isBlocked,
+    reason: destinationState.isBlocked ? method : ipState.isBlocked ? 'ip' : null,
   };
 };
 
@@ -371,194 +381,378 @@ const ensureEligibleResetUser = async (user, accountType = 'email') => {
   return { allowed: true };
 };
 
-const clearOtpState = async (user) => {
-  if (!user) return;
-  await user.update({
-    resetOtpHash: null,
-    resetOtpExpiresAt: null,
-    resetOtpUsedAt: null,
-    resetOtpAttempts: 0,
+const recordRecoveryEvent = ({ userId = null, event, result, req }) => recordAuthEvent({
+  userId,
+  action: `PASSWORD_RECOVERY_${event}`,
+  result: result || (event.endsWith('_FAILED') ? 'Failure' : 'Success'),
+  req,
+});
+
+const clearOtpState = async (recovery) => {
+  if (!recovery) return;
+  await recovery.update({
+    otpHash: null,
+    expiresAt: new Date(),
+    attempts: 0,
+    resetTokenHash: null,
+    resetTokenExpiresAt: null,
+    usedAt: new Date(),
   });
+};
+const normalizeRecoveryMethod = (value = '') => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (['phone', 'mobile', 'sms', 'tel'].includes(raw)) return 'phone';
+  if (['email', 'mail'].includes(raw)) return 'email';
+  return 'email';
+};
+
+const normalizeRecoveryDestination = (body = {}, method = 'email') => {
+  const safeMethod = normalizeRecoveryMethod(method);
+  const rawDestination = String(body.destination || body.email || body.phone || body.phoneNumber || body.mobile || '').trim();
+  if (!rawDestination) return '';
+  if (safeMethod === 'phone') return normalizePhoneNumber(rawDestination);
+  return rawDestination.toLowerCase();
+};
+
+const requestForgotPassword = async (req, res) => {
+  try {
+    const method = normalizeRecoveryMethod(req.body?.method || req.body?.recoveryMethod || 'email');
+    const destination = normalizeRecoveryDestination(req.body || {}, method);
+
+    if (method === 'phone') {
+      const requestBody = { ...req.body, phoneNumber: destination || req.body?.phoneNumber || req.body?.phone || req.body?.mobile || '' };
+      return requestForgotPasswordOtp({ ...req, body: requestBody }, res);
+    }
+
+    const email = destination || String(req.body?.email || '').trim().toLowerCase();
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+    }
+
+    const legacyRequest = { ...req, body: { ...req.body, method: 'email', email } };
+    return forgotPassword(legacyRequest, res);
+  } catch (error) {
+    console.error('Recovery request failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to process the recovery request.' });
+  }
+};
+
+const verifyForgotPassword = async (req, res) => {
+  try {
+    const method = normalizeRecoveryMethod(req.body?.method || req.body?.recoveryMethod || 'phone');
+    const destination = normalizeRecoveryDestination(req.body || {}, method);
+    const requestBody = method === 'email'
+      ? { ...req.body, method, email: destination || req.body?.email || '' }
+      : { ...req.body, method, phoneNumber: destination || req.body?.phoneNumber || req.body?.phone || req.body?.mobile || '' };
+    return verifyForgotPasswordOtp({ ...req, body: requestBody }, res);
+  } catch (error) {
+    console.error('Recovery verification failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to verify the recovery code.' });
+  }
+};
+
+const resetForgotPassword = async (req, res) => {
+  try {
+    if (req.body?.resetToken || req.body?.token) {
+      return resetPasswordWithOtp(req, res);
+    }
+    return resetPassword(req, res);
+  } catch (error) {
+    console.error('Password reset flow failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Unable to reset password.' });
+  }
 };
 
 const requestForgotPasswordOtp = async (req, res) => {
   try {
-    const rawPhone = String(req.body.phoneNumber || req.body.phone || req.body.mobile || '').trim();
+    const method = normalizeRecoveryMethod(req.body?.method || req.body?.recoveryMethod || (req.body?.email ? 'email' : 'phone'));
+    const email = String(req.body?.email || req.body?.destination || '').trim().toLowerCase();
+    const rawPhone = String(req.body.phoneNumber || req.body.phone || req.body.mobile || req.body.destination || '').trim();
     const phone = normalizePhoneNumber(rawPhone);
     const ipAddress = getClientIp(req) || req.ip || 'unknown';
+
+    if (method === 'email') {
+      if (!isValidEmail(email)) {
+        return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+      }
+
+      const rateLimitState = checkForOtpRateLimit(email, ipAddress, 'email');
+      if (rateLimitState.blocked) {
+        return res.status(429).json({ success: false, message: 'Too many OTP requests. Please try again later.' });
+      }
+
+      await recordRecoveryEvent({ event: 'REQUESTED', result: 'Success', req });
+      const emailConfiguration = validateEmailConfiguration();
+      if (!emailConfiguration.valid) {
+        console.error('Forgot password error: email service configuration missing');
+        return res.status(503).json({ success: false, message: 'We could not send the verification code right now. Please try again later.' });
+      }
+
+      const user = await User.findOne({ where: { email } });
+      if (!user || !user.active || (user.lockoutUntil && new Date(user.lockoutUntil) > new Date())) {
+        return res.json({ success: true, message: getGenericOtpMessage('email') });
+      }
+
+      const previousRecovery = await PasswordRecovery.findOne({
+        where: { userId: user.id, method, destination: email },
+        order: [['createdAt', 'DESC']],
+      });
+      if (previousRecovery && Date.now() - new Date(previousRecovery.createdAt).getTime() < OTP_RESEND_COOLDOWN_MS) {
+        return res.json({ success: true, message: getGenericOtpMessage('email') });
+      }
+
+      const otp = String(crypto.randomInt(100000, 1000000)).padStart(6, '0');
+      const otpHash = hashValue(otp);
+      const otpExpiresAt = new Date(Date.now() + RESET_OTP_TTL_MINUTES * 60 * 1000);
+
+      await PasswordRecovery.update({
+        otpHash: null,
+        expiresAt: new Date(),
+        resetTokenHash: null,
+        resetTokenExpiresAt: null,
+        usedAt: new Date(),
+      }, { where: { userId: user.id, method, usedAt: null } });
+      const recovery = await PasswordRecovery.create({
+        userId: user.id,
+        method,
+        destination: email,
+        otpHash,
+        expiresAt: otpExpiresAt,
+        attempts: 0,
+      });
+
+      const mailResult = await sendOtpEmail({
+        to: user.email,
+        fullName: user.fullName || user.username,
+        otp,
+        ttlMinutes: RESET_OTP_TTL_MINUTES,
+      });
+
+      if (mailResult.status !== 'sent') {
+        await clearOtpState(recovery);
+        console.error('Password reset OTP email delivery failed; provider:', mailResult.reason || 'smtp');
+        return res.status(503).json({ success: false, message: 'We could not send the verification code right now. Please try again later.' });
+      }
+
+      await recordRecoveryEvent({ userId: user.id, event: 'OTP_SENT', result: 'Success', req });
+      return res.json({ success: true, message: getGenericOtpMessage('email') });
+    }
 
     if (!phone) {
       return res.status(400).json({ success: false, message: 'Please enter a valid mobile phone number.' });
     }
 
-    const rateLimitState = checkForOtpRateLimit(phone, ipAddress);
+    const rateLimitState = checkForOtpRateLimit(phone, ipAddress, 'phone');
     if (rateLimitState.blocked) {
       return res.status(429).json({ success: false, message: 'Too many OTP requests. Please try again later.' });
     }
 
+    await recordRecoveryEvent({ event: 'REQUESTED', result: 'Success', req });
     if (!isSmsConfigured()) {
       return res.status(503).json({ success: false, message: 'We could not send the verification code right now. Please try again later.' });
     }
 
     const user = await User.findOne({ where: { phone } });
     if (!user || !user.active || (user.lockoutUntil && new Date(user.lockoutUntil) > new Date())) {
-      return res.json({ success: true, message: GENERIC_OTP_MESSAGE });
+      return res.json({ success: true, message: getGenericOtpMessage('phone') });
     }
 
-    const previousOtp = user.resetOtpExpiresAt && new Date(user.resetOtpExpiresAt) > new Date() ? user.resetOtpHash : null;
-    if (previousOtp) {
-      const lastOtpRequestedAt = user.updatedAt || new Date(Date.now() - OTP_RESEND_COOLDOWN_MS);
-      if (Date.now() - new Date(lastOtpRequestedAt).getTime() < OTP_RESEND_COOLDOWN_MS) {
-        return res.status(429).json({ success: false, message: 'Please wait before requesting a new OTP.' });
-      }
+    const previousRecovery = await PasswordRecovery.findOne({
+      where: { userId: user.id, method, destination: phone },
+      order: [['createdAt', 'DESC']],
+    });
+    if (previousRecovery && Date.now() - new Date(previousRecovery.createdAt).getTime() < OTP_RESEND_COOLDOWN_MS) {
+      return res.json({ success: true, message: getGenericOtpMessage('phone') });
     }
 
     const otp = String(crypto.randomInt(100000, 1000000)).padStart(6, '0');
     const otpHash = hashValue(otp);
     const otpExpiresAt = new Date(Date.now() + RESET_OTP_TTL_MINUTES * 60 * 1000);
 
-    await user.update({
-      resetOtpHash: otpHash,
-      resetOtpExpiresAt: otpExpiresAt,
-      resetOtpUsedAt: null,
-      resetOtpAttempts: 0,
+    await PasswordRecovery.update({
+      otpHash: null,
+      expiresAt: new Date(),
       resetTokenHash: null,
       resetTokenExpiresAt: null,
-      resetTokenUsedAt: null,
+      usedAt: new Date(),
+    }, { where: { userId: user.id, method, usedAt: null } });
+    const recovery = await PasswordRecovery.create({
+      userId: user.id,
+      method,
+      destination: phone,
+      otpHash,
+      expiresAt: otpExpiresAt,
+      attempts: 0,
     });
 
     const smsResult = await sendOtpSms(phone, otp, { ttlMinutes: RESET_OTP_TTL_MINUTES });
     if (smsResult.status !== 'sent') {
-      await clearOtpState(user);
+      await clearOtpState(recovery);
       console.error('Password reset OTP SMS delivery failed for phone ending with', phone.slice(-4), 'provider:', process.env.SMS_PROVIDER || 'unconfigured');
       return res.status(503).json({ success: false, message: 'We could not send the verification code right now. Please try again later.' });
     }
 
-    await recordAuthEvent({ userId: user.id, action: 'PASSWORD_RESET_OTP_REQUESTED', result: 'Success', req });
+    await recordRecoveryEvent({ userId: user.id, event: 'OTP_SENT', result: 'Success', req });
 
-    return res.json({ success: true, message: GENERIC_OTP_MESSAGE });
+    return res.json({ success: true, message: getGenericOtpMessage('phone') });
   } catch (error) {
-    console.error('Request password reset OTP failed:', error.message);
+    await recordRecoveryEvent({ event: 'REQUEST_FAILED', result: 'Failure', req });
+    console.error('Request password reset OTP failed.');
     return res.status(500).json({ success: false, message: 'Unable to process the OTP request.' });
   }
 };
 
 const verifyForgotPasswordOtp = async (req, res) => {
   try {
-    const rawPhone = String(req.body.phoneNumber || req.body.phone || req.body.mobile || '').trim();
+    const failVerification = async (status, message, userId = null) => {
+      await recordRecoveryEvent({ userId, event: 'OTP_VERIFICATION_FAILED', result: 'Failure', req });
+      return res.status(status).json({ success: false, message });
+    };
+    const method = normalizeRecoveryMethod(req.body?.method || req.body?.recoveryMethod || (req.body?.email ? 'email' : 'phone'));
+    const rawPhone = String(req.body.phoneNumber || req.body.phone || req.body.mobile || req.body.destination || '').trim();
+    const email = String(req.body.email || req.body.destination || '').trim().toLowerCase();
     const phone = normalizePhoneNumber(rawPhone);
     const otp = String(req.body.otp || '').trim();
 
-    if (!phone) {
-      return res.status(400).json({ success: false, message: 'Please enter a valid mobile phone number.' });
+    const targetEmail = method === 'email' ? email : '';
+    const targetPhone = method === 'phone' ? phone : '';
+
+    if (method === 'email') {
+      if (!isValidEmail(targetEmail)) {
+        return failVerification(400, 'Please enter a valid email address.');
+      }
+    } else if (!targetPhone) {
+      return failVerification(400, 'Please enter a valid mobile phone number.');
     }
 
     if (!/^\d{6}$/.test(otp)) {
-      return res.status(400).json({ success: false, message: 'Please enter a valid 6-digit verification code.' });
+      return failVerification(400, 'Please enter a valid 6-digit verification code.');
     }
 
-    const user = await User.findOne({ where: { phone } });
-    if (!user) {
-      return res.status(400).json({ success: false, message: 'Invalid or expired verification code.' });
-    }
+    const user = await User.findOne({ where: method === 'email' ? { email: targetEmail } : { phone: targetPhone } });
+    if (!user) return failVerification(400, 'Invalid or expired verification code.');
 
-    const eligibility = await ensureEligibleResetUser(user, 'phone');
-    if (!eligibility.allowed) {
-      return res.status(403).json({ success: false, message: 'This account cannot complete password reset right now.' });
-    }
+    const eligibility = await ensureEligibleResetUser(user, method);
+    if (!eligibility.allowed) return failVerification(403, 'This account cannot complete password reset right now.', user.id);
 
-    if (!user.resetOtpHash || !user.resetOtpExpiresAt || new Date(user.resetOtpExpiresAt) < new Date()) {
-      await clearOtpState(user);
-      return res.status(400).json({ success: false, message: 'This verification code has expired.' });
+    const destination = method === 'email' ? targetEmail : targetPhone;
+    const recovery = await PasswordRecovery.findOne({
+      where: { userId: user.id, method, destination, usedAt: null, verifiedAt: null },
+      order: [['createdAt', 'DESC']],
+    });
+    if (!recovery || !recovery.otpHash || !recovery.expiresAt || new Date(recovery.expiresAt) < new Date()) {
+      if (recovery) await clearOtpState(recovery);
+      return failVerification(400, 'This verification code has expired.', user.id);
     }
 
     const enteredHash = hashValue(otp);
-    if (!safeHashEquals(enteredHash, user.resetOtpHash)) {
-      const attempts = Number(user.resetOtpAttempts || 0) + 1;
-      await user.update({ resetOtpAttempts: attempts });
+    if (!safeHashEquals(enteredHash, recovery.otpHash)) {
+      const attempts = Number(recovery.attempts || 0) + 1;
+      await recovery.update({ attempts });
       if (attempts >= RESET_OTP_MAX_ATTEMPTS) {
-        await clearOtpState(user);
-        return res.status(429).json({ success: false, message: 'Maximum verification attempts reached. Please request a new code.' });
+        await clearOtpState(recovery);
+        return failVerification(429, 'Maximum verification attempts reached. Please request a new code.', user.id);
       }
-      return res.status(400).json({ success: false, message: 'Invalid verification code.' });
+      return failVerification(400, 'Invalid verification code.', user.id);
     }
 
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = hashValue(rawToken);
     const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000);
 
-    await user.update({
+    const verifiedAt = new Date();
+    const [verifiedCount] = await PasswordRecovery.update({
+      otpHash: null,
+      verifiedAt,
       resetTokenHash: tokenHash,
       resetTokenExpiresAt: expiresAt,
-      resetTokenUsedAt: null,
-      resetOtpHash: null,
-      resetOtpExpiresAt: null,
-      resetOtpUsedAt: new Date(),
-      resetOtpAttempts: 0,
+      attempts: 0,
+    }, {
+      where: {
+        id: recovery.id,
+        userId: user.id,
+        otpHash: recovery.otpHash,
+        verifiedAt: null,
+        usedAt: null,
+        expiresAt: { [Op.gt]: verifiedAt },
+      },
     });
+    if (!verifiedCount) return failVerification(400, 'This verification code has expired.', user.id);
 
-    await recordAuthEvent({ userId: user.id, action: 'PASSWORD_RESET_OTP_VERIFIED', result: 'Success', req });
+    await recordRecoveryEvent({ userId: user.id, event: 'OTP_VERIFICATION_SUCCEEDED', result: 'Success', req });
 
     return res.json({ success: true, message: 'Verification successful. Please create a new password.', resetToken: rawToken });
   } catch (error) {
-    console.error('Password reset OTP verification failed:', error.message);
+    await recordRecoveryEvent({ event: 'OTP_VERIFICATION_FAILED', result: 'Failure', req });
+    console.error('Password reset OTP verification failed.');
     return res.status(500).json({ success: false, message: 'Unable to verify the recovery code.' });
   }
 };
 
 const resetPasswordWithOtp = async (req, res) => {
+  let recoveryUserId = null;
   try {
     const token = String(req.body.resetToken || req.body.token || '').trim();
     const password = String(req.body.newPassword || req.body.password || '');
     const confirmPassword = String(req.body.confirmPassword || req.body.confirmPassword || '');
+    const failReset = async (status, message, userId = recoveryUserId) => {
+      await recordRecoveryEvent({ userId, event: 'PASSWORD_RESET_FAILED', result: 'Failure', req });
+      return res.status(status).json({ success: false, message });
+    };
 
     if (!token || !password || password !== confirmPassword) {
-      return res.status(400).json({ success: false, message: 'A valid reset token and matching passwords are required.' });
+      return failReset(400, 'A valid reset token and matching passwords are required.');
     }
 
     const settings = await getSecuritySettings();
     const passwordError = validatePassword(password, settings);
-    if (passwordError) return res.status(400).json({ success: false, message: passwordError });
+    if (passwordError) return failReset(400, passwordError);
 
     const tokenHash = hashValue(token);
-    const user = await User.findOne({ where: { resetTokenHash: tokenHash, resetTokenUsedAt: null } });
-    if (!user || !user.resetTokenExpiresAt || new Date(user.resetTokenExpiresAt) < new Date()) {
-      return res.status(400).json({ success: false, message: 'This password reset link is invalid or expired.' });
+    const recovery = await PasswordRecovery.findOne({ where: { resetTokenHash: tokenHash, usedAt: null } });
+    if (!recovery || !recovery.resetTokenExpiresAt || new Date(recovery.resetTokenExpiresAt) < new Date()) {
+      return failReset(400, 'This password reset link is invalid or expired.');
     }
 
+    recoveryUserId = recovery.userId;
+    const user = await User.findOne({ where: { id: recovery.userId } });
+    if (!user) return failReset(400, 'This password reset link is invalid or expired.');
     if (!user.active) {
-      await user.update({ resetTokenHash: null, resetTokenExpiresAt: null, resetTokenUsedAt: new Date() });
-      return res.status(403).json({ success: false, message: 'This account cannot complete password reset right now.' });
+      await recovery.update({ resetTokenHash: null, resetTokenExpiresAt: null, usedAt: new Date() });
+      return failReset(403, 'This account cannot complete password reset right now.');
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const now = new Date();
+    const [claimedCount] = await PasswordRecovery.update({ resetTokenHash: null, usedAt: now }, {
+      where: {
+        id: recovery.id,
+        userId: recovery.userId,
+        resetTokenHash: tokenHash,
+        usedAt: null,
+        resetTokenExpiresAt: { [Op.gt]: now },
+      },
+    });
+    if (!claimedCount) return failReset(400, 'This password reset link is invalid or expired.');
+
     const [updatedCount] = await User.update({
       password: hashedPassword,
-      resetTokenHash: null,
-      resetTokenExpiresAt: null,
-      resetTokenUsedAt: new Date(),
-      resetOtpHash: null,
-      resetOtpExpiresAt: null,
-      resetOtpUsedAt: new Date(),
-      resetOtpAttempts: 0,
+      sessionVersion: (Number(user.sessionVersion) || 0) + 1,
     }, {
-      where: {
-        id: user.id,
-        resetTokenHash: tokenHash,
-        resetTokenUsedAt: null,
-        resetTokenExpiresAt: { [Op.gt]: new Date() },
-      },
+      where: { id: user.id, active: true },
     });
 
     if (!updatedCount) {
-      return res.status(400).json({ success: false, message: 'This password reset link is invalid or expired.' });
+      return failReset(400, 'This password reset link is invalid or expired.');
     }
 
+    await recordRecoveryEvent({ userId: user.id, event: 'PASSWORD_RESET_SUCCEEDED', result: 'Success', req });
     await recordAuthEvent({ userId: user.id, action: 'PASSWORD_RESET', result: 'Success', req });
 
     return res.json({ success: true, message: 'Password reset successfully.' });
   } catch (error) {
-    console.error('OTP-based password reset failed:', error.message);
+    await recordRecoveryEvent({ userId: recoveryUserId, event: 'PASSWORD_RESET_FAILED', result: 'Failure', req });
+    console.error('OTP-based password reset failed.');
     return res.status(500).json({ success: false, message: 'Unable to reset password.' });
   }
 };
@@ -577,16 +771,16 @@ const forgotPassword = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
     }
 
+    await recordRecoveryEvent({ event: 'REQUESTED', result: 'Success', req });
+    const emailConfiguration = validateEmailConfiguration();
+    if (!emailConfiguration.valid) {
+      return res.status(503).json({ success: false, message: 'Unable to process the password reset request.' });
+    }
+
     const user = await User.findOne({ where: { email } });
     const eligibility = await ensureEligibleResetUser(user, 'email');
     if (!user || !eligibility.allowed) {
       return res.json({ success: true, message: genericResetMessage });
-    }
-
-    const emailConfiguration = validateEmailConfiguration();
-    if (!emailConfiguration.valid) {
-      console.error('Forgot password error: email service configuration missing');
-      return res.status(503).json({ success: false, message: 'Password reset email service is not configured.' });
     }
 
     const rawToken = crypto.randomBytes(32).toString('hex');
@@ -594,14 +788,30 @@ const forgotPassword = async (req, res) => {
     const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000);
     const resetUrl = `${getResetFrontendUrl()}/reset-password?token=${encodeURIComponent(rawToken)}`;
 
-    await user.update({ resetTokenHash: tokenHash, resetTokenExpiresAt: expiresAt, resetTokenUsedAt: null, resetOtpHash: null, resetOtpExpiresAt: null, resetOtpUsedAt: null, resetOtpAttempts: 0 });
+    await PasswordRecovery.update({
+      otpHash: null,
+      expiresAt: new Date(),
+      resetTokenHash: null,
+      resetTokenExpiresAt: null,
+      usedAt: new Date(),
+    }, { where: { userId: user.id, method: 'email', usedAt: null } });
+    const recovery = await PasswordRecovery.create({
+      userId: user.id,
+      method: 'email',
+      destination: email,
+      otpHash: null,
+      expiresAt,
+      attempts: 0,
+      resetTokenHash: tokenHash,
+      resetTokenExpiresAt: expiresAt,
+    });
 
     // Any delivery failure, including a timeout, must not leave a usable token behind.
     const rollbackResetToken = async () => {
       try {
-        await user.update({ resetTokenHash: null, resetTokenExpiresAt: null, resetTokenUsedAt: new Date() });
+        await recovery.update({ resetTokenHash: null, resetTokenExpiresAt: null, usedAt: new Date() });
       } catch (rollbackError) {
-        console.error('Failed to roll back password reset token:', rollbackError.message);
+        console.error('Failed to roll back password reset authorization.');
       }
     };
 
@@ -619,24 +829,30 @@ const forgotPassword = async (req, res) => {
     }
 
     await recordAuthEvent({ userId: user.id, action: 'PASSWORD_RESET_REQUESTED', result: 'Success', req });
+    await recordRecoveryEvent({ userId: user.id, event: 'RESET_LINK_SENT', result: 'Success', req });
 
     return res.json({ success: true, message: genericResetMessage });
   } catch (error) {
-    console.error('Forgot password error:', error.message);
+    await recordRecoveryEvent({ event: 'REQUEST_FAILED', result: 'Failure', req });
+    console.error('Forgot password request failed.');
     return res.status(503).json({ success: false, message: 'Unable to process the password reset request.' });
   }
 };
 
 const verifyResetOtp = async (req, res) => {
   try {
-    const { phone, method, phoneNumber } = req.body;
-    const recoveryMethod = String(method || (phoneNumber || phone ? 'phone' : 'email')).trim().toLowerCase();
+    const { phone, email, method, phoneNumber, destination } = req.body;
+    const recoveryMethod = String(method || (phoneNumber || phone ? 'phone' : (email || destination ? 'email' : 'phone'))).trim().toLowerCase();
 
-    if (recoveryMethod !== 'phone') {
-      return res.status(400).json({ success: false, message: 'Code verification is only available for mobile phone recovery. Use the reset link sent to your email address instead.' });
+    if (recoveryMethod === 'phone') {
+      return verifyForgotPasswordOtp(req, res);
     }
 
-    return verifyForgotPasswordOtp(req, res);
+    if (recoveryMethod === 'email') {
+      return verifyForgotPasswordOtp({ ...req, body: { ...req.body, method: 'email', email: email || destination || '' } }, res);
+    }
+
+    return res.status(400).json({ success: false, message: 'Unsupported recovery method for verification.' });
   } catch (error) {
     console.error('OTP verification failed:', error.message);
     return res.status(500).json({ success: false, message: 'Unable to verify the recovery code.' });
@@ -644,53 +860,15 @@ const verifyResetOtp = async (req, res) => {
 };
 
 const resetPassword = async (req, res) => {
-  try {
-    const token = String(req.body.token || '').trim();
-    const password = String(req.body.password || '');
-    const confirmPassword = String(req.body.confirmPassword || '');
-    if (!token || !password || password !== confirmPassword) {
-      return res.status(400).json({ success: false, message: 'A valid token and matching password are required.' });
-    }
-    const passwordError = validatePassword(password, await getSecuritySettings());
-    if (passwordError) return res.status(400).json({ success: false, message: passwordError });
-    const tokenHash = hashValue(token);
-    const user = await User.findOne({ where: { resetTokenHash: tokenHash, resetTokenUsedAt: null } });
-    if (!user || user.resetTokenUsedAt || !user.resetTokenExpiresAt || new Date(user.resetTokenExpiresAt) < new Date()) {
-      return res.status(400).json({ success: false, message: 'This password reset link is invalid or expired.' });
-    }
-    if (!user.active) {
-      await user.update({ resetTokenHash: null, resetTokenExpiresAt: null, resetTokenUsedAt: new Date() });
-      return res.status(403).json({ success: false, message: 'This account cannot complete password reset right now.' });
-    }
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const [updatedCount] = await User.update({
-      password: hashedPassword,
-      resetTokenHash: null,
-      resetTokenExpiresAt: null,
-      resetTokenUsedAt: new Date(),
-      resetOtpHash: null,
-      resetOtpExpiresAt: null,
-      resetOtpUsedAt: new Date(),
-      resetOtpAttempts: 0,
-    }, {
-      where: {
-        id: user.id,
-        resetTokenHash: tokenHash,
-        resetTokenUsedAt: null,
-        resetTokenExpiresAt: { [Op.gt]: new Date() },
-      },
-    });
-    if (!updatedCount) {
-      return res.status(400).json({ success: false, message: 'This password reset link is invalid or expired.' });
-    }
-
-    await recordAuthEvent({ userId: user.id, action: 'PASSWORD_RESET', result: 'Success', req });
-
-    return res.json({ success: true, message: 'Your password has been reset successfully.' });
-  } catch (error) {
-    console.error('Password reset failed:', error.message);
-    return res.status(500).json({ success: false, message: 'Unable to reset password.' });
-  }
+  const body = req.body || {};
+  return resetPasswordWithOtp({
+    ...req,
+    body: {
+      ...body,
+      resetToken: body.resetToken || body.token,
+      newPassword: body.newPassword || body.password,
+    },
+  }, res);
 };
 
 module.exports = {
@@ -702,6 +880,9 @@ module.exports = {
   changePassword,
   logout,
   forgotPassword,
+  requestForgotPassword,
+  verifyForgotPassword,
+  resetForgotPassword,
   verifyResetOtp,
   resetPassword,
   requestForgotPasswordOtp,

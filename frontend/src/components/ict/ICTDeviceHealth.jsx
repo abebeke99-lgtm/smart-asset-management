@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+  process.env.REACT_APP_API_URL || "/api";
 
 const PAGE_SIZE = 10;
 
@@ -1160,10 +1160,10 @@ export default function DeviceHealth() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6">
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6 ict-module-theme ict-theme-device-health">
       <div className="mx-auto max-w-[1600px] space-y-6">
         {/* Header */}
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between ict-page-header">
           <div>
             <div className="mb-2 flex items-center gap-2 text-sm text-slate-500">
               <Activity size={16} />
@@ -1177,7 +1177,7 @@ export default function DeviceHealth() {
               </span>
             </div>
 
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl ict-page-title">
               Device Health
             </h1>
 

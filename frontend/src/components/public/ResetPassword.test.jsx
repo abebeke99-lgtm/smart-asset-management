@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import ResetPassword from './ResetPassword';
 import { apiClient } from '../../utils/api';
@@ -17,6 +17,11 @@ jest.mock('react-toastify', () => ({
 
 const VALID_TOKEN = 'f'.repeat(64);
 
+const LocationProbe = () => {
+  const location = useLocation();
+  return <output data-testid="current-location">{`${location.pathname}${location.search}`}</output>;
+};
+
 const renderPage = (route = `/reset-password?token=${VALID_TOKEN}`) => render(
   <MemoryRouter initialEntries={[route]}>
     <UIProvider>
@@ -26,6 +31,7 @@ const renderPage = (route = `/reset-password?token=${VALID_TOKEN}`) => render(
         <Route path="/login" element={<h1>Login page</h1>} />
         <Route path="/forgot-password" element={<h1>Forgot password page</h1>} />
       </Routes>
+      <LocationProbe />
     </UIProvider>
   </MemoryRouter>,
 );
@@ -45,13 +51,14 @@ describe('ResetPassword', () => {
     window.localStorage.setItem('language', 'en');
   });
 
-  it('reads the reset token from the link query string', () => {
+  it('reads the reset token from the link query string and removes it from the URL', async () => {
     renderPage();
 
     expect(screen.getByRole('heading', { name: 'Create New Password' })).toBeInTheDocument();
     expect(screen.getByLabelText('New password')).toBeInTheDocument();
     expect(screen.getByLabelText('Confirm new password')).toBeInTheDocument();
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('current-location')).toHaveTextContent('/reset-password'));
   });
 
   it('also reads the reset token from the path form of the link', async () => {

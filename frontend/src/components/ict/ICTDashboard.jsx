@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import "./ICTDashboard.css";
 import {
   Activity,
   AlertTriangle,
@@ -9,9 +11,12 @@ import {
   CheckCircle2,
   Clock3,
   Laptop,
+  Monitor,
   Loader2,
   Network,
   Package,
+  KeyRound,
+  Headphones,
   RefreshCw,
   Server,
   ShieldAlert,
@@ -53,7 +58,7 @@ import {
 */
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+  process.env.REACT_APP_API_URL || "/api";
 
 const DASHBOARD_ENDPOINT = `${API_BASE_URL}/ict/dashboard`;
 
@@ -74,6 +79,73 @@ const CONDITION_LABELS = {
   expired: "Expired",
   replaced: "Replaced",
 };
+
+const ICT_MODULES = [
+  {
+    title: "Inventory",
+    module: "inventory",
+    to: "/ict/inventory",
+    description: "Manage ICT inventory, asset records, stock levels, and inventory movement.",
+    icon: Package,
+    tone: "blue",
+  },
+  {
+    title: "IT Equipment",
+    module: "equipment",
+    to: "/ict/equipment",
+    description: "Manage computers, printers, servers, peripherals, and other IT equipment.",
+    icon: Monitor,
+    tone: "cyan",
+  },
+  {
+    title: "Software Licenses",
+    module: "software-licenses",
+    to: "/ict/software-licenses",
+    description: "Track software licenses, activation status, expiration dates, and compliance.",
+    icon: KeyRound,
+    tone: "purple",
+  },
+  {
+    title: "Technical Support",
+    module: "support",
+    to: "/ict/support",
+    description: "Manage technical support requests, service activities, and support status.",
+    icon: Headphones,
+    tone: "green",
+  },
+  {
+    title: "Incident Management",
+    module: "incidents",
+    to: "/ict/incidents",
+    description: "Track ICT incidents, priorities, assignments, resolution, and incident history.",
+    icon: ShieldAlert,
+    tone: "red",
+  },
+  {
+    title: "ICT Maintenance",
+    module: "maintenance",
+    to: "/ict/maintenance",
+    description: "Manage preventive maintenance, repairs, maintenance requests, and schedules.",
+    icon: Wrench,
+    tone: "amber",
+  },
+  {
+    title: "Device Health",
+    module: "device-health",
+    to: "/ict/device-health",
+    description: "Monitor device condition, health status, performance, and operational risks.",
+    icon: Activity,
+    tone: "green",
+  },
+  {
+    title: "ICT Reports",
+    module: "reports",
+    to: "/ict/reports",
+    description: "View ICT asset reports, maintenance reports, incidents, analytics, and summaries.",
+    icon: BarChart3,
+    tone: "blue",
+  },
+];
 
 const DEFAULT_DASHBOARD = {
   kpis: {
@@ -389,7 +461,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="dashboard-page">
+      <div className="dashboard-page ict-module-theme ict-theme-dashboard">
         <div className="dashboard-loading">
           <Loader2 className="spin" size={38} />
           <p>Loading ICT assets...</p>
@@ -399,12 +471,12 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page ict-module-theme ict-theme-dashboard">
       {/* ---------------------------------------------------------------- */}
       {/* Page Header                                                      */}
       {/* ---------------------------------------------------------------- */}
 
-      <div className="page-header">
+      <div className="page-header ict-page-header">
         <div>
           <div className="breadcrumb">
             <span>ICT Officer</span>
@@ -412,11 +484,11 @@ export default function Dashboard() {
             <strong>Dashboard</strong>
           </div>
 
-          <h1>ICT Dashboard</h1>
+          <h1 className="ict-page-title">ICT Dashboard</h1>
 
           <p>
-            Centralized overview of ICT assets, technical operations,
-            maintenance and support activity.
+            Mekdela Amba University ICT asset management, technical operations,
+            maintenance and support.
           </p>
         </div>
 
@@ -525,6 +597,30 @@ export default function Dashboard() {
           description="Unresolved high priority"
           iconClass="danger"
         />
+      </section>
+
+      <section className="ict-module-section" aria-labelledby="ict-module-heading">
+        <div className="ict-module-section-header">
+          <div>
+            <h2 id="ict-module-heading">ICT Modules</h2>
+            <p>University ICT operations and reporting</p>
+          </div>
+        </div>
+
+        <nav className="ict-module-grid" aria-label="ICT modules">
+          {ICT_MODULES.map(({ title, module, to, description, icon: Icon, tone }) => (
+            <Link className="ict-module-card" data-module={module} to={to} key={to}>
+              <span className={`ict-module-icon ict-module-icon-${tone}`} aria-hidden="true">
+                <Icon size={21} strokeWidth={1.8} />
+              </span>
+              <span className="ict-module-title">{title}</span>
+              <span className="ict-module-description">{description}</span>
+              <span className="ict-module-link">
+                Open module <ArrowRight size={16} aria-hidden="true" />
+              </span>
+            </Link>
+          ))}
+        </nav>
       </section>
 
       {/* ---------------------------------------------------------------- */}

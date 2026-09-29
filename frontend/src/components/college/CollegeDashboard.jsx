@@ -41,6 +41,7 @@ const CollegeDashboard = () => {
   const college = data.college || {};
   const summary = data.summary || {};
   const assetStatus = data.assetStatus || [];
+  const assetCondition = data.assetCondition || data.conditionDistribution || [];
   const departmentDistribution = data.departmentDistribution || [];
   const pendingRequests = data.pendingRequests || [];
   const recentAssignments = data.recentAssignments || [];
@@ -52,16 +53,18 @@ const CollegeDashboard = () => {
 
   const metrics = useMemo(() => [
     ['totalAssets', 'Total Assets', 'Assets registered for this college.', Package, 'blue', '/college/assets'],
-    ['availableAssets', 'Available Assets', 'Currently available and ready for issue.', CheckCircle2, 'green', '/college/assets'],
-    ['assignedAssets', 'Assigned Assets', 'Assets currently assigned to users or departments.', Users, 'cyan', '/college/assignments'],
-    ['maintenanceAssets', 'Under Maintenance', 'Assets currently flagged for repair or maintenance.', Wrench, 'orange', '/college/maintenance'],
-    ['departments', 'Departments', 'Departments in this college.', Building2, 'navy', '/college/departments'],
-    ['staff', 'Staff', 'Active staff in this college.', Users, 'teal', '/college/staff'],
-    ['pendingRequests', 'Pending Requests', 'Requests awaiting approval or action.', ClipboardList, 'amber', '/college/requests'],
-    ['verificationRequired', 'Verification Required', 'Assets needing verification review.', ShieldCheck, 'orange', '/college/verification'],
-  ], []);
+    ['activeAssets', 'Active', 'Available + assigned assets in the college.', CheckCircle2, 'green', '/college/assets'],
+    ['damagedAssets', 'Damaged', 'Assets currently marked as damaged.', ShieldCheck, 'orange', '/college/assets'],
+    ['underMaintenance', 'Under Maintenance', 'Assets currently in maintenance status.', Wrench, 'amber', '/college/maintenance'],
+    ['pendingRequests', 'Pending Requests', 'Requests awaiting further processing.', ClipboardList, 'amber', '/college/requests'],
+    ['pendingApprovals', 'Pending Approvals', 'Approval items awaiting manager action.', ClipboardCheck, 'cyan', '/college/approvals'],
+    ['openMaintenance', 'Open Maintenance', 'Maintenance records still requiring attention.', Wrench, 'red', '/college/maintenance'],
+    ['verificationProgress', 'Verification Progress', summary.verificationProgress || '0 / 0', ShieldCheck, 'teal', '/college/verification'],
+  ], [summary.verificationProgress]);
 
   const maxStatusValue = Math.max(1, ...assetStatus.map((item) => Number(item.value) || 0));
+  const maxConditionValue = Math.max(1, ...assetCondition.map((item) => Number(item.value) || 0));
+  const verificationProgressValue = summary.verificationProgress || (verification.total ? `${verification.verified || 0} / ${verification.total}` : '0 / 0');
 
   if (state.loading) {
     return (
@@ -103,9 +106,9 @@ const CollegeDashboard = () => {
       <div className="college-dashboard-hero">
         <div>
           <span className="college-eyebrow">College Manager</span>
-          <h1>College Manager</h1>
-          <p>{college.name ? `${college.name}` : 'Monitor and manage assets, departments, and operations across your college.'}</p>
-          <p className="college-hero-subtitle">Monitor and manage assets, departments, and operations across your college.</p>
+          <h1>College Manager Dashboard</h1>
+          <p>Overview of assets, requests, approvals, maintenance, and verification activities for your college.</p>
+          <p className="college-hero-subtitle">Authorized college: {college.name || 'Current college'}</p>
         </div>
         <div className="college-college-badge">
           <Building2 size={20} />
@@ -115,16 +118,22 @@ const CollegeDashboard = () => {
       </div>
 
       <div className="college-dashboard-kpis">
-        {metrics.map(([key, label, description, Icon, tone, to]) => (
-          <Link className="college-kpi-card" key={key} to={to}>
-            <div className={`college-kpi-icon college-kpi-icon--${tone}`}>
-              <Icon size={21} aria-hidden="true" />
-            </div>
-            <strong className="college-kpi-value">{Number(summary[key] || 0).toLocaleString()}</strong>
-            <span className="college-kpi-label">{label}</span>
-            <small>{description}</small>
-          </Link>
-        ))}
+        {metrics.map(([key, label, description, Icon, tone, to]) => {
+          const value = key === 'verificationProgress'
+            ? verificationProgressValue
+            : Number(summary[key] || 0).toLocaleString();
+
+          return (
+            <Link className="college-kpi-card" key={key} to={to}>
+              <div className={`college-kpi-icon college-kpi-icon--${tone}`}>
+                <Icon size={21} aria-hidden="true" />
+              </div>
+              <strong className="college-kpi-value">{value}</strong>
+              <span className="college-kpi-label">{label}</span>
+              <small>{description}</small>
+            </Link>
+          );
+        })}
       </div>
 
       <div className="college-dashboard-charts">
@@ -152,6 +161,33 @@ const CollegeDashboard = () => {
             </div>
           ) : (
             <p className="college-empty-state">No asset status data available</p>
+          )}
+        </section>
+
+        <section className="college-dashboard-card">
+          <div className="college-section-heading">
+            <div>
+              <h2>Asset Condition Overview</h2>
+              <p>Current condition distribution for this college.</p>
+            </div>
+            <ShieldCheck size={20} />
+          </div>
+          {assetCondition.length ? (
+            <div className="college-chart-list">
+              {assetCondition.map((item) => (
+                <div className="college-chart-row" key={`${item.label}-${item.value}`}>
+                  <div className="college-chart-row-label">
+                    <span>{normalizeLabel(item.label)}</span>
+                    <strong>{item.value}</strong>
+                  </div>
+                  <div className="college-chart-track">
+                    <span className="college-chart-bar--status" style={{ width: `${((Number(item.value) || 0) / maxConditionValue) * 100}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="college-empty-state">No asset condition data available</p>
           )}
         </section>
 

@@ -5,31 +5,62 @@ const isProduction = process.env.NODE_ENV === 'production';
 const requiredProductionVariables = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
 
 function getDatabaseConfig() {
-  const missing = isProduction ? requiredProductionVariables.filter((name) => !String(process.env[name] || '').trim()) : [];
-  if (missing.length) {
-    const error = new Error(`Missing production database configuration: ${missing.join(', ')}`);
-    error.code = 'DB_CONFIG_MISSING';
-    throw error;
+  const connectionString = String(process.env.DATABASE_URL || '').trim();
+  let config;
+
+  if (connectionString) {
+    let parsed;
+    try {
+      parsed = new URL(connectionString);
+    } catch {
+      const error = new Error('DATABASE_URL must be a valid MySQL connection URL');
+      error.code = 'DB_CONFIG_INVALID';
+      throw error;
+    }
+    if (!['mysql:', 'mysql2:'].includes(parsed.protocol)) {
+      const error = new Error('DATABASE_URL must use the MySQL protocol');
+      error.code = 'DB_CONFIG_INVALID';
+      throw error;
+    }
+    config = {
+      host: parsed.hostname,
+      port: parsed.port || '3306',
+      database: decodeURIComponent(parsed.pathname.replace(/^\//, '')),
+      username: decodeURIComponent(parsed.username),
+      password: decodeURIComponent(parsed.password),
+    };
+    if (!config.host || !config.database || !config.username || !config.password) {
+      const error = new Error('DATABASE_URL must include a MySQL host, database, username, and password');
+      error.code = 'DB_CONFIG_INVALID';
+      throw error;
+    }
+  } else {
+    const missing = isProduction ? requiredProductionVariables.filter((name) => !String(process.env[name] || '').trim()) : [];
+    if (missing.length) {
+      const error = new Error(`Missing production database configuration: ${missing.join(', ')} or DATABASE_URL`);
+      error.code = 'DB_CONFIG_MISSING';
+      throw error;
+    }
+    config = {
+      database: process.env.DB_NAME || 'smart_asset_db',
+      username: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD || '',
+      host: process.env.DB_HOST || 'localhost',
+      port: process.env.DB_PORT || '3306',
+    };
   }
 
-  const portValue = process.env.DB_PORT || '3306';
-  if (isProduction && !process.env.DB_PORT) {
+  if (isProduction && !process.env.DB_PORT && !connectionString) {
     console.warn('DB_PORT is not configured; using the standard MySQL port 3306.');
   }
-  const port = Number(portValue);
+  const port = Number(config.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     const error = new Error('DB_PORT must be a valid TCP port');
     error.code = 'DB_CONFIG_INVALID';
     throw error;
   }
 
-  return {
-    database: process.env.DB_NAME || 'smart_asset_db',
-    username: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    host: process.env.DB_HOST || 'localhost',
-    port,
-  };
+  return { ...config, port };
 }
 
 const databaseConfig = getDatabaseConfig();
@@ -49,8 +80,10 @@ const sequelizeOptions = {
   ...(databaseConfig.password !== undefined ? { password: databaseConfig.password } : {}),
   ...(databaseConfig.host ? { host: databaseConfig.host } : {}),
   ...(databaseConfig.port ? { port: databaseConfig.port } : {}),
+  timezone: process.env.DB_TIMEZONE || '+00:00',
   dialectOptions: {
     connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT_MS) || 10000,
+    charset: process.env.DB_CHARSET || 'utf8mb4',
     ...(ssl ? { ssl } : {}),
   },
   pool: {
@@ -63,6 +96,8 @@ const sequelizeOptions = {
   define: {
     timestamps: true,
     underscored: true,
+    charset: process.env.DB_CHARSET || 'utf8mb4',
+    collate: process.env.DB_COLLATION || 'utf8mb4_unicode_ci',
   },
 };
 

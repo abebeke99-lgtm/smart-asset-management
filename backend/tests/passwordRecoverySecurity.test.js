@@ -9,7 +9,8 @@ process.env.PASSWORD_RESET_OTP_TTL_MINUTES = '8';
 process.env.PASSWORD_RESET_OTP_MAX_ATTEMPTS = '3';
 
 const nodemailer = require('nodemailer');
-const { User, Config, AuditLog } = require('../src/models');
+const { normalizePhoneNumber, sendSMS } = require('../src/services/smsService');
+const { User, PasswordRecovery, Config, AuditLog } = require('../src/models');
 const authController = require('../src/controllers/authController');
 
 const EXPECTED_OTP_TTL_MINUTES = 8;
@@ -76,6 +77,7 @@ const matchesCondition = (actual, condition) => {
     if (!actual) return false;
     return new Date(actual) > new Date(condition[Op.gt]);
   }
+  if (condition && typeof condition === 'object' && condition[Op.ne] !== undefined) return actual !== condition[Op.ne];
   return actual === condition;
 };
 
@@ -91,9 +93,82 @@ const createUserStore = (user) => ({
   },
 });
 
+const createRecoveryStore = (user) => {
+  const method = user?.recoveryMethod || 'phone';
+  const destination = method === 'email' ? user?.email : user?.phone;
+  const records = user && (user.resetOtpHash || user.resetTokenHash) ? [{
+    id: 1,
+    userId: user.id,
+    method,
+    destination,
+    otpHash: user.resetOtpHash,
+    expiresAt: user.resetOtpExpiresAt || new Date(0),
+    attempts: user.resetOtpAttempts || 0,
+    verifiedAt: user.resetOtpUsedAt,
+    usedAt: user.resetTokenUsedAt,
+    resetTokenHash: user.resetTokenHash,
+    resetTokenExpiresAt: user.resetTokenExpiresAt,
+    createdAt: user.updatedAt || new Date(0),
+  }] : [];
+
+  const syncLegacyTestFields = (record) => {
+    if (!user || record?.userId !== user.id) return;
+    user.resetOtpHash = record.otpHash;
+    user.resetOtpExpiresAt = record.otpHash ? record.expiresAt : null;
+    user.resetOtpAttempts = record.attempts;
+    user.resetOtpUsedAt = record.verifiedAt;
+    user.resetTokenHash = record.resetTokenHash;
+    user.resetTokenExpiresAt = record.resetTokenExpiresAt;
+    user.resetTokenUsedAt = record.usedAt;
+  };
+
+  records.forEach((record) => {
+    record.update = async (changes) => {
+      Object.assign(record, changes, { updatedAt: new Date() });
+      syncLegacyTestFields(record);
+      return record;
+    };
+  });
+
+  return {
+    findOne: async ({ where = {}, order = [] } = {}) => {
+      const matches = records.filter((record) => matchesWhere(record, where));
+      if (order.length) matches.sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+      return matches[0] || null;
+    },
+    create: async (values) => {
+      const record = {
+        id: records.length + 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...values,
+        async update(changes) {
+          Object.assign(this, changes, { updatedAt: new Date() });
+          syncLegacyTestFields(this);
+          return this;
+        },
+      };
+      records.push(record);
+      syncLegacyTestFields(record);
+      return record;
+    },
+    update: async (values, options = {}) => {
+      const matches = records.filter((record) => matchesWhere(record, options.where));
+      matches.forEach((record) => {
+        Object.assign(record, values, { updatedAt: new Date() });
+        syncLegacyTestFields(record);
+      });
+      return [matches.length];
+    },
+  };
+};
+
 const withStubs = async ({ user, onFetch, onSendMail, onCreateTransport }, run) => {
   const originalFindOne = User.findOne;
   const originalUpdate = User.update;
+  const originalRecoveryFindOne = PasswordRecovery.findOne;
+  const originalRecoveryCreate = PasswordRecovery.create;
+  const originalRecoveryUpdate = PasswordRecovery.update;
   const originalConfigFindByPk = Config.findByPk;
   const originalAuditCreate = AuditLog.create;
   const originalFetch = global.fetch;
@@ -109,8 +184,12 @@ const withStubs = async ({ user, onFetch, onSendMail, onCreateTransport }, run) 
   Object.assign(process.env, emailEnvironment);
 
   const store = createUserStore(user);
+  const recoveryStore = createRecoveryStore(user);
   User.findOne = store.findOne;
   User.update = store.update;
+  PasswordRecovery.findOne = recoveryStore.findOne;
+  PasswordRecovery.create = recoveryStore.create;
+  PasswordRecovery.update = recoveryStore.update;
   Config.findByPk = async () => null;
   AuditLog.create = async () => ({});
   global.fetch = onFetch || (async () => ({
@@ -130,6 +209,9 @@ const withStubs = async ({ user, onFetch, onSendMail, onCreateTransport }, run) 
   } finally {
     User.findOne = originalFindOne;
     User.update = originalUpdate;
+    PasswordRecovery.findOne = originalRecoveryFindOne;
+    PasswordRecovery.create = originalRecoveryCreate;
+    PasswordRecovery.update = originalRecoveryUpdate;
     Config.findByPk = originalConfigFindByPk;
     AuditLog.create = originalAuditCreate;
     global.fetch = originalFetch;
@@ -148,8 +230,38 @@ const configureSmsProvider = () => withEnvironment({
   SMS_SENDER: 'SMARTASSET',
 });
 
+test('normalizes Ethiopian 09 and 07 mobile formats to international form', () => {
+  assert.equal(normalizePhoneNumber('0912345678'), '+251912345678');
+  assert.equal(normalizePhoneNumber('0712345678'), '+251712345678');
+  assert.equal(normalizePhoneNumber('+251912345678'), '+251912345678');
+  assert.equal(normalizePhoneNumber('+251712345678'), '+251712345678');
+});
+
+test('does not report SMS success unless the provider confirms acceptance', async () => {
+  const restoreEnvironment = configureSmsProvider();
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify({ SMSMessageData: { Recipients: [{ status: 'Failed' }] } }),
+  });
+
+  try {
+    const result = await sendSMS('0911000001', 'test message');
+    assert.equal(result.status, 'failed');
+  } finally {
+    global.fetch = originalFetch;
+    restoreEnvironment();
+  }
+});
+
 const requestOtp = (response, phoneNumber = '0911000001') => authController.requestForgotPasswordOtp(
   { body: { phoneNumber }, headers: {}, ip: '127.0.0.1' },
+  response,
+);
+
+const requestEmailOtp = (response, email = 'student@university.edu') => authController.requestForgotPasswordOtp(
+  { body: { method: 'email', email }, headers: {}, ip: '127.0.0.1' },
   response,
 );
 
@@ -157,6 +269,32 @@ const verifyOtp = (response, otp, phoneNumber = '+251911000001') => authControll
   { body: { phoneNumber, otp }, headers: {}, ip: '127.0.0.1' },
   response,
 );
+
+test('email recovery uses the OTP flow and delivers the code through SMTP', async () => {
+  const user = createUser();
+  let delivered = null;
+
+  await withStubs({
+    user,
+    onSendMail: async (options) => {
+      delivered = options;
+      return { messageId: 'mail-otp-1' };
+    },
+  }, async () => {
+    const response = createResponse();
+    await requestEmailOtp(response);
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.success, true);
+  });
+
+  assert.ok(delivered, 'the email OTP must be delivered');
+  assert.equal(delivered.to, 'student@university.edu');
+  const deliveredCode = delivered.text.match(/(\d{6})/)[1];
+  assert.equal(user.resetOtpHash, sha256(deliveredCode), 'the persisted value must be the SHA-256 hash of the email code');
+  assert.ok(delivered.text.includes(`${EXPECTED_OTP_TTL_MINUTES} minutes`), 'the email must include the configured OTP lifetime');
+  assert.ok(new Date(user.resetOtpExpiresAt) > new Date(), 'an expiry must be stored for the email code');
+});
 
 test('OTP request delivers a real SMS and stores only a hash of the code', async () => {
   const restoreEnvironment = configureSmsProvider();
@@ -509,18 +647,30 @@ test('an unknown reset token is rejected as invalid or expired', async () => {
   });
 });
 
-test('code verification rejects the email channel instead of pretending an email code exists', async () => {
-  await withStubs({ user: createUser() }, async () => {
-    const response = createResponse();
-    await authController.verifyResetOtp(
-      { body: { method: 'email', email: 'student@university.edu', otp: '123456' }, headers: {}, ip: '127.0.0.1' },
-      response,
-    );
-
-    assert.equal(response.statusCode, 400);
-    assert.equal(response.body.success, false);
-    assert.match(response.body.message, /email address/i);
+test('code verification supports the email recovery channel with the same OTP flow', async () => {
+  const restoreEnvironment = configureSmsProvider();
+  const otp = '123456';
+  const user = createUser({
+    recoveryMethod: 'email',
+    resetOtpHash: sha256(otp),
+    resetOtpExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
   });
+
+  try {
+    await withStubs({ user }, async () => {
+      const response = createResponse();
+      await authController.verifyResetOtp(
+        { body: { method: 'email', email: 'student@university.edu', otp }, headers: {}, ip: '127.0.0.1' },
+        response,
+      );
+
+      assert.equal(response.statusCode, 200);
+      assert.equal(response.body.success, true);
+      assert.equal(user.resetTokenHash, sha256(response.body.resetToken));
+    });
+  } finally {
+    restoreEnvironment();
+  }
 });
 
 test('code verification still supports the phone recovery channel', async () => {
@@ -741,10 +891,17 @@ test('a rolled back token cannot be used to reset the password', async () => {
   assert.ok(capturedToken, 'the link must have been built before the failure');
 
   const store = createUserStore(user);
+  const recoveryStore = createRecoveryStore(user);
   const originalFindOne = User.findOne;
   const originalUpdate = User.update;
+  const originalRecoveryFindOne = PasswordRecovery.findOne;
+  const originalRecoveryCreate = PasswordRecovery.create;
+  const originalRecoveryUpdate = PasswordRecovery.update;
   User.findOne = store.findOne;
   User.update = store.update;
+  PasswordRecovery.findOne = recoveryStore.findOne;
+  PasswordRecovery.create = recoveryStore.create;
+  PasswordRecovery.update = recoveryStore.update;
 
   try {
     const response = createResponse();
@@ -758,5 +915,8 @@ test('a rolled back token cannot be used to reset the password', async () => {
   } finally {
     User.findOne = originalFindOne;
     User.update = originalUpdate;
+    PasswordRecovery.findOne = originalRecoveryFindOne;
+    PasswordRecovery.create = originalRecoveryCreate;
+    PasswordRecovery.update = originalRecoveryUpdate;
   }
 });

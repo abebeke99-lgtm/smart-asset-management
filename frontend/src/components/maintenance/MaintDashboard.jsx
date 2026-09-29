@@ -27,7 +27,7 @@ import React, { useEffect, useMemo, useState } from "react";
  */
 
 const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "";
+  process.env.REACT_APP_API_URL || "/api";
 
 const KPI_CONFIG = [
   {
@@ -335,7 +335,7 @@ function Dashboard() {
       setError("");
 
       const response = await apiRequest(
-        "/api/maintenance/dashboard"
+        "/maintenance/dashboard"
       );
 
       const normalized = normalizeDashboardResponse(response);

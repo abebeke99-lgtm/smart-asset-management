@@ -33,31 +33,19 @@ describe('Contact', () => {
     fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'Please help me with this asset record.' } });
   };
 
-  it('shows verified university information and a labeled public message form', async () => {
+  it('shows university information and a labeled public message form without unconfigured details', async () => {
     await renderContact();
 
     expect(screen.getByRole('heading', { name: 'Contact' })).toBeInTheDocument();
     expect(screen.getAllByText('Mekdela Amba University')).toHaveLength(2);
-    expect(screen.getByText('Official contact details have not been configured.')).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'University Asset Management System' })).toHaveLength(2);
+    expect(screen.getByText('Send a message to the system administration team.')).toBeInTheDocument();
+    expect(screen.queryByText(/Address:|Phone:|@/i)).not.toBeInTheDocument();
+    expect(apiClient.get).not.toHaveBeenCalled();
     expect(screen.getByRole('form')).toBeInTheDocument();
     expect(screen.getByLabelText('Name')).toBeRequired();
     expect(screen.getByLabelText('Email')).toHaveAttribute('type', 'email');
     expect(screen.getByRole('button', { name: /Send message/i })).toBeInTheDocument();
-  });
-
-  it('loads configured university contact details from the public API', async () => {
-    apiClient.get.mockResolvedValueOnce({
-      data: {
-        success: true,
-        data: { email: 'support@university.edu', phone: '+251 11 234 5678', address: 'Mekdela Amba' },
-      },
-    });
-    await renderContact();
-
-    expect(await screen.findByText(/support@university\.edu/)).toBeInTheDocument();
-    expect(screen.getByText(/\+251 11 234 5678/)).toBeInTheDocument();
-    expect(screen.getByText(/Address: Mekdela Amba/)).toBeInTheDocument();
-    expect(apiClient.get).toHaveBeenCalledWith('/contact/details');
   });
 
   it('renders headings, labels, placeholders, and validation in Amharic from the shared language setting', async () => {

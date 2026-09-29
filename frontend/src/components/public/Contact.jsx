@@ -1,22 +1,23 @@
-import React, { useEffect, useState } from 'react';
-import { Building2, Info, Mail, MessageSquareText, Send } from 'lucide-react';
+import React, { useState } from 'react';
+import { Building2, MessageSquareText, Send } from 'lucide-react';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
 
-const ContactHero = ({ eyebrow, title, subtitle, supportingText }) => (
+const ContactHero = ({ title, university, system, supportingText }) => (
   <section className="contact-hero" aria-labelledby="contact-title">
     <div className="contact-shell contact-hero-inner">
       <div className="contact-hero-copy">
-        <p className="contact-eyebrow">{eyebrow}</p>
-        <h1 id="contact-title">{title}</h1>
-        <p className="contact-hero-subtitle">{subtitle}</p>
+        <h1 id="contact-title" className="sr-only">{title}</h1>
+        <p className="contact-eyebrow">University</p>
+        <h2 className="contact-university">{university}</h2>
+        <h3 className="contact-system">{system}</h3>
         <p className="contact-supporting-text">{supportingText}</p>
       </div>
     </div>
   </section>
 );
 
-const ContactInfoCard = ({ icon: Icon, label, value, tag }) => (
+const ContactInfoCard = ({ icon: Icon, label, value }) => (
   <article className="contact-info-card">
     <div className="contact-info-head">
       <div className="contact-info-icon" aria-hidden="true">
@@ -25,7 +26,6 @@ const ContactInfoCard = ({ icon: Icon, label, value, tag }) => (
       <h3>{label}</h3>
     </div>
     <p className="contact-info-value">{value}</p>
-    {tag ? <span className="contact-info-tag">{tag}</span> : null}
   </article>
 );
 
@@ -38,57 +38,28 @@ const Contact = () => {
   const [errors, setErrors] = useState({});
   const [notice, setNotice] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [contactDetails, setContactDetails] = useState({});
-  const [contactDetailsStatus, setContactDetailsStatus] = useState('loading');
   const isDark = theme === 'dark';
 
-  useEffect(() => {
-    let isCurrent = true;
-    apiClient.get('/contact/details')
-      .then((response) => {
-        if (!isCurrent) return;
-        if (response.data?.success && response.data.data) {
-          setContactDetails(response.data.data);
-          setContactDetailsStatus('loaded');
-        } else {
-          setContactDetailsStatus('unavailable');
-        }
-      })
-      .catch(() => {
-        if (isCurrent) setContactDetailsStatus('unavailable');
-      });
-
-    return () => { isCurrent = false; };
-  }, []);
-
   const content = language === 'en' ? {
-    eyebrow: 'Mekdela Amba University',
     title: 'Contact',
-    subtitle: 'University Asset Management System',
-    supportingText: 'Send a message to the system administration team.',
+    university: 'Mekdela Amba University',
+    system: 'University Asset Management System',
+    supportingText: 'For questions or technical support related to the University Asset Management System, contact the system administration team.',
     infoHeading: 'Contact Information',
     institution: 'University',
     institutionValue: 'Mekdela Amba University',
-    system: 'System administration',
     systemValue: 'University Asset Management System',
-    details: 'University email and phone',
-    detailsValue: 'Official contact details have not been configured.',
-    detailsLoading: 'Loading contact details…',
-    detailsUnavailable: 'Contact details are currently unavailable.',
-    phone: 'Phone',
-    address: 'Address',
-    website: 'Website',
-    formHeading: 'Send a message',
-    formIntro: 'Messages are sent to system administration when email delivery is configured.',
+    formHeading: 'Send a Message',
+    formIntro: 'Send a message to the system administration team.',
     name: 'Name',
     email: 'Email',
     subject: 'Subject',
     message: 'Message',
     namePlaceholder: 'Your name',
-    emailPlaceholder: 'you@example.com',
+    emailPlaceholder: 'Enter your email address',
     subjectPlaceholder: 'What is your message about?',
     messagePlaceholder: 'Write your message (20 to 5,000 characters)',
-    submit: 'Send message',
+    submit: 'Send Message',
     submitting: 'Sending…',
     requiredName: 'Enter your name (2 to 100 characters).',
     invalidEmail: 'Enter a valid email address.',
@@ -102,30 +73,22 @@ const Contact = () => {
     sendFailed: 'Your message could not be delivered. Your entries have been kept.',
     networkError: 'The service could not be reached. Check your connection and try again.'
   } : {
-    eyebrow: 'መቅደላ አምባ ዩኒቨርሲቲ',
     title: 'ያግኙን',
-    subtitle: 'የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት',
-    supportingText: 'ለስርዓቱ አስተዳደር ቡድን መልዕክት ይላኩ።',
+    university: 'መቅደላ አምባ ዩኒቨርሲቲ',
+    system: 'የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት',
+    supportingText: 'ከዩኒቨርሲቲው የንብረት አስተዳደር ስርዓት ጋር ለተያያዙ ጥያቄዎች ወይም ቴክኒካዊ ድጋፍ የስርዓቱን አስተዳደር ቡድን ያግኙ።',
     infoHeading: 'የግንኙነት መረጃ',
     institution: 'ዩኒቨርሲቲ',
     institutionValue: 'መቅደላ አምባ ዩኒቨርሲቲ',
-    system: 'የስርዓት አስተዳደር',
     systemValue: 'የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት',
-    details: 'የዩኒቨርሲቲ ኢሜይልና ስልክ',
-    detailsValue: 'ይፋዊ የግንኙነት ዝርዝሮች አልተዋቀሩም።',
-    detailsLoading: 'የግንኙነት መረጃ በመጫን ላይ…',
-    detailsUnavailable: 'የግንኙነት መረጃ በአሁኑ ጊዜ አይገኝም።',
-    phone: 'ስልክ',
-    address: 'አድራሻ',
-    website: 'ድረ-ገጽ',
     formHeading: 'መልዕክት ይላኩ',
-    formIntro: 'የኢሜይል አገልግሎቱ ሲዋቀር መልዕክቶች ለስርዓቱ አስተዳደር ይላካሉ።',
+    formIntro: 'ለስርዓቱ አስተዳደር ቡድን መልዕክት ይላኩ።',
     name: 'ስም',
     email: 'ኢሜይል',
     subject: 'ርዕስ',
     message: 'መልዕክት',
     namePlaceholder: 'ስምዎ',
-    emailPlaceholder: 'you@example.com',
+    emailPlaceholder: 'የኢሜይል አድራሻዎን ያስገቡ',
     subjectPlaceholder: 'መልዕክትዎ ስለ ምንድን ነው?',
     messagePlaceholder: 'መልዕክትዎን ይጻፉ (ከ20 እስከ 5,000 ቁምፊዎች)',
     submit: 'መልዕክት ይላኩ',
@@ -142,20 +105,6 @@ const Contact = () => {
     sendFailed: 'መልዕክትዎ መላክ አልተቻለም። ያስገቡት መረጃ ተጠብቋል።',
     networkError: 'አገልግሎቱን ማግኘት አልተቻለም። ግንኙነትዎን ያረጋግጡና እንደገና ይሞክሩ።'
   };
-
-  const configuredDetails = [
-    contactDetails.email && `${content.email}: ${contactDetails.email}`,
-    contactDetails.phone && `${content.phone}: ${contactDetails.phone}`,
-    contactDetails.address && `${content.address}: ${contactDetails.address}`,
-    contactDetails.website && `${content.website}: ${contactDetails.website}`,
-  ].filter(Boolean);
-  const detailsValue = configuredDetails.length
-    ? configuredDetails.join(' · ')
-    : contactDetailsStatus === 'loading'
-      ? content.detailsLoading
-      : contactDetailsStatus === 'unavailable'
-        ? content.detailsUnavailable
-        : content.detailsValue;
 
   const validateForm = () => {
     const nextErrors = {};
@@ -214,27 +163,24 @@ const Contact = () => {
   return (
     <main className={`contact-page${isDark ? ' contact-page-dark' : ''}`}>
       <ContactHero
-        eyebrow={content.eyebrow}
         title={content.title}
-        subtitle={content.subtitle}
+        university={content.university}
+        system={content.system}
         supportingText={content.supportingText}
       />
 
       <section className="contact-shell contact-section" aria-labelledby="contact-information-title">
         <div className="contact-heading-row">
-          <p className="contact-section-kicker"><Building2 size={16} aria-hidden="true" /> {content.infoHeading}</p>
           <h2 id="contact-information-title">{content.infoHeading}</h2>
         </div>
         <div className="contact-info-grid">
           <ContactInfoCard icon={Building2} label={content.institution} value={content.institutionValue} />
           <ContactInfoCard icon={MessageSquareText} label={content.system} value={content.systemValue} />
-          <ContactInfoCard icon={Mail} label={content.details} value={detailsValue} />
         </div>
       </section>
 
       <section className="contact-shell contact-section contact-form-section" aria-labelledby="contact-form-title">
         <div className="contact-heading-row">
-          <p className="contact-section-kicker"><Info size={16} aria-hidden="true" /> {content.formHeading}</p>
           <h2 id="contact-form-title">{content.formHeading}</h2>
           <p className="contact-intro">{content.formIntro}</p>
         </div>
@@ -271,35 +217,47 @@ const Contact = () => {
 
       <style>{`
         .contact-page {
-          --contact-primary: #123B63;
-          --contact-secondary: #1E5A8A;
-          --contact-accent: #D9A441;
-          --contact-bg: #F5F8FC;
-          --contact-card: #FFFFFF;
+          --contact-primary: #1b365d;
+          --contact-secondary: #2a4d7a;
+          --contact-accent: #d4b46a;
+          --contact-bg: #f4f7fb;
+          --contact-card: #ffffff;
           --contact-text: #172033;
-          --contact-muted: #64748B;
-          --contact-border: #E2E8F0;
-          --contact-info: #2563EB;
-          --contact-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+          --contact-muted: #5f6f86;
+          --contact-border: #dfe7f1;
+          --contact-info: #1b365d;
+          --contact-shadow: 0 16px 30px rgba(27, 54, 93, 0.12);
           min-height: 100%;
           background: var(--contact-bg);
           color: var(--contact-text);
         }
 
         .contact-page-dark {
-          --contact-primary: #9ac2eb;
-          --contact-secondary: #7db1df;
-          --contact-accent: #f0c971;
+          --contact-primary: #dfeafc;
+          --contact-secondary: #b8d0f5;
+          --contact-accent: #f0d38d;
           --contact-bg: #0f172a;
           --contact-card: #111c2d;
           --contact-text: #ebf3ff;
           --contact-muted: #b8c7d8;
           --contact-border: rgba(148, 163, 184, 0.2);
-          --contact-info: #8ec5ff;
+          --contact-info: #dfeafc;
           --contact-shadow: 0 18px 30px rgba(2, 6, 23, 0.45);
         }
 
         .contact-page * { box-sizing: border-box; }
+
+        .sr-only {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          padding: 0;
+          margin: -1px;
+          overflow: hidden;
+          clip: rect(0, 0, 0, 0);
+          white-space: nowrap;
+          border: 0;
+        }
 
         .contact-shell {
           width: min(1100px, calc(100% - 32px));
@@ -307,8 +265,8 @@ const Contact = () => {
         }
 
         .contact-hero {
-          padding: clamp(52px, 6vw, 82px) 0 24px;
-          background: linear-gradient(135deg, rgba(18, 59, 99, 0.06), rgba(30, 90, 138, 0.04));
+          padding: clamp(52px, 6vw, 82px) 0 28px;
+          background: linear-gradient(135deg, rgba(27, 54, 93, 0.08), rgba(42, 77, 122, 0.04));
           border-bottom: 1px solid var(--contact-border);
         }
 
@@ -318,9 +276,7 @@ const Contact = () => {
 
         .contact-hero-inner {
           display: grid;
-          grid-template-columns: minmax(0, 1.45fr) minmax(220px, 0.7fr);
-          align-items: end;
-          gap: 28px;
+          grid-template-columns: minmax(0, 1fr);
         }
 
         .contact-eyebrow,
@@ -330,9 +286,9 @@ const Contact = () => {
           gap: 8px;
           margin: 0 0 16px;
           color: var(--contact-primary);
-          font-size: 0.78rem;
+          font-size: 0.76rem;
           font-weight: 800;
-          letter-spacing: 0.08em;
+          letter-spacing: 0.12em;
           text-transform: uppercase;
         }
 
@@ -394,9 +350,26 @@ const Contact = () => {
           line-height: 1.5;
         }
 
+        .contact-university {
+          margin: 0;
+          color: var(--contact-primary);
+          font-size: clamp(2.1rem, 4vw, 3.2rem);
+          line-height: 1.14;
+          letter-spacing: -0.03em;
+          font-weight: 800;
+        }
+
+        .contact-system {
+          margin: 10px 0 0;
+          color: var(--contact-secondary);
+          font-size: clamp(1.08rem, 2.1vw, 1.6rem);
+          line-height: 1.4;
+          font-weight: 700;
+        }
+
         .contact-supporting-text {
           margin: 18px 0 0;
-          max-width: 720px;
+          max-width: 760px;
           color: var(--contact-muted);
           font-size: 1.05rem;
           line-height: 1.7;
@@ -426,7 +399,9 @@ const Contact = () => {
         }
 
         .contact-info-grid {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 18px;
         }
 
         .contact-support-grid {
@@ -447,6 +422,17 @@ const Contact = () => {
 
         .contact-info-card {
           padding: 20px 20px 18px;
+          border: 1px solid var(--contact-border);
+          border-radius: 18px;
+          background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(244,247,251,0.98));
+          box-shadow: var(--contact-shadow);
+          transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        .contact-info-card:hover {
+          transform: translateY(-2px);
+          border-color: rgba(27, 54, 93, 0.2);
+          box-shadow: 0 18px 34px rgba(27, 54, 93, 0.12);
         }
 
         .contact-info-head {
@@ -704,10 +690,6 @@ const Contact = () => {
 
           .contact-info-grid { grid-template-columns: 1fr; }
 
-          .contact-hero-inner {
-            grid-template-columns: 1fr;
-          }
-
           .contact-assistance-card {
             display: grid;
             grid-template-columns: 1fr;
@@ -722,10 +704,6 @@ const Contact = () => {
 
           .contact-hero {
             padding-top: 42px;
-          }
-
-          .contact-hero-card {
-            padding: 16px 18px;
           }
 
           .contact-section {

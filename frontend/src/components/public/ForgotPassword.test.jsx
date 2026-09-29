@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import ForgotPassword from './ForgotPassword';
 import { apiClient } from '../../utils/api';
@@ -17,13 +17,22 @@ jest.mock('react-toastify', () => ({
 
 const originalLanguage = window.localStorage.getItem('language');
 
+const LocationProbe = () => {
+  const location = useLocation();
+  return <output data-testid="current-location">{`${location.pathname}${location.search}`}</output>;
+};
+
 const renderPage = (route = '/forgot-password', initialEntries = [route]) => render(
   <MemoryRouter initialEntries={initialEntries}>
     <UIProvider>
       <Routes>
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/forgot-password/request" element={<ForgotPassword />} />
+        <Route path="/forgot-password/verify" element={<ForgotPassword />} />
+        <Route path="/forgot-password/reset" element={<ForgotPassword />} />
         <Route path="/login" element={<h1>Login page</h1>} />
       </Routes>
+      <LocationProbe />
     </UIProvider>
   </MemoryRouter>,
 );
@@ -34,7 +43,7 @@ const typeEmail = (value) => {
 };
 
 const submitForm = () => {
-  fireEvent.click(screen.getByRole('button', { name: /send reset link/i }));
+  fireEvent.click(screen.getByRole('button', { name: /send verification code/i }));
 };
 
 describe('ForgotPassword', () => {
@@ -55,11 +64,32 @@ describe('ForgotPassword', () => {
     expect(screen.getByRole('button', { name: /^Email$/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Mobile Phone/ })).toBeInTheDocument();
     expect(screen.getByLabelText('Email address')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Send Reset Link/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Send Verification Code/ })).toBeInTheDocument();
 
     const backLinks = screen.getAllByRole('link', { name: /Back to Login/ });
     expect(backLinks).toHaveLength(1);
     expect(backLinks[0]).toHaveAttribute('href', '/login');
+  });
+
+  it('renders the request step on direct navigation to the request route', () => {
+    renderPage('/forgot-password/request');
+
+    expect(screen.getByRole('heading', { name: 'Forgot Password?' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Email address')).toBeInTheDocument();
+  });
+
+  it('renders the verification step on direct navigation to the verify route', () => {
+    renderPage('/forgot-password/verify');
+
+    expect(screen.getByRole('heading', { name: 'Verification Code' })).toBeInTheDocument();
+  });
+
+  it('renders the reset route and consumes a legacy query token into component state', async () => {
+    const token = 'z'.repeat(64);
+    renderPage(`/forgot-password/reset?token=${token}&keep=1`);
+
+    expect(await screen.findByLabelText('New password')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('current-location')).toHaveTextContent('/forgot-password/reset?keep=1'));
   });
 
   it('rejects an invalid email in the browser without calling the API', async () => {
@@ -81,8 +111,8 @@ describe('ForgotPassword', () => {
     expect(apiClient.post).not.toHaveBeenCalled();
   });
 
-  it('requests a reset link and shows the generic confirmation that does not reveal account existence', async () => {
-    const genericMessage = 'If an eligible account exists, password reset instructions will be sent.';
+  it('requests an email OTP and advances to the verification step without revealing account existence', async () => {
+    const genericMessage = 'If this email address is registered, a verification code has been sent.';
     apiClient.post.mockResolvedValue({ data: { success: true, message: genericMessage } });
 
     renderPage();
@@ -90,17 +120,37 @@ describe('ForgotPassword', () => {
     submitForm();
 
     await waitFor(() => expect(apiClient.post).toHaveBeenCalledTimes(1));
-    expect(apiClient.post).toHaveBeenCalledWith('/api/auth/forgot-password', {
+    expect(apiClient.post).toHaveBeenCalledWith('/api/auth/forgot-password/request', {
       method: 'email',
       email: 'student@university.edu',
     });
 
-    expect(await screen.findByRole('heading', { name: 'Check Your Email' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Verification Code' })).toBeInTheDocument();
     expect(screen.getByText(genericMessage)).toBeInTheDocument();
     expect(screen.queryByText(/does not exist|not found|no account/i)).not.toBeInTheDocument();
   });
 
-  it('blocks duplicate submissions while a request is in flight', async () => {
+  it('verifies an email OTP without requiring a phone number', async () => {
+    apiClient.post
+      .mockResolvedValueOnce({ data: { success: true, message: 'code sent' } })
+      .mockResolvedValueOnce({ data: { success: true, resetToken: 'e'.repeat(64) } });
+
+    renderPage();
+    typeEmail('student@university.edu');
+    submitForm();
+    await screen.findByRole('heading', { name: 'Verification Code' });
+
+    fireEvent.change(screen.getByLabelText('Verification Code'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: /Verify Code/ }));
+
+    await waitFor(() => expect(apiClient.post).toHaveBeenLastCalledWith(
+      '/api/auth/forgot-password/verify',
+      { method: 'email', email: 'student@university.edu', otp: '123456' },
+    ));
+    expect(await screen.findByLabelText('New password')).toBeInTheDocument();
+  });
+
+  it('blocks duplicate email OTP submissions while a request is in flight', async () => {
     let releaseRequest;
     apiClient.post.mockImplementation(() => new Promise((resolve) => { releaseRequest = resolve; }));
 
@@ -114,7 +164,7 @@ describe('ForgotPassword', () => {
     expect(apiClient.post).toHaveBeenCalledTimes(1);
 
     releaseRequest({ data: { success: true, message: 'ok' } });
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Check Your Email' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Verification Code' })).toBeInTheDocument());
   });
 
   it('surfaces a server failure instead of claiming the email was sent', async () => {
@@ -162,7 +212,7 @@ describe('ForgotPassword', () => {
     fireEvent.click(screen.getByRole('button', { name: /Send Verification Code/ }));
 
     await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith(
-      '/api/auth/forgot-password/request-otp',
+      '/api/auth/forgot-password/request',
       { phoneNumber: '+251912345678' },
     ));
 
@@ -173,7 +223,7 @@ describe('ForgotPassword', () => {
     fireEvent.click(screen.getByRole('button', { name: /Verify Code/ }));
 
     await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith(
-      '/api/auth/forgot-password/verify-otp',
+      '/api/auth/forgot-password/verify',
       { phoneNumber: '+251912345678', otp: '123456' },
     ));
 
@@ -184,7 +234,7 @@ describe('ForgotPassword', () => {
     fireEvent.click(screen.getByRole('button', { name: /Update Password/ }));
 
     await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith(
-      '/api/auth/forgot-password/reset-password',
+      '/api/auth/forgot-password/reset',
       { resetToken: 'a'.repeat(64), newPassword: 'Str0ng!Pass', confirmPassword: 'Str0ng!Pass' },
     ));
 
@@ -291,30 +341,28 @@ describe('ForgotPassword', () => {
     expect(passwordInput).toHaveAttribute('type', 'text');
   });
 
-  it('returns the user to the login page from the confirmation state', async () => {
-    apiClient.post.mockResolvedValue({ data: { success: true, message: 'If an eligible account exists, instructions will be sent.' } });
+  it('returns the user to the login page from the verification state', async () => {
+    apiClient.post.mockResolvedValue({ data: { success: true, message: 'If this email address is registered, a verification code has been sent.' } });
 
     renderPage();
     typeEmail('student@university.edu');
     submitForm();
-    await screen.findByRole('heading', { name: 'Check Your Email' });
+    await screen.findByRole('heading', { name: 'Verification Code' });
 
-    fireEvent.click(screen.getByRole('button', { name: /Back to Login/ }));
+    fireEvent.click(screen.getByRole('link', { name: /Back to Login/ }));
 
     expect(await screen.findByRole('heading', { name: 'Login page' })).toBeInTheDocument();
   });
 
-  it('can return to the form to request a link for a different address', async () => {
-    apiClient.post.mockResolvedValue({ data: { success: true, message: 'If an eligible account exists, instructions will be sent.' } });
+  it('keeps the user on the verification step after an email OTP request', async () => {
+    apiClient.post.mockResolvedValue({ data: { success: true, message: 'If this email address is registered, a verification code has been sent.' } });
 
     renderPage();
     typeEmail('student@university.edu');
     submitForm();
-    await screen.findByRole('heading', { name: 'Check Your Email' });
+    await screen.findByRole('heading', { name: 'Verification Code' });
 
-    fireEvent.click(screen.getByRole('button', { name: /Send to a different email address/ }));
-
-    expect(await screen.findByLabelText('Email address')).toBeInTheDocument();
+    expect(screen.getByLabelText('Verification Code')).toBeInTheDocument();
   });
 
   it('renders the Amharic interface from the shared language context', () => {

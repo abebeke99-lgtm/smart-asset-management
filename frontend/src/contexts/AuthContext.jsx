@@ -32,6 +32,10 @@ const normalizeRoleValue = (role) => {
     'dept_head': 'department_head',
     'department-head': 'department_head',
     'department': 'department_head',
+    'college manager': 'college_manager',
+    'college-manager': 'college_manager',
+    college_manager: 'college_manager',
+    college: 'college_manager',
     'infrastructure director': 'infrastructure',
     'infrastructure directorate': 'infrastructure',
     'infrastructure_directorate': 'infrastructure',
@@ -41,6 +45,8 @@ const normalizeRoleValue = (role) => {
   return aliases[value] || value;
 };
 
+const normalizePermissionValue = (permission) => String(permission || '').trim().toLowerCase().replace(/\s+/g, '.').replace(/[_-]+/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
+
 const normalizeUser = (userData) => {
   if (!userData || typeof userData !== 'object') {
     return userData;
@@ -48,9 +54,16 @@ const normalizeUser = (userData) => {
 
   const department = userData.department;
   const profilePhoto = userData.profilePhoto ?? userData.profile_photo ?? userData.avatar ?? userData.photo_url ?? userData.avatar_url ?? null;
+  const permissions = Array.isArray(userData.permissions)
+    ? userData.permissions.map(normalizePermissionValue).filter(Boolean)
+    : Array.isArray(userData.rolePermissions)
+      ? userData.rolePermissions.map(normalizePermissionValue).filter(Boolean)
+      : [];
+
   return {
     ...userData,
     role: normalizeRoleValue(userData.role),
+    permissions,
     department: department && typeof department === 'object'
       ? department.name || department.code || ''
       : department || '',
@@ -200,13 +213,34 @@ export const AuthProvider = ({ children }) => {
     return () => { mounted = false; };
   }, []);
 
+  const hasRole = (roleToCheck) => {
+    const target = normalizeRoleValue(roleToCheck);
+    return !!user && normalizeRoleValue(user.role) === target;
+  };
+
+  const hasPermission = (permission) => {
+    if (!user) return false;
+    const normalizedPermission = normalizePermissionValue(permission);
+    const permissionSet = new Set((user.permissions || []).map(normalizePermissionValue));
+    return permissionSet.has(normalizedPermission) || permissionSet.has('*');
+  };
+
+  const canAccessCollege = (collegeId) => {
+    if (!user) return false;
+    if (!collegeId) return true;
+    return Number(user.collegeId) === Number(collegeId) || !user.collegeId || normalizeRoleValue(user.role) !== 'college_manager';
+  };
+
   const value = {
     user,
     login,
     logout,
     updateUser,
     loading,
-    isAuthenticated: !!user
+    isAuthenticated: !!user,
+    hasRole,
+    hasPermission,
+    canAccessCollege,
   };
 
   return (

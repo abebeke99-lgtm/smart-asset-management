@@ -26,18 +26,17 @@
   --color-brand-card: #FFFFFF;
 
   /* ---------- Header ----------
-     Cyan background with ink text. */
-  --color-header: #00A3C7;
-  --color-header-hover: #0086A5;
-  --color-header-border: #0086A5;
-  --color-header-text: #111827;
-  --color-header-text-strong: #111827;
-  /* #0C4A6E only reaches 3.33:1 on the sky fill; this step clears 4.5:1. */
-  --color-header-text-muted: #08344A;
-  --color-header-icon-hover: rgba(17, 24, 39, 0.10);
-  --color-header-focus: #111827;
-  --color-header-badge: #DC2626;
-   --color-header-control-border: rgba(17, 24, 39, 0.22);
+     Updated to a darker university blue for a stronger branded look. */
+  --color-header: linear-gradient(135deg, #0F172A 0%, #1D4ED8 100%);
+  --color-header-hover: linear-gradient(135deg, #111827 0%, #1E40AF 100%);
+  --color-header-border: rgba(255, 255, 255, 0.18);
+  --color-header-text: #F8FAFC;
+  --color-header-text-strong: #FFFFFF;
+  --color-header-text-muted: #E2E8F0;
+  --color-header-icon-hover: rgba(255, 255, 255, 0.12);
+  --color-header-focus: #F8FAFC;
+  --color-header-badge: #F59E0B;
+  --color-header-control-border: rgba(255, 255, 255, 0.28);
 
   /* ---------- Sidebar ---------- */
   --color-sidebar: var(--color-brand-navy);
@@ -90,14 +89,39 @@
   --color-neutral-text: #374151;
   --color-disabled: #9CA3AF;
 
+   /* ---------- Global search ---------- */
+   --color-search-field: #FFFFFF;
+   --color-search-border: #0C4A6E;
+   --color-search-icon: #4B5563;
+   --color-search-text: #111827;
+   --color-search-hover: #111827;
+   --color-search-focus: #111827;
+   --color-search-shortcut-bg: #F3F4F6;
+   --color-search-shortcut-text: #374151;
+   --color-search-shortcut-border: #E5E7EB;
+   --color-search-dropdown: #FFFFFF;
+   --color-search-dropdown-border: #E5E7EB;
+   --color-search-group: #4B5563;
+   --color-search-divider: #E5E7EB;
+   --color-search-item-hover: #F3F6F9;
+   --color-search-selected-bg: #DBEAFE;
+   --color-search-selected-border: #2563EB;
+   --color-search-highlight: #1D4ED8;
+   --color-search-badge-bg: #F3F4F6;
+   --color-search-badge-text: #374151;
+   --color-search-skeleton: #E5E7EB;
+   --color-search-error: #991B1B;
+   --color-search-error-bg: #FEE2E2;
+   --color-search-empty: #4B5563;
+
   /* ---------- Accent (active nav only) ---------- */
   --color-accent: var(--color-brand-gold);
 
   /* ---------- Footer ---------- */
-   --color-footer-background: #517B97;
-   --color-footer-border: rgba(255, 255, 255, 0.28);
-   --color-footer-text: #FFFFFF;
-   --color-footer-link: #FFFFFF;
+   --color-footer-background: #4A7C99;
+   --color-footer-border: rgba(255, 255, 255, 0.18);
+   --color-footer-text: #000000;
+   --color-footer-link: #111827;
 
   /* ---------- Tables / charts ---------- */
   --color-table-header: #F3F6F9;
@@ -125,6 +149,8 @@
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
+   --radius-search-field: 10px;
+   --radius-search-dropdown: 12px;
 
   /* ---------- Elevation ---------- */
   --shadow-sm: 0 1px 3px rgba(17, 24, 39, 0.08);
@@ -169,8 +195,8 @@
   --primary-blue-hover: var(--color-primary-hover);
   --color-secondary: var(--color-text-secondary);
   --color-secondary-hover: #334155;
-  --header-gradient-start: var(--color-header);
-  --header-gradient-end: var(--color-header);
+  --header-gradient-start: #0F172A;
+  --header-gradient-end: #1D4ED8;
 
   --dashboard-header: var(--color-header);
   --dashboard-sidebar: var(--color-sidebar);

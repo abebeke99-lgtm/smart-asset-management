@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+  process.env.REACT_APP_API_URL || "/api";
 
 const PAGE_SIZE = 10;
 
@@ -903,10 +903,10 @@ export default function SoftwareLicenses() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6">
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6 ict-module-theme ict-theme-software-licenses">
       <div className="mx-auto max-w-[1600px] space-y-6">
         {/* Header */}
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between ict-page-header">
           <div>
             <div className="mb-2 flex items-center gap-2 text-sm text-slate-500">
               <FileKey2 size={16} />
@@ -917,7 +917,7 @@ export default function SoftwareLicenses() {
               </span>
             </div>
 
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl ict-page-title">
               Software Licenses
             </h1>
 
@@ -1028,7 +1028,7 @@ export default function SoftwareLicenses() {
         {/* Table */}
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           {/* Filters */}
-          <div className="border-b border-slate-200 p-4">
+          <div className="border-b border-slate-200 p-4 ict-filter-panel">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="relative w-full xl:max-w-md">
                 <Search

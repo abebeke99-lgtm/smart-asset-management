@@ -7,6 +7,7 @@ import axios from 'axios';
 import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import './App.css';
 import './admin-design-system.css';
+import './components/ict/ICTModuleThemes.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, House, Info, Languages, LayoutDashboard, LifeBuoy, LockKeyhole, LogIn, LogOut, Mail, MapPin, Moon, MoreHorizontal, Package, Phone, Radio, Search, Settings, ShieldCheck, Sparkles, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
@@ -84,7 +85,7 @@ import ICTNotifications from './components/ict/ICTNotifications';
 import ICTDocuments from './components/ict/ICTDocuments';
 import ICTWarranty from './components/ict/ICTWarranty';
 import ICTPhotoEvidence from './components/ict/ICTPhotoEvidence';
-import ICTGlobalSearch from './components/ict/ICTGlobalSearch';
+import GlobalSearch from './components/common/GlobalSearch';
 
 import DeptDashboard from './components/department/DeptDashboard';
 import DeptProfile from './components/department/DeptProfile';
@@ -201,10 +202,10 @@ export const normalizeRole = (role) => {
     'ict officer': 'ict_officer',
     ict_officer: 'ict_officer',
     'ict-officer': 'ict_officer',
-    college: 'college',
-    'college manager': 'college',
-    college_manager: 'college',
-    'college-manager': 'college',
+    college: 'college_manager',
+    'college manager': 'college_manager',
+    college_manager: 'college_manager',
+    'college-manager': 'college_manager',
     'department head': 'department_head',
     department_head: 'department_head',
     'department-head': 'department_head',
@@ -240,6 +241,7 @@ const getDashboardRoute = (role) => {
   const roleMap = {
     admin: '/admin',
     ict_officer: '/ict',
+    college_manager: '/college',
     college: '/college',
     department_head: '/department',
     finance: '/finance',
@@ -259,10 +261,11 @@ const AccessDenied = () => (
   </main>
 );
 
-export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
-  const { user, loading: authLoading } = useAuth();
+export const ProtectedRoute = ({ children, allowedRoles = [], allowedPermissions = [] }) => {
+  const { user, loading: authLoading, hasPermission } = useAuth();
   const location = useLocation();
   const currentRole = normalizeRole(user?.role || user?.roles);
+  const normalizedAllowedRoles = allowedRoles.map(normalizeRole);
 
   if (authLoading) {
     return <LoadingFallback />;
@@ -273,7 +276,11 @@ export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     return <Navigate to={`/login?redirect=${encodeURIComponent(redirectPath)}`} replace state={{ from: location }} />;
   }
 
-  if (allowedRoles.length > 0 && !allowedRoles.includes(currentRole)) {
+  if (normalizedAllowedRoles.length > 0 && !normalizedAllowedRoles.includes(currentRole)) {
+    return <AccessDenied />;
+  }
+
+  if (allowedPermissions.length > 0 && !allowedPermissions.every((permission) => hasPermission(permission))) {
     return <AccessDenied />;
   }
 
@@ -2556,11 +2563,7 @@ function AppContent() {
           <img className="dashboard-menu-logo" src={UNIVERSITY_LOGO} alt="Mekdela Amba University" />
         </div>
 
-        {sidebarRole === 'ict_officer' && (
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', padding: '0 16px' }}>
-            <ICTGlobalSearch />
-          </div>
-        )}
+        <div className="dashboard-header-search"><GlobalSearch role={sidebarRole} language={language} /></div>
 
         <div className="dashboard-header-actions">
           <button
@@ -2627,7 +2630,7 @@ function AppContent() {
       <DashboardHeader />
       <div className={`authenticated-shell${isStoreManager ? ' store-manager-body' : ''}`} style={hideSidebar || !showDashboardSidebar ? { display: 'block' } : undefined}>
         {showDashboardSidebar && (
-          <aside className={`admin-sidebar${isStoreManager ? ' store-manager-sidebar' : ''}`}>
+          <aside className={`admin-sidebar${isStoreManager ? ' store-manager-sidebar' : ''}${sidebarRole === 'ict_officer' ? ' ict-sidebar' : ''}`}>
             <nav className="admin-sidebar-nav" aria-label="Application navigation">
               {showCollegeNavigation && <div className="sidebar-subsection-label">{translateCollegeNavigation('COLLEGE MANAGER')}</div>}
               {showCollegeNavigation && (
@@ -2804,6 +2807,9 @@ function AppContent() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/forgot-password/request" element={<ForgotPassword />} />
+                <Route path="/forgot-password/verify" element={<ForgotPassword />} />
+                <Route path="/forgot-password/reset" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/reset-password/:token" element={<ResetPassword />} />
                 <Route path="/home" element={<Home />} />
@@ -2855,7 +2861,7 @@ function AppContent() {
         { path: '/admin/inventory/quarantine', label: 'Chemical Quarantine', icon: ShieldCheck, group: 'System' }
       ],
       'ict_officer': [
-        { path: '/ict/dashboard', label: 'Dashboard Overview', icon: LayoutDashboard, section: 'IT ASSET MANAGEMENT' },
+        { path: '/ict/dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'IT ASSET MANAGEMENT' },
         { path: '/ict/assets', label: 'ICT Assets', section: 'ASSET MANAGEMENT' },
         { path: '/ict/inventory', label: 'Inventory', section: 'ASSET MANAGEMENT' },
         { path: '/ict/assignments', label: 'Assignments', section: 'ASSET MANAGEMENT' },
@@ -3355,7 +3361,7 @@ function AppContent() {
             <Route path="department-reports" element={<CollegeManagerPages section="department-reports" />} />
             <Route path="department-history" element={<CollegeManagerPages section="department-history" />} />
             <Route path="staff" element={<CollegeManagerPages section="staff" />} />
-            <Route path="locations" element={<CollegeManagerPages section="locations" />} />
+            <Route path="locations" element={<ProtectedRoute allowedRoles={['college']} allowedPermissions={['college.locations.view']}><CollegeManagerPages section="locations" /></ProtectedRoute>} />
             <Route path="assets" element={<CollegeManagerPages section="assets" />} />
             <Route path="inventory" element={<CollegeManagerPages section="inventory" />} />
             <Route path="requests" element={<CollegeManagerPages section="requests" />} />
@@ -3367,6 +3373,7 @@ function AppContent() {
             <Route path="rfid" element={<CollegeManagerPages section="rfid" />} />
             <Route path="verification" element={<CollegeManagerPages section="verification" />} />
             <Route path="reports" element={<CollegeManagerPages section="reports" />} />
+            <Route path="analytics" element={<Navigate to="/college/analytics/assets" replace />} />
             <Route path="analytics/assets" element={<CollegeManagerPages section="analytics-assets" />} />
             <Route path="analytics/departments" element={<CollegeManagerPages section="department-reports" />} />
             <Route path="notifications" element={<CollegeManagerPages section="notifications" />} />

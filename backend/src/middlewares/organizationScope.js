@@ -2,11 +2,17 @@ const { Op } = require('sequelize');
 const { College, Department, User } = require('../models');
 const { requireAuth, requireRole } = require('./auth');
 
-const requireCollegeManager = [requireAuth, requireRole('college')];
+const normalizeCollegeRole = (role) => {
+  const value = String(role || '').trim().toLowerCase();
+  if (['college', 'college manager', 'college-manager', 'college_manager'].includes(value)) return 'college_manager';
+  return value;
+};
+
+const requireCollegeManager = [requireAuth, requireRole('college_manager', 'college')];
 const requireDepartmentHead = [requireAuth, requireRole('department_head')];
 
 const ensureDefaultCollegeForUser = async (candidateUser) => {
-  if (!candidateUser || !candidateUser.id || candidateUser.role !== 'college') {
+  if (!candidateUser || !candidateUser.id || normalizeCollegeRole(candidateUser.role) !== 'college') {
     return null;
   }
 
@@ -94,7 +100,7 @@ const findCollegeScopeForUser = async (user) => {
     }
   } catch (error) { return null; }
 
-  if (candidateUser.role === 'college') {
+  if (normalizeCollegeRole(candidateUser.role) === 'college') {
     return ensureDefaultCollegeForUser(candidateUser);
   }
 

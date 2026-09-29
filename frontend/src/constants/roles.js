@@ -5,6 +5,7 @@ export const ROLES = {
   ADMIN: 'admin',
   ICT_OFFICER: 'ict_officer',
   COLLEGE: 'college',
+  COLLEGE_MANAGER: 'college_manager',
   COLLEGE_HEAD: 'college',
   DEPARTMENT_HEAD: 'department_head',
   FINANCE_MANAGER: 'finance',
@@ -87,7 +88,7 @@ export const ROLE_PERMISSIONS = {
     'college.notifications.view',
     'college.notifications.update'
   ],
-  [ROLES.COLLEGE_HEAD]: [
+  [ROLES.COLLEGE_MANAGER]: [
     'college.dashboard.view',
     'college.assets.view',
     'college.assets.history.view',
@@ -213,6 +214,7 @@ export const ROLE_LABELS = {
   [ROLES.ADMIN]: 'Administrator',
   [ROLES.ICT_OFFICER]: 'ICT Officer',
   [ROLES.COLLEGE]: 'College Head',
+  [ROLES.COLLEGE_MANAGER]: 'College Manager',
   [ROLES.COLLEGE_HEAD]: 'College Head',
   [ROLES.FINANCE_MANAGER]: 'Finance Manager',
   [ROLES.MAINTENANCE_STAFF]: 'Maintenance Staff',

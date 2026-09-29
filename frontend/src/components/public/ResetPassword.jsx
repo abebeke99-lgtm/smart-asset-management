@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
 import { toast } from 'react-toastify';
@@ -41,6 +41,7 @@ const describePasswordProblem = (value) => {
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
   const { token: routeToken } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { language, theme } = useLanguage();
   const isDark = theme === 'dark';
@@ -54,6 +55,18 @@ const ResetPassword = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!searchParams.has('token')) return;
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete('token');
+    const query = nextSearchParams.toString();
+    navigate({
+      pathname: location.pathname,
+      search: query ? `?${query}` : '',
+      hash: location.hash,
+    }, { replace: true });
+  }, [location.hash, location.pathname, navigate, searchParams]);
 
   const t = useMemo(() => (language === 'en' ? translations.en : translations.am), [language]);
 

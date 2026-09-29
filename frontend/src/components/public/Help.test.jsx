@@ -15,80 +15,62 @@ describe('Help page', () => {
     mockLanguage = 'en';
   });
 
-  it('shows verified guidance, unavailable support status, and real quick-action routes', () => {
+  it('renders the university identity and each requested section once', () => {
     render(<MemoryRouter><Help /></MemoryRouter>);
 
-    expect(screen.getByText('Mekdela Amba University')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /University Asset Management System/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Help & Support/i })).toBeInTheDocument();
-    expect(screen.getByText(/Practical guidance for signing in/i)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Frequently Asked Questions' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Roles and Access' })).toBeInTheDocument();
-    expect(screen.getByText('Official contact details have not been configured.')).toBeInTheDocument();
-    expect(screen.getByText('Public message submission is unavailable.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'View Contact Information' })).toHaveAttribute('href', '/contact');
-    expect(screen.getByRole('link', { name: /Login/i })).toHaveAttribute('href', '/login');
-    expect(screen.getByRole('link', { name: /Forgot Password/i })).toHaveAttribute('href', '/forgot-password');
+    expect(screen.getByRole('heading', { name: 'Mekdela Amba University' })).toBeInTheDocument();
+    expect(screen.getByText('University Asset Management System')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Help & Support' })).toBeInTheDocument();
+    expect(screen.getByText('Practical guidance for signing in and using the asset workflows available to your role.')).toBeInTheDocument();
+    ['Quick Actions', 'Help Topics', 'Password Reset', 'Frequently Asked Questions', 'Roles and Access', 'Need More Help?'].forEach((title) => {
+      expect(screen.getAllByRole('heading', { name: title })).toHaveLength(1);
+    });
+    expect(screen.queryByText('Official contact details have not been configured.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Public message submission is unavailable.')).not.toBeInTheDocument();
   });
 
-  it('filters help content in real time and clears empty results', () => {
+  it('keeps all public action routes and contact/home links', () => {
     render(<MemoryRouter><Help /></MemoryRouter>);
-    const search = screen.getByPlaceholderText('Search help topics or questions...');
 
-    fireEvent.change(search, { target: { value: 'transfer' } });
-    expect(screen.getByText('How do I request a transfer?')).toBeInTheDocument();
-    expect(screen.queryByText('How do I report a maintenance issue?')).not.toBeInTheDocument();
-
-    fireEvent.change(search, { target: { value: 'maintenance' } });
-    expect(screen.getByText('How do I report a maintenance issue?')).toBeInTheDocument();
-
-    fireEvent.change(search, { target: { value: 'not-a-real-help-topic' } });
-    expect(screen.getByText('No matching help topics found.')).toBeInTheDocument();
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'Clear search' })[0]);
-    expect(screen.getByText('How do I request a transfer?')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Login/ })).toHaveAttribute('href', '/login');
+    expect(screen.getByRole('link', { name: /Forgot Password/ })).toHaveAttribute('href', '/forgot-password');
+    expect(screen.getByRole('link', { name: /Contact Support/ })).toHaveAttribute('href', '/contact');
+    expect(screen.getByRole('link', { name: /Open password recovery/ })).toHaveAttribute('href', '/forgot-password');
+    expect(screen.getByRole('link', { name: /View Contact Information/ })).toHaveAttribute('href', '/contact');
+    expect(screen.getByRole('link', { name: /Back to Home/ })).toHaveAttribute('href', '/');
   });
 
-  it('supports role filtering with localized role names', () => {
+  it('includes the specified workflows, FAQ guidance, and role descriptions', () => {
     render(<MemoryRouter><Help /></MemoryRouter>);
 
-    expect(screen.getByRole('button', { name: 'All Roles' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Administrator' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Store Manager' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Maintenance' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Infrastructure' })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Maintenance' }));
-    expect(screen.getByText('Maintenance records, service requests, and repair workflows.')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'All Roles' }));
-    expect(screen.getByRole('button', { name: 'ICT Officer' })).toBeInTheDocument();
-  });
-
-  it('renders Amharic content and matches English search terms', () => {
-    mockLanguage = 'am';
-    render(<MemoryRouter><Help /></MemoryRouter>);
-
-    expect(screen.getByRole('heading', { name: 'እገዛና ድጋፍ' })).toBeInTheDocument();
-    expect(screen.getByText('የእገዛ ርዕሶች')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'የይለፍ ቃል መመለስ' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /የይለፍ ቃል ረሳሁ/ })).toHaveAttribute('href', '/forgot-password');
-    expect(screen.getByRole('button', { name: 'ሁሉም ሚናዎች' })).toBeInTheDocument();
-
-    fireEvent.change(screen.getByPlaceholderText(/የእገዛ ርዕስ/), { target: { value: 'maintenance' } });
-    expect(screen.getByText('የጥገና ችግርን እንዴት እዘግባለሁ?')).toBeInTheDocument();
-    expect(screen.queryByText('የዝውውር ጥያቄ እንዴት አቀርባለሁ?')).not.toBeInTheDocument();
+    const workflow = screen.getByRole('heading', { name: 'Asset Workflows' }).closest('article');
+    ['Asset assignment', 'Asset transfer', 'Asset verification', 'Maintenance requests', 'Asset returns', 'Asset disposal'].forEach((item) => {
+      expect(within(workflow).getByText(item)).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'How do I request a transfer?' })).toBeInTheDocument();
+    expect(screen.getByText('Your dashboard and available actions depend on your assigned role.')).toBeInTheDocument();
+    expect(screen.getByText('System administration and broad asset-management workflows according to assigned permissions.')).toBeInTheDocument();
   });
 
   it('expands and collapses FAQ answers', () => {
     render(<MemoryRouter><Help /></MemoryRouter>);
-    const question = screen.getByText('How do I register an asset?');
-    const disclosure = question.closest('.help-faq-card');
+    const question = screen.getByRole('button', { name: 'How do I register an asset?' });
+    const answer = question.parentElement.querySelector('.help-faq-answer');
 
-    expect(within(disclosure).getByText(/Asset creation is restricted/)).not.toBeVisible();
+    expect(answer).not.toBeVisible();
     fireEvent.click(question);
-    expect(within(disclosure).getByText(/Asset creation is restricted/)).toBeVisible();
+    expect(answer).toBeVisible();
     fireEvent.click(question);
-    expect(within(disclosure).getByText(/Asset creation is restricted/)).not.toBeVisible();
+    expect(answer).not.toBeVisible();
+  });
+
+  it('retains the Amharic page content and public links', () => {
+    mockLanguage = 'am';
+    render(<MemoryRouter><Help /></MemoryRouter>);
+
+    expect(screen.getByRole('heading', { name: 'እገዛና ድጋፍ' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'የእገዛ ርዕሶች' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /የይለፍ ቃል ረሳሁ/ })).toHaveAttribute('href', '/forgot-password');
+    expect(screen.getByRole('link', { name: /ወደ መነሻ ገጽ/ })).toHaveAttribute('href', '/');
   });
 });

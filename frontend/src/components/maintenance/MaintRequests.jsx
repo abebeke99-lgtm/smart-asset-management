@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || "";
+const API_BASE_URL = process.env.REACT_APP_API_URL || "/api";
 
 const PRIORITIES = ["Low", "Medium", "High", "Critical"];
 
@@ -392,7 +392,7 @@ export default function Requests() {
       setFormError("");
       setActionMessage("");
 
-      await apiRequest("/api/maintenance/requests", {
+      await apiRequest("/maintenance/requests", {
         method: "POST",
         body: JSON.stringify({
           assetId: form.assetId,

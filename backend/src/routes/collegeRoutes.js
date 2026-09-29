@@ -1,7 +1,7 @@
 const express = require('express');
-const { requireAuth, requireRole } = require('../middlewares/auth');
+const { requireAuth, requireActiveAccount, requireRole, requirePermission } = require('../middlewares/auth');
 const { requireCollegeManager, resolveCollegeScope } = require('../middlewares/organizationScope');
-const { getCollegeDashboard, getCollegeProfile, updateCollegeProfile, listCollegeDepartments, getCollegeDepartmentOverview, getCollegeDepartmentPerformance, getCollegeDepartmentReports, listCollegeStaff, listCollegeAssets, getCollegeInventory, getCollegeAsset, listCollegeLocations, createCollegeDepartment, updateCollegeDepartment, updateCollegeDepartmentStatus, deleteCollegeDepartment, getCollegeDepartmentDetails, listCollegeDepartmentStaff, listCollegeDepartmentAssets, listCollegeAssignments, listCollegeMaintenance, getCollegeMaintenance, listCollegeVerification, getCollegeReports, getCollegeAssetAnalytics, listCollegeRFIDTracking } = require('../controllers/collegeController');
+const { getCollegeDashboard, getCollegeProfile, updateCollegeProfile, listCollegeDepartments, getCollegeDepartmentOverview, getCollegeDepartmentPerformance, getCollegeDepartmentReports, listCollegeStaff, getCollegeStaffMember, listCollegeAssets, getCollegeInventory, getCollegeAsset, listCollegeLocations, getCollegeLocation, createCollegeLocation, updateCollegeLocation, deleteCollegeLocation, createCollegeDepartment, updateCollegeDepartment, updateCollegeDepartmentStatus, deleteCollegeDepartment, getCollegeDepartmentDetails, listCollegeDepartmentStaff, listCollegeDepartmentAssets, listCollegeAssignments, listCollegeMaintenance, getCollegeMaintenance, listCollegeVerification, getCollegeReports, getCollegeAssetAnalytics, listCollegeRFIDTracking } = require('../controllers/collegeController');
 const { listRequests, getRequest, decideRequest, listCollegeRequests, getCollegeRequest, listCollegeDepartmentRequests } = require('../controllers/workspaceRequestController');
 const verification = require('../controllers/verificationController');
 
@@ -39,40 +39,40 @@ const buildCollegeNotificationScope = (req) => ({
   ],
 });
 
-router.use(...requireCollegeManager, resolveCollegeScope);
-router.get('/dashboard', getCollegeDashboard);
-router.get('/profile', getCollegeProfile);
-router.put('/profile', updateCollegeProfile);
-router.get('/departments', listCollegeDepartments);
-router.post('/departments', createCollegeDepartment);
-router.get('/department-overview', getCollegeDepartmentOverview);
-router.get('/department-performance', getCollegeDepartmentPerformance);
-router.get('/analytics/departments', getCollegeDepartmentReports);
-router.get('/department-assets', listCollegeDepartmentAssets);
-router.get('/departments/:id/staff', listCollegeDepartmentStaff);
-router.get('/departments/:id/assets', listCollegeDepartmentAssets);
-router.get('/departments/:id', getCollegeDepartmentDetails);
-router.put('/departments/:id', updateCollegeDepartment);
-router.patch('/departments/:id/status', updateCollegeDepartmentStatus);
-router.delete('/departments/:id', deleteCollegeDepartment);
-router.get('/requests', listCollegeRequests);
-router.get('/requests/:id', getCollegeRequest);
-router.get('/department-requests', listCollegeDepartmentRequests);
-router.get('/approvals', listCollegeRequests);
-router.get('/approvals/:id', getCollegeRequest);
-router.get('/assignments', listCollegeAssignments);
-router.post('/approvals/:id/approve', (req, res, next) => { req.body.decision = 'approved'; return decideRequest(req, res, next); });
-router.post('/approvals/:id/reject', (req, res, next) => { req.body.decision = 'rejected'; return decideRequest(req, res, next); });
-router.post('/approvals/:id/request-changes', (req, res, next) => { req.body.decision = 'changes_requested'; return decideRequest(req, res, next); });
-router.get('/verification', listCollegeVerification);
-router.post('/verification', verification.createSession);
-router.get('/verification/:id', verification.getSession);
-router.post('/verification/:id/items', verification.addItem);
-router.post('/verification/:id/submit', verification.submitSession);
-router.post('/verification/:id/finalize', verification.finalizeSession);
-router.get('/maintenance', listCollegeMaintenance);
-router.get('/maintenance/:id', getCollegeMaintenance);
-router.get('/notifications', async (req, res, next) => {
+router.use(requireAuth, requireActiveAccount, requireRole('college_manager', 'college'), resolveCollegeScope);
+router.get('/dashboard', requirePermission('college.dashboard.view'), getCollegeDashboard);
+router.get('/profile', requirePermission('college.profile.view'), getCollegeProfile);
+router.put('/profile', requirePermission('college.profile.update'), updateCollegeProfile);
+router.get('/departments', requirePermission('college.departments.view'), listCollegeDepartments);
+router.post('/departments', requirePermission('college.departments.view'), createCollegeDepartment);
+router.get('/department-overview', requirePermission('college.departments.view'), getCollegeDepartmentOverview);
+router.get('/department-performance', requirePermission('college.departments.view'), getCollegeDepartmentPerformance);
+router.get('/analytics/departments', requirePermission('college.departments.view'), getCollegeDepartmentReports);
+router.get('/department-assets', requirePermission('college.departments.view'), listCollegeDepartmentAssets);
+router.get('/departments/:id/staff', requirePermission('college.staff.view'), listCollegeDepartmentStaff);
+router.get('/departments/:id/assets', requirePermission('college.departments.view'), listCollegeDepartmentAssets);
+router.get('/departments/:id', requirePermission('college.departments.view'), getCollegeDepartmentDetails);
+router.put('/departments/:id', requirePermission('college.departments.view'), updateCollegeDepartment);
+router.patch('/departments/:id/status', requirePermission('college.departments.view'), updateCollegeDepartmentStatus);
+router.delete('/departments/:id', requirePermission('college.departments.view'), deleteCollegeDepartment);
+router.get('/requests', requirePermission('college.requests.view'), listCollegeRequests);
+router.get('/requests/:id', requirePermission('college.requests.view'), getCollegeRequest);
+router.get('/department-requests', requirePermission('college.requests.view'), listCollegeDepartmentRequests);
+router.get('/approvals', requirePermission('college.approvals.view'), listCollegeRequests);
+router.get('/approvals/:id', requirePermission('college.approvals.view'), getCollegeRequest);
+router.get('/assignments', requirePermission('college.assignments.view'), listCollegeAssignments);
+router.post('/approvals/:id/approve', requirePermission('college.approvals.approve'), (req, res, next) => { req.body.decision = 'approved'; return decideRequest(req, res, next); });
+router.post('/approvals/:id/reject', requirePermission('college.approvals.reject'), (req, res, next) => { req.body.decision = 'rejected'; return decideRequest(req, res, next); });
+router.post('/approvals/:id/request-changes', requirePermission('college.approvals.request_changes'), (req, res, next) => { req.body.decision = 'changes_requested'; return decideRequest(req, res, next); });
+router.get('/verification', requirePermission('college.verification.view'), listCollegeVerification);
+router.post('/verification', requirePermission('college.verification.manage'), verification.createSession);
+router.get('/verification/:id', requirePermission('college.verification.view'), verification.getSession);
+router.post('/verification/:id/items', requirePermission('college.verification.manage'), verification.addItem);
+router.post('/verification/:id/submit', requirePermission('college.verification.manage'), verification.submitSession);
+router.post('/verification/:id/finalize', requirePermission('college.verification.manage'), verification.finalizeSession);
+router.get('/maintenance', requirePermission('college.maintenance.view'), listCollegeMaintenance);
+router.get('/maintenance/:id', requirePermission('college.maintenance.view'), getCollegeMaintenance);
+router.get('/notifications', requirePermission('college.notifications.view'), async (req, res, next) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
@@ -127,7 +127,7 @@ router.get('/notifications', async (req, res, next) => {
   }
 });
 
-router.patch('/notifications/:id/read', async (req, res, next) => {
+router.patch('/notifications/:id/read', requirePermission('college.notifications.view'), async (req, res, next) => {
   try {
     const notification = await Notification.findOne({
       where: {
@@ -150,7 +150,7 @@ router.patch('/notifications/:id/read', async (req, res, next) => {
   }
 });
 
-router.patch('/notifications/read-all', async (req, res, next) => {
+router.patch('/notifications/read-all', requirePermission('college.notifications.view'), async (req, res, next) => {
   try {
     const where = {
       read: false,
@@ -167,7 +167,7 @@ router.patch('/notifications/read-all', async (req, res, next) => {
   }
 });
 
-router.delete('/notifications/:id', async (req, res, next) => {
+router.delete('/notifications/:id', requirePermission('college.notifications.view'), async (req, res, next) => {
   try {
     const notification = await Notification.findOne({
       where: {
@@ -188,13 +188,18 @@ router.delete('/notifications/:id', async (req, res, next) => {
     return next(error);
   }
 });
-router.get('/reports', getCollegeReports);
-router.get('/analytics/assets', getCollegeAssetAnalytics);
-router.get('/staff', listCollegeStaff);
-router.get('/assets', listCollegeAssets);
-router.get('/inventory', getCollegeInventory);
-router.get('/rfid', listCollegeRFIDTracking);
-router.get('/assets/:id', getCollegeAsset);
-router.get('/locations', listCollegeLocations);
+router.get('/reports', requirePermission('college.reports.view'), getCollegeReports);
+router.get('/analytics/assets', requirePermission('college.analytics.view'), getCollegeAssetAnalytics);
+router.get('/staff', requirePermission('college.staff.view'), listCollegeStaff);
+router.get('/staff/:id', requirePermission('college.staff.view'), getCollegeStaffMember);
+router.get('/assets', requirePermission('college.assets.view'), listCollegeAssets);
+router.get('/inventory', requirePermission('college.inventory.view'), getCollegeInventory);
+router.get('/rfid', requirePermission('college.rfid.view'), listCollegeRFIDTracking);
+router.get('/assets/:id', requirePermission('college.assets.view'), getCollegeAsset);
+router.get('/locations', requirePermission('college.locations.view'), listCollegeLocations);
+router.get('/locations/:id', requirePermission('college.locations.view'), getCollegeLocation);
+router.post('/locations', requirePermission('college.locations.manage'), createCollegeLocation);
+router.put('/locations/:id', requirePermission('college.locations.manage'), updateCollegeLocation);
+router.delete('/locations/:id', requirePermission('college.locations.manage'), deleteCollegeLocation);
 
 module.exports = router;

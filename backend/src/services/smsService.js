@@ -5,9 +5,17 @@ const normalizePhoneNumber = (value) => {
   if (!raw) return null;
 
   if (/^\+2519\d{8}$/.test(raw)) return raw;
+  if (/^\+2517\d{8}$/.test(raw)) return raw;
+  if (/^\+2517\d{8}$/.test(raw)) return raw;
   if (/^2519\d{8}$/.test(raw)) return `+251${raw.slice(3)}`;
+  if (/^2517\d{8}$/.test(raw)) return `+251${raw.slice(3)}`;
+  if (/^2517\d{8}$/.test(raw)) return `+251${raw.slice(3)}`;
+  if (/^07\d{8}$/.test(raw)) return `+251${raw.slice(1)}`;
   if (/^09\d{8}$/.test(raw)) return `+251${raw.slice(1)}`;
-  if (/^9\d{9}$/.test(raw)) return `+251${raw}`;
+  if (/^7\d{9}$/.test(raw)) return `+251${raw}`;
+  if (/^07\d{8}$/.test(raw)) return `+251${raw.slice(1)}`;
+  if (/^9\d{8}$/.test(raw)) return `+251${raw}`;
+  if (/^7\d{8}$/.test(raw)) return `+251${raw}`;
 
   return null;
 };
@@ -77,10 +85,10 @@ const sendTwilioSms = async (normalizedPhoneNumber, message) => {
       return { status: 'sent', provider: 'twilio', messageId: json.sid || null };
     }
   } catch (error) {
-    // Provide a generic failure if the provider does not return the expected payload.
+    return { status: 'failed', reason: 'Twilio returned an invalid response' };
   }
 
-  return { status: 'sent', provider: 'twilio' };
+  return { status: 'failed', reason: 'Twilio did not confirm message acceptance' };
 };
 
 const sendAfricaTalkingSms = async (normalizedPhoneNumber, message) => {
@@ -120,10 +128,10 @@ const sendAfricaTalkingSms = async (normalizedPhoneNumber, message) => {
       return { status: 'sent', provider: 'africastalking', messageId: json?.SMSMessageData?.Recipients?.[0]?.messageId || null };
     }
   } catch (error) {
-    // fall through and mark the message as sent when the provider accepts the request
+    return { status: 'failed', reason: 'AfricaTalking returned an invalid response' };
   }
 
-  return { status: 'sent', provider: 'africastalking' };
+  return { status: 'failed', reason: 'AfricaTalking did not confirm message acceptance' };
 };
 
 const sendSMS = async (phoneNumber, message) => {

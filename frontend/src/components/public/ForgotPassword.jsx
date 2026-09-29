@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
 import { toast } from 'react-toastify';
@@ -35,9 +35,13 @@ const normalizePhoneNumber = (value) => {
   const raw = String(value || '').replace(/[^\d+]/g, '');
   if (!raw) return null;
   if (/^\+2519\d{8}$/.test(raw)) return raw;
+  if (/^\+2517\d{8}$/.test(raw)) return raw;
   if (/^2519\d{8}$/.test(raw)) return `+251${raw.slice(3)}`;
+  if (/^2517\d{8}$/.test(raw)) return `+251${raw.slice(3)}`;
   if (/^09\d{8}$/.test(raw)) return `+251${raw.slice(1)}`;
-  if (/^9\d{9}$/.test(raw)) return `+251${raw}`;
+  if (/^07\d{8}$/.test(raw)) return `+251${raw.slice(1)}`;
+  if (/^9\d{8}$/.test(raw)) return `+251${raw}`;
+  if (/^7\d{8}$/.test(raw)) return `+251${raw}`;
   return null;
 };
 
@@ -70,6 +74,7 @@ const ForgotPassword = () => {
   const { language, theme } = useLanguage();
   const isDark = theme === 'dark';
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [method, setMethod] = useState('email');
   const [identifier, setIdentifier] = useState('');
@@ -86,6 +91,33 @@ const ForgotPassword = () => {
   const [resendCountdown, setResendCountdown] = useState(0);
 
   const t = useMemo(() => (language === 'en' ? englishTranslations : amharicTranslations), [language]);
+  const routeToken = new URLSearchParams(location.search).get('token') || '';
+
+  useEffect(() => {
+    const path = location.pathname.toLowerCase();
+    if (path.endsWith('/verify')) {
+      setStep('verify');
+      return;
+    }
+    if (path.endsWith('/reset')) {
+      setStep('reset');
+      return;
+    }
+    setStep('request');
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!routeToken) return;
+    setResetToken(routeToken);
+    const searchParams = new URLSearchParams(location.search);
+    searchParams.delete('token');
+    const query = searchParams.toString();
+    navigate({
+      pathname: location.pathname,
+      search: query ? `?${query}` : '',
+      hash: location.hash,
+    }, { replace: true });
+  }, [location.hash, location.pathname, location.search, navigate, routeToken]);
 
   useEffect(() => {
     if (resendCountdown <= 0) return undefined;
@@ -116,7 +148,7 @@ const ForgotPassword = () => {
       return;
     }
 
-    const response = await apiClient.post('/api/auth/forgot-password', {
+    const response = await apiClient.post('/api/auth/forgot-password/request', {
       method: 'email',
       email: trimmed.toLowerCase(),
     });
@@ -126,8 +158,10 @@ const ForgotPassword = () => {
     }
 
     setSuccessMessage(response.data.message || t.successMessage);
-    setStep('email-sent');
-    toast.success(response.data.message || t.successMessage);
+    setOtp('');
+    setResendCountdown(OTP_RESEND_SECONDS);
+    setStep('verify');
+    toast.success(response.data.message || t.otpSent);
   }).catch((err) => {
     const message = resolveErrorMessage(err, t);
     setError(message);
@@ -141,7 +175,7 @@ const ForgotPassword = () => {
       return;
     }
 
-    const response = await apiClient.post('/api/auth/forgot-password/request-otp', {
+    const response = await apiClient.post('/api/auth/forgot-password/request', {
       phoneNumber: normalizedPhone,
     });
 
@@ -163,9 +197,9 @@ const ForgotPassword = () => {
   const handleOtpVerification = (event) => {
     event.preventDefault();
     runRequest('verify', async () => {
-      const normalizedPhone = normalizePhoneNumber(identifier);
-      if (!normalizedPhone) {
-        setError(t.invalidPhone);
+      const normalizedPhone = method === 'phone' ? normalizePhoneNumber(identifier) : null;
+      if (method === 'email' ? !isValidEmail(identifier.trim()) : !normalizedPhone) {
+        setError(method === 'email' ? t.invalidEmail : t.invalidPhone);
         return;
       }
       if (!/^\d{6}$/.test(otp.trim())) {
@@ -173,10 +207,11 @@ const ForgotPassword = () => {
         return;
       }
 
-      const response = await apiClient.post('/api/auth/forgot-password/verify-otp', {
-        phoneNumber: normalizedPhone,
-        otp: otp.trim(),
-      });
+      const payload = method === 'email'
+        ? { method: 'email', email: identifier.trim().toLowerCase(), otp: otp.trim() }
+        : { phoneNumber: normalizedPhone, otp: otp.trim() };
+
+      const response = await apiClient.post('/api/auth/forgot-password/verify', payload);
 
       if (!response.data?.success || !response.data.resetToken) {
         throw userFacingError(response.data?.message || t.otpExpired);
@@ -197,7 +232,8 @@ const ForgotPassword = () => {
   const handlePasswordReset = (event) => {
     event.preventDefault();
     runRequest('reset', async () => {
-      if (!resetToken) {
+      const activeToken = resetToken;
+      if (!activeToken) {
         setError(t.invalidToken);
         return;
       }
@@ -211,8 +247,8 @@ const ForgotPassword = () => {
         return;
       }
 
-      const response = await apiClient.post('/api/auth/forgot-password/reset-password', {
-        resetToken,
+      const response = await apiClient.post('/api/auth/forgot-password/reset', {
+        resetToken: activeToken,
         newPassword: password,
         confirmPassword,
       });
@@ -304,7 +340,7 @@ const ForgotPassword = () => {
         {pendingAction === 'email' || pendingAction === 'otp' ? (
           <>{spinner} <span>{t.sending}</span></>
         ) : (
-          <><Send size={16} aria-hidden="true" /> <span>{isEmailMethod ? t.sendResetLink : t.sendOtp}</span></>
+          <><Send size={16} aria-hidden="true" /> <span>{t.sendOtp}</span></>
         )}
       </button>
     </form>
@@ -317,6 +353,8 @@ const ForgotPassword = () => {
         <h2>{t.verificationCode}</h2>
         <p>{t.enterOtp}</p>
       </div>
+
+      {successMessage && <p className="step-status">{successMessage}</p>}
 
       <div className="field">
         <label className="field-label" htmlFor="forgot-otp">{t.verificationCode}</label>
@@ -347,14 +385,31 @@ const ForgotPassword = () => {
         type="button"
         className="btn-secondary"
         disabled={loading || resendCountdown > 0}
-        onClick={() => handlePhoneRequest()}
+        onClick={() => (method === 'email' ? handleEmailRequest() : handlePhoneRequest())}
       >
         {resendCountdown > 0 ? `${t.resendOtp} (${resendCountdown}s)` : t.resendOtp}
       </button>
     </form>
   );
 
-  const renderResetForm = () => (
+  const renderResetForm = () => {
+    const activeToken = resetToken;
+
+    if (!activeToken) {
+      return (
+        <div className="success-state">
+          <CircleAlert className="success-icon" size={46} aria-hidden="true" />
+          <h2>{t.invalidToken}</h2>
+          <p>{t.invalidToken}</p>
+          <button type="button" className="btn-primary" onClick={() => navigate('/forgot-password')}>
+            <ArrowLeft size={16} aria-hidden="true" />
+            <span>{t.backToLogin}</span>
+          </button>
+        </div>
+      );
+    }
+
+    return (
     <form onSubmit={handlePasswordReset} noValidate>
       <div className="step-heading">
         <LockKeyhole size={34} aria-hidden="true" />
@@ -411,7 +466,8 @@ const ForgotPassword = () => {
         {pendingAction === 'reset' ? <>{spinner} <span>{t.updating}</span></> : <><CircleCheck size={16} aria-hidden="true" /> <span>{t.resetPassword}</span></>}
       </button>
     </form>
-  );
+    );
+  };
 
   const renderTerminalState = ({ title, message, showNewLink }) => (
     <div className="success-state">
@@ -601,6 +657,18 @@ const ForgotPassword = () => {
         .step-heading h2 { margin: 10px 0 0; font-size: 1.35rem; color: #17212B; }
         .forgot-page.forgot-dark .step-heading h2 { color: #F5F7F9; }
         .step-heading p { margin: 8px 0 0; color: #64748B; font-size: 0.88rem; line-height: 1.5; }
+        .step-status {
+          margin: 0 0 14px;
+          padding: 10px 12px;
+          border: 1px solid #D7DEE5;
+          border-radius: 10px;
+          background: #F5F7F9;
+          color: #334155;
+          font-size: 0.82rem;
+          line-height: 1.5;
+          text-align: center;
+        }
+        .forgot-page.forgot-dark .step-status { background: #25333C; border-color: #465866; color: #E2E8F0; }
         .success-state { text-align: center; }
         .success-icon { margin-bottom: 14px; color: #536575; }
         .success-state h2 { margin: 0; font-size: 1.4rem; color: #17212B; }
@@ -673,7 +741,7 @@ const englishTranslations = {
   verifying: 'Verifying...',
   updating: 'Updating...',
   verificationCode: 'Verification Code',
-  enterOtp: 'Enter the 6-digit code we sent to your phone. It expires shortly.',
+  enterOtp: 'Enter the 6-digit code sent to your recovery destination. It expires shortly.',
   verifyOtp: 'Verify Code',
   resendOtp: 'Resend code',
   newPassword: 'Create New Password',
@@ -692,7 +760,7 @@ const englishTranslations = {
   networkError: 'Unable to reach the server. Please check your connection and try again.',
   rateLimitError: 'Too many requests. Please wait a moment and try again.',
   successMessage: 'Password reset instructions will be sent if the account matches.',
-  otpSent: 'If this phone number is registered, a verification code has been sent.',
+  otpSent: 'If this recovery destination is registered, a verification code has been sent.',
   checkYourEmail: 'Check Your Email',
   verifyOtpSuccess: 'Verification successful. Please create a new password.',
   passwordMismatch: 'The passwords do not match. Please try again.',
@@ -726,7 +794,7 @@ const amharicTranslations = {
   verifying: 'በማረጋገጫ ላይ...',
   updating: 'በማስተካከል ላይ...',
   verificationCode: 'የማረጋገጫ ኮድ',
-  enterOtp: 'ወደ ሞባይልዎ የተላከውን 6-አሃዝ ኮድ ያስገቡ። ኮዱ በቅርብ ጊዜ ያልበል።',
+  enterOtp: 'ወደ መልሶ ማግኛ አድራሻዎ የተላከውን 6-አሃዝ ኮድ ያስገቡ። ኮዱ በቅርብ ጊዜ ያበቃል።',
   verifyOtp: 'ኮድ ያረጋግጡ',
   resendOtp: 'ኮድ እንደገና ላክ',
   newPassword: 'አዲስ የይለፍ ቃል ፍጠር',
@@ -745,7 +813,7 @@ const amharicTranslations = {
   networkError: 'ከአገልጋዩ ጋር መገናኘት አልተቻለም። ግንኙነትዎን አረጋግጠው እንደገና ይሞክሩ።',
   rateLimitError: 'በጣም ብዙ ጥያቄዎች ተልከዋል። እባክዎ ቆይተው ይሞክሩ።',
   successMessage: 'መለያው ከመለያው ጋር ከሚዛመድ ከሆነ የይለፍ ቃል መልሶ ማግኛ መመሪያዎች ይላካሉ።',
-  otpSent: 'ይህ የሞባይል ቁጥር ከተመዘገበ ከሆነ የማረጋገጫ ኮድ ተልኳል።',
+  otpSent: 'ይህ የመልሶ ማግኛ አድራሻ ከተመዘገበ የማረጋገጫ ኮድ ተልኳል።',
   checkYourEmail: 'ኢሜይልዎን ይፈትሹ',
   verifyOtpSuccess: 'ማረጋገጫ ተሳክቷል። አሁን አዲስ የይለፍ ቃል ይፍጠሩ።',
   passwordMismatch: 'የይለፍ ቃሎቹ አይመሳሰሉም። እባክዎ እንደገና ይሞክሩ።',
