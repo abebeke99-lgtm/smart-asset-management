@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 const API_BASE_URL =
   (process.env.REACT_APP_API_URL || "").replace(/\/api\/?$/i, "");
@@ -34,16 +34,16 @@ function Dashboard() {
     recentActivity: [],
   });
 
-  const getToken = () => {
+  const getToken = useCallback(() => {
     return (
       localStorage.getItem("token") ||
       localStorage.getItem("authToken") ||
       sessionStorage.getItem("token") ||
       sessionStorage.getItem("authToken")
     );
-  };
+  }, []);
 
-  const buildHeaders = () => {
+  const buildHeaders = useCallback(() => {
     const token = getToken();
 
     const headers = {
@@ -55,14 +55,21 @@ function Dashboard() {
     }
 
     return headers;
-  };
+  }, [getToken]);
 
-  const fetchJson = async (url) => {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: buildHeaders(),
-      credentials: "include",
-    });
+  const fetchJson = useCallback(async (url) => {
+    let response;
+
+    try {
+      response = await fetch(url, {
+        method: "GET",
+        headers: buildHeaders(),
+        credentials: "include",
+      });
+    } catch (requestError) {
+      requestError.kind = "network";
+      throw requestError;
+    }
 
     const contentType = response.headers.get("content-type") || "";
 
@@ -80,19 +87,22 @@ function Dashboard() {
         data?.message ||
         data?.error ||
         `Request failed with status ${response.status}`;
-
-      throw new Error(message);
+      const requestError = new Error(message);
+      requestError.status = response.status;
+      throw requestError;
     }
 
     return data;
-  };
+  }, [buildHeaders]);
+
+  const requestInProgress = useRef(false);
 
   const normalizeNumber = (value) => {
     const number = Number(value);
     return Number.isFinite(number) ? number : 0;
   };
 
-  const normalizeDashboard = (data) => {
+  const normalizeDashboard = useCallback((data) => {
     const source = data?.data || data || {};
 
     const assets = source.assets || source.assetSummary || {};
@@ -211,58 +221,44 @@ function Dashboard() {
         ? source.activities
         : [],
     };
-  };
+  }, []);
 
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
+    if (requestInProgress.current) return;
+
+    requestInProgress.current = true;
     setLoading(true);
     setError("");
 
     try {
-      /*
-       * The Administrator documentation defines:
-       * /admin as the dashboard route and
-       * /api/maintenance/* as the maintenance API group.
-       *
-       * Reuse the existing dashboard endpoint when available.
-       */
-      const endpoints = [
-        `${API_BASE_URL}/api/admin/dashboard`,
-        `${API_BASE_URL}/api/dashboard`,
-        `${API_BASE_URL}/api/analytics/dashboard`,
-      ];
-
-      let result = null;
-      let lastError = null;
-
-      for (const endpoint of endpoints) {
-        try {
-          result = await fetchJson(endpoint);
-          break;
-        } catch (requestError) {
-          lastError = requestError;
-        }
-      }
-
-      if (!result) {
-        throw lastError || new Error("Unable to load dashboard");
-      }
-
+      const result = await fetchJson(`${API_BASE_URL}/api/admin/dashboard`);
       setDashboard(normalizeDashboard(result));
     } catch (requestError) {
       console.error("Dashboard loading error:", requestError);
 
-      setError(
-        requestError?.message ||
-          "Unable to load administrator dashboard."
-      );
+      if (requestError?.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("user");
+        window.location.assign("/login?redirect=%2Fadmin");
+      } else if (requestError?.status === 403) {
+        setError("You do not have permission to view the administrator dashboard.");
+      } else if (requestError?.kind === "network") {
+        setError("Unable to connect to the server. Please check that the backend is running.");
+      } else if (requestError?.status >= 500) {
+        setError("Unable to load dashboard data. Please try again.");
+      } else {
+        setError(requestError?.message || "Unable to load administrator dashboard.");
+      }
     } finally {
+      requestInProgress.current = false;
       setLoading(false);
     }
-  };
+  }, [fetchJson]);
 
   useEffect(() => {
     loadDashboard();
-  }, []);
+  }, [loadDashboard]);
 
   const statCards = [
     {

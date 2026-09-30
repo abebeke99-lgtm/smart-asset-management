@@ -46,6 +46,16 @@ const Help = () => {
         .help-system { margin: 8px 0 0; color: var(--help-brand-alt); font-size: 1.2rem; }
         .help-header h2 { margin: 22px 0 0; font-size: 1.65rem; }
         .help-body { padding: 28px 0 48px; }
+        .help-intro { margin: 0 0 24px; color: var(--help-text-soft); line-height: 1.65; }
+        .help-section { padding: 24px 0; border-top: 1px solid var(--help-outline); }
+        .help-section h3 { margin: 0 0 12px; font-size: 1.2rem; }
+        .help-section p { color: var(--help-text-soft); line-height: 1.65; }
+        .help-action-links { display: flex; flex-wrap: wrap; gap: 10px 20px; }
+        .help-action-links a, .help-inline-link { color: var(--help-brand); font-weight: 700; text-underline-offset: 3px; overflow-wrap: anywhere; }
+        .help-topic h4 { margin: 0 0 8px; font-size: 1.05rem; }
+        .help-topic ul { margin: 0; padding-left: 20px; color: var(--help-text-soft); line-height: 1.8; }
+        .help-role-list { display: grid; gap: 12px; }
+        .help-role-list p { margin: 0; }
         .help-search { display: flex; gap: 10px; min-width: 0; }
         .help-search input { flex: 1 1 auto; min-width: 0; height: 46px; padding: 0 13px; border: 1px solid var(--help-outline); border-radius: 6px; background: var(--help-surface); color: var(--help-text-main); font: inherit; }
         .help-search input:focus { border-color: var(--help-brand); outline: 3px solid rgba(18,59,99,0.12); }
@@ -88,6 +98,40 @@ const Help = () => {
           <button type="submit"><Search size={18} aria-hidden="true" />{text('Search', 'ፈልግ')}</button>
         </form>
 
+        <p className="help-intro">{text('Practical guidance for signing in and using the asset workflows available to your role.', 'ለመግባትና ለሚናዎ የተፈቀዱ የንብረት ሂደቶችን ለመጠቀም ተግባራዊ መመሪያ።')}</p>
+
+        <section className="help-section" aria-labelledby="help-quick-actions">
+          <h3 id="help-quick-actions">{text('Quick Actions', 'ፈጣን እርምጃዎች')}</h3>
+          <nav className="help-action-links" aria-label={text('Quick Actions', 'ፈጣን እርምጃዎች')}>
+            <a href="/login">{text('Login', 'ግባ')}</a>
+            <a href="/forgot-password">{text('Forgot Password', 'የይለፍ ቃል ረሳሁ')}</a>
+            <a href="/contact">{text('Contact Support', 'የድጋፍ አገልግሎት')}</a>
+          </nav>
+        </section>
+
+        <section className="help-section" aria-labelledby="help-topics">
+          <h3 id="help-topics">{text('Help Topics', 'የእገዛ ርዕሶች')}</h3>
+          <article className="help-topic">
+            <h4>Asset Workflows</h4>
+            <ul>
+              <li>Asset assignment</li>
+              <li>Asset transfer</li>
+              <li>Asset verification</li>
+              <li>Maintenance requests</li>
+              <li>Asset returns</li>
+              <li>Asset disposal</li>
+            </ul>
+          </article>
+        </section>
+
+        <section className="help-section" aria-labelledby="help-password-reset">
+          <h3 id="help-password-reset">{text('Password Reset', 'የይለፍ ቃል መቀየር')}</h3>
+          <p>{text('Use password recovery to request a reset code or link for the email or phone number registered to your account.', 'በመለያዎ የተመዘገበውን ኢሜይል ወይም ስልክ ተጠቅመው የይለፍ ቃል መመለሻ ኮድ ወይም አገናኝ ይጠይቁ።')}</p>
+          <a className="help-inline-link" href="/forgot-password">{text('Open password recovery', 'የይለፍ ቃል መመለሻን ክፈት')}</a>
+        </section>
+
+        <section className="help-section" aria-labelledby="help-faq-heading">
+          <h3 id="help-faq-heading">{text('Frequently Asked Questions', 'ተደጋጋሚ ጥያቄዎች')}</h3>
         {filteredQuestions.length > 0 ? (
           <section className="help-faq-list" aria-label={text('Frequently Asked Questions', 'ተደጋጋሚ ጥያቄዎች')}>
             {filteredQuestions.map(([question, answer], index) => {
@@ -115,6 +159,23 @@ const Help = () => {
         ) : (
           <p className="help-empty" role="status">{text('No matching results found.', 'ተዛማጅ ውጤት አልተገኘም።')}</p>
         )}
+        </section>
+
+        <section className="help-section" aria-labelledby="help-roles">
+          <h3 id="help-roles">{text('Roles and Access', 'ሚናዎችና ፈቃዶች')}</h3>
+          <div className="help-role-list">
+            <p>{text('Your dashboard and available actions depend on your assigned role.', 'ዳሽቦርድዎና የሚገኙ እርምጃዎች በተመደበው ሚናዎ ይወሰናሉ።')}</p>
+            <p>{text('System administration and broad asset-management workflows according to assigned permissions.', 'በተመደቡ ፈቃዶች መሠረት የስርዓት አስተዳደርና ሰፊ የንብረት አስተዳደር ሂደቶች።')}</p>
+          </div>
+        </section>
+
+        <section className="help-section" aria-labelledby="help-more">
+          <h3 id="help-more">{text('Need More Help?', 'ተጨማሪ እገዛ ይፈልጋሉ?')}</h3>
+          <nav className="help-action-links" aria-label={text('More help', 'ተጨማሪ እገዛ')}>
+            <a href="/contact">{text('View Contact Information', 'የድጋፍ መረጃን ይመልከቱ')}</a>
+            <a href="/">{text('Back to Home', 'ወደ መነሻ ገጽ')}</a>
+          </nav>
+        </section>
       </div>
     </main>
   );
