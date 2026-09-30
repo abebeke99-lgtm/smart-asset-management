@@ -8,6 +8,7 @@ const { sequelize, testConnection } = require('./config/database');
 require('./models');
 const { syncDatabase } = require('./config/sync');
 const { seedDatabase } = require('./config/seed');
+const { initializeInitialAdmin } = require('./services/initialAdminService');
 const { ensureUploadDirectories } = require('./utils/uploadUtils');
 
 const authRoutes = require('./routes/authRoutes');
@@ -216,6 +217,14 @@ async function initializeDatabase() {
       }
     }
     if (databaseConnected && schemaReady) {
+      if (process.env.INITIAL_ADMIN_PASSWORD) {
+        try {
+          const result = await initializeInitialAdmin();
+          console.log(result.created ? 'Initial admin account created.' : 'Initial admin account already exists; no changes made.');
+        } finally {
+          delete process.env.INITIAL_ADMIN_PASSWORD;
+        }
+      }
       if (process.env.NODE_ENV !== 'production') {
         if (process.env.SEED_DEMO_DATA === 'true') {
           await seedDatabase();
