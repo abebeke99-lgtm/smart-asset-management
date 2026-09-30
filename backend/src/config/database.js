@@ -135,7 +135,7 @@ async function testConnection() {
 
   try {
     await sequelize.authenticate();
-    console.log(`Database connection established (host=${databaseConfig.host}, port=${databaseConfig.port}, database=${databaseConfig.database}).`);
+    console.log(`Database connection established successfully (host=${databaseConfig.host}, port=${databaseConfig.port}, database=${databaseConfig.database}).`);
     return true;
   } catch (error) {
     const code = error.code || error.parent?.code || error.original?.code || 'UNKNOWN';
