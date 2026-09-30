@@ -2092,6 +2092,7 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
       missingAssets: assets.filter((asset) => normalizeStatus(asset.status) === 'missing').length,
       damagedAssets: assets.filter((asset) => normalizeStatus(asset.status) === 'damaged').length,
       underMaintenance: maintenanceAssets,
+      totalColleges: colleges.length,
       totalDepartments: departments.length,
       totalUsers: users.length,
       pendingMaintenance: maintenanceCounts.pending || 0,

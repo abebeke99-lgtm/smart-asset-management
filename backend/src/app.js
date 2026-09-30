@@ -68,6 +68,9 @@ const configuredOrigins = [
   .flatMap((value) => value.split(','))
   .map((value) => value.trim())
   .filter(Boolean);
+const productionFallbackOrigins = [
+  'https://smart-asset-management-3.onrender.com',
+];
 const localOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
@@ -80,7 +83,7 @@ const localOrigins = [
   'http://172.16.39.87:3000'
 ];
 const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? configuredOrigins
+  ? [...configuredOrigins, ...productionFallbackOrigins]
   : [...configuredOrigins, ...localOrigins];
 
 const normalizeOrigin = (value = '') => value.replace(/\/+$/, '');

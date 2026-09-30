@@ -20,6 +20,12 @@ test('liveness endpoint always returns HTTP 200 without checking database state'
   assert.match(source, /app\.get\('\/health', healthHandler\)/);
 });
 
+test('production CORS allows the configured deployed frontend origin without a wildcard', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
+  assert.match(source, /https:\/\/smart-asset-management-3\.onrender\.com/);
+  assert.doesNotMatch(source, /origin:\s*['"]\*['"]/);
+});
+
 test('root production start and Railway deployment target the backend', () => {
   const rootPackage = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8'));
   const railwayConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../railway.json'), 'utf8'));

@@ -106,9 +106,9 @@ const checkDatabase = async () => {
   const base = {
     status: 'unknown',
     connection: 'disconnected',
-    databaseName: sequelize?.getDatabaseName ? sequelize.getDatabaseName() : process.env.DB_NAME || 'smart_asset_db',
-    host: sequelize?.config?.host || process.env.DB_HOST || 'localhost',
-    port: sequelize?.config?.port || Number(process.env.DB_PORT || 3306),
+    databaseName: sequelize?.getDatabaseName ? sequelize.getDatabaseName() : process.env.DB_NAME || process.env.MYSQLDATABASE || 'smart_asset_db',
+    host: sequelize?.config?.host || process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
+    port: sequelize?.config?.port || Number(process.env.DB_PORT || process.env.MYSQLPORT || 3306),
     responseTime: null,
     checkedAt: new Date().toISOString(),
     message: 'Database health check unavailable.'

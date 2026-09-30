@@ -2,10 +2,10 @@ const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
 const isProduction = process.env.NODE_ENV === 'production';
-const requiredProductionVariables = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
 
-function getDatabaseConfig() {
-  const connectionString = String(process.env.DATABASE_URL || '').trim();
+function getDatabaseConfig(environment = process.env) {
+  const production = environment.NODE_ENV === 'production';
+  const connectionString = String(environment.DATABASE_URL || environment.MYSQL_URL || '').trim();
   let config;
 
   if (connectionString) {
@@ -35,22 +35,34 @@ function getDatabaseConfig() {
       throw error;
     }
   } else {
-    const missing = isProduction ? requiredProductionVariables.filter((name) => !String(process.env[name] || '').trim()) : [];
+    config = {
+      database: environment.DB_NAME || environment.MYSQLDATABASE,
+      username: environment.DB_USER || environment.MYSQLUSER,
+      password: environment.DB_PASSWORD || environment.MYSQLPASSWORD,
+      host: environment.DB_HOST || environment.MYSQLHOST,
+      port: environment.DB_PORT || environment.MYSQLPORT || '3306',
+    };
+    const requiredValues = [
+      ['DB_HOST/MYSQLHOST', config.host],
+      ['DB_NAME/MYSQLDATABASE', config.database],
+      ['DB_USER/MYSQLUSER', config.username],
+      ['DB_PASSWORD/MYSQLPASSWORD', config.password],
+    ];
+    const missing = production
+      ? requiredValues.filter(([, value]) => !String(value || '').trim()).map(([name]) => name)
+      : [];
     if (missing.length) {
-      const error = new Error(`Missing production database configuration: ${missing.join(', ')} or DATABASE_URL`);
+      const error = new Error(`Missing production database configuration: ${missing.join(', ')} or DATABASE_URL/MYSQL_URL`);
       error.code = 'DB_CONFIG_MISSING';
       throw error;
     }
-    config = {
-      database: process.env.DB_NAME || 'smart_asset_db',
-      username: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      host: process.env.DB_HOST || 'localhost',
-      port: process.env.DB_PORT || '3306',
-    };
+    config.database = config.database || 'smart_asset_db';
+    config.username = config.username || 'root';
+    config.password = config.password || '';
+    config.host = config.host || 'localhost';
   }
 
-  if (isProduction && !process.env.DB_PORT && !connectionString) {
+  if (production && !environment.DB_PORT && !environment.MYSQLPORT && !connectionString) {
     console.warn('DB_PORT is not configured; using the standard MySQL port 3306.');
   }
   const port = Number(config.port);
@@ -71,11 +83,11 @@ try {
   if (!['DB_CONFIG_MISSING', 'DB_CONFIG_INVALID'].includes(error.code)) throw error;
   databaseConfigError = error;
   databaseConfig = {
-    database: process.env.DB_NAME || 'smart_asset_db',
-    username: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    host: process.env.DB_HOST || '127.0.0.1',
-    port: Number(process.env.DB_PORT) || 3306,
+    database: process.env.DB_NAME || process.env.MYSQLDATABASE || 'smart_asset_db',
+    username: process.env.DB_USER || process.env.MYSQLUSER || 'root',
+    password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || '',
+    host: isProduction ? 'database-not-configured.invalid' : process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
+    port: Number(process.env.DB_PORT || process.env.MYSQLPORT) || 3306,
   };
   console.error(`Database configuration unavailable: ${error.message}`);
 }

@@ -1,5 +1,7 @@
 # UAMS Production Deployment
 
+These existing instructions cover Render/Aiven. For Railway + Railway MySQL, use the additional setup below; the application still uses the same Express, Sequelize, and MySQL architecture.
+
 ## Architecture
 
 - Frontend: Create React App (React 18) deployed to Vercel from the repository root. The Vercel build command produces `frontend/build`.
@@ -120,3 +122,31 @@ Set the same variable for Preview only if preview deployments should call a back
 20. Log in with the new password and compare existing data counts with the pre-deployment backup.
 
 Do not declare production deployment successful until the React app, Render backend, Aiven connectivity, health endpoint, browser API calls, login/logout, both OTP channels, OTP limits/expiry, reset, new-password login, and data preservation have all been verified against the deployed services.
+
+## Railway Backend and MySQL
+
+The repository's `railway.json` builds backend dependencies and starts the root production script, which delegates to `backend/src/app.js`. The API reads Railway's `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, and `MYSQLPASSWORD` directly, or the equivalent `DB_*` variables. Explicit `DB_*` values take precedence; `DATABASE_URL` or `MYSQL_URL` can be used instead.
+
+In the Railway project, keep the backend and MySQL services in the same project/environment. In the backend service's Variables panel, add references to the actual MySQL service name (replace `MySQL` below if the service has another name):
+
+```text
+DB_HOST=${{MySQL.MYSQLHOST}}
+DB_PORT=${{MySQL.MYSQLPORT}}
+DB_NAME=${{MySQL.MYSQLDATABASE}}
+DB_USER=${{MySQL.MYSQLUSER}}
+DB_PASSWORD=${{MySQL.MYSQLPASSWORD}}
+NODE_ENV=production
+JWT_SECRET=<generate and store a high-entropy secret in Railway>
+FRONTEND_URL=https://<your-frontend-domain>
+DB_SYNC_ON_START=false
+```
+
+Railway variable references are service-name-sensitive. Confirm each referenced value in Railway's Variables view without copying secrets into source control. Use the MySQL service's private host/port for an internal Railway connection. Leave `DB_SSL` unset/false unless Railway's current provider settings explicitly require TLS; if required, configure certificate verification rather than disabling it. The app also accepts Railway's `MYSQL*` variables directly if those are exposed to the backend service.
+
+The existing local development database name defaults to `smart_asset_db`; production must use the Railway service's actual `MYSQLDATABASE` (or its `DB_NAME` reference), not an assumed name. There is no versioned migration runner. Production schema synchronization remains opt-in with `DB_SYNC_ON_START=true`; it creates missing tables and adds selected columns/indexes, but also performs DDL and duplicate-index repair on existing tables. Back up the target and test against a restored staging copy before enabling it, then return it to `false`. Do not use schema sync as a substitute for importing existing XAMPP records.
+
+To preserve the existing XAMPP data, first verify the actual source schema name, take a verified MySQL dump, and import that dump into the selected Railway database without dropping/truncating tables. Keep the source unchanged and compare table/row counts before cutover. Do not commit dumps or put credentials in shell history or repository files. The repository does not contain production Railway credentials, so connectivity and data import must be verified after the service references are configured.
+
+For the frontend service, set the build-time variable `REACT_APP_API_URL` to `https://<your-railway-backend-domain>/api`, then rebuild/redeploy the React app. Set backend `FRONTEND_URL` to the frontend's exact origin; additional approved origins may use `CLIENT_URL`, `CORS_ORIGIN`, or comma-separated `CORS_ORIGINS`. The existing monitoring screen calls `/admin/monitoring/overview`, which resolves through the shared API client to the backend's `/api/admin/monitoring/overview` route and remains admin-authenticated.
+
+The public liveness endpoint is `GET /health`; it returns HTTP 200 independently of MySQL. Database initialization runs after the listener starts. Verify backend logs for the resolved database host/name and successful Sequelize authentication after configuring Railway variables; a healthy liveness endpoint alone does not prove database readiness.
