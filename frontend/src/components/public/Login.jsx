@@ -120,6 +120,8 @@ const Login = () => {
         .login-panel {
           width: min(100%, 440px);
           display: flex;
+          flex-direction: column;
+          align-items: center;
           justify-content: center;
         }
         .login-card {
@@ -263,8 +265,8 @@ const Login = () => {
               <button type="submit" className="login-submit" disabled={loading}>{loading ? t.signingIn : <><span>{t.signIn}</span><ArrowRight size={17} aria-hidden="true" /></>}</button>
             </form>
             <div className="login-signup"><span>{t.noAccount}</span> <Link to="/register">{t.signUp}</Link></div>
-            <Link to="/home" className="login-back-link" aria-label={t.backToHomepage}>{t.backToHomepage}</Link>
           </main>
+          <a href="https://smart-asset-management-six.vercel.app/home" className="login-back-link" aria-label={t.backToHomepage}>{t.backToHomepage}</a>
         </section>
       </main>
     </>

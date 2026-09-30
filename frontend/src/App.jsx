@@ -402,6 +402,11 @@ export const isPublicRoute = (path = '') => {
 
 export const shouldUseStandaloneLoginLayout = (path = '') => String(path || '').trim() === '/login';
 
+export const AppFooter = (props) => {
+  const { pathname } = useLocation();
+  return shouldUseStandaloneLoginLayout(pathname) ? null : <Footer {...props} />;
+};
+
 export const isDashboardRoute = (path = '') => {
   const normalized = String(path || '').trim();
   return normalized === '/dashboard' || /^\/dashboard(?:\/.*)?$/.test(normalized);
@@ -2542,7 +2547,7 @@ function AppContent() {
         <main className="public-main" style={{ backgroundColor: currentTheme.mainBg }}>
           {children}
         </main>
-        <Footer
+        <AppFooter
           t={t}
           language={language}
           setLanguage={setLanguage}
@@ -2791,7 +2796,7 @@ function AppContent() {
         {isLoginRoute ? (
           <>
             <Login />
-            <Footer
+            <AppFooter
               t={t}
               language={language}
               setLanguage={setLanguage}

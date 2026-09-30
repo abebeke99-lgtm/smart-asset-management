@@ -1,11 +1,12 @@
 import {
+  AppFooter,
   shouldHideSidebarForPath,
   shouldUseStandaloneLoginLayout,
   shouldShowDashboardSidebar,
   isDashboardRoute,
   isPublicRoute,
 } from './App';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Login from './components/public/Login';
@@ -170,13 +171,71 @@ describe('Maintenance coordinator route wiring', () => {
 
 describe('Login page navigation', () => {
   it('renders a homepage link on the standalone login page', () => {
-    render(
+    const { container } = render(
       <MemoryRouter>
         <Login />
       </MemoryRouter>
     );
 
     const homepageLink = screen.getByRole('link', { name: '← Back to Homepage' });
-    expect(homepageLink).toHaveAttribute('href', '/home');
+    expect(homepageLink).toHaveAttribute('href', 'https://smart-asset-management-six.vercel.app/home');
+    expect(homepageLink.parentElement).toHaveClass('login-panel');
+    const loginCard = container.querySelector('.login-panel .login-card');
+    expect(loginCard).toBeInTheDocument();
+    expect(loginCard.compareDocumentPosition(homepageLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('hides the global footer on login while keeping it on normal pages', () => {
+    const footerProps = {
+      t: {
+        footerLabel: 'University footer',
+        university: 'University',
+        footerBrandTitle: 'Asset Management',
+        footerDescription: 'University assets',
+        footerNavigation: 'Navigation',
+        home: 'Home',
+        about: 'About',
+        help: 'Help',
+        contact: 'Contact',
+        footerSystem: 'System',
+        footerAssetManagement: 'Assets',
+        inventory: 'Inventory',
+        footerQrRfid: 'QR and RFID',
+        maintenance: 'Maintenance',
+        reports: 'Reports',
+        footerSupport: 'Support',
+        footerHelpCenter: 'Help center',
+        footerFaq: 'FAQ',
+        footerContactSupport: 'Contact support',
+        footerLegal: 'Legal',
+        privacyPolicy: 'Privacy policy',
+        footerLegalUnavailable: 'Unavailable',
+        footerTermsOfUse: 'Terms of use',
+        language: 'Language',
+        languageEnglish: 'English',
+        languageAmharic: 'Amharic',
+      },
+      language: 'en',
+      setLanguage: jest.fn(),
+      organization: { name: 'Mekdela Amba University' },
+    };
+    const renderAt = (path) => render(
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/home" element={<h1>Home page</h1>} />
+        </Routes>
+        <AppFooter {...footerProps} />
+      </MemoryRouter>
+    );
+
+    const loginPage = renderAt('/login');
+    expect(screen.getByRole('heading', { name: 'Welcome Back' })).toBeInTheDocument();
+    expect(screen.queryByRole('contentinfo', { name: 'University footer' })).not.toBeInTheDocument();
+    loginPage.unmount();
+
+    renderAt('/home');
+    expect(screen.getByRole('heading', { name: 'Home page' })).toBeInTheDocument();
+    expect(screen.getByRole('contentinfo', { name: 'University footer' })).toBeInTheDocument();
   });
 });
