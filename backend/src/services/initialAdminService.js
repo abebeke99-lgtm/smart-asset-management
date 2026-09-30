@@ -3,6 +3,7 @@ const User = require('../models/User');
 
 const ADMIN_USERNAME = 'admin';
 const ADMIN_EMAIL = 'admin@bekelei.com';
+const BCRYPT_HASH_PATTERN = /^\$2[aby]\$(?:0[4-9]|[12]\d|3[01])\$[./A-Za-z0-9]{53}$/;
 
 const validateInitialAdminPassword = (password) => {
   if (typeof password !== 'string' || Buffer.byteLength(password, 'utf8') > 72) {
@@ -20,14 +21,27 @@ const validateInitialAdminPassword = (password) => {
   }
 };
 
-const initializeInitialAdmin = async ({ userModel = User, password = process.env.INITIAL_ADMIN_PASSWORD } = {}) => {
+const verifyExistingAdmin = (user) => {
+  const active = user.active === true || user.active === 1;
+  const adminRole = String(user.role || '').toLowerCase() === 'admin';
+  const validPasswordHash = typeof user.password === 'string' && BCRYPT_HASH_PATTERN.test(user.password);
+
+  if (!active || !adminRole || !validPasswordHash) {
+    throw new Error('Existing admin account failed verification. Check its active status, role, and bcrypt password hash.');
+  }
+
+  return { created: false, userId: user.id };
+};
+
+const initializeInitialAdmin = async ({ userModel = User } = {}) => {
+  const password = process.env.INITIAL_ADMIN_PASSWORD;
   if (!password) {
     throw new Error('Set INITIAL_ADMIN_PASSWORD in the backend environment before initializing the first admin.');
   }
 
   const existingAdmin = await userModel.findOne({ where: { username: ADMIN_USERNAME } });
   if (existingAdmin) {
-    return { created: false, userId: existingAdmin.id };
+    return verifyExistingAdmin(existingAdmin);
   }
 
   validateInitialAdminPassword(password);
@@ -52,7 +66,7 @@ const initializeInitialAdmin = async ({ userModel = User, password = process.env
 
     const createdByAnotherProcess = await userModel.findOne({ where: { username: ADMIN_USERNAME } });
     if (createdByAnotherProcess) {
-      return { created: false, userId: createdByAnotherProcess.id };
+      return verifyExistingAdmin(createdByAnotherProcess);
     }
 
     throw error;

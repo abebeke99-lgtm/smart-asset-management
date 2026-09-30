@@ -1,12 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { randomBytes } = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { User, Config, AuditLog } = require('../src/models');
 const { login } = require('../src/controllers/authController');
 const { initializeInitialAdmin } = require('../src/services/initialAdminService');
 
-const testPassword = ['Unit', 'Test', '42', '!'].join('');
+const makeTestPassword = () => `Test-${randomBytes(24).toString('hex')}!Aa1`;
+const testPassword = makeTestPassword();
 const jwtSecret = 'test-only-jwt-secret';
 
 const makeUser = async ({ password = testPassword, active = true } = {}) => ({
@@ -87,7 +89,7 @@ test('inactive users receive 403 before password comparison', async () => {
   assert.equal(response.statusCode, 403);
 });
 
-test('initial admin creation stores a bcrypt hash and is idempotent', async () => {
+test('initial admin creation stores one active admin with a bcrypt hash and is idempotent', async () => {
   const users = [];
   let createCalls = 0;
   const userModel = {
@@ -102,20 +104,76 @@ test('initial admin creation stores a bcrypt hash and is idempotent', async () =
     },
   };
 
-  const first = await initializeInitialAdmin({ userModel, password: testPassword });
-  const firstHash = users[0].password;
-  const second = await initializeInitialAdmin({ userModel, password: 'Another-Test-43!' });
+  const previousPassword = process.env.INITIAL_ADMIN_PASSWORD;
+  process.env.INITIAL_ADMIN_PASSWORD = testPassword;
+  let first;
+  let second;
+  let firstHash;
+  try {
+    first = await initializeInitialAdmin({ userModel });
+    firstHash = users[0].password;
+    process.env.INITIAL_ADMIN_PASSWORD = makeTestPassword();
+    second = await initializeInitialAdmin({ userModel });
+  } finally {
+    if (previousPassword === undefined) delete process.env.INITIAL_ADMIN_PASSWORD;
+    else process.env.INITIAL_ADMIN_PASSWORD = previousPassword;
+  }
 
   assert.deepEqual(first, { created: true, userId: 1 });
   assert.deepEqual(second, { created: false, userId: 1 });
   assert.equal(createCalls, 1);
   assert.equal(users.length, 1);
   assert.match(firstHash, /^\$2[aby]\$/);
+  assert.equal(users[0].password, firstHash);
   assert.equal(await bcrypt.compare(testPassword, firstHash), true);
   assert.equal(users[0].active, true);
   assert.equal(users[0].role, 'admin');
 });
 
+test('existing inactive or malformed-hash admin is rejected without mutation or duplication', async () => {
+  const previousPassword = process.env.INITIAL_ADMIN_PASSWORD;
+  process.env.INITIAL_ADMIN_PASSWORD = testPassword;
+  let createCalls = 0;
+  const inactiveAdmin = {
+    id: 9,
+    username: 'admin',
+    role: 'admin',
+    active: false,
+    password: await bcrypt.hash(testPassword, 4),
+  };
+  const inactiveAdminHash = inactiveAdmin.password;
+  const malformedHashAdmin = { ...inactiveAdmin, active: true, password: 'not-a-bcrypt-hash' };
+  try {
+    await assert.rejects(initializeInitialAdmin({
+      userModel: {
+        async findOne() { return inactiveAdmin; },
+        async create() { createCalls += 1; },
+      },
+    }), /failed verification/);
+
+    await assert.rejects(initializeInitialAdmin({
+      userModel: {
+        async findOne() { return malformedHashAdmin; },
+        async create() { createCalls += 1; },
+      },
+    }), /failed verification/);
+  } finally {
+    if (previousPassword === undefined) delete process.env.INITIAL_ADMIN_PASSWORD;
+    else process.env.INITIAL_ADMIN_PASSWORD = previousPassword;
+  }
+
+  assert.equal(inactiveAdmin.active, false);
+  assert.equal(inactiveAdmin.password, inactiveAdminHash);
+  assert.equal(malformedHashAdmin.password, 'not-a-bcrypt-hash');
+  assert.equal(createCalls, 0);
+});
+
 test('initial admin initialization requires a configured secret', async () => {
-  await assert.rejects(initializeInitialAdmin({ userModel: {}, password: '' }), /INITIAL_ADMIN_PASSWORD/);
+  const previousPassword = process.env.INITIAL_ADMIN_PASSWORD;
+  delete process.env.INITIAL_ADMIN_PASSWORD;
+  try {
+    await assert.rejects(initializeInitialAdmin({ userModel: {} }), /INITIAL_ADMIN_PASSWORD/);
+  } finally {
+    if (previousPassword !== undefined) process.env.INITIAL_ADMIN_PASSWORD = previousPassword;
+  }
 });
