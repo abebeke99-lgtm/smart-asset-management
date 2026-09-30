@@ -1,15 +1,17 @@
 const express = require('express');
 const { getInventory, getTransactions, getStoreDashboard, createTransaction } = require('../controllers/inventoryController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
-const { resolveCollegeScope } = require('../middlewares/organizationScope');
+const { resolveCollegeScope, isCollegeScopedRole } = require('../middlewares/organizationScope');
 
 const router = express.Router();
-const inventoryWriteAccess = [requireAuth, requireRole('admin', 'store_manager', 'ict_officer')];
-const inventoryReadAccess = [requireAuth, requireRole('admin', 'store_manager', 'ict_officer'), (req, res, next) => req.user.role === 'ict_officer' ? resolveCollegeScope(req, res, next) : next()];
+const resolveScopedInventoryCollegeScope = (req, res, next) => isCollegeScopedRole(req.user?.role) ? resolveCollegeScope(req, res, next) : next();
+const resolveInventoryReadCollegeScope = (req, res, next) => isCollegeScopedRole(req.user?.role) || req.user?.role === 'ict_officer' ? resolveCollegeScope(req, res, next) : next();
+const inventoryWriteAccess = [requireAuth, requireRole('admin', 'store_manager', 'ict_officer'), resolveScopedInventoryCollegeScope];
+const inventoryReadAccess = [requireAuth, requireRole('admin', 'store_manager', 'college_manager', 'ict_officer'), resolveInventoryReadCollegeScope];
 router.get('/', ...inventoryReadAccess, getInventory);
-router.get('/dashboard', requireAuth, requireRole('admin', 'store_manager'), getStoreDashboard);
-router.get('/transactions', requireAuth, getTransactions);
-router.get('/movements', requireAuth, getTransactions);
+router.get('/dashboard', requireAuth, requireRole('admin', 'store_manager', 'college_manager'), resolveScopedInventoryCollegeScope, getStoreDashboard);
+router.get('/transactions', requireAuth, resolveScopedInventoryCollegeScope, getTransactions);
+router.get('/movements', requireAuth, resolveScopedInventoryCollegeScope, getTransactions);
 router.post('/:assetId/movement', ...inventoryWriteAccess, (req, res, next) => {
   req.body.asset_id = req.params.assetId;
   next();

@@ -20,12 +20,25 @@ const {
   Config,
 } = require('../models');
 const { createAuditLog } = require('../services/auditLogService');
+const { isCollegeScopedRole, getCollegeScopeId } = require('../middlewares/organizationScope');
 
 const ALLOWED_DOC_TYPES = ['application/pdf', 'application/msword', 'image/jpeg', 'image/png'];
 const MAX_DOC_SIZE = 10 * 1024 * 1024;
 const VALID_CONDITIONS = ['Good', 'Fair', 'Poor', 'Damaged'];
 const VALID_STATUSES = ['available', 'in-use', 'under-maintenance', 'damaged', 'replaced', 'expired', 'disposed', 'testing'];
 const SOFT_DELETE_RECOVERY_DAYS = 30;
+
+const collegeAssetScope = (req) => {
+  if (!isCollegeScopedRole(req.user?.role)) return {};
+  const collegeId = getCollegeScopeId(req);
+  return collegeId ? { collegeId } : null;
+};
+
+const findAssetInScope = (req, id, options = {}) => {
+  const scope = collegeAssetScope(req);
+  if (!scope) return Promise.resolve(null);
+  return Asset.findOne({ ...options, where: { id, ...scope } });
+};
 
 const normalizeStatus = (value) => {
   const status = String(value || '').trim().toLowerCase().replace(/[_ ]+/g, '-');
@@ -158,8 +171,12 @@ const lookupByQr = async (req, res, next) => {
   try {
     const identifier = String(req.params.identifier || req.query.identifier || '').trim();
     if (!identifier) return res.status(400).json({ success: false, message: 'Identifier is required' });
+    const scope = collegeAssetScope(req);
+    if (!scope) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
     const asset = await Asset.findOne({
       where: {
+        ...scope,
+        [Op.and]: [{
         [Op.or]: [
           { digitalId: identifier },
           { assetCode: identifier },
@@ -167,6 +184,7 @@ const lookupByQr = async (req, res, next) => {
           { rfidTag: identifier },
           { id: Number.isInteger(Number(identifier)) ? Number(identifier) : -1 },
         ],
+        }],
       },
       include: [
         { model: Campus, as: 'CampusRecord', attributes: ['id', 'campusName', 'campusCode'] },
@@ -201,7 +219,9 @@ const listDeletedAssets = async (req, res, next) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 20));
-    const { count, rows } = await Asset.findAndCountAll({ where: { deletedAt: { [Op.ne]: null } }, paranoid: false, order: [['deletedAt', 'DESC']], limit, offset: (page - 1) * limit });
+    const scope = collegeAssetScope(req);
+    if (!scope) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+    const { count, rows } = await Asset.findAndCountAll({ where: { deletedAt: { [Op.ne]: null }, ...scope }, paranoid: false, order: [['deletedAt', 'DESC']], limit, offset: (page - 1) * limit });
     const data = rows.map((asset) => ({
       ...asset.toJSON(),
       deleted_at: asset.deletedAt,
@@ -216,7 +236,7 @@ const listDeletedAssets = async (req, res, next) => {
 const softDeleteAsset = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
-    const asset = await Asset.findByPk(req.params.id, { transaction });
+    const asset = await findAssetInScope(req, req.params.id, { transaction });
     if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
     const previousValue = asset.toJSON();
     await asset.update({ deletedBy: req.user.id }, { transaction });
@@ -233,7 +253,7 @@ const softDeleteAsset = async (req, res, next) => {
 const restoreAsset = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
-    const asset = await Asset.findByPk(req.params.id, { paranoid: false, transaction });
+    const asset = await findAssetInScope(req, req.params.id, { paranoid: false, transaction });
     if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
     if (!asset.deletedAt) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Asset is not deleted' }); }
     const deletedAt = new Date(asset.deletedAt);
@@ -256,7 +276,7 @@ const restoreAsset = async (req, res, next) => {
 const permanentDeleteAsset = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
-    const asset = await Asset.findByPk(req.params.id, { paranoid: false, transaction });
+    const asset = await findAssetInScope(req, req.params.id, { paranoid: false, transaction });
     if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
     if (!asset.deletedAt) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Use authorized removal flow for non-deleted assets' }); }
     const previousValue = asset.toJSON();
@@ -275,6 +295,10 @@ const permanentDeleteAsset = async (req, res, next) => {
 
 const listAssetDocuments = async (req, res, next) => {
   try {
+    if (isCollegeScopedRole(req.user?.role)) {
+      const asset = await findAssetInScope(req, req.params.id);
+      if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
+    }
     const documents = await AssetDocument.findAll({ where: { assetId: req.params.id, status: 'active' }, order: [['createdAt', 'DESC']] });
     res.json({ success: true, data: documents, documents });
   } catch (error) { next(error); }
@@ -282,7 +306,7 @@ const listAssetDocuments = async (req, res, next) => {
 
 const uploadAssetDocument = async (req, res, next) => {
   try {
-    const asset = await Asset.findByPk(req.params.id);
+    const asset = await findAssetInScope(req, req.params.id);
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
     const saved = saveDocument(req.body, 'assets');
     const document = await AssetDocument.create({
@@ -306,7 +330,11 @@ const uploadAssetDocument = async (req, res, next) => {
 
 const deleteAssetDocument = async (req, res, next) => {
   try {
-    const document = await AssetDocument.findByPk(req.params.documentId);
+    if (isCollegeScopedRole(req.user?.role)) {
+      const asset = await findAssetInScope(req, req.params.id);
+      if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
+    }
+    const document = await AssetDocument.findOne({ where: { id: req.params.documentId, assetId: req.params.id } });
     if (!document) return res.status(404).json({ success: false, message: 'Document not found' });
     await document.update({ status: 'removed' });
     res.json({ success: true, message: 'Document removed' });
@@ -318,6 +346,10 @@ const downloadAssetDocument = async (req, res, next) => {
     const document = await AssetDocument.findByPk(req.params.documentId);
     if (!document || String(document.assetId) !== String(req.params.id)) {
       return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+    if (isCollegeScopedRole(req.user?.role)) {
+      const asset = await findAssetInScope(req, req.params.id);
+      if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
     }
     const absolutePath = path.resolve(__dirname, '..', document.filePath || '');
     if (!fs.existsSync(absolutePath)) {
@@ -336,7 +368,7 @@ const listAssetGrants = async (req, res, next) => {
 
 const createAssetGrant = async (req, res, next) => {
   try {
-    const asset = await Asset.findByPk(req.params.id);
+    const asset = await findAssetInScope(req, req.params.id);
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
     const grantNumber = String(req.body.grantNumber || req.body.grant_number || '').trim();
     const grantName = String(req.body.grantName || req.body.grant_name || '').trim();
@@ -375,7 +407,7 @@ const listCustody = async (req, res, next) => {
 const createAssetCustody = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
-    const asset = await Asset.findByPk(req.params.id, { transaction });
+    const asset = await findAssetInScope(req, req.params.id, { transaction });
     if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
     const custodianId = Number(req.body.custodianId || req.body.custodian_id || req.body.assigned_to);
     if (!Number.isInteger(custodianId)) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'A valid custodian user id is required' }); }
@@ -402,7 +434,7 @@ const createAssetCustody = async (req, res, next) => {
 
 const endCustody = async (req, res, next) => {
   try {
-    const custody = await AssetCustody.findByPk(req.params.custodyId);
+    const custody = await AssetCustody.findOne({ where: { id: req.params.custodyId, assetId: req.params.id } });
     if (!custody) return res.status(404).json({ success: false, message: 'Custody record not found' });
     if (custody.status !== 'active') return res.status(409).json({ success: false, message: 'Custody is already closed' });
     await custody.update({ status: 'returned', returnedDate: new Date() });

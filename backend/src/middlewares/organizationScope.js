@@ -1,18 +1,19 @@
 const { Op } = require('sequelize');
 const { College, Department, User } = require('../models');
-const { requireAuth, requireRole } = require('./auth');
+const { requireAuth, requireRole, normalizeRoleValue } = require('./auth');
 
-const normalizeCollegeRole = (role) => {
-  const value = String(role || '').trim().toLowerCase();
-  if (['college', 'college manager', 'college-manager', 'college_manager'].includes(value)) return 'college_manager';
-  return value;
+const normalizeCollegeRole = (role) => normalizeRoleValue(role);
+const isCollegeScopedRole = (role) => ['college_manager', 'store_manager'].includes(normalizeRoleValue(role));
+const getCollegeScopeId = (req) => {
+  const collegeId = Number(req.organizationScope?.collegeId ?? req.user?.collegeId ?? req.user?.college_id);
+  return Number.isSafeInteger(collegeId) && collegeId > 0 ? collegeId : null;
 };
 
 const requireCollegeManager = [requireAuth, requireRole('college_manager', 'college')];
 const requireDepartmentHead = [requireAuth, requireRole('department_head')];
 
 const ensureDefaultCollegeForUser = async (candidateUser) => {
-  if (!candidateUser || !candidateUser.id || normalizeCollegeRole(candidateUser.role) !== 'college') {
+  if (!candidateUser || !candidateUser.id || normalizeCollegeRole(candidateUser.role) !== 'college_manager') {
     return null;
   }
 
@@ -100,7 +101,7 @@ const findCollegeScopeForUser = async (user) => {
     }
   } catch (error) { return null; }
 
-  if (normalizeCollegeRole(candidateUser.role) === 'college') {
+  if (normalizeCollegeRole(candidateUser.role) === 'college_manager') {
     return ensureDefaultCollegeForUser(candidateUser);
   }
 
@@ -190,4 +191,4 @@ const departmentIdsForCollege = (collegeId) => ({ collegeId: Number(collegeId) }
 const scopeByCollege = (collegeId) => ({ collegeId: Number(collegeId) });
 const scopeByDepartment = (departmentId) => ({ departmentId: Number(departmentId) });
 
-module.exports = { requireCollegeManager, requireDepartmentHead, resolveCollegeScope, resolveDepartmentScope, departmentIdsForCollege, scopeByCollege, scopeByDepartment, findCollegeScopeForUser, Op };
+module.exports = { requireCollegeManager, requireDepartmentHead, resolveCollegeScope, resolveDepartmentScope, departmentIdsForCollege, scopeByCollege, scopeByDepartment, findCollegeScopeForUser, isCollegeScopedRole, getCollegeScopeId, Op };

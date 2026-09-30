@@ -8,8 +8,8 @@ test('college asset history route requires history permission and uses the share
   assert.match(source, /router\.get\('\/assets\/:id\/history', requirePermission\('college\.history\.view'\), getAssetHistory\)/);
 });
 
-test('shared asset history enforces collegeId for canonical college managers', () => {
+test('shared asset history enforces the resolved College scope for scoped roles', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../controllers/assetController.js'), 'utf8');
-  assert.match(source, /req\.user\.role === 'college_manager'/);
-  assert.match(source, /asset\.collegeId.*authorizedCollegeId/);
+  assert.match(source, /isCollegeScopedRole\(req\.user\?\.role\)/);
+  assert.match(source, /where: \{ id: assetId, collegeId \}/);
 });

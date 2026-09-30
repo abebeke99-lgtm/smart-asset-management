@@ -85,15 +85,16 @@ test('user profile lookups are gated away from unprivileged roles', () => {
 
 test('inventory stock write routes require an authorized role', () => {
   const source = read('../routes/inventoryRoutes.js');
-  assert.match(source, /const inventoryWriteAccess = \[requireAuth, requireRole\('admin', 'store_manager', 'ict_officer'\)\]/);
+  assert.match(source, /const inventoryWriteAccess = \[requireAuth, requireRole\('admin', 'store_manager', 'ict_officer'\), resolveScopedInventoryCollegeScope\]/);
+  assert.match(source, /const resolveScopedInventoryCollegeScope = .*isCollegeScopedRole\(req\.user\?\.role\).*resolveCollegeScope/);
   assert.doesNotMatch(source, /router\.post\('\/transactions', requireAuth, createTransaction\)/);
   assert.doesNotMatch(source, /router\.post\('\/:assetId\/movement', requireAuth,/);
 });
 
 test('inventory reads are restricted and ICT requests resolve college scope', () => {
   const source = read('../routes/inventoryRoutes.js');
-  assert.match(source, /const inventoryReadAccess = \[requireAuth, requireRole\('admin', 'store_manager', 'ict_officer'\)/);
-  assert.match(source, /req\.user\.role === 'ict_officer' \? resolveCollegeScope/);
+  assert.match(source, /const inventoryReadAccess = \[requireAuth, requireRole\('admin', 'store_manager', 'college_manager', 'ict_officer'\), resolveInventoryReadCollegeScope\]/);
+  assert.match(source, /const resolveInventoryReadCollegeScope = .*req\.user\?\.role === 'ict_officer' \? resolveCollegeScope/);
   assert.match(read('../controllers/inventoryController.js'), /req\.user\?\.role === 'ict_officer' && req\.organizationScope\?\.collegeId/);
 });
 

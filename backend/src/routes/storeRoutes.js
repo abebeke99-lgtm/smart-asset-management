@@ -1,5 +1,5 @@
 const express = require('express');
-const { getDashboard, getHistory, getInventory, getLowStock, getAvailableAssets, getStockAdjustments, getReceipts } = require('../controllers/storeController');
+const { getDashboard, getHistory, getInventory, getInventoryDetail, exportInventory, getLowStock, getAvailableAssets, getStockAdjustments, getReceipts } = require('../controllers/storeController');
 const { createStockAdjustment, createReceipt } = require('../controllers/inventoryController');
 const verification = require('../controllers/verificationController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
@@ -25,13 +25,15 @@ const ensureStoreScope = async (req, res, next) => {
   }
 };
 
-router.get('/dashboard', requireAuth, requireRole('store_manager'), getDashboard);
+router.get('/dashboard', requireAuth, requireRole('store_manager'), ensureStoreScope, getDashboard);
 router.get('/history', requireAuth, requireRole('store_manager'), ensureStoreScope, getHistory);
+router.get('/inventory/export', requireAuth, requireRole('store_manager'), ensureStoreScope, exportInventory);
 router.get('/inventory', requireAuth, requireRole('store_manager'), ensureStoreScope, getInventory);
+router.get('/inventory/:id', requireAuth, requireRole('store_manager'), ensureStoreScope, getInventoryDetail);
 router.get('/available-assets', requireAuth, requireRole('store_manager'), ensureStoreScope, getAvailableAssets);
-router.get('/low-stock', requireAuth, requireRole('store_manager'), getLowStock);
-router.get('/stock-adjustments', requireAuth, requireRole('store_manager'), getStockAdjustments);
-router.post('/stock-adjustments', requireAuth, requireRole('store_manager'), createStockAdjustment);
+router.get('/low-stock', requireAuth, requireRole('store_manager'), ensureStoreScope, getLowStock);
+router.get('/stock-adjustments', requireAuth, requireRole('store_manager'), ensureStoreScope, getStockAdjustments);
+router.post('/stock-adjustments', requireAuth, requireRole('store_manager'), ensureStoreScope, createStockAdjustment);
 router.get('/receive', requireAuth, requireRole('store_manager'), ensureStoreScope, getReceipts);
 router.post('/receive', requireAuth, requireRole('store_manager'), ensureStoreScope, createReceipt);
 router.get('/verification', requireAuth, requireRole('store_manager'), ensureStoreScope, verification.listSessions);

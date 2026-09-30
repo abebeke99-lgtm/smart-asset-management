@@ -1,29 +1,69 @@
-const { Approval, Asset, Department, User, AuditLog } = require('../models');
+const { sequelize, Approval, Asset, Department, User, AuditLog } = require('../models');
 const { Op } = require('sequelize');
 const { createFinanceNotification, createBulkNotification } = require('../services/notificationService');
+const { getCollegeScopeId } = require('../middlewares/organizationScope');
+const { normalizeRoleValue } = require('../middlewares/auth');
+
+const isStoreManager = (req) => normalizeRoleValue(req.user?.role) === 'store_manager';
 
 const normalize = (item) => {
   const data = item.toJSON();
   return { ...data, request_id: `REQ-${String(data.id).padStart(6, '0')}`, requested_by: item.Requester?.fullName || item.Requester?.username, requested_by_id: data.requestedBy, department: item.Department?.name, approved_by: item.Reviewer?.fullName || item.Reviewer?.username, created_at: data.createdAt, updated_at: data.updatedAt, approval_comment: data.comment };
 };
-const include = [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'department'] }, { model: Department, attributes: ['id', 'name'] }, { model: User, as: 'Requester', attributes: ['id', 'username', 'fullName', 'department'] }, { model: User, as: 'Reviewer', attributes: ['id', 'username', 'fullName'] }];
+const include = [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'department', 'collegeId'] }, { model: Department, attributes: ['id', 'name', 'collegeId'] }, { model: User, as: 'Requester', attributes: ['id', 'username', 'fullName', 'department'] }, { model: User, as: 'Reviewer', attributes: ['id', 'username', 'fullName'] }];
+
+const buildStoreApprovalPredicates = async (collegeId) => {
+  const [departments, assets] = await Promise.all([
+    Department.findAll({ where: { collegeId }, attributes: ['id'], raw: true }),
+    Asset.findAll({ where: { collegeId }, attributes: ['id'], raw: true }),
+  ]);
+  const departmentIds = departments.map((department) => department.id);
+  const assetIds = assets.map((asset) => asset.id);
+  const inCollege = [];
+  if (departmentIds.length) inCollege.push({ departmentId: { [Op.in]: departmentIds } });
+  if (assetIds.length) inCollege.push({ assetId: { [Op.in]: assetIds } });
+
+  if (!inCollege.length) return [{ id: -1 }];
+  return [
+    { [Op.or]: [{ departmentId: null }, { departmentId: { [Op.in]: departmentIds } }] },
+    { [Op.or]: [{ assetId: null }, { assetId: { [Op.in]: assetIds } }] },
+    { [Op.or]: inCollege },
+  ];
+};
+
+const approvalBelongsToCollege = (record, collegeId) => {
+  if (record.departmentId && Number(record.Department?.collegeId) !== collegeId) return false;
+  if (record.assetId && Number(record.Asset?.collegeId) !== collegeId) return false;
+  return Boolean(record.departmentId || record.assetId);
+};
 
 const listApprovals = async (req, res, next) => {
   try {
     const where = {};
+    if (isStoreManager(req)) {
+      const collegeId = getCollegeScopeId(req);
+      if (!collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+      where[Op.and] = await buildStoreApprovalPredicates(collegeId);
+    }
     if (req.query.status) where.status = String(req.query.status).toLowerCase();
     if (req.query.type) where.type = req.query.type;
     if (req.query.requested_by) where.requestedBy = req.query.requested_by;
-    const items = await Approval.findAll({ where, include, order: [['createdAt', 'DESC']] });
-    const result = items.filter((item) => {
-      if (req.user.role !== 'college') return true;
-      return item.Department?.id === Number(req.user.department_id || req.user.departmentId)
-        || item.Department?.name === req.user.department
-        || item.Asset?.department === req.user.department
-        || item.Requester?.department === req.user.department;
-    });
+    const result = await Approval.findAll({ where, include, order: [['createdAt', 'DESC']] });
     res.json({ success: true, requests: result.map(normalize), approvals: result.map(normalize), total: result.length });
   } catch (error) { next(error); }
+};
+
+const getApprovalById = async (req, res, next) => {
+  try {
+    const record = await Approval.findByPk(req.params.id, { include });
+    if (!record) return res.status(404).json({ success: false, message: 'Approval not found' });
+    if (isStoreManager(req)) {
+      const collegeId = getCollegeScopeId(req);
+      if (!collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+      if (!approvalBelongsToCollege(record, collegeId)) return res.status(404).json({ success: false, message: 'Approval not found' });
+    }
+    return res.json({ success: true, request: normalize(record), approval: normalize(record) });
+  } catch (error) { return next(error); }
 };
 
 const createApproval = async (req, res, next) => {
@@ -43,18 +83,47 @@ const createApproval = async (req, res, next) => {
 };
 
 const decideApproval = async (req, res, next) => {
+  let transaction;
+  let transactionFinished = false;
   try {
     if (!['admin', 'college', 'finance', 'store_manager'].includes(req.user.role)) return res.status(403).json({ success: false, message: 'Approval authorization required' });
     const status = String(req.body.status || '').toLowerCase();
     if (!['approved', 'rejected', 'cancelled'].includes(status)) return res.status(400).json({ success: false, message: 'Invalid approval status' });
-    const record = await Approval.findByPk(req.params.id, { include });
-    if (!record) return res.status(404).json({ success: false, message: 'Approval not found' });
-    if (req.user.role === 'college' && record.Department?.name && record.Department.name !== req.user.department) return res.status(403).json({ success: false, message: 'Department authorization required' });
-    if (record.status !== 'pending') return res.status(409).json({ success: false, message: 'Only pending requests can be decided' });
-    if (record.requestedBy === req.user.id) return res.status(403).json({ success: false, message: 'A requester cannot approve their own request' });
+    transaction = await sequelize.transaction();
+    const record = await Approval.findByPk(req.params.id, { include, transaction, lock: transaction.LOCK.UPDATE });
+    if (!record) {
+      await transaction.rollback();
+      transactionFinished = true;
+      return res.status(404).json({ success: false, message: 'Approval not found' });
+    }
+    if (isStoreManager(req)) {
+      const collegeId = getCollegeScopeId(req);
+      if (!collegeId) {
+        await transaction.rollback();
+        transactionFinished = true;
+        return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+      }
+      if (!approvalBelongsToCollege(record, collegeId)) {
+        await transaction.rollback();
+        transactionFinished = true;
+        return res.status(404).json({ success: false, message: 'Approval not found' });
+      }
+    }
+    if (record.status !== 'pending') {
+      await transaction.rollback();
+      transactionFinished = true;
+      return res.status(409).json({ success: false, message: 'Only pending requests can be decided' });
+    }
+    if (record.requestedBy === req.user.id) {
+      await transaction.rollback();
+      transactionFinished = true;
+      return res.status(403).json({ success: false, message: 'A requester cannot approve their own request' });
+    }
     const comment = String(req.body.comment || req.body.reason || '').trim();
-    await record.update({ status, reviewedBy: req.user.id, comment: req.body.comment || req.body.reason || '' });
-    await AuditLog.create({ userId: req.user.id, action: `REQUEST_${status.toUpperCase()}`, entity: `approval:${record.id}`, details: JSON.stringify({ requestId: record.id, beforeStatus: 'pending', afterStatus: status, comment }) });
+    await record.update({ status, reviewedBy: req.user.id, comment: req.body.comment || req.body.reason || '' }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: `REQUEST_${status.toUpperCase()}`, entity: `approval:${record.id}`, details: JSON.stringify({ requestId: record.id, beforeStatus: 'pending', afterStatus: status, comment }) }, { transaction });
+    await transaction.commit();
+    transactionFinished = true;
     try {
       await createBulkNotification({
         recipientType: 'users',
@@ -69,8 +138,13 @@ const decideApproval = async (req, res, next) => {
     } catch (notificationError) {
       console.error('Approval notification failed:', notificationError.message);
     }
-    res.json({ success: true, request: normalize(record) });
-  } catch (error) { next(error); }
+    return res.json({ success: true, request: normalize(record) });
+  } catch (error) {
+    if (transaction && !transactionFinished) {
+      try { await transaction.rollback(); } catch (rollbackError) { console.error('Approval transaction rollback failed:', rollbackError.message); }
+    }
+    return next(error);
+  }
 };
 
-module.exports = { listApprovals, createApproval, decideApproval };
+module.exports = { listApprovals, getApprovalById, createApproval, decideApproval };

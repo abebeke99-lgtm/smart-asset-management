@@ -2,6 +2,7 @@ const { sequelize, Asset, Inventory, Assignment, Transfer, Maintenance, RFIDLog,
 const { Op } = require('sequelize');
 const { nextDigitalId, buildAssetCodeFromConfig } = require('./assetExtendedController');
 const { createAuditLog } = require('../services/auditLogService');
+const { isCollegeScopedRole, getCollegeScopeId } = require('../middlewares/organizationScope');
 
 const serializeAsset = (asset, assignment = null) => {
   const data = asset.toJSON ? asset.toJSON() : asset;
@@ -27,16 +28,18 @@ const serializeAsset = (asset, assignment = null) => {
 const getAllAssets = async (req, res) => {
   try {
     const where = {};
-    if (req.user.role === 'college' && req.query.department && req.query.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
-    const department = req.user.role === 'college' ? req.user.department : req.query.department;
+    const collegeId = isCollegeScopedRole(req.user?.role) ? getCollegeScopeId(req) : null;
+    if (isCollegeScopedRole(req.user?.role) && !collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+    if (collegeId) where.collegeId = collegeId;
+    const department = req.query.department;
     if (department) where.department = department;
     if (req.query.status) where.status = { [Op.in]: [req.query.status, String(req.query.status).toLowerCase(), String(req.query.status).replace(/[_ ]/g, '-').toLowerCase()] };
     if (req.query.category) where.category = req.query.category;
     if (req.query.location) where.location = req.query.location;
     if (req.query.condition) where.condition = { [Op.in]: [req.query.condition, String(req.query.condition).toLowerCase()] };
     if (req.query.department_id) {
-      const department = await Department.findByPk(req.query.department_id);
-      if (department) where.department = department.name;
+      const requestedDepartment = await Department.findByPk(req.query.department_id);
+      if (requestedDepartment && (!collegeId || Number(requestedDepartment.collegeId) === collegeId)) where.department = requestedDepartment.name;
     }
     if (req.query.search) {
       const search = String(req.query.search).trim();
@@ -58,7 +61,7 @@ const getAllAssets = async (req, res) => {
     const orderField = sortFields[req.query.sort_by] || 'id';
     const orderDirection = String(req.query.sort_order).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
     const { count, rows } = await Asset.findAndCountAll({ where, order: [[orderField, orderDirection]], limit, offset: (page - 1) * limit });
-    const summaryRows = await Asset.findAll({ attributes: ['status'], raw: true });
+    const summaryRows = await Asset.findAll({ attributes: ['status'], raw: true, ...(collegeId ? { where: { collegeId } } : {}) });
     const summary = summaryRows.reduce((counts, asset) => {
       const status = String(asset.status || '').toLowerCase().replace(/[_ ]/g, '-');
       const key = status === 'in-use' || status === 'assigned' ? 'assigned' : status === 'under-maintenance' ? 'maintenance' : status === 'lost' || status === 'missing' ? 'missing' : status === 'disposed' || status === 'retired' ? 'retired' : status;
@@ -76,9 +79,12 @@ const getAllAssets = async (req, res) => {
 
 const getAssetById = async (req, res) => {
   try {
-    const asset = await Asset.findByPk(req.params.id);
+    const collegeId = isCollegeScopedRole(req.user?.role) ? getCollegeScopeId(req) : null;
+    if (isCollegeScopedRole(req.user?.role) && !collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+    const asset = collegeId
+      ? await Asset.findOne({ where: { id: req.params.id, collegeId } })
+      : await Asset.findByPk(req.params.id);
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
-    if (req.user.role === 'college' && asset.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
     const assignment = await Assignment.findOne({ where: { assetId: asset.id, status: 'active' }, include: [{ model: User, attributes: ['username', 'fullName'] }] });
     res.json({ success: true, data: serializeAsset(asset, assignment), asset: serializeAsset(asset, assignment) });
   } catch (error) {
@@ -88,9 +94,14 @@ const getAssetById = async (req, res) => {
 };
 
 const createAsset = async (req, res) => {
+  const body = req.body || {};
+  const scopedRole = isCollegeScopedRole(req.user?.role);
+  const collegeId = scopedRole ? getCollegeScopeId(req) : null;
+  if (scopedRole && !collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+  const providedCollegeId = body.collegeId ?? body.college_id;
+  if (scopedRole && providedCollegeId !== undefined && Number(providedCollegeId) !== collegeId) return res.status(403).json({ success: false, message: 'Asset College is outside your organization scope' });
   const transaction = await sequelize.transaction();
   try {
-    const body = req.body || {};
     const providedAssetCode = String(body.assetCode || body.asset_id || '').trim();
     const serialNumber = String(body.serialNumber || body.serial_number || '').trim();
     const rfidTag = String(body.rfidTag || body.rfid_tag || '').trim();
@@ -116,17 +127,20 @@ const createAsset = async (req, res) => {
     const digitalId = body.digitalId || body.digital_id || await nextDigitalId(transaction);
     const quantity = Number(body.quantity ?? 1);
     if (!Number.isInteger(quantity) || quantity < 1) return res.status(400).json({ success: false, message: 'Quantity must be a positive integer' });
+    if (serialNumber && quantity !== 1) return res.status(422).json({ success: false, message: 'Serialized assets must have a quantity of one' });
 
     const asset = await Asset.create({
       name,
       assetCode,
       digitalId,
       category: body.category || body.category_id || '',
+      subcategory: body.subcategory || '',
+      unit: body.unit || 'unit',
       description: body.description || '',
       serialNumber,
       rfidTag,
       department: body.department || body.department_id || '',
-      collegeId: body.collegeId || body.college_id || null,
+      collegeId: scopedRole ? collegeId : (body.collegeId || body.college_id || null),
       departmentId: body.departmentId || body.department_id || null,
       campusId: body.campusId || body.campus_id || null,
       buildingId: body.buildingId || body.building_id || null,
@@ -138,6 +152,8 @@ const createAsset = async (req, res) => {
       condition: body.condition || body.condition_status || 'Good',
       status: body.status || 'available',
       purchaseDate,
+      expiryDate: body.expiryDate || body.expiry_date || null,
+      batchLot: body.batchLot || body.batch_lot || null,
       purchasePrice: Number(purchasePrice),
       supplier: body.supplier || '',
       manufacturer: body.manufacturer || body.brand || '',
@@ -163,17 +179,25 @@ const createAsset = async (req, res) => {
   }
 };
 
-const updatableAssetFields = ['assetCode', 'digitalId', 'name', 'category', 'description', 'serialNumber', 'rfidTag', 'status', 'condition', 'department', 'collegeId', 'departmentId', 'campusId', 'buildingId', 'roomId', 'location', 'quantity', 'specifications', 'fundingSource', 'purchaseDate', 'purchasePrice', 'supplier', 'manufacturer', 'model', 'warrantyExpiry', 'notes', 'currentValue', 'healthScore'];
+const updatableAssetFields = ['assetCode', 'digitalId', 'name', 'category', 'subcategory', 'unit', 'description', 'serialNumber', 'rfidTag', 'status', 'condition', 'department', 'collegeId', 'departmentId', 'campusId', 'buildingId', 'roomId', 'location', 'quantity', 'specifications', 'fundingSource', 'purchaseDate', 'expiryDate', 'batchLot', 'purchasePrice', 'supplier', 'manufacturer', 'model', 'warrantyExpiry', 'notes', 'currentValue', 'healthScore'];
 
 const updateAsset = async (req, res) => {
   try {
-    const asset = await Asset.findByPk(req.params.id);
+    const scopedRole = isCollegeScopedRole(req.user?.role);
+    const collegeId = scopedRole ? getCollegeScopeId(req) : null;
+    if (scopedRole && !collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+    const providedCollegeId = req.body?.collegeId ?? req.body?.college_id;
+    if (scopedRole && (req.body?.collegeId !== undefined || req.body?.college_id !== undefined) && Number(providedCollegeId) !== collegeId) return res.status(403).json({ success: false, message: 'Asset College is outside your organization scope' });
+    const asset = collegeId
+      ? await Asset.findOne({ where: { id: req.params.id, collegeId } })
+      : await Asset.findByPk(req.params.id);
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
     const previousValue = asset.toJSON();
     const updates = {};
     const aliases = {
       asset_id: 'assetCode', serial_number: 'serialNumber', rfid_tag: 'rfidTag',
       condition_status: 'condition', purchase_cost: 'purchasePrice', warranty_expiry: 'warrantyExpiry',
+      expiry_date: 'expiryDate', batch_lot: 'batchLot', college_id: 'collegeId',
     };
     for (const [alias, field] of Object.entries(aliases)) {
       if (req.body[alias] !== undefined) updates[field] = req.body[alias];
@@ -181,6 +205,7 @@ const updateAsset = async (req, res) => {
     for (const field of updatableAssetFields) {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
     }
+    if (scopedRole) updates.collegeId = collegeId;
     for (const field of ['purchasePrice', 'currentValue', 'quantity', 'healthScore']) {
       if (updates[field] !== undefined && updates[field] !== null && updates[field] !== '') {
         const value = Number(updates[field]);
@@ -192,6 +217,13 @@ const updateAsset = async (req, res) => {
       if (updates[field] !== undefined && updates[field] !== null && updates[field] !== '' && Number.isNaN(Date.parse(updates[field]))) {
         return res.status(422).json({ success: false, message: `${field} must be a valid date` });
       }
+    }
+    const serialNumber = String(updates.serialNumber ?? asset.serialNumber ?? '').trim();
+    const quantity = Number(updates.quantity ?? asset.quantity ?? 1);
+    if (serialNumber && quantity !== 1) return res.status(422).json({ success: false, message: 'Serialized assets must have a quantity of one' });
+    if (serialNumber && serialNumber !== String(asset.serialNumber || '').trim()) {
+      const duplicate = await Asset.findOne({ where: { serialNumber, id: { [Op.ne]: asset.id } } });
+      if (duplicate) return res.status(409).json({ success: false, message: 'Serial number already exists' });
     }
     await asset.update(updates);
     await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, oldValue: previousValue, newValue: asset.toJSON(), details: { assetId: asset.id } });
@@ -238,15 +270,12 @@ const checkAssetField = (field) => async (req, res, next) => {
 const getAssetHistory = async (req, res, next) => {
   try {
     const assetId = Number(req.params.id);
-    const asset = await Asset.findByPk(assetId, { attributes: ['id', 'department', 'collegeId'] });
+    const collegeId = isCollegeScopedRole(req.user?.role) ? getCollegeScopeId(req) : null;
+    if (isCollegeScopedRole(req.user?.role) && !collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+    const asset = collegeId
+      ? await Asset.findOne({ where: { id: assetId, collegeId }, attributes: ['id', 'department', 'collegeId'] })
+      : await Asset.findByPk(assetId, { attributes: ['id', 'department', 'collegeId'] });
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
-    if (req.user.role === 'college_manager') {
-      const authorizedCollegeId = Number(req.organizationScope?.collegeId || req.user.collegeId || 0);
-      if (!authorizedCollegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
-      if (Number(asset.collegeId) !== authorizedCollegeId) {
-        return res.status(404).json({ success: false, message: 'Asset not found in your college' });
-      }
-    }
     const [assignments, transfers, maintenance, rfid, audits] = await Promise.all([
       Assignment.findAll({ where: { assetId }, order: [['createdAt', 'DESC']] }),
       Transfer.findAll({ where: { assetId }, order: [['createdAt', 'DESC']] }),

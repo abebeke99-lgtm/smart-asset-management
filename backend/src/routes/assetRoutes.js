@@ -19,14 +19,25 @@ const {
   endCustody,
 } = require('../controllers/assetExtendedController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
-const { resolveDepartmentScope } = require('../middlewares/organizationScope');
-const { Assignment, Maintenance, Transfer, RFIDLog, AuditLog, User, Department } = require('../models');
+const { resolveDepartmentScope, resolveCollegeScope, isCollegeScopedRole, getCollegeScopeId } = require('../middlewares/organizationScope');
+const { Asset, Assignment, Maintenance, Transfer, RFIDLog, AuditLog, User, Department } = require('../models');
 const { Op } = require('sequelize');
 const { createAuditLog } = require('../services/auditLogService');
 
 const router = express.Router();
 
 const assetManagerRoles = ['admin', 'ict_officer', 'store_manager'];
+const resolveScopedCollegeAssetScope = (req, res, next) => isCollegeScopedRole(req.user?.role) ? resolveCollegeScope(req, res, next) : next();
+const verifyScopedCollegeAsset = async (req, res, next) => {
+	if (!isCollegeScopedRole(req.user?.role)) return next();
+	const collegeId = getCollegeScopeId(req);
+	if (!collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+	try {
+		const asset = await Asset.findOne({ where: { id: req.params.id, collegeId }, paranoid: false, attributes: ['id'] });
+		if (!asset) return res.status(404).json({ success: false, message: 'Asset not found in your college' });
+		return next();
+	} catch (error) { return next(error); }
+};
 const resolveDepartmentHeadAssetScope = (req, res, next) => req.user.role === 'department_head'
 	? resolveDepartmentScope(req, res, next)
 	: next();
@@ -37,28 +48,28 @@ const verifyDepartmentHeadAsset = async (req, res, next) => {
 	return next();
 };
 
-router.get('/', requireAuth, getAllAssets);
+router.get('/', requireAuth, resolveScopedCollegeAssetScope, getAllAssets);
 router.get('/next-id', requireAuth, getNextAssetId);
 router.get('/next-digital-id', requireAuth, generateDigitalId);
-router.get('/scan/:identifier', requireAuth, lookupByQr);
-router.get('/deleted', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), listDeletedAssets);
+router.get('/scan/:identifier', requireAuth, resolveScopedCollegeAssetScope, lookupByQr);
+router.get('/deleted', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, listDeletedAssets);
 router.get('/import/template', requireAuth, assetImportTemplate);
 router.post('/import', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), bulkImportAssets);
 router.get('/check-id/:value', requireAuth, checkAssetField('assetCode'));
 router.get('/check-serial/:value', requireAuth, checkAssetField('serialNumber'));
 router.get('/check-rfid/:value', requireAuth, checkAssetField('rfidTag'));
-router.get('/:id/history', requireAuth, requireRole('admin', 'ict_officer', 'college', 'store_manager'), getAssetHistory);
-router.post('/:id/restore', requireAuth, requireRole('admin', 'store_manager'), restoreAsset);
+router.get('/:id/history', requireAuth, requireRole('admin', 'ict_officer', 'college', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, getAssetHistory);
+router.post('/:id/restore', requireAuth, requireRole('admin', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, restoreAsset);
 router.delete('/:id/permanent', requireAuth, requireRole('admin'), permanentDeleteAsset);
-router.get('/:id/documents', requireAuth, listAssetDocuments);
-router.post('/:id/documents', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), uploadAssetDocument);
-router.delete('/:id/documents/:documentId', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), deleteAssetDocument);
-router.get('/:id/documents/:documentId/file', requireAuth, downloadAssetDocument);
-router.get('/:id/grants', requireAuth, listAssetGrants);
+router.get('/:id/documents', requireAuth, resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, listAssetDocuments);
+router.post('/:id/documents', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, uploadAssetDocument);
+router.delete('/:id/documents/:documentId', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, deleteAssetDocument);
+router.get('/:id/documents/:documentId/file', requireAuth, resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, downloadAssetDocument);
+router.get('/:id/grants', requireAuth, resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, listAssetGrants);
 router.post('/:id/grants', requireAuth, requireRole('admin', 'ict_officer'), createAssetGrant);
-router.get('/:id/custody', requireAuth, listCustody);
-router.post('/:id/custody', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), createAssetCustody);
-router.post('/:id/custody/:custodyId/end', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), endCustody);
+router.get('/:id/custody', requireAuth, resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, listCustody);
+router.post('/:id/custody', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, createAssetCustody);
+router.post('/:id/custody/:custodyId/end', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, endCustody);
 router.post('/:id/assign', requireAuth, requireRole('admin', 'ict_officer'), async (req, res, next) => {
 	const transaction = await require('../models').sequelize.transaction();
 	try {
@@ -107,9 +118,9 @@ const linkRfid = async (req, res, next) => {
 		res.json({ success: true, asset: asset.toJSON() });
 	} catch (error) { next(error); }
 };
-router.post('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), linkRfid);
-router.put('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), linkRfid);
-router.delete('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), async (req, res, next) => {
+router.post('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, linkRfid);
+router.put('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, linkRfid);
+router.delete('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, async (req, res, next) => {
 	try {
 		const asset = await require('../models').Asset.findByPk(req.params.id);
 		if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
@@ -120,21 +131,21 @@ router.delete('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer', 'sto
 		res.json({ success: true, asset: asset.toJSON() });
 	} catch (error) { next(error); }
 });
-router.get('/:id', requireAuth, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, getAssetById);
-router.get('/:id/assignments', requireAuth, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, async (req, res, next) => {
+router.get('/:id', requireAuth, resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, getAssetById);
+router.get('/:id/assignments', requireAuth, resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, async (req, res, next) => {
 	try {
 		const history = await Assignment.findAll({ where: { assetId: req.params.id }, order: [['createdAt', 'DESC']] });
 		res.json({ success: true, history });
 	} catch (error) { next(error); }
 });
-router.get('/:id/maintenance', requireAuth, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, async (req, res, next) => {
+router.get('/:id/maintenance', requireAuth, resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, async (req, res, next) => {
 	try {
 		const history = await Maintenance.findAll({ where: { assetId: req.params.id }, order: [['createdAt', 'DESC']] });
 		res.json({ success: true, history });
 	} catch (error) { next(error); }
 });
-router.post('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), createAsset);
-router.put('/:id', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), updateAsset);
+router.post('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, createAsset);
+router.put('/:id', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, updateAsset);
 router.delete('/:id', requireAuth, requireRole('admin'), deleteAsset);
 
 module.exports = router;

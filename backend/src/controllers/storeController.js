@@ -2,21 +2,39 @@ const { Op, Sequelize } = require('sequelize');
 const { sequelize, Asset, Inventory, InventoryTransaction, User, Department, Maintenance, Approval, AssetReturn, Transfer, AssetMovement, VerificationSession, VerificationItem, AuditLog, Assignment } = require('../models');
 const { normalizeInventory } = require('./inventoryController');
 
-const storeScope = (req) => {
-  const collegeId = req.organizationScope?.collegeId ?? req.user?.collegeId ?? req.user?.college_id;
-  return collegeId ? { collegeId: Number(collegeId) } : {};
+const inventoryAssetAttributes = ['id', 'assetCode', 'digitalId', 'name', 'category', 'subcategory', 'unit', 'serialNumber', 'rfidTag', 'status', 'condition', 'location', 'collegeId', 'description', 'purchaseDate', 'purchasePrice', 'supplier', 'warrantyExpiry', 'expiryDate', 'batchLot', 'campusId', 'buildingId', 'roomId', 'currentValue'];
+const inventorySortFields = {
+  id: ['id'], itemId: ['id'], assetId: [Asset, 'assetCode'], name: [Asset, 'name'], category: [Asset, 'category'],
+  subcategory: [Asset, 'subcategory'], serialNumber: [Asset, 'serialNumber'], quantity: ['quantity'], unit: [Asset, 'unit'],
+  purchaseDate: [Asset, 'purchaseDate'], purchaseCost: [Asset, 'purchasePrice'], supplier: [Asset, 'supplier'],
+  status: [Asset, 'status'], condition: [Asset, 'condition'], location: ['location'], campus: [Asset, 'campusId'],
+  building: [Asset, 'buildingId'], room: [Asset, 'roomId'], warranty: [Asset, 'warrantyExpiry'], expiryDate: [Asset, 'expiryDate'],
+  qrCode: [Asset, 'digitalId'], rfid: [Asset, 'rfidTag'], batchLot: [Asset, 'batchLot'], createdAt: ['createdAt'], updatedAt: ['updatedAt'],
 };
 
-const assetInclude = (scope) => ({ model: Asset, attributes: ['id', 'assetCode', 'name', 'status', 'condition', 'location', 'collegeId'], required: true, where: scope });
+const storeScope = (req) => {
+  const collegeId = Number(req.organizationScope?.collegeId ?? req.user?.collegeId ?? req.user?.college_id);
+  if (!Number.isSafeInteger(collegeId) || collegeId <= 0) {
+    const error = new Error('Store Manager college scope is not configured');
+    error.statusCode = 403;
+    throw error;
+  }
+  return { collegeId };
+};
+
+const assetInclude = (scope) => ({ model: Asset, attributes: ['id', 'assetCode', 'name', 'status', 'condition', 'location', 'category', 'collegeId'], required: true, where: scope });
 const dateStart = () => { const value = new Date(); value.setHours(0, 0, 0, 0); return value; };
 const label = (value) => String(value || '').replace(/[-_]/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
 
 const getStoreDashboard = async (req, res, next) => {
   try {
     const scope = storeScope(req);
+    const { collegeId } = scope;
     const today = dateStart();
+    const yearStart = new Date(new Date().getFullYear(), 0, 1);
     const pendingRequests = { status: 'pending' };
-    const [inventoryRows, requestCount, receiptCount, issueCount, returnCount, transferCount, maintenanceCount, readyForReturn, verificationScans, todayTransactions, recentTransactions, recentMovements, lowStockAlerts, latestVerification] = await Promise.all([
+    const lowStockWhere = Sequelize.where(Sequelize.col('available_quantity'), Op.lte, Sequelize.col('minimum_quantity'));
+    const [inventoryRows, requestCount, receiptCount, issueCount, returnCount, transferCount, maintenanceCount, readyForReturn, verificationScans, todayTransactions, recentTransactions, recentMovements, lowStockCount, lowStockAlerts, latestVerification, stockMovementRows, monthlyMovementRows] = await Promise.all([
       Inventory.findAll({ include: [assetInclude(scope)], attributes: ['id', 'assetId', 'quantity', 'availableQuantity', 'reservedQuantity', 'damagedQuantity', 'minimumQuantity', 'status'] }),
       Approval.count({ where: pendingRequests, include: [assetInclude(scope)] }),
       Approval.count({ where: { ...pendingRequests, type: { [Op.in]: ['receive', 'receiving', 'procurement', 'purchase'] } }, include: [assetInclude(scope)] }),
@@ -26,30 +44,66 @@ const getStoreDashboard = async (req, res, next) => {
       Maintenance.count({ where: { status: { [Op.in]: ['pending', 'approved', 'assigned', 'in-progress', 'under maintenance'] } }, include: [assetInclude(scope)] }),
       Maintenance.count({ where: { status: { [Op.in]: ['completed', 'ready for return'] } }, include: [assetInclude(scope)] }),
       VerificationItem.count({ where: { createdAt: { [Op.gte]: today } }, include: [{ model: VerificationSession, required: true, where: scope.collegeId ? { collegeId: scope.collegeId } : {} }] }),
-      InventoryTransaction.findAll({ where: { createdAt: { [Op.gte]: today } }, include: [assetInclude(scope)], attributes: ['id', 'assetId', 'type', 'quantity', 'createdAt'], order: [['createdAt', 'DESC']], limit: 100 }),
+      InventoryTransaction.findAll({ where: { createdAt: { [Op.gte]: today } }, include: [assetInclude(scope)], attributes: ['id', 'assetId', 'type', 'quantity', 'createdAt'], order: [['createdAt', 'DESC']] }),
       InventoryTransaction.findAll({ include: [assetInclude(scope), { model: User, attributes: ['fullName', 'username'] }], attributes: ['id', 'assetId', 'type', 'quantity', 'fromLocation', 'toLocation', 'createdAt'], order: [['createdAt', 'DESC']], limit: 8 }),
       AssetMovement.findAll({ include: [assetInclude(scope), { model: User, attributes: ['fullName', 'username'] }], order: [['createdAt', 'DESC']], limit: 8 }),
-      Inventory.findAll({ where: Sequelize.where(Sequelize.col('available_quantity'), Op.lte, Sequelize.col('minimum_quantity')), include: [assetInclude(scope)], attributes: ['id', 'assetId', 'availableQuantity', 'minimumQuantity'], order: [['availableQuantity', 'ASC']], limit: 8 }),
-      VerificationSession.findOne({ where: scope.collegeId ? { collegeId: scope.collegeId } : {}, include: [{ model: VerificationItem, attributes: ['state'] }], order: [['createdAt', 'DESC']] }),
+      Inventory.count({ where: lowStockWhere, include: [assetInclude(scope)], distinct: true }),
+      Inventory.findAll({ where: lowStockWhere, include: [assetInclude(scope)], attributes: ['id', 'assetId', 'availableQuantity', 'minimumQuantity'], order: [['availableQuantity', 'ASC']], limit: 8 }),
+      VerificationSession.findOne({ where: { collegeId }, include: [{ model: VerificationItem, attributes: ['state'] }], order: [['createdAt', 'DESC']] }),
+      InventoryTransaction.findAll({ attributes: ['type', [Sequelize.fn('SUM', Sequelize.col('quantity')), 'quantity']], include: [{ model: Asset, attributes: [], required: true, where: scope }], group: ['type'], raw: true }),
+      InventoryTransaction.findAll({ where: { createdAt: { [Op.gte]: yearStart } }, attributes: ['type', [Sequelize.fn('DATE_FORMAT', Sequelize.col('InventoryTransaction.createdAt'), '%Y-%m'), 'month'], [Sequelize.fn('SUM', Sequelize.col('quantity')), 'quantity']], include: [{ model: Asset, attributes: [], required: true, where: scope }], group: ['type', Sequelize.fn('DATE_FORMAT', Sequelize.col('InventoryTransaction.createdAt'), '%Y-%m')], raw: true }),
     ]);
 
     const activeInventory = inventoryRows.filter((row) => !['disposed', 'deleted', 'archived'].includes(String(row.Asset?.status || '').toLowerCase()));
-    const inventoryHealth = { available: 0, assigned: 0, maintenance: 0, missing: 0, damaged: 0 };
-    activeInventory.forEach((row) => {
-      const status = String(row.Asset?.status || row.status || '').toLowerCase();
+    const inventoryByStatus = { available: 0, reserved: 0, assigned: 0, issued: 0, damaged: 0, underMaintenance: 0, missing: 0, retired: 0, disposed: 0 };
+    inventoryRows.forEach((row) => {
+      const status = String(row.Asset?.status || row.status || '').toLowerCase().replace(/[-_]+/g, ' ');
       const quantity = Number(row.quantity || 0);
-      if (['available', 'in_store'].includes(status)) inventoryHealth.available += Number(row.availableQuantity || 0);
-      else if (['assigned', 'issued'].includes(status)) inventoryHealth.assigned += quantity;
-      else if (status.includes('maintenance')) inventoryHealth.maintenance += quantity;
-      else if (['missing', 'lost'].includes(status)) inventoryHealth.missing += quantity;
-      if (status === 'damaged' || Number(row.damagedQuantity || 0) > 0) inventoryHealth.damaged += Number(row.damagedQuantity || quantity);
+      const damaged = Number(row.damagedQuantity || 0);
+      if (status === 'disposed') inventoryByStatus.disposed += quantity;
+      else if (['deleted', 'archived'].includes(status)) return;
+      else if (status === 'retired') inventoryByStatus.retired += quantity;
+      else if (['missing', 'lost'].includes(status)) inventoryByStatus.missing += quantity;
+      else if (status.includes('maintenance')) inventoryByStatus.underMaintenance += quantity;
+      else if (status === 'issued') inventoryByStatus.issued += Math.max(quantity - damaged, 0);
+      else if (['assigned', 'in use'].includes(status)) inventoryByStatus.assigned += Math.max(quantity - damaged, 0);
+      else if (status === 'damaged') inventoryByStatus.damaged += damaged || quantity;
+      else if (status === 'reserved') inventoryByStatus.reserved += Number(row.reservedQuantity || quantity);
+      else {
+        inventoryByStatus.available += Number(row.availableQuantity || 0);
+        inventoryByStatus.reserved += Number(row.reservedQuantity || 0);
+        inventoryByStatus.damaged += damaged;
+      }
     });
     const todayCounts = todayTransactions.reduce((counts, item) => ({ ...counts, [item.type]: (counts[item.type] || 0) + Number(item.quantity || 1) }), {});
+    const categories = inventoryRows.reduce((counts, row) => {
+      const category = row.Asset?.category || 'Uncategorized';
+      counts[category] = (counts[category] || 0) + Number(row.quantity || 0);
+      return counts;
+    }, {});
+    const movementKeys = { receive: 'received', received: 'received', issue: 'issued', issued: 'issued', return: 'returned', returned: 'returned', transfer: 'transferred', transferred: 'transferred', adjustment: 'adjusted', adjusted: 'adjusted', stock_adjustment: 'adjusted', consume: 'consumed', consumed: 'consumed', dispose: 'disposed', disposed: 'disposed' };
+    const stockMovement = { received: 0, issued: 0, returned: 0, transferred: 0, adjusted: 0, consumed: 0, disposed: 0 };
+    stockMovementRows.forEach((row) => { const key = movementKeys[String(row.type || '').toLowerCase()]; if (key) stockMovement[key] += Number(row.quantity || 0); });
+    const monthlyMovements = Array.from({ length: 12 }, (_, index) => ({ month: `${new Date().getFullYear()}-${String(index + 1).padStart(2, '0')}`, received: 0, issued: 0, returned: 0, transferred: 0, adjusted: 0, consumed: 0, disposed: 0 }));
+    const monthlyByKey = new Map(monthlyMovements.map((row) => [row.month, row]));
+    monthlyMovementRows.forEach((row) => {
+      const key = movementKeys[String(row.type || '').toLowerCase()];
+      const month = monthlyByKey.get(row.month);
+      if (key && month) month[key] += Number(row.quantity || 0);
+    });
     const recent = recentTransactions.map((item) => ({ id: item.id, asset: item.Asset?.name || item.Asset?.assetCode || 'Asset', assetCode: item.Asset?.assetCode, type: label(item.type), date: item.createdAt, status: 'Recorded' }));
+    const transactionIds = new Set(recentTransactions.map((item) => item.id));
+    const activities = [
+      ...recentTransactions.map((item) => ({ id: `transaction-${item.id}`, date: item.createdAt, user: item.User?.fullName || item.User?.username || 'Store', action: label(item.type), asset: item.Asset?.name || item.Asset?.assetCode || 'Asset', assetCode: item.Asset?.assetCode, quantity: Number(item.quantity || 0), location: item.toLocation || item.fromLocation || item.Asset?.location || '-', status: 'Recorded' })),
+      ...recentMovements.filter((item) => item.referenceType !== 'inventory_transaction' || !transactionIds.has(Number(item.referenceId))).map((item) => ({ id: `movement-${item.id}`, date: item.createdAt, user: item.User?.fullName || item.User?.username || 'Store', action: label(item.movementType), asset: item.Asset?.name || item.Asset?.assetCode || 'Asset', assetCode: item.Asset?.assetCode, quantity: item.quantity ?? null, location: item.Asset?.location || item.destinationType || '-', status: 'Recorded' })),
+    ].sort((first, second) => new Date(second.date) - new Date(first.date)).slice(0, 8);
     const movements = recentMovements.map((item) => ({ id: item.id, asset: item.Asset?.name || item.Asset?.assetCode || 'Asset', assetCode: item.Asset?.assetCode, type: label(item.movementType), from: item.sourceType || 'Store', to: item.destinationType || 'Store', performedBy: item.User?.fullName || item.User?.username || 'Store', date: item.createdAt, status: 'Recorded' }));
     const items = latestVerification?.VerificationItems || [];
     const verification = latestVerification ? { lastVerification: latestVerification.updatedAt || latestVerification.createdAt, verified: items.filter((item) => item.state === 'verified').length, missing: items.filter((item) => item.state === 'missing').length, damaged: items.filter((item) => item.state === 'damaged').length, unverified: items.filter((item) => item.state === 'needs_review').length, discrepancies: items.filter((item) => ['missing', 'damaged', 'wrong_location', 'unidentified'].includes(item.state)).length } : { lastVerification: null, verified: 0, missing: 0, damaged: 0, unverified: 0, discrepancies: 0 };
-    return res.json({ success: true, data: { kpis: { totalAssets: activeInventory.reduce((sum, row) => sum + Number(row.quantity || 0), 0), availableAssets: inventoryHealth.available, pendingRequests: requestCount, pendingReceipts: receiptCount, pendingIssues: issueCount, pendingReturns: returnCount, pendingTransfers: transferCount, lowStock: lowStockAlerts.length }, status: { inMaintenance: maintenanceCount, awaitingVerification: verification.unverified, verificationDiscrepancies: verification.discrepancies }, today: { receipts: todayCounts.receive || 0, issues: todayCounts.issue || 0, returns: todayCounts.return || 0, transfers: todayCounts.transfer || 0, adjustments: todayCounts.adjustment || 0, verificationScans }, inventoryHealth, pendingTransactions: [{ type: 'Request', count: requestCount, route: '/store/requests' }, { type: 'Receipt', count: receiptCount, route: '/store/receive' }, { type: 'Issue', count: issueCount, route: '/store/issue' }, { type: 'Return', count: returnCount, route: '/store/returns' }, { type: 'Transfer', count: transferCount, route: '/store/transfers' }], recentMovements: movements, recentTransactions: recent, lowStockAlerts: lowStockAlerts.map((row) => ({ id: row.id, item: row.Asset?.name || row.Asset?.assetCode || 'Inventory item', currentQuantity: row.availableQuantity, reorderLevel: row.minimumQuantity, severity: Number(row.availableQuantity) <= 0 ? 'Critical' : 'Low' })), verification, maintenance: { sentToMaintenance: maintenanceCount, underMaintenance: maintenanceCount, readyForReturn, returnedToStore: todayCounts.return || 0 }, health: { api: 'online', database: 'connected' } } });
+    const assignedAssets = inventoryByStatus.assigned + inventoryByStatus.issued;
+    const damagedItems = inventoryByStatus.damaged;
+    const inventoryHealth = { available: inventoryByStatus.available, assigned: assignedAssets, maintenance: inventoryByStatus.underMaintenance, missing: inventoryByStatus.missing, damaged: damagedItems };
+    return res.json({ success: true, data: { kpis: { totalInventory: activeInventory.reduce((sum, row) => sum + Number(row.quantity || 0), 0), totalAssets: activeInventory.reduce((sum, row) => sum + Number(row.quantity || 0), 0), availableAssets: inventoryHealth.available, assignedAssets, damagedItems, pendingRequests: requestCount, pendingReceipts: receiptCount, pendingIssues: issueCount, pendingReturns: returnCount, pendingTransfers: transferCount, lowStock: lowStockCount }, status: { inMaintenance: maintenanceCount, awaitingVerification: verification.unverified, verificationDiscrepancies: verification.discrepancies }, today: { receipts: todayCounts.receive || 0, issues: todayCounts.issue || 0, returns: todayCounts.return || 0, transfers: todayCounts.transfer || 0, adjustments: todayCounts.adjustment || 0, verificationScans }, inventoryByStatus, categories, stockMovement, monthlyMovements, pendingTransactions: [{ type: 'Request', count: requestCount, route: '/store/requests' }, { type: 'Receipt', count: receiptCount, route: '/store/receive' }, { type: 'Issue', count: issueCount, route: '/store/issue' }, { type: 'Return', count: returnCount, route: '/store/returns' }, { type: 'Transfer', count: transferCount, route: '/store/transfers' }], recentActivities: activities, recentMovements: movements, recentTransactions: recent, lowStockAlerts: lowStockAlerts.map((row) => ({ id: row.id, item: row.Asset?.name || row.Asset?.assetCode || 'Inventory item', currentQuantity: row.availableQuantity, reorderLevel: row.minimumQuantity, severity: Number(row.availableQuantity) <= 0 ? 'Critical' : 'Low' })), verification, maintenance: { sentToMaintenance: maintenanceCount, underMaintenance: maintenanceCount, readyForReturn, returnedToStore: todayCounts.return || 0 }, health: { api: 'online', database: 'connected' } } });
   } catch (error) { return next(error); }
 };
 
@@ -239,20 +293,10 @@ const getInventory = async (req, res, next) => {
   try {
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
     const pageSize = Math.min(100, Math.max(1, Number.parseInt(req.query.pageSize || req.query.limit, 10) || 20));
-    const scope = storeScope(req);
-    const inventoryWhere = {};
-    const assetWhere = { ...scope };
-    const search = String(req.query.search || '').trim();
-    if (req.query.status) assetWhere.status = String(req.query.status).toLowerCase();
-    if (req.query.category) assetWhere.category = String(req.query.category);
-    if (req.query.condition) assetWhere.condition = String(req.query.condition);
-    if (req.query.location) assetWhere.location = String(req.query.location);
-    if (search) assetWhere[Op.or] = ['assetCode', 'name', 'category', 'serialNumber', 'rfidTag'].map((field) => ({ [field]: { [Op.like]: `%${search}%` } }));
-    if (String(req.query.lowStockOnly).toLowerCase() === 'true') inventoryWhere[Op.and] = Sequelize.where(Sequelize.col('available_quantity'), Op.lte, Sequelize.col('minimum_quantity'));
-
-    const result = await Inventory.findAndCountAll({ where: inventoryWhere, include: [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'category', 'serialNumber', 'rfidTag', 'status', 'condition', 'location', 'collegeId'], required: true, where: assetWhere }, { model: Department, attributes: ['id', 'name'] }], order: [['id', 'ASC']], limit: pageSize, offset: (page - 1) * pageSize, distinct: true });
+    const { inventoryWhere, assetWhere, order } = buildInventoryQuery(req);
+    const result = await Inventory.findAndCountAll({ where: inventoryWhere, include: inventoryIncludes(assetWhere), order, limit: pageSize, offset: (page - 1) * pageSize, distinct: true });
     const items = result.rows.map(normalizeInventory);
-    const allScopeRows = await Inventory.findAll({ where: inventoryWhere, include: [{ model: Asset, attributes: ['status', 'collegeId', 'category', 'condition', 'location'], required: true, where: assetWhere }], attributes: ['quantity', 'availableQuantity', 'reservedQuantity', 'damagedQuantity', 'minimumQuantity'] });
+    const allScopeRows = await Inventory.findAll({ where: inventoryWhere, include: [{ model: Asset, attributes: ['status', 'collegeId', 'category', 'condition', 'location'], required: true, where: assetWhere }], attributes: ['quantity', 'availableQuantity', 'reservedQuantity', 'damagedQuantity', 'minimumQuantity', 'location'] });
     const summary = allScopeRows.reduce((stats, item) => {
       const status = String(item.Asset?.status || item.status || '').toLowerCase();
       stats.total += Number(item.quantity || 0);
@@ -270,11 +314,71 @@ const getInventory = async (req, res, next) => {
       summary,
       filters: {
         categories: [...new Set(allScopeRows.map((row) => row.Asset?.category).filter(Boolean))].sort(),
-        locations: [...new Set(allScopeRows.map((row) => row.Asset?.location || row.location).filter(Boolean))].sort(),
+        locations: [...new Set(allScopeRows.map((row) => row.location || row.Asset?.location).filter(Boolean))].sort(),
         conditions: [...new Set(allScopeRows.map((row) => row.Asset?.condition).filter(Boolean))].sort(),
       },
       pagination: { page, pageSize, limit: pageSize, total: result.count, totalPages: Math.ceil(result.count / pageSize) },
     });
+  } catch (error) { return next(error); }
+};
+
+const buildInventoryQuery = (req) => {
+  const inventoryWhere = {};
+  const assetWhere = { ...storeScope(req) };
+  const search = String(req.query.search || '').trim();
+  const clauses = [];
+  if (req.query.status) assetWhere.status = String(req.query.status).toLowerCase();
+  if (req.query.category) assetWhere.category = String(req.query.category);
+  if (req.query.condition) assetWhere.condition = String(req.query.condition);
+  if (req.query.location) inventoryWhere.location = String(req.query.location);
+  const inventoryIdSearch = search.match(/^INV-(\d+)$/i);
+  if (inventoryIdSearch) inventoryWhere.id = Number(inventoryIdSearch[1]);
+  else if (search) assetWhere[Op.or] = ['assetCode', 'name', 'category', 'subcategory', 'serialNumber', 'rfidTag', 'digitalId', 'supplier', 'batchLot'].map((field) => ({ [field]: { [Op.like]: `%${search}%` } }));
+  if (String(req.query.lowStockOnly).toLowerCase() === 'true') clauses.push(Sequelize.where(Sequelize.col('available_quantity'), Op.lte, Sequelize.col('minimum_quantity')));
+  if (clauses.length) inventoryWhere[Op.and] = clauses;
+  const sortField = inventorySortFields[req.query.sortBy] || inventorySortFields.id;
+  const direction = String(req.query.sortOrder).toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+  const order = [[...sortField, direction]];
+  if (req.query.sortBy !== 'id' && req.query.sortBy !== 'itemId') order.push(['id', 'ASC']);
+  return { inventoryWhere, assetWhere, order };
+};
+
+const inventoryIncludes = (assetWhere) => [
+  {
+    model: Asset,
+    attributes: inventoryAssetAttributes,
+    required: true,
+    where: assetWhere,
+    include: [
+      { model: require('../models/Campus'), as: 'CampusRecord', attributes: ['campusName'] },
+      { model: require('../models/Building'), as: 'BuildingRecord', attributes: ['buildingName'] },
+      { model: require('../models/Room'), as: 'RoomRecord', attributes: ['roomName'] },
+    ],
+  },
+  { model: Department, attributes: ['id', 'name'] },
+];
+
+const getInventoryDetail = async (req, res, next) => {
+  try {
+    const inventoryId = Number(req.params.id);
+    if (!Number.isSafeInteger(inventoryId) || inventoryId <= 0) return res.status(404).json({ success: false, message: 'Inventory item not found' });
+    const item = await Inventory.findOne({ where: { id: inventoryId }, include: inventoryIncludes(storeScope(req)) });
+    if (!item) return res.status(404).json({ success: false, message: 'Inventory item not found' });
+    return res.json({ success: true, data: normalizeInventory(item) });
+  } catch (error) { return next(error); }
+};
+
+const exportInventory = async (req, res, next) => {
+  try {
+    const { inventoryWhere, assetWhere, order } = buildInventoryQuery(req);
+    const items = await Inventory.findAll({ where: inventoryWhere, include: inventoryIncludes(assetWhere), order, distinct: true });
+    await AuditLog.create({
+      userId: req.user.id,
+      action: 'Inventory Exported',
+      entity: 'inventory:export',
+      details: JSON.stringify({ count: items.length, filters: { search: req.query.search || '', status: req.query.status || '', category: req.query.category || '', location: req.query.location || '', condition: req.query.condition || '', lowStockOnly: String(req.query.lowStockOnly).toLowerCase() === 'true' } }),
+    });
+    return res.json({ success: true, data: items.map(normalizeInventory), total: items.length });
   } catch (error) { return next(error); }
 };
 
@@ -395,8 +499,17 @@ const getReceipts = async (req, res, next) => {
     const result = await InventoryTransaction.findAndCountAll({ where, include, order: [['createdAt', 'DESC']], limit: pageSize, offset: (page - 1) * pageSize, distinct: true });
     const rows = result.rows.map((row) => { let details = {}; try { details = JSON.parse(row.notes || '{}'); } catch { details = { notes: row.notes || '' }; } return { id: row.id, receiptNumber: details.reference || `RCV-${String(row.id).padStart(6, '0')}`, date: details.receivedDate || row.createdAt, asset: row.Asset?.name || 'Inventory Item', assetId: row.assetId, assetCode: row.Asset?.assetCode || '', category: row.Asset?.category || '', quantity: Number(row.quantity || 0), location: row.toLocation || row.Asset?.location || '', condition: details.condition || '', supplier: details.supplier || row.Asset?.supplier || '', purchaseOrder: details.purchaseOrder || '', invoice: details.invoice || '', deliveryNote: details.deliveryNote || '', notes: details.notes || '', receivedBy: row.User?.fullName || row.User?.username || 'Store Manager', status: 'Received' }; });
     const today = dateStart(); const month = new Date(); month.setDate(1); month.setHours(0, 0, 0, 0);
-    const [todayQuantity, monthQuantity] = await Promise.all([InventoryTransaction.sum('quantity', { where: { type: 'receive', createdAt: { [Op.gte]: today } }, include }), InventoryTransaction.sum('quantity', { where: { type: 'receive', createdAt: { [Op.gte]: month } }, include })]);
-    return res.json({ success: true, data: { items: rows, total: result.count, summary: { receivedToday: Number(todayQuantity || 0), receivedThisMonth: Number(monthQuantity || 0), pendingInspection: null }, pagination: { page, pageSize, total: result.count, totalPages: Math.ceil(result.count / pageSize) } } });
+    let todayQuantity; let monthQuantity;
+    try {
+      const scopedAssetInclude = [include[0]];
+      [todayQuantity, monthQuantity] = await Promise.all([
+        InventoryTransaction.sum('quantity', { where: { type: 'receive', createdAt: { [Op.gte]: today } }, include: scopedAssetInclude }),
+        InventoryTransaction.sum('quantity', { where: { type: 'receive', createdAt: { [Op.gte]: month } }, include: scopedAssetInclude }),
+      ]);
+    } catch (summaryError) {
+      console.error('Store receipt summary query failed:', summaryError.name);
+    }
+    return res.json({ success: true, data: { items: rows, total: result.count, summary: { receivedToday: todayQuantity === undefined ? null : Number(todayQuantity || 0), receivedThisMonth: monthQuantity === undefined ? null : Number(monthQuantity || 0), pendingInspection: null }, pagination: { page, pageSize, total: result.count, totalPages: Math.ceil(result.count / pageSize) } } });
   } catch (error) { return next(error); }
 };
 
@@ -404,6 +517,8 @@ module.exports = {
   getDashboard,
   getHistory,
   getInventory,
+  getInventoryDetail,
+  exportInventory,
   getLowStock,
   getAvailableAssets,
   getStockAdjustments,
