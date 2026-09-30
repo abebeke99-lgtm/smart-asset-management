@@ -467,17 +467,17 @@ body {
 }
 
 .public-site-header {
-  --public-header-text: #000000;
-  --public-header-muted: #000000;
-  --public-header-primary: #000000;
+  --public-header-text: #111827;
+  --public-header-muted: #172B3D;
+  --public-header-primary: #111827;
   --public-header-action: #2563eb;
-  --public-header-border: rgba(255, 255, 255, 0.28);
+  --public-header-border: rgba(17, 24, 39, 0.18);
   position: sticky !important;
   top: 0;
   z-index: 50;
   min-height: 76px;
   padding: 0 clamp(18px, 4vw, 56px) !important;
-  background: #517b97 !important;
+  background: var(--color-header) !important;
   color: var(--public-header-text) !important;
   border-bottom: 1px solid var(--public-header-border) !important;
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12) !important;
@@ -489,12 +489,12 @@ body {
 }
 
 .home-public-header {
-  --public-header-text: #ffffff;
-  --public-header-muted: #dbe7f4;
-  --public-header-primary: #ffffff;
+  --public-header-text: #111827;
+  --public-header-muted: #172B3D;
+  --public-header-primary: #111827;
   --public-header-action: #2563eb;
-  --public-header-border: rgba(219, 234, 254, 0.24);
-  background: #517B97 !important;
+  --public-header-border: rgba(17, 24, 39, 0.18);
+  background: var(--color-header) !important;
 }
 
 .public-site-header a {
@@ -799,13 +799,11 @@ body {
 }
 
 /* ==========================================
-   Footer
-   White surface, #E5E7EB top rule, #6B7280 text,
-   #2563EB links. No accent colour, no gradients.
-   ========================================== */
+  Footer
+  ========================================== */
 .public-site-footer {
-  --color-footer-text: #000000;
-  --color-footer-link: #111827;
+  --color-footer-text: #F8FAFC;
+  --color-footer-link: #93C5FD;
   --color-text-primary: var(--color-footer-text);
   --color-text-muted: var(--color-footer-text);
   --color-text-secondary: var(--color-footer-text);
@@ -987,7 +985,7 @@ body {
 .public-site-footer .footer-link:hover,
 .public-site-footer .footer-link:focus-visible,
 .public-site-footer .footer-link[aria-current='page'] {
-  color: var(--color-brand-blue-dark);
+  color: #BFDBFE;
   text-decoration: underline;
 }
 
@@ -1034,7 +1032,7 @@ body {
   border: 1px solid var(--color-footer-border);
   border-radius: 6px;
   background: var(--color-surface);
-  color: var(--color-text-secondary);
+  color: var(--color-brand-navy);
   cursor: pointer;
 }
 
@@ -1095,13 +1093,13 @@ body {
 }
 
 body.dark .public-site-footer {
-  --color-footer-background: #FFFFFF;
-  --color-footer-border: #E5E7EB;
-  --color-footer-text: #6B7280;
-  --color-footer-link: #2563EB;
-  --color-text-primary: #6B7280;
-  --color-text-muted: #6B7280;
-  --color-text-secondary: #6B7280;
+  --color-footer-background: #111827;
+  --color-footer-border: rgba(255, 255, 255, 0.18);
+  --color-footer-text: #F8FAFC;
+  --color-footer-link: #93C5FD;
+  --color-text-primary: #F8FAFC;
+  --color-text-muted: #F8FAFC;
+  --color-text-secondary: #F8FAFC;
   --color-surface: #FFFFFF;
   --color-surface-muted: #F9FAFB;
   border-top-color: var(--color-footer-border);

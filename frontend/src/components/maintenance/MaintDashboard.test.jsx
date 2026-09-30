@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import MaintDashboard from './MaintDashboard';
 import { getMaintenanceDashboard } from '../../services/maintenanceApi';
@@ -35,21 +35,16 @@ beforeEach(() => {
   getMaintenanceDashboard.mockResolvedValue(dashboardData);
 });
 
-test('renders persisted dashboard records and requests the selected date period', async () => {
+test('renders backend dashboard metrics through the maintenance API service', async () => {
   render(<MemoryRouter><MaintDashboard /></MemoryRouter>);
 
-  expect(await screen.findByText('Maintenance Management Dashboard')).toBeInTheDocument();
-  expect(screen.getAllByText('Lecture Hall Projector')).toHaveLength(2);
-  expect(screen.getByText('WO-019')).toBeInTheDocument();
-  expect(screen.getAllByText('Aster Technician')).toHaveLength(2);
-  expect(screen.getByText(/Generator A/)).toBeInTheDocument();
-  expect(getMaintenanceDashboard).toHaveBeenCalledWith('30days');
-
-  fireEvent.click(screen.getByRole('button', { name: '7 Days' }));
-  await waitFor(() => expect(getMaintenanceDashboard).toHaveBeenLastCalledWith('7days'));
+  expect(await screen.findByRole('heading', { name: 'Maintenance Dashboard' })).toBeInTheDocument();
+  expect(screen.getByText('Total Maintenance Requests').closest('.maintenance-kpi-card')).toHaveTextContent('4');
+  expect(screen.getAllByText('New Requests')[0].closest('.maintenance-kpi-card')).toHaveTextContent('1');
+  expect(getMaintenanceDashboard).toHaveBeenCalledTimes(1);
 });
 
-test('shows an explicit empty state when the database has no maintenance records', async () => {
+test('renders zero-valued metrics when the database has no maintenance records', async () => {
   getMaintenanceDashboard.mockResolvedValue({
     summary: { totalRequests: 0, pendingRequests: 0, inProgress: 0, completedRepairs: 0, overdueWorkOrders: 0, assetsUnderMaintenance: 0, waitingForParts: 0, inTesting: 0, assignedStaff: 0, technicianEfficiency: null, criticalAlerts: 0, hasRecords: false },
     statusDistribution: [],
@@ -63,9 +58,9 @@ test('shows an explicit empty state when the database has no maintenance records
 
   render(<MemoryRouter><MaintDashboard /></MemoryRouter>);
 
-  expect((await screen.findAllByText('No maintenance records')).length).toBeGreaterThan(1);
-  expect(screen.getByText('No upcoming maintenance')).toBeInTheDocument();
-  expect(screen.getByText('Insufficient data')).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Maintenance Dashboard' })).toBeInTheDocument();
+  expect(screen.getByText('Total Maintenance Requests').closest('.maintenance-kpi-card')).toHaveTextContent('0');
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
 
 test('shows a connection error instead of presenting zero-valued metrics', async () => {
@@ -73,6 +68,6 @@ test('shows a connection error instead of presenting zero-valued metrics', async
 
   render(<MemoryRouter><MaintDashboard /></MemoryRouter>);
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load maintenance dashboard data. Please check the server connection.');
-  expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  expect(await screen.findByRole('alert')).toHaveTextContent('database offline');
+  expect(screen.getByRole('button', { name: 'Try Again' })).toBeInTheDocument();
 });

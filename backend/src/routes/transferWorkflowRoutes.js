@@ -1,12 +1,13 @@
 const router = require('express').Router();
+const { requirePermission } = require('../middlewares/auth');
 const { requireCollegeManager, resolveCollegeScope, requireDepartmentHead, resolveDepartmentScope } = require('../middlewares/organizationScope');
 const workflow = require('../controllers/transferWorkflowController');
 
 const college = router;
-college.get('/college/transfers', ...requireCollegeManager, resolveCollegeScope, workflow.listTransfers);
-college.get('/college/transfers/:id', ...requireCollegeManager, resolveCollegeScope, workflow.getTransfer);
-college.post('/college/transfers/:id/approve', ...requireCollegeManager, resolveCollegeScope, workflow.approveTransfer);
-college.post('/college/transfers/:id/reject', ...requireCollegeManager, resolveCollegeScope, workflow.rejectTransfer);
+college.get('/college/transfers', ...requireCollegeManager, resolveCollegeScope, requirePermission('college.transfers.view'), workflow.listTransfers);
+college.get('/college/transfers/:id', ...requireCollegeManager, resolveCollegeScope, requirePermission('college.transfers.view'), workflow.getTransfer);
+college.post('/college/transfers/:id/approve', ...requireCollegeManager, resolveCollegeScope, requirePermission('college.transfers.manage'), workflow.approveTransfer);
+college.post('/college/transfers/:id/reject', ...requireCollegeManager, resolveCollegeScope, requirePermission('college.transfers.manage'), workflow.rejectTransfer);
 college.get('/department/transfers', ...requireDepartmentHead, resolveDepartmentScope, workflow.listTransfers);
 college.post('/department/transfers', ...requireDepartmentHead, resolveDepartmentScope, workflow.createTransfer);
 college.get('/department/transfers/:id', ...requireDepartmentHead, resolveDepartmentScope, workflow.getTransfer);

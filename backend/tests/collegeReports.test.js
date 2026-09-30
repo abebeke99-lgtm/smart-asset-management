@@ -15,6 +15,6 @@ test('college reports controller enforces college scoping and includes a report 
 });
 
 test('college routes expose the college reports endpoint for college managers', () => {
-  assert.match(routeSource, /router\.get\('\/reports'\s*,\s*getCollegeReports\)/i);
+  assert.match(routeSource, /router\.get\('\/reports'\s*,\s*requirePermission\('college\.reports\.view'\)\s*,\s*getCollegeReports\)/i);
   assert.match(routeSource, /getCollegeReports/i);
 });

@@ -4,6 +4,9 @@ const { requireCollegeManager, resolveCollegeScope } = require('../middlewares/o
 const { getCollegeDashboard, getCollegeProfile, updateCollegeProfile, listCollegeDepartments, getCollegeDepartmentOverview, getCollegeDepartmentPerformance, getCollegeDepartmentReports, listCollegeStaff, getCollegeStaffMember, listCollegeAssets, getCollegeInventory, getCollegeAsset, listCollegeLocations, getCollegeLocation, createCollegeLocation, updateCollegeLocation, deleteCollegeLocation, createCollegeDepartment, updateCollegeDepartment, updateCollegeDepartmentStatus, deleteCollegeDepartment, getCollegeDepartmentDetails, listCollegeDepartmentStaff, listCollegeDepartmentAssets, listCollegeAssignments, listCollegeMaintenance, getCollegeMaintenance, listCollegeVerification, getCollegeReports, getCollegeAssetAnalytics, listCollegeRFIDTracking } = require('../controllers/collegeController');
 const { listRequests, getRequest, decideRequest, listCollegeRequests, getCollegeRequest, listCollegeDepartmentRequests } = require('../controllers/workspaceRequestController');
 const verification = require('../controllers/verificationController');
+const { getAssetHistory } = require('../controllers/assetController');
+const { Asset } = require('../models');
+const { listAssetDocuments, uploadAssetDocument, deleteAssetDocument, downloadAssetDocument } = require('../controllers/assetExtendedController');
 
 const router = express.Router();
 const { Op } = require('sequelize');
@@ -38,6 +41,16 @@ const buildCollegeNotificationScope = (req) => ({
     { userId: null, collegeId: { [Op.or]: [null, req.organizationScope.collegeId] } },
   ],
 });
+
+const requireCollegeAsset = async (req, res, next) => {
+  try {
+    const asset = await Asset.findOne({ where: { id: req.params.id, collegeId: req.organizationScope.collegeId }, attributes: ['id'] });
+    if (!asset) return res.status(404).json({ success: false, message: 'Asset not found in your college' });
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+};
 
 router.use(requireAuth, requireActiveAccount, requireRole('college_manager', 'college'), resolveCollegeScope);
 router.get('/dashboard', requirePermission('college.dashboard.view'), getCollegeDashboard);
@@ -195,6 +208,11 @@ router.get('/staff/:id', requirePermission('college.staff.view'), getCollegeStaf
 router.get('/assets', requirePermission('college.assets.view'), listCollegeAssets);
 router.get('/inventory', requirePermission('college.inventory.view'), getCollegeInventory);
 router.get('/rfid', requirePermission('college.rfid.view'), listCollegeRFIDTracking);
+router.get('/assets/:id/history', requirePermission('college.history.view'), getAssetHistory);
+router.get('/assets/:id/documents', requirePermission('college.assets.view'), requireCollegeAsset, listAssetDocuments);
+router.post('/assets/:id/documents', requirePermission('college.documents.manage'), requireCollegeAsset, uploadAssetDocument);
+router.delete('/assets/:id/documents/:documentId', requirePermission('college.documents.manage'), requireCollegeAsset, deleteAssetDocument);
+router.get('/assets/:id/documents/:documentId/file', requirePermission('college.assets.view'), requireCollegeAsset, downloadAssetDocument);
 router.get('/assets/:id', requirePermission('college.assets.view'), getCollegeAsset);
 router.get('/locations', requirePermission('college.locations.view'), listCollegeLocations);
 router.get('/locations/:id', requirePermission('college.locations.view'), getCollegeLocation);

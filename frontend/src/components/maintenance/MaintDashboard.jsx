@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { getMaintenanceDashboard } from "../../services/maintenanceApi";
 
 /**
  * Maintenance Coordinator Dashboard
@@ -25,9 +26,6 @@ import React, { useEffect, useMemo, useState } from "react";
  *
  * All KPI values are loaded from backend APIs.
  */
-
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "/api";
 
 const KPI_CONFIG = [
   {
@@ -122,61 +120,6 @@ const DEFAULT_DATA = {
   pendingQualityChecks: 0,
 };
 
-function getAuthToken() {
-  return (
-    localStorage.getItem("token") ||
-    localStorage.getItem("accessToken") ||
-    sessionStorage.getItem("token") ||
-    sessionStorage.getItem("accessToken")
-  );
-}
-
-async function apiRequest(endpoint, options = {}) {
-  const token = getAuthToken();
-
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
-
-  if (response.status === 401) {
-    throw new Error("Your session has expired. Please log in again.");
-  }
-
-  if (response.status === 403) {
-    throw new Error(
-      "You do not have permission to access maintenance dashboard data."
-    );
-  }
-
-  let body = null;
-
-  try {
-    body = await response.json();
-  } catch {
-    body = null;
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      body?.message ||
-        body?.error ||
-        `Unable to load dashboard data. HTTP ${response.status}`
-    );
-  }
-
-  return body;
-}
-
 function normalizeDashboardResponse(response) {
   /**
    * Supports common API response structures:
@@ -205,91 +148,101 @@ function normalizeDashboardResponse(response) {
     response?.dashboard ||
     response ||
     {};
+  const summary = source.summary || source;
+  const byStatus = source.byStatus || {};
 
   return {
     totalRequests:
       Number(
-        source.totalRequests ??
-          source.totalMaintenanceRequests ??
-          source.total_requests ??
+        summary.totalRequests ??
+          summary.totalMaintenanceRequests ??
+          summary.total_requests ??
           0
       ) || 0,
 
     newRequests:
       Number(
-        source.newRequests ??
-          source.newMaintenanceRequests ??
-          source.new_requests ??
+        summary.newRequests ??
+          summary.newMaintenanceRequests ??
+          summary.new_requests ??
+          summary.pendingRequests ??
           0
       ) || 0,
 
     scheduledRepairs:
       Number(
-        source.scheduledRepairs ??
-          source.scheduled_repairs ??
+        summary.scheduledRepairs ??
+          summary.scheduled_repairs ??
+          byStatus.scheduled ??
           0
       ) || 0,
 
     inProgressRepairs:
       Number(
-        source.inProgressRepairs ??
-          source.in_progress_repairs ??
+        summary.inProgressRepairs ??
+          summary.in_progress_repairs ??
+          summary.inProgress ??
+          byStatus["in-progress"] ??
           0
       ) || 0,
 
     completedRepairs:
       Number(
-        source.completedRepairs ??
-          source.completed_repairs ??
+        summary.completedRepairs ??
+          summary.completed_repairs ??
           0
       ) || 0,
 
     assetsUnderMaintenance:
       Number(
-        source.assetsUnderMaintenance ??
-          source.assets_under_maintenance ??
+        summary.assetsUnderMaintenance ??
+          summary.assets_under_maintenance ??
           0
       ) || 0,
 
     overdueMaintenance:
       Number(
-        source.overdueMaintenance ??
-          source.overdue_maintenance ??
+        summary.overdueMaintenance ??
+          summary.overdue_maintenance ??
+          summary.overdueWorkOrders ??
           0
       ) || 0,
 
     preventiveMaintenanceDue:
       Number(
-        source.preventiveMaintenanceDue ??
-          source.preventive_maintenance_due ??
+        summary.preventiveMaintenanceDue ??
+          summary.preventive_maintenance_due ??
           0
       ) || 0,
 
     criticalRepairs:
       Number(
-        source.criticalRepairs ??
-          source.critical_repairs ??
+        summary.criticalRepairs ??
+          summary.critical_repairs ??
+          summary.criticalAlerts ??
           0
       ) || 0,
 
     availableTechnicians:
       Number(
-        source.availableTechnicians ??
-          source.available_technicians ??
+        summary.availableTechnicians ??
+          summary.available_technicians ??
+          summary.assignedStaff ??
           0
       ) || 0,
 
     lowSpareParts:
       Number(
-        source.lowSpareParts ??
-          source.low_spare_parts ??
+        summary.lowSpareParts ??
+          summary.low_spare_parts ??
           0
       ) || 0,
 
     pendingQualityChecks:
       Number(
-        source.pendingQualityChecks ??
-          source.pending_quality_checks ??
+        summary.pendingQualityChecks ??
+          summary.pending_quality_checks ??
+          summary.inTesting ??
           0
       ) || 0,
   };
@@ -334,9 +287,7 @@ function Dashboard() {
 
       setError("");
 
-      const response = await apiRequest(
-        "/maintenance/dashboard"
-      );
+      const response = await getMaintenanceDashboard();
 
       const normalized = normalizeDashboardResponse(response);
 

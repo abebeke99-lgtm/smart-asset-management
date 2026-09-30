@@ -1,10 +1,12 @@
-const { spawn, execSync } = require('child_process');
+const { spawn } = require('child_process');
 const http = require('http');
 const net = require('net');
 const path = require('path');
 
-const PORT = Number(process.env.PORT || 5000);
 const projectRoot = path.resolve(__dirname, '..');
+const backendRoot = path.resolve(projectRoot, 'backend');
+require(path.resolve(backendRoot, 'node_modules/dotenv')).config({ path: path.resolve(backendRoot, '.env') });
+const PORT = Number(process.env.PORT || 5000);
 
 function portInUse(port) {
   return new Promise((resolve) => {
@@ -31,17 +33,6 @@ function backendIsHealthy(port) {
   });
 }
 
-function clearPort(port) {
-  try {
-    execSync(
-      `powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force }"`,
-      { stdio: 'ignore' }
-    );
-  } catch (error) {
-    // Ignore if no process is listening or PowerShell is unavailable.
-  }
-}
-
 async function main() {
   const inUse = await portInUse(PORT);
 
@@ -51,17 +42,8 @@ async function main() {
       return;
     }
 
-    console.log(`Port ${PORT} is already in use. Clearing stale listener...`);
-    clearPort(PORT);
-
-    setTimeout(async () => {
-      const stillInUse = await portInUse(PORT);
-      if (stillInUse) {
-        console.error(`Port ${PORT} is still busy. Please stop the existing process manually and retry.`);
-        process.exit(1);
-      }
-      startBackend();
-    }, 500);
+    console.error(`Port ${PORT} is in use by a process that is not a healthy backend. Identify and stop it manually, or configure another PORT.`);
+    process.exitCode = 1;
     return;
   }
 
@@ -69,10 +51,10 @@ async function main() {
 }
 
 function startBackend() {
-  const child = spawn(process.execPath, ['backend/src/app.js'], {
-    cwd: projectRoot,
+  const child = spawn(process.execPath, ['src/app.js'], {
+    cwd: backendRoot,
     stdio: 'inherit',
-    env: { ...process.env, PORT: String(PORT) }
+    env: { ...process.env, PORT: String(PORT) },
   });
 
   child.on('exit', (code, signal) => {

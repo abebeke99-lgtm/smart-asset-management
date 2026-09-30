@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BarChart3, Building2, CheckCircle2, ClipboardCheck, ClipboardList, MapPin, Package, RefreshCw, RotateCcw, ShieldCheck, Truck, Users, Wrench } from 'lucide-react';
+import { ArrowRight, BarChart3, Building2, CheckCircle2, ClipboardCheck, ClipboardList, MapPin, Package, RotateCcw, ShieldCheck, Truck, Wrench } from 'lucide-react';
 import apiClient from '../../services/apiClient';
 import './CollegeDashboard.css';
 
@@ -12,12 +12,6 @@ const quickActions = [
   ['/college/transfers', 'Transfers', Truck],
   ['/college/verification', 'Verification', ShieldCheck],
 ];
-
-const formatDate = (value) => {
-  if (!value) return 'Not available';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
-};
 
 const normalizeLabel = (value = '') => String(value).replace(/[_-]+/g, ' ').trim() || 'Unknown';
 
@@ -49,7 +43,6 @@ const CollegeDashboard = () => {
   const recentReturns = data.recentReturns || [];
   const maintenance = data.maintenance || {};
   const verification = data.verification || {};
-  const recentActivity = data.recentActivity || [];
 
   const metrics = useMemo(() => [
     ['totalAssets', 'Total Assets', 'Assets registered for this college.', Package, 'blue', '/college/assets'],
@@ -396,32 +389,6 @@ const CollegeDashboard = () => {
           </dl>
         </section>
       </div>
-
-      <section className="college-dashboard-card">
-        <div className="college-section-heading">
-          <div>
-            <h2>Recent Activity</h2>
-            <p>Latest college events and records.</p>
-          </div>
-          <RefreshCw size={20} />
-        </div>
-        {recentActivity.length ? (
-          <div className="college-activity-list">
-            {recentActivity.map((item, index) => (
-              <div className="college-activity-row" key={`${item.type}-${item.timestamp || index}`}>
-                <span className="college-activity-dot" />
-                <div>
-                  <strong>{item.type}</strong>
-                  <p>{item.description}</p>
-                  <small>{item.actor || 'System'} · {formatDate(item.timestamp)}{item.status ? ` · ${item.status}` : ''}</small>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="college-empty-state">No recent activity</p>
-        )}
-      </section>
 
       <section className="college-dashboard-card college-actions-section">
         <div className="college-section-heading">

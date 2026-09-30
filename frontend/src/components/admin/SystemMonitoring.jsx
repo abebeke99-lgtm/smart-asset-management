@@ -1,24 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-
-const API_URL = "/api/system/monitoring";
-
-const getToken = () =>
-  localStorage.getItem("token") ||
-  localStorage.getItem("accessToken") ||
-  localStorage.getItem("authToken") ||
-  "";
-
-const getHeaders = (json = false) => {
-  const token = getToken();
-
-  return {
-    Accept: "application/json",
-    ...(json ? { "Content-Type": "application/json" } : {}),
-    ...(token
-      ? { Authorization: `Bearer ${token}` }
-      : {}),
-  };
-};
+import apiClient, { getApiErrorMessage } from "../../services/apiClient";
 
 const normalizeData = (payload) => {
   const data =
@@ -29,9 +10,20 @@ const normalizeData = (payload) => {
 
   return {
     ...data,
-    system: data.system || {},
-    server: data.server || {},
-    database: data.database || {},
+    system: data.system || data.overall || {},
+    server: {
+      ...(data.server || {}),
+      cpuCores: data.server?.cpuCores ?? data.resources?.cpu?.cores,
+      memoryUsage: data.server?.memoryUsage ?? data.server?.memoryUsagePercent ?? data.resources?.memory?.percentage,
+      memoryTotal: data.server?.memoryTotal ?? data.resources?.memory?.total,
+      diskUsage: data.server?.diskUsage ?? data.server?.storageUsagePercent ?? data.storage?.usagePercent,
+      diskTotal: data.server?.diskTotal ?? data.storage?.total,
+      environment: data.server?.environment ?? data.application?.environment,
+    },
+    database: {
+      ...(data.database || {}),
+      name: data.database?.name ?? data.database?.databaseName,
+    },
     api: data.api || {},
     services: Array.isArray(data.services)
       ? data.services
@@ -200,25 +192,10 @@ export default function SystemMonitoring() {
     setError("");
 
     try {
-      const response = await fetch(
-        API_URL,
-        {
-          method: "GET",
-          headers: getHeaders(),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          `Unable to load system monitoring: ${response.status} ${response.statusText}`
-        );
-      }
-
-      const payload =
-        await response.json();
+      const response = await apiClient.get("/admin/monitoring/overview");
 
       setMonitoring(
-        normalizeData(payload)
+        normalizeData(response.data)
       );
 
       setLastUpdated(new Date());
@@ -228,10 +205,16 @@ export default function SystemMonitoring() {
         err
       );
 
-      setError(
-        err.message ||
-          "Unable to load system monitoring data."
-      );
+      const status = err.response?.status;
+      const message = status === 403
+        ? "Your account is not authorized to view system monitoring. An Admin account is required."
+        : status === 404
+          ? "The system monitoring endpoint was not found on the backend."
+          : status >= 500
+            ? "The backend could not load system monitoring data. Check the server logs."
+            : getApiErrorMessage(err, "Unable to load system monitoring data.");
+
+      setError(message);
     } finally {
       setLoading(false);
       setRefreshing(false);

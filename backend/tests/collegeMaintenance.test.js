@@ -7,8 +7,8 @@ const routeSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/colle
 const controllerSource = fs.readFileSync(path.resolve(__dirname, '../src/controllers/collegeController.js'), 'utf8');
 
 test('college maintenance route is scoped to the authenticated college manager and exposes paginated data', () => {
-  assert.match(routeSource, /router\.get\('\/maintenance',\s*listCollegeMaintenance\)/);
-  assert.match(routeSource, /router\.get\('\/maintenance\/:id',\s*getCollegeMaintenance\)/);
+  assert.match(routeSource, /router\.get\('\/maintenance',\s*requirePermission\('college\.maintenance\.view'\),\s*listCollegeMaintenance\)/);
+  assert.match(routeSource, /router\.get\('\/maintenance\/:id',\s*requirePermission\('college\.maintenance\.view'\),\s*getCollegeMaintenance\)/);
   assert.match(controllerSource, /listCollegeMaintenance/i);
   assert.match(controllerSource, /getCollegeMaintenance/i);
   assert.match(controllerSource, /req\.organizationScope\?\.collegeId|req\.organizationScope\.collegeId/i);

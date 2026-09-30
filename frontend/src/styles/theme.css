@@ -25,18 +25,17 @@
   --color-brand-page: #F3F6F9;
   --color-brand-card: #FFFFFF;
 
-  /* ---------- Header ----------
-     Updated to a darker university blue for a stronger branded look. */
-  --color-header: linear-gradient(135deg, #0F172A 0%, #1D4ED8 100%);
-  --color-header-hover: linear-gradient(135deg, #111827 0%, #1E40AF 100%);
-  --color-header-border: rgba(255, 255, 255, 0.18);
-  --color-header-text: #F8FAFC;
-  --color-header-text-strong: #FFFFFF;
-  --color-header-text-muted: #E2E8F0;
-  --color-header-icon-hover: rgba(255, 255, 255, 0.12);
-  --color-header-focus: #F8FAFC;
+  /* ---------- Header ---------- */
+  --color-header: #429ED0;
+  --color-header-hover: #3289B9;
+  --color-header-border: rgba(17, 24, 39, 0.18);
+  --color-header-text: #111827;
+  --color-header-text-strong: #111827;
+  --color-header-text-muted: #172B3D;
+  --color-header-icon-hover: rgba(17, 24, 39, 0.1);
+  --color-header-focus: #111827;
   --color-header-badge: #F59E0B;
-  --color-header-control-border: rgba(255, 255, 255, 0.28);
+   --color-header-control-border: rgba(17, 24, 39, 0.28);
 
   /* ---------- Sidebar ---------- */
   --color-sidebar: var(--color-brand-navy);
@@ -118,10 +117,10 @@
   --color-accent: var(--color-brand-gold);
 
   /* ---------- Footer ---------- */
-   --color-footer-background: #4A7C99;
+   --color-footer-background: #111827;
    --color-footer-border: rgba(255, 255, 255, 0.18);
-   --color-footer-text: #000000;
-   --color-footer-link: #111827;
+   --color-footer-text: #F8FAFC;
+   --color-footer-link: #93C5FD;
 
   /* ---------- Tables / charts ---------- */
   --color-table-header: #F3F6F9;

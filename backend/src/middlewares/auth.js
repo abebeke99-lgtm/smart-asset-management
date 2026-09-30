@@ -32,6 +32,8 @@ const COLLEGE_MANAGER_PERMISSIONS = [
   'college.transfers.manage',
   'college.returns.view',
   'college.returns.manage',
+  'college.returns.view',
+  'college.returns.manage',
   'college.maintenance.view',
   'college.service.view',
   'college.rfid.view',

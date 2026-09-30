@@ -15,12 +15,12 @@ test('college department performance API is defined with college-scoped security
 });
 
 test('college routes expose the department-performance endpoint under the college manager router', () => {
-  assert.match(routesSource, /router\.get\(['"]\/department-performance['"],\s*getCollegeDepartmentPerformance/i);
+  assert.match(routesSource, /router\.get\(['"]\/department-performance['"],\s*requirePermission\('college\.departments\.view'\),\s*getCollegeDepartmentPerformance/i);
 });
 
 test('college department analytics route is protected and scoped to the authenticated college', () => {
   assert.match(controllerSource, /getCollegeDepartmentReports/i);
   assert.match(controllerSource, /req\.organizationScope\?\.collegeId|req\.organizationScope\.collegeId/i);
-  assert.match(routesSource, /router\.get\(['"]\/analytics\/departments['"],\s*getCollegeDepartmentReports/i);
+  assert.match(routesSource, /router\.get\(['"]\/analytics\/departments['"],\s*requirePermission\('college\.departments\.view'\),\s*getCollegeDepartmentReports/i);
   assert.match(controllerSource, /summary\s*:\s*\{|department report rows|departmentId/i);
 });

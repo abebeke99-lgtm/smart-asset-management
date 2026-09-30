@@ -27,9 +27,9 @@ import CollegeMaintenance from './CollegeMaintenance';
 import CollegeNotifications from './CollegeNotifications';
 import CollegeReports from './CollegeReports';
 import CollegeAssetAnalytics from './CollegeAssetAnalytics';
+import CollegeRFIDTracking from './CollegeRFIDTracking';
 
 const SECTION_COPY = {
-  'College Dashboard': 'የኮሌጅ ዳሽቦርድ',
   'College-level asset, assignment, maintenance and approval overview.': 'የኮሌጅ ንብረት፣ ምደባ፣ ጥገና እና ማጽደቅ አጠቃላይ እይታ።',
   'Asset Verification': 'የንብረት ማረጋገጫ',
   'Physical verification, discrepancies, inspection results and audit trail for the authorized college.': 'ለተፈቀደው ኮሌጅ አካላዊ ማረጋገጫ፣ ልዩነቶች፣ የምርመራ ውጤቶች እና የኦዲት ታሪክ።',
@@ -59,7 +59,7 @@ const CollegeSectionWrapper = ({ title, subtitle, children }) => {
 const CollegeManagerPages = ({ section = 'dashboard' }) => {
   const sectionMap = {
     dashboard: (
-      <CollegeSectionWrapper title="College Dashboard">
+      <CollegeSectionWrapper>
         <CollegeDashboard />
       </CollegeSectionWrapper>
     ),
@@ -95,7 +95,7 @@ const CollegeManagerPages = ({ section = 'dashboard' }) => {
     maintenance: <CollegeMaintenance />,
     rfid: (
       <CollegeSectionWrapper title="RFID / QR Tracking" subtitle="Asset lookup, scan history and location tracking for authorized college assets.">
-        <DeptAssets />
+        <CollegeRFIDTracking />
       </CollegeSectionWrapper>
     ),
     reports: (

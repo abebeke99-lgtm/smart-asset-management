@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-const API_URL = "/api/system/backup";
+const API_URL = "/api/admin/backups";
 
 const getToken = () =>
   localStorage.getItem("token") ||
@@ -46,6 +46,11 @@ const getBackupId = (backup) =>
   backup?.backupId ??
   backup?.backup_id ??
   backup?.id;
+
+const getBackupFilename = (backup) =>
+  backup?.filename ||
+  backup?.fileName ||
+  backup?.name;
 
 const getBackupName = (backup) =>
   backup?.name ||
@@ -326,23 +331,23 @@ export default function Backup() {
   const downloadBackup = async (
     backup
   ) => {
-    const id =
-      getBackupId(backup);
+    const filename =
+      getBackupFilename(backup);
 
-    if (!id) {
+    if (!filename) {
       setError(
-        "Backup ID is missing."
+        "Backup filename is missing."
       );
       return;
     }
 
-    setDownloading(id);
+    setDownloading(getBackupId(backup) || filename);
     setError("");
     setSuccess("");
 
     try {
       const response = await fetch(
-        `${API_URL}/${id}/download`,
+        `${API_URL}/download/${encodeURIComponent(filename)}`,
         {
           method: "GET",
           headers: getHeaders(),
@@ -408,12 +413,12 @@ export default function Backup() {
   const restoreBackup = async (
     backup
   ) => {
-    const id =
-      getBackupId(backup);
+    const filename =
+      getBackupFilename(backup);
 
-    if (!id) {
+    if (!filename) {
       setError(
-        "Backup ID is missing."
+        "Backup filename is missing."
       );
       return;
     }
@@ -427,18 +432,18 @@ export default function Backup() {
 
     if (!confirmed) return;
 
-    setRestoring(id);
+    setRestoring(getBackupId(backup) || filename);
     setError("");
     setSuccess("");
 
     try {
       const response = await fetch(
-        `${API_URL}/${id}/restore`,
+        `${API_URL}/restore/${encodeURIComponent(filename)}`,
         {
           method: "POST",
           headers: getHeaders(true),
           body: JSON.stringify({
-            backupId: id,
+            backupId: getBackupId(backup),
           }),
         }
       );
@@ -488,12 +493,12 @@ export default function Backup() {
   const deleteBackup = async (
     backup
   ) => {
-    const id =
-      getBackupId(backup);
+    const filename =
+      getBackupFilename(backup);
 
-    if (!id) {
+    if (!filename) {
       setError(
-        "Backup ID is missing."
+        "Backup filename is missing."
       );
       return;
     }
@@ -507,13 +512,14 @@ export default function Backup() {
 
     if (!confirmed) return;
 
+    const id = getBackupId(backup) || filename;
     setDeleting(id);
     setError("");
     setSuccess("");
 
     try {
       const response = await fetch(
-        `${API_URL}/${id}`,
+        `${API_URL}/${encodeURIComponent(filename)}`,
         {
           method: "DELETE",
           headers: getHeaders(),

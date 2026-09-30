@@ -30,17 +30,14 @@ beforeEach(() => {
   });
 });
 
-test('uses semantic tokens for priorities, statuses, and table colors', async () => {
+test('renders normalized maintenance requests with priority, status, and table styles', async () => {
   const { container } = render(<MaintRequests />);
 
   expect(await screen.findByText('REQ-001')).toBeInTheDocument();
   expect(container.querySelector('thead tr')).toHaveStyle({ backgroundColor: 'var(--color-table-header)' });
   expect(container.querySelectorAll('tbody tr')[0]).toHaveStyle({ backgroundColor: 'var(--color-surface)' });
   expect(container.querySelectorAll('tbody tr')[1]).toHaveStyle({ backgroundColor: 'var(--color-table-hover)' });
-  expect(container.querySelector('tbody tr td:nth-child(4) span')).toHaveStyle({
-    backgroundColor: 'var(--color-primary-light)',
-    color: 'var(--color-primary-text)',
-  });
-  const pendingStatus = screen.getByDisplayValue('Pending');
-  expect(pendingStatus).toHaveClass('maintenance-request-status--warning');
+  const firstRow = container.querySelectorAll('tbody tr')[0];
+  expect(firstRow.cells[6].querySelector('span')).toHaveClass('request-priority', 'request-priority-medium');
+  expect(firstRow.cells[7].querySelector('span')).toHaveClass('request-status', 'request-status-pending');
 });

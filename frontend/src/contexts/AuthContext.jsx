@@ -47,6 +47,60 @@ const normalizeRoleValue = (role) => {
 
 const normalizePermissionValue = (permission) => String(permission || '').trim().toLowerCase().replace(/\s+/g, '.').replace(/[_-]+/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
 
+const DEFAULT_ROLE_PERMISSIONS = {
+  admin: ['*'],
+  ict_officer: ['*'],
+  college_manager: [
+    'college.dashboard.view',
+    'college.profile.view',
+    'college.profile.update',
+    'college.staff.view',
+    'college.locations.view',
+    'college.locations.manage',
+    'college.departments.view',
+    'college.assets.view',
+    'college.assets.create',
+    'college.assets.update',
+    'college.assets.export',
+    'college.assets.delete',
+    'college.assets.restore',
+    'college.documents.manage',
+    'college.history.view',
+    'college.grants.view',
+    'college.inventory.view',
+    'college.chemicals.view',
+    'college.requests.view',
+    'college.requests.review',
+    'college.approvals.view',
+    'college.approvals.approve',
+    'college.approvals.reject',
+    'college.approvals.request_changes',
+    'college.approvals.escalate',
+    'college.assignments.view',
+    'college.assignments.manage',
+    'college.transfers.view',
+    'college.transfers.manage',
+    'college.returns.view',
+    'college.returns.manage',
+    'college.maintenance.view',
+    'college.service.view',
+    'college.rfid.view',
+    'college.verification.view',
+    'college.verification.manage',
+    'college.reports.view',
+    'college.reports.export',
+    'college.analytics.view',
+    'college.notifications.view',
+  ],
+  department_head: ['*'],
+  finance: ['*'],
+  store_manager: ['*'],
+  maintenance: ['*'],
+  infrastructure: ['*'],
+  staff: ['*'],
+  student: ['*'],
+};
+
 const normalizeUser = (userData) => {
   if (!userData || typeof userData !== 'object') {
     return userData;
@@ -54,15 +108,17 @@ const normalizeUser = (userData) => {
 
   const department = userData.department;
   const profilePhoto = userData.profilePhoto ?? userData.profile_photo ?? userData.avatar ?? userData.photo_url ?? userData.avatar_url ?? null;
-  const permissions = Array.isArray(userData.permissions)
-    ? userData.permissions.map(normalizePermissionValue).filter(Boolean)
+  const role = normalizeRoleValue(userData.role);
+  const permissionSource = Array.isArray(userData.permissions) && userData.permissions.length > 0
+    ? userData.permissions
     : Array.isArray(userData.rolePermissions)
-      ? userData.rolePermissions.map(normalizePermissionValue).filter(Boolean)
-      : [];
+      ? userData.rolePermissions
+      : DEFAULT_ROLE_PERMISSIONS[role] || [];
+  const permissions = permissionSource.map(normalizePermissionValue).filter(Boolean);
 
   return {
     ...userData,
-    role: normalizeRoleValue(userData.role),
+    role,
     permissions,
     department: department && typeof department === 'object'
       ? department.name || department.code || ''

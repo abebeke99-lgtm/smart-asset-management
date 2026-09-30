@@ -40,7 +40,7 @@ Health Check: /api/health
 
 Set the database and `JWT_SECRET` values in Render Environment Variables. For Aiven MySQL, set `DB_SSL=true`; do not commit database credentials.
 
-For real password reset email delivery, configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, and `FRONTEND_URL`. In production, `FRONTEND_URL` must be the deployed HTTPS frontend URL. SMTP secrets belong only in backend/Render environment variables and must never be added to frontend environment files.
+For real password reset email delivery, configure `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM`, and `FRONTEND_URL` in the backend environment. For Gmail, use `smtp.gmail.com` on port `465` (implicit TLS), enable 2-Step Verification, and use a Google App Password rather than the normal account password. The app password must not be committed. Equivalent `SMTP_*` names are supported as aliases; `MAIL_FROM` and `SMTP_FROM` are legacy sender aliases. In production, `FRONTEND_URL` must be the deployed HTTPS frontend URL. SMTP secrets belong only in backend/Render environment variables and must never be added to frontend environment files.
 
 ## Local login
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { apiClient } from '../../utils/api';
 
 const API_URL = "/api/settings";
 
@@ -81,6 +82,46 @@ const normalizeSettings = (payload) => {
       ),
   };
 };
+
+export function AccountProfile({ user, onUserUpdate }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('photo', file);
+
+    setUploading(true);
+    setError('');
+
+    try {
+      const response = await apiClient.post('/api/users/profile/photo', formData);
+      const nextUser = response?.data?.user || response?.data || user;
+      if (onUserUpdate) onUserUpdate(nextUser);
+    } catch (err) {
+      setError(err?.message || 'Unable to upload profile photo.');
+    } finally {
+      setUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  return (
+    <div className="account-profile-upload">
+      <input
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        disabled={uploading}
+      />
+      {uploading && <span>Uploading...</span>}
+      {error && <small role="alert">{error}</small>}
+    </div>
+  );
+}
 
 export default function Settings() {
   const [settings, setSettings] =

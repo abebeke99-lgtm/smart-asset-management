@@ -107,7 +107,7 @@ const Footer = ({ t, language, setLanguage, organization, role, onPublicNavigati
       </div>
 
       <div className="footer-bottom">
-        <span>© {year} {organizationName}. {t.footerCopyright}</span>
+        <span>© {year} Mekdela Amba University. All rights reserved. Developed by Bekele (0986481821)</span>
         <div className="footer-controls" role="group" aria-label={t.language}>
           <Languages size={16} aria-hidden="true" />
           <button type="button" onClick={() => setLanguage('en')} aria-label={t.languageEnglish} aria-pressed={language === 'en'}>EN</button>

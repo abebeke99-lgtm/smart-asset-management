@@ -772,15 +772,15 @@ const forgotPassword = async (req, res) => {
     }
 
     await recordRecoveryEvent({ event: 'REQUESTED', result: 'Success', req });
-    const emailConfiguration = validateEmailConfiguration();
-    if (!emailConfiguration.valid) {
-      return res.status(503).json({ success: false, message: 'Unable to process the password reset request.' });
-    }
-
     const user = await User.findOne({ where: { email } });
     const eligibility = await ensureEligibleResetUser(user, 'email');
     if (!user || !eligibility.allowed) {
       return res.json({ success: true, message: genericResetMessage });
+    }
+
+    const emailConfiguration = validateEmailConfiguration();
+    if (!emailConfiguration.valid) {
+      return res.status(503).json({ success: false, message: 'Unable to process the password reset request.' });
     }
 
     const rawToken = crypto.randomBytes(32).toString('hex');

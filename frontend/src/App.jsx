@@ -2201,7 +2201,7 @@ function AppContent() {
     const roleMap = {
       'admin': { emoji: '👑', label: 'Admin' },
       'ict_officer': { emoji: '💻', label: 'ICT Officer' },
-      'college': { emoji: '🏫', label: 'College Manager' },
+      'college_manager': { emoji: '🏫', label: 'College Manager' },
       'store_manager': { emoji: '🏪', label: 'Store Manager' },
       'finance': { emoji: '💰', label: 'Finance' },
       'maintenance': { emoji: '🔧', label: 'Maintenance' },
@@ -2883,7 +2883,7 @@ function AppContent() {
         { path: '/ict/analytics', label: 'Asset Analytics', section: 'ANALYTICS & REPORTS' },
         { path: '/ict/notifications', label: 'Notifications', section: 'SYSTEM' }
       ],
-      'college': [
+      'college_manager': [
         { path: '/college', label: 'Dashboard' },
         { path: '/college/profile', label: 'College Profile' },
         { path: '/college/staff', label: 'College Staff' },
@@ -3005,7 +3005,7 @@ function AppContent() {
   const responsibility = String(user?.departmentRole || user?.responsibility || user?.position || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
   const isDepartmentStaff = sidebarRole === 'staff' || responsibility === 'department staff';
   const isDepartmentDean = responsibility === 'department dean' || responsibility === 'dean';
-  const showCollegeNavigation = sidebarRole === 'college' && !isDepartmentStaff && !isDepartmentDean;
+  const showCollegeNavigation = sidebarRole === 'college_manager' && !isDepartmentStaff && !isDepartmentDean;
   const showDepartmentsNavigation = sidebarRole === 'department_head' || isDepartmentStaff || isDepartmentDean;
   const financeSectionLabels = {
     'Overview': 'OVERVIEW',

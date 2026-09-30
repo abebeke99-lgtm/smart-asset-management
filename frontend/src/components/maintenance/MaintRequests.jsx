@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || "/api";
+import {
+  assignMaintenance,
+  createMaintenance,
+  getAssets,
+  getMaintenancePage,
+  getTechnicians,
+  setMaintenanceStatus,
+  updateMaintenance,
+} from "../../services/maintenanceApi";
 
 const PRIORITIES = ["Low", "Medium", "High", "Critical"];
 
@@ -22,81 +29,6 @@ const EMPTY_FORM = {
   assignedTechnicianId: "",
   remarks: "",
 };
-
-function getToken() {
-  return (
-    localStorage.getItem("token") ||
-    localStorage.getItem("accessToken") ||
-    sessionStorage.getItem("token") ||
-    sessionStorage.getItem("accessToken")
-  );
-}
-
-async function apiRequest(url, options = {}) {
-  const token = getToken();
-
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(`${API_BASE_URL}${url}`, {
-    ...options,
-    headers,
-  });
-
-  let body = null;
-
-  try {
-    body = await response.json();
-  } catch {
-    body = null;
-  }
-
-  if (response.status === 401) {
-    throw new Error("Your session has expired. Please log in again.");
-  }
-
-  if (response.status === 403) {
-    throw new Error(
-      "You do not have permission to perform this maintenance action."
-    );
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      body?.message ||
-        body?.error ||
-        `Request failed with status ${response.status}`
-    );
-  }
-
-  return body;
-}
-
-function normalizeList(response, possibleKeys = []) {
-  if (Array.isArray(response)) return response;
-
-  for (const key of possibleKeys) {
-    if (Array.isArray(response?.[key])) {
-      return response[key];
-    }
-
-    if (Array.isArray(response?.data?.[key])) {
-      return response.data[key];
-    }
-  }
-
-  if (Array.isArray(response?.data)) {
-    return response.data;
-  }
-
-  return [];
-}
 
 function getRequestId(request) {
   return (
@@ -204,36 +136,16 @@ export default function Requests() {
 
       setError("");
 
-      const params = new URLSearchParams();
+      const response = await getMaintenancePage({
+        search: search.trim(),
+        status: statusFilter,
+        priority: priorityFilter,
+        category: categoryFilter,
+        page: 1,
+        limit: 100,
+      });
 
-      if (search.trim()) {
-        params.set("search", search.trim());
-      }
-
-      if (statusFilter) {
-        params.set("status", statusFilter);
-      }
-
-      if (priorityFilter) {
-        params.set("priority", priorityFilter);
-      }
-
-      if (categoryFilter) {
-        params.set("category", categoryFilter);
-      }
-
-      const query = params.toString();
-
-      const response = await apiRequest(
-        `/api/maintenance/requests${query ? `?${query}` : ""}`
-      );
-
-      const data = normalizeList(response, [
-        "requests",
-        "maintenanceRequests",
-      ]);
-
-      setRequests(data);
+      setRequests(response.items || []);
       setPage(1);
     } catch (err) {
       console.error(err);
@@ -250,13 +162,7 @@ export default function Requests() {
     try {
       setLoadingTechnicians(true);
 
-      const response = await apiRequest(
-        "/api/maintenance/technicians"
-      );
-
-      setTechnicians(
-        normalizeList(response, ["technicians"])
-      );
+      setTechnicians(await getTechnicians());
     } catch (err) {
       console.error("Technician loading error:", err);
     } finally {
@@ -268,13 +174,7 @@ export default function Requests() {
     try {
       setLoadingAssets(true);
 
-      const response = await apiRequest(
-        "/api/assets"
-      );
-
-      setAssets(
-        normalizeList(response, ["assets"])
-      );
+      setAssets(await getAssets());
     } catch (err) {
       console.error("Asset loading error:", err);
     } finally {
@@ -392,18 +292,14 @@ export default function Requests() {
       setFormError("");
       setActionMessage("");
 
-      await apiRequest("/maintenance/requests", {
-        method: "POST",
-        body: JSON.stringify({
-          assetId: form.assetId,
-          description: form.description.trim(),
-          priority: form.priority,
-          category: form.category.trim(),
-          scheduledAt: form.scheduledAt || null,
-          assignedTechnicianId:
-            form.assignedTechnicianId || null,
-          remarks: form.remarks.trim() || null,
-        }),
+      await createMaintenance({
+        assetId: form.assetId,
+        description: form.description.trim(),
+        priority: form.priority,
+        category: form.category.trim(),
+        scheduledAt: form.scheduledAt || null,
+        assignedTechnicianId: form.assignedTechnicianId || null,
+        remarks: form.remarks.trim() || null,
       });
 
       setShowCreateModal(false);
@@ -451,22 +347,15 @@ export default function Requests() {
       setFormError("");
       setActionMessage("");
 
-      await apiRequest(
-        `/api/maintenance/requests/${id}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            assetId: form.assetId,
-            description: form.description.trim(),
-            priority: form.priority,
-            category: form.category.trim(),
-            scheduledAt: form.scheduledAt || null,
-            assignedTechnicianId:
-              form.assignedTechnicianId || null,
-            remarks: form.remarks.trim() || null,
-          }),
-        }
-      );
+      await updateMaintenance(id, {
+        assetId: form.assetId,
+        description: form.description.trim(),
+        priority: form.priority,
+        category: form.category.trim(),
+        scheduledAt: form.scheduledAt || null,
+        assignedTechnicianId: form.assignedTechnicianId || null,
+        remarks: form.remarks.trim() || null,
+      });
 
       setShowEditModal(false);
 
@@ -507,16 +396,7 @@ export default function Requests() {
       setFormError("");
       setActionMessage("");
 
-      await apiRequest(
-        `/api/maintenance/requests/${id}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            assignedTechnicianId:
-              form.assignedTechnicianId,
-          }),
-        }
-      );
+      await assignMaintenance(id, form.assignedTechnicianId);
 
       setShowAssignModal(false);
 
@@ -550,15 +430,7 @@ export default function Requests() {
     try {
       setActionMessage("");
 
-      await apiRequest(
-        `/api/maintenance/requests/${id}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            status,
-          }),
-        }
-      );
+      await setMaintenanceStatus(id, status);
 
       setActionMessage(
         `Request status changed to ${status}.`
@@ -608,6 +480,7 @@ export default function Requests() {
       const requestId = String(
         request?.requestNumber ||
           request?.request_number ||
+          request?.refId ||
           request?.id ||
           ""
       ).toLowerCase();
@@ -949,6 +822,7 @@ export default function Requests() {
                     const requestNumber =
                       request?.requestNumber ||
                       request?.request_number ||
+                      request?.refId ||
                       `REQ-${id || "—"}`;
 
                     const requester =
@@ -966,6 +840,7 @@ export default function Requests() {
                     const assetName =
                       request?.assetName ||
                       request?.asset_name ||
+                      request?.asset ||
                       "—";
 
                     const assetId =
@@ -982,6 +857,7 @@ export default function Requests() {
                       request?.assignedTechnicianName ||
                       request?.assigned_technician_name ||
                       request?.technicianName ||
+                      request?.technician ||
                       "Unassigned";
 
                     return (
@@ -1003,7 +879,8 @@ export default function Requests() {
                             request?.requestDate ||
                               request?.request_date ||
                               request?.createdAt ||
-                              request?.created_at
+                              request?.created_at ||
+                              request?.created
                           )}
                         </td>
 

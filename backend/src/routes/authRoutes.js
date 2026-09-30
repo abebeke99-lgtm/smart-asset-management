@@ -9,6 +9,7 @@ const {
   verifyResetOtp,
   resetPassword,
   requestForgotPasswordOtp,
+  verifyForgotPassword,
   verifyForgotPasswordOtp,
   resetPasswordWithOtp,
 } = require('../controllers/authController');

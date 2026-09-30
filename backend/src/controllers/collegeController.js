@@ -92,7 +92,15 @@ const listCollegeAssignments = async (req, res, next) => {
 };
 
 const normalizeMaintenanceStatus = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, '-');
-const validMaintenanceStatuses = ['pending', 'approved', 'assigned', 'in-progress', 'waiting-for-parts', 'testing', 'completed', 'rejected', 'cancelled'];
+const validMaintenanceStatuses = ['pending', 'approved', 'assigned', 'in-progress', 'waiting-for-parts', 'testing', 'overdue', 'completed', 'rejected', 'cancelled'];
+const isMaintenanceOverdue = (row) => {
+  const status = normalizeMaintenanceStatus(row?.status);
+  if (['completed', 'cancelled', 'rejected'].includes(status)) return false;
+  if (status === 'overdue') return true;
+
+  const dueDate = row?.dueDate || row?.scheduledDate || row?.expectedCompletionDate;
+  return Boolean(dueDate && new Date(dueDate).getTime() < Date.now());
+};
 
 const listCollegeMaintenance = async (req, res, next) => {
   try {
@@ -246,12 +254,7 @@ const listCollegeMaintenance = async (req, res, next) => {
       if (row.Asset?.status && ['maintenance', 'under-maintenance', 'in-repair', 'repair'].includes(normalizeMaintenanceStatus(row.Asset.status))) summary.underMaintenance += 1;
     }
 
-    const overdue = allScopedRows.filter((row) => {
-      const status = normalizeMaintenanceStatus(row.status);
-      if (['completed', 'cancelled', 'rejected'].includes(status)) return false;
-      return false;
-    });
-    summary.overdue = overdue.length;
+    summary.overdue = allScopedRows.filter(isMaintenanceOverdue).length;
 
     res.json({
       success: true,
@@ -3222,4 +3225,5 @@ module.exports = {
   listCollegeVerification,
   getCollegeReports,
   getCollegeAssetAnalytics,
+  isMaintenanceOverdue,
 };

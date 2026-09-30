@@ -76,7 +76,7 @@ Set these in the Render service environment. Do not commit populated environment
 | `DB_SYNC_ON_START` | `false` in production | Set to `true` only for a reviewed, backed-up schema synchronization; return to `false` after the one-time run. |
 | `FRONTEND_URL` | Required | Exact HTTPS Vercel production origin, e.g. `https://uams-college.vercel.app`, without `/api`. Used by CORS and reset links. |
 | `CORS_ORIGINS` | Optional | Comma-separated additional exact origins, such as approved Vercel preview domains. No wildcard. |
-| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM` | Required for email OTP | Real SMTP account. Equivalent `SMTP_*` names are supported. |
+| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM` | Required for email OTP | For Gmail use `smtp.gmail.com`, port `465` (implicit TLS), and a Google App Password created with 2-Step Verification enabled. Do not use the normal account password. Equivalent `SMTP_*` names are supported. |
 | `SMS_PROVIDER`, `SMS_API_KEY`, `SMS_API_SECRET`, `SMS_SENDER_ID` | Required for SMS OTP | Use `twilio` or `africastalking` and the corresponding provider credentials. `SMS_SENDER` remains a compatibility alias. |
 | `PASSWORD_RESET_OTP_TTL_MINUTES` | `5` | OTP expiry. |
 | `PASSWORD_RESET_OTP_MAX_ATTEMPTS` | `5` | The implementation caps this setting at five. |
