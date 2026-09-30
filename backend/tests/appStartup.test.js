@@ -8,22 +8,47 @@ test('app startup initializes the backup service dependency required for server 
   assert.match(source, /const backupService = require\('\.\/services\/backupService'\);/);
 });
 
-test('app startup listens before attempting database initialization', () => {
+test('app startup completes database initialization before listening', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
   const startup = source.slice(source.indexOf('async function startServer()'));
-  assert.ok(startup.indexOf("app.listen(PORT, '0.0.0.0'") < startup.indexOf('initializeDatabase().catch'));
+  assert.ok(startup.indexOf('await initializeDatabase()') < startup.indexOf("app.listen(PORT, '0.0.0.0'"));
 });
 
-test('liveness endpoint always returns HTTP 200 without checking database state', () => {
+test('health endpoint checks database connectivity without querying users', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
-  assert.match(source, /const healthHandler = \(_req, res\) => res\.status\(200\)\.json\(\{ status: 'ok' \}\)/);
+  assert.match(source, /await sequelize\.query\('SELECT 1'\)/);
+  assert.match(source, /res\.status\(200\)\.json\(\{ status: 'ok', database: 'connected' \}\)/);
+  assert.match(source, /res\.status\(503\)\.json\(\{ status: 'error', database: 'unavailable' \}\)/);
+  assert.doesNotMatch(source, /healthHandler[\s\S]*?User\.find/);
   assert.match(source, /app\.get\('\/health', healthHandler\)/);
 });
 
-test('production CORS allows the configured deployed frontend origin without a wildcard', () => {
+test('production CORS accepts configured comma-separated origins without a wildcard', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
-  assert.match(source, /https:\/\/smart-asset-management-six\.vercel\.app/);
+  assert.match(source, /process\.env\.CORS_ORIGINS/);
+  assert.match(source, /\.flatMap\(\(value\) => value\.split\(','\)\)/);
+  assert.match(source, /\.map\(\(value\) => value\.trim\(\)\)/);
+  assert.doesNotMatch(source, /productionFallbackOrigins/);
   assert.doesNotMatch(source, /origin:\s*['"]\*['"]/);
+});
+
+test('models are loaded before database synchronization is initialized', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
+  assert.ok(source.indexOf("require('./models')") < source.indexOf("require('./config/sync')"));
+});
+
+test('database schema sync runs in production and fails startup when initialization fails', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
+  assert.match(source, /schemaReady = await syncDatabase\(\)/);
+  assert.match(source, /throw new Error\('Database initialization failed after retry limit\.'\)/);
+  assert.match(source, /console\.log\('Database initialization completed\.'\)/);
+});
+
+test('schema initialization rejects startup if any registered model table is missing', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../src/config/sync.js'), 'utf8');
+  assert.match(source, /const unresolvedTables = \[\]/);
+  assert.match(source, /if \(unresolvedTables\.length > 0\) \{/);
+  assert.match(source, /Database schema initialization could not create required table/);
 });
 
 test('root production start and Railway deployment target the backend', () => {

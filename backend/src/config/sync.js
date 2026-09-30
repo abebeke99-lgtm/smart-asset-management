@@ -120,6 +120,14 @@ async function createMissingTables() {
     }
   }
 
+  const unresolvedTables = [];
+  for (const model of missing) {
+    if (!(await queryInterface.tableExists(model.getTableName()))) unresolvedTables.push(model.getTableName());
+  }
+  if (unresolvedTables.length > 0) {
+    throw new Error(`Database schema initialization could not create required table(s): ${unresolvedTables.join(', ')}`);
+  }
+
   console.log(`Database schema synchronized. ${missing.length} table(s) created.`);
   return missing.length;
 }

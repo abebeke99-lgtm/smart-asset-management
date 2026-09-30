@@ -11,9 +11,7 @@ These existing instructions cover Render/Aiven. For Railway + Railway MySQL, use
 
 ## Database and Schema Safety
 
-There is no versioned migration runner. Backend startup uses the existing custom Sequelize schema synchronizer in development. It creates missing tables, adds selected missing columns and constraints, changes the `maintenance_inspections.maintenance_id` column, creates missing password-recovery indexes, and removes duplicate non-primary indexes. It does not drop tables or truncate rows and does not run `sync({ force: true })` or `alter: true`; however, it does execute DDL against existing tables when enabled. In production, `DB_SYNC_ON_START` defaults to `false`, so normal service startup only verifies the database connection and does not run schema DDL or index repair. Test any required sync against a restored staging copy first.
-
-For a first deployment that needs schema updates, restore a staging copy, review the resulting schema, then explicitly set `DB_SYNC_ON_START=true` for a controlled one-time run. Set it back to `false` after the schema is verified. Do not enable it against production until the DDL and duplicate-index removals have been reviewed and backed up.
+There is no versioned migration runner. Backend startup loads all Sequelize models and associations, then runs the existing custom schema synchronizer in every environment before opening the HTTP listener. It creates missing model tables, adds selected missing columns and constraints, changes the `maintenance_inspections.maintenance_id` column, creates missing password-recovery indexes, and removes duplicate non-primary indexes. It does not drop tables or truncate rows and does not run `sync({ force: true })` or `alter: true`; it does execute DDL against existing tables. Startup fails if any registered model table remains missing. Test the synchronizer against a restored staging copy and keep a verified backup before deploying schema changes. `DB_SYNC_ON_START` is no longer used.
 
 The `PasswordRecovery` model maps to `password_recoveries`. Its logical fields are `id`, `userId`, `method`, `destination`, `otpHash`, `expiresAt`, `attempts`, `verifiedAt`, `usedAt`, and Sequelize timestamps `createdAt`/`updatedAt`. With underscored naming, most fields are stored as `user_id`, `otp_hash`, `expires_at`, `verified_at`, `used_at`, `created_at`, and `updated_at`. Model indexes cover user, destination, expiry, and reset-token hash.
 
@@ -75,7 +73,6 @@ Set these in the Render service environment. Do not commit populated environment
 | `DB_CHARSET` | Optional | Defaults to `utf8mb4`. |
 | `DB_COLLATION` | Optional | New tables default to `utf8mb4_unicode_ci`; existing tables are not globally converted. |
 | `DB_TIMEZONE` | Optional | Defaults to `+00:00` (UTC). |
-| `DB_SYNC_ON_START` | `false` in production | Set to `true` only for a reviewed, backed-up schema synchronization; return to `false` after the one-time run. |
 | `FRONTEND_URL` | Required | Exact HTTPS Vercel production origin, e.g. `https://uams-college.vercel.app`, without `/api`. Used by CORS and reset links. |
 | `CORS_ORIGINS` | Optional | Comma-separated additional exact origins, such as approved Vercel preview domains. No wildcard. |
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM` | Required for email OTP | For Gmail use `smtp.gmail.com`, port `465` (implicit TLS), and a Google App Password created with 2-Step Verification enabled. Do not use the normal account password. Equivalent `SMTP_*` names are supported. |
@@ -138,7 +135,6 @@ DB_PASSWORD=${{MySQL.MYSQLPASSWORD}}
 NODE_ENV=production
 JWT_SECRET=<generate and store a high-entropy secret in Railway>
 FRONTEND_URL=https://<your-frontend-domain>
-DB_SYNC_ON_START=false
 ```
 
 Railway variable references are service-name-sensitive. Confirm each referenced value in Railway's Variables view without copying secrets into source control. Use the MySQL service's private host/port for an internal Railway connection. Leave `DB_SSL` unset/false unless Railway's current provider settings explicitly require TLS; if required, configure certificate verification rather than disabling it. The app also accepts Railway's `MYSQL*` variables directly if those are exposed to the backend service.
@@ -158,13 +154,13 @@ Railway variable references are service-name-sensitive. Confirm each referenced 
    ```
 
 4. Add `JWT_SECRET` as a Railway secret and set `NODE_ENV=production`. Set `FRONTEND_URL` or `CORS_ORIGINS` to the exact frontend origin.
-5. Save the variables and redeploy the backend service. In the deployment logs, confirm database configuration is detected, Sequelize authentication succeeds, and database initialization completes without retry exhaustion.
-6. Verify `GET /health`, `GET /api/health`, an unauthenticated protected endpoint returning `401`, and then an authenticated endpoint using an existing legitimate account. Do not mark the database or authenticated dashboard as verified from the health endpoint alone.
+5. Save the variables and redeploy the backend service. In the deployment logs, confirm Sequelize authentication and schema initialization succeed before the server starts listening.
+6. Verify `GET /health` and `GET /api/health` return `200` with a connected database, an unauthenticated protected endpoint returns `401`, and an authenticated endpoint works using an existing legitimate account.
 
-The existing local development database name defaults to `smart_asset_db`; production must use the Railway service's actual `MYSQLDATABASE` (or its `DB_NAME` reference), not an assumed name. There is no versioned migration runner. Production schema synchronization remains opt-in with `DB_SYNC_ON_START=true`; it creates missing tables and adds selected columns/indexes, but also performs DDL and duplicate-index repair on existing tables. Back up the target and test against a restored staging copy before enabling it, then return it to `false`. Do not use schema sync as a substitute for importing existing XAMPP records.
+The existing local development database name defaults to `smart_asset_db`; production must use the Railway service's actual `MYSQLDATABASE` (or its `DB_NAME` reference), not an assumed name. There is no versioned migration runner. Production startup creates missing model tables and applies the synchronizer's selected schema repairs; this includes DDL and duplicate-index repair on existing tables. Back up the target and test against a restored staging copy before deployment. Do not use schema sync as a substitute for importing existing XAMPP records.
 
 To preserve the existing XAMPP data, first verify the actual source schema name, take a verified MySQL dump, and import that dump into the selected Railway database without dropping/truncating tables. Keep the source unchanged and compare table/row counts before cutover. Do not commit dumps or put credentials in shell history or repository files. The repository does not contain production Railway credentials, so connectivity and data import must be verified after the service references are configured.
 
 For the frontend service, set the build-time variable `REACT_APP_API_URL` to `https://<your-railway-backend-domain>/api`, then rebuild/redeploy the React app. Set backend `FRONTEND_URL` to the frontend's exact origin; additional approved origins may use `CLIENT_URL`, `CORS_ORIGIN`, or comma-separated `CORS_ORIGINS`. The existing monitoring screen calls `/admin/monitoring/overview`, which resolves through the shared API client to the backend's `/api/admin/monitoring/overview` route and remains admin-authenticated.
 
-The public liveness endpoint is `GET /health`; it returns HTTP 200 independently of MySQL. Database initialization runs after the listener starts. Verify backend logs for the resolved database host/name and successful Sequelize authentication after configuring Railway variables; a healthy liveness endpoint alone does not prove database readiness.
+`GET /health` and `GET /api/health` run `SELECT 1` and return HTTP 200 only when MySQL is reachable; they return HTTP 503 when it is unavailable. Database initialization, including model-table creation, completes before the listener starts. Verify backend logs for successful Sequelize authentication and schema initialization after configuring Railway variables.

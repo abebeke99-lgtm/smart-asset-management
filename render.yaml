@@ -33,9 +33,6 @@ services:
         sync: false
       - key: EMAIL_FROM
         sync: false
-      - key: DB_SYNC_ON_START
-        value: "false"
-
   - type: web
     name: smart-asset-management-3
     runtime: static

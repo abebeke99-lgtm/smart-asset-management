@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const passport = require('./config/passport');
 const { sequelize, testConnection } = require('./config/database');
+require('./models');
 const { syncDatabase } = require('./config/sync');
 const { seedDatabase } = require('./config/seed');
 const { ensureUploadDirectories } = require('./utils/uploadUtils');
@@ -55,7 +56,14 @@ const { requireAuth, requireRole } = require('./middlewares/auth');
 const app = express();
 const PORT = process.env.PORT || 5000;
 app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
-const healthHandler = (_req, res) => res.status(200).json({ status: 'ok' });
+const healthHandler = async (_req, res) => {
+  try {
+    await sequelize.query('SELECT 1');
+    return res.status(200).json({ status: 'ok', database: 'connected' });
+  } catch {
+    return res.status(503).json({ status: 'error', database: 'unavailable' });
+  }
+};
 
 const uploadRoot = path.resolve(__dirname, '..', (process.env.UPLOAD_DIR || './uploads').replace(/^\.\//, ''));
 const configuredOrigins = [
@@ -68,9 +76,6 @@ const configuredOrigins = [
   .flatMap((value) => value.split(','))
   .map((value) => value.trim())
   .filter(Boolean);
-const productionFallbackOrigins = [
-  'https://smart-asset-management-six.vercel.app',
-];
 const localOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
@@ -83,7 +88,7 @@ const localOrigins = [
   'http://172.16.39.87:3000'
 ];
 const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? [...configuredOrigins, ...productionFallbackOrigins]
+  ? configuredOrigins
   : [...configuredOrigins, ...localOrigins];
 
 const normalizeOrigin = (value = '') => value.replace(/\/+$/, '');
@@ -202,13 +207,12 @@ async function initializeDatabase() {
   const retryDelays = [5000, 10000, 20000, 30000, 60000];
   for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
     const databaseConnected = await testConnection();
-    const syncEnabled = process.env.NODE_ENV !== 'production' || process.env.DB_SYNC_ON_START === 'true';
-    let schemaReady = databaseConnected && !syncEnabled;
-    if (databaseConnected && syncEnabled) {
+    let schemaReady = false;
+    if (databaseConnected) {
       try {
         schemaReady = await syncDatabase();
       } catch (error) {
-        console.error('Database schema initialization failed:', error);
+        console.error('Database schema initialization failed:', error.message);
       }
     }
     if (databaseConnected && schemaReady) {
@@ -224,11 +228,12 @@ async function initializeDatabase() {
 
     if (attempt === retryDelays.length) {
       console.error('Database initialization failed after retry limit. Verify DB_HOST, DB_PORT, credentials, SSL, and provider firewall settings.');
-      return;
+      throw new Error('Database initialization failed after retry limit.');
     }
 
     const delay = retryDelays[attempt];
-    console.error(`Database unavailable. Retrying in ${delay / 1000} seconds (attempt ${attempt + 1}/${retryDelays.length}).`);
+    const failureReason = databaseConnected ? 'Database schema initialization incomplete' : 'Database connection unavailable';
+    console.error(`${failureReason}. Retrying in ${delay / 1000} seconds (attempt ${attempt + 1}/${retryDelays.length}).`);
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
 }
@@ -240,16 +245,14 @@ async function startServer() {
     console.error('Could not initialize upload directories:', error.message);
   }
 
-  await new Promise((resolve, reject) => {
+  await initializeDatabase();
+
+  return new Promise((resolve, reject) => {
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
       resolve();
     });
     server.once('error', reject);
-  });
-
-  initializeDatabase().catch((error) => {
-    console.error('Database initialization failed:', error);
   });
 }
 
