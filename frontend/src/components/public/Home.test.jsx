@@ -15,7 +15,7 @@ describe('Home', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('heading', { name: 'Smart University Asset Management' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'University Asset Management' })).toBeInTheDocument();
     expect(screen.getAllByText('UNIVERSITY ASSET OPERATIONS')).toHaveLength(2);
     expect(screen.getByText('Manage, track, assign, maintain, and monitor every university asset from one centralized platform.')).toBeInTheDocument();
     expect(screen.getByText(/From asset registration and assignment to transfer, maintenance, verification, returns, and financial reporting/)).toBeInTheDocument();
@@ -43,7 +43,7 @@ describe('Home', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('heading', { name: 'ዘመናዊ የዩኒቨርሲቲ ንብረት አስተዳደር' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'የዩኒቨርሲቲ ንብረት አስተዳደር' })).toBeInTheDocument();
     expect(screen.getByText('ንብረት መመዝገብ')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'ስርዓቱ እንዴት ይሰራል?' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'ለሁሉም ሚናዎች የተዘጋጀ' })).not.toBeInTheDocument();

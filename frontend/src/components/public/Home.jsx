@@ -9,7 +9,7 @@ import {
 
 const pageText = {
   en: {
-    systemTitle: 'Smart University Asset Management',
+    systemTitle: 'University Asset Management',
     heroEyebrow: 'UNIVERSITY ASSET OPERATIONS',
     lead: 'Manage, track, assign, maintain, and monitor every university asset from one centralized platform.',
     supportingText: 'From asset registration and assignment to transfer, maintenance, verification, returns, and financial reporting — keep university resources organized, accountable, and visible.',
@@ -27,7 +27,7 @@ const pageText = {
     highlights: ['Asset Registration', 'Asset Tracking', 'Assignment', 'Transfer', 'Verification', 'Maintenance', 'Returns', 'Financial Management', 'Reports & Analytics']
   },
   am: {
-    systemTitle: 'ዘመናዊ የዩኒቨርሲቲ ንብረት አስተዳደር',
+    systemTitle: 'የዩኒቨርሲቲ ንብረት አስተዳደር',
     heroEyebrow: 'የዩኒቨርሲቲ ንብረት አስተዳደር',
     lead: 'እያንዳንዱን የዩኒቨርሲቲ ንብረት በአንድ ማዕከላዊ መድረክ ያስተዳድሩ፣ ይመዝግቡ፣ ይመድቡ፣ ይጠግኑ እና ይከታተሉ።',
     supportingText: 'ከንብረት ምዝገባና ምደባ እስከ ማስተላለፍ፣ ጥገና፣ ማረጋገጫ፣ መመለስ እና የፋይናንስ ሪፖርት ድረስ፤ የዩኒቨርሲቲ ሀብቶችን የተደራጁ፣ ተጠያቂ እና ግልጽ ያድርጉ።',
@@ -78,7 +78,7 @@ const Home = () => {
       <div className="uam-hero-shell">
         <div className="uam-hero-copy">
           <span className="uam-eyebrow">{text.heroEyebrow}</span>
-          <h1 id="home-title">{language === 'en' ? <>Smart University<br />Asset Management</> : text.systemTitle}</h1>
+          <h1 id="home-title">{language === 'en' ? <>University<br />Asset Management</> : text.systemTitle}</h1>
           <p className="uam-lead">
             {text.lead}
           </p>

@@ -12,24 +12,11 @@ const normalize = (item) => {
 };
 const include = [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'department', 'collegeId'] }, { model: Department, attributes: ['id', 'name', 'collegeId'] }, { model: User, as: 'Requester', attributes: ['id', 'username', 'fullName', 'department'] }, { model: User, as: 'Reviewer', attributes: ['id', 'username', 'fullName'] }];
 
-const buildStoreApprovalPredicates = async (collegeId) => {
-  const [departments, assets] = await Promise.all([
-    Department.findAll({ where: { collegeId }, attributes: ['id'], raw: true }),
-    Asset.findAll({ where: { collegeId }, attributes: ['id'], raw: true }),
-  ]);
-  const departmentIds = departments.map((department) => department.id);
-  const assetIds = assets.map((asset) => asset.id);
-  const inCollege = [];
-  if (departmentIds.length) inCollege.push({ departmentId: { [Op.in]: departmentIds } });
-  if (assetIds.length) inCollege.push({ assetId: { [Op.in]: assetIds } });
-
-  if (!inCollege.length) return [{ id: -1 }];
-  return [
-    { [Op.or]: [{ departmentId: null }, { departmentId: { [Op.in]: departmentIds } }] },
-    { [Op.or]: [{ assetId: null }, { assetId: { [Op.in]: assetIds } }] },
-    { [Op.or]: inCollege },
-  ];
-};
+const buildStoreApprovalPredicates = (collegeId) => [
+  { [Op.or]: [{ departmentId: null }, { '$Department.collegeId$': collegeId }] },
+  { [Op.or]: [{ assetId: null }, { '$Asset.collegeId$': collegeId }] },
+  { [Op.or]: [{ '$Department.collegeId$': collegeId }, { '$Asset.collegeId$': collegeId }] },
+];
 
 const approvalBelongsToCollege = (record, collegeId) => {
   if (record.departmentId && Number(record.Department?.collegeId) !== collegeId) return false;
@@ -43,7 +30,7 @@ const listApprovals = async (req, res, next) => {
     if (isStoreManager(req)) {
       const collegeId = getCollegeScopeId(req);
       if (!collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
-      where[Op.and] = await buildStoreApprovalPredicates(collegeId);
+      where[Op.and] = buildStoreApprovalPredicates(collegeId);
     }
     if (req.query.status) where.status = String(req.query.status).toLowerCase();
     if (req.query.type) where.type = req.query.type;
