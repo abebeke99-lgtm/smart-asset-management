@@ -8,8 +8,8 @@ const configuredApiUrl = [
 const defaultApiOrigin = process.env.NODE_ENV === 'production'
   ? ''
   : typeof window !== 'undefined' && window.location?.hostname
-  ? `${window.location.protocol || 'http:'}//${window.location.hostname}:5000`
-  : 'http://localhost:5000';
+  ? `${window.location.protocol || 'http:'}//${window.location.hostname}:8080`
+  : 'http://localhost:8080';
 
 const normalizeApiBase = (value) => {
   const trimmed = String(value || '').trim();
