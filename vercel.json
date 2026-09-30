@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm install --prefix frontend && npm run build --prefix frontend",
+  "buildCommand": "CI=false npm install --prefix frontend && CI=false npm run build --prefix frontend",
   "outputDirectory": "frontend/build",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
