@@ -143,6 +143,24 @@ DB_SYNC_ON_START=false
 
 Railway variable references are service-name-sensitive. Confirm each referenced value in Railway's Variables view without copying secrets into source control. Use the MySQL service's private host/port for an internal Railway connection. Leave `DB_SSL` unset/false unless Railway's current provider settings explicitly require TLS; if required, configure certificate verification rather than disabling it. The app also accepts Railway's `MYSQL*` variables directly if those are exposed to the backend service.
 
+### Railway UI Checklist
+
+1. Open the Railway project and confirm a MySQL service exists. If it does not, use **New > Database > MySQL**; do not create credentials in source code.
+2. Open the backend application service, select **Variables**, and choose **Add Reference** (or the equivalent service-variable reference action).
+3. Select the actual MySQL service name and map its generated variables to the backend names. Replace `<actual-mysql-service>` below with the service selected in Railway; never guess the name:
+
+   ```text
+   DB_HOST=${{<actual-mysql-service>.MYSQLHOST}}
+   DB_PORT=${{<actual-mysql-service>.MYSQLPORT}}
+   DB_NAME=${{<actual-mysql-service>.MYSQLDATABASE}}
+   DB_USER=${{<actual-mysql-service>.MYSQLUSER}}
+   DB_PASSWORD=${{<actual-mysql-service>.MYSQLPASSWORD}}
+   ```
+
+4. Add `JWT_SECRET` as a Railway secret and set `NODE_ENV=production`. Set `FRONTEND_URL` or `CORS_ORIGINS` to the exact frontend origin.
+5. Save the variables and redeploy the backend service. In the deployment logs, confirm database configuration is detected, Sequelize authentication succeeds, and database initialization completes without retry exhaustion.
+6. Verify `GET /health`, `GET /api/health`, an unauthenticated protected endpoint returning `401`, and then an authenticated endpoint using an existing legitimate account. Do not mark the database or authenticated dashboard as verified from the health endpoint alone.
+
 The existing local development database name defaults to `smart_asset_db`; production must use the Railway service's actual `MYSQLDATABASE` (or its `DB_NAME` reference), not an assumed name. There is no versioned migration runner. Production schema synchronization remains opt-in with `DB_SYNC_ON_START=true`; it creates missing tables and adds selected columns/indexes, but also performs DDL and duplicate-index repair on existing tables. Back up the target and test against a restored staging copy before enabling it, then return it to `false`. Do not use schema sync as a substitute for importing existing XAMPP records.
 
 To preserve the existing XAMPP data, first verify the actual source schema name, take a verified MySQL dump, and import that dump into the selected Railway database without dropping/truncating tables. Keep the source unchanged and compare table/row counts before cutover. Do not commit dumps or put credentials in shell history or repository files. The repository does not contain production Railway credentials, so connectivity and data import must be verified after the service references are configured.
