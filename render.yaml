@@ -22,7 +22,7 @@ services:
       - key: DB_SSL_CA
         sync: false
       - key: FRONTEND_URL
-        value: https://smart-asset-management-3.onrender.com
+        value: https://smart-asset-management-six.vercel.app
       - key: EMAIL_HOST
         sync: false
       - key: EMAIL_PORT
@@ -44,7 +44,7 @@ services:
     staticPublishPath: frontend/build
     envVars:
       - key: REACT_APP_API_URL
-        value: https://smart-asset-management-3-production.up.railway.app/api
+        value: https://smart-asset-management-3-production-9258.up.railway.app/api
       - key: REACT_APP_API_TIMEOUT
         value: "30000"
     routes:

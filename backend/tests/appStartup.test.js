@@ -22,7 +22,7 @@ test('liveness endpoint always returns HTTP 200 without checking database state'
 
 test('production CORS allows the configured deployed frontend origin without a wildcard', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
-  assert.match(source, /https:\/\/smart-asset-management-3\.onrender\.com/);
+  assert.match(source, /https:\/\/smart-asset-management-six\.vercel\.app/);
   assert.doesNotMatch(source, /origin:\s*['"]\*['"]/);
 });
 

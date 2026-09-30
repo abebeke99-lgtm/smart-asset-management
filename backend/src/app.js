@@ -69,7 +69,7 @@ const configuredOrigins = [
   .map((value) => value.trim())
   .filter(Boolean);
 const productionFallbackOrigins = [
-  'https://smart-asset-management-3.onrender.com',
+  'https://smart-asset-management-six.vercel.app',
 ];
 const localOrigins = [
   'http://localhost:3000',
