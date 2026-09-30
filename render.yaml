@@ -44,7 +44,7 @@ services:
     staticPublishPath: frontend/build
     envVars:
       - key: REACT_APP_API_URL
-        value: https://smart-asset-management-2f5p.onrender.com/api
+        value: https://smart-asset-management-3-production.up.railway.app/api
       - key: REACT_APP_API_TIMEOUT
         value: "30000"
     routes:
