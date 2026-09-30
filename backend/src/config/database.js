@@ -63,7 +63,22 @@ function getDatabaseConfig() {
   return { ...config, port };
 }
 
-const databaseConfig = getDatabaseConfig();
+let databaseConfigError = null;
+let databaseConfig;
+try {
+  databaseConfig = getDatabaseConfig();
+} catch (error) {
+  if (!['DB_CONFIG_MISSING', 'DB_CONFIG_INVALID'].includes(error.code)) throw error;
+  databaseConfigError = error;
+  databaseConfig = {
+    database: process.env.DB_NAME || 'smart_asset_db',
+    username: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    host: process.env.DB_HOST || '127.0.0.1',
+    port: Number(process.env.DB_PORT) || 3306,
+  };
+  console.error(`Database configuration unavailable: ${error.message}`);
+}
 const dbHost = databaseConfig.host || '';
 const sslEnabled = process.env.DB_SSL === 'true' || dbHost.includes('aivencloud.com');
 const sslRejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false';
@@ -104,6 +119,8 @@ const sequelizeOptions = {
 const sequelize = new Sequelize(sequelizeOptions);
 
 async function testConnection() {
+  if (databaseConfigError) return false;
+
   try {
     await sequelize.authenticate();
     console.log(`Database connection established (host=${databaseConfig.host}, port=${databaseConfig.port}, database=${databaseConfig.database}).`);

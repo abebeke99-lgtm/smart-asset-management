@@ -14,16 +14,16 @@ const { createAuditLog } = require('../services/auditLogService');
 
 const router = express.Router();
 const requireAdmin = [requireAuth, requireRole('admin')];
-const mfaCipherKey = crypto.createHash('sha256').update(getJwtSecret()).digest();
+const getMfaCipherKey = () => crypto.createHash('sha256').update(getJwtSecret()).digest();
 const encryptMfaSecret = (secret) => {
   const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv('aes-256-gcm', mfaCipherKey, iv);
+  const cipher = crypto.createCipheriv('aes-256-gcm', getMfaCipherKey(), iv);
   const encrypted = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
   return `${iv.toString('hex')}:${cipher.getAuthTag().toString('hex')}:${encrypted.toString('hex')}`;
 };
 const decryptMfaSecret = (payload) => {
   const [ivHex, tagHex, encryptedHex] = String(payload).split(':');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', mfaCipherKey, Buffer.from(ivHex, 'hex'));
+  const decipher = crypto.createDecipheriv('aes-256-gcm', getMfaCipherKey(), Buffer.from(ivHex, 'hex'));
   decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
   return Buffer.concat([decipher.update(Buffer.from(encryptedHex, 'hex')), decipher.final()]).toString('utf8');
 };

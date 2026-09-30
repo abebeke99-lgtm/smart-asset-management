@@ -55,6 +55,8 @@ const { requireAuth, requireRole } = require('./middlewares/auth');
 const app = express();
 const PORT = process.env.PORT || 5000;
 app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
+const healthHandler = (_req, res) => res.status(200).json({ status: 'ok' });
+
 const uploadRoot = path.resolve(__dirname, '..', (process.env.UPLOAD_DIR || './uploads').replace(/^\.\//, ''));
 const configuredOrigins = [
   process.env.FRONTEND_URL,
@@ -121,30 +123,15 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(passport.initialize());
 app.use(requestContextMiddleware);
 app.use(requestMetricsMiddleware);
-
-let databaseReady = false;
-
-const healthHandler = async (req, res) => {
-  let connected = databaseReady;
-  if (connected) {
-    try {
-      await sequelize.authenticate();
-    } catch (error) {
-      connected = false;
-      databaseReady = false;
-    }
-  }
-  const status = connected ? 'ok' : 'degraded';
-  res.status(connected ? 200 : 503).json({ status });
-};
-
-app.get('/health', healthHandler);
-app.get('/api/health', healthHandler);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/search', searchRoutes);
@@ -208,13 +195,19 @@ app.use((err, req, res, next) => {
   });
 });
 
-async function startServer() {
-  ensureUploadDirectories();
+async function initializeDatabase() {
   const retryDelays = [5000, 10000, 20000, 30000, 60000];
   for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
     const databaseConnected = await testConnection();
     const syncEnabled = process.env.NODE_ENV !== 'production' || process.env.DB_SYNC_ON_START === 'true';
-    const schemaReady = databaseConnected && (!syncEnabled || await syncDatabase());
+    let schemaReady = databaseConnected && !syncEnabled;
+    if (databaseConnected && syncEnabled) {
+      try {
+        schemaReady = await syncDatabase();
+      } catch (error) {
+        console.error('Database schema initialization failed:', error);
+      }
+    }
     if (databaseConnected && schemaReady) {
       if (process.env.NODE_ENV !== 'production') {
         if (process.env.SEED_DEMO_DATA === 'true') {
@@ -222,18 +215,26 @@ async function startServer() {
         }
       }
       backupService.startAutomaticBackupScheduler();
-      databaseReady = true;
       console.log('Database initialization completed.');
       break;
     }
 
     if (attempt === retryDelays.length) {
-      throw new Error('Database initialization failed after retry limit. Verify DB_HOST, DB_PORT, credentials, SSL, and provider firewall settings.');
+      console.error('Database initialization failed after retry limit. Verify DB_HOST, DB_PORT, credentials, SSL, and provider firewall settings.');
+      return;
     }
 
     const delay = retryDelays[attempt];
     console.error(`Database unavailable. Retrying in ${delay / 1000} seconds (attempt ${attempt + 1}/${retryDelays.length}).`);
     await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+}
+
+async function startServer() {
+  try {
+    ensureUploadDirectories();
+  } catch (error) {
+    console.error('Could not initialize upload directories:', error.message);
   }
 
   await new Promise((resolve, reject) => {
@@ -242,6 +243,10 @@ async function startServer() {
       resolve();
     });
     server.once('error', reject);
+  });
+
+  initializeDatabase().catch((error) => {
+    console.error('Database initialization failed:', error);
   });
 }
 

@@ -7,7 +7,13 @@ const { getJwtSecret } = require('./jwt');
 
 const opts = {
   jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-  secretOrKey: getJwtSecret(),
+  secretOrKeyProvider: (_req, _rawToken, done) => {
+    try {
+      done(null, getJwtSecret());
+    } catch (error) {
+      done(error);
+    }
+  },
 };
 
 passport.use(

@@ -8,9 +8,22 @@ test('app startup initializes the backup service dependency required for server 
   assert.match(source, /const backupService = require\('\.\/services\/backupService'\);/);
 });
 
-test('app startup verifies and synchronizes the database before listening', () => {
+test('app startup listens before attempting database initialization', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
   const startup = source.slice(source.indexOf('async function startServer()'));
-  assert.ok(startup.indexOf('testConnection()') < startup.indexOf("app.listen(PORT"));
-  assert.ok(startup.indexOf('syncDatabase()') < startup.indexOf("app.listen(PORT"));
+  assert.ok(startup.indexOf("app.listen(PORT, '0.0.0.0'") < startup.indexOf('initializeDatabase().catch'));
+});
+
+test('liveness endpoint always returns HTTP 200 without checking database state', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
+  assert.match(source, /const healthHandler = \(_req, res\) => res\.status\(200\)\.json\(\{ status: 'ok' \}\)/);
+  assert.match(source, /app\.get\('\/health', healthHandler\)/);
+});
+
+test('root production start and Railway deployment target the backend', () => {
+  const rootPackage = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8'));
+  const railwayConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../railway.json'), 'utf8'));
+  assert.equal(rootPackage.scripts.start, 'npm --prefix backend start');
+  assert.equal(railwayConfig.deploy.startCommand, 'npm start');
+  assert.equal(railwayConfig.deploy.healthcheckPath, '/health');
 });
