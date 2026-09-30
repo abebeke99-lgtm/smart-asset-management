@@ -51,6 +51,11 @@ test('schema initialization rejects startup if any registered model table is mis
   assert.match(source, /Database schema initialization could not create required table/);
 });
 
+test('duplicate-index repair query groups non-aggregated columns for MySQL strict mode', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../src/config/sync.js'), 'utf8');
+  assert.match(source, /GROUP BY TABLE_NAME, INDEX_NAME, NON_UNIQUE/);
+});
+
 test('root production start and Railway deployment target the backend', () => {
   const rootPackage = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8'));
   const railwayConfig = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../railway.json'), 'utf8'));
