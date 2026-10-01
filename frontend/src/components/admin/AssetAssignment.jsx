@@ -135,10 +135,10 @@ function normalizeUser(user, index) {
     name:
       user?.name ??
       user?.fullName ??
-      `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-      user?.username ||
-      user?.email ||
-      "Unnamed User",
+      (`${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+        user?.username ||
+        user?.email ||
+        "Unnamed User"),
     email: user?.email ?? "",
     department:
       user?.departmentName ??

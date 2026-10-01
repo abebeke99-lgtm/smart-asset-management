@@ -21,6 +21,11 @@ test('chemical quarantine release records the operation with old and new values'
   assert.match(controllerSource, /action:\s*quarantineChanged\s*\?\s*'QUARANTINE_OPERATION'/, 'expected quarantine changes to use the quarantine audit action');
   assert.match(controllerSource, /operation:\s*req\.body\.remove_quarantine\s*===\s*true\s*\?\s*'release'/, 'expected release actions to be identified in audit details');
   assert.match(controllerSource, /oldValue:\s*previousValue,[\s\S]*newValue:\s*chemical\.toJSON\(\)/, 'expected quarantine audit entries to retain old and new values');
+  assert.match(controllerSource, /if \(req\.body\.storageLocation !== undefined\) updates\.storageLocation = String\(req\.body\.storageLocation \|\| ''\)\.trim\(\)/, 'expected the existing chemical storage location column to persist quarantine location');
+  const quarantinePage = fs.readFileSync(path.resolve(__dirname, '../../../frontend/src/components/admin/AdminChemicalQuarantine.jsx'), 'utf8');
+  assert.match(quarantinePage, /const CHEMICALS_API = "\/api\/admin\/inventory"/);
+  assert.match(quarantinePage, /const QUARANTINE_API = `\$\{CHEMICALS_API\}\/quarantine`/);
+  assert.doesNotMatch(quarantinePage, /\/chemical-quarantine|\/release|\/cancel/);
 });
 
 test('chemical quarantine search is applied in the database query', async () => {

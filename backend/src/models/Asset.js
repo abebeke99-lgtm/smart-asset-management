@@ -11,7 +11,7 @@ const Asset = sequelize.define('Asset', {
   serialNumber: { type: DataTypes.STRING(255), defaultValue: '' },
   assetCode: { type: DataTypes.STRING(255), defaultValue: '' },
   digitalId: { type: DataTypes.STRING(100), allowNull: true, unique: true, field: 'digital_id' },
-  rfidTag: { type: DataTypes.STRING(255), defaultValue: '' },
+  rfidTag: { type: DataTypes.STRING(255), allowNull: true, defaultValue: null },
   status: { type: DataTypes.STRING(100), defaultValue: 'available' },
   condition: { type: DataTypes.STRING(100), defaultValue: 'Good' },
   department: { type: DataTypes.STRING(255), defaultValue: '' },

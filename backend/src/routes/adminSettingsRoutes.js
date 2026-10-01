@@ -35,6 +35,7 @@ const configKey = (section) => `settings:${section}`;
 const defaultNotificationSettings = { enabled: true, inAppEnabled: true, emailEnabled: false, events: defaultEventRules };
 const defaultAssetSettings = {
   enabled: true,
+  recoveryDays: 30,
   prefix: 'MAU',
   categoryCode: 'GEN',
   year: new Date().getFullYear(),
@@ -145,6 +146,7 @@ const validateSection = (section, data) => {
     }
   }
   if (section === 'assets') {
+    const recoveryDays = Number(data.recoveryDays ?? data.recovery_days ?? defaultAssetSettings.recoveryDays);
     const prefix = String(data.prefix || defaultAssetSettings.prefix).trim();
     const categoryCode = String(data.categoryCode || data.category || defaultAssetSettings.categoryCode).trim();
     const sequenceLength = Number(data.sequenceLength ?? data.sequence_length ?? defaultAssetSettings.sequenceLength);
@@ -153,6 +155,7 @@ const validateSection = (section, data) => {
     if (!categoryCode || categoryCode.length > 12) return 'Asset category code must be a non-empty value up to 12 characters';
     if (!Number.isInteger(sequenceLength) || sequenceLength < 3 || sequenceLength > 12) return 'Asset sequence length must be an integer between 3 and 12';
     if (!Number.isInteger(startNumber) || startNumber < 1 || startNumber > 999999) return 'Asset starting number must be an integer between 1 and 999999';
+    if (!Number.isInteger(recoveryDays) || recoveryDays < 1 || recoveryDays > 3650) return 'Asset recovery period must be an integer between 1 and 3650 days';
   }
   return null;
 };

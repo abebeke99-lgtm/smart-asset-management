@@ -192,7 +192,7 @@ export default function SystemMonitoring() {
     setError("");
 
     try {
-      const response = await apiClient.get("/admin/monitoring/overview");
+      const response = await apiClient.get("/api/admin/monitoring/overview");
 
       setMonitoring(
         normalizeData(response.data)

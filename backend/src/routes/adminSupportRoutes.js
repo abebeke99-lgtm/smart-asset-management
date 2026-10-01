@@ -1914,7 +1914,38 @@ router.get('/assets', ...requireAdmin, async (req, res, next) => {
   }
 });
 
-router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
+router.get('/recovery', ...requireAdmin, async (req, res, next) => {
+  try {
+    const days = Number(req.query.days || 30);
+    const windowMs = Math.max(1, days) * 24 * 60 * 60 * 1000;
+    const cutoff = new Date(Date.now() - windowMs);
+    const { count, rows } = await Asset.findAndCountAll({
+      where: {
+        deletedAt: { [Op.ne]: null },
+        deletedAt: { [Op.gte]: cutoff },
+      },
+      paranoid: false,
+      order: [['deletedAt', 'DESC']],
+      limit: Math.min(200, Number(req.query.limit) || 50),
+      offset: Math.max(0, (Number(req.query.page) || 1) - 1) * Math.min(200, Number(req.query.limit) || 50),
+      raw: true,
+    });
+    const recoveryItems = rows.map((asset) => ({
+      id: asset.id,
+      entityType: 'asset',
+      entityId: asset.id,
+      deletedBy: asset.deletedBy || 'System',
+      deletedAt: asset.deletedAt,
+      recoverable: asset.deletedAt && (Date.now() - new Date(asset.deletedAt).getTime()) <= windowMs,
+      name: asset.name || asset.assetCode || `Asset ${asset.id}`,
+    }));
+    return res.json({ success: true, data: recoveryItems, items: recoveryItems, total: count, recoveryDays: days, pagination: { total: count, page: Number(req.query.page) || 1, limit: Math.min(200, Number(req.query.limit) || 50) } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get(['/dashboard', '/admin/dashboard'], ...requireAdmin, async (req, res, next) => {
   try {
     const [assets, users, assignments, maintenance, rfidLogs, rfidDevices, departments, auditLogs, transfers, inventory, colleges, disposalRequests] = await Promise.all([
       Asset.findAll({ order: [['updatedAt', 'DESC']] }),
@@ -1936,6 +1967,7 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
       const normalized = normalizeStatus(status).replace(/[_-]/g, ' ');
       const labels = {
         available: 'Available',
+        'in-use': 'Assigned',
         active: 'Active',
         assigned: 'Assigned',
         'in use': 'Assigned',
@@ -2073,6 +2105,9 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
     const availableAssets = assets.filter((asset) => normalizeStatus(asset.status) === 'available').length;
     const assignedAssets = assets.filter((asset) => displayStatus(asset.status) === 'Assigned').length;
     const maintenanceAssets = assets.filter((asset) => ['under-maintenance', 'under maintenance'].includes(normalizeStatus(asset.status))).length;
+    const activeAssetStatuses = new Set(['active', 'available', 'assigned', 'in-use', 'in use']);
+    const activeAssets = assets.filter((asset) => activeAssetStatuses.has(normalizeStatus(asset.status))).length;
+    const expiredAssets = assets.filter((asset) => asset.expiryDate && new Date(asset.expiryDate) < new Date(new Date().toDateString())).length;
     const isTrueRfidAnomaly = (log) => {
       const action = String(log.action || '').trim().toLowerCase();
       if (['qr-lookup', 'qr lookup', 'qr_lookup', 'qr-scan', 'verification'].includes(action)) {
@@ -2084,10 +2119,11 @@ router.get('/admin/dashboard', ...requireAdmin, async (req, res, next) => {
 
     const data = {
       totalAssets: assets.length,
-      activeAssets: availableAssets,
+      activeAssets,
       availableAssets,
       assignedAssets,
       maintenanceAssets,
+      expiredAssets,
       retiredAssets: assets.filter((asset) => ['retired', 'disposed'].includes(normalizeStatus(asset.status))).length,
       missingAssets: assets.filter((asset) => normalizeStatus(asset.status) === 'missing').length,
       damagedAssets: assets.filter((asset) => normalizeStatus(asset.status) === 'damaged').length,

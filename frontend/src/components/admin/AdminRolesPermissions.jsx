@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
+import apiClient, { getApiErrorMessage } from "../../services/apiClient";
 
-const ROLES_API = "/api/roles";
-const PERMISSIONS_API = "/api/permissions";
+const ROLES_API = "/api/admin/roles";
+const PERMISSIONS_API = "/api/admin/permissions";
 
 const getToken = () =>
   localStorage.getItem("token") ||
@@ -25,6 +26,26 @@ const getHeaders = (json = false) => {
   }
 
   return headers;
+};
+
+const apiRequest = async (url, options = {}) => {
+  try {
+    const response = await apiClient.request({
+      url,
+      method: options.method || "GET",
+      data: options.body ? JSON.parse(options.body) : undefined,
+      headers: options.headers,
+    });
+    const payload = response.data ?? {};
+    return {
+      ok: true,
+      status: response.status,
+      json: async () => payload,
+      text: async () => typeof payload === "string" ? payload : JSON.stringify(payload),
+    };
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, "Unable to complete the roles request."));
+  }
 };
 
 const normalizeArray = (data, keys = []) => {
@@ -143,7 +164,7 @@ export default function RolesPermissions() {
       setLoading(true);
       setError("");
 
-      const response = await fetch(ROLES_API, {
+      const response = await apiRequest(ROLES_API, {
         method: "GET",
         headers: getHeaders(),
       });
@@ -172,7 +193,7 @@ export default function RolesPermissions() {
 
   const loadPermissions = async () => {
     try {
-      const response = await fetch(PERMISSIONS_API, {
+      const response = await apiRequest(PERMISSIONS_API, {
         method: "GET",
         headers: getHeaders(),
       });
@@ -335,7 +356,7 @@ export default function RolesPermissions() {
         ? `${ROLES_API}/${roleId}`
         : ROLES_API;
 
-      const response = await fetch(url, {
+      const response = await apiRequest(url, {
         method: editing ? "PUT" : "POST",
         headers: getHeaders(true),
         body: JSON.stringify(payload),
@@ -447,7 +468,7 @@ export default function RolesPermissions() {
         permissions: selectedPermissionIds,
       };
 
-      const response = await fetch(
+      const response = await apiRequest(
         `${ROLES_API}/${roleId}/permissions`,
         {
           method: "PUT",
@@ -518,7 +539,7 @@ export default function RolesPermissions() {
       setError("");
       setSuccess("");
 
-      const response = await fetch(
+      const response = await apiRequest(
         `${ROLES_API}/${roleId}`,
         {
           method: "PUT",
@@ -584,7 +605,7 @@ export default function RolesPermissions() {
       setError("");
       setSuccess("");
 
-      const response = await fetch(
+      const response = await apiRequest(
         `${ROLES_API}/${roleId}`,
         {
           method: "DELETE",

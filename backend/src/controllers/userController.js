@@ -35,7 +35,15 @@ const getAllUsers = async (req, res) => {
     const where = {};
     if (req.user.role === 'college' && req.query.department && req.query.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
     if (req.user.role === 'college') where.department = req.user.department;
-    if (req.user.role === 'store_manager') where.collegeId = Number(req.organizationScope?.collegeId ?? req.user.collegeId ?? req.user.college_id);
+    if (req.user.role === 'store_manager') {
+      const configuredCollegeId = req.organizationScope?.collegeId ?? req.user.collegeId ?? req.user.college_id;
+      const scope = configuredCollegeId == null ? await findCollegeScopeForUser(req.user) : null;
+      const collegeId = Number(configuredCollegeId ?? scope?.collegeId);
+      if (!Number.isSafeInteger(collegeId) || collegeId <= 0) {
+        return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+      }
+      where.collegeId = collegeId;
+    }
     else if (req.query.department) where.department = req.query.department;
     if (req.query.role) where.role = req.query.role;
     if (req.query.active !== undefined) where.active = req.query.active === 'true';

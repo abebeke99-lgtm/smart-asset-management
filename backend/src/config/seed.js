@@ -204,6 +204,12 @@ async function ensureDemoUser(userData) {
     if (userData.role === 'department_head') {
       await ensureDepartmentScopeForUser(createdUser);
     }
+    if (userData.role === 'store_manager') {
+      const activeCollege = await College.findOne({ where: { status: 'active' }, order: [['id', 'ASC']] });
+      if (activeCollege && Number(createdUser.collegeId) !== Number(activeCollege.id)) {
+        await createdUser.update({ collegeId: activeCollege.id });
+      }
+    }
     console.log(`✅ Created missing user: ${userData.username} (${userData.role})`);
     return;
   }
@@ -230,6 +236,12 @@ async function ensureDemoUser(userData) {
   }
   if (userData.role === 'department_head') {
     await ensureDepartmentScopeForUser(existingUser);
+  }
+  if (userData.role === 'store_manager') {
+    const activeCollege = await College.findOne({ where: { status: 'active' }, order: [['id', 'ASC']] });
+    if (activeCollege && Number(existingUser.collegeId) !== Number(activeCollege.id)) {
+      await existingUser.update({ collegeId: activeCollege.id });
+    }
   }
 
   for (const legacyUsername of aliasUpdates) {
@@ -267,6 +279,12 @@ async function seedDatabase() {
         });
         if (normalizeCollegeRole(userData.role) === 'college') await ensureCollegeScopeForUser(createdUser);
         if (userData.role === 'department_head') await ensureDepartmentScopeForUser(createdUser);
+        if (userData.role === 'store_manager') {
+          const activeCollege = await College.findOne({ where: { status: 'active' }, order: [['id', 'ASC']] });
+          if (activeCollege && Number(createdUser.collegeId) !== Number(activeCollege.id)) {
+            await createdUser.update({ collegeId: activeCollege.id });
+          }
+        }
       }
       console.log('✅ Seeded all demo accounts with role-scoped access');
       return;

@@ -116,6 +116,13 @@ export const messages = {
       depreciation: 'Depreciation',
       audit: 'Audit Trail'
     },
+    tracking: {
+      title: 'RFID & QR Tracking', summary: 'Tracking summary', totalAssets: 'Total Assets', rfidAssigned: 'RFID Assigned', qrAssigned: 'QR Assigned', fullyTracked: 'Fully Tracked', notFullyTracked: 'Not Fully Tracked',
+      searchPlaceholder: 'Search asset ID, name, serial, RFID, QR, department...', filterLabel: 'Tracking filter', refresh: 'Refresh', lookups: 'Asset lookups', scanner: 'QR Scanner', startScan: 'Start Scan', stopScan: 'Stop Scan',
+      assetIdLookup: 'Asset ID lookup', assetIdPlaceholder: 'Enter asset ID', codeLookup: 'RFID / QR lookup', codePlaceholder: 'Enter or scan RFID / QR code', search: 'Search', assetList: 'Tracked assets', assetId: 'Asset ID', name: 'Name', category: 'Category', serial: 'Serial', status: 'Status', qrCode: 'QR code', rfidTag: 'RFID tag', department: 'Department', assignedTo: 'Assigned to', currentLocation: 'Current Location', locationUnavailable: 'Location not specified',
+      close: 'Close', assetDetails: 'Asset details', history: 'Asset history', historyTabs: { assignments: 'Assignment History', transfers: 'Transfer History', maintenance: 'Maintenance History' }, user: 'User', date: 'Date', fromTo: 'From / To', reason: 'Reason', problem: 'Problem', technician: 'Technician', noHistory: 'No history records', loading: 'Loading...', showing: 'Showing', of: 'of', assets: 'assets', noMatchingAssets: 'No matching assets', emptyAssets: 'No assets to display', assetsLoadError: 'Unable to load assets.', lookupError: 'Unable to complete the lookup.', historyLoadError: 'Unable to load history.', assetNotFound: 'Asset not found', cameraUnavailable: 'Camera cannot be opened', cameraPermissionDenied: 'Camera permission was denied.',
+      filter: { all: 'All', rfid: 'RFID assigned', qr: 'QR assigned', fully: 'Fully tracked', incomplete: 'Not fully tracked' }
+    },
     footer: {
       footerBrandTitle: 'University Asset Management System',
       footerDescription: 'Centralized management of university assets, inventory, assignments, transfers, maintenance, verification, and reporting.',
@@ -289,6 +296,13 @@ export const messages = {
       valuation: 'የንብረት ዋጋ ግምት',
       depreciation: 'የዋጋ ቅናሽ',
       audit: 'የኦዲት መዝገብ'
+    },
+    tracking: {
+      title: 'RFID እና QR ክትትል', summary: 'የክትትል ማጠቃለያ', totalAssets: 'ጠቅላላ ንብረቶች', rfidAssigned: 'RFID የተመደበላቸው', qrAssigned: 'QR የተመደበላቸው', fullyTracked: 'ሙሉ በሙሉ የተከታተሉ', notFullyTracked: 'ሙሉ በሙሉ ያልተከታተሉ',
+      searchPlaceholder: 'የንብረት መለያ፣ ስም፣ ተከታታይ ቁጥር፣ RFID፣ QR ወይም ክፍል ፈልግ...', filterLabel: 'የክትትል ማጣሪያ', refresh: 'አድስ', lookups: 'ንብረት ፍለጋዎች', scanner: 'QR ስካነር', startScan: 'ስካን ጀምር', stopScan: 'ስካን አቁም',
+      assetIdLookup: 'በንብረት መለያ ፈልግ', assetIdPlaceholder: 'የንብረት መለያ ያስገቡ', codeLookup: 'በRFID / QR ፈልግ', codePlaceholder: 'RFID / QR ኮድ ያስገቡ ወይም ያንብቡ', search: 'ፈልግ', assetList: 'የተከታተሉ ንብረቶች', assetId: 'የንብረት መለያ', name: 'ስም', category: 'ምድብ', serial: 'ተከታታይ ቁጥር', status: 'ሁኔታ', qrCode: 'QR ኮድ', rfidTag: 'RFID መለያ', department: 'ክፍል', assignedTo: 'የተመደበለት', currentLocation: 'የአሁኑ ቦታ', locationUnavailable: 'ቦታ አልተገለጸም',
+      close: 'ዝጋ', assetDetails: 'የንብረት ዝርዝር', history: 'የንብረት ታሪክ', historyTabs: { assignments: 'የመመደብ ታሪክ', transfers: 'የማስተላለፍ ታሪክ', maintenance: 'የጥገና ታሪክ' }, user: 'ተጠቃሚ', date: 'ቀን', fromTo: 'ከ / ወደ', reason: 'ምክንያት', problem: 'ችግር', technician: 'ቴክኒሻን', noHistory: 'የታሪክ መዝገብ የለም', loading: 'በመጫን ላይ...', showing: 'ከ', of: 'ውስጥ', assets: 'ንብረቶች', noMatchingAssets: 'ተዛማጅ ንብረት የለም', emptyAssets: 'የሚታይ ንብረት የለም', assetsLoadError: 'ንብረቶችን መጫን አልተቻለም።', lookupError: 'ፍለጋውን ማጠናቀቅ አልተቻለም።', historyLoadError: 'ታሪክን መጫን አልተቻለም።', assetNotFound: 'ንብረቱ አልተገኘም', cameraUnavailable: 'ካሜራውን መክፈት አልተቻለም', cameraPermissionDenied: 'የካሜራ ፈቃድ ተከልክሏል።',
+      filter: { all: 'ሁሉም', rfid: 'RFID የተመደበላቸው', qr: 'QR የተመደበላቸው', fully: 'ሙሉ በሙሉ የተከታተሉ', incomplete: 'ሙሉ በሙሉ ያልተከታተሉ' }
     },
     footer: {
       footerBrandTitle: 'የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት',

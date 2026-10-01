@@ -447,7 +447,9 @@ const quarantineChemical = async (req, res, next) => {
     const chemical = await Chemical.findByPk(req.params.id);
     if (!chemical) return res.status(404).json({ success: false, message: 'Chemical not found' });
     const previousValue = chemical.toJSON();
-    await chemical.update({ quarantine: true, quarantineReason: req.body.quarantineReason || req.body.reason || 'Quarantined by user' });
+    const updates = { quarantine: true, quarantineReason: req.body.quarantineReason || req.body.reason || 'Quarantined by user' };
+    if (req.body.storageLocation !== undefined) updates.storageLocation = String(req.body.storageLocation || '').trim();
+    await chemical.update(updates);
     await createAuditLog({
       userId: req.user.id,
       role: req.user.role,

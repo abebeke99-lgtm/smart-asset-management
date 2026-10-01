@@ -26,7 +26,18 @@ const ALLOWED_DOC_TYPES = ['application/pdf', 'application/msword', 'image/jpeg'
 const MAX_DOC_SIZE = 10 * 1024 * 1024;
 const VALID_CONDITIONS = ['Good', 'Fair', 'Poor', 'Damaged'];
 const VALID_STATUSES = ['available', 'in-use', 'under-maintenance', 'damaged', 'replaced', 'expired', 'disposed', 'testing'];
-const SOFT_DELETE_RECOVERY_DAYS = 30;
+const DEFAULT_SOFT_DELETE_RECOVERY_DAYS = 30;
+
+const getSoftDeleteRecoveryDays = async () => {
+  try {
+    const record = await Config.findByPk('settings:assets');
+    const settings = record?.value ? JSON.parse(record.value) : {};
+    const configuredDays = Number(settings.recoveryDays ?? settings.recovery_days);
+    return Number.isInteger(configuredDays) && configuredDays > 0 ? configuredDays : DEFAULT_SOFT_DELETE_RECOVERY_DAYS;
+  } catch (error) {
+    return DEFAULT_SOFT_DELETE_RECOVERY_DAYS;
+  }
+};
 
 const collegeAssetScope = (req) => {
   if (!isCollegeScopedRole(req.user?.role)) return {};
@@ -217,6 +228,7 @@ const lookupByQr = async (req, res, next) => {
 
 const listDeletedAssets = async (req, res, next) => {
   try {
+    const recoveryDays = await getSoftDeleteRecoveryDays();
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 20));
     const scope = collegeAssetScope(req);
@@ -226,10 +238,10 @@ const listDeletedAssets = async (req, res, next) => {
       ...asset.toJSON(),
       deleted_at: asset.deletedAt,
       deleted_by: asset.deletedBy,
-      days_remaining: SOFT_DELETE_RECOVERY_DAYS - Math.floor((Date.now() - new Date(asset.deletedAt).getTime()) / (24 * 60 * 60 * 1000)),
-      recoverable: (Date.now() - new Date(asset.deletedAt).getTime()) < SOFT_DELETE_RECOVERY_DAYS * 24 * 60 * 60 * 1000,
+      days_remaining: recoveryDays - Math.floor((Date.now() - new Date(asset.deletedAt).getTime()) / (24 * 60 * 60 * 1000)),
+      recoverable: (Date.now() - new Date(asset.deletedAt).getTime()) < recoveryDays * 24 * 60 * 60 * 1000,
     }));
-    res.json({ success: true, data, assets: data, total: count, recovery_days: SOFT_DELETE_RECOVERY_DAYS, pagination: { page, limit, total: count, pages: Math.max(1, Math.ceil(count / limit)) } });
+    res.json({ success: true, data, assets: data, total: count, recovery_days: recoveryDays, pagination: { page, limit, total: count, pages: Math.max(1, Math.ceil(count / limit)) } });
   } catch (error) { next(error); }
 };
 
@@ -241,9 +253,9 @@ const softDeleteAsset = async (req, res, next) => {
     const previousValue = asset.toJSON();
     await asset.update({ deletedBy: req.user.id }, { transaction });
     await asset.destroy({ transaction });
-    await AuditLog.create({ userId: req.user.id, action: 'DELETE_ASSET', entity: `asset:${asset.id}`, details: JSON.stringify({ assetId: asset.id, deletedAt: new Date(), previousValue }) }, { transaction });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'DELETE_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, oldValue: previousValue, newValue: asset.toJSON(), details: { assetId: asset.id }, transaction });
     await transaction.commit();
-    res.json({ success: true, message: 'Asset soft-deleted. It can be restored within 30 days.', data: serializedExtended(asset) });
+    res.json({ success: true, message: 'Asset soft-deleted.', data: serializedExtended(asset) });
   } catch (error) {
     await transaction.rollback();
     next(error);
@@ -257,14 +269,15 @@ const restoreAsset = async (req, res, next) => {
     if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
     if (!asset.deletedAt) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Asset is not deleted' }); }
     const deletedAt = new Date(asset.deletedAt);
-    if ((Date.now() - deletedAt.getTime()) > SOFT_DELETE_RECOVERY_DAYS * 24 * 60 * 60 * 1000) {
+    const recoveryDays = await getSoftDeleteRecoveryDays();
+    if ((Date.now() - deletedAt.getTime()) >= recoveryDays * 24 * 60 * 60 * 1000) {
       await transaction.rollback();
-      return res.status(409).json({ success: false, message: 'The 30-day recovery period for this asset has passed. Permanent deletion is required.' });
+      return res.status(409).json({ success: false, message: `The ${recoveryDays}-day recovery period for this asset has passed. Permanent deletion is required.` });
     }
     const previousValue = asset.toJSON();
     const restored = await asset.restore({ transaction });
     await asset.update({ deletedBy: null }, { transaction });
-    await AuditLog.create({ userId: req.user.id, action: 'RESTORE_ASSET', entity: `asset:${asset.id}`, details: JSON.stringify({ assetId: asset.id, deletedAt, previousValue, restoredAt: new Date() }) }, { transaction });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'RESTORE_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, oldValue: previousValue, newValue: asset.toJSON(), details: { assetId: asset.id, deletedAt, restoredAt: new Date() }, transaction });
     await transaction.commit();
     res.json({ success: true, message: 'Asset restored', data: serializedExtended(restored || asset) });
   } catch (error) {

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bar, Line } from 'react-chartjs-2';
-import { Chart as ChartJS, BarElement, CategoryScale, Filler, Legend, LinearScale, LineElement, PointElement, Title, Tooltip } from 'chart.js';
+import { Bar, Doughnut, Line } from 'react-chartjs-2';
+import { ArcElement, Chart as ChartJS, BarElement, CategoryScale, Filler, Legend, LinearScale, LineElement, PointElement, Title, Tooltip } from 'chart.js';
 import {
   Activity,
   AlertTriangle,
@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../utils/api';
 
-ChartJS.register(BarElement, CategoryScale, Filler, Legend, LinearScale, LineElement, PointElement, Title, Tooltip);
+ChartJS.register(ArcElement, BarElement, CategoryScale, Filler, Legend, LinearScale, LineElement, PointElement, Title, Tooltip);
 
 const navy = '#1A237E';
 const blue = '#2563EB';
@@ -135,7 +135,7 @@ const AdminAnalyticsCenter = ({ system = false }) => {
       const response = await apiClient.get('/api/admin/analytics/system', { params: query });
       const payload = response?.data?.data || {};
       setSystemData(payload);
-      setLastUpdated(new Date());
+      setLastUpdated(payload.generatedAt || null);
     } catch (fetchError) {
       setError(fetchError?.response?.data?.message || 'Unable to load system analytics.');
     } finally {
@@ -152,6 +152,10 @@ const AdminAnalyticsCenter = ({ system = false }) => {
   const recentSecurity = systemData.security?.events || [];
   const recentErrors = systemData.errors?.recent || [];
   const moduleActivity = systemData.audit?.modules || [];
+  const authenticationTrend = systemData.authentication?.trend || [];
+  const apiTrend = systemData.api?.trend || [];
+  const responseTimeTrend = systemData.api?.responseTimeTrend || [];
+  const notificationTrend = systemData.notifications?.trend || [];
 
   const auditChart = {
     labels: auditTrend.map((row) => row.period || 'Unknown'),
@@ -175,6 +179,32 @@ const AdminAnalyticsCenter = ({ system = false }) => {
     }],
   };
 
+  const authenticationChart = {
+    labels: authenticationTrend.map((row) => row.period),
+    datasets: [
+      { label: 'Successful logins', data: authenticationTrend.map((row) => Number(row.successful || 0)), borderColor: green, backgroundColor: 'rgba(22, 163, 74, 0.12)', tension: 0.3 },
+      { label: 'Failed logins', data: authenticationTrend.map((row) => Number(row.failed || 0)), borderColor: red, backgroundColor: 'rgba(220, 38, 38, 0.1)', tension: 0.3 },
+    ],
+  };
+
+  const apiChart = {
+    labels: apiTrend.map((row) => row.period),
+    datasets: [
+      { label: 'Successful requests', data: apiTrend.map((row) => Number(row.successful || 0)), borderColor: green, tension: 0.3 },
+      { label: 'Failed requests', data: apiTrend.map((row) => Number(row.failed || 0)), borderColor: red, tension: 0.3 },
+    ],
+  };
+
+  const responseTimeChart = {
+    labels: responseTimeTrend.map((row) => row.period),
+    datasets: [{ label: 'Average response time (ms)', data: responseTimeTrend.map((row) => Number(row.averageResponseTime || 0)), borderColor: cyan, backgroundColor: 'rgba(14, 165, 233, 0.12)', fill: true, tension: 0.3 }],
+  };
+
+  const notificationChart = {
+    labels: notificationTrend.map((row) => row.period),
+    datasets: [{ label: 'Generated notifications', data: notificationTrend.map((row) => Number(row.count || 0)), borderColor: purple, backgroundColor: 'rgba(124, 58, 237, 0.12)', fill: true, tension: 0.3 }],
+  };
+
   const actionChart = {
     labels: actionBreakdown.map((row) => row.action || 'Unknown'),
     datasets: [{
@@ -193,6 +223,16 @@ const AdminAnalyticsCenter = ({ system = false }) => {
       backgroundColor: [blue, green, purple, orange, red, cyan, gray],
       borderRadius: 6,
     }],
+  };
+
+  const errorStatusChart = {
+    labels: (systemData.api?.errorsByStatus || []).map((row) => String(row.status)),
+    datasets: [{ label: 'Failed requests', data: (systemData.api?.errorsByStatus || []).map((row) => Number(row.count || 0)), backgroundColor: red, borderRadius: 4 }],
+  };
+
+  const errorEndpointChart = {
+    labels: (systemData.api?.errorsByEndpoint || []).map((row) => row.endpoint),
+    datasets: [{ label: 'Failed requests', data: (systemData.api?.errorsByEndpoint || []).map((row) => Number(row.count || 0)), backgroundColor: orange, borderRadius: 4 }],
   };
 
   const healthCards = [
@@ -264,8 +304,8 @@ const AdminAnalyticsCenter = ({ system = false }) => {
               </div>
             </ChartCard>
             <ChartCard title="Users by role" subtitle="Current user distribution" empty={!roleBreakdown.length}>
-              <div style={{ height: 220 }}>
-                <Bar data={roleChart} options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } } }} />
+                      <div style={{ height: 220 }}>
+                        <Doughnut data={roleChart} options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { position: 'bottom' } } }} />
               </div>
             </ChartCard>
           </div>
@@ -279,6 +319,9 @@ const AdminAnalyticsCenter = ({ system = false }) => {
                 <KpiCard label="Login attempts" value={formatNumber(systemData.authentication?.loginAttempts)} icon={LogIn} tone={blue} />
                 <KpiCard label="Unique active users" value={formatNumber(systemData.authentication?.uniqueActiveUsers)} icon={Users} tone={purple} />
               </div>
+              <ChartCard title="Successful vs failed logins" subtitle="Recorded authentication events" empty={!authenticationTrend.length}>
+                <div style={{ height: 220 }}><Line data={authenticationChart} options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { tooltip: { mode: 'index', intersect: false } } }} /></div>
+              </ChartCard>
             </div>
 
             <div className="admin-card">
@@ -290,6 +333,12 @@ const AdminAnalyticsCenter = ({ system = false }) => {
                 <div><strong>Failed requests:</strong> {formatNumber(systemData.api?.failedRequests)}</div>
                 <div><strong>Average response time:</strong> {systemData.api?.averageResponseTime !== null && systemData.api?.averageResponseTime !== undefined ? `${Number(systemData.api.averageResponseTime).toFixed(2)} ms` : 'Not available'}</div>
               </div>
+              <ChartCard title="Requests over time" subtitle="Collected backend request samples" empty={!apiTrend.length}>
+                <div style={{ height: 220 }}><Line data={apiChart} options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { tooltip: { mode: 'index', intersect: false } } }} /></div>
+              </ChartCard>
+              <ChartCard title="Response-time trend" subtitle="Average response time in milliseconds" empty={!responseTimeTrend.length}>
+                <div style={{ height: 220 }}><Line data={responseTimeChart} options={{ responsive: true, maintainAspectRatio: false, animation: false }} /></div>
+              </ChartCard>
             </div>
           </div>
 
@@ -300,6 +349,8 @@ const AdminAnalyticsCenter = ({ system = false }) => {
                 <div><strong>Available:</strong> {systemData.storage?.available === true ? 'Yes' : systemData.storage?.available === false ? 'No' : 'Not available'}</div>
                 <div><strong>Uploaded files:</strong> {formatNumber(systemData.storage?.uploadedFiles)}</div>
                 <div><strong>Used storage:</strong> {systemData.storage?.usedBytes !== null && systemData.storage?.usedBytes !== undefined ? `${formatNumber(systemData.storage.usedBytes)} bytes` : 'Not available'}</div>
+                <div><strong>Available storage:</strong> Not available</div>
+                <div><strong>Storage usage:</strong> Not available</div>
                 <div><strong>Notes:</strong> {systemData.storage?.reason || 'Storage reporting is available when the backend can read the application uploads directory.'}</div>
               </div>
             </div>
@@ -309,14 +360,16 @@ const AdminAnalyticsCenter = ({ system = false }) => {
               <div style={{ display: 'grid', gap: 10 }}>
                 <div><strong>Total failed requests:</strong> {formatNumber(systemData.errors?.total)}</div>
                 {recentErrors.length ? (
-                  <div style={{ maxHeight: 220, overflow: 'auto' }}>
-                    {recentErrors.slice(0, 6).map((entry, index) => (
-                      <div key={`${entry.method}-${entry.path}-${index}`} style={{ padding: '8px 0', borderBottom: '1px solid #E2E8F0' }}>
-                        {entry.method} {entry.path} → {entry.status} ({entry.responseTime ?? 'N/A'} ms)
-                      </div>
-                    ))}
-                  </div>
+                  <div className="admin-table-scroll"><table className="admin-table"><thead><tr><th>Time</th><th>Endpoint</th><th>Method</th><th>Status</th><th>Response</th></tr></thead><tbody>
+                    {recentErrors.map((entry, index) => <tr key={`${entry.method}-${entry.path}-${index}`}><td>{formatDate(entry.timestamp)}</td><td>{entry.path}</td><td>{entry.method}</td><td>{entry.status}</td><td>{entry.responseTime === null || entry.responseTime === undefined ? 'Not available' : `${Number(entry.responseTime).toFixed(2)} ms`}</td></tr>)}
+                  </tbody></table></div>
                 ) : <div className="admin-empty-state">No system errors recorded for the selected period.</div>}
+              <ChartCard title="Errors by HTTP status" empty={!(systemData.api?.errorsByStatus || []).length}>
+                <div style={{ height: 200 }}><Bar data={errorStatusChart} options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } } }} /></div>
+              </ChartCard>
+              <ChartCard title="Errors by endpoint" empty={!(systemData.api?.errorsByEndpoint || []).length}>
+                <div style={{ height: 200 }}><Bar data={errorEndpointChart} options={{ responsive: true, maintainAspectRatio: false, animation: false, indexAxis: 'y', plugins: { legend: { display: false } } }} /></div>
+              </ChartCard>
               </div>
             </div>
           </div>
@@ -330,26 +383,18 @@ const AdminAnalyticsCenter = ({ system = false }) => {
                 <KpiCard label="Permission changes" value={formatNumber(systemData.security?.permissionChanges)} icon={ShieldCheck} tone={purple} />
               </div>
               {recentSecurity.length ? (
-                <div style={{ maxHeight: 220, overflow: 'auto' }}>
-                  {recentSecurity.slice(0, 8).map((event) => (
-                    <div key={`${event.id}-${event.action}`} style={{ padding: '8px 0', borderBottom: '1px solid #E2E8F0' }}>
-                      <strong>{event.action}</strong> · {event.entity || 'System'} · {formatDate(event.createdAt)}
-                    </div>
-                  ))}
-                </div>
+                <div className="admin-table-scroll"><table className="admin-table"><thead><tr><th>Date/time</th><th>User</th><th>Event</th><th>IP address</th><th>Module</th><th>Status</th></tr></thead><tbody>
+                  {recentSecurity.map((event) => <tr key={`${event.id}-${event.action}`}><td>{formatDate(event.createdAt)}</td><td>{event.user || 'Not available'}</td><td><StatusBadge label={event.action} tone={event.action === 'LOGIN_FAILED' || event.action === 'UNAUTHORIZED_ACCESS' ? red : orange} /></td><td>{event.ipAddress || 'Not available'}</td><td>{event.entity || 'System'}</td><td>{event.action === 'LOGIN_FAILED' || event.action === 'UNAUTHORIZED_ACCESS' ? 'Critical' : 'Recorded'}</td></tr>)}
+                </tbody></table></div>
               ) : <div className="admin-empty-state">No security events recorded for the selected period.</div>}
             </div>
 
             <div className="admin-card">
               <SectionTitle icon={ClipboardList} title="Recent audit activity" subtitle="Latest platform actions" />
               {recentAudit.length ? (
-                <div style={{ maxHeight: 260, overflow: 'auto' }}>
-                  {recentAudit.slice(0, 8).map((event) => (
-                    <div key={`${event.id}-${event.action}`} style={{ padding: '8px 0', borderBottom: '1px solid #E2E8F0' }}>
-                      <strong>{event.action}</strong> · {event.entity || 'System'} · {event.userId || 'System'} · {formatDate(event.createdAt)}
-                    </div>
-                  ))}
-                </div>
+                <div className="admin-table-scroll"><table className="admin-table"><thead><tr><th>Date/time</th><th>User</th><th>Action</th><th>Module</th><th>Entity</th><th>Description</th></tr></thead><tbody>
+                  {recentAudit.map((event) => <tr key={`${event.id}-${event.action}`}><td>{formatDate(event.createdAt)}</td><td>{event.user || 'Not available'}</td><td>{event.action}</td><td>{event.entity || 'System'}</td><td>{event.entity || 'Not available'}</td><td>{event.description || 'Not available'}</td></tr>)}
+                </tbody></table></div>
               ) : <div className="admin-empty-state">No recent audit activity for this range.</div>}
             </div>
           </div>
@@ -372,7 +417,14 @@ const AdminAnalyticsCenter = ({ system = false }) => {
             <div className="admin-kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
               <KpiCard label="Generated" value={formatNumber(systemData.notifications?.generated)} icon={Activity} tone={blue} />
               <KpiCard label="Unread" value={formatNumber(systemData.notifications?.unread)} icon={ClipboardList} tone={purple} />
+              <KpiCard label="Read" value={formatNumber(systemData.notifications?.read)} icon={CheckCircle2} tone={green} />
               <KpiCard label="Failed deliveries" value={formatNumber(systemData.notifications?.failedDeliveries)} icon={AlertTriangle} tone={red} />
+            </div>
+            <ChartCard title="Notification trend" subtitle="Generated notifications by date" empty={!notificationTrend.length}>
+              <div style={{ height: 220 }}><Line data={notificationChart} options={{ responsive: true, maintainAspectRatio: false, animation: false }} /></div>
+            </ChartCard>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+              {(systemData.notifications?.deliveryStatuses || []).map((item) => <StatusBadge key={item.status} label={`${item.status}: ${formatNumber(item.count)}`} tone={toneForStatus(item.status)} />)}
             </div>
           </div>
         </>

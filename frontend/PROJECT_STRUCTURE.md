@@ -1,4 +1,4 @@
-# Smart University Asset Management System - Project Structure
+#  University Asset Management System - Project Structure
 
 ## ✅ FINALIZED COMPONENT ORGANIZATION
 

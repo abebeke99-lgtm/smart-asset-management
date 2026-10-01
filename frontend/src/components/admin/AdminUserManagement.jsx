@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
+import apiClient, { getApiErrorMessage } from "../../services/apiClient";
 
 const USERS_API = "/api/users";
-const ROLES_API = "/api/roles";
+const ROLES_API = "/api/admin/roles";
 const COLLEGES_API = "/api/colleges";
 const DEPARTMENTS_API = "/api/departments";
 
@@ -15,57 +16,18 @@ const EMPTY_FORM = {
   status: "Active",
 };
 
-function getToken() {
-  return (
-    localStorage.getItem("token") ||
-    localStorage.getItem("accessToken") ||
-    sessionStorage.getItem("token") ||
-    sessionStorage.getItem("accessToken") ||
-    ""
-  );
-}
-
 async function apiRequest(url, options = {}) {
-  const token = getToken();
-
-  const headers = {
-    Accept: "application/json",
-    ...(options.body
-      ? { "Content-Type": "application/json" }
-      : {}),
-    ...(options.headers || {}),
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  try {
+    const response = await apiClient.request({
+      url,
+      method: options.method || "GET",
+      data: options.body ? JSON.parse(options.body) : undefined,
+      headers: options.headers,
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, "Unable to complete the user management request."));
   }
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  const contentType =
-    response.headers.get("content-type") || "";
-
-  let data = {};
-
-  if (contentType.includes("application/json")) {
-    data = await response.json();
-  } else {
-    const text = await response.text();
-    data = text ? { message: text } : {};
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      data?.message ||
-        data?.error ||
-        `Request failed with status ${response.status}`
-    );
-  }
-
-  return data;
 }
 
 function extractArray(data, keys = []) {

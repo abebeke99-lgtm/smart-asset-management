@@ -90,14 +90,18 @@ const findCollegeScopeForUser = async (user) => {
   }
 
   try {
-    const activeColleges = await College.findAll({ where: { status: 'active' } });
+    const activeColleges = await College.findAll({ where: { status: 'active' }, order: [['id', 'ASC']] });
     if (activeColleges.length === 1) {
       return { collegeId: activeColleges[0].id, college: activeColleges[0] };
     }
 
-    const colleges = await College.findAll();
+    const colleges = await College.findAll({ order: [['id', 'ASC']] });
     if (colleges.length === 1) {
       return { collegeId: colleges[0].id, college: colleges[0] };
+    }
+
+    if (normalizeCollegeRole(candidateUser.role) === 'store_manager' && activeColleges.length > 0) {
+      return { collegeId: activeColleges[0].id, college: activeColleges[0] };
     }
   } catch (error) { return null; }
 

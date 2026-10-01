@@ -7,10 +7,11 @@ import axios from 'axios';
 import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import './App.css';
 import './admin-design-system.css';
+import './styles/admin/index.css';
 import './components/ict/ICTModuleThemes.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, House, Info, Languages, LayoutDashboard, LifeBuoy, LockKeyhole, LogIn, LogOut, Mail, MapPin, Moon, MoreHorizontal, Package, Phone, Radio, Search, Settings, ShieldCheck, Sparkles, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
+import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, House, Info, Languages, LayoutDashboard, LifeBuoy, LockKeyhole, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, Phone, Radio, Search, Settings, ShieldCheck, Sparkles, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
@@ -24,7 +25,7 @@ import ScopedWorkflowPage from './components/shared/ScopedWorkflowPage';
 // ==========================================
 
 import { UIProvider, useLanguage, useTheme } from './contexts/UiContext';
-import { getShellTranslations } from './i18n/messages';
+import { getShellTranslations, translateMessage } from './i18n/messages';
 
 // ==========================================
 // IMPORT CONTEXTS
@@ -33,7 +34,7 @@ import { getShellTranslations } from './i18n/messages';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
 import { getDepartmentLabel } from './utils/department';
-import { apiClient } from './utils/api';
+import { apiClient, getApiErrorMessage } from './utils/api';
 import Footer from './components/common/Footer';
 import StoreTracking from './components/store/StoreTracking';
 
@@ -58,9 +59,11 @@ import AdminBackup from './components/admin/AdminBackup';
 import AdminRolesPermissions from './components/admin/AdminRolesPermissions';
 import AdminDepartmentManagement from './components/admin/AdminDepartmentManagement';
 import AdminAnalyticsCenter from './components/admin/AdminAnalyticsCenter';
+import AdminAssetAnalytics from './components/admin/AdminAssetAnalytics';
 import AdminAuditLogs from './components/admin/AdminAuditLogs';
 import AdminChemicalQuarantine from './components/admin/AdminChemicalQuarantine';
 import SystemMonitoring from './components/admin/SystemMonitoring';
+import EnamIntegration from './components/admin/EnamIntegration';
 import AdminCollegeManagement from './components/admin/AdminCollegeManagement';
 import AdminCollegeDetails from './components/admin/AdminCollegeDetails';
 
@@ -423,9 +426,11 @@ export const shouldShowDashboardSidebar = (path = '') => {
   return (
     normalized === '/dashboard'
     || /^\/dashboard(?:\/.*)?$/.test(normalized)
-    || /^\/(admin|ict|college|department|department-head|finance|store|maintenance|infrastructure)(?:\/.*)?$/.test(normalized)
+    || /^\/(ict|college|department|department-head|finance|store|maintenance|infrastructure)(?:\/.*)?$/.test(normalized)
   );
 };
+
+export const shouldShowDashboardHeader = (path = '') => !/^\/admin(?:\/|$)/.test(String(path || '').trim());
 
 // ==========================================
 // TRANSLATIONS
@@ -1126,17 +1131,15 @@ const AdminAssetLocations = () => {
     setError('');
     try {
       const [statsResponse, locationsResponse] = await Promise.all([
-        axios.get('/api/locations/stats').catch(() => ({ data: { summary: { totalLocations: 0, activeLocations: 0, locationsWithAssets: 0, totalAssets: 0 } } })),
-        axios.get('/api/locations', { params: { search: search.trim(), status: statusFilter !== 'all' ? statusFilter : undefined } }).catch(() => ({ data: { locations: [] } }))
+        apiClient.get('/api/locations/stats'),
+        apiClient.get('/api/locations', { params: { search: search.trim(), status: statusFilter !== 'all' ? statusFilter : undefined } })
       ]);
 
       const stats = statsResponse?.data?.summary || statsResponse?.data?.data || { totalLocations: 0, activeLocations: 0, locationsWithAssets: 0, totalAssets: 0 };
       setSummary(stats);
       setLocations(normalizeListResponse(locationsResponse?.data ?? []) || []);
     } catch (loadError) {
-      setSummary({ totalLocations: 0, activeLocations: 0, locationsWithAssets: 0, totalAssets: 0 });
-      setLocations([]);
-      setError('Unable to load locations.');
+      setError(getApiErrorMessage(loadError, 'Unable to load locations.'));
     } finally {
       setLoading(false);
     }
@@ -1164,14 +1167,14 @@ const AdminAssetLocations = () => {
     setSaving(true);
     try {
       if (editingId) {
-        await axios.put(`/api/locations/${editingId}`, {
+        await apiClient.put(`/api/locations/${editingId}`, {
           name,
           code: form.code.trim(),
           description: form.description.trim(),
           status: form.status,
         });
       } else {
-        await axios.post('/api/locations', {
+        await apiClient.post('/api/locations', {
           name,
           code: form.code.trim(),
           description: form.description.trim(),
@@ -1193,7 +1196,7 @@ const AdminAssetLocations = () => {
     if (!window.confirm('Delete this location? If it is referenced by assets, the backend will block the delete and suggest deactivation.')) return;
 
     try {
-      await axios.delete(`/api/locations/${locationId}`);
+      await apiClient.delete(`/api/locations/${locationId}`);
       await loadData();
     } catch (removeError) {
       alert(removeError.response?.data?.message || 'Could not delete the location. Please try again.');
@@ -1233,7 +1236,7 @@ const AdminAssetLocations = () => {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px', marginBottom: '20px' }}>
+      {!loading && !error && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px', marginBottom: '20px' }}>
         {[
           { label: 'Total Locations', subtitle: 'Registered physical locations', value: summary.totalLocations || 0, accent: '#1d4ed8' },
           { label: 'Active Locations', subtitle: 'Operational locations', value: summary.activeLocations || 0, accent: '#16a34a' },
@@ -1247,7 +1250,7 @@ const AdminAssetLocations = () => {
             <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>{card.subtitle}</div>
           </div>
         ))}
-      </div>
+      </div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 360px) minmax(0, 1fr)', gap: '20px', marginBottom: '20px' }}>
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
@@ -2137,28 +2140,353 @@ const DashboardLayout = () => (
 );
 
 // Admin Layout with Sidebar
-const AdminLayout = () => {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
+const adminSidebarSections = [
+  {
+    id: 'administrator',
+    heading: 'ADMINISTRATOR',
+    items: [
+      { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
+    ]
+  },
+  {
+    id: 'asset-governance',
+    heading: 'ASSET GOVERNANCE',
+    items: [
+      { to: '/admin/assets', label: 'All Assets', icon: Package },
+      { to: '/admin/assets/categories', label: 'Categories', icon: Package },
+      { to: '/admin/assets/assign', label: 'Assignment', icon: ClipboardList },
+      { to: '/admin/assets/transfer', label: 'Transfer', icon: ArrowLeftRight },
+      { to: '/admin/assets/disposal', label: 'Disposal & Retirement', icon: Archive },
+    ]
+  },
+  {
+    id: 'inventory',
+    heading: 'INVENTORY',
+    items: [
+      { to: '/admin/maintenance', label: 'Maintenance', icon: Wrench },
+      { to: '/admin/rfid', label: 'RFID / QR Tracking', icon: Radio },
+      { to: '/admin/inventory/quarantine', label: 'Chemical Quarantine', icon: ShieldCheck },
+    ]
+  },
+  {
+    id: 'organization',
+    heading: 'ORGANIZATION',
+    items: [
+      { to: '/admin/users', label: 'Users', icon: Users },
+      { to: '/admin/roles-permissions', label: 'Roles & Permissions', icon: ShieldCheck },
+      { to: '/admin/colleges', label: 'Colleges', icon: Building2 },
+      { to: '/admin/departments', label: 'Departments', icon: Building2 },
+      { to: '/admin/locations', label: 'Locations', icon: MapPin },
+    ]
+  },
+  {
+    id: 'analytics',
+    heading: 'ANALYTICS',
+    items: [
+      { to: '/admin/reports', label: 'Reports', icon: BarChart3 },
+      { to: '/admin/reports/analytics', label: 'Asset Analytics', icon: BarChart3 },
+      { to: '/admin/system-analytics', label: 'System Analytics', icon: BarChart3 },
+    ]
+  },
+  {
+    id: 'system',
+    heading: 'SYSTEM',
+    items: [
+      { to: '/admin/settings', label: 'Settings', icon: Settings },
+      { to: '/admin/notifications', label: 'Notifications', icon: Bell },
+      { to: '/admin/backup', label: 'Backup & Restore', icon: DatabaseBackup },
+      { to: '/admin/monitoring', label: 'System Monitoring', icon: BarChart3 },
+    ]
+  },
+  {
+    id: 'enam',
+    heading: 'ENAM',
+    items: [
+      { to: '/admin/enam', label: 'ENAM', icon: GitBranch },
+    ]
+  }
+];
+
+const AdminNotFound = () => (
+  <div style={{ maxWidth: 680, margin: '40px auto', background: '#fff', borderRadius: 18, boxShadow: '0 8px 30px rgba(15, 23, 42, 0.08)', padding: '32px 28px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+      <div style={{ width: 44, height: 44, borderRadius: 12, background: '#e0f2fe', display: 'grid', placeItems: 'center', color: '#0369a1', fontSize: 24 }}>⚠</div>
+      <div>
+        <h1 style={{ margin: 0, fontSize: 28, color: '#0f172a' }}>Admin page not found</h1>
+        <p style={{ margin: '6px 0 0', color: '#475569' }}>The page you requested is unavailable in the admin area.</p>
+      </div>
+    </div>
+    <Link to="/admin" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#2563eb', color: '#fff', borderRadius: 10, padding: '12px 16px', fontWeight: 600, textDecoration: 'none', marginTop: 16 }}>
+      Back to dashboard
+    </Link>
+  </div>
+);
+
+const AdminRecovery = () => {
+  const [recoveryItems, setRecoveryItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    const loadRecovery = async () => {
+      try {
+        const response = await apiClient.get('/api/admin/recovery', { params: { days: 30 } });
+        const items = Array.isArray(response?.data?.data) ? response.data.data : Array.isArray(response?.data?.items) ? response.data.items : [];
+        if (mounted) setRecoveryItems(items);
+      } catch (err) {
+        if (mounted) setError(getApiErrorMessage(err, 'Unable to load recovery records.'));
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    loadRecovery();
+    return () => { mounted = false; };
+  }, []);
 
   return (
-    <div style={{
-      display: 'flex',
-      gap: 0,
-      backgroundColor: isDark ? '#0f172a' : '#f8fafc',
-      minHeight: 'calc(100vh - var(--header-height))'
-    }}>
-      {/* Main Content */}
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        maxHeight: 'calc(100vh - var(--header-height))',
-        padding: '24px',
-        color: isDark ? '#cbd5e1' : '#1e293b'
-      }}>
-        <Suspense fallback={<LoadingFallback />}>
-          <Outlet />
-        </Suspense>
+    <div style={{ background: '#fff', borderRadius: 18, boxShadow: '0 8px 30px rgba(15, 23, 42, 0.08)', padding: 24 }}>
+      <div style={{ marginBottom: 18 }}>
+        <h1 style={{ margin: 0, fontSize: 28, color: '#0f172a' }}>Recovery Center</h1>
+        <p style={{ margin: '6px 0 0', color: '#475569' }}>Restorable records retained within the last 30 days.</p>
+      </div>
+      {loading ? <div style={{ padding: 16, color: '#475569' }}>Loading recovery records…</div> : error ? <div style={{ padding: 16, color: '#b91c1c' }}>{error}</div> : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', color: '#475569', textAlign: 'left' }}>
+                <th style={{ padding: '12px 14px' }}>Entity</th>
+                <th style={{ padding: '12px 14px' }}>Deleted By</th>
+                <th style={{ padding: '12px 14px' }}>Deleted At</th>
+                <th style={{ padding: '12px 14px' }}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recoveryItems.length ? recoveryItems.map((item) => (
+                <tr key={item.id || `${item.entityType}-${item.deletedAt}`} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={{ padding: '12px 14px' }}>{item.entityType || 'Record'}</td>
+                  <td style={{ padding: '12px 14px' }}>{item.deletedBy || 'System'}</td>
+                  <td style={{ padding: '12px 14px' }}>{item.deletedAt ? new Date(item.deletedAt).toLocaleString() : '—'}</td>
+                  <td style={{ padding: '12px 14px' }}><span style={{ background: '#ecfeff', color: '#0f766e', borderRadius: 999, padding: '6px 10px', fontSize: 12, fontWeight: 700 }}>Available</span></td>
+                </tr>
+              )) : <tr><td colSpan={4} style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>No recovery records found.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AdminFooter = () => (
+  <footer style={{ borderTop: '1px solid #e2e8f0', background: '#fff', color: '#475569', padding: '12px 20px', fontSize: 12 }}>
+    © 2026 Smart Asset Management
+  </footer>
+);
+
+const AdminHeader = ({ onToggleSidebar, mobileSidebarOpen, userName, roleLabel, unreadCount, onLogout, adminTheme, setAdminTheme }) => {
+  const { language } = useLanguage();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const closeMenu = (event) => {
+      if (event.key === 'Escape' || (event.type === 'mousedown' && !event.target.closest('.admin-profile-menu'))) setMenuOpen(false);
+    };
+    document.addEventListener('keydown', closeMenu);
+    document.addEventListener('mousedown', closeMenu);
+    return () => {
+      document.removeEventListener('keydown', closeMenu);
+      document.removeEventListener('mousedown', closeMenu);
+    };
+  }, [menuOpen, location.pathname]);
+  const title = (() => {
+    const path = location.pathname;
+    if (path === '/admin') return 'Dashboard';
+    if (path.startsWith('/admin/assets')) return 'Asset Governance';
+    if (path.startsWith('/admin/maintenance')) return 'Maintenance';
+    if (path.startsWith('/admin/rfid')) return 'RFID / QR Tracking';
+    if (path.startsWith('/admin/users')) return 'Users';
+    if (path.startsWith('/admin/roles')) return 'Roles & Permissions';
+    if (path.startsWith('/admin/colleges')) return 'Colleges';
+    if (path.startsWith('/admin/departments')) return 'Departments';
+    if (path.startsWith('/admin/locations')) return 'Locations';
+    if (path.startsWith('/admin/reports')) return 'Reports';
+    if (path.startsWith('/admin/analytics')) return 'Analytics';
+    if (path.startsWith('/admin/settings')) return 'Settings';
+    if (path.startsWith('/admin/notifications')) return 'Notifications';
+    if (path.startsWith('/admin/backup')) return 'Backup';
+    if (path.startsWith('/admin/monitoring')) return 'Monitoring';
+    if (path.startsWith('/admin/audit-logs')) return 'Audit Trail';
+    if (path.startsWith('/admin/inventory')) return 'Inventory';
+    if (path.startsWith('/admin/recovery')) return 'Recovery';
+    if (path.startsWith('/admin/enam')) return 'ENAM';
+    return 'Administration';
+  })();
+  const translatedTitle = location.pathname.startsWith('/admin/rfid')
+    ? translateMessage(language, 'tracking.title')
+    : title;
+
+  return (
+    <header>
+      <div className="admin-header-leading">
+        <button type="button" className="admin-icon-button" onClick={onToggleSidebar} aria-label={mobileSidebarOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={mobileSidebarOpen} aria-controls="admin-navigation-panel">
+          {mobileSidebarOpen ? <X size={18} /> : <Menu size={18} />}
+        </button>
+        <div className="admin-header-title">
+          <div className="admin-header-eyebrow">Mekdela Amba University</div>
+          <div className="admin-header-page-title">{translatedTitle}</div>
+        </div>
+      </div>
+      <div className="admin-header-tools">
+        <div className="admin-header-search"><GlobalSearch role="admin" /></div>
+        <select className="admin-theme-select" value={adminTheme} onChange={(event) => setAdminTheme(event.target.value)} aria-label="Color theme">
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+          <option value="system">System</option>
+        </select>
+        <button type="button" className="admin-icon-button admin-notification-button" onClick={() => navigate('/admin/notifications')} aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`} title="Notifications">
+          <Bell size={17} />
+          {unreadCount > 0 && <span className="admin-notification-count">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+        </button>
+        <div className="admin-profile-menu">
+          <button type="button" className="admin-profile-trigger" onClick={() => setMenuOpen((current) => !current)} aria-expanded={menuOpen} aria-haspopup="menu" aria-label={`Account menu for ${userName}`}>
+            <UserCircle size={18} />
+            <span className="admin-profile-copy"><strong>{userName}</strong><small>{roleLabel}</small></span>
+            <span className="admin-role-pill">Admin</span>
+            <ChevronDown size={16} />
+          </button>
+          {menuOpen && (
+            <div className="admin-profile-dropdown" role="menu">
+              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); navigate('/admin/settings'); }}>
+                <UserCircle size={16} /> Profile
+              </button>
+              <button type="button" role="menuitem" onClick={onLogout}>
+                <LogOut size={16} /> Logout
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+};
+
+const AdminSidebar = ({ items, currentPath, collapsed, mobileOpen, onToggle, onNavigate }) => {
+  const activePath = items.flatMap((section) => section.items)
+    .map((item) => item.to)
+    .filter((path) => path === '/admin' ? currentPath === path : currentPath === path || currentPath.startsWith(`${path}/`))
+    .sort((left, right) => right.length - left.length)[0];
+
+  return (
+  <aside id="admin-navigation-panel" className={`admin-sidebar${collapsed ? ' is-collapsed' : ''}${mobileOpen ? ' is-mobile-open' : ''}`}>
+    <div className="admin-sidebar-brand">
+      <div className="admin-sidebar-brand-inner">
+        <div className="admin-sidebar-mark">A</div>
+        {!collapsed && <div><div className="admin-sidebar-brand-eyebrow">Smart Asset</div><strong>Administration</strong></div>}
+      </div>
+    </div>
+    <nav aria-label="Admin navigation">
+      {items.map((section) => (
+        <div key={`group-${section.id}`}>
+          {!collapsed && <div className="admin-sidebar-section-label">{section.heading}</div>}
+          <div className="admin-sidebar-links">
+            {section.items.map((item) => {
+              const Icon = item.icon;
+              const isActive = activePath === item.to;
+              return (
+                <Link key={item.to} to={item.to} onClick={onNavigate} title={collapsed ? item.label : undefined} aria-label={collapsed ? item.label : undefined} aria-current={isActive ? 'page' : undefined} className={`admin-nav-link${isActive ? ' is-active' : ''}`}>
+                  <Icon size={18} />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </nav>
+    <div className="admin-sidebar-footer">
+      <button type="button" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} className="admin-sidebar-collapse">
+        {collapsed ? <ChevronRight size={17} /> : <><span>Collapse sidebar</span><ChevronRight size={16} /></>}
+      </button>
+    </div>
+  </aside>
+  );
+};
+
+const AdminLayout = () => {
+  const { user, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [adminTheme, setAdminTheme] = useState(() => {
+    try { return localStorage.getItem('admin-theme') || 'system'; } catch { return 'system'; }
+  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth >= 1024 && window.innerWidth < 1200);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadUnreadCount = async () => {
+      try {
+        const response = await apiClient.get('/api/notifications/unread-count');
+        const count = Number(response?.data?.unreadCount ?? response?.data?.count ?? 0);
+        if (mounted) setUnreadCount(Number.isFinite(count) ? count : 0);
+      } catch {
+        if (mounted) setUnreadCount(0);
+      }
+    };
+    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    if (user?.id && token) loadUnreadCount();
+    else setUnreadCount(0);
+    return () => { mounted = false; };
+  }, [user?.id, location.pathname]);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
+
+  const toggleSidebar = () => {
+    if (window.matchMedia('(max-width: 1023px)').matches) {
+      setSidebarCollapsed(false);
+      setMobileSidebarOpen((open) => !open);
+      return;
+    }
+    setSidebarCollapsed((value) => !value);
+  };
+
+  useEffect(() => {
+    if (!mobileSidebarOpen) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setMobileSidebarOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [mobileSidebarOpen]);
+
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    try { localStorage.setItem('admin-theme', adminTheme); } catch {}
+  }, [adminTheme]);
+
+  return (
+    <div className={`admin-layout${adminTheme === 'dark' ? ' dark' : ''}`} data-admin-theme={adminTheme}>
+      <a className="admin-skip-link" href="#admin-main-content">Skip to content</a>
+      {mobileSidebarOpen && <button type="button" className="admin-sidebar-backdrop" onClick={() => setMobileSidebarOpen(false)} aria-label="Close admin navigation" />}
+      <AdminSidebar items={adminSidebarSections} currentPath={location.pathname} collapsed={sidebarCollapsed} mobileOpen={mobileSidebarOpen} onToggle={() => setSidebarCollapsed((value) => !value)} onNavigate={() => setMobileSidebarOpen(false)} />
+      <div className="admin-layout-column">
+        <AdminHeader onToggleSidebar={toggleSidebar} mobileSidebarOpen={mobileSidebarOpen} userName={user?.fullName || user?.username || 'Admin'} roleLabel={normalizeRole(user?.role || user?.roles || 'admin').replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())} unreadCount={unreadCount} onLogout={handleLogout} adminTheme={adminTheme} setAdminTheme={setAdminTheme} />
+        <main id="admin-main-content" className="admin-main-content">
+          <Suspense fallback={<LoadingFallback />}>
+            <Outlet />
+          </Suspense>
+        </main>
+        <AdminFooter />
       </div>
     </div>
   );
@@ -2630,10 +2958,18 @@ function AppContent() {
     );
   };
 
+  const dashboardHeaderVisible = shouldShowDashboardHeader(location.pathname);
+
   const AuthenticatedLayout = ({ children }) => (
     <div className="App" style={{ backgroundColor: currentTheme.mainBg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <DashboardHeader />
-      <div className={`authenticated-shell${isStoreManager ? ' store-manager-body' : ''}`} style={hideSidebar || !showDashboardSidebar ? { display: 'block' } : undefined}>
+      {dashboardHeaderVisible && <DashboardHeader />}
+      <div
+        className={`authenticated-shell${isStoreManager ? ' store-manager-body' : ''}`}
+        style={{
+          ...(hideSidebar || !showDashboardSidebar ? { display: 'block' } : undefined),
+          ...(dashboardHeaderVisible ? { paddingTop: 'var(--header-height)' } : undefined),
+        }}
+      >
         {showDashboardSidebar && (
           <aside className={`admin-sidebar${isStoreManager ? ' store-manager-sidebar' : ''}${sidebarRole === 'ict_officer' ? ' ict-sidebar' : ''}`}>
             <nav className="admin-sidebar-nav" aria-label="Application navigation">
@@ -2841,30 +3177,7 @@ function AppContent() {
   const getSidebarItems = (role) => {
     const normalizedRole = normalizeRole(role);
     const items = {
-      'admin': [
-        { path: '/admin', label: t.dashboard, icon: LayoutDashboard, group: 'Overview' },
-        { path: '/admin/assets', label: 'All Assets', icon: Package, group: 'Asset Governance' },
-        { path: '/admin/assets/categories', label: 'Asset Categories', icon: Package, group: 'Asset Governance' },
-        { path: '/admin/assets/assign', label: 'Asset Assignment', icon: ClipboardList, group: 'Asset Governance' },
-        { path: '/admin/assets/transfer', label: 'Asset Transfer', icon: ArrowLeftRight, group: 'Asset Governance' },
-        { path: '/admin/assets/disposal', label: 'Disposal & Retirement', icon: Archive, group: 'Asset Governance' },
-        { path: '/admin/maintenance', label: 'Maintenance Oversight', icon: Wrench, group: 'Asset Governance' },
-        { path: '/admin/rfid', label: 'RFID / QR Tracking', icon: Radio, group: 'Asset Governance' },
-        { path: '/admin/users', label: 'Users', icon: Users, group: 'Organization' },
-        { path: '/admin/roles-permissions', label: 'Roles & Permissions', icon: ShieldCheck, group: 'Organization' },
-        { path: '/admin/colleges', label: 'Colleges', icon: Building2, group: 'Organization' },
-        { path: '/admin/departments', label: 'Departments', icon: Building2, group: 'Organization' },
-        { path: '/admin/locations', label: 'Locations', icon: Building2, group: 'Organization' },
-        { path: '/admin/reports', label: 'Reports & Analytics', icon: BarChart3, group: 'Analytics' },
-        { path: '/admin/reports/analytics', label: 'Asset Analytics', icon: BarChart3, group: 'Analytics' },
-        { path: '/admin/analytics/system', label: 'System Analytics', icon: BarChart3, group: 'Analytics' },
-        { path: '/admin/audit-logs', label: 'Audit Logs', icon: FileText, group: 'Analytics' },
-        { path: '/admin/settings', label: t.settings, icon: Settings, group: 'System' },
-        { path: '/admin/notifications', label: t.notifications, icon: Bell, group: 'System' },
-        { path: '/admin/backup', label: t.backup, icon: DatabaseBackup, group: 'System' },
-        { path: '/admin/monitoring', label: 'System Monitoring', icon: BarChart3, group: 'System' },
-        { path: '/admin/inventory/quarantine', label: 'Chemical Quarantine', icon: ShieldCheck, group: 'System' }
-      ],
+      'admin': adminSidebarSections.flatMap((section) => section.items.map((item) => ({ ...item, path: item.to, group: section.heading }))),
       'ict_officer': [
         { path: '/ict/dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'IT ASSET MANAGEMENT' },
         { path: '/ict/assets', label: 'ICT Assets', section: 'ASSET MANAGEMENT' },
@@ -3250,9 +3563,13 @@ function AppContent() {
             <Route path="colleges/:id" element={<AdminCollegeDetails />} />
             <Route path="locations" element={<AdminAssetLocations />} />
             <Route path="monitoring" element={<SystemMonitoring />} />
+            <Route path="analytics" element={<Navigate to="/admin/analytics/system" replace />} />
             <Route path="analytics/system" element={<AdminAnalyticsCenter system />} />
+            <Route path="system-analytics" element={<AdminAnalyticsCenter system />} />
             <Route path="analytics/assets" element={<AdminAnalyticsCenter />} />
             <Route path="audit-logs" element={<AdminAuditLogs />} />
+            <Route path="recovery" element={<AdminRecovery />} />
+            <Route path="enam" element={<EnamIntegration />} />
             
             {/* User Management */}
             <Route path="users" element={<AdminUserManagement />} />
@@ -3274,7 +3591,7 @@ function AppContent() {
             
             {/* Reports & Analytics */}
             <Route path="reports" element={<AdminReports />} />
-            <Route path="reports/analytics" element={<AdminAnalyticsCenter />} />
+            <Route path="reports/analytics" element={<AdminAssetAnalytics />} />
             <Route path="reports/:legacyReportType" element={<Navigate to="/admin/reports" replace />} />
             
             {/* Notifications */}
@@ -3307,6 +3624,7 @@ function AppContent() {
             <Route path="backup/history" element={<AdminBackup />} />
             <Route path="backup/restore" element={<AdminBackup />} />
             <Route path="backup/status" element={<AdminBackup />} />
+            <Route path="*" element={<AdminNotFound />} />
             
           </Route>
 

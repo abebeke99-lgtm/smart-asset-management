@@ -471,7 +471,7 @@ const unassignIctRfid = async (req, res, next) => {
     if (!asset) return res.status(404).json({ success: false, message: 'Tracking record not found' });
     const previousValue = asset.rfidTag || null;
     if (!previousValue) return res.status(409).json({ success: false, message: 'No RFID UID is assigned to this asset' });
-    await asset.update({ rfidTag: '' });
+    await asset.update({ rfidTag: null });
     await RFIDLog.create({ assetId: asset.id, tag: previousValue, action: 'unlink', location: asset.location || '', notes: `RFID tag unassigned by user ${req.user.id}` });
     await AuditLog.create({ userId: req.user.id, action: 'RFID_TAG_UNASSIGNED', entity: `asset:${asset.id}`, details: JSON.stringify({ assetId: asset.id, previousValue }) });
     return res.json({ success: true, data: trackingRow(asset, null, null) });

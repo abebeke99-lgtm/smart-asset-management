@@ -1,7 +1,38 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { Bar, Doughnut } from "react-chartjs-2";
+import { ArcElement, BarElement, CategoryScale, Chart as ChartJS, Legend, LinearScale, Tooltip } from "chart.js";
+import { Activity, Archive, ArrowLeftRight, Bell, Boxes, ClipboardList, Package, Plus, RefreshCw, Users, Wrench } from "lucide-react";
+import { Link } from "react-router-dom";
+import apiClient, { getApiErrorMessage } from "../../services/apiClient";
+import PageHeader from "./ui/PageHeader";
+import "./AdminDashboard.css";
 
-const API_BASE_URL =
-  (process.env.REACT_APP_API_URL || "").replace(/\/api\/?$/i, "");
+ChartJS.register(ArcElement, BarElement, CategoryScale, Legend, LinearScale, Tooltip);
+
+const chartColorTokens = ["--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5", "--chart-6"];
+const readAdminToken = (name) => {
+  const adminRoot = document.querySelector(".admin-layout");
+  return adminRoot ? getComputedStyle(adminRoot).getPropertyValue(name).trim() : "";
+};
+const chartColors = () => chartColorTokens.map(readAdminToken).filter(Boolean);
+const buildDoughnutData = (rows) => ({
+  labels: rows.map((row) => row.label),
+  datasets: [{ data: rows.map((row) => row.value), backgroundColor: chartColors(), borderWidth: 2, borderColor: readAdminToken("--color-surface") }],
+});
+const buildBarData = (rows) => ({
+  labels: rows.map((row) => row.label),
+  datasets: [{ label: "Assets", data: rows.map((row) => row.value), backgroundColor: readAdminToken("--chart-1"), borderRadius: 4 }],
+});
+const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } };
+const barOptions = { ...chartOptions, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } };
+const quickActionIcons = {
+  "/admin/assets/create": Package,
+  "/admin/assets/assign": ClipboardList,
+  "/admin/assets/transfer": ArrowLeftRight,
+  "/admin/maintenance": Wrench,
+  "/admin/users": Users,
+  "/admin/reports": Activity,
+};
 
 function Dashboard() {
   const [loading, setLoading] = useState(true);
@@ -11,7 +42,9 @@ function Dashboard() {
       total: 0,
       active: 0,
       damaged: 0,
-      replaced: 0,
+      assigned: 0,
+      available: 0,
+      maintenance: 0,
       expired: 0,
     },
     users: 0,
@@ -22,80 +55,15 @@ function Dashboard() {
       scheduled: 0,
       inProgress: 0,
       completed: 0,
-      escalated: 0,
-    },
-    inventory: {
-      lowStock: 0,
-      outOfStock: 0,
-      expiringChemicals: 0,
-      expiredChemicals: 0,
-      quarantinedChemicals: 0,
+      overdue: 0,
     },
     recentActivity: [],
+    recentAssets: [],
+    assetByStatus: [],
+    assetByCategory: [],
+    alerts: [],
+    quickActions: [],
   });
-
-  const getToken = useCallback(() => {
-    return (
-      localStorage.getItem("token") ||
-      localStorage.getItem("authToken") ||
-      sessionStorage.getItem("token") ||
-      sessionStorage.getItem("authToken")
-    );
-  }, []);
-
-  const buildHeaders = useCallback(() => {
-    const token = getToken();
-
-    const headers = {
-      "Content-Type": "application/json",
-    };
-
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-
-    return headers;
-  }, [getToken]);
-
-  const fetchJson = useCallback(async (url) => {
-    let response;
-
-    try {
-      response = await fetch(url, {
-        method: "GET",
-        headers: buildHeaders(),
-        credentials: "include",
-      });
-    } catch (requestError) {
-      requestError.kind = "network";
-      throw requestError;
-    }
-
-    const contentType = response.headers.get("content-type") || "";
-
-    let data = null;
-
-    if (contentType.includes("application/json")) {
-      data = await response.json();
-    } else {
-      const text = await response.text();
-      data = text ? { message: text } : null;
-    }
-
-    if (!response.ok) {
-      const message =
-        data?.message ||
-        data?.error ||
-        `Request failed with status ${response.status}`;
-      const requestError = new Error(message);
-      requestError.status = response.status;
-      throw requestError;
-    }
-
-    return data;
-  }, [buildHeaders]);
-
-  const requestInProgress = useRef(false);
 
   const normalizeNumber = (value) => {
     const number = Number(value);
@@ -108,9 +76,6 @@ function Dashboard() {
     const assets = source.assets || source.assetSummary || {};
     const maintenance =
       source.maintenance || source.maintenanceSummary || {};
-    const inventory =
-      source.inventory || source.inventorySummary || {};
-
     return {
       assets: {
         total: normalizeNumber(
@@ -128,11 +93,9 @@ function Dashboard() {
             assets.damagedAssets ??
             source.damagedAssets
         ),
-        replaced: normalizeNumber(
-          assets.replaced ??
-            assets.replacedAssets ??
-            source.replacedAssets
-        ),
+        assigned: normalizeNumber(assets.assigned ?? source.assignedAssets),
+        available: normalizeNumber(assets.available ?? source.availableAssets),
+        maintenance: normalizeNumber(assets.maintenance ?? source.maintenanceAssets ?? source.underMaintenance),
         expired: normalizeNumber(
           assets.expired ??
             assets.expiredAssets ??
@@ -162,6 +125,7 @@ function Dashboard() {
         submitted: normalizeNumber(
           maintenance.submitted ??
             maintenance.submittedRequests ??
+            maintenance.open ??
             source.submittedMaintenance
         ),
         scheduled: normalizeNumber(
@@ -180,122 +144,58 @@ function Dashboard() {
             maintenance.completedRequests ??
             source.completedMaintenance
         ),
-        escalated: normalizeNumber(
-          maintenance.escalated ??
-            maintenance.escalatedRequests ??
-            source.escalatedMaintenance
-        ),
+        overdue: normalizeNumber(maintenance.overdue ?? source.overdueMaintenance),
       },
 
-      inventory: {
-        lowStock: normalizeNumber(
-          inventory.lowStock ??
-            inventory.low_stock ??
-            source.lowStock
-        ),
-        outOfStock: normalizeNumber(
-          inventory.outOfStock ??
-            inventory.out_of_stock ??
-            source.outOfStock
-        ),
-        expiringChemicals: normalizeNumber(
-          inventory.expiringChemicals ??
-            inventory.expiring_chemicals ??
-            source.expiringChemicals
-        ),
-        expiredChemicals: normalizeNumber(
-          inventory.expiredChemicals ??
-            inventory.expired_chemicals ??
-            source.expiredChemicals
-        ),
-        quarantinedChemicals: normalizeNumber(
-          inventory.quarantinedChemicals ??
-            inventory.quarantined_chemicals ??
-            source.quarantinedChemicals
-        ),
-      },
 
       recentActivity: Array.isArray(source.recentActivity)
         ? source.recentActivity
+        : Array.isArray(source.recentActivities)
+        ? source.recentActivities
         : Array.isArray(source.activities)
-        ? source.activities
+          ? source.activities
         : [],
+      recentAssets: Array.isArray(source.recentAssets) ? source.recentAssets : [],
+      assetByStatus: Array.isArray(source.assetByStatus) ? source.assetByStatus : [],
+      assetByCategory: Array.isArray(source.assetByCategory) ? source.assetByCategory : [],
+      alerts: Array.isArray(source.alerts) ? source.alerts : [],
+      quickActions: Array.isArray(source.quickActions) ? source.quickActions : [],
     };
   }, []);
 
   const loadDashboard = useCallback(async () => {
-    if (requestInProgress.current) return;
-
-    requestInProgress.current = true;
     setLoading(true);
     setError("");
 
     try {
-      const result = await fetchJson(`${API_BASE_URL}/api/admin/dashboard`);
-      setDashboard(normalizeDashboard(result));
+      const response = await apiClient.get("/api/admin/dashboard");
+      setDashboard(normalizeDashboard(response.data));
     } catch (requestError) {
       console.error("Dashboard loading error:", requestError);
-
-      if (requestError?.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("authToken");
-        localStorage.removeItem("user");
-        window.location.assign("/login?redirect=%2Fadmin");
-      } else if (requestError?.status === 403) {
-        setError("You do not have permission to view the administrator dashboard.");
-      } else if (requestError?.kind === "network") {
-        setError("Unable to connect to the server. Please check that the backend is running.");
-      } else if (requestError?.status >= 500) {
-        setError("Unable to load dashboard data. Please try again.");
-      } else {
-        setError(requestError?.message || "Unable to load administrator dashboard.");
-      }
+      setError(getApiErrorMessage(requestError, "Unable to load administrator dashboard."));
     } finally {
-      requestInProgress.current = false;
       setLoading(false);
     }
-  }, [fetchJson]);
+  }, [normalizeDashboard]);
 
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
 
   const statCards = [
-    {
-      title: "Total Assets",
-      value: dashboard.assets.total,
-      icon: "📦",
-    },
-    {
-      title: "Active Assets",
-      value: dashboard.assets.active,
-      icon: "✓",
-    },
-    {
-      title: "Damaged Assets",
-      value: dashboard.assets.damaged,
-      icon: "⚠",
-    },
-    {
-      title: "Users",
-      value: dashboard.users,
-      icon: "👥",
-    },
-    {
-      title: "Colleges",
-      value: dashboard.colleges,
-      icon: "🏫",
-    },
-    {
-      title: "Departments",
-      value: dashboard.departments,
-      icon: "🏢",
-    },
+    { title: "Total Assets", value: dashboard.assets.total, icon: Package },
+    { title: "Active Assets", value: dashboard.assets.active, icon: Activity },
+    { title: "Damaged Assets", value: dashboard.assets.damaged, icon: Archive },
+    { title: "Maintenance", value: dashboard.assets.maintenance, icon: Wrench },
+    { title: "Assigned Assets", value: dashboard.assets.assigned, icon: ClipboardList },
+    { title: "Available Assets", value: dashboard.assets.available, icon: Boxes },
+    { title: "Expired Assets", value: dashboard.assets.expired, icon: Bell },
+    { title: "Total Users", value: dashboard.users, icon: Users },
   ];
 
   const maintenanceCards = [
     {
-      title: "Submitted",
+      title: "Open",
       value: dashboard.maintenance.submitted,
     },
     {
@@ -310,99 +210,71 @@ function Dashboard() {
       title: "Completed",
       value: dashboard.maintenance.completed,
     },
-    {
-      title: "Escalated",
-      value: dashboard.maintenance.escalated,
-    },
-  ];
-
-  const inventoryCards = [
-    {
-      title: "Low Stock",
-      value: dashboard.inventory.lowStock,
-    },
-    {
-      title: "Out of Stock",
-      value: dashboard.inventory.outOfStock,
-    },
-    {
-      title: "Expiring Chemicals",
-      value: dashboard.inventory.expiringChemicals,
-    },
-    {
-      title: "Expired Chemicals",
-      value: dashboard.inventory.expiredChemicals,
-    },
-    {
-      title: "Quarantined",
-      value: dashboard.inventory.quarantinedChemicals,
-    },
   ];
 
   if (loading) {
     return (
-      <div style={styles.page}>
-        <div style={styles.loadingCard}>
-          <div style={styles.spinner} />
-          <p style={styles.loadingText}>
-            Loading administrator dashboard...
-          </p>
+      <div className="admin-dashboard-shell admin-dashboard-shell--loading" aria-busy="true" aria-label="Loading administrator dashboard">
+        <PageHeader eyebrow="Administrator" title="Dashboard" subtitle="Overview of assets, maintenance, and system activity." />
+        <div className="admin-dashboard-skeleton admin-dashboard-skeleton--header" />
+        <div className="admin-dashboard-skeleton-grid">
+          {Array.from({ length: 8 }, (_, index) => <div className="admin-dashboard-skeleton admin-dashboard-skeleton--stat" key={index} />)}
+        </div>
+        <div className="admin-dashboard-skeleton-grid admin-dashboard-skeleton-grid--charts">
+          <div className="admin-dashboard-skeleton admin-dashboard-skeleton--chart" />
+          <div className="admin-dashboard-skeleton admin-dashboard-skeleton--chart" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="admin-dashboard-page" style={styles.page}>
+        <PageHeader eyebrow="Administrator" title="Dashboard" subtitle="Overview of assets, maintenance, and system activity." />
+        <div style={styles.errorBox} role="alert">
+          <div><strong>Unable to load dashboard</strong><div style={styles.errorText}>{error}</div></div>
+          <button type="button" onClick={loadDashboard} style={styles.retryButton}><RefreshCw size={15} aria-hidden="true" /> Retry</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>Administrator Dashboard</h1>
-          <p style={styles.subtitle}>
-            Central overview of university assets, maintenance,
-            inventory and system activity.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={loadDashboard}
-          style={styles.refreshButton}
-        >
-          ↻ Refresh
-        </button>
-      </div>
-
-      {error && (
-        <div style={styles.errorBox}>
-          <div>
-            <strong>Unable to load dashboard</strong>
-            <div style={styles.errorText}>{error}</div>
-          </div>
-
-          <button
-            type="button"
-            onClick={loadDashboard}
-            style={styles.retryButton}
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
+    <div className="admin-dashboard-page" style={styles.page}>
+      <PageHeader eyebrow="Administrator" title="Dashboard" subtitle="Overview of assets, maintenance, and system activity." />
       <section>
         <h2 style={styles.sectionTitle}>Asset Overview</h2>
 
         <div style={styles.grid}>
-          {statCards.map((card) => (
-            <div key={card.title} style={styles.card}>
-              <div style={styles.cardIcon}>{card.icon}</div>
+          {statCards.map(({ title, value, icon: Icon }) => (
+            <div key={title} style={styles.card}>
+              <div style={styles.cardIcon}><Icon size={19} aria-hidden="true" /></div>
 
               <div>
-                <div style={styles.cardLabel}>{card.title}</div>
-                <div style={styles.cardValue}>{card.value}</div>
+                <div style={styles.cardLabel}>{title}</div>
+                <div style={styles.cardValue}>{value.toLocaleString()}</div>
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section style={styles.section}>
+        <h2 style={styles.sectionTitle}>Asset Distribution</h2>
+        <div className="admin-dashboard-chart-grid">
+          <section className="admin-dashboard-panel" aria-labelledby="asset-status-heading">
+            <h3 id="asset-status-heading">Assets by status</h3>
+            {dashboard.assetByStatus.length ? (
+              <div className="admin-dashboard-chart" role="img" aria-label="Assets grouped by status"><Doughnut data={buildDoughnutData(dashboard.assetByStatus)} options={chartOptions} /><p className="admin-sr-only">{dashboard.assetByStatus.map((row) => `${row.label}: ${row.value}`).join(', ')}</p></div>
+            ) : <div className="admin-dashboard-empty">No asset status data available.</div>}
+          </section>
+          <section className="admin-dashboard-panel" aria-labelledby="asset-category-heading">
+            <h3 id="asset-category-heading">Assets by category</h3>
+            {dashboard.assetByCategory.length ? (
+              <div className="admin-dashboard-chart" role="img" aria-label="Assets grouped by category"><Bar data={buildBarData(dashboard.assetByCategory)} options={barOptions} /><p className="admin-sr-only">{dashboard.assetByCategory.map((row) => `${row.label}: ${row.value}`).join(', ')}</p></div>
+            ) : <div className="admin-dashboard-empty">No asset category data available.</div>}
+          </section>
         </div>
       </section>
 
@@ -416,79 +288,57 @@ function Dashboard() {
               <div style={styles.cardValue}>{card.value}</div>
             </div>
           ))}
+          <div style={styles.card}>
+            <div><div style={styles.cardLabel}>Overdue</div><div style={styles.cardValue}>{dashboard.maintenance.overdue.toLocaleString()}</div></div>
+          </div>
         </div>
       </section>
 
       <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Inventory Alerts</h2>
-
-        <div style={styles.grid}>
-          {inventoryCards.map((card) => (
-            <div key={card.title} style={styles.card}>
-              <div style={styles.cardLabel}>{card.title}</div>
-              <div style={styles.cardValue}>{card.value}</div>
-            </div>
-          ))}
+        <h2 style={styles.sectionTitle}>Recent Assets</h2>
+        <div className="admin-dashboard-table-wrap">
+          {dashboard.recentAssets.length ? (
+            <table className="admin-dashboard-table">
+              <thead><tr><th scope="col">Asset</th><th scope="col">Category</th><th scope="col">Department</th><th scope="col">Status</th><th scope="col">Updated</th></tr></thead>
+              <tbody>{dashboard.recentAssets.map((asset) => (
+                <tr key={asset.id}>
+                  <td><Link to={`/admin/assets/${asset.id}`}>{asset.name || `Asset ${asset.id}`}</Link></td>
+                  <td>{asset.category || "Uncategorized"}</td>
+                  <td>{asset.department || "Unassigned"}</td>
+                  <td><span className="admin-dashboard-status">{asset.status || "Unknown"}</span></td>
+                  <td>{asset.updatedAt ? new Date(asset.updatedAt).toLocaleDateString() : "—"}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          ) : <div className="admin-dashboard-empty">No recent assets found.</div>}
         </div>
       </section>
 
       <section style={styles.section}>
-        <div style={styles.sectionHeader}>
-          <h2 style={styles.sectionTitle}>
-            Recent Activity
-          </h2>
-        </div>
-
-        <div style={styles.activityCard}>
-          {dashboard.recentActivity.length === 0 ? (
-            <div style={styles.emptyState}>
-              No recent activity available.
+        <div style={styles.sectionHeader}><h2 style={styles.sectionTitle}>Alerts</h2></div>
+        <div className="admin-dashboard-alerts">
+          {dashboard.alerts.length ? dashboard.alerts.map((alert, index) => (
+            <div className={`admin-dashboard-alert admin-dashboard-alert--${alert.type || "info"}`} key={`${alert.category || "alert"}-${index}`}>
+              <Bell size={17} aria-hidden="true" /><div><strong>{alert.message}</strong><span>{Number(alert.count || 0).toLocaleString()} item{Number(alert.count) === 1 ? "" : "s"}</span></div>
             </div>
-          ) : (
-            dashboard.recentActivity.map((activity, index) => (
-              <div
-                key={
-                  activity.id ||
-                  activity.activityId ||
-                  `activity-${index}`
-                }
-                style={styles.activityRow}
-              >
-                <div style={styles.activityDot} />
-
-                <div style={styles.activityContent}>
-                  <div style={styles.activityTitle}>
-                    {activity.title ||
-                      activity.action ||
-                      activity.description ||
-                      "System activity"}
-                  </div>
-
-                  {(activity.description ||
-                    activity.message) && (
-                    <div style={styles.activityDescription}>
-                      {activity.description ||
-                        activity.message}
-                    </div>
-                  )}
-
-                  {(activity.createdAt ||
-                    activity.date ||
-                    activity.timestamp) && (
-                    <div style={styles.activityDate}>
-                      {new Date(
-                        activity.createdAt ||
-                          activity.date ||
-                          activity.timestamp
-                      ).toLocaleString()}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
+          )) : <div className="admin-dashboard-empty">No active alerts.</div>}
         </div>
       </section>
+
+      <section style={styles.section}>
+        <h2 style={styles.sectionTitle}>Quick Actions</h2>
+        <div className="admin-dashboard-actions">
+          {dashboard.quickActions.length ? dashboard.quickActions.map((action) => {
+            const ActionIcon = quickActionIcons[action.path] || Plus;
+            return (
+              <Link className="admin-dashboard-action" to={action.path} key={action.path}>
+                <ActionIcon size={17} aria-hidden="true" /><span>{action.label}</span>
+              </Link>
+            );
+          }) : <div className="admin-dashboard-empty">No quick actions are available.</div>}
+        </div>
+      </section>
+
     </div>
   );
 }
@@ -496,42 +346,9 @@ function Dashboard() {
 const styles = {
   page: {
     minHeight: "100%",
-    padding: "24px",
-    background: "#F3F6F9",
+    padding: "0",
+    background: "transparent",
     boxSizing: "border-box",
-  },
-
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "16px",
-    marginBottom: "28px",
-    flexWrap: "wrap",
-  },
-
-  title: {
-    margin: 0,
-    color: "#111827",
-    fontSize: "28px",
-    fontWeight: 700,
-  },
-
-  subtitle: {
-    margin: "8px 0 0",
-    color: "#64748B",
-    fontSize: "14px",
-    lineHeight: 1.6,
-  },
-
-  refreshButton: {
-    border: "none",
-    borderRadius: "8px",
-    padding: "10px 16px",
-    background: "#2563EB",
-    color: "#FFFFFF",
-    cursor: "pointer",
-    fontWeight: 600,
   },
 
   errorBox: {
@@ -542,9 +359,9 @@ const styles = {
     padding: "14px 16px",
     marginBottom: "24px",
     borderRadius: "10px",
-    border: "1px solid #FCA5A5",
-    background: "#FEF2F2",
-    color: "#991B1B",
+    border: "1px solid var(--color-danger-bg)",
+    background: "var(--color-danger-bg)",
+    color: "var(--color-danger-text)",
   },
 
   errorText: {
@@ -553,11 +370,11 @@ const styles = {
   },
 
   retryButton: {
-    border: "1px solid #991B1B",
+    border: "1px solid var(--color-danger-text)",
     borderRadius: "7px",
     padding: "8px 14px",
-    background: "#FFFFFF",
-    color: "#991B1B",
+    background: "var(--color-surface)",
+    color: "var(--color-danger-text)",
     cursor: "pointer",
     fontWeight: 600,
   },
@@ -568,22 +385,22 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    background: "#FFFFFF",
+    background: "var(--color-surface)",
     borderRadius: "12px",
   },
 
   spinner: {
     width: "34px",
     height: "34px",
-    border: "4px solid #E5E7EB",
-    borderTop: "4px solid #2563EB",
+    border: "4px solid var(--color-border)",
+    borderTop: "4px solid var(--color-primary)",
     borderRadius: "50%",
     animation: "spin 1s linear infinite",
   },
 
   loadingText: {
     marginTop: "14px",
-    color: "#64748B",
+    color: "var(--color-muted)",
   },
 
   section: {
@@ -599,7 +416,7 @@ const styles = {
 
   sectionTitle: {
     margin: "0 0 14px",
-    color: "#111827",
+    color: "var(--color-text)",
     fontSize: "18px",
     fontWeight: 700,
   },
@@ -617,9 +434,9 @@ const styles = {
     gap: "14px",
     minHeight: "100px",
     padding: "18px",
-    background: "#FFFFFF",
+    background: "var(--color-surface)",
     borderRadius: "12px",
-    border: "1px solid #E5E7EB",
+    border: "1px solid var(--color-border)",
     boxSizing: "border-box",
   },
 
@@ -630,26 +447,26 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     borderRadius: "10px",
-    background: "#EFF6FF",
+    background: "var(--color-info-bg)",
     fontSize: "20px",
   },
 
   cardLabel: {
-    color: "#64748B",
+    color: "var(--color-muted)",
     fontSize: "13px",
     fontWeight: 500,
   },
 
   cardValue: {
     marginTop: "5px",
-    color: "#111827",
+    color: "var(--color-text)",
     fontSize: "25px",
     fontWeight: 700,
   },
 
   activityCard: {
-    background: "#FFFFFF",
-    border: "1px solid #E5E7EB",
+    background: "var(--color-surface)",
+    border: "1px solid var(--color-border)",
     borderRadius: "12px",
     overflow: "hidden",
   },
@@ -658,7 +475,7 @@ const styles = {
     display: "flex",
     gap: "14px",
     padding: "16px 18px",
-    borderBottom: "1px solid #F1F5F9",
+    borderBottom: "1px solid var(--color-border)",
   },
 
   activityDot: {
@@ -666,7 +483,7 @@ const styles = {
     height: "9px",
     marginTop: "6px",
     borderRadius: "50%",
-    background: "#2563EB",
+    background: "var(--color-primary)",
     flexShrink: 0,
   },
 
@@ -676,27 +493,27 @@ const styles = {
   },
 
   activityTitle: {
-    color: "#111827",
+    color: "var(--color-text)",
     fontSize: "14px",
     fontWeight: 600,
   },
 
   activityDescription: {
     marginTop: "4px",
-    color: "#64748B",
+    color: "var(--color-muted)",
     fontSize: "13px",
   },
 
   activityDate: {
     marginTop: "6px",
-    color: "#94A3B8",
+    color: "var(--color-muted)",
     fontSize: "12px",
   },
 
   emptyState: {
     padding: "32px",
     textAlign: "center",
-    color: "#64748B",
+    color: "var(--color-muted)",
     fontSize: "14px",
   },
 };

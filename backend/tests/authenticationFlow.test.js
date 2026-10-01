@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const { User, Config, AuditLog } = require('../src/models');
 const { login } = require('../src/controllers/authController');
 const { initializeInitialAdmin } = require('../src/services/initialAdminService');
+const { repairExistingAdminPassword } = require('../src/scripts/repairExistingAdminPassword');
 
 const makeTestPassword = () => `Test-${randomBytes(24).toString('hex')}!Aa1`;
 const testPassword = makeTestPassword();
@@ -176,4 +177,60 @@ test('initial admin initialization requires a configured secret', async () => {
   } finally {
     if (previousPassword !== undefined) process.env.INITIAL_ADMIN_PASSWORD = previousPassword;
   }
+});
+
+test('admin password repair updates only the password of the existing active admin', async () => {
+  const user = await makeUser();
+  const nextPassword = makeTestPassword();
+  let updateCalls = 0;
+  let createCalls = 0;
+  user.update = async function update(values, options) {
+    updateCalls += 1;
+    assert.deepEqual(Object.keys(values), ['password']);
+    assert.equal(options.silent, true);
+    Object.assign(this, values);
+  };
+
+  const result = await repairExistingAdminPassword({
+    userModel: {
+      async findOne({ where }) {
+        assert.deepEqual(where, { username: 'admin' });
+        return user;
+      },
+      async create() { createCalls += 1; },
+    },
+    password: nextPassword,
+    settings: {
+      password_min_length: 8,
+      password_require_uppercase: true,
+      password_require_lowercase: true,
+      password_require_numbers: true,
+      password_require_special: true,
+    },
+  });
+
+  assert.deepEqual(result, { userId: user.id, changed: true });
+  assert.equal(await bcrypt.compare(nextPassword, user.password), true);
+  assert.equal(user.role, 'admin');
+  assert.equal(updateCalls, 1);
+  assert.equal(createCalls, 0);
+});
+
+test('admin password repair refuses missing, inactive, or non-admin accounts', async () => {
+  const password = makeTestPassword();
+  const settings = {
+    password_min_length: 8,
+    password_require_uppercase: true,
+    password_require_lowercase: true,
+    password_require_numbers: true,
+    password_require_special: true,
+  };
+
+  await assert.rejects(repairExistingAdminPassword({ userModel: { async findOne() { return null; } }, password, settings }), /was not found/);
+
+  const inactiveAdmin = await makeUser({ active: false });
+  await assert.rejects(repairExistingAdminPassword({ userModel: { async findOne() { return inactiveAdmin; } }, password, settings }), /inactive or does not have the admin role/);
+
+  const nonAdmin = { ...(await makeUser()), role: 'store_manager' };
+  await assert.rejects(repairExistingAdminPassword({ userModel: { async findOne() { return nonAdmin; } }, password, settings }), /inactive or does not have the admin role/);
 });

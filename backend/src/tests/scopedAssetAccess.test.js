@@ -113,7 +113,130 @@ test('scoped asset ID routes resolve College and verify ownership before dispatc
   assert.match(routeSource, /const resolveScopedCollegeAssetScope = .*resolveCollegeScope/);
   assert.match(routeSource, /const verifyScopedCollegeAsset = async/);
   assert.match(routeSource, /router\.get\('\/'.*resolveScopedCollegeAssetScope, getAllAssets/);
+  assert.match(routeSource, /router\.post\('\/'.*requireRole\('admin'\)/);
+  assert.match(routeSource, /router\.put\('\/:id'.*requireRole\('admin'\)/);
   assert.match(routeSource, /router\.post\('\/:id\/restore'.*resolveScopedCollegeAssetScope, verifyScopedCollegeAsset/);
   assert.match(routeSource, /router\.delete\('\/:id\/rfid'.*resolveScopedCollegeAssetScope, verifyScopedCollegeAsset/);
   assert.match(routeSource, /router\.get\('\/:id\/documents'.*resolveScopedCollegeAssetScope, verifyScopedCollegeAsset/);
+});
+
+test('asset list accepts validated filters, allowlisted sorting, search, and deleted rows', async () => {
+  const models = require('../models');
+  const originals = {
+    assetFindAndCountAll: Asset.findAndCountAll,
+    assetFindAll: Asset.findAll,
+    departmentFindByPk: models.Department.findByPk,
+    departmentFindAll: models.Department.findAll,
+    collegeFindAll: models.College.findAll,
+    userFindAll: models.User.findAll,
+    assignmentFindAll: Assignment.findAll,
+    maintenanceFindAll: models.Maintenance.findAll,
+  };
+  let listOptions;
+  let collegeFindOptions;
+  Asset.findAndCountAll = async (options) => { listOptions = options; return { count: 0, rows: [] }; };
+  Asset.findAll = async () => [];
+  models.Department.findByPk = async () => ({ id: 4, name: 'ICT', collegeId: 3 });
+  models.Department.findAll = async () => [];
+  models.College.findAll = async (options) => { collegeFindOptions = options; return []; };
+  models.User.findAll = async () => [];
+  Assignment.findAll = async () => [];
+  models.Maintenance.findAll = async () => [];
+  try {
+    const response = makeResponse();
+    await getAllAssets(scopedRequest({
+      user: { id: 5, role: 'admin' },
+      query: {
+        page: '2', limit: '25', search: 'Lab', status: 'available', category: 'Computing', campus_id: '2',
+        college_id: '3', department_id: '4', laboratory_id: '5', purchase_from: '2024-01-01',
+        purchase_to: '2024-12-31', research_grant: 'has', maintenance_status: 'open', deleted: 'true',
+        sort_by: 'assetCode', sort_order: 'asc',
+      },
+    }), response);
+    assert.equal(response.statusCode, 200);
+    assert.equal(listOptions.limit, 25);
+    assert.equal(listOptions.offset, 25);
+    assert.deepEqual(listOptions.order, [['assetCode', 'ASC']]);
+    assert.equal(listOptions.paranoid, false);
+    assert.equal(listOptions.where.campusId, '2');
+    assert.equal(listOptions.where.collegeId, '3');
+    assert.equal(listOptions.where.departmentId, '4');
+    assert.equal(listOptions.where.roomId, '5');
+    assert.equal(listOptions.where.deletedAt[require('sequelize').Op.not], null);
+    assert.ok(listOptions.where[require('sequelize').Op.and]);
+    assert.deepEqual(Object.keys(collegeFindOptions.where), ['collegeName']);
+
+    const invalidResponse = makeResponse();
+    await getAllAssets(scopedRequest({ user: { id: 5, role: 'admin' }, query: { sort_by: 'password' } }), invalidResponse);
+    assert.equal(invalidResponse.statusCode, 400);
+  } finally {
+    Asset.findAndCountAll = originals.assetFindAndCountAll;
+    Asset.findAll = originals.assetFindAll;
+    models.Department.findByPk = originals.departmentFindByPk;
+    models.Department.findAll = originals.departmentFindAll;
+    models.College.findAll = originals.collegeFindAll;
+    models.User.findAll = originals.userFindAll;
+    Assignment.findAll = originals.assignmentFindAll;
+    models.Maintenance.findAll = originals.maintenanceFindAll;
+  }
+});
+
+test('expired asset recovery purge uses configured days and keeps a system audit record', async () => {
+  const models = require('../models');
+  const { purgeExpiredAssets, getRecoveryDays } = require('../services/assetRetentionService');
+  const originals = {
+    configFindByPk: models.Config.findByPk,
+    assetFindAll: Asset.findAll,
+    assetFindOne: Asset.findOne,
+    transaction: sequelize.transaction,
+    documentDestroy: models.AssetDocument.destroy,
+    grantDestroy: models.AssetGrant.destroy,
+    custodyDestroy: models.AssetCustody.destroy,
+    auditCreate: models.AuditLog.create,
+  };
+  let listOptions;
+  let auditRecord;
+  let destroyOptions;
+  const transaction = {
+    LOCK: { UPDATE: 'UPDATE' },
+    finished: null,
+    async commit() { this.finished = 'commit'; },
+    async rollback() { this.finished = 'rollback'; },
+  };
+  const asset = {
+    id: 9,
+    deletedAt: new Date(Date.now() - 46 * 86400000),
+    toJSON() { return { id: this.id, deletedAt: this.deletedAt }; },
+    async destroy(options) { destroyOptions = options; },
+  };
+  models.Config.findByPk = async () => ({ value: JSON.stringify({ recoveryDays: 45 }) });
+  Asset.findAll = async (options) => { listOptions = options; return [{ id: 9 }]; };
+  Asset.findOne = async () => asset;
+  sequelize.transaction = async () => transaction;
+  models.AssetDocument.destroy = async () => 1;
+  models.AssetGrant.destroy = async () => 1;
+  models.AssetCustody.destroy = async () => 1;
+  models.AuditLog.create = async (record) => { auditRecord = record; return record; };
+  try {
+    assert.equal(await getRecoveryDays(), 45);
+    const result = await purgeExpiredAssets();
+    assert.equal(result.deletedCount, 1);
+    assert.equal(result.failedCount, 0);
+    assert.equal(result.recoveryDays, 45);
+    assert.ok(listOptions.where.deletedAt[require('sequelize').Op.lte] instanceof Date);
+    assert.equal(destroyOptions.force, true);
+    assert.equal(transaction.finished, 'commit');
+    assert.equal(auditRecord.action, 'PERMANENT_DELETE_ASSET');
+    assert.equal(auditRecord.userId, null);
+    assert.match(auditRecord.details, /recovery_period_expired/);
+  } finally {
+    models.Config.findByPk = originals.configFindByPk;
+    Asset.findAll = originals.assetFindAll;
+    Asset.findOne = originals.assetFindOne;
+    sequelize.transaction = originals.transaction;
+    models.AssetDocument.destroy = originals.documentDestroy;
+    models.AssetGrant.destroy = originals.grantDestroy;
+    models.AssetCustody.destroy = originals.custodyDestroy;
+    models.AuditLog.create = originals.auditCreate;
+  }
 });

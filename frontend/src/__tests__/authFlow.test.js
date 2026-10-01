@@ -15,7 +15,7 @@ jest.mock('../utils/api', () => ({
     put: jest.fn(),
     patch: jest.fn(),
   },
-  apiBase: () => 'http://localhost:8080',
+  apiBase: () => '',
   getApiErrorMessage: (error, fallback) => fallback || 'Error',
   resolveAssetUrl: (value) => value || '',
 }));

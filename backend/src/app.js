@@ -40,6 +40,7 @@ const adminNotificationRoutes = require('./routes/adminNotificationRoutes');
 const adminSettingsRoutes = require('./routes/adminSettingsRoutes');
 const adminRoleRoutes = require('./routes/adminRoleRoutes');
 const systemMonitoringRoutes = require('./routes/systemMonitoringRoutes');
+const enamRoutes = require('./routes/enamRoutes');
 const chemicalRoutes = require('./routes/chemicalRoutes');
 const serviceRequestRoutes = require('./routes/serviceRequestRoutes');
 const locationRoutes = require('./routes/locationRoutes');
@@ -50,6 +51,7 @@ const incidentRoutes = require('./routes/incidentRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const backupService = require('./services/backupService');
+const { startAssetRetentionScheduler } = require('./services/assetRetentionService');
 const { requestMetricsMiddleware } = require('./middlewares/requestMetrics');
 const { requestContextMiddleware } = require('./middlewares/requestContext');
 const { requireAuth, requireRole } = require('./middlewares/auth');
@@ -172,6 +174,8 @@ app.use('/api/admin', analyticsRoutes);
 app.use('/api/admin', adminNotificationRoutes);
 app.use('/api/admin', adminSettingsRoutes);
 app.use('/api/admin', adminRoleRoutes);
+app.use('/api/admin/integrations/enam', requireAuth, requireRole('admin'), enamRoutes);
+app.use('/api/enam', requireAuth, requireRole('admin'), enamRoutes);
 app.use('/api/admin/inventory', requireAuth, requireRole('admin'), chemicalRoutes);
 app.use('/api/admin/monitoring', systemMonitoringRoutes);
 app.use('/api/admin/system-monitoring', systemMonitoringRoutes);
@@ -231,6 +235,7 @@ async function initializeDatabase() {
         }
       }
       backupService.startAutomaticBackupScheduler();
+      startAssetRetentionScheduler();
       console.log('Database initialization completed.');
       break;
     }

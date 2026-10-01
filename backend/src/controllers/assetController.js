@@ -1,4 +1,4 @@
-const { sequelize, Asset, Inventory, Assignment, Transfer, Maintenance, RFIDLog, AuditLog, User, Department } = require('../models');
+const { sequelize, Asset, Inventory, Assignment, Transfer, Maintenance, RFIDLog, AuditLog, User, Department, College, Campus, Building, Room } = require('../models');
 const { Op } = require('sequelize');
 const { nextDigitalId, buildAssetCodeFromConfig } = require('./assetExtendedController');
 const { createAuditLog } = require('../services/auditLogService');
@@ -11,6 +11,7 @@ const serializeAsset = (asset, assignment = null) => {
     asset_tag: data.assetCode,
     serial_number: data.serialNumber,
     rfid_tag: data.rfidTag,
+    qrCode: data.digitalId,
     condition: data.condition,
     condition_status: data.condition,
     department_name: data.department,
@@ -27,40 +28,121 @@ const serializeAsset = (asset, assignment = null) => {
 
 const getAllAssets = async (req, res) => {
   try {
+    const query = req.query || {};
+    const allowedSortFields = { created_at: 'createdAt', name: 'name', status: 'status', purchaseDate: 'purchaseDate', assetCode: 'assetCode' };
+    const allowedParameters = new Set([
+      'page', 'limit', 'search', 'status', 'category', 'location', 'condition', 'department', 'department_id', 'departmentId',
+      'campus', 'campus_id', 'campusId', 'college', 'college_id', 'collegeId', 'laboratory', 'laboratory_id', 'laboratoryId', 'purchase_from', 'purchase_to',
+      'research_grant', 'maintenance_status', 'deleted', 'include_deleted', 'sort_by', 'sort_order',
+    ]);
+    const unsupportedParameter = Object.keys(query).find((key) => !allowedParameters.has(key));
+    if (unsupportedParameter) return res.status(400).json({ success: false, message: `Unsupported asset filter: ${unsupportedParameter}` });
+    if (query.sort_by && !allowedSortFields[query.sort_by]) return res.status(400).json({ success: false, message: 'Unsupported asset sort field' });
+    if (query.sort_order && !['asc', 'desc'].includes(String(query.sort_order).toLowerCase())) return res.status(400).json({ success: false, message: 'sort_order must be asc or desc' });
+    for (const field of ['campus_id', 'college_id', 'department_id', 'departmentId', 'campusId', 'collegeId', 'laboratory_id', 'laboratoryId']) {
+      if (query[field] && (!Number.isInteger(Number(query[field])) || Number(query[field]) < 1)) return res.status(400).json({ success: false, message: `${field} must be a positive integer` });
+    }
+    for (const field of ['purchase_from', 'purchase_to']) {
+      if (query[field] && Number.isNaN(Date.parse(query[field]))) return res.status(400).json({ success: false, message: `${field} must be a valid date` });
+    }
+    if (query.purchase_from && query.purchase_to && new Date(query.purchase_from) > new Date(query.purchase_to)) return res.status(400).json({ success: false, message: 'purchase_from cannot be after purchase_to' });
     const where = {};
     const collegeId = isCollegeScopedRole(req.user?.role) ? getCollegeScopeId(req) : null;
     if (isCollegeScopedRole(req.user?.role) && !collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
     if (collegeId) where.collegeId = collegeId;
-    const department = req.query.department;
+    const department = query.department;
     if (department) where.department = department;
-    if (req.query.status) where.status = { [Op.in]: [req.query.status, String(req.query.status).toLowerCase(), String(req.query.status).replace(/[_ ]/g, '-').toLowerCase()] };
-    if (req.query.category) where.category = req.query.category;
-    if (req.query.location) where.location = req.query.location;
-    if (req.query.condition) where.condition = { [Op.in]: [req.query.condition, String(req.query.condition).toLowerCase()] };
-    if (req.query.department_id) {
-      const requestedDepartment = await Department.findByPk(req.query.department_id);
+    if (query.status) where.status = { [Op.in]: [query.status, String(query.status).toLowerCase(), String(query.status).replace(/[_ ]/g, '-').toLowerCase()] };
+    if (query.category) where.category = query.category;
+    if (query.location) where.location = { [Op.like]: `%${String(query.location).trim()}%` };
+    if (query.condition) where.condition = { [Op.in]: [query.condition, String(query.condition).toLowerCase()] };
+    if (query.department_id) {
+      where.departmentId = query.department_id;
+      const requestedDepartment = await Department.findByPk(query.department_id);
       if (requestedDepartment && (!collegeId || Number(requestedDepartment.collegeId) === collegeId)) where.department = requestedDepartment.name;
     }
-    if (req.query.search) {
-      const search = String(req.query.search).trim();
+    for (const [parameter, field] of [['campus_id', 'campusId'], ['college_id', 'collegeId']]) {
+      if (query[parameter]) {
+        if (field === 'collegeId' && collegeId) continue;
+        if (!Asset.rawAttributes[field]) return res.status(400).json({ success: false, message: `${parameter} filtering is not supported by the asset schema` });
+        where[field] = query[parameter];
+      }
+    }
+    if (query.campus) where.campusId = query.campus;
+    if (query.college) {
+      const College = require('../models').College;
+      const matchingColleges = await College.findAll({ where: { collegeName: { [Op.like]: `%${String(query.college).trim()}%` } }, attributes: ['id'] });
+      const matchingCollegeIds = matchingColleges.map((item) => Number(item.id));
+      where.collegeId = collegeId ? (matchingCollegeIds.includes(Number(collegeId)) ? collegeId : -1) : { [Op.in]: matchingCollegeIds };
+    }
+    if (query.laboratory_id || query.laboratory) {
+      if (query.laboratory_id && Asset.rawAttributes.roomId) where.roomId = query.laboratory_id;
+      else where.location = { [Op.like]: `%${String(query.laboratory).trim()}%` };
+    }
+    if (query.purchase_from || query.purchase_to) {
+      where.purchaseDate = {};
+      if (query.purchase_from) where.purchaseDate[Op.gte] = new Date(query.purchase_from);
+      if (query.purchase_to) where.purchaseDate[Op.lte] = new Date(`${String(query.purchase_to).slice(0, 10)}T23:59:59.999Z`);
+    }
+    if (query.research_grant && !['any', 'has', 'none'].includes(query.research_grant)) return res.status(400).json({ success: false, message: 'research_grant must be any, has, or none' });
+    if (query.research_grant === 'has') where.fundingSource = { [Op.ne]: '' };
+    if (query.research_grant === 'none') where[Op.or] = [{ fundingSource: '' }, { fundingSource: null }];
+    if (query.maintenance_status) {
+      const validMaintenanceStatuses = ['open', 'pending', 'in_progress', 'completed', 'cancelled'];
+      const normalizedMaintenanceStatus = String(query.maintenance_status).toLowerCase().replace(/[ -]/g, '_');
+      if (!validMaintenanceStatuses.includes(normalizedMaintenanceStatus)) return res.status(400).json({ success: false, message: 'Unsupported maintenance_status' });
+      const matchingMaintenance = await Maintenance.findAll({ where: { status: normalizedMaintenanceStatus }, attributes: ['assetId'] });
+      where.id = { [Op.in]: matchingMaintenance.map((item) => item.assetId) };
+    }
+    const includeDeleted = ['true', '1'].includes(String(query.deleted || query.include_deleted || '').toLowerCase());
+    if (includeDeleted) where.deletedAt = { [Op.not]: null };
+    if (query.search) {
+      const search = String(query.search).trim();
       const matchingUsers = await User.findAll({ where: { [Op.or]: [{ username: { [Op.like]: `%${search}%` } }, { fullName: { [Op.like]: `%${search}%` } }] }, attributes: ['id'] });
       const matchingAssignments = matchingUsers.length ? await Assignment.findAll({ where: { assignedTo: { [Op.in]: matchingUsers.map(item => item.id) }, status: 'active' }, attributes: ['assetId'] }) : [];
-      where[Op.or] = [
+      const [matchingColleges, matchingCampuses, matchingBuildings, matchingRooms] = await Promise.all([
+        College.findAll({ where: { collegeName: { [Op.like]: `%${search}%` } }, attributes: ['id'] }),
+        Campus.findAll({ where: { campusName: { [Op.like]: `%${search}%` } }, attributes: ['id'] }),
+        Building.findAll({ where: { buildingName: { [Op.like]: `%${search}%` } }, attributes: ['id'] }),
+        Room.findAll({ where: { roomName: { [Op.like]: `%${search}%` } }, attributes: ['id'] }),
+      ]);
+      const matchingDepartments = await Department.findAll({ where: { name: { [Op.like]: `%${search}%` } }, attributes: ['id'] });
+      where[Op.and] = [{ [Op.or]: [
         { name: { [Op.like]: `%${search}%` } },
         { assetCode: { [Op.like]: `%${search}%` } },
         { serialNumber: { [Op.like]: `%${search}%` } },
         { rfidTag: { [Op.like]: `%${search}%` } },
+        { category: { [Op.like]: `%${search}%` } },
         { department: { [Op.like]: `%${search}%` } },
         { location: { [Op.like]: `%${search}%` } },
+        { collegeId: { [Op.in]: matchingColleges.map((item) => item.id) } },
+        { departmentId: { [Op.in]: matchingDepartments.map((item) => item.id) } },
+        { campusId: { [Op.in]: matchingCampuses.map((item) => item.id) } },
+        { buildingId: { [Op.in]: matchingBuildings.map((item) => item.id) } },
+        { roomId: { [Op.in]: matchingRooms.map((item) => item.id) } },
         { id: { [Op.in]: matchingAssignments.map(item => item.assetId) } },
-      ];
+      ] }];
     }
-    const page = Math.max(1, Number(req.query.page) || 1);
-    const limit = Math.min(1000, Math.max(1, Number(req.query.limit) || 10));
-    const sortFields = { name: 'name', created_at: 'createdAt', createdAt: 'createdAt', current_value: 'currentValue', status: 'status' };
-    const orderField = sortFields[req.query.sort_by] || 'id';
-    const orderDirection = String(req.query.sort_order).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
-    const { count, rows } = await Asset.findAndCountAll({ where, order: [[orderField, orderDirection]], limit, offset: (page - 1) * limit });
+    const page = Math.max(1, Number(query.page) || 1);
+    const requestedLimit = Number(query.limit) || 10;
+    if (![10, 25, 50].includes(requestedLimit)) return res.status(400).json({ success: false, message: 'limit must be 10, 25, or 50' });
+    const limit = requestedLimit;
+    const orderField = allowedSortFields[query.sort_by] || 'createdAt';
+    const orderDirection = String(query.sort_order).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+    const { count, rows } = await Asset.findAndCountAll({
+      where,
+      include: [
+        { model: Campus, as: 'CampusRecord', required: false },
+        { model: College, required: false },
+        { model: Department, as: 'DepartmentRecord', required: false },
+        { model: Building, as: 'BuildingRecord', required: false },
+        { model: Room, as: 'RoomRecord', required: false },
+      ],
+      ...(includeDeleted ? { paranoid: false } : {}),
+      order: [[orderField, orderDirection]],
+      limit,
+      offset: (page - 1) * limit,
+    });
     const summaryRows = await Asset.findAll({ attributes: ['status'], raw: true, ...(collegeId ? { where: { collegeId } } : {}) });
     const summary = summaryRows.reduce((counts, asset) => {
       const status = String(asset.status || '').toLowerCase().replace(/[_ ]/g, '-');
@@ -68,11 +150,11 @@ const getAllAssets = async (req, res) => {
       counts[key] = (counts[key] || 0) + 1;
       return counts;
     }, { available: 0, assigned: 0, maintenance: 0, damaged: 0, missing: 0, retired: 0 });
-    const assignments = await Assignment.findAll({ where: { status: 'active', assetId: { [Op.in]: rows.map(asset => asset.id) } }, include: [{ model: User, attributes: ['username', 'fullName'] }] });
+    const assignments = await Assignment.findAll({ where: { status: 'active', assetId: { [Op.in]: rows.map(asset => asset.id) } }, include: [{ model: User, attributes: ['username', 'fullName'], required: false }] });
     const serialized = rows.map(asset => serializeAsset(asset, assignments.find(assignment => assignment.assetId === asset.id)));
     res.json({ success: true, data: serialized, assets: serialized, total: count, summary: { total: summaryRows.length, ...summary }, pagination: { page, limit, total: count, pages: Math.ceil(count / limit) } });
   } catch (error) {
-    console.error('Asset list request failed:', error);
+    console.error('Asset list request failed:', error.stack || error);
     res.status(500).json({ success: false, message: 'Unable to load assets.' });
   }
 };
@@ -81,9 +163,17 @@ const getAssetById = async (req, res) => {
   try {
     const collegeId = isCollegeScopedRole(req.user?.role) ? getCollegeScopeId(req) : null;
     if (isCollegeScopedRole(req.user?.role) && !collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
-    const asset = collegeId
-      ? await Asset.findOne({ where: { id: req.params.id, collegeId } })
-      : await Asset.findByPk(req.params.id);
+    const asset = await Asset.findOne({
+      where: { id: req.params.id, ...(collegeId ? { collegeId } : {}) },
+      paranoid: false,
+      include: [
+        { model: Campus, as: 'CampusRecord', required: false },
+        { model: College, required: false },
+        { model: Department, as: 'DepartmentRecord', required: false },
+        { model: Building, as: 'BuildingRecord', required: false },
+        { model: Room, as: 'RoomRecord', required: false },
+      ],
+    });
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
     const assignment = await Assignment.findOne({ where: { assetId: asset.id, status: 'active' }, include: [{ model: User, attributes: ['username', 'fullName'] }] });
     res.json({ success: true, data: serializeAsset(asset, assignment), asset: serializeAsset(asset, assignment) });
@@ -104,7 +194,7 @@ const createAsset = async (req, res) => {
   try {
     const providedAssetCode = String(body.assetCode || body.asset_id || '').trim();
     const serialNumber = String(body.serialNumber || body.serial_number || '').trim();
-    const rfidTag = String(body.rfidTag || body.rfid_tag || '').trim();
+    const rfidTag = String(body.rfidTag || body.rfid_tag || '').trim() || null;
     const name = String(body.name || '').trim();
     const purchasePrice = body.purchasePrice ?? body.purchase_cost ?? 0;
     const purchaseDate = body.purchaseDate || body.purchase_date || null;
@@ -240,11 +330,9 @@ const deleteAsset = async (req, res, next) => {
     const asset = await Asset.findByPk(req.params.id, { transaction });
     if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
     const previousValue = asset.toJSON();
-    const updates = { deletedBy: req.user.id };
-    if (asset.status !== 'disposed') updates.status = 'disposed';
-    await asset.update(updates, { transaction });
+    await asset.update({ deletedBy: req.user.id }, { transaction });
     await asset.destroy({ transaction });
-    await AuditLog.create({ userId: req.user.id, action: 'DELETE_ASSET', entity: `asset:${asset.id}`, details: JSON.stringify({ assetId: asset.id, deletedAt: new Date(), previousValue, newValue: asset.toJSON() }) }, { transaction });
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'DELETE_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, oldValue: previousValue, newValue: asset.toJSON(), details: { assetId: asset.id }, transaction });
     await transaction.commit();
     res.json({ success: true, message: 'Asset soft-deleted. It can be restored within 30 days.', data: serializeAsset(asset) });
   } catch (error) {

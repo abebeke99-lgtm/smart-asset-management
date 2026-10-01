@@ -5,23 +5,18 @@ const configuredApiUrl = [
   process.env.API_BASE_URL
 ].find((value) => typeof value === 'string' && value.trim()) || '';
 
-const defaultApiOrigin = process.env.NODE_ENV === 'production'
-  ? ''
-  : typeof window !== 'undefined' && window.location?.hostname
-  ? `${window.location.protocol || 'http:'}//${window.location.hostname}:5000`
-  : 'http://localhost:5000';
-
 const normalizeApiBase = (value) => {
   const trimmed = String(value || '').trim();
-  if (!trimmed) return defaultApiOrigin;
+  if (!trimmed) return '';
 
   if (/^https?:\/\//i.test(trimmed)) {
     return trimmed.replace(/\/api(?:\/)?$/i, '').replace(/\/+$/, '');
   }
 
   if (trimmed.startsWith('/')) {
-    const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'http://localhost:3000';
-    return `${origin}${trimmed.replace(/\/api(?:\/)?$/i, '').replace(/\/+$/, '')}`;
+    const basePath = trimmed.replace(/\/api(?:\/)?$/i, '').replace(/\/+$/, '');
+    const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+    return `${origin}${basePath}`;
   }
 
   return trimmed.replace(/\/api(?:\/)?$/i, '').replace(/\/+$/, '');

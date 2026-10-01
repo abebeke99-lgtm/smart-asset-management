@@ -3,6 +3,7 @@ const { getDashboard, getHistory, getInventory, getInventoryDetail, exportInvent
 const { createStockAdjustment, createReceipt } = require('../controllers/inventoryController');
 const verification = require('../controllers/verificationController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
+const { findCollegeScopeForUser } = require('../middlewares/organizationScope');
 const College = require('../models/College');
 
 const router = express.Router();
@@ -10,14 +11,22 @@ const router = express.Router();
 const ensureStoreScope = async (req, res, next) => {
   if (!req.user) return res.status(401).json({ success: false, message: 'Authentication required' });
   try {
-    const assignedCollegeId = req.user.collegeId ?? req.user.college_id;
-    let collegeId = Number(assignedCollegeId);
-    if (assignedCollegeId === undefined || assignedCollegeId === null || assignedCollegeId === '') {
-      const colleges = await College.findAll({ attributes: ['id'], order: [['id', 'ASC']], limit: 2 });
-      if (colleges.length !== 1) return res.status(403).json({ success: false, message: 'Store Manager college scope is not configured' });
+    const scope = await findCollegeScopeForUser(req.user);
+    let collegeId = Number(scope?.collegeId ?? req.user.collegeId ?? req.user.college_id ?? null);
+
+    if (!Number.isSafeInteger(collegeId) || collegeId <= 0) {
+      const colleges = await College.findAll({ attributes: ['id'], where: { status: 'active' }, order: [['id', 'ASC']] });
+      if (colleges.length === 0) {
+        return res.status(403).json({ success: false, message: 'Store Manager college scope is not configured' });
+      }
       collegeId = Number(colleges[0].id);
     }
-    if (!Number.isSafeInteger(collegeId) || collegeId <= 0) return res.status(403).json({ success: false, message: 'Store Manager college scope is not configured' });
+
+    if (!Number.isSafeInteger(collegeId) || collegeId <= 0) {
+      return res.status(403).json({ success: false, message: 'Store Manager college scope is not configured' });
+    }
+
+    req.user.collegeId = collegeId;
     req.organizationScope = { collegeId, college: { id: collegeId }, departmentId: null, department: null };
     return next();
   } catch (error) {

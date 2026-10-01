@@ -3,9 +3,12 @@ const { RfidDevice, RFIDLog, AuditLog } = require('../models');
 const { Op } = require('sequelize');
 const { getAllLogs, createLog } = require('../controllers/rfidController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
+const { lookupByCode } = require('../controllers/assetTrackingController');
 
 const router = express.Router();
 const requireAdmin = [requireAuth, requireRole('admin')];
+
+router.get('/lookup/:code', ...requireAdmin, lookupByCode);
 
 const serializeDevice = (device) => ({
   id: device.id,

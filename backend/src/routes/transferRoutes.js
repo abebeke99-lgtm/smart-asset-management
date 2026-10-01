@@ -271,6 +271,8 @@ router.post('/', ...canRequestTransfers, resolveIctTransferScope, async (req, re
     const transfer = await Transfer.create({
       transferNumber,
       assetId,
+      sourceCollegeId: asset.collegeId || null,
+      destinationCollegeId: destination.collegeId || null,
       sourceDepartment: asset.department || '',
       destinationDepartment: destination.name,
       sourceDepartmentId: asset.departmentId || null,

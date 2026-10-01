@@ -1,67 +1,27 @@
 import React, { useEffect, useMemo, useState } from "react";
+import apiClient, { getApiErrorMessage } from "../../services/apiClient";
 
-const CHEMICALS_API = "/api/inventory/chemicals";
-const QUARANTINE_API = "/api/inventory/chemical-quarantine";
+const CHEMICALS_API = "/api/admin/inventory";
+const QUARANTINE_API = `${CHEMICALS_API}/quarantine`;
 
 const EMPTY_FORM = {
   chemicalId: "",
   reason: "",
-  quarantineDate: new Date().toISOString().slice(0, 10),
   storageLocation: "",
-  notes: "",
 };
 
-function getToken() {
-  return (
-    localStorage.getItem("token") ||
-    localStorage.getItem("accessToken") ||
-    sessionStorage.getItem("token") ||
-    sessionStorage.getItem("accessToken") ||
-    ""
-  );
-}
-
 async function apiRequest(url, options = {}) {
-  const token = getToken();
-
-  const headers = {
-    Accept: "application/json",
-    ...(options.body
-      ? { "Content-Type": "application/json" }
-      : {}),
-    ...(options.headers || {}),
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  try {
+    const response = await apiClient.request({
+      url,
+      method: options.method || "GET",
+      data: options.body ? JSON.parse(options.body) : undefined,
+      headers: options.headers,
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error, "Unable to complete the chemical quarantine request."));
   }
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  const contentType =
-    response.headers.get("content-type") || "";
-
-  let data = {};
-
-  if (contentType.includes("application/json")) {
-    data = await response.json();
-  } else {
-    const text = await response.text();
-    data = text ? { message: text } : {};
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      data?.message ||
-        data?.error ||
-        `Request failed with status ${response.status}`
-    );
-  }
-
-  return data;
 }
 
 function extractArray(data, keys = []) {
@@ -158,6 +118,8 @@ function normalizeRecord(item, index) {
       item?.referenceNumber ??
       item?.quarantineNumber ??
       item?.recordNumber ??
+      item?.chemicalCode ??
+      item?.chemical_code ??
       "",
 
     chemicalId:
@@ -179,11 +141,13 @@ function normalizeRecord(item, index) {
 
     reason:
       item?.reason ??
+      item?.quarantineReason ??
       "",
 
     quarantineDate:
       item?.quarantineDate ??
       item?.date ??
+      item?.updatedAt ??
       item?.createdAt ??
       null,
 
@@ -194,22 +158,8 @@ function normalizeRecord(item, index) {
       "",
 
     status:
-      item?.status ??
+      (item?.quarantine ? "Quarantined" : item?.status) ??
       "Quarantined",
-
-    releasedDate:
-      item?.releasedDate ??
-      null,
-
-    releasedBy:
-      item?.releasedByName ??
-      item?.releasedBy?.name ??
-      item?.releasedBy ??
-      "",
-
-    notes:
-      item?.notes ??
-      "",
 
     createdBy:
       item?.createdByName ??
@@ -374,12 +324,6 @@ export default function ChemicalQuarantine() {
       "quarantined"
   ).length;
 
-  const releasedCount = records.filter(
-    (record) =>
-      String(record.status).toLowerCase() ===
-      "released"
-  ).length;
-
   const expiredChemicalCount = chemicals.filter(
     (chemical) => {
       const days = daysUntil(
@@ -478,12 +422,7 @@ export default function ChemicalQuarantine() {
   };
 
   const openForm = () => {
-    setForm({
-      ...EMPTY_FORM,
-      quarantineDate: new Date()
-        .toISOString()
-        .slice(0, 10),
-    });
+    setForm(EMPTY_FORM);
 
     setError("");
     setShowForm(true);
@@ -511,27 +450,17 @@ export default function ChemicalQuarantine() {
       return;
     }
 
-    if (!form.quarantineDate) {
-      setError(
-        "The quarantine date is required."
-      );
-      return;
-    }
-
     setSaving(true);
     setError("");
 
     try {
-      await apiRequest(QUARANTINE_API, {
+      const selectedChemical = chemicals.find((chemical) => String(chemical.id) === String(form.chemicalId));
+      await apiRequest(`${CHEMICALS_API}/${encodeURIComponent(selectedChemical.id)}/quarantine`, {
         method: "POST",
         body: JSON.stringify({
-          chemicalId: form.chemicalId,
           reason: form.reason.trim(),
-          quarantineDate:
-            form.quarantineDate,
           storageLocation:
             form.storageLocation.trim(),
-          notes: form.notes.trim(),
         }),
       });
 
@@ -562,11 +491,10 @@ export default function ChemicalQuarantine() {
 
     try {
       await apiRequest(
-        `${QUARANTINE_API}/${encodeURIComponent(
-          record.id
-        )}/release`,
+        `${CHEMICALS_API}/${encodeURIComponent(record.id)}`,
         {
-          method: "POST",
+          method: "PUT",
+          body: JSON.stringify({ remove_quarantine: true }),
         }
       );
 
@@ -575,40 +503,6 @@ export default function ChemicalQuarantine() {
       setError(
         err.message ||
           "Unable to release the chemical."
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const cancelQuarantine = async (record) => {
-    const confirmed = window.confirm(
-      `Cancel the quarantine record for ${
-        record.chemicalName ||
-        record.chemicalId
-      }?`
-    );
-
-    if (!confirmed) return;
-
-    setSaving(true);
-    setError("");
-
-    try {
-      await apiRequest(
-        `${QUARANTINE_API}/${encodeURIComponent(
-          record.id
-        )}/cancel`,
-        {
-          method: "POST",
-        }
-      );
-
-      await loadData();
-    } catch (err) {
-      setError(
-        err.message ||
-          "Unable to cancel the quarantine record."
       );
     } finally {
       setSaving(false);
@@ -1113,16 +1007,6 @@ export default function ChemicalQuarantine() {
 
           <div className="summary-card">
             <div className="summary-label">
-              Released
-            </div>
-
-            <div className="summary-value">
-              {releasedCount}
-            </div>
-          </div>
-
-          <div className="summary-card">
-            <div className="summary-label">
               Expired Chemicals
             </div>
 
@@ -1168,13 +1052,6 @@ export default function ChemicalQuarantine() {
               Quarantined
             </option>
 
-            <option value="Released">
-              Released
-            </option>
-
-            <option value="Cancelled">
-              Cancelled
-            </option>
           </select>
 
           <button
@@ -1346,20 +1223,6 @@ export default function ChemicalQuarantine() {
                                     Release
                                   </button>
 
-                                  <button
-                                    type="button"
-                                    className="action-button cancel"
-                                    onClick={() =>
-                                      cancelQuarantine(
-                                        record
-                                      )
-                                    }
-                                    disabled={
-                                      saving
-                                    }
-                                  >
-                                    Cancel
-                                  </button>
                                 </>
                               )}
                             </div>
@@ -1462,26 +1325,6 @@ export default function ChemicalQuarantine() {
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">
-                    Quarantine Date{" "}
-                    <span className="required">
-                      *
-                    </span>
-                  </label>
-
-                  <input
-                    type="date"
-                    name="quarantineDate"
-                    className="form-input"
-                    value={
-                      form.quarantineDate
-                    }
-                    onChange={updateForm}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">
                     Storage Location
                   </label>
 
@@ -1514,20 +1357,6 @@ export default function ChemicalQuarantine() {
                   onChange={updateForm}
                   placeholder="Reason for quarantine"
                   required
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">
-                  Notes
-                </label>
-
-                <textarea
-                  name="notes"
-                  className="form-textarea"
-                  value={form.notes}
-                  onChange={updateForm}
-                  placeholder="Safety notes, inspection information or additional remarks..."
                 />
               </div>
 
@@ -1666,18 +1495,6 @@ export default function ChemicalQuarantine() {
                 </div>
               </div>
 
-              <div className="detail-item">
-                <div className="detail-label">
-                  Released Date
-                </div>
-
-                <div className="detail-value">
-                  {formatDate(
-                    selectedRecord.releasedDate
-                  )}
-                </div>
-              </div>
-
               <div className="detail-item detail-full">
                 <div className="detail-label">
                   Reason
@@ -1685,17 +1502,6 @@ export default function ChemicalQuarantine() {
 
                 <div className="detail-value">
                   {selectedRecord.reason ||
-                    "—"}
-                </div>
-              </div>
-
-              <div className="detail-item detail-full">
-                <div className="detail-label">
-                  Notes
-                </div>
-
-                <div className="detail-value">
-                  {selectedRecord.notes ||
                     "—"}
                 </div>
               </div>
@@ -1711,16 +1517,6 @@ export default function ChemicalQuarantine() {
                 </div>
               </div>
 
-              <div className="detail-item">
-                <div className="detail-label">
-                  Released By
-                </div>
-
-                <div className="detail-value">
-                  {selectedRecord.releasedBy ||
-                    "—"}
-                </div>
-              </div>
             </div>
 
             <div className="modal-footer">

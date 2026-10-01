@@ -1,1429 +1,299 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Html5Qrcode } from 'html5-qrcode';
+import { QRCodeSVG } from 'qrcode.react';
+import { Camera, RefreshCw, Search, X } from 'lucide-react';
+import { toast } from 'react-toastify';
+import apiClient, { getApiErrorMessage } from '../../services/apiClient';
+import { useLanguage } from '../../contexts/UiContext';
+import { translateMessage } from '../../i18n/messages';
 
-const ASSETS_API = "/api/assets";
-const RFID_API = "/api/rfid";
-const QR_API = "/api/qr";
+const ASSETS_API = '/api/assets';
+const PAGE_SIZE = 50;
+const HISTORY_TABS = ['assignments', 'transfers', 'maintenance'];
+const textFor = (language, key) => translateMessage(language, `tracking.${key}`);
+const localizedApiError = (error, key, language) => language === 'am'
+  ? textFor(language, key)
+  : getApiErrorMessage(error, textFor(language, key));
 
-function getToken() {
-  return (
-    localStorage.getItem("token") ||
-    localStorage.getItem("accessToken") ||
-    sessionStorage.getItem("token") ||
-    sessionStorage.getItem("accessToken") ||
-    ""
-  );
-}
-
-async function apiRequest(url, options = {}) {
-  const token = getToken();
-
-  const headers = {
-    Accept: "application/json",
-    ...(options.body
-      ? { "Content-Type": "application/json" }
-      : {}),
-    ...(options.headers || {}),
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  const contentType =
-    response.headers.get("content-type") || "";
-
-  let data = {};
-
-  if (contentType.includes("application/json")) {
-    data = await response.json();
-  } else {
-    const text = await response.text();
-    data = text ? { message: text } : {};
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      data?.message ||
-        data?.error ||
-        `Request failed with status ${response.status}`
-    );
-  }
-
-  return data;
-}
-
-function extractArray(data, keys = []) {
-  if (Array.isArray(data)) return data;
-
-  for (const key of keys) {
-    if (Array.isArray(data?.[key])) {
-      return data[key];
-    }
-  }
-
-  if (Array.isArray(data?.data)) return data.data;
-  if (Array.isArray(data?.rows)) return data.rows;
-  if (Array.isArray(data?.items)) return data.items;
-
-  return [];
-}
-
-function normalizeAsset(asset, index) {
+const normalizeAsset = (asset = {}) => {
+  const location = asset.location && typeof asset.location === 'object' ? asset.location : {};
   return {
-    id:
-      asset?.id ??
-      asset?.assetId ??
-      asset?._id ??
-      `asset-${index}`,
-
-    assetId:
-      asset?.assetId ??
-      asset?.id ??
-      "",
-
-    name:
-      asset?.name ??
-      asset?.assetName ??
-      "",
-
-    serialNumber:
-      asset?.serialNumber ??
-      asset?.serial_number ??
-      "",
-
-    category:
-      asset?.categoryName ??
-      asset?.category?.name ??
-      asset?.category ??
-      "",
-
-    department:
-      asset?.departmentName ??
-      asset?.department?.name ??
-      asset?.department ??
-      "",
-
-    location:
-      asset?.locationName ??
-      asset?.location?.name ??
-      asset?.location ??
-      "",
-
-    status:
-      asset?.status ??
-      "Available",
-
-    condition:
-      asset?.condition ??
-      asset?.assetCondition ??
-      "",
-
-    rfidTag:
-      asset?.rfidTag ??
-      asset?.rfid_tag ??
-      asset?.rfid?.tagId ??
-      asset?.rfid?.uid ??
-      "",
-
-    qrCode:
-      asset?.qrCode ??
-      asset?.qr_code ??
-      asset?.qr?.code ??
-      "",
-
-    raw: asset,
+    ...asset,
+    id: asset.id ?? asset.assetId ?? asset.asset_id,
+    assetCode: String(asset.assetCode ?? asset.asset_code ?? asset.assetId ?? asset.asset_id ?? asset.id ?? ''),
+    name: String(asset.name ?? asset.assetName ?? ''),
+    category: String(asset.category?.name ?? asset.categoryName ?? asset.category ?? ''),
+    serialNumber: String(asset.serialNumber ?? asset.serial_number ?? ''),
+    status: String(asset.status ?? ''),
+    department: String(asset.department?.name ?? asset.departmentName ?? asset.department ?? ''),
+    assignedTo: String(asset.assignedTo ?? asset.assignedToName ?? asset.assigned_to_name ?? ''),
+    qrCode: String(asset.qrCode ?? asset.qr_code ?? asset.digitalId ?? asset.digital_id ?? ''),
+    rfidTag: String(asset.rfidTag ?? asset.rfid_tag ?? ''),
+    locationParts: [
+      location.campus ?? asset.CampusRecord?.campusName ?? asset.campusName ?? asset.campus_name,
+      location.building ?? asset.BuildingRecord?.buildingName ?? asset.buildingName ?? asset.building_name,
+      location.floor ?? asset.RoomRecord?.floor ?? asset.floorName ?? asset.floor_name,
+      location.room ?? asset.RoomRecord?.roomName ?? asset.roomName ?? asset.room_name ?? (typeof asset.location === 'string' ? asset.location : ''),
+    ].filter((part) => part !== null && part !== undefined && String(part).trim()),
   };
-}
+};
 
-function formatStatus(value) {
-  if (!value) return "Not Assigned";
+const assetRows = (payload) => Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.assets) ? payload.assets : [];
+const historyRows = (payload) => Array.isArray(payload?.data) ? payload.data : payload?.history || [];
+const formatDate = (value) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
+};
 
-  return String(value)
-    .replace(/[_-]/g, " ")
-    .replace(/\b\w/g, (letter) =>
-      letter.toUpperCase()
-    );
-}
-
-export default function RfidQrTracking() {
+export default function AdminRFIDTracking() {
+  const { language } = useLanguage();
+  const tr = useCallback((key) => textFor(language, key), [language]);
   const [assets, setAssets] = useState([]);
-
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
+  const [listError, setListError] = useState('');
+  const [search, setSearch] = useState('');
+  const [trackingFilter, setTrackingFilter] = useState('all');
+  const [assetIdInput, setAssetIdInput] = useState('');
+  const [codeInput, setCodeInput] = useState('');
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState('');
+  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [activeTab, setActiveTab] = useState(HISTORY_TABS[0]);
+  const [historyState, setHistoryState] = useState({ status: 'idle', rows: [] });
+  const [scanning, setScanning] = useState(false);
+  const scannerRef = useRef(null);
+  const scannerStartRef = useRef(Promise.resolve());
+  const scanHandledRef = useRef(false);
+  const listControllerRef = useRef(null);
+  const lookupControllerRef = useRef(null);
+  const historyControllerRef = useRef(null);
+  const mountedRef = useRef(true);
 
-  const [error, setError] = useState("");
-
-  const [search, setSearch] = useState("");
-  const [trackingFilter, setTrackingFilter] =
-    useState("All");
-
-  const [selectedAsset, setSelectedAsset] =
-    useState(null);
-
-  const [showRfidModal, setShowRfidModal] =
-    useState(false);
-
-  const [showQrModal, setShowQrModal] =
-    useState(false);
-
-  const [rfidValue, setRfidValue] = useState("");
-  const [qrValue, setQrValue] = useState("");
-
-  const loadAssets = async () => {
+  const loadAssets = useCallback(async (signal) => {
     setLoading(true);
-    setError("");
-
+    setListError('');
     try {
-      const response = await apiRequest(ASSETS_API);
-
-      const list = extractArray(response, [
-        "assets",
-      ]).map(normalizeAsset);
-
-      setAssets(list);
-    } catch (err) {
-      setError(
-        err.message ||
-          "Unable to load assets."
-      );
+      const firstResponse = await apiClient.get(ASSETS_API, { params: { limit: PAGE_SIZE, page: 1 }, signal });
+      const payload = firstResponse.data;
+      const rows = assetRows(payload);
+      const pageCount = Number(payload?.pagination?.pages) || Math.ceil(Number(payload?.total || rows.length) / PAGE_SIZE);
+      for (let page = 2; page <= pageCount; page += 1) {
+        const response = await apiClient.get(ASSETS_API, { params: { limit: PAGE_SIZE, page }, signal });
+        rows.push(...assetRows(response.data));
+      }
+      if (!signal?.aborted) setAssets(rows.map(normalizeAsset));
+    } catch (error) {
+      if (!signal?.aborted) setListError(localizedApiError(error, 'assetsLoadError', language));
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
+  }, [language]);
+
+  const refreshAssets = () => {
+    listControllerRef.current?.abort();
+    const controller = new AbortController();
+    listControllerRef.current = controller;
+    void loadAssets(controller.signal);
   };
 
   useEffect(() => {
-    loadAssets();
-  }, []);
-
-  const statistics = useMemo(() => {
-    const total = assets.length;
-
-    const rfidAssigned = assets.filter(
-      (asset) => Boolean(asset.rfidTag)
-    ).length;
-
-    const qrAssigned = assets.filter(
-      (asset) => Boolean(asset.qrCode)
-    ).length;
-
-    const fullyTracked = assets.filter(
-      (asset) =>
-        Boolean(asset.rfidTag) &&
-        Boolean(asset.qrCode)
-    ).length;
-
-    return {
-      total,
-      rfidAssigned,
-      qrAssigned,
-      fullyTracked,
-      untracked: Math.max(
-        0,
-        total - fullyTracked
-      ),
+    mountedRef.current = true;
+    const controller = new AbortController();
+    listControllerRef.current = controller;
+    void loadAssets(controller.signal);
+    return () => {
+      mountedRef.current = false;
+      controller.abort();
+      lookupControllerRef.current?.abort();
+      historyControllerRef.current?.abort();
+      const scanner = scannerRef.current;
+      if (scanner) {
+        Promise.resolve(scannerStartRef.current).catch(() => {})
+          .then(() => scanner.stop()).catch(() => {})
+          .then(() => { try { scanner.clear(); } catch {} }).catch(() => {});
+      }
     };
-  }, [assets]);
+  }, [loadAssets]);
+
+  const statistics = useMemo(() => ({
+    total: assets.length,
+    rfidAssigned: assets.filter((asset) => Boolean(asset.rfidTag)).length,
+    qrAssigned: assets.filter((asset) => Boolean(asset.qrCode)).length,
+    fullyTracked: assets.filter((asset) => Boolean(asset.rfidTag && asset.qrCode)).length,
+    notFullyTracked: assets.filter((asset) => !asset.rfidTag || !asset.qrCode).length,
+  }), [assets]);
 
   const filteredAssets = useMemo(() => {
     const query = search.trim().toLowerCase();
-
     return assets.filter((asset) => {
-      const matchesSearch =
-        !query ||
-        asset.assetId
-          .toLowerCase()
-          .includes(query) ||
-        asset.name
-          .toLowerCase()
-          .includes(query) ||
-        asset.serialNumber
-          .toLowerCase()
-          .includes(query) ||
-        asset.rfidTag
-          .toLowerCase()
-          .includes(query) ||
-        asset.qrCode
-          .toLowerCase()
-          .includes(query) ||
-        asset.department
-          .toLowerCase()
-          .includes(query) ||
-        asset.location
-          .toLowerCase()
-          .includes(query);
-
-      let matchesFilter = true;
-
-      if (trackingFilter === "RFID Assigned") {
-        matchesFilter = Boolean(asset.rfidTag);
-      }
-
-      if (trackingFilter === "QR Assigned") {
-        matchesFilter = Boolean(asset.qrCode);
-      }
-
-      if (trackingFilter === "Fully Tracked") {
-        matchesFilter =
-          Boolean(asset.rfidTag) &&
-          Boolean(asset.qrCode);
-      }
-
-      if (trackingFilter === "Not Fully Tracked") {
-        matchesFilter =
-          !asset.rfidTag ||
-          !asset.qrCode;
-      }
-
-      return (
-        matchesSearch &&
-        matchesFilter
-      );
+      const matchesSearch = !query || [asset.assetCode, asset.id, asset.name, asset.serialNumber, asset.rfidTag, asset.qrCode, asset.department]
+        .some((value) => String(value ?? '').toLowerCase().includes(query));
+      const matchesFilter = trackingFilter === 'all'
+        || (trackingFilter === 'rfid' && Boolean(asset.rfidTag))
+        || (trackingFilter === 'qr' && Boolean(asset.qrCode))
+        || (trackingFilter === 'fully' && Boolean(asset.rfidTag && asset.qrCode))
+        || (trackingFilter === 'incomplete' && (!asset.rfidTag || !asset.qrCode));
+      return matchesSearch && matchesFilter;
     });
-  }, [
-    assets,
-    search,
-    trackingFilter,
-  ]);
+  }, [assets, search, trackingFilter]);
 
-  const openRfidModal = (asset) => {
-    setSelectedAsset(asset);
-    setRfidValue(asset.rfidTag || "");
-    setError("");
-    setShowRfidModal(true);
-  };
+  const lookupAsset = useCallback(async (url) => {
+    lookupControllerRef.current?.abort();
+    const controller = new AbortController();
+    lookupControllerRef.current = controller;
+    setLookupLoading(true);
+    setLookupError('');
+    try {
+      const response = await apiClient.get(url, { signal: controller.signal });
+      const record = response.data?.data?.asset ?? response.data?.asset;
+      if (!record) throw new Error(textFor(language, 'assetNotFound'));
+      setSelectedAsset(normalizeAsset(record));
+      setActiveTab(HISTORY_TABS[0]);
+      setLookupError('');
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      const message = error.response?.status === 404 ? textFor(language, 'assetNotFound') : localizedApiError(error, 'lookupError', language);
+      setLookupError(message);
+      toast.error(message);
+    } finally {
+      if (!controller.signal.aborted) setLookupLoading(false);
+    }
+  }, [language]);
 
-  const openQrModal = (asset) => {
-    setSelectedAsset(asset);
-    setQrValue(asset.qrCode || "");
-    setError("");
-    setShowQrModal(true);
-  };
-
-  const closeModals = () => {
-    if (processing) return;
-
-    setShowRfidModal(false);
-    setShowQrModal(false);
-    setSelectedAsset(null);
-    setRfidValue("");
-    setQrValue("");
-  };
-
-  const assignRfid = async (event) => {
+  const submitAssetId = (event) => {
     event.preventDefault();
-
-    if (!selectedAsset) return;
-
-    if (!rfidValue.trim()) {
-      setError(
-        "Please enter an RFID tag value."
-      );
-      return;
-    }
-
-    setProcessing(true);
-    setError("");
-
-    try {
-      await apiRequest(
-        `${RFID_API}/${encodeURIComponent(
-          selectedAsset.assetId
-        )}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            assetId: selectedAsset.assetId,
-            rfidTag: rfidValue.trim(),
-          }),
-        }
-      );
-
-      closeModals();
-      await loadAssets();
-    } catch (err) {
-      setError(
-        err.message ||
-          "Unable to assign the RFID tag."
-      );
-    } finally {
-      setProcessing(false);
-    }
+    const value = assetIdInput.trim();
+    if (value) void lookupAsset(`${ASSETS_API}/lookup/${encodeURIComponent(value)}`);
   };
 
-  const removeRfid = async (asset) => {
-    if (!asset.rfidTag) return;
-
-    const confirmed = window.confirm(
-      `Remove RFID tag ${asset.rfidTag} from ${asset.assetId}?`
-    );
-
-    if (!confirmed) return;
-
-    setProcessing(true);
-    setError("");
-
-    try {
-      await apiRequest(
-        `${RFID_API}/${encodeURIComponent(
-          asset.assetId
-        )}`,
-        {
-          method: "DELETE",
-        }
-      );
-
-      await loadAssets();
-    } catch (err) {
-      setError(
-        err.message ||
-          "Unable to remove the RFID tag."
-      );
-    } finally {
-      setProcessing(false);
-    }
+  const submitCode = (event) => {
+    event.preventDefault();
+    const value = codeInput.trim();
+    if (value) void lookupAsset(`/api/rfid/lookup/${encodeURIComponent(value)}`);
   };
 
-  const generateQr = async () => {
-    if (!selectedAsset) return;
+  const selectAsset = (asset) => {
+    lookupControllerRef.current?.abort();
+    setLookupLoading(false);
+    setLookupError('');
+    setSelectedAsset(asset);
+    setActiveTab(HISTORY_TABS[0]);
+  };
 
-    setProcessing(true);
-    setError("");
+  const stopScanner = useCallback(async () => {
+    const scanner = scannerRef.current;
+    if (!scanner) return;
+    try { await scanner.stop(); } catch {}
+    try { scanner.clear(); } catch {}
+    scannerRef.current = null;
+    if (mountedRef.current) setScanning(false);
+  }, []);
 
+  const startScanner = async () => {
+    if (scannerRef.current) return;
+    scanHandledRef.current = false;
+    let scanner;
     try {
-      const response = await apiRequest(
-        QR_API,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            assetId: selectedAsset.assetId,
-          }),
-        }
-      );
-
-      const generated =
-        response?.qrCode ??
-        response?.code ??
-        response?.data?.qrCode ??
-        "";
-
-      if (generated) {
-        setQrValue(generated);
+      scanner = new Html5Qrcode('admin-rfid-reader');
+      scannerRef.current = scanner;
+      const onDecode = (decodedText) => {
+        if (scanHandledRef.current) return;
+        scanHandledRef.current = true;
+        void stopScanner().then(() => lookupAsset(`/api/rfid/lookup/${encodeURIComponent(decodedText)}`)).catch(() => {});
+      };
+      const scanConfig = { fps: 10, qrbox: { width: 250, height: 250 } };
+      let startPromise = scanner.start({ facingMode: 'environment' }, scanConfig, onDecode, () => {});
+      scannerStartRef.current = startPromise;
+      try {
+        await startPromise;
+      } catch (cameraError) {
+        const details = String(cameraError?.message || cameraError || '').toLowerCase();
+        if (details.includes('permission') || details.includes('denied') || details.includes('notallowed')) throw cameraError;
+        const cameras = await Html5Qrcode.getCameras();
+        const preferredCamera = cameras.find((camera) => /back|rear|environment/i.test(camera.label || '')) || cameras[0];
+        if (!preferredCamera?.id) throw cameraError;
+        startPromise = scanner.start(preferredCamera.id, scanConfig, onDecode, () => {});
+        scannerStartRef.current = startPromise;
+        await startPromise;
       }
-
-      await loadAssets();
-
-      setError("");
-    } catch (err) {
-      setError(
-        err.message ||
-          "Unable to generate the QR code."
-      );
-    } finally {
-      setProcessing(false);
+      if (mountedRef.current) setScanning(true);
+    } catch (error) {
+      if (scanner) {
+        try { scanner.clear(); } catch {}
+        if (scannerRef.current === scanner) scannerRef.current = null;
+      }
+      if (mountedRef.current) setScanning(false);
+      const details = String(error?.message || error || '').toLowerCase();
+      toast.error(details.includes('permission') || details.includes('denied') || details.includes('notallowed') ? tr('cameraPermissionDenied') : tr('cameraUnavailable'));
     }
   };
 
-  const downloadQr = () => {
-    if (!qrValue) return;
+  const selectedAssetId = selectedAsset?.id;
+  useEffect(() => {
+    if (!selectedAssetId) {
+      setHistoryState({ status: 'idle', rows: [] });
+      return undefined;
+    }
+    historyControllerRef.current?.abort();
+    const controller = new AbortController();
+    historyControllerRef.current = controller;
+    setHistoryState({ status: 'loading', rows: [] });
+    apiClient.get(`${ASSETS_API}/${encodeURIComponent(selectedAssetId)}/${activeTab}`, { signal: controller.signal })
+      .then((response) => { if (!controller.signal.aborted) setHistoryState({ status: 'loaded', rows: historyRows(response.data) }); })
+      .catch((error) => { if (!controller.signal.aborted) setHistoryState({ status: 'error', rows: [], message: localizedApiError(error, 'historyLoadError', language) }); });
+    return () => controller.abort();
+  }, [selectedAssetId, activeTab, language, tr]);
 
-    const encoded = encodeURIComponent(
-      qrValue
-    );
+  const closeDetails = () => {
+    historyControllerRef.current?.abort();
+    setSelectedAsset(null);
+  };
 
-    const url =
-      `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encoded}`;
-
-    const link =
-      document.createElement("a");
-
-    link.href = url;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.click();
+  const stats = [['total', 'totalAssets'], ['rfidAssigned', 'rfidAssigned'], ['qrAssigned', 'qrAssigned'], ['fullyTracked', 'fullyTracked'], ['notFullyTracked', 'notFullyTracked']];
+  const historyColumns = {
+    assignments: [['userName', 'user'], ['department', 'department'], ['assignedAt', 'date'], ['status', 'status']],
+    transfers: [[(row) => `${row.fromLocation || row.fromDepartment || '—'} → ${row.toLocation || row.toDepartment || '—'}`, 'fromTo'], ['transferredAt', 'date'], ['reason', 'reason']],
+    maintenance: [['requestedAt', 'date'], [(row) => row.title || row.description, 'problem'], ['status', 'status'], ['technicianName', 'technician']],
   };
 
   return (
-    <div className="tracking-page">
+    <div className="rfid-page">
       <style>{`
-        .tracking-page {
-          min-height: 100%;
-          padding: 24px;
-          background: #f3f6f9;
-          color: #111827;
-          box-sizing: border-box;
-        }
-
-        .tracking-container {
-          max-width: 1500px;
-          margin: 0 auto;
-        }
-
-        .page-header {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 20px;
-          margin-bottom: 24px;
-        }
-
-        .page-title {
-          margin: 0;
-          font-size: 28px;
-          font-weight: 700;
-        }
-
-        .page-subtitle {
-          margin: 7px 0 0;
-          color: #64748b;
-          font-size: 14px;
-        }
-
-        .summary-grid {
-          display: grid;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
-          gap: 14px;
-          margin-bottom: 20px;
-        }
-
-        .summary-card {
-          background: #fff;
-          border: 1px solid #e2e8f0;
-          border-radius: 10px;
-          padding: 17px;
-          box-shadow: 0 2px 8px rgba(15, 23, 42, .04);
-        }
-
-        .summary-label {
-          color: #64748b;
-          font-size: 12px;
-          font-weight: 600;
-          margin-bottom: 7px;
-        }
-
-        .summary-value {
-          font-size: 25px;
-          font-weight: 700;
-        }
-
-        .toolbar {
-          display: flex;
-          gap: 12px;
-          align-items: center;
-          padding: 15px;
-          margin-bottom: 16px;
-          background: #fff;
-          border: 1px solid #e2e8f0;
-          border-radius: 10px;
-        }
-
-        .search-input,
-        .filter-select {
-          padding: 10px 12px;
-          border: 1px solid #cbd5e1;
-          border-radius: 7px;
-          background: #fff;
-          color: #111827;
-          font-size: 14px;
-          outline: none;
-        }
-
-        .search-input {
-          flex: 1;
-          min-width: 250px;
-        }
-
-        .search-input:focus,
-        .filter-select:focus,
-        .modal-input:focus {
-          border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37, 99, 235, .1);
-        }
-
-        .refresh-button {
-          padding: 10px 14px;
-          border: 1px solid #cbd5e1;
-          border-radius: 7px;
-          background: #fff;
-          color: #334155;
-          font-weight: 600;
-          cursor: pointer;
-        }
-
-        .table-card {
-          overflow: hidden;
-          background: #fff;
-          border: 1px solid #e2e8f0;
-          border-radius: 10px;
-          box-shadow: 0 2px 8px rgba(15, 23, 42, .04);
-        }
-
-        .table-wrapper {
-          overflow-x: auto;
-        }
-
-        .asset-table {
-          width: 100%;
-          min-width: 1250px;
-          border-collapse: collapse;
-        }
-
-        .asset-table th {
-          padding: 13px 15px;
-          background: #f8fafc;
-          color: #475569;
-          border-bottom: 1px solid #e2e8f0;
-          text-align: left;
-          font-size: 12px;
-          white-space: nowrap;
-        }
-
-        .asset-table td {
-          padding: 13px 15px;
-          border-bottom: 1px solid #eef2f7;
-          font-size: 13px;
-          vertical-align: middle;
-        }
-
-        .asset-table tr:last-child td {
-          border-bottom: 0;
-        }
-
-        .asset-id {
-          color: #1d4ed8;
-          font-weight: 700;
-        }
-
-        .asset-name {
-          margin-top: 3px;
-          font-weight: 600;
-        }
-
-        .secondary {
-          margin-top: 3px;
-          color: #64748b;
-          font-size: 12px;
-        }
-
-        .tracking-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 5px 9px;
-          border-radius: 999px;
-          font-size: 11px;
-          font-weight: 700;
-        }
-
-        .assigned {
-          color: #166534;
-          background: #dcfce7;
-        }
-
-        .not-assigned {
-          color: #92400e;
-          background: #fef3c7;
-        }
-
-        .tag-value {
-          font-family: monospace;
-          color: #334155;
-          font-size: 12px;
-        }
-
-        .actions {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 6px;
-        }
-
-        .action-button {
-          padding: 6px 9px;
-          border: 1px solid #cbd5e1;
-          border-radius: 6px;
-          background: #fff;
-          color: #334155;
-          font-size: 12px;
-          font-weight: 600;
-          cursor: pointer;
-        }
-
-        .action-button.primary {
-          color: #1d4ed8;
-          background: #eff6ff;
-          border-color: #bfdbfe;
-        }
-
-        .action-button.danger {
-          color: #b91c1c;
-          background: #fef2f2;
-          border-color: #fecaca;
-        }
-
-        .error-box {
-          margin-bottom: 16px;
-          padding: 12px 14px;
-          border: 1px solid #fecaca;
-          border-radius: 8px;
-          background: #fef2f2;
-          color: #991b1b;
-          font-size: 14px;
-        }
-
-        .empty-state,
-        .loading-state {
-          padding: 55px 20px;
-          text-align: center;
-          color: #64748b;
-        }
-
-        .modal-backdrop {
-          position: fixed;
-          inset: 0;
-          z-index: 1000;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 20px;
-          background: rgba(15, 23, 42, .55);
-        }
-
-        .modal {
-          width: min(570px, 100%);
-          max-height: calc(100vh - 40px);
-          overflow-y: auto;
-          background: #fff;
-          border-radius: 12px;
-          box-shadow: 0 20px 60px rgba(15, 23, 42, .25);
-        }
-
-        .modal-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 18px 20px;
-          border-bottom: 1px solid #e2e8f0;
-        }
-
-        .modal-title {
-          margin: 0;
-          font-size: 19px;
-        }
-
-        .close-button {
-          width: 34px;
-          height: 34px;
-          border: 0;
-          border-radius: 7px;
-          background: #f1f5f9;
-          color: #475569;
-          font-size: 18px;
-          cursor: pointer;
-        }
-
-        .modal-body {
-          padding: 20px;
-        }
-
-        .asset-summary {
-          margin-bottom: 18px;
-          padding: 13px;
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
-          background: #f8fafc;
-        }
-
-        .asset-summary-id {
-          color: #1d4ed8;
-          font-size: 13px;
-          font-weight: 700;
-        }
-
-        .asset-summary-name {
-          margin-top: 4px;
-          font-size: 16px;
-          font-weight: 700;
-        }
-
-        .modal-label {
-          display: block;
-          margin-bottom: 7px;
-          color: #334155;
-          font-size: 13px;
-          font-weight: 700;
-        }
-
-        .modal-input {
-          width: 100%;
-          box-sizing: border-box;
-          padding: 11px 12px;
-          border: 1px solid #cbd5e1;
-          border-radius: 7px;
-          outline: none;
-          font-size: 14px;
-        }
-
-        .modal-help {
-          margin-top: 7px;
-          color: #64748b;
-          font-size: 12px;
-        }
-
-        .qr-box {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 230px;
-          margin-top: 15px;
-          padding: 15px;
-          border: 1px dashed #cbd5e1;
-          border-radius: 10px;
-          background: #f8fafc;
-        }
-
-        .qr-image {
-          width: 210px;
-          height: 210px;
-          object-fit: contain;
-          border: 8px solid #fff;
-          box-shadow: 0 2px 10px rgba(15, 23, 42, .1);
-        }
-
-        .qr-placeholder {
-          color: #64748b;
-          text-align: center;
-          font-size: 13px;
-        }
-
-        .modal-footer {
-          display: flex;
-          justify-content: flex-end;
-          gap: 10px;
-          padding: 16px 20px;
-          border-top: 1px solid #e2e8f0;
-        }
-
-        .secondary-button,
-        .primary-button {
-          padding: 10px 15px;
-          border-radius: 7px;
-          font-weight: 600;
-          cursor: pointer;
-        }
-
-        .secondary-button {
-          border: 1px solid #cbd5e1;
-          background: #fff;
-          color: #334155;
-        }
-
-        .primary-button {
-          border: 0;
-          background: #2563eb;
-          color: #fff;
-        }
-
-        .primary-button:hover {
-          background: #1d4ed8;
-        }
-
-        .tracking-info {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-          margin-top: 18px;
-        }
-
-        .info-card {
-          padding: 13px;
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
-        }
-
-        .info-label {
-          color: #64748b;
-          font-size: 11px;
-          font-weight: 700;
-          text-transform: uppercase;
-        }
-
-        .info-value {
-          margin-top: 5px;
-          color: #111827;
-          font-size: 13px;
-          font-weight: 600;
-          word-break: break-word;
-        }
-
-        @media (max-width: 1100px) {
-          .summary-grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-          }
-        }
-
-        @media (max-width: 800px) {
-          .summary-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-
-          .toolbar {
-            flex-direction: column;
-            align-items: stretch;
-          }
-
-          .search-input {
-            min-width: 0;
-          }
-        }
-
-        @media (max-width: 520px) {
-          .tracking-page {
-            padding: 16px;
-          }
-
-          .summary-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .tracking-info {
-            grid-template-columns: 1fr;
-          }
-        }
+        .rfid-page{min-height:100%;padding:24px;background:#f3f6f9;color:#111827;box-sizing:border-box}.rfid-container{max-width:1500px;margin:0 auto}.rfid-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}.rfid-title{margin:0;font-size:28px;font-weight:700}.rfid-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin-bottom:18px}.rfid-summary-card,.rfid-panel,.rfid-table-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 2px 8px rgba(15,23,42,.04)}.rfid-summary-card{padding:16px}.rfid-summary-label{margin-bottom:7px;color:#64748b;font-size:12px;font-weight:600}.rfid-summary-value{font-size:25px;font-weight:700}.rfid-toolbar{display:flex;align-items:center;gap:10px;padding:14px;margin-bottom:14px;background:#fff;border:1px solid #e2e8f0;border-radius:10px}.rfid-control{height:44px;box-sizing:border-box;padding:0 12px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#111827;font:inherit;font-size:14px}.rfid-search{flex:1;min-width:180px}.rfid-select{min-width:190px}.rfid-button{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 14px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#334155;font:inherit;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}.rfid-button:hover{background:#f8fafc}.rfid-button:disabled{opacity:.55;cursor:not-allowed}.rfid-button-primary{border-color:#1d4ed8;background:#1d4ed8;color:#fff}.rfid-button-primary:hover{background:#1e40af}.rfid-workflows{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:16px}.rfid-panel{min-width:0;padding:16px}.rfid-panel h2{margin:0 0 12px;font-size:16px}.rfid-form{display:flex;gap:8px}.rfid-form .rfid-control{min-width:0;flex:1}.rfid-scanner{min-height:0;display:flex;justify-content:center;overflow:hidden;margin:0 0 10px}.rfid-scanner:not(:empty){min-height:62px}.rfid-scanner video{max-width:100%;border-radius:7px}.rfid-scanner-actions{display:flex;gap:8px;flex-wrap:wrap}.rfid-error{margin:0 0 14px;padding:12px 14px;border:1px solid #fecaca;border-radius:8px;background:#fef2f2;color:#991b1b;font-size:14px}.rfid-table-card{overflow:hidden}.rfid-table-scroll{overflow-x:auto}.rfid-table{width:100%;min-width:850px;border-collapse:collapse}.rfid-table th{padding:13px 15px;background:#f8fafc;color:#475569;border-bottom:1px solid #e2e8f0;text-align:left;font-size:12px;white-space:nowrap}.rfid-table td{padding:13px 15px;border-bottom:1px solid #eef2f7;font-size:13px;vertical-align:middle}.rfid-table tbody tr{cursor:pointer}.rfid-table tbody tr:hover,.rfid-table tbody tr:focus{background:#f8fafc;outline:2px solid #bfdbfe;outline-offset:-2px}.rfid-code{font-family:monospace;color:#334155;font-size:12px;overflow-wrap:anywhere}.rfid-empty{padding:42px 20px;text-align:center;color:#64748b}.rfid-footer{padding:12px 15px;color:#64748b;font-size:13px;border-top:1px solid #eef2f7}.rfid-modal-backdrop{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.52)}.rfid-detail{width:min(850px,100%);max-height:calc(100vh - 32px);overflow:auto;background:#fff;border-radius:10px;box-shadow:0 18px 60px rgba(15,23,42,.25)}.rfid-detail-header{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;background:#fff;border-bottom:1px solid #e2e8f0}.rfid-detail-header h2{margin:0;font-size:20px}.rfid-icon-button{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#334155;cursor:pointer}.rfid-detail-content{padding:18px 20px}.rfid-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.rfid-detail-field{min-width:0;padding:12px;border:1px solid #e2e8f0;border-radius:8px}.rfid-detail-label{display:block;margin-bottom:5px;color:#64748b;font-size:12px;font-weight:600}.rfid-detail-value{overflow-wrap:anywhere;font-size:14px;font-weight:600}.rfid-location{margin:14px 0 18px;padding:12px;border-left:3px solid #0f766e;background:#f0fdfa;font-size:14px}.rfid-qr{display:flex;align-items:center;gap:12px;margin:14px 0}.rfid-tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid #e2e8f0}.rfid-tab{min-height:44px;padding:0 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:#475569;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}.rfid-tab[aria-selected=true]{border-bottom-color:#0f766e;color:#0f766e;font-weight:700}.rfid-history{margin-top:12px;overflow-x:auto}.rfid-history table{width:100%;min-width:560px;border-collapse:collapse}.rfid-history th,.rfid-history td{padding:10px 12px;border-bottom:1px solid #eef2f7;text-align:left;font-size:13px;vertical-align:top}.rfid-history th{color:#64748b;font-size:12px}@media(max-width:980px){.rfid-summary{grid-template-columns:repeat(3,minmax(0,1fr))}.rfid-workflows{grid-template-columns:1fr 1fr}.rfid-workflows .rfid-panel:first-child{grid-column:1/-1}}@media(max-width:640px){.rfid-page{padding:14px}.rfid-title{font-size:23px}.rfid-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.rfid-summary-card{padding:13px}.rfid-summary-value{font-size:22px}.rfid-toolbar{align-items:stretch;flex-wrap:wrap;padding:10px}.rfid-search{flex-basis:100%}.rfid-select{flex:1;min-width:0}.rfid-toolbar .rfid-button{flex:1}.rfid-workflows{grid-template-columns:1fr}.rfid-workflows .rfid-panel:first-child{grid-column:auto}.rfid-form{flex-wrap:wrap}.rfid-form .rfid-control{flex-basis:100%}.rfid-form .rfid-button{flex:1}.rfid-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.rfid-detail-content{padding:14px}.rfid-modal-backdrop{padding:8px}.rfid-detail{max-height:calc(100vh - 16px)}}
       `}</style>
-
-      <div className="tracking-container">
-        <div className="page-header">
-          <div>
-            <h1 className="page-title">
-              RFID & QR Tracking
-            </h1>
-
-            <p className="page-subtitle">
-              Monitor RFID and QR identification
-              assignments across university assets.
-            </p>
-          </div>
+      <div className="rfid-container">
+        <header className="rfid-header"><h1 className="rfid-title">{tr('title')}</h1></header>
+        <section className="rfid-summary" aria-label={tr('summary')}>
+          {stats.map(([key, label]) => <div className="rfid-summary-card" key={key}><div className="rfid-summary-label">{tr(label)}</div><div className="rfid-summary-value">{statistics[key]}</div></div>)}
+        </section>
+        <div className="rfid-toolbar">
+          <input className="rfid-control rfid-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={tr('searchPlaceholder')} aria-label={tr('searchPlaceholder')} />
+          <select className="rfid-control rfid-select" value={trackingFilter} onChange={(event) => setTrackingFilter(event.target.value)} aria-label={tr('filterLabel')}>{['all', 'rfid', 'qr', 'fully', 'incomplete'].map((filter) => <option key={filter} value={filter}>{tr(`filter.${filter}`)}</option>)}</select>
+          <button className="rfid-button" type="button" onClick={refreshAssets} disabled={loading}><RefreshCw size={16} aria-hidden="true" />{tr('refresh')}</button>
         </div>
-
-        {error && (
-          <div className="error-box">
-            {error}
-          </div>
-        )}
-
-        <div className="summary-grid">
-          <div className="summary-card">
-            <div className="summary-label">
-              Total Assets
-            </div>
-            <div className="summary-value">
-              {statistics.total}
-            </div>
-          </div>
-
-          <div className="summary-card">
-            <div className="summary-label">
-              RFID Assigned
-            </div>
-            <div className="summary-value">
-              {statistics.rfidAssigned}
-            </div>
-          </div>
-
-          <div className="summary-card">
-            <div className="summary-label">
-              QR Assigned
-            </div>
-            <div className="summary-value">
-              {statistics.qrAssigned}
-            </div>
-          </div>
-
-          <div className="summary-card">
-            <div className="summary-label">
-              Fully Tracked
-            </div>
-            <div className="summary-value">
-              {statistics.fullyTracked}
-            </div>
-          </div>
-
-          <div className="summary-card">
-            <div className="summary-label">
-              Not Fully Tracked
-            </div>
-            <div className="summary-value">
-              {statistics.untracked}
-            </div>
-          </div>
-        </div>
-
-        <div className="toolbar">
-          <input
-            type="search"
-            className="search-input"
-            placeholder="Search asset ID, name, serial, RFID, QR, department..."
-            value={search}
-            onChange={(event) =>
-              setSearch(event.target.value)
-            }
-          />
-
-          <select
-            className="filter-select"
-            value={trackingFilter}
-            onChange={(event) =>
-              setTrackingFilter(event.target.value)
-            }
-          >
-            <option value="All">
-              All Tracking
-            </option>
-
-            <option value="RFID Assigned">
-              RFID Assigned
-            </option>
-
-            <option value="QR Assigned">
-              QR Assigned
-            </option>
-
-            <option value="Fully Tracked">
-              Fully Tracked
-            </option>
-
-            <option value="Not Fully Tracked">
-              Not Fully Tracked
-            </option>
-          </select>
-
-          <button
-            type="button"
-            className="refresh-button"
-            onClick={loadAssets}
-            disabled={loading}
-          >
-            {loading ? "Loading..." : "Refresh"}
-          </button>
-        </div>
-
-        <div className="table-card">
-          {loading ? (
-            <div className="loading-state">
-              Loading asset tracking information...
-            </div>
-          ) : filteredAssets.length === 0 ? (
-            <div className="empty-state">
-              <div
-                style={{
-                  fontSize: 30,
-                  marginBottom: 10,
-                }}
-              >
-                🏷️
-              </div>
-
-              <strong>
-                No matching assets
-              </strong>
-
-              <div
-                style={{
-                  marginTop: 7,
-                }}
-              >
-                Try changing your search or tracking
-                filter.
-              </div>
-            </div>
-          ) : (
-            <div className="table-wrapper">
-              <table className="asset-table">
-                <thead>
-                  <tr>
-                    <th>Asset</th>
-                    <th>Category</th>
-                    <th>Department</th>
-                    <th>Location</th>
-                    <th>RFID</th>
-                    <th>QR Code</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {filteredAssets.map((asset) => (
-                    <tr key={asset.id}>
-                      <td>
-                        <div className="asset-id">
-                          {asset.assetId || "—"}
-                        </div>
-
-                        <div className="asset-name">
-                          {asset.name ||
-                            "Unnamed Asset"}
-                        </div>
-
-                        {asset.serialNumber && (
-                          <div className="secondary">
-                            SN:{" "}
-                            {asset.serialNumber}
-                          </div>
-                        )}
-                      </td>
-
-                      <td>
-                        {asset.category || "—"}
-                      </td>
-
-                      <td>
-                        {asset.department || "—"}
-                      </td>
-
-                      <td>
-                        {asset.location || "—"}
-                      </td>
-
-                      <td>
-                        {asset.rfidTag ? (
-                          <>
-                            <span className="tracking-badge assigned">
-                              Assigned
-                            </span>
-
-                            <div className="tag-value">
-                              {asset.rfidTag}
-                            </div>
-                          </>
-                        ) : (
-                          <span className="tracking-badge not-assigned">
-                            Not Assigned
-                          </span>
-                        )}
-                      </td>
-
-                      <td>
-                        {asset.qrCode ? (
-                          <>
-                            <span className="tracking-badge assigned">
-                              Assigned
-                            </span>
-
-                            <div className="tag-value">
-                              {asset.qrCode}
-                            </div>
-                          </>
-                        ) : (
-                          <span className="tracking-badge not-assigned">
-                            Not Assigned
-                          </span>
-                        )}
-                      </td>
-
-                      <td>
-                        {formatStatus(
-                          asset.status
-                        )}
-                      </td>
-
-                      <td>
-                        <div className="actions">
-                          <button
-                            type="button"
-                            className="action-button primary"
-                            onClick={() =>
-                              openRfidModal(asset)
-                            }
-                          >
-                            {asset.rfidTag
-                              ? "Edit RFID"
-                              : "Assign RFID"}
-                          </button>
-
-                          {asset.rfidTag && (
-                            <button
-                              type="button"
-                              className="action-button danger"
-                              onClick={() =>
-                                removeRfid(asset)
-                              }
-                              disabled={processing}
-                            >
-                              Remove
-                            </button>
-                          )}
-
-                          <button
-                            type="button"
-                            className="action-button"
-                            onClick={() =>
-                              openQrModal(asset)
-                            }
-                          >
-                            {asset.qrCode
-                              ? "View QR"
-                              : "Generate QR"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        <div
-          style={{
-            marginTop: 12,
-            color: "#64748b",
-            fontSize: 13,
-          }}
-        >
-          Showing {filteredAssets.length} of{" "}
-          {assets.length} assets
-        </div>
+        <section className="rfid-workflows" aria-label={tr('lookups')}>
+          <div className="rfid-panel"><h2>{tr('scanner')}</h2><div id="admin-rfid-reader" className="rfid-scanner" /><div className="rfid-scanner-actions"><button className="rfid-button rfid-button-primary" type="button" onClick={startScanner} disabled={scanning}><Camera size={16} aria-hidden="true" />{tr('startScan')}</button><button className="rfid-button" type="button" onClick={() => { void stopScanner(); }} disabled={!scanning}>{tr('stopScan')}</button></div></div>
+          <div className="rfid-panel"><h2>{tr('assetIdLookup')}</h2><form className="rfid-form" onSubmit={submitAssetId}><input className="rfid-control" value={assetIdInput} onChange={(event) => setAssetIdInput(event.target.value)} placeholder={tr('assetIdPlaceholder')} aria-label={tr('assetIdPlaceholder')} /><button className="rfid-button rfid-button-primary" type="submit" disabled={lookupLoading || !assetIdInput.trim()}><Search size={16} aria-hidden="true" />{tr('search')}</button></form></div>
+          <div className="rfid-panel"><h2>{tr('codeLookup')}</h2><form className="rfid-form" onSubmit={submitCode}><input className="rfid-control" value={codeInput} onChange={(event) => setCodeInput(event.target.value)} placeholder={tr('codePlaceholder')} aria-label={tr('codePlaceholder')} /><button className="rfid-button rfid-button-primary" type="submit" disabled={lookupLoading || !codeInput.trim()}><Search size={16} aria-hidden="true" />{tr('search')}</button></form></div>
+        </section>
+        {lookupError && <div className="rfid-error" role="alert">{lookupError}</div>}{listError && <div className="rfid-error" role="alert">{listError}</div>}
+        <section className="rfid-table-card" aria-label={tr('assetList')}><div className="rfid-table-scroll"><table className="rfid-table"><thead><tr><th>{tr('assetId')}</th><th>{tr('name')}</th><th>{tr('department')}</th><th>{tr('status')}</th><th>QR</th><th>RFID</th></tr></thead><tbody>
+          {filteredAssets.map((asset) => <tr key={asset.id} tabIndex={0} onClick={() => selectAsset(asset)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectAsset(asset); } }}><td className="rfid-code">{asset.assetCode || asset.id || '—'}</td><td>{asset.name || '—'}{asset.serialNumber && <div className="rfid-summary-label">{tr('serial')}: {asset.serialNumber}</div>}</td><td>{asset.department || '—'}</td><td>{asset.status || '—'}</td><td className="rfid-code">{asset.qrCode || '—'}</td><td className="rfid-code">{asset.rfidTag || '—'}</td></tr>)}
+          {!loading && filteredAssets.length === 0 && <tr><td colSpan="6" className="rfid-empty">{assets.length ? tr('noMatchingAssets') : tr('emptyAssets')}</td></tr>}{loading && <tr><td colSpan="6" className="rfid-empty">{tr('loading')}</td></tr>}
+        </tbody></table></div><footer className="rfid-footer">{tr('showing')} {filteredAssets.length} {tr('of')} {assets.length} {tr('assets')}</footer></section>
       </div>
-
-      {showRfidModal && selectedAsset && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeModals();
-            }
-          }}
-        >
-          <div className="modal">
-            <div className="modal-header">
-              <h2 className="modal-title">
-                Assign RFID Tag
-              </h2>
-
-              <button
-                type="button"
-                className="close-button"
-                onClick={closeModals}
-                disabled={processing}
-              >
-                ×
-              </button>
-            </div>
-
-            <form onSubmit={assignRfid}>
-              <div className="modal-body">
-                <div className="asset-summary">
-                  <div className="asset-summary-id">
-                    {selectedAsset.assetId}
-                  </div>
-
-                  <div className="asset-summary-name">
-                    {selectedAsset.name ||
-                      "Unnamed Asset"}
-                  </div>
-
-                  {selectedAsset.serialNumber && (
-                    <div className="secondary">
-                      Serial:{" "}
-                      {selectedAsset.serialNumber}
-                    </div>
-                  )}
-                </div>
-
-                <label className="modal-label">
-                  RFID Tag / UID
-                </label>
-
-                <input
-                  type="text"
-                  className="modal-input"
-                  value={rfidValue}
-                  onChange={(event) =>
-                    setRfidValue(
-                      event.target.value
-                    )
-                  }
-                  placeholder="Enter RFID tag or UID"
-                  autoFocus
-                  required
-                />
-
-                <div className="modal-help">
-                  Enter the unique RFID identifier
-                  attached to this university asset.
-                </div>
-
-                <div className="tracking-info">
-                  <div className="info-card">
-                    <div className="info-label">
-                      Current RFID
-                    </div>
-
-                    <div className="info-value">
-                      {selectedAsset.rfidTag ||
-                        "Not assigned"}
-                    </div>
-                  </div>
-
-                  <div className="info-card">
-                    <div className="info-label">
-                      Current QR
-                    </div>
-
-                    <div className="info-value">
-                      {selectedAsset.qrCode ||
-                        "Not assigned"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={closeModals}
-                  disabled={processing}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="primary-button"
-                  disabled={processing}
-                >
-                  {processing
-                    ? "Saving..."
-                    : "Save RFID"}
-                </button>
-              </div>
-            </form>
+      {selectedAsset && <div className="rfid-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDetails(); }}><section className="rfid-detail" role="dialog" aria-modal="true" aria-labelledby="rfid-detail-title">
+        <header className="rfid-detail-header"><h2 id="rfid-detail-title">{selectedAsset.assetCode || selectedAsset.name || tr('assetDetails')}</h2><button className="rfid-icon-button" type="button" onClick={closeDetails} aria-label={tr('close')} title={tr('close')}><X size={18} /></button></header>
+        <div className="rfid-detail-content"><div className="rfid-detail-grid">{[['name', selectedAsset.name], ['category', selectedAsset.category], ['serial', selectedAsset.serialNumber], ['status', selectedAsset.status], ['qrCode', selectedAsset.qrCode], ['rfidTag', selectedAsset.rfidTag], ['department', selectedAsset.department], ['assignedTo', selectedAsset.assignedTo]].map(([label, value]) => <div className="rfid-detail-field" key={label}><span className="rfid-detail-label">{tr(label)}</span><span className="rfid-detail-value">{value || '—'}</span></div>)}</div>
+          <div className="rfid-location"><strong>{tr('currentLocation')}:</strong> {selectedAsset.locationParts.length ? selectedAsset.locationParts.join(' → ') : tr('locationUnavailable')}</div>{selectedAsset.qrCode && <div className="rfid-qr"><QRCodeSVG value={selectedAsset.qrCode} size={112} level="M" /><span className="rfid-code">{selectedAsset.qrCode}</span></div>}
+          <div className="rfid-tabs" role="tablist" aria-label={tr('history')}>{HISTORY_TABS.map((tab) => <button className="rfid-tab" id={`rfid-tab-${tab}`} key={tab} type="button" role="tab" aria-selected={activeTab === tab} aria-controls="rfid-history-panel" onClick={() => setActiveTab(tab)}>{tr(`historyTabs.${tab}`)}</button>)}</div>
+          <div id="rfid-history-panel" className="rfid-history" role="tabpanel" aria-labelledby={`rfid-tab-${activeTab}`}>
+            {historyState.status === 'loading' && <div className="rfid-empty">{tr('loading')}</div>}{historyState.status === 'error' && <div className="rfid-error" role="alert">{historyState.message}</div>}{historyState.status === 'loaded' && historyState.rows.length === 0 && <div className="rfid-empty">{tr('noHistory')}</div>}
+            {historyState.status === 'loaded' && historyState.rows.length > 0 && <table><thead><tr>{historyColumns[activeTab].map(([, label]) => <th key={label}>{tr(label)}</th>)}</tr></thead><tbody>{historyState.rows.map((row, index) => <tr key={`${activeTab}-${index}`}>{historyColumns[activeTab].map(([field]) => { const value = typeof field === 'function' ? field(row) : row[field]; return <td key={typeof field === 'string' ? field : 'from-to'}>{['assignedAt', 'transferredAt', 'requestedAt'].includes(field) ? formatDate(value) : value || '—'}</td>; })}</tr>)}</tbody></table>}
           </div>
         </div>
-      )}
-
-      {showQrModal && selectedAsset && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeModals();
-            }
-          }}
-        >
-          <div className="modal">
-            <div className="modal-header">
-              <h2 className="modal-title">
-                Asset QR Code
-              </h2>
-
-              <button
-                type="button"
-                className="close-button"
-                onClick={closeModals}
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="modal-body">
-              <div className="asset-summary">
-                <div className="asset-summary-id">
-                  {selectedAsset.assetId}
-                </div>
-
-                <div className="asset-summary-name">
-                  {selectedAsset.name ||
-                    "Unnamed Asset"}
-                </div>
-              </div>
-
-              <label className="modal-label">
-                QR Value
-              </label>
-
-              <input
-                type="text"
-                className="modal-input"
-                value={qrValue}
-                onChange={(event) =>
-                  setQrValue(event.target.value)
-                }
-                placeholder="QR code value"
-              />
-
-              {qrValue ? (
-                <div className="qr-box">
-                  <img
-                    className="qr-image"
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(
-                      qrValue
-                    )}`}
-                    alt={`QR code for ${selectedAsset.assetId}`}
-                  />
-
-                  <div
-                    className="tag-value"
-                    style={{
-                      marginTop: 12,
-                    }}
-                  >
-                    {qrValue}
-                  </div>
-                </div>
-              ) : (
-                <div className="qr-box">
-                  <div className="qr-placeholder">
-                    This asset does not have a QR
-                    code yet.
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={closeModals}
-              >
-                Close
-              </button>
-
-              {!qrValue && (
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={generateQr}
-                  disabled={processing}
-                >
-                  {processing
-                    ? "Generating..."
-                    : "Generate QR"}
-                </button>
-              )}
-
-              {qrValue && (
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={downloadQr}
-                >
-                  Open QR
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      </section></div>}
     </div>
   );
 }

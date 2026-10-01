@@ -148,6 +148,38 @@ async function ensurePasswordRecoveryIndexes() {
   }
 }
 
+async function ensureUserRoleEnum() {
+  const table = await sequelize.getQueryInterface().describeTable('users');
+  if (!table.role || String(table.role.type || '').toLowerCase().includes('enum') === false) {
+    return;
+  }
+
+  const roleValues = [
+    'admin',
+    'ict_officer',
+    'college',
+    'college_manager',
+    'department_head',
+    'finance',
+    'store_manager',
+    'maintenance',
+    'infrastructure',
+    'staff',
+    'student',
+  ];
+
+  const currentValues = String(table.role.values || '').split(',').map((value) => value.replace(/^'|'$/g, '').trim()).filter(Boolean);
+  if (currentValues.length >= roleValues.length && roleValues.every((value) => currentValues.includes(value))) {
+    return;
+  }
+
+  await sequelize.query(`
+    ALTER TABLE users
+    MODIFY COLUMN role ENUM(${roleValues.map((value) => `'${value}'`).join(',')}) NOT NULL DEFAULT 'student'
+  `);
+  console.log('Updated users.role enum to include the canonical role set.');
+}
+
 async function syncDatabase() {
   try {
     const ensureColumn = async (tableName, columnName, definition) => {
@@ -160,6 +192,7 @@ async function syncDatabase() {
 
     // Create only missing tables; existing tables are left untouched by sync.
     await createMissingTables();
+    await ensureUserRoleEnum();
     await ensurePasswordRecoveryIndexes();
 
     for (const [column, definition] of Object.entries({

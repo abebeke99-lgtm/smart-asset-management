@@ -42,6 +42,7 @@ const Login = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (loading) return;
     setError(null);
     if (!username.trim()) { setError(t.usernameRequired); return; }
     if (!password) { setError(t.passwordRequired); return; }
