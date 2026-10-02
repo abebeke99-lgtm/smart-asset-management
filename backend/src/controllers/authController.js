@@ -303,6 +303,16 @@ const genericResetMessage = 'If an eligible account exists, password reset instr
 const getGenericOtpMessage = (method = 'phone') => (method === 'email'
   ? 'If this email address is registered, a verification code has been sent.'
   : 'If this phone number is registered, a verification code has been sent.');
+const mapEmailDeliveryError = (error) => {
+  const errorCode = String(error?.code || '').toUpperCase();
+  if (errorCode === 'EMAIL_NOT_CONFIGURED') {
+    return { code: 'EMAIL_NOT_CONFIGURED', message: 'Email service is temporarily unavailable. Please try again later.' };
+  }
+  if (errorCode === 'EAUTH' || Number(error?.responseCode) === 535) {
+    return { code: 'EMAIL_AUTH_FAILED', message: 'Email service is temporarily unavailable. Please try again later.' };
+  }
+  return { code: 'EMAIL_NETWORK_ERROR', message: 'Email service is temporarily unavailable. Please try again later.' };
+};
 const RESET_TOKEN_TTL_MINUTES = Math.min(30, Math.max(15, Number(process.env.PASSWORD_RESET_TTL_MINUTES) || 20));
 const RESET_OTP_TTL_MINUTES = Math.min(15, Math.max(5, Number(process.env.PASSWORD_RESET_OTP_TTL_MINUTES) || 5));
 const RESET_OTP_MAX_ATTEMPTS = Math.min(5, Math.max(1, Number(process.env.PASSWORD_RESET_OTP_MAX_ATTEMPTS) || 5));
@@ -508,9 +518,14 @@ const requestForgotPasswordOtp = async (req, res) => {
 
       await recordRecoveryEvent({ event: 'REQUESTED', result: 'Success', req });
       const emailConfiguration = validateEmailConfiguration();
-      if (!emailConfiguration.valid) {
-        console.error('Forgot password error: email service configuration missing');
-        return res.status(503).json({ success: false, message: 'We could not send the verification code right now. Please try again later.' });
+      const developmentOtpFallback = process.env.NODE_ENV === 'development' && !emailConfiguration.valid;
+      if (!emailConfiguration.valid && !developmentOtpFallback) {
+        console.warn(`Forgot password email configuration missing: ${(emailConfiguration.missingVariables || []).join(', ') || 'EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASSWORD'}`);
+        return res.status(503).json({
+          success: false,
+          code: 'EMAIL_NOT_CONFIGURED',
+          message: 'Email service is temporarily unavailable. Please try again later.',
+        });
       }
 
       const user = await User.findOne({ where: { email } });
@@ -546,17 +561,24 @@ const requestForgotPasswordOtp = async (req, res) => {
         attempts: 0,
       });
 
-      const mailResult = await sendOtpEmail({
-        to: user.email,
-        fullName: user.fullName || user.username,
-        otp,
-        ttlMinutes: RESET_OTP_TTL_MINUTES,
-      });
+      if (developmentOtpFallback) {
+        console.warn(`DEV ONLY: password reset OTP for ${email}: ${otp}`);
+        await recordRecoveryEvent({ userId: user.id, event: 'OTP_SENT', result: 'Success', req });
+        return res.json({ success: true, message: getGenericOtpMessage('email') });
+      }
 
-      if (mailResult.status !== 'sent') {
+      try {
+        await sendOtpEmail({
+          to: user.email,
+          fullName: user.fullName || user.username,
+          otp,
+          ttlMinutes: RESET_OTP_TTL_MINUTES,
+        });
+      } catch (error) {
         await clearOtpState(recovery);
-        console.error('Password reset OTP email delivery failed; provider:', mailResult.reason || 'smtp');
-        return res.status(503).json({ success: false, message: 'We could not send the verification code right now. Please try again later.' });
+        console.error('Password reset OTP email delivery failed:', error.message, error.code || 'UNKNOWN');
+        const mappedError = mapEmailDeliveryError(error);
+        return res.status(503).json({ success: false, ...mappedError });
       }
 
       await recordRecoveryEvent({ userId: user.id, event: 'OTP_SENT', result: 'Success', req });
@@ -574,7 +596,7 @@ const requestForgotPasswordOtp = async (req, res) => {
 
     await recordRecoveryEvent({ event: 'REQUESTED', result: 'Success', req });
     if (!isSmsConfigured()) {
-      return res.status(503).json({ success: false, message: 'We could not send the verification code right now. Please try again later.' });
+      return res.status(503).json({ success: false, code: 'SMS_NOT_CONFIGURED', message: 'SMS service is not available yet.' });
     }
 
     const user = await User.findOne({ where: { phone } });

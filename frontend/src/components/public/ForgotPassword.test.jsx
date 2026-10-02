@@ -196,8 +196,40 @@ describe('ForgotPassword', () => {
     typeEmail('student@university.edu');
     submitForm();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to reach the server. Please check your connection and try again.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to reach the server. Please check your connection.');
     expect(screen.queryByRole('heading', { name: 'Check Your Email' })).not.toBeInTheDocument();
+  });
+
+  it('shows the email service message for an HTTP 503 response', async () => {
+    apiClient.post.mockRejectedValue({ response: { status: 503, data: { code: 'EMAIL_AUTH_FAILED' } } });
+
+    renderPage();
+    typeEmail('student@university.edu');
+    submitForm();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Email service is temporarily unavailable. Please try again later.');
+  });
+
+  it('shows the translated SMS-unavailable message when no SMS provider is configured', async () => {
+    apiClient.post.mockRejectedValue({ response: { status: 503, data: { code: 'SMS_NOT_CONFIGURED' } } });
+
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /Mobile Phone/ }));
+    fireEvent.change(screen.getByLabelText('Mobile phone number'), { target: { value: '0912345678' } });
+    fireEvent.click(screen.getByRole('button', { name: /Send Verification Code/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('SMS service is not available yet.');
+  });
+
+  it('translates the email service error into Amharic', async () => {
+    window.localStorage.setItem('language', 'am');
+    apiClient.post.mockRejectedValue({ response: { status: 503 } });
+
+    renderPage();
+    fireEvent.change(screen.getByLabelText('የኢሜይል አድራሻ'), { target: { value: 'student@university.edu' } });
+    fireEvent.click(screen.getByRole('button', { name: /የማረጋገጫ ኮድ ላክ/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('የኢሜይል አገልግሎቱ ለጊዜው አይገኝም። እባክዎ ቆይተው እንደገና ይሞክሩ።');
   });
 
   it('runs the phone recovery flow from code request through to a new password', async () => {

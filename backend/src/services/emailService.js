@@ -1,55 +1,17 @@
-const nodemailer = require('nodemailer');
-
-const DEFAULT_SMTP_TIMEOUTS = {
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 15000,
-  dnsTimeout: 10000,
-  hardTimeout: 30000,
-};
-
-const readPositiveInt = (name, fallback) => {
-  const parsed = Number(process.env[name]);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-};
-
-// Nodemailer only fails fast when every stage of the SMTP handshake is bounded.
-// A stalled connect, greeting or socket would otherwise keep the request open indefinitely.
-const getSmtpTimeouts = () => ({
-  connectionTimeout: readPositiveInt('SMTP_CONNECTION_TIMEOUT_MS', DEFAULT_SMTP_TIMEOUTS.connectionTimeout),
-  greetingTimeout: readPositiveInt('SMTP_GREETING_TIMEOUT_MS', DEFAULT_SMTP_TIMEOUTS.greetingTimeout),
-  socketTimeout: readPositiveInt('SMTP_SOCKET_TIMEOUT_MS', DEFAULT_SMTP_TIMEOUTS.socketTimeout),
-  dnsTimeout: readPositiveInt('SMTP_DNS_TIMEOUT_MS', DEFAULT_SMTP_TIMEOUTS.dnsTimeout),
-  hardTimeout: readPositiveInt('SMTP_HARD_TIMEOUT_MS', DEFAULT_SMTP_TIMEOUTS.hardTimeout),
-});
-
-const getEmailConfig = () => {
-  const host = process.env.EMAIL_HOST || process.env.SMTP_HOST;
-  const port = Number(process.env.EMAIL_PORT || process.env.SMTP_PORT || 0);
-  const user = process.env.EMAIL_USER || process.env.SMTP_USER;
-  const password = process.env.EMAIL_PASSWORD || process.env.SMTP_PASSWORD;
-  const from = process.env.EMAIL_FROM || process.env.MAIL_FROM || process.env.SMTP_FROM;
-  return { host, port, user, password, from };
-};
+const { getMailerStatus, getSmtpTimeouts, getTransporter, readMailerConfig } = require('../utils/mailer');
 
 const validateEmailConfiguration = () => {
-  const config = getEmailConfig();
-  if (!config.host || !config.port || !config.user || !config.password || !config.from) return { valid: false, reason: 'Email service is not configured' };
-  return { valid: true, config };
+  const status = getMailerStatus();
+  if (!status.configured) {
+    return { valid: false, reason: 'Email service is not configured', missingVariables: status.missingVariables };
+  }
+  return { valid: true, config: readMailerConfig() };
 };
-
-const createEmailTransport = (config) => nodemailer.createTransport({
-  host: config.host,
-  port: config.port,
-  secure: config.port === 465,
-  auth: { user: config.user, pass: config.password },
-  ...getSmtpTimeouts(),
-});
 
 const getEmailTransport = () => {
   const validation = validateEmailConfiguration();
   if (!validation.valid) return null;
-  return { transporter: createEmailTransport(validation.config), from: validation.config.from };
+  return { transporter: getTransporter(), from: validation.config.from };
 };
 
 const createSmtpTimeoutError = (label, timeoutMs) => {
@@ -58,7 +20,6 @@ const createSmtpTimeoutError = (label, timeoutMs) => {
   return error;
 };
 
-// Belt-and-braces guard: even a driver that ignores its own timeout cannot hang the request.
 const withHardTimeout = (operation, label, timeoutMs) => new Promise((resolve, reject) => {
   const timer = setTimeout(() => reject(createSmtpTimeoutError(label, timeoutMs)), timeoutMs);
   if (typeof timer.unref === 'function') timer.unref();
@@ -71,45 +32,47 @@ const withHardTimeout = (operation, label, timeoutMs) => new Promise((resolve, r
     );
 });
 
+const sendMailWithTransport = async (mailer, mailOptions) => {
+  const { hardTimeout } = getSmtpTimeouts();
+  const info = await withHardTimeout(
+    () => mailer.transporter.sendMail({ from: mailer.from, ...mailOptions }),
+    'send',
+    hardTimeout,
+  );
+  return { status: 'sent', provider: 'smtp', providerMessageId: info?.messageId || null };
+};
+
 const sendMail = async (mailOptions) => {
-  const { hardTimeout, ...transportTimeouts } = getSmtpTimeouts();
   const mailer = getEmailTransport();
-  if (!mailer) return { status: 'failed', reason: 'Email service is not configured' };
+  if (!mailer) return { status: 'failed', reason: 'Email service is not configured', code: 'EMAIL_NOT_CONFIGURED' };
 
   try {
-    const info = await withHardTimeout(
-      () => mailer.transporter.sendMail({ from: mailer.from, ...mailOptions }),
-      'send',
-      hardTimeout,
-    );
-    return { status: 'sent', provider: 'smtp', providerMessageId: info?.messageId || null, timeouts: transportTimeouts };
+    return await sendMailWithTransport(mailer, mailOptions);
   } catch (error) {
-    return {
-      status: 'failed',
-      reason: error?.code === 'ESMTP_TIMEOUT' ? error.message : 'Email delivery failed',
-      timedOut: error?.code === 'ESMTP_TIMEOUT',
-    };
+    return { status: 'failed', reason: 'Email delivery failed', code: error?.code };
   }
 };
 
-// Reports SMTP reachability and authentication without sending a message.
 const verifySmtpConnection = async () => {
   const validation = validateEmailConfiguration();
-  if (!validation.valid) return { ok: false, reason: validation.reason };
-
-  const { hardTimeout } = getSmtpTimeouts();
-  const mailer = getEmailTransport();
-  if (!mailer) return { ok: false, reason: 'Email service is not configured' };
-
-  try {
-    await withHardTimeout(() => mailer.transporter.verify(), 'verification', hardTimeout);
-    return { ok: true, host: validation.config.host, port: validation.config.port, user: validation.config.user };
-  } catch (error) {
+  if (!validation.valid) {
     return {
       ok: false,
-      reason: error?.code === 'ESMTP_TIMEOUT' ? error.message : 'SMTP authentication failed',
-      timedOut: error?.code === 'ESMTP_TIMEOUT',
+      reason: validation.reason,
+      code: 'EMAIL_NOT_CONFIGURED',
+      missingVariables: validation.missingVariables,
     };
+  }
+
+  const mailer = getEmailTransport();
+  if (!mailer) return { ok: false, reason: 'Email service is not configured', code: 'EMAIL_NOT_CONFIGURED' };
+
+  try {
+    const { hardTimeout } = getSmtpTimeouts();
+    await withHardTimeout(() => mailer.transporter.verify(), 'verification', hardTimeout);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, reason: error?.message || 'SMTP verification failed', code: error?.code };
   }
 };
 
@@ -132,14 +95,20 @@ const sendNotificationEmail = async ({ recipient, notification }) => {
 };
 
 const sendOtpEmail = async ({ to, fullName, otp, ttlMinutes }) => {
+  const mailer = getEmailTransport();
+  if (!mailer) {
+    const error = new Error('Email service is not configured');
+    error.code = 'EMAIL_NOT_CONFIGURED';
+    throw error;
+  }
+
   const greetingName = escapeHtml(fullName || 'there');
   const safeOtp = escapeHtml(String(otp || ''));
-
-  return sendMail({
+  return sendMailWithTransport(mailer, {
     to,
     subject: 'Your verification code for password recovery',
-    text: `Mekdela Amba University Asset Management System\n\nHello ${fullName || 'there'},\n\nYour password recovery verification code is ${otp}.\n\nThis code expires in ${ttlMinutes} minutes. Please do not share it with anyone.`,
-    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#172033"><div style="background:#0EA5E9;padding:24px;color:#fff"><h1 style="margin:0;font-size:22px">Mekdela Amba University</h1><p style="margin:8px 0 0">University Asset Management System</p></div><div style="padding:28px;border:1px solid #dbe4ef"><h2>Password Recovery</h2><p>Hello ${greetingName},</p><p>Your password recovery verification code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:22px 0">${safeOtp}</p><p>This code expires in ${ttlMinutes} minutes and must not be shared with anyone.</p></div></div>`,
+    text: `Mekdela Amba University Asset Management System\n\nHello ${fullName || 'there'},\n\nYour password recovery verification code is ${otp}.\n\nThis code expires in ${ttlMinutes} minutes. Do not share it with anyone. If you did not request this code, you can safely ignore this email.`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#172033"><div style="background:#0EA5E9;padding:24px;color:#fff"><h1 style="margin:0;font-size:22px">Mekdela Amba University</h1><p style="margin:8px 0 0">Asset Management System</p></div><div style="padding:28px;border:1px solid #dbe4ef"><h2>Password Recovery</h2><p>Hello ${greetingName},</p><p>Your six-digit verification code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:22px 0">${safeOtp}</p><p>This code expires in ${ttlMinutes} minutes. Do not share it with anyone.</p><p>If you did not request this code, you can safely ignore this email.</p></div></div>`,
   });
 };
 

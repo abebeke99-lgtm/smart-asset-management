@@ -22,9 +22,7 @@ import {
   Clock3,
   CircleDollarSign,
 } from "lucide-react";
-
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "/api";
+import { apiClient } from "../../utils/api";
 
 const PAGE_SIZE = 10;
 
@@ -54,6 +52,27 @@ const REPAIR_TYPES = [
   "Electrical Repair",
   "Other",
 ];
+
+const repairStatusLabel = (value) => {
+  const status = String(value || "Reported").trim().toLowerCase().replace(/[\s_]+/g, "-");
+  const labels = {
+    open: "Reported",
+    pending: "Reported",
+    reported: "Reported",
+    assigned: "Diagnosed",
+    diagnosing: "Diagnosed",
+    diagnosed: "Diagnosed",
+    "in-progress": "In Repair",
+    "waiting-for-parts": "Waiting for Parts",
+    testing: "In Repair",
+    failed: "In Repair",
+    rework: "In Repair",
+    completed: "Completed",
+    returned: "Returned",
+    cancelled: "Cancelled",
+  };
+  return labels[status] || value || "Reported";
+};
 
 const initialForm = {
   repairNumber: "",
@@ -88,34 +107,19 @@ const initialForm = {
 };
 
 async function apiRequest(url, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${url}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    ...options,
+  const response = await apiClient.request({
+    url: `/maintenance${url}`,
+    method: options.method || "GET",
+    data: options.body,
+    headers: options.headers,
   });
-
-  if (!response.ok) {
-    let message = `Request failed with status ${response.status}`;
-
-    try {
-      const error = await response.json();
-      message = error?.message || error?.error || message;
-    } catch {
-      // Ignore invalid response bodies.
-    }
-
-    throw new Error(message);
-  }
-
-  if (response.status === 204) return null;
-
-  return response.json();
+  return response.data;
 }
 
 function extractArray(data) {
   if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.records)) return data.records;
+  if (Array.isArray(data?.data?.records)) return data.data.records;
   if (Array.isArray(data?.data)) return data.data;
   if (Array.isArray(data?.items)) return data.items;
   if (Array.isArray(data?.repairs)) return data.repairs;
@@ -140,6 +144,7 @@ function normalizeRepair(item, index) {
     repairNumber:
       item.repairNumber ??
       item.repair_number ??
+      item.repairId ??
       item.referenceNumber ??
       item.reference_number ??
       `REP-${String(index + 1).padStart(5, "0")}`,
@@ -175,9 +180,9 @@ function normalizeRepair(item, index) {
       item.type ??
       "Hardware Repair",
 
-    priority: item.priority ?? "Medium",
+    priority: String(item.priority ?? "Medium").replace(/\b\w/g, (letter) => letter.toUpperCase()),
 
-    status: item.status ?? "Reported",
+    status: repairStatusLabel(item.statusRaw ?? item.status),
 
     reportedBy:
       item.reportedBy ??
@@ -190,6 +195,7 @@ function normalizeRepair(item, index) {
       item.assigned_technician ??
       item.technicianName ??
       item.technician?.name ??
+      item.technician ??
       "",
 
     department:
@@ -214,6 +220,7 @@ function normalizeRepair(item, index) {
       item.date_reported ??
       item.reportedDate ??
       item.reported_date ??
+      item.createdAt ??
       "",
 
     diagnosisDate:
@@ -246,6 +253,8 @@ function normalizeRepair(item, index) {
     actualCost:
       item.actualCost ??
       item.actual_cost ??
+      item.repairCost ??
+      item.totalCost ??
       0,
 
     downtimeHours:
@@ -588,28 +597,14 @@ export default function RepairHistory() {
     setError("");
 
     try {
-      let data;
-
-      try {
-        data = await apiRequest("/repair-history");
-      } catch {
-        try {
-          data = await apiRequest("/repairHistory");
-        } catch {
-          try {
-            data = await apiRequest("/repairs");
-          } catch {
-            data = await apiRequest("/repair");
-          }
-        }
-      }
+      const data = await apiRequest("/repairs");
 
       setRecords(
         extractArray(data).map(normalizeRepair)
       );
     } catch (err) {
       setError(
-        err.message ||
+        err.response?.data?.message || err.message ||
           "Unable to load repair history."
       );
     } finally {

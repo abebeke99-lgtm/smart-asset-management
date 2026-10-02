@@ -427,11 +427,11 @@ export const shouldShowDashboardSidebar = (path = '') => {
   return (
     normalized === '/dashboard'
     || /^\/dashboard(?:\/.*)?$/.test(normalized)
-    || /^\/(ict|college|department|department-head|finance|store|maintenance|infrastructure)(?:\/.*)?$/.test(normalized)
+    || /^\/(admin|ict|college|department|department-head|finance|store|maintenance|infrastructure)(?:\/.*)?$/.test(normalized)
   );
 };
 
-export const shouldShowDashboardHeader = (path = '') => !/^\/admin(?:\/|$)/.test(String(path || '').trim());
+export const shouldShowDashboardHeader = (path = '') => !isPublicRoute(path) && !shouldUseStandaloneLoginLayout(path);
 
 // ==========================================
 // TRANSLATIONS
@@ -2154,11 +2154,30 @@ const DashboardOverview = () => (
   </div>
 );
 
-const DashboardLayout = () => (
-  <Suspense fallback={<LoadingFallback />}>
-    <Outlet />
-  </Suspense>
-);
+const DashboardLayout = ({ header, sidebar, sidebarOpen, onCloseSidebar, className = '', bodyClassName = '', children }) => {
+  if (header === undefined && sidebar === undefined && children === undefined) {
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <Outlet />
+      </Suspense>
+    );
+  }
+
+  return (
+    <div className={`dashboard-layout ${className}`.trim()}>
+      {header}
+      <div className={`dashboard-layout-body ${bodyClassName}`.trim()}>
+        {sidebarOpen && sidebar && (
+          <button type="button" className="dashboard-layout-backdrop" onClick={onCloseSidebar} aria-label="Close navigation menu" />
+        )}
+        {sidebar}
+        {children}
+      </div>
+    </div>
+  );
+};
+
+const DASHBOARD_MOBILE_QUERY = '(max-width: 1023px)';
 
 // Admin Layout with Sidebar
 const adminSidebarSections = [
@@ -2305,81 +2324,81 @@ const AdminFooter = () => (
   </footer>
 );
 
-const AdminHeader = ({ onToggleSidebar, mobileSidebarOpen, userName, roleLabel, unreadCount, onLogout, adminTheme, setAdminTheme }) => {
-  const { language } = useLanguage();
+const MenuToggleButton = ({ isOpen, onToggle, toggleRef, controls = 'application-navigation-panel' }) => (
+  <button
+    ref={toggleRef}
+    type="button"
+    className="dashboard-menu-toggle"
+    onClick={onToggle}
+    aria-label={isOpen ? 'Close navigation menu' : 'Open navigation menu'}
+    aria-expanded={isOpen}
+    aria-controls={controls}
+  >
+    {isOpen ? <X size={21} aria-hidden="true" /> : <Menu size={21} aria-hidden="true" />}
+  </button>
+);
+
+const AdminHeader = ({ userName, roleLabel, unreadCount, onLogout, adminTheme, setAdminTheme }) => {
+  const { language, setLanguage } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   useEffect(() => {
-    if (!menuOpen) return undefined;
     const closeMenu = (event) => {
-      if (event.key === 'Escape' || (event.type === 'mousedown' && !event.target.closest('.admin-profile-menu'))) setMenuOpen(false);
+      if (event.key === 'Escape') {
+        setMenuOpen(false);
+        setMobileSearchOpen(false);
+      } else if (menuOpen && event.type === 'mousedown' && !event.target.closest('.admin-profile-menu')) {
+        setMenuOpen(false);
+      }
     };
     document.addEventListener('keydown', closeMenu);
-    document.addEventListener('mousedown', closeMenu);
+    if (menuOpen) document.addEventListener('mousedown', closeMenu);
     return () => {
       document.removeEventListener('keydown', closeMenu);
       document.removeEventListener('mousedown', closeMenu);
     };
   }, [menuOpen, location.pathname]);
-  const title = (() => {
-    const path = location.pathname;
-    if (path === '/admin') return 'Dashboard';
-    if (path.startsWith('/admin/assets')) return 'Asset Governance';
-    if (path.startsWith('/admin/maintenance')) return 'Maintenance';
-    if (path.startsWith('/admin/rfid')) return 'RFID / QR Tracking';
-    if (path.startsWith('/admin/users')) return 'Users';
-    if (path.startsWith('/admin/roles')) return 'Roles & Permissions';
-    if (path.startsWith('/admin/colleges')) return 'Colleges';
-    if (path.startsWith('/admin/departments')) return 'Departments';
-    if (path.startsWith('/admin/locations')) return 'Locations';
-    if (path.startsWith('/admin/reports')) return 'Reports';
-    if (path.startsWith('/admin/analytics')) return 'Analytics';
-    if (path.startsWith('/admin/settings')) return 'Settings';
-    if (path.startsWith('/admin/notifications')) return 'Notifications';
-    if (path.startsWith('/admin/backup')) return 'Backup';
-    if (path.startsWith('/admin/monitoring')) return 'Monitoring';
-    if (path.startsWith('/admin/audit-logs')) return 'Audit Trail';
-    if (path.startsWith('/admin/inventory')) return 'Inventory';
-    if (path.startsWith('/admin/recovery')) return 'Recovery';
-    if (path.startsWith('/admin/enam')) return 'ENAM';
-    return 'Administration';
-  })();
-  const translatedTitle = location.pathname.startsWith('/admin/rfid')
-    ? translateMessage(language, 'tracking.title')
-    : title;
-
   return (
-    <header>
-      <div className="admin-header-leading">
-        <button type="button" className="admin-icon-button" onClick={onToggleSidebar} aria-label={mobileSidebarOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={mobileSidebarOpen} aria-controls="admin-navigation-panel">
-          {mobileSidebarOpen ? <X size={18} /> : <Menu size={18} />}
-        </button>
-        <div className="admin-header-title">
-          <div className="admin-header-eyebrow">Mekdela Amba University</div>
-          <div className="admin-header-page-title">{translatedTitle}</div>
+    <header className="dashboard-header dashboard-layout-header">
+      <div className="dashboard-header-left">
+        <img className="dashboard-menu-logo" src={UNIVERSITY_LOGO} alt="Mekdela Amba University" />
+        <div className="dashboard-header-brand-copy">
+          <strong>Mekdela Amba University</strong>
+          <span>Asset Management System</span>
         </div>
       </div>
-      <div className="admin-header-tools">
-        <div className="admin-header-search"><GlobalSearch role="admin" /></div>
-        <select className="admin-theme-select" value={adminTheme} onChange={(event) => setAdminTheme(event.target.value)} aria-label="Color theme">
+      <div className={`dashboard-header-search${mobileSearchOpen ? ' is-mobile-search-open' : ''}`}>
+        <GlobalSearch role="admin" language={language} />
+      </div>
+      <div className="dashboard-header-actions">
+        <button type="button" className="dashboard-icon-button dashboard-mobile-search-button" onClick={() => setMobileSearchOpen((open) => !open)} aria-label={mobileSearchOpen ? 'Close search' : 'Open search'} aria-expanded={mobileSearchOpen}>
+          {mobileSearchOpen ? <X size={18} aria-hidden="true" /> : <Search size={18} aria-hidden="true" />}
+        </button>
+        <button type="button" className="dashboard-icon-button" onClick={() => navigate('/admin/notifications')} aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`} title="Notifications">
+          <Bell size={18} aria-hidden="true" />
+          {unreadCount > 0 && <span className="dashboard-notification-count">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+        </button>
+        <div className="dashboard-language-switch" role="group" aria-label="Language">
+          <button type="button" className="dashboard-language-button" onClick={() => setLanguage('en')} aria-pressed={language === 'en'} aria-label="English">EN</button>
+          <button type="button" className="dashboard-language-button" onClick={() => setLanguage('am')} aria-pressed={language === 'am'} aria-label="Amharic">AM</button>
+        </div>
+        <div className="admin-profile-menu">
+          <button type="button" className="dashboard-profile-button" onClick={() => setMenuOpen((current) => !current)} aria-expanded={menuOpen} aria-haspopup="menu" aria-label={`Account menu for ${userName}`}>
+            <UserCircle size={20} aria-hidden="true" />
+            <span className="admin-profile-copy"><strong>{userName}</strong><small>{roleLabel}</small></span>
+            <ChevronDown size={16} aria-hidden="true" />
+          </button>
+          {menuOpen && (
+            <div className="admin-profile-dropdown dashboard-profile-menu" role="menu">
+              <label className="admin-theme-menu-item">Color theme
+                <select className="admin-theme-select" value={adminTheme} onChange={(event) => setAdminTheme(event.target.value)} aria-label="Color theme">
           <option value="light">Light</option>
           <option value="dark">Dark</option>
           <option value="system">System</option>
-        </select>
-        <button type="button" className="admin-icon-button admin-notification-button" onClick={() => navigate('/admin/notifications')} aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`} title="Notifications">
-          <Bell size={17} />
-          {unreadCount > 0 && <span className="admin-notification-count">{unreadCount > 99 ? '99+' : unreadCount}</span>}
-        </button>
-        <div className="admin-profile-menu">
-          <button type="button" className="admin-profile-trigger" onClick={() => setMenuOpen((current) => !current)} aria-expanded={menuOpen} aria-haspopup="menu" aria-label={`Account menu for ${userName}`}>
-            <UserCircle size={18} />
-            <span className="admin-profile-copy"><strong>{userName}</strong><small>{roleLabel}</small></span>
-            <span className="admin-role-pill">Admin</span>
-            <ChevronDown size={16} />
-          </button>
-          {menuOpen && (
-            <div className="admin-profile-dropdown" role="menu">
+                </select>
+              </label>
               <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); navigate('/admin/settings'); }}>
                 <UserCircle size={16} /> Profile
               </button>
@@ -2394,128 +2413,12 @@ const AdminHeader = ({ onToggleSidebar, mobileSidebarOpen, userName, roleLabel, 
   );
 };
 
-const AdminSidebar = ({ items, currentPath, collapsed, mobileOpen, onToggle, onNavigate }) => {
-  const activePath = items.flatMap((section) => section.items)
-    .map((item) => item.to)
-    .filter((path) => path === '/admin' ? currentPath === path : currentPath === path || currentPath.startsWith(`${path}/`))
-    .sort((left, right) => right.length - left.length)[0];
-
-  return (
-  <aside id="admin-navigation-panel" className={`admin-sidebar${collapsed ? ' is-collapsed' : ''}${mobileOpen ? ' is-mobile-open' : ''}`}>
-    <div className="admin-sidebar-brand">
-      <div className="admin-sidebar-brand-inner">
-        <div className="admin-sidebar-mark">A</div>
-        {!collapsed && <div><div className="admin-sidebar-brand-eyebrow">Smart Asset</div><strong>Administration</strong></div>}
-      </div>
-    </div>
-    <nav aria-label="Admin navigation">
-      {items.map((section) => (
-        <div key={`group-${section.id}`}>
-          {!collapsed && <div className="admin-sidebar-section-label">{section.heading}</div>}
-          <div className="admin-sidebar-links">
-            {section.items.map((item) => {
-              const Icon = item.icon;
-              const isActive = activePath === item.to;
-              return (
-                <Link key={item.to} to={item.to} onClick={onNavigate} title={collapsed ? item.label : undefined} aria-label={collapsed ? item.label : undefined} aria-current={isActive ? 'page' : undefined} className={`admin-nav-link${isActive ? ' is-active' : ''}`}>
-                  <Icon size={18} />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </nav>
-    <div className="admin-sidebar-footer">
-      <button type="button" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} className="admin-sidebar-collapse">
-        {collapsed ? <ChevronRight size={17} /> : <><span>Collapse sidebar</span><ChevronRight size={16} /></>}
-      </button>
-    </div>
-  </aside>
-  );
-};
-
-const AdminLayout = () => {
-  const { user, logout } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [adminTheme, setAdminTheme] = useState(() => {
-    try { return localStorage.getItem('admin-theme') || 'system'; } catch { return 'system'; }
-  });
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth >= 1024 && window.innerWidth < 1200);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  useEffect(() => {
-    let mounted = true;
-    const loadUnreadCount = async () => {
-      try {
-        const response = await apiClient.get('/api/notifications/unread-count');
-        const count = Number(response?.data?.unreadCount ?? response?.data?.count ?? 0);
-        if (mounted) setUnreadCount(Number.isFinite(count) ? count : 0);
-      } catch {
-        if (mounted) setUnreadCount(0);
-      }
-    };
-    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
-    if (user?.id && token) loadUnreadCount();
-    else setUnreadCount(0);
-    return () => { mounted = false; };
-  }, [user?.id, location.pathname]);
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login', { replace: true });
-  };
-
-  const toggleSidebar = () => {
-    if (window.matchMedia('(max-width: 1023px)').matches) {
-      setSidebarCollapsed(false);
-      setMobileSidebarOpen((open) => !open);
-      return;
-    }
-    setSidebarCollapsed((value) => !value);
-  };
-
-  useEffect(() => {
-    if (!mobileSidebarOpen) return undefined;
-    const closeOnEscape = (event) => {
-      if (event.key === 'Escape') setMobileSidebarOpen(false);
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [mobileSidebarOpen]);
-
-  useEffect(() => {
-    setMobileSidebarOpen(false);
-  }, [location.pathname]);
-
-  useEffect(() => {
-    try { localStorage.setItem('admin-theme', adminTheme); } catch {}
-  }, [adminTheme]);
-
-  return (
-    <div className={`admin-layout${adminTheme === 'dark' ? ' dark' : ''}`} data-admin-theme={adminTheme}>
-      <a className="admin-skip-link" href="#admin-main-content">Skip to content</a>
-      {mobileSidebarOpen && <button type="button" className="admin-sidebar-backdrop" onClick={() => setMobileSidebarOpen(false)} aria-label="Close admin navigation" />}
-      <AdminSidebar items={adminSidebarSections} currentPath={location.pathname} collapsed={sidebarCollapsed} mobileOpen={mobileSidebarOpen} onToggle={() => setSidebarCollapsed((value) => !value)} onNavigate={() => setMobileSidebarOpen(false)} />
-      <div className="admin-layout-column">
-        <AdminHeader onToggleSidebar={toggleSidebar} mobileSidebarOpen={mobileSidebarOpen} userName={user?.fullName || user?.username || 'Admin'} roleLabel={normalizeRole(user?.role || user?.roles || 'admin').replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())} unreadCount={unreadCount} onLogout={handleLogout} adminTheme={adminTheme} setAdminTheme={setAdminTheme} />
-        <main id="admin-main-content" className="admin-main-content">
-          <Suspense fallback={<LoadingFallback />}>
-            <Outlet />
-          </Suspense>
-        </main>
-        <AdminFooter />
-      </div>
-    </div>
-  );
-};
-
-// ==========================================
-// APP CONTENT COMPONENT
-// ==========================================
+            const AdminLayout = () => (
+              <>
+                <a className="admin-skip-link" href="#admin-main-content">Skip to content</a>
+                <Outlet />
+              </>
+            );
 
 function AppContent() {
   const { user, logout, loading: authLoading } = useAuth();
@@ -2542,6 +2445,21 @@ function AppContent() {
   const allowPublicNavigationRef = useRef(false);
   const logoutDestinationRef = useRef(null);
   const notificationMenuRef = useRef(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const sidebarRef = useRef(null);
+  const sidebarToggleRef = useRef(null);
+  const previousRouteRef = useRef(location.pathname);
+
+  const closeSidebar = useCallback(() => {
+    setIsSidebarOpen(false);
+    window.requestAnimationFrame(() => sidebarToggleRef.current?.focus());
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
+    if (!window.matchMedia(DASHBOARD_MOBILE_QUERY).matches) return;
+    if (isSidebarOpen) closeSidebar();
+    else setIsSidebarOpen(true);
+  }, [closeSidebar, isSidebarOpen]);
 
   const t = getShellTranslations(language);
   const collegeNavigationCopy = language === 'am' ? {
@@ -2553,20 +2471,59 @@ function AppContent() {
   const getRoleDisplay = (role) => {
     const normalizedRole = normalizeRole(role);
     const roleMap = {
-      'admin': { emoji: '👑', label: 'Admin' },
-      'ict_officer': { emoji: '💻', label: 'ICT Officer' },
-      'college_manager': { emoji: '🏫', label: 'College Manager' },
-      'store_manager': { emoji: '🏪', label: 'Store Manager' },
-      'finance': { emoji: '💰', label: 'Finance' },
-      'maintenance': { emoji: '🔧', label: 'Maintenance' },
-      'infrastructure': { emoji: '🏗️', label: 'Infrastructure' }
+      admin: { emoji: '👑', label: 'Admin' },
+      ict_officer: { emoji: '💻', label: 'ICT Officer' },
+      college_manager: { emoji: '🏫', label: 'College Manager' },
+      store_manager: { emoji: '🏪', label: 'Store Manager' },
+      finance: { emoji: '💰', label: 'Finance' },
+      maintenance: { emoji: '🔧', label: 'Maintenance' },
+      infrastructure: { emoji: '🏗️', label: 'Infrastructure' }
     };
-    return roleMap[normalizedRole] || { emoji: '👤', label: normalizedRole ? normalizedRole.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase()) : 'User' };
+    return roleMap[normalizedRole] || { emoji: '👤', label: normalizedRole ? normalizedRole.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()) : 'User' };
   };
 
   useEffect(() => {
     document.body.className = theme;
   }, [theme]);
+
+  useEffect(() => {
+    const routeChanged = previousRouteRef.current !== location.pathname;
+    previousRouteRef.current = location.pathname;
+    if (routeChanged && isSidebarOpen) closeSidebar();
+  }, [closeSidebar, location.pathname, isSidebarOpen]);
+
+  useEffect(() => {
+    if (!isSidebarOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusableElements = sidebarRef.current?.querySelectorAll(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    const firstFocusableElement = focusableElements?.[0];
+    const lastFocusableElement = focusableElements?.[focusableElements.length - 1];
+    firstFocusableElement?.focus();
+
+    const handleDrawerKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeSidebar();
+      } else if (event.key === 'Tab' && firstFocusableElement && lastFocusableElement) {
+        if (event.shiftKey && document.activeElement === firstFocusableElement) {
+          event.preventDefault();
+          lastFocusableElement.focus();
+        } else if (!event.shiftKey && document.activeElement === lastFocusableElement) {
+          event.preventDefault();
+          firstFocusableElement.focus();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleDrawerKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleDrawerKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [closeSidebar, isSidebarOpen]);
 
   useEffect(() => {
     if (!user) {
@@ -2909,17 +2866,35 @@ function AppContent() {
   };
 
   const DashboardHeader = () => {
+    const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
     const notificationPath = sidebarItems.find((item) => item.path.endsWith('/notifications'))?.path || getDashboardRoute(user?.role);
+    useEffect(() => {
+      if (!mobileSearchOpen) return undefined;
+      const closeSearch = (event) => {
+        if (event.key === 'Escape') setMobileSearchOpen(false);
+      };
+      window.addEventListener('keydown', closeSearch);
+      return () => window.removeEventListener('keydown', closeSearch);
+    }, [mobileSearchOpen]);
 
     return (
-      <header className="dashboard-header">
+      <header className="dashboard-header dashboard-layout-header">
         <div className="dashboard-header-left">
           <img className="dashboard-menu-logo" src={UNIVERSITY_LOGO} alt="Mekdela Amba University" />
+          <div className="dashboard-header-brand-copy">
+            <strong>Mekdela Amba University</strong>
+            <span>Asset Management System</span>
+          </div>
         </div>
 
-        <div className="dashboard-header-search"><GlobalSearch role={sidebarRole} language={language} /></div>
+        <div className={`dashboard-header-search${mobileSearchOpen ? ' is-mobile-search-open' : ''}`}>
+          <GlobalSearch role={sidebarRole} language={language} />
+        </div>
 
         <div className="dashboard-header-actions">
+          <button type="button" className="dashboard-icon-button dashboard-mobile-search-button" onClick={() => setMobileSearchOpen((open) => !open)} aria-label={mobileSearchOpen ? 'Close search' : 'Open search'} aria-expanded={mobileSearchOpen}>
+            {mobileSearchOpen ? <X size={18} aria-hidden="true" /> : <Search size={18} aria-hidden="true" />}
+          </button>
           <button
             type="button"
             className="dashboard-icon-button"
@@ -2931,7 +2906,7 @@ function AppContent() {
             {unreadNotificationCount > 0 && <span className="dashboard-notification-count">{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</span>}
           </button>
 
-          <div role="group" aria-label={t.language} style={{ display: 'inline-flex', alignItems: 'center' }}>
+          <div className="dashboard-language-switch" role="group" aria-label={t.language}>
             <button
               type="button"
               className="dashboard-language-button"
@@ -2963,11 +2938,18 @@ function AppContent() {
               aria-haspopup="menu"
               aria-label="Open user menu"
             >
+              <UserCircle className="dashboard-profile-avatar" size={21} aria-hidden="true" />
               <span className="dashboard-profile-name">{user.fullName || user.username || 'User'}</span>
               <ChevronDown size={16} aria-hidden="true" />
             </button>
             {profileMenuOpen && (
               <div className="dashboard-profile-menu" role="menu">
+                <label className="dashboard-theme-menu-item">Color theme
+                  <select value={theme} onChange={(event) => setTheme(event.target.value)} aria-label="Color theme">
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                  </select>
+                </label>
                 <button type="button" role="menuitem" onClick={handleLogout}>
                   <LogOut size={15} aria-hidden="true" /> {t.logout}
                 </button>
@@ -2983,17 +2965,21 @@ function AppContent() {
 
   const AuthenticatedLayout = ({ children }) => (
     <div className="App" style={{ backgroundColor: currentTheme.mainBg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {dashboardHeaderVisible && <DashboardHeader />}
-      <div
-        className={`authenticated-shell${isStoreManager ? ' store-manager-body' : ''}`}
-        style={{
-          ...(hideSidebar || !showDashboardSidebar ? { display: 'block' } : undefined),
-          ...(dashboardHeaderVisible ? { paddingTop: 'var(--header-height)' } : undefined),
-        }}
-      >
-        {showDashboardSidebar && (
-          <aside className={`admin-sidebar${isStoreManager ? ' store-manager-sidebar' : ''}${sidebarRole === 'ict_officer' ? ' ict-sidebar' : ''}`}>
-            <nav className="admin-sidebar-nav" aria-label="Application navigation">
+      <DashboardLayout
+        className="role-dashboard-layout"
+        bodyClassName={`authenticated-shell${isStoreManager ? ' store-manager-body' : ''}`}
+        header={dashboardHeaderVisible ? <DashboardHeader /> : null}
+        sidebarOpen={showDashboardSidebar && isSidebarOpen}
+        onCloseSidebar={closeSidebar}
+        sidebar={showDashboardSidebar ? (
+          <aside
+            ref={sidebarRef}
+            id="application-navigation-panel"
+            className={`admin-sidebar${isStoreManager ? ' store-manager-sidebar' : ''}${sidebarRole === 'ict_officer' ? ' ict-sidebar' : ''}${isSidebarOpen ? ' is-mobile-open' : ''}`}
+          >
+            <nav className="admin-sidebar-nav" aria-label="Application navigation" onClick={(event) => {
+              if (event.target.closest?.('a')) closeSidebar();
+            }}>
               {showCollegeNavigation && <div className="sidebar-subsection-label">{translateCollegeNavigation('COLLEGE MANAGER')}</div>}
               {showCollegeNavigation && (
                 <>
@@ -3111,12 +3097,18 @@ function AppContent() {
             </nav>
 
           </aside>
+        ) : null}
+      >
+        {showDashboardSidebar && (
+          <div className="dashboard-mobile-page-heading">
+            <MenuToggleButton toggleRef={sidebarToggleRef} onToggle={toggleSidebar} isOpen={isSidebarOpen} controls="application-navigation-panel" />
+            <h1>{dashboardPageTitle}</h1>
+          </div>
         )}
-
-        <main className={`admin-main-content app-main-content${isStoreManager ? ' store-manager-main' : ''}${hideSidebar ? ' create-asset-main' : ''}`} style={hideSidebar || !showDashboardSidebar ? { width: '100%', maxWidth: '100%', marginLeft: 0 } : undefined}>
+        <main id="admin-main-content" className={`admin-main-content app-main-content${isStoreManager ? ' store-manager-main' : ''}${hideSidebar ? ' create-asset-main' : ''}`} style={hideSidebar || !showDashboardSidebar ? { width: '100%', maxWidth: '100%', marginLeft: 0 } : undefined}>
           {children}
         </main>
-      </div>
+      </DashboardLayout>
       <ToastContainer position="top-right" autoClose={3000} />
       {pendingPublicPath && (
         <div className="public-navigation-modal" role="dialog" aria-modal="true" aria-labelledby="public-navigation-title">
@@ -3342,6 +3334,9 @@ function AppContent() {
   const hideSidebar = shouldHideSidebarForPath(location.pathname);
   const showDashboardSidebar = shouldShowDashboardSidebar(location.pathname) && !hideSidebar;
   const sidebarItems = getSidebarItems(sidebarRole);
+  const dashboardPageTitle = sidebarItems
+    .filter((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))
+    .sort((left, right) => right.path.length - left.path.length)[0]?.label || 'Dashboard';
   const responsibility = String(user?.departmentRole || user?.responsibility || user?.position || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
   const isDepartmentStaff = sidebarRole === 'staff' || responsibility === 'department staff';
   const isDepartmentDean = responsibility === 'department dean' || responsibility === 'dean';
@@ -3494,10 +3489,9 @@ function AppContent() {
   // AUTHENTICATED ROUTES - FIXED!
   // ==========================================
 
-  return (
-    <AuthenticatedLayout>
-      <Suspense fallback={<LoadingFallback />}>
-        <Routes>
+  const routeTree = (
+    <Suspense fallback={<LoadingFallback />}>
+      <Routes>
           {/* Public Routes */}
           <Route path="/" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
           <Route path="/home" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
@@ -3907,10 +3901,11 @@ function AppContent() {
 
           {/* Catch-all redirect for authenticated routes. */}
           <Route path="*" element={<Navigate to={getDashboardRoute(user.role)} replace />} />
-        </Routes>
-      </Suspense>
-    </AuthenticatedLayout>
+      </Routes>
+    </Suspense>
   );
+
+  return <AuthenticatedLayout>{routeTree}</AuthenticatedLayout>;
 }
 
 // ==========================================

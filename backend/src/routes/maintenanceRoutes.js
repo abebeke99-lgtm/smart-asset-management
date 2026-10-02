@@ -327,7 +327,7 @@ router.get('/vendors/:id', ...vendorAccess, getMaintenanceVendor);
 router.post('/vendors', ...vendorAccess, createMaintenanceVendor);
 router.put('/vendors/:id', ...vendorAccess, updateMaintenanceVendor);
 router.patch('/vendors/:id/status', ...vendorAccess, setMaintenanceVendorStatus);
-const repairAccess = [requireAuth, requireRole('ict_officer', 'maintenance')];
+const repairAccess = [requireAuth, requireRole('admin', 'ict_officer', 'maintenance')];
 const inspectionReadAccess = [requireAuth, requireRole('admin', 'maintenance', 'ict_officer')];
 router.get('/inspections', ...inspectionReadAccess, inspectionController.listInspections);
 router.get('/inspections/options', ...inspectionReadAccess, inspectionController.getInspectionOptions);

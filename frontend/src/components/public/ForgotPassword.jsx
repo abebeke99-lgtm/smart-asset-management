@@ -57,10 +57,12 @@ const describePasswordProblem = (value) => {
 const extractServerMessage = (error, fallback) => {
   const status = error?.response?.status;
   const serverMessage = error?.response?.data?.message;
-  if (serverMessage) return serverMessage;
+  const code = error?.response?.data?.code;
+  if (code === 'SMS_NOT_CONFIGURED') return fallback.smsUnavailable;
+  if (status === 503) return fallback.emailServiceUnavailable;
   if (status === 429) return fallback.rateLimitError;
   if (!status) return fallback.networkError;
-  return fallback.errorMessage;
+  return serverMessage || fallback.errorMessage;
 };
 
 // Errors raised by this screen carry a message that is safe and already localised.
@@ -757,7 +759,9 @@ const englishTranslations = {
   emailRequired: 'Please enter your email address.',
   invalidPhone: 'Please enter a valid Ethiopian mobile number, for example 0912345678.',
   errorMessage: 'Something went wrong. Please try again later.',
-  networkError: 'Unable to reach the server. Please check your connection and try again.',
+  networkError: 'Unable to reach the server. Please check your connection.',
+  emailServiceUnavailable: 'Email service is temporarily unavailable. Please try again later.',
+  smsUnavailable: 'SMS service is not available yet.',
   rateLimitError: 'Too many requests. Please wait a moment and try again.',
   successMessage: 'Password reset instructions will be sent if the account matches.',
   otpSent: 'If this recovery destination is registered, a verification code has been sent.',
@@ -810,7 +814,9 @@ const amharicTranslations = {
   emailRequired: 'እባክዎ የኢሜይል አድራሻዎን ያስገቡ።',
   invalidPhone: 'እባክዎ ትክክለኛ የኢትዮጵያ ሞባይል ቁጥር ያስገቡ፤ ለምሳሌ 0912345678።',
   errorMessage: 'ችግር ተከስቷል። እባክዎ ቆይተው እንደገና ይሞክሩ።',
-  networkError: 'ከአገልጋዩ ጋር መገናኘት አልተቻለም። ግንኙነትዎን አረጋግጠው እንደገና ይሞክሩ።',
+  networkError: 'ከአገልጋዩ ጋር መገናኘት አልተቻለም። ግንኙነትዎን አረጋግጡ።',
+  emailServiceUnavailable: 'የኢሜይል አገልግሎቱ ለጊዜው አይገኝም። እባክዎ ቆይተው እንደገና ይሞክሩ።',
+  smsUnavailable: 'የSMS አገልግሎት ገና አይገኝም።',
   rateLimitError: 'በጣም ብዙ ጥያቄዎች ተልከዋል። እባክዎ ቆይተው ይሞክሩ።',
   successMessage: 'መለያው ከመለያው ጋር ከሚዛመድ ከሆነ የይለፍ ቃል መልሶ ማግኛ መመሪያዎች ይላካሉ።',
   otpSent: 'ይህ የመልሶ ማግኛ አድራሻ ከተመዘገበ የማረጋገጫ ኮድ ተልኳል።',

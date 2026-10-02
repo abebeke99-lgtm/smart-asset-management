@@ -109,8 +109,8 @@ describe('Public and dashboard route rules', () => {
   });
 
   it('shows the dashboard sidebar only on authenticated dashboard routes', () => {
-    expect(shouldShowDashboardSidebar('/admin')).toBe(false);
-    expect(shouldShowDashboardSidebar('/admin/assets')).toBe(false);
+    expect(shouldShowDashboardSidebar('/admin')).toBe(true);
+    expect(shouldShowDashboardSidebar('/admin/assets')).toBe(true);
     expect(shouldShowDashboardSidebar('/dashboard')).toBe(true);
     expect(shouldShowDashboardSidebar('/dashboard/assets')).toBe(true);
     expect(shouldShowDashboardSidebar('/home')).toBe(false);
@@ -119,10 +119,11 @@ describe('Public and dashboard route rules', () => {
     expect(shouldShowDashboardSidebar('/help')).toBe(false);
   });
 
-  it('uses the canonical admin header instead of the generic dashboard header', () => {
-    expect(shouldShowDashboardHeader('/admin')).toBe(false);
-    expect(shouldShowDashboardHeader('/admin/assets')).toBe(false);
+  it('uses the shared dashboard header for every authenticated role', () => {
+    expect(shouldShowDashboardHeader('/admin')).toBe(true);
+    expect(shouldShowDashboardHeader('/admin/assets')).toBe(true);
     expect(shouldShowDashboardHeader('/ict')).toBe(true);
+    expect(shouldShowDashboardHeader('/login')).toBe(false);
   });
 
   it('keeps the shared admin shell header and removes the duplicate page title from the dashboard content', async () => {
@@ -185,7 +186,7 @@ describe('Administrator route wiring', () => {
   ];
 
   it('registers all documented paths in the sidebar and renders their owning page under admin RBAC', () => {
-    expect(appSource).toContain('<Route path="/admin" element={<ProtectedRoute allowedRoles={[\'admin\']}><MainLayout /></ProtectedRoute>}>');
+    expect(appSource).toContain('<Route path="/admin" element={<ProtectedRoute allowedRoles={[\'admin\']}><AdminLayout /></ProtectedRoute>}>');
     for (const [route, nestedPath, component] of documentedRoutes) {
       if (nestedPath) {
         expect(appSource).toContain(`<Route path="${nestedPath}" element={<${component}`);
@@ -196,8 +197,10 @@ describe('Administrator route wiring', () => {
   });
 
   it('has one canonical shared app shell and redirects the analytics alias to system analytics', () => {
-    expect((appSource.match(/import MainLayout from '\.\/layouts\/MainLayout';/g) || []).length).toBe(1);
-    expect(appSource).toContain('<Route path="/admin" element={<ProtectedRoute allowedRoles={[\'admin\']}><MainLayout /></ProtectedRoute>}>');
+    expect(appSource).toContain('const DashboardLayout = ({ header, sidebar, sidebarOpen, onCloseSidebar');
+    expect(appSource).toContain('return <AuthenticatedLayout>{routeTree}</AuthenticatedLayout>;');
+    expect(appSource).toContain('const AdminLayout = () => (');
+    expect(appSource).toContain('<Route path="/admin" element={<ProtectedRoute allowedRoles={[\'admin\']}><AdminLayout /></ProtectedRoute>}>');
     expect(appSource).toContain('<Route path="analytics" element={<Navigate to="/admin/analytics/system" replace />} />');
     expect(appSource).toContain('<Route path="system-analytics" element={<AdminAnalyticsCenter system />} />');
   });
