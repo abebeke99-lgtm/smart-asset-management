@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
-import axios from 'axios';
 import * as XLSX from 'xlsx';
+import { getAllAssets } from '../../services/assetApi';
 
 const StoreWarranty = () => {
   const { user } = useAuth();
@@ -28,8 +28,7 @@ const StoreWarranty = () => {
   const fetchWarranties = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/assets', { params: { limit: 500 } });
-      const assets = response.data.assets || response.data.data || [];
+      const assets = await getAllAssets();
 
       // Filter assets with warranty information
       const warrantyData = assets

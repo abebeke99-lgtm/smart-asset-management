@@ -6,18 +6,44 @@ const bcrypt = require('bcryptjs');
 const { findCollegeScopeForUser } = require('../middlewares/organizationScope');
 const { saveProfilePhoto, validateProfilePhoto, buildPublicFileUrl } = require('../utils/uploadUtils');
 const { createAuditLog } = require('../services/auditLogService');
+const { getConfiguredRolePermissions } = require('../services/rolePermissionService');
 
-const roles = ['admin', 'ict_officer', 'college', 'finance', 'store_manager', 'maintenance', 'infrastructure', 'staff', 'student'];
+const roles = ['admin', 'ict_officer', 'college', 'college_manager', 'department_head', 'finance', 'store_manager', 'maintenance', 'infrastructure', 'staff', 'student'];
+const normalizeLookupValue = (value) => String(value ?? '').trim().toLowerCase();
+
+const findDuplicateUser = async ({ username = '', email = '', excludeUserId = null } = {}) => {
+  const normalizedUsername = normalizeLookupValue(username);
+  const normalizedEmail = normalizeLookupValue(email);
+  if (!normalizedUsername && !normalizedEmail) return null;
+
+  const where = {
+    [Op.or]: [
+      ...(normalizedUsername ? [{ username: { [Op.like]: `%${normalizedUsername}%` } }] : []),
+      ...(normalizedEmail ? [{ email: { [Op.like]: `%${normalizedEmail}%` } }] : []),
+    ],
+  };
+  if (excludeUserId) where.id = { [Op.ne]: excludeUserId };
+
+  const matches = await User.findAll({ where });
+  return matches.find((candidate) => {
+    const candidateUsername = normalizeLookupValue(candidate.username);
+    const candidateEmail = normalizeLookupValue(candidate.email ?? '');
+    return (normalizedUsername && candidateUsername === normalizedUsername) || (normalizedEmail && candidateEmail === normalizedEmail);
+  }) || null;
+};
+
 const safeUser = (user) => {
   const data = user.toJSON ? user.toJSON() : { ...user };
   delete data.password;
+  delete data.passwordHash;
+  delete data.password_hash;
   return data;
 };
 
 const validateUserInput = async (input, { requirePassword = false } = {}) => {
   if (!input.username || !String(input.username).trim()) return 'Username is required';
   if (requirePassword) {
-    const pwd = String(input.password);
+    const pwd = typeof input.password === 'string' ? input.password : '';
     if (!pwd || pwd.length < 8) return 'Password must be at least 8 characters';
     if (pwd.length > 16) return 'Password must be at most 16 characters';
   }
@@ -80,25 +106,39 @@ const getUserById = async (req, res) => {
 
 const createUser = async (req, res) => {
   try {
-    const { full_name, phone_number, is_active, ...input } = req.body;
-    const validationError = await validateUserInput(input, { requirePassword: true });
+    const body = req.body || {};
+    if (typeof body.password !== 'string' || !body.password) return res.status(400).json({ success: false, message: 'Password is required' });
+    if (typeof body.confirmPassword !== 'string' || !body.confirmPassword) return res.status(400).json({ success: false, message: 'Confirm Password is required' });
+    if (body.password !== body.confirmPassword) return res.status(400).json({ success: false, message: 'Password and Confirm Password must match' });
+    const { full_name, phone_number, is_active, ...input } = body;
+    const username = String(input.username || '').trim();
+    const email = String(input.email || '').trim();
+    const role = input.role || input.roleId;
+    if (!role) return res.status(400).json({ success: false, message: 'Role is required' });
+    const departmentRecord = input.departmentId ? await Department.findByPk(input.departmentId) : null;
+    if (input.departmentId && !departmentRecord) return res.status(400).json({ success: false, message: 'Department not found' });
+    const department = departmentRecord?.name || input.department || '';
+    const active = input.active ?? is_active ?? (input.status ? ['active', 'enabled'].includes(String(input.status).toLowerCase()) : true);
+    const validationError = await validateUserInput({ ...input, username, email, role, department }, { requirePassword: true });
     if (validationError) return res.status(400).json({ success: false, message: validationError });
-    const existing = await User.findOne({ where: { [Op.or]: [{ username: input.username }, ...(input.email ? [{ email: input.email }] : [])] } });
+    const existing = await findDuplicateUser({ username, email });
     if (existing) return res.status(409).json({ success: false, message: 'Username or email is already in use' });
     const user = await User.create({
-      username: input.username,
-      email: input.email || null,
-      role: input.role || 'staff',
-      department: input.department || '',
-      fullName: req.body.fullName || full_name || req.body.username,
-      phone: req.body.phone || phone_number || '',
-      active: req.body.active ?? is_active ?? true,
-      password: await bcrypt.hash(req.body.password, 10),
+      username,
+      email: email || null,
+      role: role || 'staff',
+      department,
+      collegeId: input.collegeId || null,
+      departmentId: input.departmentId || null,
+      fullName: body.fullName || body.name || full_name || username,
+      phone: body.phone || phone_number || '',
+      active,
+      password: await bcrypt.hash(input.password, 10),
     });
     await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CREATE_USER', entity: `user:${user.id}`, entityId: user.id, newValue: safeUser(user), details: { username: user.username } });
     res.status(201).json({ success: true, data: safeUser(user) });
   } catch (error) {
-    console.error('User creation failed:', error);
+    console.error('User creation failed.');
     res.status(500).json({ success: false, message: 'Unable to create user.' });
   }
 };
@@ -107,17 +147,23 @@ const updateUser = async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    const { full_name, phone_number, is_active, ...input } = req.body;
-    const validationError = await validateUserInput({ ...input, username: input.username || user.username }, { requirePassword: false });
+    const body = req.body || {};
+    const { full_name, phone_number, is_active, ...input } = body;
+    const role = input.role || input.roleId;
+    const departmentRecord = input.departmentId ? await Department.findByPk(input.departmentId) : null;
+    if (input.departmentId && !departmentRecord) return res.status(400).json({ success: false, message: 'Department not found' });
+    const department = departmentRecord?.name || input.department;
+    const validationError = await validateUserInput({ ...input, role, department, username: input.username || user.username }, { requirePassword: false });
     if (validationError) return res.status(400).json({ success: false, message: validationError });
     const updates = {
       ...(input.username ? { username: input.username } : {}),
       ...(input.email !== undefined ? { email: input.email || null } : {}),
-      ...(input.role ? { role: input.role } : {}),
-      ...(input.department !== undefined ? { department: input.department || '' } : {}),
-      ...(input.fullName || full_name ? { fullName: input.fullName || full_name } : {}),
-      ...(input.phone || phone_number ? { phone: input.phone || phone_number } : {}),
-      ...(input.active !== undefined || is_active !== undefined ? { active: input.active ?? is_active } : {})
+      ...(role ? { role } : {}),
+      ...(input.departmentId !== undefined ? { departmentId: input.departmentId || null, department: department || '' } : input.department !== undefined ? { department: input.department || '' } : {}),
+      ...(input.collegeId !== undefined ? { collegeId: input.collegeId || null } : {}),
+      ...(input.fullName || input.name || full_name ? { fullName: input.fullName || input.name || full_name } : {}),
+      ...(input.phone !== undefined || phone_number !== undefined ? { phone: input.phone ?? phone_number ?? '' } : {}),
+      ...(input.active !== undefined || is_active !== undefined || input.status !== undefined ? { active: input.active ?? is_active ?? ['active', 'enabled'].includes(String(input.status).toLowerCase()) } : {})
     };
     if (input.password) {
       if (String(input.password).length < 8) return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
@@ -125,7 +171,7 @@ const updateUser = async (req, res) => {
       updates.password = await bcrypt.hash(input.password, 10);
     }
     if (updates.username !== user.username || updates.email !== user.email) {
-      const duplicate = await User.findOne({ where: { [Op.or]: [{ username: updates.username || user.username }, ...(updates.email ? [{ email: updates.email }] : [])], id: { [Op.ne]: user.id } } });
+      const duplicate = await findDuplicateUser({ username: updates.username || user.username, email: updates.email !== undefined ? updates.email : user.email, excludeUserId: user.id });
       if (duplicate) return res.status(409).json({ success: false, message: 'Username or email is already in use' });
     }
     const before = safeUser(user);
@@ -156,7 +202,10 @@ const getCurrentUserProfile = async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    return res.json({ success: true, data: safeUser(user) });
+    const data = safeUser(user);
+    const permissions = await getConfiguredRolePermissions(user.role);
+    if (permissions !== null) data.permissions = permissions;
+    return res.json({ success: true, data });
   } catch (error) {
     console.error('User profile request failed:', error);
     return res.status(500).json({ success: false, message: 'Unable to load profile.' });

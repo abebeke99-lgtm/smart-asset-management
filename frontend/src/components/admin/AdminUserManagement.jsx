@@ -1,19 +1,35 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import apiClient, { getApiErrorMessage } from "../../services/apiClient";
 
 const USERS_API = "/api/users";
-const ROLES_API = "/api/admin/roles";
 const COLLEGES_API = "/api/colleges";
 const DEPARTMENTS_API = "/api/departments";
+const ROLE_OPTIONS = [
+  "admin",
+  "ict_officer",
+  "college",
+  "college_manager",
+  "department_head",
+  "finance",
+  "store_manager",
+  "maintenance",
+  "infrastructure",
+  "staff",
+  "student",
+];
 
 const EMPTY_FORM = {
   name: "",
+  username: "",
   email: "",
   phone: "",
   roleId: "",
   collegeId: "",
   departmentId: "",
   status: "Active",
+  password: "",
+  confirmPassword: "",
 };
 
 async function apiRequest(url, options = {}) {
@@ -26,7 +42,13 @@ async function apiRequest(url, options = {}) {
     });
     return response.data;
   } catch (error) {
-    throw new Error(getApiErrorMessage(error, "Unable to complete the user management request."));
+    console.error("User management API request failed", {
+      url,
+      method: options.method || "GET",
+      status: error.response?.status || 0,
+      code: error.code || "",
+    });
+    throw new Error(getApiErrorMessage(error, error.message || "Unable to complete the user management request."));
   }
 }
 
@@ -78,6 +100,7 @@ function normalizeUser(item, index) {
     roleId:
       item?.roleId ??
       item?.role?.id ??
+      item?.role ??
       "",
 
     roleName:
@@ -126,11 +149,11 @@ function normalizeUser(item, index) {
   };
 }
 
+
 function normalizeOption(item, index) {
   return {
     id:
       item?.id ??
-      item?.roleId ??
       item?.collegeId ??
       item?.departmentId ??
       item?._id ??
@@ -138,7 +161,6 @@ function normalizeOption(item, index) {
 
     name:
       item?.name ??
-      item?.roleName ??
       item?.collegeName ??
       item?.departmentName ??
       "",
@@ -206,6 +228,18 @@ export default function Users() {
     useState(null);
 
   const [form, setForm] = useState(EMPTY_FORM);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [resettingUser, setResettingUser] = useState(null);
+  const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [confirmTemporaryPassword, setConfirmTemporaryPassword] = useState("");
+  const [showTemporaryPassword, setShowTemporaryPassword] = useState(false);
+  const [showConfirmTemporaryPassword, setShowConfirmTemporaryPassword] = useState(false);
+  const [resetError, setResetError] = useState("");
+  const [activityUser, setActivityUser] = useState(null);
+  const [activityLogs, setActivityLogs] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState("");
 
   const loadData = async () => {
     setLoading(true);
@@ -214,12 +248,10 @@ export default function Users() {
     try {
       const [
         usersResponse,
-        rolesResponse,
         collegesResponse,
         departmentsResponse,
       ] = await Promise.all([
         apiRequest(USERS_API),
-        apiRequest(ROLES_API),
         apiRequest(COLLEGES_API),
         apiRequest(DEPARTMENTS_API),
       ]);
@@ -230,11 +262,7 @@ export default function Users() {
         ]).map(normalizeUser)
       );
 
-      setRoles(
-        extractArray(rolesResponse, [
-          "roles",
-        ]).map(normalizeOption)
-      );
+      setRoles(ROLE_OPTIONS.map((name) => ({ id: name, name })));
 
       setColleges(
         extractArray(collegesResponse, [
@@ -330,6 +358,8 @@ export default function Users() {
   const openCreateForm = () => {
     setEditingUser(null);
     setForm(EMPTY_FORM);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     setError("");
     setShowForm(true);
   };
@@ -339,14 +369,19 @@ export default function Users() {
 
     setForm({
       name: user.name || "",
+      username: user.raw?.username || "",
       email: user.email || "",
       phone: user.phone || "",
       roleId: user.roleId || "",
       collegeId: user.collegeId || "",
       departmentId: user.departmentId || "",
       status: user.status || "Active",
+      password: "",
+      confirmPassword: "",
     });
 
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     setError("");
     setShowForm(true);
   };
@@ -357,6 +392,8 @@ export default function Users() {
     setShowForm(false);
     setEditingUser(null);
     setForm(EMPTY_FORM);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
   const updateForm = (event) => {
@@ -376,13 +413,23 @@ export default function Users() {
       return;
     }
 
-    if (!form.email.trim()) {
-      setError("Email address is required.");
+    if (!form.username.trim()) {
+      setError("Username is required.");
       return;
     }
 
     if (!form.roleId) {
       setError("Please select a role.");
+      return;
+    }
+
+    if (!editingUser && !form.password) {
+      setError("Password is required.");
+      return;
+    }
+
+    if (!editingUser && form.password !== form.confirmPassword) {
+      setError("Password and Confirm Password must match.");
       return;
     }
 
@@ -392,14 +439,20 @@ export default function Users() {
     try {
       const payload = {
         name: form.name.trim(),
-        email: form.email.trim(),
+        username: form.username.trim(),
+        email: form.email.trim() || null,
         phone: form.phone.trim(),
-        roleId: form.roleId,
+        role: form.roleId,
         collegeId: form.collegeId || null,
         departmentId:
           form.departmentId || null,
         status: form.status,
       };
+
+      if (!editingUser) {
+        payload.password = form.password;
+        payload.confirmPassword = form.confirmPassword;
+      }
 
       if (editingUser) {
         await apiRequest(
@@ -469,6 +522,69 @@ export default function Users() {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openResetPassword = (user) => {
+    setResettingUser(user);
+    setTemporaryPassword("");
+    setConfirmTemporaryPassword("");
+    setShowTemporaryPassword(false);
+    setShowConfirmTemporaryPassword(false);
+    setResetError("");
+  };
+
+  const closeResetPassword = () => {
+    if (saving) return;
+    setResettingUser(null);
+    setTemporaryPassword("");
+    setConfirmTemporaryPassword("");
+    setShowTemporaryPassword(false);
+    setShowConfirmTemporaryPassword(false);
+  };
+
+  const resetUserPassword = async (event) => {
+    event.preventDefault();
+    if (!temporaryPassword) {
+      setResetError("Temporary password is required.");
+      return;
+    }
+    if (temporaryPassword.length < 8 || temporaryPassword.length > 16) {
+      setResetError("Temporary password must be 8 to 16 characters.");
+      return;
+    }
+    if (temporaryPassword !== confirmTemporaryPassword) {
+      setResetError("Temporary passwords must match.");
+      return;
+    }
+
+    setSaving(true);
+    setResetError("");
+    try {
+      await apiRequest(
+        `${USERS_API}/${encodeURIComponent(resettingUser.id)}/reset-password`,
+        { method: "POST", body: JSON.stringify({ password: temporaryPassword }) }
+      );
+      closeResetPassword();
+    } catch (err) {
+      setResetError(err.message || "Unable to reset user password.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const viewUserActivity = async (user) => {
+    setActivityUser(user);
+    setActivityLogs([]);
+    setActivityError("");
+    setActivityLoading(true);
+    try {
+      const response = await apiRequest(`${USERS_API}/${encodeURIComponent(user.id)}/activity`);
+      setActivityLogs(extractArray(response, ["logs"]));
+    } catch (err) {
+      setActivityError(err.message || "Unable to load user activity.");
+    } finally {
+      setActivityLoading(false);
     }
   };
 
@@ -862,6 +978,40 @@ export default function Users() {
           outline: none;
         }
 
+        .password-field {
+          position: relative;
+        }
+
+        .password-field .form-input {
+          padding-right: 44px;
+        }
+
+        .password-toggle {
+          position: absolute;
+          top: 50%;
+          right: 7px;
+          display: grid;
+          width: 32px;
+          height: 32px;
+          place-items: center;
+          border: 0;
+          border-radius: 6px;
+          color: #64748b;
+          background: transparent;
+          cursor: pointer;
+          transform: translateY(-50%);
+        }
+
+        .password-toggle:hover {
+          color: #1d4ed8;
+          background: #eff6ff;
+        }
+
+        .password-toggle:focus-visible {
+          outline: 2px solid #2563eb;
+          outline-offset: 1px;
+        }
+
         .modal-footer {
           display: flex;
           justify-content: flex-end;
@@ -1196,6 +1346,23 @@ export default function Users() {
                           <button
                             type="button"
                             className="action-button edit"
+                            onClick={() => openResetPassword(user)}
+                            disabled={saving}
+                          >
+                            Reset Password
+                          </button>
+
+                          <button
+                            type="button"
+                            className="action-button view"
+                            onClick={() => viewUserActivity(user)}
+                          >
+                            Activity
+                          </button>
+
+                          <button
+                            type="button"
+                            className="action-button edit"
                             onClick={() =>
                               openEditForm(
                                 user
@@ -1317,11 +1484,24 @@ export default function Users() {
                 </div>
 
                 <div className="form-group">
+                  <label className="form-label" htmlFor="new-user-username">
+                    Username <span className="required">*</span>
+                  </label>
+                  <input
+                    id="new-user-username"
+                    type="text"
+                    name="username"
+                    className="form-input"
+                    value={form.username}
+                    onChange={updateForm}
+                    autoComplete="username"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
                   <label className="form-label">
-                    Email{" "}
-                    <span className="required">
-                      *
-                    </span>
+                    Email
                   </label>
 
                   <input
@@ -1331,10 +1511,69 @@ export default function Users() {
                     value={form.email}
                     onChange={updateForm}
                     placeholder="user@university.edu"
-                    required
                   />
                 </div>
               </div>
+
+              {!editingUser && (
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="new-user-password">
+                      Password <span className="required">*</span>
+                    </label>
+                    <div className="password-field">
+                      <input
+                        id="new-user-password"
+                        type={showPassword ? "text" : "password"}
+                        name="password"
+                        className="form-input"
+                        value={form.password}
+                        onChange={updateForm}
+                        autoComplete="new-password"
+                        minLength={8}
+                        maxLength={16}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="password-toggle"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        onClick={() => setShowPassword((visible) => !visible)}
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="new-user-confirm-password">
+                      Confirm Password <span className="required">*</span>
+                    </label>
+                    <div className="password-field">
+                      <input
+                        id="new-user-confirm-password"
+                        type={showConfirmPassword ? "text" : "password"}
+                        name="confirmPassword"
+                        className="form-input"
+                        value={form.confirmPassword}
+                        onChange={updateForm}
+                        autoComplete="new-password"
+                        minLength={8}
+                        maxLength={16}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="password-toggle"
+                        aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                        onClick={() => setShowConfirmPassword((visible) => !visible)}
+                      >
+                        {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="form-row">
                 <div className="form-group">
@@ -1638,6 +1877,141 @@ export default function Users() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {resettingUser && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeResetPassword();
+          }}
+        >
+          <div className="modal">
+            <div className="modal-header">
+              <h2 className="modal-title">Reset Password</h2>
+              <button
+                type="button"
+                className="close-button"
+                onClick={closeResetPassword}
+                disabled={saving}
+                aria-label="Close reset password dialog"
+              >
+                ×
+              </button>
+            </div>
+
+            <form className="form" onSubmit={resetUserPassword}>
+              <p>Set a temporary password for {resettingUser.name || resettingUser.email}.</p>
+              {resetError && <div className="error-box" role="alert">{resetError}</div>}
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label" htmlFor="temporary-user-password">Temporary Password *</label>
+                  <div className="password-field">
+                    <input
+                      id="temporary-user-password"
+                      type={showTemporaryPassword ? "text" : "password"}
+                      className="form-input"
+                      value={temporaryPassword}
+                      onChange={(event) => setTemporaryPassword(event.target.value)}
+                      autoComplete="new-password"
+                      minLength={8}
+                      maxLength={16}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      aria-label={showTemporaryPassword ? "Hide temporary password" : "Show temporary password"}
+                      onClick={() => setShowTemporaryPassword((visible) => !visible)}
+                    >
+                      {showTemporaryPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" htmlFor="confirm-temporary-user-password">Confirm Temporary Password *</label>
+                  <div className="password-field">
+                    <input
+                      id="confirm-temporary-user-password"
+                      type={showConfirmTemporaryPassword ? "text" : "password"}
+                      className="form-input"
+                      value={confirmTemporaryPassword}
+                      onChange={(event) => setConfirmTemporaryPassword(event.target.value)}
+                      autoComplete="new-password"
+                      minLength={8}
+                      maxLength={16}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      aria-label={showConfirmTemporaryPassword ? "Hide confirm temporary password" : "Show confirm temporary password"}
+                      onClick={() => setShowConfirmTemporaryPassword((visible) => !visible)}
+                    >
+                      {showConfirmTemporaryPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="secondary-button" onClick={closeResetPassword} disabled={saving}>Cancel</button>
+                <button type="submit" className="primary-button" disabled={saving}>{saving ? "Resetting..." : "Reset Password"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {activityUser && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setActivityUser(null);
+          }}
+        >
+          <div className="modal">
+            <div className="modal-header">
+              <h2 className="modal-title">Activity: {activityUser.name || activityUser.email}</h2>
+              <button
+                type="button"
+                className="close-button"
+                onClick={() => setActivityUser(null)}
+                aria-label="Close user activity"
+              >
+                ×
+              </button>
+            </div>
+
+            {activityLoading ? (
+              <div className="loading-state">Loading activity...</div>
+            ) : activityError ? (
+              <div className="error-box" role="alert">{activityError}</div>
+            ) : activityLogs.length === 0 ? (
+              <div className="empty-state">No user activity found.</div>
+            ) : (
+              <div className="table-wrapper">
+                <table className="users-table">
+                  <thead>
+                    <tr><th>Action</th><th>Entity</th><th>Actor</th><th>Timestamp</th></tr>
+                  </thead>
+                  <tbody>
+                    {activityLogs.map((log, index) => (
+                      <tr key={log.id || `${log.action}-${log.createdAt}-${index}`}>
+                        <td>{log.action || "—"}</td>
+                        <td>{log.entity || log.entityId || "—"}</td>
+                        <td>{log.User?.fullName || log.User?.username || log.userId || "System"}</td>
+                        <td>{log.createdAt ? new Date(log.createdAt).toLocaleString() : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}

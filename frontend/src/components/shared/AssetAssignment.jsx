@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { getAllAssets } from '../../services/assetApi';
 
 const AssetAssignment = () => {
   const { language, theme } = useLanguage();
@@ -23,10 +24,10 @@ const AssetAssignment = () => {
     setLoading(true);
     try {
       const [assetsRes, usersRes] = await Promise.all([
-        axios.get('/api/assets', { params: { status: 'Available', limit: 100 } }),
+        getAllAssets(axios, { status: 'Available' }),
         axios.get('/api/users')
       ]);
-      setAssets(assetsRes.data.assets || []);
+      setAssets(assetsRes.data || []);
       setUsers(usersRes.data.users || []);
     } catch (error) {
       toast.error('Failed to load data');

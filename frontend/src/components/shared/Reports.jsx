@@ -3,6 +3,7 @@ import { useLanguage } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
 import * as XLSX from 'xlsx';
 import axios from 'axios';
+import { getAllAssets } from '../../services/assetApi';
 
 const Reports = () => {
   const { language, theme } = useLanguage();
@@ -16,12 +17,9 @@ const Reports = () => {
   const fetchReport = useCallback(async () => {
     setLoading(true);
     try {
-      let endpoint = '/api/assets?limit=500';
-      if (reportType === 'maintenance') endpoint = '/api/maintenance?limit=500';
-      else if (reportType === 'valuation') endpoint = '/api/assets?limit=500';
-      
-      const response = await axios.get(endpoint);
-      let data = response.data.assets || response.data.requests || [];
+      const data = reportType === 'maintenance'
+        ? (await axios.get('/api/maintenance', { params: { limit: 50 } })).data?.requests || []
+        : await getAllAssets(axios);
       setReportData(data);
     } catch (error) {
       toast.error('Failed to load report data');

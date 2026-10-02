@@ -14,9 +14,9 @@ function getJwtSecret() {
   }
 
   if (!cachedDevSecret) {
-    cachedDevSecret = process.env.JWT_DEV_SECRET || crypto.randomBytes(48).toString('hex');
+    cachedDevSecret = process.env.JWT_DEV_SECRET || 'dev-smart-asset-management-secret-2026-10-01';
     console.warn(
-      'JWT_SECRET is not set. Using JWT_DEV_SECRET or a generated development secret. Set JWT_SECRET in the environment.'
+      'JWT_SECRET is not set. Using the project development fallback secret. Set JWT_SECRET in the environment.'
     );
   }
   return cachedDevSecret;

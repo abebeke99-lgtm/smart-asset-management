@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { getAllAssets } from '../../services/assetApi';
 import * as XLSX from 'xlsx';
 import {
   AlertTriangle,
@@ -87,7 +88,6 @@ const DeptAssets = () => {
     try {
       const params = {
         department: user?.department || user?.department_name || undefined,
-        limit: 500,
         search: search || undefined,
         status: filterStatus || undefined,
         category: filterCategory || undefined,
@@ -105,8 +105,11 @@ const DeptAssets = () => {
         return;
       }
 
-      const response = await axios.get('/api/assets', { params });
-      setAssets(response.data.assets || response.data.data || []);
+      const { assigned_to: assignedToName, ...assetParams } = params;
+      const assetRows = await getAllAssets(axios, assetParams);
+      setAssets(assignedToName
+        ? assetRows.filter((asset) => String(asset.assigned_to_name || 'Unassigned') === String(assignedToName))
+        : assetRows);
     } catch (error) {
       console.error('Department assets fetch error:', error);
       toast.error(t.fetchError || 'Failed to load assets');

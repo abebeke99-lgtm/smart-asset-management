@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../../utils/api';
+import { getAllAssets } from '../../services/assetApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
 import * as XLSX from 'xlsx';
@@ -201,20 +202,24 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
       if (isTransferType) {
         const [transferResponse, assetResponse, departmentResponse] = await Promise.all([
           apiClient.get(getTransferListEndpoint(scope, role), { params: statusFilter ? { status: statusFilter } : {} }),
-          apiClient.get(getAssetEndpoint(scope), { params: { limit: 500 } }),
+          getAssetEndpoint(scope) === '/api/assets'
+            ? getAllAssets(apiClient)
+            : apiClient.get(getAssetEndpoint(scope), { params: { limit: 50 } }),
           apiClient.get('/api/departments', { params: { limit: 500 } }),
         ]);
 
         setRows(parseListData(transferResponse.data).map(normalizeTransfer));
-        setAssets(parseListData(assetResponse.data));
+        setAssets(Array.isArray(assetResponse) ? assetResponse : parseListData(assetResponse.data));
         setDepartments(parseListData(departmentResponse.data));
       } else {
         const [workflowResponse, assetsResponse] = await Promise.all([
           apiClient.get(base, { params: { status: status || undefined } }),
-          apiClient.get(getAssetEndpoint(scope), { params: { limit: 100 } }),
+          getAssetEndpoint(scope) === '/api/assets'
+            ? getAllAssets(apiClient)
+            : apiClient.get(getAssetEndpoint(scope), { params: { limit: 50 } }),
         ]);
         setRows(parseListData(workflowResponse.data));
-        setAssets(parseListData(assetsResponse.data));
+        setAssets(Array.isArray(assetsResponse) ? assetsResponse : parseListData(assetsResponse.data));
       }
     } catch (loadError) {
       setError(scope === 'college' && isTransferType && language === 'am' ? 'የዝውውር መዝገቦችን መጫን አልተቻለም።' : loadError.response?.data?.message || `Unable to load ${config.title.toLowerCase()}.`);

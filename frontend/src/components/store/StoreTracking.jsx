@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ClipboardCheck, ClipboardList, RefreshCw, ScanLine, Search, ShieldCheck, XCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { apiClient } from '../../utils/api';
+import { getAllAssets } from '../../services/assetApi';
 import { useLanguage } from '../../contexts/UiContext';
 
 const statusOptions = ['available', 'assigned', 'in-use', 'in_store', 'in-store', 'maintenance', 'damaged', 'missing', 'retired'];
@@ -119,12 +120,12 @@ const StoreTracking = () => {
     try {
       setLoading(true);
       const [assetsResponse, inventoryResponse, sessionsResponse] = await Promise.all([
-        apiClient.get('/api/assets', { params: { limit: 1000 } }),
+        getAllAssets(apiClient),
         apiClient.get('/api/store/inventory', { params: { page: 1, pageSize: 200 } }),
         apiClient.get('/api/store/verification'),
       ]);
 
-      const assetRows = assetsResponse.data?.data || assetsResponse.data?.assets || [];
+      const assetRows = assetsResponse;
       const inventory = inventoryResponse.data?.data?.items || inventoryResponse.data?.data || [];
       const sessionRows = sessionsResponse.data?.data || [];
       const verificationItems = sessionRows.flatMap((session) => (session.VerificationItems || []).map((item) => ({ ...item, sessionId: session.id, sessionName: session.name })));

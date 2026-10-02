@@ -240,7 +240,7 @@ export const normalizeRole = (role) => {
 // non-digit characters count as decoration, so non-Latin scripts (e.g. Amharic) are preserved.
 const stripLeadingDecoration = (value) => String(value == null ? '' : value).replace(/^[^\p{L}\p{N}]+\s*/u, '').trim();
 
-const getDashboardRoute = (role) => {
+export const getDashboardRoute = (role) => {
   const roleMap = {
     admin: '/admin',
     ict_officer: '/ict',
@@ -251,7 +251,8 @@ const getDashboardRoute = (role) => {
     store_manager: '/store',
     maintenance: '/maintenance',
     infrastructure: '/infrastructure',
-    staff: '/department'
+    staff: '/department',
+    student: '/student'
   };
   return roleMap[normalizeRole(role)] || '/home';
 };
@@ -1459,11 +1460,17 @@ const AdminAssetDisposal = () => {
     setError('');
     try {
       const [assetsResponse, disposalsResponse] = await Promise.all([
-        axios.get('/api/assets', { params: { page: 1, limit: 500 } }).catch(() => ({ data: { assets: [] } })),
+        axios.get('/api/assets', { params: { page: 1, limit: 50 } }),
         axios.get('/api/admin/disposals', { params: { page: 1, limit: 500, sortBy: 'createdAt', sortOrder: 'DESC' } }).catch(() => ({ data: { disposals: [] } }))
       ]);
 
-      const assetRows = normalizeListResponse(assetsResponse?.data ?? []).filter((asset) => asset && (asset.status !== 'deleted' || asset.deletedAt == null));
+      const assetPageCount = Math.max(1, Number(assetsResponse?.data?.pagination?.pages) || 1);
+      const remainingAssetPages = await Promise.all(Array.from({ length: assetPageCount - 1 }, (_, index) =>
+        axios.get('/api/assets', { params: { page: index + 2, limit: 50 } })
+      ));
+      const assetRows = [assetsResponse, ...remainingAssetPages]
+        .flatMap((response) => normalizeListResponse(response?.data ?? []))
+        .filter((asset) => asset && (asset.status !== 'deleted' || asset.deletedAt == null));
       const requestRows = normalizeListResponse(disposalsResponse?.data ?? []).map(normalizeRequest);
 
       setAssets(assetRows);
@@ -2108,8 +2115,20 @@ const AdminAssetDocuments = () => {
 
 const RoleLayout = () => {
   const { theme } = useTheme();
+  const location = useLocation();
   const isDark = theme === 'dark';
-  
+
+  const formatSegment = (segment = '') => {
+    const cleaned = String(segment || '').trim();
+    if (!cleaned) return 'Home';
+
+    return cleaned
+      .split(/[-_ /]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  };
+
   return (
     <div style={{
       backgroundColor: isDark ? '#0f172a' : '#f8fafc',
@@ -2117,9 +2136,11 @@ const RoleLayout = () => {
       padding: '24px',
       minHeight: 'calc(100vh - var(--header-height))'
     }}>
-      <Suspense fallback={<LoadingFallback />}>
-        <Outlet />
-      </Suspense>
+      <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
+        <Suspense fallback={<LoadingFallback />}>
+          <Outlet />
+        </Suspense>
+      </div>
     </div>
   );
 };
@@ -3222,6 +3243,7 @@ function AppContent() {
         { path: '/college/notifications', label: 'Notifications' }
       ],
       'staff': [],
+      'student': [{ path: '/student', label: 'Dashboard', icon: LayoutDashboard }],
       'finance': [
         { path: '/finance', label: '📊 ' + t.dashboard, section: 'Overview' },
         { path: '/finance/purchase-requests', label: '📝 Purchase Requests', section: 'PROCUREMENT' },
@@ -3652,6 +3674,7 @@ function AppContent() {
             <Route path="requests" element={<Navigate to="/ict/asset-requests" replace />} />
             <Route path="equipment" element={<ICTEquipment />} />
             <Route path="network" element={<ICTNetwork />} />
+            <Route path="network-equipment" element={<ICTNetwork />} />
             <Route path="software-licenses" element={<ICTSoftwareLicenses />} />
             <Route path="support" element={<ICTTechnicalSupport />} />
             <Route path="technical-support" element={<Navigate to="/ict/support" replace />} />
@@ -3876,6 +3899,10 @@ function AppContent() {
             <Route path="reports" element={<InfrastructureReports />} />
             <Route path="documents" element={<InfrastructureDocuments />} />
             <Route path="notifications" element={<InfrastructureNotifications />} />
+          </Route>
+
+          <Route path="/student" element={<ProtectedRoute allowedRoles={['student']}><RoleLayout /></ProtectedRoute>}>
+            <Route index element={<main className="role-dashboard"><h1>Student Dashboard</h1></main>} />
           </Route>
 
           {/* Catch-all redirect for authenticated routes. */}

@@ -9,6 +9,8 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
+    "seed:demo": "node src/scripts/seedDemoAccounts.js",
+    "reset:demo-passwords": "node src/scripts/resetDemoPasswords.js",
     "test": "node --test"
   },
   "dependencies": {

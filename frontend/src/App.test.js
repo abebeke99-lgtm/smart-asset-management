@@ -10,10 +10,11 @@ import {
 
 const mockLogin = jest.fn();
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Login from './components/public/Login';
 import AdminDashboard from './components/admin/AdminDashboard';
+import apiClient from './services/apiClient';
 import fs from 'fs';
 import path from 'path';
 
@@ -131,6 +132,26 @@ describe('Public and dashboard route rules', () => {
 
     expect(screen.queryByText('Administrator Dashboard')).not.toBeInTheDocument();
   });
+
+  it('shows an error state when the dashboard request never settles', async () => {
+    jest.useFakeTimers();
+    apiClient.get.mockReturnValueOnce(new Promise(() => {}));
+
+    try {
+      render(<AdminDashboard />);
+      expect(screen.getByLabelText('Loading administrator dashboard')).toBeInTheDocument();
+
+      await act(async () => {
+        jest.advanceTimersByTime(15000);
+      });
+
+      expect(screen.getByRole('heading', { name: 'Admin Dashboard' })).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent('Dashboard data took too long to load. Please try again.');
+      expect(screen.queryByLabelText('Loading administrator dashboard')).not.toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe('Administrator route wiring', () => {
@@ -164,7 +185,7 @@ describe('Administrator route wiring', () => {
   ];
 
   it('registers all documented paths in the sidebar and renders their owning page under admin RBAC', () => {
-    expect(appSource).toContain('<Route path="/admin" element={<ProtectedRoute allowedRoles={[\'admin\']}><AdminLayout /></ProtectedRoute>}>');
+    expect(appSource).toContain('<Route path="/admin" element={<ProtectedRoute allowedRoles={[\'admin\']}><MainLayout /></ProtectedRoute>}>');
     for (const [route, nestedPath, component] of documentedRoutes) {
       if (nestedPath) {
         expect(appSource).toContain(`<Route path="${nestedPath}" element={<${component}`);
@@ -174,10 +195,9 @@ describe('Administrator route wiring', () => {
     }
   });
 
-  it('has one canonical admin shell and redirects the analytics alias to system analytics', () => {
-    for (const component of ['AdminLayout', 'AdminSidebar', 'AdminHeader']) {
-      expect((appSource.match(new RegExp(`const ${component}\\s*=`, 'g')) || []).length).toBe(1);
-    }
+  it('has one canonical shared app shell and redirects the analytics alias to system analytics', () => {
+    expect((appSource.match(/import MainLayout from '\.\/layouts\/MainLayout';/g) || []).length).toBe(1);
+    expect(appSource).toContain('<Route path="/admin" element={<ProtectedRoute allowedRoles={[\'admin\']}><MainLayout /></ProtectedRoute>}>');
     expect(appSource).toContain('<Route path="analytics" element={<Navigate to="/admin/analytics/system" replace />} />');
     expect(appSource).toContain('<Route path="system-analytics" element={<AdminAnalyticsCenter system />} />');
   });
@@ -228,7 +248,7 @@ describe('Login page navigation', () => {
     );
 
     const homepageLink = screen.getByRole('link', { name: '← Back to Homepage' });
-    expect(homepageLink).toHaveAttribute('href', 'https://smart-asset-management-six.vercel.app/home');
+    expect(homepageLink).toHaveAttribute('href', '/home');
     expect(homepageLink.parentElement).toHaveClass('login-panel');
     const loginCard = container.querySelector('.login-panel .login-card');
     expect(loginCard).toBeInTheDocument();

@@ -1509,6 +1509,22 @@ body.dark .admin-nav-link.is-active {
   background: var(--color-sidebar-accent);
 }
 
+.authenticated-shell > .admin-sidebar {
+  --color-sidebar: linear-gradient(180deg, #0066FF 0%, #007BFF 50%, #0052CC 100%);
+  --color-sidebar-hover: rgba(255, 255, 255, 0.12);
+  --color-sidebar-active: rgba(255, 255, 255, 0.18);
+  --color-sidebar-text: #FFFFFF;
+  --color-sidebar-text-active: #FFFFFF;
+  --color-sidebar-label: #FFFFFF;
+  --color-sidebar-divider: rgba(255, 255, 255, 0.18);
+  --color-sidebar-accent: #BFE0FF;
+  box-shadow: 4px 0 15px rgba(0, 0, 0, 0.12);
+}
+
+.authenticated-shell > .admin-sidebar .admin-nav-link.is-active::before {
+  display: none;
+}
+
 .admin-sidebar-footer {
   flex: 0 0 auto;
   padding: 12px;

@@ -5,6 +5,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { User, Config, AuditLog } = require('../src/models');
 const { login } = require('../src/controllers/authController');
+const { getJwtSecret } = require('../src/config/jwt');
+const verificationController = require('../src/controllers/verificationController');
 const { initializeInitialAdmin } = require('../src/services/initialAdminService');
 const { repairExistingAdminPassword } = require('../src/scripts/repairExistingAdminPassword');
 
@@ -71,6 +73,41 @@ test('valid login returns a JWT and the authentication query includes the passwo
   assert.equal(jwt.verify(response.body.token, jwtSecret).id, user.id);
   assert.equal(User.rawAttributes.password.fieldName, 'password');
   assert.equal(queryOptions.attributes, undefined);
+});
+
+test('jwt secret falls back to a stable development value when no explicit secret is configured', async () => {
+  const previousSecret = process.env.JWT_SECRET;
+  delete process.env.JWT_SECRET;
+  try {
+    assert.equal(getJwtSecret(), 'dev-smart-asset-management-secret-2026-10-01');
+  } finally {
+    if (previousSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = previousSecret;
+  }
+});
+
+test('verification session listing tolerates requests without organization scope data', async () => {
+  const { VerificationSession } = require('../src/models');
+  const previousFindAll = VerificationSession.findAll;
+  const calls = [];
+
+  VerificationSession.findAll = async (options) => {
+    calls.push(options);
+    return [];
+  };
+
+  try {
+    await verificationController.listSessions(
+      { user: { id: 1 }, organizationScope: undefined },
+      { json: () => {} },
+      (error) => { throw error; }
+    );
+
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].where, {});
+  } finally {
+    VerificationSession.findAll = previousFindAll;
+  }
 });
 
 test('unknown users receive 401', async () => {

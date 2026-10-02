@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, ClipboardList, Eye, Filter, Package, Plus, RefreshCw, Search, Wrench, X } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { createRepair, getAssets, getRepairDetails, getRepairHistory, updateRepair } from '../../services/maintenanceApi';
+import { createRepair, getRepairDetails, getRepairHistory, updateRepair } from '../../services/maintenanceApi';
+import { getAllAssets } from '../../services/assetApi';
+import { apiClient } from '../../utils/api';
 import './ICTRepairHistory.css';
 
 const statuses = ['pending', 'assigned', 'in-progress', 'waiting-for-parts', 'testing', 'completed', 'cancelled'];
@@ -32,7 +34,7 @@ const ICTRepairHistory = () => {
   }, [filters, page]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { getAssets({ limit: 1000 }).then(setAssets).catch(() => {}); }, []);
+  useEffect(() => { getAllAssets(apiClient).then(setAssets).catch(() => {}); }, []);
 
   const openDetails = async (record) => {
     try { setSelected(await getRepairDetails(record.id)); } catch { toast.error('Unable to load repair details.'); }

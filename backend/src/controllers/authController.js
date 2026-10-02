@@ -8,6 +8,7 @@ const { validateEmailConfiguration, sendPasswordResetEmail, sendOtpEmail } = req
 const { isValidEmail, isValidUsername } = require('../utils/validators');
 const { getJwtSecret } = require('../config/jwt');
 const { getRequestContext, getClientIp } = require('../middlewares/requestContext');
+const { getConfiguredRolePermissions } = require('../services/rolePermissionService');
 
 const LOGIN_ALIASES = {
   admin: ['admin'],
@@ -21,6 +22,28 @@ const LOGIN_ALIASES = {
 };
 
 const normalizeAlias = (value = '') => String(value || '').trim().toLowerCase().replace(/[_\-\s]+/g, ' ').replace(/\s+/g, ' ').trim();
+const normalizeUniqueLookup = (value = '') => String(value ?? '').trim().toLowerCase();
+
+const findExistingAccount = async ({ username = '', email = '', excludeUserId = null } = {}) => {
+  const normalizedUsername = normalizeUniqueLookup(username);
+  const normalizedEmail = normalizeUniqueLookup(email);
+  if (!normalizedUsername && !normalizedEmail) return null;
+
+  const where = {
+    [Op.or]: [
+      ...(normalizedUsername ? [{ username: { [Op.like]: `%${normalizedUsername}%` } }] : []),
+      ...(normalizedEmail ? [{ email: { [Op.like]: `%${normalizedEmail}%` } }] : []),
+    ],
+  };
+  if (excludeUserId) where.id = { [Op.ne]: excludeUserId };
+
+  const matches = await User.findAll({ where });
+  return matches.find((candidate) => {
+    const candidateUsername = normalizeUniqueLookup(candidate.username);
+    const candidateEmail = normalizeUniqueLookup(candidate.email ?? '');
+    return (normalizedUsername && candidateUsername === normalizedUsername) || (normalizedEmail && candidateEmail === normalizedEmail);
+  }) || null;
+};
 
 const normalizeLoginIdentity = (value = '') => {
   if (typeof value !== 'string') {
@@ -187,6 +210,8 @@ const login = async (req, res) => {
       lastLoginAt: user.lastLoginAt,
       forcePasswordChange: Boolean(user.forcePasswordChange),
     };
+    const rolePermissions = await getConfiguredRolePermissions(user.role);
+    if (rolePermissions !== null) safeUser.permissions = rolePermissions;
 
     await recordAuthEvent({ userId: user.id, action: 'LOGIN', result: 'Success', req });
 
@@ -222,9 +247,9 @@ const register = async (req, res) => {
     const passwordError = validatePassword(password || '', security);
     if (passwordError) return res.status(400).json({ success: false, message: passwordError });
 
-    const exists = await User.findOne({ where: { [require('sequelize').Op.or]: [{ username }, { email }] } });
+    const exists = await findExistingAccount({ username, email });
     if (exists) {
-      return res.status(409).json({ success: false, message: 'User already exists' });
+      return res.status(409).json({ success: false, message: 'Username or email is already in use' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import { useLanguage } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
+import { getAllAssets } from '../../services/assetApi';
 
 const normalizeStatus = (value) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, '-');
 
@@ -127,7 +128,7 @@ const StoreMaintenanceStatus = () => {
     try {
       const [maintenanceResponse, assetsResponse, usersResponse] = await Promise.all([
         apiClient.get('/api/maintenance', { params: { limit: 1000 } }),
-        apiClient.get('/api/assets', { params: { limit: 1000 } }),
+        getAllAssets(apiClient),
         apiClient.get('/api/users', { params: { limit: 1000 } }),
       ]);
 
@@ -139,7 +140,9 @@ const StoreMaintenanceStatus = () => {
             ? maintenanceResponse.data
             : [];
 
-      const assetList = Array.isArray(assetsResponse.data?.data)
+      const assetList = Array.isArray(assetsResponse)
+        ? assetsResponse
+        : Array.isArray(assetsResponse.data?.data)
         ? assetsResponse.data.data
         : Array.isArray(assetsResponse.data?.assets)
           ? assetsResponse.data.assets

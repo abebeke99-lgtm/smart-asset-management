@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import axios from 'axios';
+import { getAllAssets } from '../../services/assetApi';
 import { Bar, Line, Doughnut, Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement, PointElement, LineElement, Filler } from 'chart.js';
 
@@ -69,16 +70,15 @@ const FinanceReports = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [assetsRes, maintRes, disposedRes] = await Promise.all([
-        axios.get('/api/assets', { params: { limit: 1000, include_financial: true } }),
+      const [assetRows, maintRes, disposedRows] = await Promise.all([
+        getAllAssets(axios),
         axios.get('/api/maintenance', { params: { limit: 500 } }),
-        axios.get('/api/assets', { params: { limit: 500, status: 'Disposed' } })
+        getAllAssets(axios, { status: 'Disposed' })
       ]);
 
-      const assetRows = assetsRes.data?.assets || assetsRes.data?.data || [];
       setAssets(Array.isArray(assetRows) ? assetRows.map(normalizeAsset) : []);
       setMaintenanceRequests(maintRes.data?.requests || []);
-      setDisposedAssets(disposedRes.data?.assets || []);
+      setDisposedAssets(disposedRows);
     } catch (error) {
       toast.error(t.fetchError || 'Failed to load data');
       setAssets([]);

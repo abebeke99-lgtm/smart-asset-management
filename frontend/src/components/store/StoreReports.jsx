@@ -6,6 +6,7 @@ import { ArcElement, BarElement, CategoryScale, Chart as ChartJS, Legend, Linear
 import * as XLSX from 'xlsx';
 import { useLanguage } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
+import { getAllAssets } from '../../services/assetApi';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
@@ -182,33 +183,28 @@ const StoreReports = () => {
     setLoading(true);
     setInventoryError('');
     try {
-      let response;
+      let rows;
+      let summaryFromApi = {};
       try {
-        response = await apiClient.get('/api/store/inventory', {
+        const response = await apiClient.get('/api/store/inventory', {
           params: {
             page: 1,
             pageSize: 500,
           },
         });
+        rows = Array.isArray(response?.data?.data)
+          ? response.data.data
+          : Array.isArray(response?.data?.items)
+            ? response.data.items
+            : Array.isArray(response?.data?.assets)
+              ? response.data.assets
+              : [];
+        summaryFromApi = response?.data?.summary || {};
       } catch (storeError) {
-        response = await apiClient.get('/api/assets', {
-          params: {
-            page: 1,
-            limit: 500,
-          },
-        });
+        rows = await getAllAssets(apiClient);
       }
 
-      const rows = Array.isArray(response?.data?.data)
-        ? response.data.data
-        : Array.isArray(response?.data?.items)
-          ? response.data.items
-          : Array.isArray(response?.data?.assets)
-            ? response.data.assets
-            : [];
-
       const normalizedRows = rows.map(normalizeAssetRow);
-      const summaryFromApi = response?.data?.summary || {};
 
       const derivedSummary = {
         totalAssets: safeNumber(summaryFromApi.totalAssets ?? summaryFromApi.total ?? normalizedRows.length),

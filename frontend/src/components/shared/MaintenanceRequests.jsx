@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { getAllAssets } from '../../services/assetApi';
 
 const SharedMaintenanceRequests = () => {
   const { language, theme } = useLanguage();
@@ -31,10 +32,10 @@ const SharedMaintenanceRequests = () => {
     try {
       const [requestsRes, assetsRes] = await Promise.all([
         axios.get('/api/maintenance', { params: { limit: 100 } }),
-        axios.get('/api/assets', { params: { limit: 100 } })
+        getAllAssets(axios)
       ]);
       setRequests(requestsRes.data.requests || []);
-      setAssets(assetsRes.data.assets || []);
+      setAssets(assetsRes.data || []);
     } catch (error) {
       toast.error('Failed to load maintenance data');
     }

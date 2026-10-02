@@ -2,8 +2,27 @@ const { sequelize, VerificationSession, VerificationItem, Asset, Department, Aud
 const { Op } = require('sequelize');
 
 const sessionInclude = [{ model: Department, attributes: ['id', 'name', 'code'] }];
-const scopedSessionWhere = (req) => req.organizationScope.departmentId ? { departmentId: req.organizationScope.departmentId } : { collegeId: req.organizationScope.collegeId };
-const assetScope = (req) => req.organizationScope.departmentId ? { departmentId: req.organizationScope.departmentId } : { collegeId: req.organizationScope.collegeId };
+const scopedSessionWhere = (req) => {
+  const organizationScope = req?.organizationScope || {};
+  if (organizationScope.departmentId) {
+    return { departmentId: organizationScope.departmentId };
+  }
+  if (organizationScope.collegeId) {
+    return { collegeId: organizationScope.collegeId };
+  }
+  return {};
+};
+
+const assetScope = (req) => {
+  const organizationScope = req?.organizationScope || {};
+  if (organizationScope.departmentId) {
+    return { departmentId: organizationScope.departmentId };
+  }
+  if (organizationScope.collegeId) {
+    return { collegeId: organizationScope.collegeId };
+  }
+  return {};
+};
 
 const listSessions = async (req, res, next) => {
   try {

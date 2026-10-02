@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-toastify';
 import axios from 'axios';
+import { getAllAssets } from '../../services/assetApi';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import {
@@ -57,7 +58,7 @@ const ICTAssignments = () => {
   const [departments, setDepartments] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [returning, setReturning] = useState(false);
   const [search, setSearch] = useState('');
@@ -75,15 +76,15 @@ const ICTAssignments = () => {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    setLoadError(false);
+    setLoadError('');
     try {
       const [assetsResponse, usersResponse, departmentsResponse, assignmentsResponse] = await Promise.all([
-        axios.get('/api/assets', { params: { limit: 1000 } }),
+        getAllAssets(axios),
         axios.get('/api/users', { params: { limit: 1000 } }),
         axios.get('/api/departments'),
         axios.get('/api/assignments', { params: { page: 1, limit: 500 } }),
       ]);
-      const assetRows = assetsResponse.data?.assets || assetsResponse.data?.data || [];
+      const assetRows = assetsResponse;
       setAssets(assetRows);
       if (requestedAssetId && assetRows.some((item) => String(item.id) === requestedAssetId && String(item.status || '').toLowerCase() === 'available')) {
         setForm((current) => ({ ...current, asset: requestedAssetId }));
@@ -93,7 +94,7 @@ const ICTAssignments = () => {
       setAssignments(assignmentsResponse.data?.assignments || assignmentsResponse.data?.data || []);
     } catch (error) {
       console.error('Failed to load ICT assignments:', error);
-      setLoadError(true);
+      setLoadError(error.response?.data?.message || error.message || 'Unable to load ICT assignment data.');
     } finally {
       setLoading(false);
     }
@@ -175,6 +176,7 @@ const ICTAssignments = () => {
 
   return <div className="ia-page"><style>{styles}</style><main className="ia-container">
     <div className="ia-breadcrumb"><span>Dashboard</span><span>/</span><span>Asset Management</span><span>/</span><strong>Assignments</strong></div>
+    {loadError && <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, padding: 14, border: '1px solid #fecaca', borderRadius: 8, background: '#fef2f2', color: '#991b1b' }}><TriangleAlert size={18} /><span>{loadError}</span><button type="button" className="ia-button secondary" onClick={fetchData}><RefreshCw size={16} /> Retry</button></div>}
     <header className="ia-header"><div><div className="ia-title-row"><div className="ia-title-icon"><ClipboardList size={22} /></div><div><h1>Asset Assignments</h1><p>Manage asset assignments, current holders, returns, and assignment history.</p></div></div><div className="ia-updated"><Clock size={14} /> Last updated: {loading ? 'Updating...' : 'just now'}</div></div><div className="ia-header-actions"><button type="button" className="ia-button secondary" onClick={fetchData}><RefreshCw size={16} /> Refresh</button><button type="button" className="ia-button secondary" onClick={() => setShowFilters((value) => !value)}><Filter size={16} /> Filter</button><button type="button" className="ia-button secondary" onClick={exportPdf}><FileDown size={16} /> Export PDF</button></div></header>
     <div className="ia-stats">{stats.map(([label, description, value, Icon, tone, action]) => <button type="button" className="ia-stat-card" key={label} onClick={action} disabled={!action}><div className={`ia-stat-icon ${tone}`}><Icon size={21} /></div><strong>{value}</strong><span>{label}</span><small>{description}</small></button>)}</div>
     <section className="ia-card" id="assignment-form"><div className="ia-section-heading"><div className="ia-section-icon"><UserPlus size={20} /></div><div><h2>Assign New Asset</h2><p>Assign an ICT asset to a user and record its condition.</p></div></div>{!canManage && <div className="ia-permission"><TriangleAlert size={17} /> You have view-only access to assignments.</div>}<form onSubmit={assign} className="ia-form">
@@ -185,7 +187,7 @@ const ICTAssignments = () => {
       <div className="ia-field"><label htmlFor="expected-return">Expected Return Date</label><div className="ia-input-with-icon"><CalendarDays size={16} /><input id="expected-return" type="date" min={form.assignmentDate || today()} value={form.expectedReturn} onChange={(event) => setField('expectedReturn', event.target.value)} /></div>{errors.expectedReturn && <span className="ia-error">{errors.expectedReturn}</span>}</div>
       <div className="ia-field"><label htmlFor="condition">Condition</label><div className="ia-input-with-icon"><CircleCheck size={16} /><select id="condition" value={form.condition} onChange={(event) => setField('condition', event.target.value)}>{['Excellent', 'Good', 'Fair', 'Poor', 'Damaged'].map((item) => <option key={item}>{item}</option>)}</select></div></div>
       <div className="ia-field ia-full"><label htmlFor="remarks">Remarks</label><textarea id="remarks" maxLength="500" value={form.remarks} onChange={(event) => setField('remarks', event.target.value)} placeholder="Add any relevant notes about this assignment..." /><small className="ia-character-count">{form.remarks.length} / 500</small></div><div className="ia-form-actions"><button type="submit" className="ia-button primary" disabled={saving || !canManage}>{saving ? <><Loader2 size={16} /> Assigning...</> : <><UserPlus size={16} /> Assign Asset</>}</button></div>
-    </form></section>
+    {!loading && !loadError && assets.length === 0 && <div className="ia-form-notice" role="status" style={{ gridColumn: '1 / -1', padding: '12px 14px', border: '1px solid #cbd5e1', borderRadius: 8, background: '#f8fafc', color: '#475569' }}>No assets are currently available to assign.</div>}</form></section>
     <section className="ia-card ia-history"><div className="ia-section-heading"><div className="ia-section-icon"><FileText size={20} /></div><div><h2>Assignment History</h2><p>Track active and returned asset assignments.</p></div></div><div className="ia-toolbar"><div className="ia-search"><Search size={17} /><input aria-label="Search assignments" placeholder="Search assignments..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></div><button type="button" className="ia-button secondary" onClick={() => setShowFilters((value) => !value)}><Filter size={16} /> Filters</button><button type="button" className="ia-button secondary" onClick={exportPdf}><Download size={16} /> Export</button></div>
       {showFilters && <div className="ia-filters"><label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="returned">Returned</option><option value="overdue">Overdue</option></select></label><label>Department<select value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)}><option value="all">All departments</option>{departments.map((item) => <option key={item.id} value={item.id}>{item.name || item.department_name}</option>)}</select></label><button type="button" className="ia-link" onClick={() => { setStatusFilter('all'); setDepartmentFilter('all'); }}>Reset filters</button></div>}
       {loading ? <div className="ia-skeletons">{[1, 2, 3, 4, 5].map((item) => <div className="ia-skeleton" key={item}><i /><i /><i /><i /></div>)}</div> : loadError ? <div className="ia-empty"><TriangleAlert size={32} /><h3>Unable to load assignments</h3><p>We couldn't retrieve assignment data.</p><button type="button" className="ia-button secondary" onClick={fetchData}><RefreshCw size={16} /> Retry</button></div> : !rows.length ? <div className="ia-empty"><ClipboardList size={34} /><h3>{assignments.length ? 'No assignments found' : 'No asset assignments yet'}</h3><p>There are currently no asset assignments matching your selected filters.</p><button type="button" className="ia-button primary" onClick={() => document.getElementById('assignment-form')?.scrollIntoView({ behavior: 'smooth' })}><UserPlus size={16} /> Assign New Asset</button></div> : <><div className="ia-table-wrap"><table><caption className="ia-sr-only">Asset assignment history</caption><thead><tr><th><SortButton field="asset_name">Asset</SortButton></th><th><SortButton field="assigned_to_name">Assigned To</SortButton></th><th><SortButton field="department_name">Department</SortButton></th><th><SortButton field="assigned_date">Assignment Date</SortButton></th><th>Expected Return</th><th>Condition</th><th>Status</th><th>Actions</th></tr></thead><tbody>{pageRows.map((item) => { const state = getStatus(item); const ConditionIcon = conditionIcons[item.condition_at_assignment] || CircleCheck; return <tr key={item.id}><td><div className="ia-asset-cell"><strong>{item.asset_name || 'Unnamed asset'}</strong><small>{item.asset_tag || `AST-${item.asset_id}`}</small></div></td><td><div className="ia-user-cell"><span>{(item.assigned_to_name || 'U').split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</span><div><strong>{item.assigned_to_name || 'Unknown user'}</strong><small>{item.user_department || item.department_name || 'No department'}</small></div></div></td><td>{item.department_name || 'Not specified'}</td><td>{dateLabel(item.assigned_date)}</td><td>{dateLabel(item.expected_return_date)}</td><td><span className="ia-condition"><ConditionIcon size={15} />{item.condition_at_assignment || item.condition || 'Good'}</span></td><td><StatusBadge status={state} /></td><td><div className="ia-row-actions"><IconButton label="View details" onClick={() => setDetails(item)}><Eye size={17} /></IconButton>{state !== 'returned' && canManage && <IconButton label="Return asset" onClick={() => setReturnTarget(item)}><PackageCheck size={17} /></IconButton>}<IconButton label="More actions" onClick={() => setMenuId(menuId === item.id ? null : item.id)}><MoreVertical size={17} /></IconButton>{menuId === item.id && <div className="ia-menu"><button type="button" onClick={() => setDetails(item)}><Eye size={15} /> View Details</button><button type="button" onClick={() => window.print()}><FileText size={15} /> Print Assignment</button></div>}</div></td></tr>; })}</tbody></table></div><div className="ia-pagination"><span>Showing {((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, rows.length)} of {rows.length} assignments</span><div><select aria-label="Rows per page" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>{[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size} / page</option>)}</select><button type="button" disabled={page === 1} onClick={() => setPage((value) => value - 1)}>Previous</button><strong>{page} / {pageCount}</strong><button type="button" disabled={page === pageCount} onClick={() => setPage((value) => value + 1)}>Next</button></div></div></>}

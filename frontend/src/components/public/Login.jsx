@@ -44,13 +44,13 @@ const Login = () => {
     e.preventDefault();
     if (loading) return;
     setError(null);
-    if (!username.trim()) { setError(t.usernameRequired); return; }
-    if (!password) { setError(t.passwordRequired); return; }
+    if (!username.trim()) { setError('Username or email is required.'); return; }
+    if (!password) { setError('Password is required.'); return; }
     setLoading(true);
     try {
       const result = await login(username.trim(), password);
       if (!result?.success) {
-        setError(result?.error || 'Authentication failed.');
+        setError(result?.error || 'Invalid username or password.');
         return;
       }
       const roleRoutes = {
@@ -65,6 +65,7 @@ const Login = () => {
         maintenance: '/maintenance',
         infrastructure: '/infrastructure',
         staff: '/department',
+        student: '/student',
       };
       const role = String(result?.user?.role || '').trim().toLowerCase();
       const fallbackDestination = roleRoutes[role] || '/home';
@@ -80,6 +81,7 @@ const Login = () => {
         maintenance: '/maintenance',
         infrastructure: '/infrastructure',
         staff: '/department',
+        student: '/student',
       };
       const allowedPrefix = allowedRedirectPrefixes[role];
       const isAllowedRedirect = allowedPrefix && redirectParam && (
@@ -90,7 +92,7 @@ const Login = () => {
         : fallbackDestination;
       navigate(destination, { replace: true });
     } catch (err) {
-      setError(err?.response?.data?.message || 'Unable to connect to server.');
+      setError('Unable to connect to the server. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -260,14 +262,14 @@ const Login = () => {
             <div className="login-status"><span className={`status-dot ${backendStatus === 'online' ? 'status-online' : backendStatus === 'offline' ? 'status-offline' : ''}`} /><Activity size={15} aria-hidden="true" /> {t.systemStatus}: {t[backendStatus]}</div>
             {error && <div className="login-error" role="alert"><ShieldCheck size={17} aria-hidden="true" /> <span>{error}</span></div>}
             <form onSubmit={handleLogin}>
-              <div className="login-field"><label htmlFor="login-username">{t.usernameLabel}</label><div className="login-input"><Mail size={18} aria-hidden="true" /><input id="login-username" type="text" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={t.usernamePlaceholder} disabled={loading} /></div></div>
-              <div className="login-field"><label htmlFor="login-password">{t.passwordLabel}</label><div className="login-input"><LockKeyhole size={18} aria-hidden="true" /><input id="login-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t.passwordPlaceholder} disabled={loading} /><button className="password-toggle" type="button" aria-label={showPassword ? t.hidePassword : t.showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}</button></div></div>
+              <div className="login-field"><label htmlFor="login-username">{t.usernameLabel}</label><div className="login-input"><Mail size={18} aria-hidden="true" /><input id="login-username" type="text" name="username" lang="en" dir="ltr" autoCapitalize="none" autoCorrect="off" spellCheck="false" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={t.usernamePlaceholder} disabled={loading} /></div></div>
+              <div className="login-field"><label htmlFor="login-password">{t.passwordLabel}</label><div className="login-input"><LockKeyhole size={18} aria-hidden="true" /><input id="login-password" name="password" lang="en" dir="ltr" autoCapitalize="none" autoCorrect="off" spellCheck="false" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t.passwordPlaceholder} disabled={loading} /><button className="password-toggle" type="button" aria-label={showPassword ? t.hidePassword : t.showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}</button></div></div>
               <Link to="/forgot-password" className="forgot-link">{t.forgotPassword}</Link>
               <button type="submit" className="login-submit" disabled={loading}>{loading ? t.signingIn : <><span>{t.signIn}</span><ArrowRight size={17} aria-hidden="true" /></>}</button>
             </form>
             <div className="login-signup"><span>{t.noAccount}</span> <Link to="/register">{t.signUp}</Link></div>
           </main>
-          <a href="https://smart-asset-management-six.vercel.app/home" className="login-back-link" aria-label={t.backToHomepage}>{t.backToHomepage}</a>
+          <a href="/home" className="login-back-link" aria-label={t.backToHomepage}>{t.backToHomepage}</a>
         </section>
       </main>
     </>

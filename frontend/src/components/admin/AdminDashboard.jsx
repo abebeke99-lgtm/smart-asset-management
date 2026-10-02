@@ -9,6 +9,7 @@ import "./AdminDashboard.css";
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, Legend, LinearScale, Tooltip);
 
+const DASHBOARD_REQUEST_TIMEOUT_MS = 15000;
 const chartColorTokens = ["--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5", "--chart-6"];
 const readAdminToken = (name) => {
   const adminRoot = document.querySelector(".admin-layout");
@@ -166,14 +167,33 @@ function Dashboard() {
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError("");
+    const controller = new AbortController();
+    let timeoutId;
 
     try {
-      const response = await apiClient.get("/api/admin/dashboard");
+      const timeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          const timeoutError = new Error("Dashboard request timed out.");
+          timeoutError.code = "DASHBOARD_TIMEOUT";
+          reject(timeoutError);
+          controller.abort();
+        }, DASHBOARD_REQUEST_TIMEOUT_MS);
+      });
+      const response = await Promise.race([
+        apiClient.get("/api/admin/dashboard", {
+          timeout: DASHBOARD_REQUEST_TIMEOUT_MS,
+          signal: controller.signal,
+        }),
+        timeout,
+      ]);
       setDashboard(normalizeDashboard(response.data));
     } catch (requestError) {
       console.error("Dashboard loading error:", requestError);
-      setError(getApiErrorMessage(requestError, "Unable to load administrator dashboard."));
+      setError(requestError?.code === "DASHBOARD_TIMEOUT"
+        ? "Dashboard data took too long to load. Please try again."
+        : getApiErrorMessage(requestError, "Unable to load administrator dashboard."));
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   }, [normalizeDashboard]);
@@ -215,7 +235,7 @@ function Dashboard() {
   if (loading) {
     return (
       <div className="admin-dashboard-shell admin-dashboard-shell--loading" aria-busy="true" aria-label="Loading administrator dashboard">
-        <PageHeader eyebrow="Administrator" title="Dashboard" subtitle="Overview of assets, maintenance, and system activity." />
+        <PageHeader eyebrow="Administrator" title="Admin Dashboard" subtitle="Overview of assets, maintenance, and system activity." />
         <div className="admin-dashboard-skeleton admin-dashboard-skeleton--header" />
         <div className="admin-dashboard-skeleton-grid">
           {Array.from({ length: 8 }, (_, index) => <div className="admin-dashboard-skeleton admin-dashboard-skeleton--stat" key={index} />)}
@@ -231,7 +251,7 @@ function Dashboard() {
   if (error) {
     return (
       <div className="admin-dashboard-page" style={styles.page}>
-        <PageHeader eyebrow="Administrator" title="Dashboard" subtitle="Overview of assets, maintenance, and system activity." />
+        <PageHeader eyebrow="Administrator" title="Admin Dashboard" subtitle="Overview of assets, maintenance, and system activity." />
         <div style={styles.errorBox} role="alert">
           <div><strong>Unable to load dashboard</strong><div style={styles.errorText}>{error}</div></div>
           <button type="button" onClick={loadDashboard} style={styles.retryButton}><RefreshCw size={15} aria-hidden="true" /> Retry</button>
@@ -242,7 +262,7 @@ function Dashboard() {
 
   return (
     <div className="admin-dashboard-page" style={styles.page}>
-      <PageHeader eyebrow="Administrator" title="Dashboard" subtitle="Overview of assets, maintenance, and system activity." />
+      <PageHeader eyebrow="Administrator" title="Admin Dashboard" subtitle="Overview of assets, maintenance, and system activity." />
       <section>
         <h2 style={styles.sectionTitle}>Asset Overview</h2>
 

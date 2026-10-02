@@ -49,10 +49,11 @@ const buildScope = (query = {}) => {
 };
 
 const dateWhere = (from, to, field = 'createdAt') => ({ [field]: { [Op.between]: [from, to] } });
+const quoteIdentifier = sequelize.getQueryInterface().quoteIdentifier.bind(sequelize.getQueryInterface());
+const databaseField = (Model, field) => Model.rawAttributes[field]?.field || field;
+const modelColumn = (Model, field) => col(`${quoteIdentifier(Model.name)}.${quoteIdentifier(databaseField(Model, field))}`);
 const groupByDate = (Model, field = 'createdAt') => {
-  const databaseField = Model.rawAttributes[field]?.field || field;
-  const quoteIdentifier = sequelize.getQueryInterface().quoteIdentifier.bind(sequelize.getQueryInterface());
-  return literal(`DATE_FORMAT(${quoteIdentifier(Model.name)}.${quoteIdentifier(databaseField)}, '%Y-%m-%d')`);
+  return literal(`DATE_FORMAT(${quoteIdentifier(Model.name)}.${quoteIdentifier(databaseField(Model, field))}, '%Y-%m-%d')`);
 };
 
 const trend = async (Model, where, field = 'createdAt') => {
@@ -103,14 +104,15 @@ const getAssetAnalytics = async (query = {}) => {
   const scope = buildScope(query);
   const assetWhere = { ...scope, ...dateWhere(from, to) };
   const maintenanceWhere = dateWhere(from, to);
+  const purchaseDateColumn = quoteIdentifier(databaseField(Asset, 'purchaseDate'));
   if (query.maintenanceStatus) maintenanceWhere.status = String(query.maintenanceStatus);
   const [totalAssets, statusRows, categoryRows, conditionRows, ageRows, averageAge, totalValue, assignedAssets, maintenanceAssets, assignmentTrend, maintenanceTrend, transferTrend, acquisitionTrend, maintenanceStatus, maintenanceTotal, completedMaintenance, openMaintenance, maintainedAssetCount, frequentMaintenanceRows, inventoryStatus, inventoryTotals, rfidTotal, rfidTrend, colleges, departments, campuses, collegeGroups, departmentGroups, campusGroups, fundingGroups] = await Promise.all([
     Asset.count({ where: assetWhere }),
     countByStatus(Asset, assetWhere),
-    Asset.findAll({ where: assetWhere, attributes: ['category', [fn('COUNT', col('id')), 'count'], [fn('SUM', col('purchasePrice')), 'value']], group: ['category'], order: [[literal('count'), 'DESC']], raw: true }),
+    Asset.findAll({ where: assetWhere, attributes: ['category', [fn('COUNT', col('id')), 'count'], [fn('SUM', modelColumn(Asset, 'purchasePrice')), 'value']], group: ['category'], order: [[literal('count'), 'DESC']], raw: true }),
     Asset.findAll({ where: assetWhere, attributes: ['condition', [fn('COUNT', col('id')), 'count']], group: ['condition'], order: [[literal('count'), 'DESC']], raw: true }),
-    Asset.findAll({ where: { ...scope, purchaseDate: { [Op.ne]: null } }, attributes: [[literal("CASE WHEN purchaseDate >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR) THEN 'Less than 1 year' WHEN purchaseDate >= DATE_SUB(CURDATE(), INTERVAL 3 YEAR) THEN '1-3 years' WHEN purchaseDate >= DATE_SUB(CURDATE(), INTERVAL 5 YEAR) THEN '3-5 years' WHEN purchaseDate >= DATE_SUB(CURDATE(), INTERVAL 10 YEAR) THEN '5-10 years' ELSE 'More than 10 years' END"), 'bucket'], [fn('COUNT', col('id')), 'count']], group: [literal('bucket')], raw: true }),
-    Asset.findOne({ where: { ...scope, purchaseDate: { [Op.ne]: null } }, attributes: [[fn('AVG', literal('TIMESTAMPDIFF(YEAR, purchaseDate, CURDATE())')), 'averageAge']], raw: true }),
+    Asset.findAll({ where: { ...scope, purchaseDate: { [Op.ne]: null } }, attributes: [[literal(`CASE WHEN ${purchaseDateColumn} >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR) THEN 'Less than 1 year' WHEN ${purchaseDateColumn} >= DATE_SUB(CURDATE(), INTERVAL 3 YEAR) THEN '1-3 years' WHEN ${purchaseDateColumn} >= DATE_SUB(CURDATE(), INTERVAL 5 YEAR) THEN '3-5 years' WHEN ${purchaseDateColumn} >= DATE_SUB(CURDATE(), INTERVAL 10 YEAR) THEN '5-10 years' ELSE 'More than 10 years' END`), 'bucket'], [fn('COUNT', col('id')), 'count']], group: [literal('bucket')], raw: true }),
+    Asset.findOne({ where: { ...scope, purchaseDate: { [Op.ne]: null } }, attributes: [[fn('AVG', literal(`TIMESTAMPDIFF(YEAR, ${purchaseDateColumn}, CURDATE())`)), 'averageAge']], raw: true }),
     Asset.sum('purchasePrice', { where: assetWhere }),
     Assignment.count({ where: { status: 'active', ...dateWhere(from, to) }, include: [{ model: Asset, required: true, where: scope, attributes: [] }] }),
     Asset.count({ where: { ...assetWhere, status: { [Op.in]: ['maintenance', 'under maintenance', 'in_maintenance'] } } }),
@@ -123,18 +125,18 @@ const getAssetAnalytics = async (query = {}) => {
     Maintenance.count({ where: { ...maintenanceWhere, status: { [Op.in]: ['completed', 'complete', 'closed'] } }, include: [{ model: Asset, required: true, where: scope, attributes: [] }] }),
     Maintenance.count({ where: { ...maintenanceWhere, status: { [Op.in]: ['pending', 'open', 'assigned', 'in_progress', 'in progress'] } }, include: [{ model: Asset, required: true, where: scope, attributes: [] }] }),
     Maintenance.count({ distinct: true, col: 'asset_id', where: maintenanceWhere, include: [{ model: Asset, required: true, where: scope, attributes: [] }] }),
-    Maintenance.findAll({ where: maintenanceWhere, attributes: ['assetId', [fn('COUNT', col('Maintenance.id')), 'count'], [fn('MAX', col('Maintenance.createdAt')), 'lastMaintenance']], include: [{ model: Asset, required: true, where: scope, attributes: [] }], group: ['assetId'], order: [[literal('count'), 'DESC']], limit: 10, raw: true }),
+    Maintenance.findAll({ where: maintenanceWhere, attributes: ['assetId', [fn('COUNT', modelColumn(Maintenance, 'id')), 'count'], [fn('MAX', modelColumn(Maintenance, 'createdAt')), 'lastMaintenance']], include: [{ model: Asset, required: true, where: scope, attributes: [] }], group: ['assetId'], order: [[literal('count'), 'DESC']], limit: 10, raw: true }),
     countByStatus(Inventory, dateWhere(from, to)),
-    Inventory.findOne({ where: dateWhere(from, to), attributes: [[fn('SUM', col('quantity')), 'quantity'], [fn('SUM', col('availableQuantity')), 'availableQuantity'], [fn('SUM', col('damagedQuantity')), 'damagedQuantity']], raw: true }),
+    Inventory.findOne({ where: dateWhere(from, to), attributes: [[fn('SUM', modelColumn(Inventory, 'quantity')), 'quantity'], [fn('SUM', modelColumn(Inventory, 'availableQuantity')), 'availableQuantity'], [fn('SUM', modelColumn(Inventory, 'damagedQuantity')), 'damagedQuantity']], raw: true }),
     RFIDLog.count({ where: dateWhere(from, to) }),
     trend(RFIDLog, dateWhere(from, to)),
     College.findAll({ attributes: ['id', 'collegeName', 'collegeCode'], order: [['collegeName', 'ASC']], raw: true }),
     Department.findAll({ attributes: ['id', 'name', 'code'], order: [['name', 'ASC']], raw: true }),
     Campus.findAll({ attributes: ['id', 'campusName', 'campusCode'], order: [['campusName', 'ASC']], raw: true }),
-    Asset.findAll({ where: assetWhere, attributes: ['collegeId', [fn('COUNT', col('id')), 'count'], [fn('SUM', col('purchasePrice')), 'value']], group: ['collegeId'], raw: true }),
-    Asset.findAll({ where: assetWhere, attributes: ['departmentId', [fn('COUNT', col('id')), 'count'], [fn('SUM', col('purchasePrice')), 'value']], group: ['departmentId'], raw: true }),
-    Asset.findAll({ where: assetWhere, attributes: ['campusId', [fn('COUNT', col('id')), 'count'], [fn('SUM', col('purchasePrice')), 'value']], group: ['campusId'], raw: true }),
-    Asset.findAll({ where: assetWhere, attributes: ['fundingSource', [fn('COUNT', col('id')), 'count'], [fn('SUM', col('purchasePrice')), 'value']], group: ['fundingSource'], order: [[literal('count'), 'DESC']], raw: true }),
+    Asset.findAll({ where: assetWhere, attributes: ['collegeId', [fn('COUNT', col('id')), 'count'], [fn('SUM', modelColumn(Asset, 'purchasePrice')), 'value']], group: ['collegeId'], raw: true }),
+    Asset.findAll({ where: assetWhere, attributes: ['departmentId', [fn('COUNT', col('id')), 'count'], [fn('SUM', modelColumn(Asset, 'purchasePrice')), 'value']], group: ['departmentId'], raw: true }),
+    Asset.findAll({ where: assetWhere, attributes: ['campusId', [fn('COUNT', col('id')), 'count'], [fn('SUM', modelColumn(Asset, 'purchasePrice')), 'value']], group: ['campusId'], raw: true }),
+    Asset.findAll({ where: assetWhere, attributes: ['fundingSource', [fn('COUNT', col('id')), 'count'], [fn('SUM', modelColumn(Asset, 'purchasePrice')), 'value']], group: ['fundingSource'], order: [[literal('count'), 'DESC']], raw: true }),
   ]);
   const statusMap = Object.fromEntries(statusRows.map((row) => [String(row.status).toLowerCase(), row.count]));
   const eligible = totalAssets - (statusMap.disposed || statusMap.retired || 0);
