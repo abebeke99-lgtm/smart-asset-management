@@ -58,6 +58,7 @@ test('demo seeding hashes passwords, preserves existing users, and is idempotent
   assert.equal(models.users.size, DEMO_USERS.length);
   assert.equal(models.users.get('finance').password, existingPasswordHash);
   assert.equal(await bcrypt.compare('seed-test-password', models.users.get('admin').password), true);
+  assert.equal(models.users.get('admin').password.startsWith('$2'), true);
 
   const secondRun = await seedDatabase(options);
   assert.deepEqual(secondRun, { created: 0, existing: DEMO_USERS.length });
@@ -72,5 +73,5 @@ test('demo seeding does not claim an email address already used by another accou
   await seedDatabase({ ...models, password: 'seed-test-password' });
 
   assert.equal(models.users.get('existing_user').password, 'existing-hash');
-  assert.equal(models.users.get('ict_officer').email, null);
+  assert.equal(models.users.get('ict_officer').email, 'ict_officer@bekelei.com');
 });

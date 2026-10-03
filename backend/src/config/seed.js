@@ -186,6 +186,16 @@ function normalizeDemoUserSeed(userData = {}) {
   };
 }
 
+const normalizeEmailLocalPart = (email = '') => String(email || '').trim().toLowerCase().split('@')[0] || '';
+
+const hasEmailClaimConflict = (candidateEmail, existingEmail) => {
+  const candidateLocal = normalizeEmailLocalPart(candidateEmail);
+  const existingLocal = normalizeEmailLocalPart(existingEmail);
+  if (!candidateLocal || !existingLocal) return false;
+  if (candidateLocal === existingLocal) return true;
+  return candidateLocal.startsWith(existingLocal) || existingLocal.startsWith(candidateLocal);
+};
+
 const applyUserUpdates = async (existingUser, updates, userModel) => {
   if (!Object.keys(updates).length) {
     return existingUser;
@@ -219,6 +229,13 @@ async function ensureDemoUser(userData, { userModel = User, collegeModel = Colle
       updates.email = null;
     }
 
+    if (normalizedUserData.email && existingUser.email && !updates.email && existingUser.email !== normalizedUserData.email) {
+      const conflictingOwner = await userModel.findOne({ where: { email: normalizedUserData.email } });
+      if (!conflictingOwner || String(conflictingOwner.username) === normalizedUserData.username) {
+        updates.email = normalizedUserData.email;
+      }
+    }
+
     if (normalizedUserData.fullName && existingUser.fullName !== normalizedUserData.fullName) updates.fullName = normalizedUserData.fullName;
     if (normalizedUserData.role && existingUser.role !== normalizedUserData.role) updates.role = normalizedUserData.role;
     if (normalizedUserData.department && existingUser.department !== normalizedUserData.department) updates.department = normalizedUserData.department;
@@ -248,6 +265,9 @@ async function ensureDemoUser(userData, { userModel = User, collegeModel = Colle
       password: hashedPassword,
     },
   });
+  if (created && normalizedUserData.email && !createdUser.email && emailOwner) {
+    await createdUser.update({ email: null });
+  }
   if (!created) return { created: false, updated: false, user: createdUser };
 
   if (normalizeCollegeRole(normalizedUserData.role) === 'college_manager') {
