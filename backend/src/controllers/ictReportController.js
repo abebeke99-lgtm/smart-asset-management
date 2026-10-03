@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Asset, Assignment, Department, Incident, IncidentHistory, Maintenance, RFIDLog, ServiceRequest, SoftwareLicense, SoftwareLicenseAssignment, User } = require('../models');
+const { Asset, Assignment, Department, Room, Incident, IncidentHistory, Maintenance, RFIDLog, ServiceRequest, SoftwareLicense, SoftwareLicenseAssignment, User } = require('../models');
 const { equipmentPredicate, networkPredicate } = require('../utils/ictAssetFilters');
 const { calculateSoftwareLicenseStatus } = require('../utils/softwareLicenseStatus');
 
@@ -351,7 +351,16 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
         ...options,
         include: [
           { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name'], required: false },
-          { model: Assignment, required: false, where: { status: { [Op.notIn]: ['returned', 'cancelled', 'closed'] } }, include: [{ model: User, attributes: ['id', 'fullName', 'username'] }] },
+          {
+            model: Assignment,
+            required: false,
+            where: { status: { [Op.notIn]: ['returned', 'cancelled', 'closed'] } },
+            include: [
+              { model: User, attributes: ['id', 'fullName', 'username'], required: false },
+              { model: Department, as: 'AssignedDepartment', attributes: ['id', 'name'], required: false },
+              { model: Room, as: 'AssignedLaboratory', attributes: ['id', 'roomName'], required: false },
+            ],
+          },
         ],
         distinct: true,
       });
@@ -371,7 +380,11 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
         condition: data.condition || '—',
         department: data.DepartmentRecord?.name || data.department || '—',
         location: data.location || '—',
-        assignedTo: personName(assignment?.User),
+        assignedTo: assignment?.assignedToType === 'department'
+          ? assignment.AssignedDepartment?.name || '—'
+          : assignment?.assignedToType === 'laboratory'
+            ? assignment.AssignedLaboratory?.roomName || '—'
+            : personName(assignment?.User),
         purchaseDate: data.purchaseDate,
         lastUpdated: data.updatedAt,
       };
@@ -406,10 +419,29 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
       ...options,
       include: [
         { model: Asset, required: true, where: assetWhere(filters), attributes: ['id', 'assetCode', 'name', 'department', 'location'], include: [{ model: Department, as: 'DepartmentRecord', attributes: ['id', 'name'], required: false }] },
-        { model: User, attributes: ['id', 'fullName', 'username'] },
+        { model: User, attributes: ['id', 'fullName', 'username'], required: false },
+        { model: Department, as: 'AssignedDepartment', attributes: ['id', 'name'], required: false },
+        { model: Room, as: 'AssignedLaboratory', attributes: ['id', 'roomName'], required: false },
+        { model: User, as: 'AssignedByUser', attributes: ['id', 'fullName', 'username'], required: false },
       ],
     });
-    const rows = result.rows.map((record) => ({ id: record.id, assetTag: record.Asset?.assetCode || '—', asset: record.Asset?.name || '—', assignedTo: personName(record.User), department: record.Asset?.DepartmentRecord?.name || record.Asset?.department || '—', assignedDate: record.createdAt, status: record.status || 'active', location: record.Asset?.location || '—' }));
+    const rows = result.rows.map((record) => ({
+      id: record.id,
+      assetTag: record.Asset?.assetCode || '—',
+      asset: record.Asset?.name || '—',
+      assignedTo: record.assignedToType === 'department'
+        ? record.AssignedDepartment?.name || '—'
+        : record.assignedToType === 'laboratory'
+          ? record.AssignedLaboratory?.roomName || '—'
+          : personName(record.User),
+      assignedToType: record.assignedToType || 'user',
+      assignedBy: personName(record.AssignedByUser),
+      department: record.AssignedDepartment?.name || record.Asset?.DepartmentRecord?.name || record.Asset?.department || '—',
+      assignedDate: record.assignedDate || record.createdAt,
+      condition: record.conditionAtAssignment || '—',
+      status: record.status || 'active',
+      location: record.location || record.Asset?.location || '—',
+    }));
     const all = await Assignment.findAll({ where, include: [{ model: Asset, required: true, where: assetWhere(filters), attributes: [] }], attributes: ['status'], raw: true });
     return { rows, total: result.count, summary: { totalAssignments: all.length, active: all.filter((item) => !['returned', 'cancelled', 'closed'].includes(String(item.status).toLowerCase())).length, returned: all.filter((item) => ['returned', 'cancelled', 'closed'].includes(String(item.status).toLowerCase())).length } };
   }

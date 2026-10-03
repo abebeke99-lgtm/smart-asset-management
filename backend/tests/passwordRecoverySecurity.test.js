@@ -9,6 +9,7 @@ process.env.PASSWORD_RESET_OTP_TTL_MINUTES = '8';
 process.env.PASSWORD_RESET_OTP_MAX_ATTEMPTS = '3';
 
 const nodemailer = require('nodemailer');
+const { resetTransporter } = require('../src/utils/mailer');
 const { normalizePhoneNumber, sendSMS } = require('../src/services/smsService');
 const { User, PasswordRecovery, Config, AuditLog } = require('../src/models');
 const authController = require('../src/controllers/authController');
@@ -17,6 +18,7 @@ const EXPECTED_OTP_TTL_MINUTES = 8;
 const EXPECTED_OTP_MAX_ATTEMPTS = 3;
 
 const sha256 = (value) => crypto.createHash('sha256').update(String(value)).digest('hex');
+let testUserSequence = 0;
 
 const SMS_ENV_KEYS = ['SMS_PROVIDER', 'SMS_API_KEY', 'SMS_API_SECRET', 'SMS_SENDER_ID', 'SMS_SENDER'];
 
@@ -50,7 +52,7 @@ const createResponse = () => ({
 const createUser = (overrides = {}) => ({
   id: 7,
   active: true,
-  email: 'student@university.edu',
+  email: `student-${++testUserSequence}@university.edu`,
   username: 'student',
   fullName: 'Test Student',
   phone: '+251911000001',
@@ -164,6 +166,7 @@ const createRecoveryStore = (user) => {
 };
 
 const withStubs = async ({ user, onFetch, onSendMail, onCreateTransport }, run) => {
+  resetTransporter();
   const originalFindOne = User.findOne;
   const originalUpdate = User.update;
   const originalRecoveryFindOne = PasswordRecovery.findOne;
@@ -220,6 +223,7 @@ const withStubs = async ({ user, onFetch, onSendMail, onCreateTransport }, run) 
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     });
+    resetTransporter();
   }
 };
 
@@ -260,10 +264,14 @@ const requestOtp = (response, phoneNumber = '0911000001') => authController.requ
   response,
 );
 
-const requestEmailOtp = (response, email = 'student@university.edu') => authController.requestForgotPasswordOtp(
-  { body: { method: 'email', email }, headers: {}, ip: '127.0.0.1' },
-  response,
-);
+const requestEmailOtp = (response, email) => {
+  const sequence = Number(String(email).match(/(\d+)@university\.edu$/)?.[1] || 0);
+  const ip = `192.0.2.${(sequence % 253) + 1}`;
+  return authController.requestForgotPasswordOtp(
+    { body: { method: 'email', email }, headers: {}, ip },
+    response,
+  );
+};
 
 const verifyOtp = (response, otp, phoneNumber = '+251911000001') => authController.verifyForgotPasswordOtp(
   { body: { phoneNumber, otp }, headers: {}, ip: '127.0.0.1' },
@@ -282,14 +290,14 @@ test('email recovery uses the OTP flow and delivers the code through SMTP', asyn
     },
   }, async () => {
     const response = createResponse();
-    await requestEmailOtp(response);
+    await requestEmailOtp(response, user.email);
 
     assert.equal(response.statusCode, 200);
     assert.equal(response.body.success, true);
   });
 
   assert.ok(delivered, 'the email OTP must be delivered');
-  assert.equal(delivered.to, 'student@university.edu');
+  assert.equal(delivered.to, user.email);
   const deliveredCode = delivered.text.match(/(\d{6})/)[1];
   assert.equal(user.resetOtpHash, sha256(deliveredCode), 'the persisted value must be the SHA-256 hash of the email code');
   assert.ok(delivered.text.includes(`${EXPECTED_OTP_TTL_MINUTES} minutes`), 'the email must include the configured OTP lifetime');
@@ -337,6 +345,97 @@ test('OTP request delivers a real SMS and stores only a hash of the code', async
     `the SMS must state the configured ${EXPECTED_OTP_TTL_MINUTES} minute OTP lifetime`,
   );
   assert.ok(new Date(user.resetOtpExpiresAt) > new Date(), 'an expiry must be stored');
+});
+
+test('email OTP requests use the same generic response for registered and unregistered addresses', async () => {
+  const user = createUser();
+
+  await withStubs({ user }, async () => {
+    const registered = createResponse();
+    const unregistered = createResponse();
+    await requestEmailOtp(registered, user.email);
+    await requestEmailOtp(unregistered, `unknown-${testUserSequence}@university.edu`);
+
+    assert.equal(registered.statusCode, 200);
+    assert.equal(unregistered.statusCode, 200);
+    assert.equal(registered.body.message, unregistered.body.message);
+    assert.equal(registered.body.message, 'If this email address is registered, a verification code has been sent.');
+  });
+});
+
+test('the sixth email OTP request in fifteen minutes is rate limited', async () => {
+  const user = createUser();
+
+  await withStubs({ user }, async () => {
+    const responses = [];
+    for (let requestNumber = 0; requestNumber < 6; requestNumber += 1) {
+      const response = createResponse();
+      await requestEmailOtp(response, user.email);
+      responses.push(response);
+    }
+
+    assert.ok(responses.slice(0, 5).every((response) => response.statusCode === 200));
+    assert.equal(responses[5].statusCode, 429);
+    assert.equal(responses[5].body.message, 'Too many OTP requests. Please try again later.');
+  });
+});
+
+test('development mode prints an OTP with a DEV ONLY label when SMTP is not configured', async () => {
+  const user = createUser();
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalWarn = console.warn;
+  const emailKeys = ['EMAIL_HOST', 'EMAIL_PORT', 'EMAIL_USER', 'EMAIL_PASSWORD', 'EMAIL_FROM', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD'];
+  let warning = '';
+  process.env.NODE_ENV = 'development';
+  console.warn = (...args) => { warning += `${args.join(' ')}\n`; };
+
+  try {
+    await withStubs({ user }, async () => {
+      emailKeys.forEach((key) => delete process.env[key]);
+      const response = createResponse();
+      await requestEmailOtp(response, user.email);
+      assert.equal(response.statusCode, 200);
+      assert.equal(response.body.message, 'If this email address is registered, a verification code has been sent.');
+    });
+  } finally {
+    console.warn = originalWarn;
+    if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = originalNodeEnv;
+  }
+
+  const printedOtp = warning.match(new RegExp(`DEV ONLY: password reset OTP for ${user.email}: (\\d{6})`));
+  assert.ok(printedOtp, 'the console warning must contain the OTP and DEV ONLY label');
+  assert.equal(user.resetOtpHash, sha256(printedOtp[1]), 'only the hash is stored');
+});
+
+test('SMTP failure details stay in server logs and the client receives only a safe response', async () => {
+  const user = createUser();
+  const originalConsoleError = console.error;
+  let serverLog = '';
+  let response;
+  console.error = (...args) => { serverLog += `${args.join(' ')}\n`; };
+
+  try {
+    await withStubs({
+      user,
+      onSendMail: async () => {
+        const error = new Error('server-only diagnostic secret-value');
+        error.code = 'EAUTH';
+        throw error;
+      },
+    }, async () => {
+      response = createResponse();
+      await requestEmailOtp(response, user.email);
+    });
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.body.code, 'EMAIL_AUTH_FAILED');
+  assert.doesNotMatch(JSON.stringify(response.body), /secret-value|diagnostic|stack|password/i);
+  assert.match(serverLog, /server-only diagnostic secret-value/);
+  assert.match(serverLog, /EAUTH/);
 });
 
 test('a failed provider delivery leaves no usable code behind', async () => {
@@ -660,7 +759,7 @@ test('code verification supports the email recovery channel with the same OTP fl
     await withStubs({ user }, async () => {
       const response = createResponse();
       await authController.verifyResetOtp(
-        { body: { method: 'email', email: 'student@university.edu', otp }, headers: {}, ip: '127.0.0.1' },
+        { body: { method: 'email', email: user.email, otp }, headers: {}, ip: '127.0.0.1' },
         response,
       );
 
@@ -726,7 +825,7 @@ test('an eligible account only ever has a token hash stored, never the emailed t
     }, async () => {
       const response = createResponse();
       await authController.forgotPassword(
-        { body: { email: 'student@university.edu' }, headers: {}, ip: '127.0.0.1' },
+        { body: { email: user.email }, headers: {}, ip: '127.0.0.1' },
         response,
       );
 
@@ -739,7 +838,7 @@ test('an eligible account only ever has a token hash stored, never the emailed t
   }
 
   assert.ok(delivered, 'the reset email must actually be dispatched');
-  assert.equal(delivered.to, 'student@university.edu');
+  assert.equal(delivered.to, user.email);
 
   const emailedLink = delivered.html.match(/href="([^"]+)"/)[1].replace(/&amp;/g, '&');
   const resetToken = new URL(emailedLink).searchParams.get('token');
@@ -769,7 +868,7 @@ test('the emailed reset link points at the configured frontend and carries no se
       },
     }, async () => {
       await authController.forgotPassword(
-        { body: { email: 'student@university.edu' }, headers: {}, ip: '127.0.0.1' },
+        { body: { email: user.email }, headers: {}, ip: '127.0.0.1' },
         createResponse(),
       );
     });
@@ -803,7 +902,7 @@ const withSmtpEnvironment = (overrides) => {
   };
 };
 
-const requestEmailReset = (response, email = 'student@university.edu') => authController.forgotPassword(
+const requestEmailReset = (response, email) => authController.forgotPassword(
   { body: { email }, headers: {}, ip: '127.0.0.1' },
   response,
 );
@@ -817,7 +916,7 @@ test('the SMTP transport is created with connection, greeting and socket timeout
     onCreateTransport: (options) => { transportOptions = options; },
   }, async () => {
     const response = createResponse();
-    await requestEmailReset(response);
+    await requestEmailReset(response, user.email);
     assert.equal(response.statusCode, 200);
   });
 
@@ -835,7 +934,7 @@ test('an SMTP send that never settles is abandoned instead of hanging the reques
   try {
     await withStubs({ user, onSendMail: () => new Promise(() => {}) }, async () => {
       const response = createResponse();
-      await requestEmailReset(response);
+      await requestEmailReset(response, user.email);
 
       assert.equal(response.statusCode, 503);
       assert.equal(response.body.success, false);
@@ -857,7 +956,7 @@ test('a rejected SMTP send rolls the reset token back', async () => {
     onSendMail: async () => { throw new Error('535 authentication failed'); },
   }, async () => {
     const response = createResponse();
-    await requestEmailReset(response);
+    await requestEmailReset(response, user.email);
 
     assert.equal(response.statusCode, 503);
     assert.equal(response.body.success, false);
@@ -882,7 +981,7 @@ test('a rolled back token cannot be used to reset the password', async () => {
         throw new Error('SMTP unavailable');
       },
     }, async () => {
-      await requestEmailReset(createResponse());
+      await requestEmailReset(createResponse(), user.email);
     });
   } finally {
     restoreEnvironment();

@@ -23,7 +23,11 @@ const requireSettingsPermission = (permission) => [requireAuth, async (req, res,
 }];
 const requireSettingsView = requireSettingsPermission('settings.view');
 const requireSettingsUpdate = requireSettingsPermission('settings.manage');
-const sections = ['organization', 'account', 'security', 'roles', 'notifications', 'localization', 'assets', 'workflow', 'rfid', 'maintenance', 'financial', 'reports', 'audit', 'backup'];
+const requireSettingsSectionAccess = (settingsAccess) => (req, res, next) => {
+  const access = req.params.section === 'dashboard' ? requireAdmin : settingsAccess;
+  return access[0](req, res, () => access[1](req, res, next));
+};
+const sections = ['organization', 'account', 'security', 'roles', 'notifications', 'localization', 'assets', 'workflow', 'rfid', 'maintenance', 'financial', 'reports', 'audit', 'backup', 'dashboard'];
 const sensitiveKeys = /password|secret|token|api.?key|private.?key|credential/i;
 const redact = (value) => {
   if (!value || typeof value !== 'object') return value;
@@ -43,6 +47,11 @@ const defaultAssetSettings = {
   startNumber: 1,
   separator: '-',
   format: '{PREFIX}-{CATEGORY}-{YEAR}-{SEQUENCE}',
+};
+const defaultDashboardSettings = {
+  lowStockPercent: 10,
+  expirationNoticeDays: 30,
+  escalationHours: 72
 };
 
 const normalizeOrganizationSettings = (data = {}) => {
@@ -111,6 +120,7 @@ const getSection = async (section) => {
   const record = await Config.findByPk(configKey(section));
   if (section === 'notifications' && !record) return defaultNotificationSettings;
   if (section === 'assets' && !record) return defaultAssetSettings;
+  if (section === 'dashboard' && !record) return defaultDashboardSettings;
   if (record) return parseValue(record);
   return {};
 };
@@ -157,12 +167,21 @@ const validateSection = (section, data) => {
     if (!Number.isInteger(startNumber) || startNumber < 1 || startNumber > 999999) return 'Asset starting number must be an integer between 1 and 999999';
     if (!Number.isInteger(recoveryDays) || recoveryDays < 1 || recoveryDays > 3650) return 'Asset recovery period must be an integer between 1 and 3650 days';
   }
+  if (section === 'dashboard') {
+    const lowStockPercent = Number(data.lowStockPercent);
+    const expirationNoticeDays = Number(data.expirationNoticeDays);
+    const escalationHours = Number(data.escalationHours);
+    if (!Number.isFinite(lowStockPercent) || lowStockPercent <= 0 || lowStockPercent > 100) return 'Low stock threshold must be greater than 0 and at most 100 percent';
+    if (!Number.isInteger(expirationNoticeDays) || expirationNoticeDays < 1 || expirationNoticeDays > 3650) return 'Expiration notice must be an integer between 1 and 3650 days';
+    if (!Number.isInteger(escalationHours) || escalationHours < 1 || escalationHours > 8760) return 'Escalation threshold must be an integer between 1 and 8760 hours';
+  }
   return null;
 };
 
 router.get('/settings', ...requireSettingsView, async (req, res, next) => {
   try {
-    const values = await Promise.all(sections.map(async (section) => [section, await getSection(section)]));
+    const visibleSections = req.user.role === 'admin' ? sections : sections.filter((section) => section !== 'dashboard');
+    const values = await Promise.all(visibleSections.map(async (section) => [section, await getSection(section)]));
     const settings = Object.fromEntries(values);
     if (settings.notifications) settings.notifications = { ...defaultNotificationSettings, ...settings.notifications, events: { ...defaultEventRules, ...(settings.notifications.events || {}) }, emailStatus: require('../services/emailService').validateEmailConfiguration() };
     return res.json({ success: true, data: settings, settings });
@@ -243,7 +262,7 @@ router.get('/system/integrity', ...requireSettingsView, async (req, res, next) =
   } catch (error) { next(error); }
 });
 
-router.get('/settings/:section', ...requireSettingsView, async (req, res, next) => {
+router.get('/settings/:section', requireSettingsSectionAccess(requireSettingsView), async (req, res, next) => {
   try {
     if (!sections.includes(req.params.section)) return res.status(404).json({ success: false, message: 'Settings section not found' });
     const settings = await getSection(req.params.section);
@@ -252,7 +271,7 @@ router.get('/settings/:section', ...requireSettingsView, async (req, res, next) 
   } catch (error) { next(error); }
 });
 
-router.put('/settings/:section', ...requireSettingsUpdate, async (req, res, next) => {
+router.put('/settings/:section', requireSettingsSectionAccess(requireSettingsUpdate), async (req, res, next) => {
   try {
     const section = req.params.section;
     if (!sections.includes(section)) return res.status(404).json({ success: false, message: 'Settings section not found' });

@@ -192,6 +192,69 @@ async function syncDatabase() {
 
     // Create only missing tables; existing tables are left untouched by sync.
     await createMissingTables();
+    const queryInterface = sequelize.getQueryInterface();
+    const assignmentColumns = await queryInterface.describeTable('assignments');
+    if (assignmentColumns.assigned_to && assignmentColumns.assigned_to.allowNull === false) {
+      await queryInterface.changeColumn('assignments', 'assigned_to', {
+        type: require('sequelize').DataTypes.INTEGER,
+        allowNull: true,
+      });
+    }
+    for (const [column, definition] of Object.entries({
+      assigned_to_type: { type: require('sequelize').DataTypes.STRING(30), allowNull: false, defaultValue: 'user' },
+      assigned_to_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      workflow_status: { type: require('sequelize').DataTypes.STRING(30), allowNull: false, defaultValue: 'assigned' },
+      assigned_date: { type: require('sequelize').DataTypes.DATE, allowNull: true },
+      expected_return_date: { type: require('sequelize').DataTypes.DATE, allowNull: true },
+      returned_at: { type: require('sequelize').DataTypes.DATE, allowNull: true },
+      department_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      location: { type: require('sequelize').DataTypes.STRING(255), allowNull: true },
+      condition_at_assignment: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
+    })) await ensureColumn('assignments', column, definition);
+    await sequelize.query('UPDATE assignments SET assigned_to_type = COALESCE(assigned_to_type, \'user\'), assigned_to_id = COALESCE(assigned_to_id, assigned_to), workflow_status = COALESCE(workflow_status, CASE WHEN status = \'returned\' THEN \'returned\' ELSE \'assigned\' END), assigned_date = COALESCE(assigned_date, created_at)');
+    await sequelize.query(`
+      UPDATE assignments
+      SET expected_return_date = COALESCE(
+        expected_return_date,
+        CASE
+          WHEN JSON_VALID(notes) THEN COALESCE(
+            JSON_UNQUOTE(JSON_EXTRACT(notes, '$.expectedReturnDate')),
+            JSON_UNQUOTE(JSON_EXTRACT(notes, '$.expected_return_date'))
+          )
+          ELSE NULL
+        END
+      )
+      WHERE expected_return_date IS NULL
+    `);
+    await sequelize.query(`
+      UPDATE assignments
+      SET
+        department_id = COALESCE(
+          department_id,
+          CASE WHEN JSON_VALID(notes) THEN CAST(COALESCE(
+            JSON_UNQUOTE(JSON_EXTRACT(notes, '$.departmentId')),
+            JSON_UNQUOTE(JSON_EXTRACT(notes, '$.department_id'))
+          ) AS UNSIGNED) ELSE NULL END
+        ),
+        location = COALESCE(
+          location,
+          CASE WHEN JSON_VALID(notes) THEN JSON_UNQUOTE(JSON_EXTRACT(notes, '$.location')) ELSE NULL END
+        ),
+        condition_at_assignment = COALESCE(
+          condition_at_assignment,
+          CASE WHEN JSON_VALID(notes) THEN JSON_UNQUOTE(JSON_EXTRACT(notes, '$.condition')) ELSE NULL END
+        )
+    `);
+    const assignmentIndexes = await queryInterface.showIndex('assignments');
+    for (const index of [
+      { name: 'assignments_status_created_at_idx', fields: ['status', 'created_at'] },
+      { name: 'assignments_type_created_at_idx', fields: ['assigned_to_type', 'created_at'] },
+      { name: 'assignments_department_date_idx', fields: ['department_id', 'assigned_date'] },
+      { name: 'assignments_expected_return_idx', fields: ['expected_return_date'] },
+    ]) {
+      const present = assignmentIndexes.some((existing) => existing.name === index.name);
+      if (!present) await queryInterface.addIndex('assignments', index.fields, { name: index.name });
+    }
     await ensureUserRoleEnum();
     await ensurePasswordRecoveryIndexes();
 
@@ -370,12 +433,24 @@ async function syncDatabase() {
     await ensureColumn('categories', 'code', { type: require('sequelize').DataTypes.STRING(80), allowNull: true, defaultValue: '' });
     await ensureColumn('categories', 'icon', { type: require('sequelize').DataTypes.STRING(80), allowNull: true, defaultValue: 'layers' });
     await ensureColumn('categories', 'status', { type: require('sequelize').DataTypes.ENUM('active', 'inactive'), allowNull: false, defaultValue: 'active' });
+    await ensureColumn('colleges', 'campus_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
+    await ensureColumn('rooms', 'department_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
     for (const [column, definition] of Object.entries({
       transfer_number: { type: require('sequelize').DataTypes.STRING(40), allowNull: true },
+      source_campus_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
       source_college_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
       source_department_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      source_building_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      source_room_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      source_floor: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      destination_campus_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
       destination_college_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
       destination_department_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      destination_building_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      destination_room_id: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      destination_floor: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
+      condition_at_transfer: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
+      asset_status_before_transfer: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
       requested_by: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
       dispatched_by: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
       received_by: { type: require('sequelize').DataTypes.INTEGER, allowNull: true },
@@ -383,6 +458,7 @@ async function syncDatabase() {
       ready_at: { type: require('sequelize').DataTypes.DATE, allowNull: true },
       dispatched_at: { type: require('sequelize').DataTypes.DATE, allowNull: true },
       received_at: { type: require('sequelize').DataTypes.DATE, allowNull: true },
+      approval_reason: { type: require('sequelize').DataTypes.TEXT, allowNull: true },
     })) await ensureColumn('transfers', column, definition);
     const table = await sequelize.getQueryInterface().describeTable('users');
     if (!table.reset_token_hash) {

@@ -64,21 +64,30 @@ const requireActiveAccount = (req, res, next) => {
   return next();
 };
 
-const requireRole = (...roles) => (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ success: false, message: 'Authentication required' });
-  }
+const requireRole = (...roles) => {
+  const middleware = (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
 
-  const normalizedUserRole = normalizeRoleValue(req.user.role);
-  const allowedRoles = new Set(roles.map(normalizeRoleValue));
+    const normalizedUserRole = normalizeRoleValue(req.user.role);
+    const allowedRoles = new Set(roles.map(normalizeRoleValue));
 
-  if (roles.length && !allowedRoles.has(normalizedUserRole)) {
-    return res.status(403).json({ success: false, message: 'Access denied for this role' });
-  }
+    if (roles.length && !allowedRoles.has(normalizedUserRole)) {
+      return res.status(403).json({ success: false, message: 'Access denied for this role' });
+    }
 
-  req.user.role = normalizedUserRole;
-  req.user.permissions = resolveUserPermissions(req.user);
-  return next();
+    req.user.role = normalizedUserRole;
+    req.user.permissions = resolveUserPermissions(req.user);
+    return next();
+  };
+
+  Object.defineProperty(middleware, 'toString', {
+    value: () => `requireRole(${roles.map((role) => `'${String(role).replace(/'/g, "\\'")}'`).join(', ')})`,
+    configurable: true,
+  });
+
+  return middleware;
 };
 
 const requirePermission = (...permissions) => (req, res, next) => {

@@ -1,4 +1,4 @@
-const { Campus, Building, Room, AuditLog, sequelize } = require('../models');
+const { Campus, Building, Room, Department, College, AuditLog, sequelize } = require('../models');
 const { Op } = require('sequelize');
 
 const uniqueCode = (prefix) => `${prefix}-${String(Date.now()).slice(-8)}${String(Math.floor(Math.random() * 100)).padStart(2, '0')}`;
@@ -85,8 +85,11 @@ const deleteCampus = async (req, res, next) => {
   try {
     const campus = await Campus.findByPk(req.params.id);
     if (!campus) return res.status(404).json({ success: false, message: 'Campus not found' });
-    const buildingCount = await Building.count({ where: { campusId: campus.id } });
-    if (buildingCount > 0) return res.status(409).json({ success: false, message: 'Campus has buildings and cannot be deleted' });
+    const [buildingCount, collegeCount] = await Promise.all([
+      Building.count({ where: { campusId: campus.id } }),
+      College.count({ where: { campusId: campus.id } }),
+    ]);
+    if (buildingCount > 0 || collegeCount > 0) return res.status(409).json({ success: false, message: 'Campus is assigned to buildings or colleges and cannot be deleted' });
     const previousValue = campus.toJSON();
     await campus.destroy();
     await AuditLog.create({ userId: req.user.id, action: 'DELETE_CAMPUS', entity: `campus:${campus.id}`, details: JSON.stringify({ previousValue }) });
@@ -219,6 +222,12 @@ const createRoom = async (req, res, next) => {
     if (!Number.isInteger(buildingId)) return res.status(400).json({ success: false, message: 'A valid building is required' });
     const building = await Building.findByPk(buildingId);
     if (!building) return res.status(400).json({ success: false, message: 'Building not found' });
+    const departmentId = req.body.departmentId || req.body.department_id ? Number(req.body.departmentId || req.body.department_id) : null;
+    if (departmentId !== null) {
+      const department = await Department.findOne({ where: { id: departmentId, status: 'active' }, include: [{ model: College, required: false }] });
+      if (!department) return res.status(400).json({ success: false, message: 'Laboratory department was not found or is inactive' });
+      if (department.College?.campusId && Number(department.College.campusId) !== Number(building.campusId)) return res.status(400).json({ success: false, message: 'Laboratory department belongs to a different campus' });
+    }
     const roomName = String(req.body.roomName || req.body.name || '').trim();
     if (!roomName) return res.status(400).json({ success: false, message: 'Room name is required' });
     const roomCode = String(req.body.roomCode || req.body.code || '').trim().toUpperCase() || uniqueCode('RM');
@@ -231,6 +240,7 @@ const createRoom = async (req, res, next) => {
     const room = await Room.create({
       buildingId,
       campusId: building.campusId,
+      departmentId,
       roomCode,
       roomName,
       roomType: req.body.roomType || req.body.room_type || 'laboratory',
@@ -256,6 +266,21 @@ const updateRoom = async (req, res, next) => {
       updates.buildingId = building.id;
       updates.campusId = building.campusId;
     }
+    const departmentWasProvided = req.body.departmentId !== undefined || req.body.department_id !== undefined;
+    const rawDepartmentId = req.body.departmentId ?? req.body.department_id;
+    const departmentId = departmentWasProvided
+      ? (rawDepartmentId === null || rawDepartmentId === '' ? null : Number(rawDepartmentId))
+      : room.departmentId;
+    if (departmentId !== null && departmentId !== undefined) {
+      const department = await Department.findOne({ where: { id: departmentId, status: 'active' }, include: [{ model: College, required: false }] });
+      if (!department) return res.status(400).json({ success: false, message: 'Laboratory department was not found or is inactive' });
+      const nextBuildingId = updates.buildingId || room.buildingId;
+      const nextBuilding = await Building.findByPk(nextBuildingId);
+      if (department.College?.campusId && Number(department.College.campusId) !== Number(nextBuilding?.campusId)) return res.status(400).json({ success: false, message: 'Laboratory department belongs to a different campus' });
+    } else if (departmentWasProvided && rawDepartmentId !== null && rawDepartmentId !== '') {
+      return res.status(400).json({ success: false, message: 'Laboratory department must be a valid database record' });
+    }
+    if (departmentWasProvided) updates.departmentId = departmentId;
     if (req.body.roomName || req.body.name) updates.roomName = String(req.body.roomName || req.body.name).trim();
     if (req.body.roomCode || req.body.code) updates.roomCode = String(req.body.roomCode || req.body.code).trim().toUpperCase();
     if (req.body.roomType !== undefined) updates.roomType = req.body.roomType;

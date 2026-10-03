@@ -20,14 +20,21 @@ const normalizePhoneNumber = (value) => {
   return null;
 };
 
+const getSmsDriver = () => String(process.env.SMS_PROVIDER || '').trim().toLowerCase();
+const isDevelopmentSmsDriver = () => ['log', 'console', 'mock', 'dev', 'test'].includes(getSmsDriver());
+
 const ensureSmsConfig = () => {
-  const provider = String(process.env.SMS_PROVIDER || '').trim().toLowerCase();
+  const provider = getSmsDriver();
   if (!provider) return { ok: false, reason: 'SMS service is not configured' };
+
+  if (isDevelopmentSmsDriver()) {
+    return { ok: true, provider, apiKey: process.env.SMS_PROVIDER_KEY || 'dev-provider-key', apiSecret: process.env.SMS_PROVIDER_SECRET || process.env.SMS_API_SECRET || 'dev-provider-secret', senderId: process.env.SMS_SENDER_ID || process.env.SMS_SENDER || 'SMARTASSET' };
+  }
 
   const config = {
     provider,
-    apiKey: process.env.SMS_API_KEY || '',
-    apiSecret: process.env.SMS_API_SECRET || '',
+    apiKey: process.env.SMS_API_KEY || process.env.SMS_PROVIDER_KEY || '',
+    apiSecret: process.env.SMS_API_SECRET || process.env.SMS_PROVIDER_SECRET || '',
     senderId: process.env.SMS_SENDER_ID || process.env.SMS_SENDER || '',
   };
 
@@ -41,7 +48,7 @@ const ensureSmsConfig = () => {
 
 const isSmsConfigured = () => {
   const config = ensureSmsConfig();
-  return config.ok && ['twilio', 'africastalking', 'africa_talking'].includes(config.provider);
+  return config.ok && ['twilio', 'africastalking', 'africa_talking', 'log', 'mock', 'dev', 'test'].includes(config.provider);
 };
 
 const smsHeaders = (contentType = 'application/json') => ({
@@ -142,6 +149,10 @@ const sendSMS = async (phoneNumber, message) => {
   if (!config.ok) return { status: 'failed', reason: config.reason };
 
   try {
+    if (isDevelopmentSmsDriver()) {
+      console.info(`[SMS_LOG] to=${normalized} message=${message}`);
+      return { status: 'sent', provider: config.provider, messageId: `dev-${Date.now()}` };
+    }
     if (config.provider === 'twilio') {
       return await sendTwilioSms(normalized, message);
     }

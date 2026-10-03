@@ -5,6 +5,7 @@ const College = sequelize.define('College', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   collegeCode: { type: DataTypes.STRING(100), allowNull: false, unique: true, field: 'college_code' },
   collegeName: { type: DataTypes.STRING(255), allowNull: false, field: 'college_name' },
+  campusId: { type: DataTypes.INTEGER, allowNull: true, field: 'campus_id' },
   description: { type: DataTypes.TEXT, defaultValue: '' },
   managerId: { type: DataTypes.INTEGER, allowNull: true, field: 'manager_id' },
   location: { type: DataTypes.STRING(255), defaultValue: '' },

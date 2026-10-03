@@ -1,7 +1,8 @@
 const { Op, fn, col } = require('sequelize');
 const fs = require('fs');
 const path = require('path');
-const { sequelize, Approval, Asset, Assignment, AuditLog, Category, Department, Incident, IncidentHistory, Maintenance, MaintenanceHistory, Notification, PreventiveMaintenance, RFIDLog, RfidDevice, RequestStatusHistory, ServiceRequest, SoftwareLicense, Transfer, User, AssetDocument } = require('../models');
+const { sequelize, Approval, Asset, Assignment, AuditLog, Inventory, InventoryTransaction, Category, Department, Incident, IncidentHistory, Maintenance, MaintenanceHistory, Notification, PreventiveMaintenance, RFIDLog, RfidDevice, RequestStatusHistory, ServiceRequest, SoftwareLicense, Transfer, User, AssetDocument } = require('../models');
+const { createAuditLog } = require('../services/auditLogService');
 const { equipmentTerms, networkTerms, equipmentPredicate, networkPredicate } = require('../utils/ictAssetFilters');
 
 const ALLOWED_DOC_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
@@ -1075,26 +1076,97 @@ const createIctPreventiveMaintenance = async (req, res, next) => {
 };
 
 const assignIctAsset = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
   try {
-    const asset = await Asset.findOne({ where: { id: req.params.id, ...ictAssetWhere(req) } });
-    if (!asset) return res.status(404).json({ success: false, message: 'ICT asset not found' });
+    const asset = await Asset.findOne({ where: { id: req.params.id, ...ictAssetWhere(req) }, transaction, lock: transaction.LOCK.UPDATE });
+    if (!asset) {
+      await transaction.rollback();
+      return res.status(404).json({ success: false, message: 'ICT asset not found' });
+    }
     const assigneeId = Number(req.body.assignedTo || req.body.userId);
-    if (!Number.isInteger(assigneeId) || assigneeId < 1) return res.status(422).json({ success: false, message: 'Valid assignee user ID is required' });
-    const assignee = await User.findOne({ where: { id: assigneeId, active: true } });
-    if (!assignee) return res.status(422).json({ success: false, message: 'Assignee not found or inactive' });
-    if (['under-maintenance', 'lost', 'retired', 'assigned', 'disposed'].includes(String(asset.status).toLowerCase())) {
+    if (!Number.isInteger(assigneeId) || assigneeId < 1) {
+      await transaction.rollback();
+      return res.status(422).json({ success: false, message: 'Valid assignee user ID is required' });
+    }
+    const assignee = await User.findOne({ where: { id: assigneeId, active: true }, transaction, lock: transaction.LOCK.UPDATE });
+    if (!assignee) {
+      await transaction.rollback();
+      return res.status(422).json({ success: false, message: 'Assignee not found or inactive' });
+    }
+    if (String(asset.status || '').toLowerCase().replace(/[_ ]/g, '-') !== 'available') {
+      await transaction.rollback();
       return res.status(409).json({ success: false, message: `Asset cannot be assigned while its status is "${asset.status}"` });
     }
-    const existing = await Assignment.findOne({ where: { assetId: asset.id, status: 'active' } });
-    if (existing) return res.status(409).json({ success: false, message: 'Asset is already assigned to another user' });
-    const assignment = await Assignment.create({ assetId: asset.id, assignedTo: assigneeId, assignedBy: req.user.id, status: 'active', assignmentDate: new Date(), notes: req.body.notes || '' });
-    await asset.update({ status: 'assigned' });
-    await AuditLog.create({ userId: req.user.id, action: 'ICT_ASSET_ASSIGNED', entity: `asset:${asset.id}`, details: JSON.stringify({ assignmentId: assignment.id, assignedTo: assigneeId }) });
+    if (req.user.role === 'ict_officer' && Number(assignee.collegeId) !== Number(req.organizationScope.collegeId)) {
+      await transaction.rollback();
+      return res.status(403).json({ success: false, message: 'Recipient is outside your organization scope.' });
+    }
+    const existing = await Assignment.findOne({ where: { assetId: asset.id, status: 'active' }, transaction, lock: transaction.LOCK.UPDATE });
+    if (existing) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'Asset is already assigned to another user' });
+    }
+    const inventory = await Inventory.findOne({ where: { assetId: asset.id }, transaction, lock: transaction.LOCK.UPDATE });
+    if (!inventory || Number(inventory.availableQuantity) < 1) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'Asset is not available in inventory.' });
+    }
+    const assignedDate = new Date();
+    const departmentId = Number(assignee.departmentId || 0) || null;
+    const location = String(req.body.location || asset.location || '').trim();
+    const condition = String(req.body.condition_at_assignment || req.body.condition || asset.condition || 'Good');
+    const expectedReturnDate = req.body.expectedReturnDate || req.body.expected_return_date || null;
+    if (location.length > 255) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Location must be 255 characters or fewer.' });
+    }
+    if (!['excellent', 'good', 'fair', 'poor', 'damaged'].includes(condition.toLowerCase())) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Condition must be Excellent, Good, Fair, Poor or Damaged.' });
+    }
+    if (expectedReturnDate && (Number.isNaN(Date.parse(expectedReturnDate)) || new Date(expectedReturnDate) < assignedDate)) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Expected return date must be a valid future date.' });
+    }
+    const previousValue = asset.toJSON();
+    await inventory.update({ availableQuantity: inventory.availableQuantity - 1 }, { transaction });
+    const assignment = await Assignment.create({
+      assetId: asset.id,
+      assignedTo: assigneeId,
+      assignedToType: 'user',
+      assignedToId: assigneeId,
+      assignedBy: req.user.id,
+      status: 'active',
+      workflowStatus: 'assigned',
+      assignedDate,
+      expectedReturnDate,
+      departmentId,
+      location,
+      conditionAtAssignment: condition,
+      notes: JSON.stringify({ notes: req.body.notes || '', departmentId, location, condition }),
+    }, { transaction });
+    await asset.update({ status: 'assigned', ...(departmentId ? { departmentId } : {}), location }, { transaction });
+    await InventoryTransaction.create({ inventoryId: inventory.id, assetId: asset.id, userId: req.user.id, type: 'issue', quantity: 1, reason: 'Asset assignment', notes: req.body.notes || '' }, { transaction });
+    await createAuditLog({
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'ASSIGN_ASSET',
+      entity: `asset:${asset.id}`,
+      entityId: asset.id,
+      oldValue: previousValue,
+      newValue: { asset: asset.toJSON(), assignment: assignment.toJSON() },
+      details: { assignmentId: assignment.id, assignedTo: { type: 'user', id: assigneeId }, ip: req.ip, sessionId: req.sessionID || null },
+      transaction,
+    });
+    await transaction.commit();
     try {
       await Notification.create({ userId: assigneeId, title: 'Asset Assigned', message: `You have been assigned ${asset.name} (${asset.assetCode || asset.id})`, type: 'assignment', priority: 'medium', entityType: 'asset', entityId: asset.id, actionUrl: `/ict/assets` });
     } catch (notificationError) { console.error('Assignment notification failed:', notificationError.message); }
     return res.status(201).json({ success: true, data: assignment });
-  } catch (error) { next(error); }
+  } catch (error) {
+    if (!transaction.finished) await transaction.rollback();
+    next(error);
+  }
 };
 
 const transferIctAsset = async (req, res, next) => {

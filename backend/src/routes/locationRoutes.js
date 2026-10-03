@@ -22,20 +22,22 @@ const { requireAuth, requireRole } = require('../middlewares/auth');
 
 const router = express.Router();
 
-router.get('/campuses', requireAuth, listCampuses);
-router.get('/campuses/:id', requireAuth, getCampus);
+const locationReadAccess = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college', 'college_manager', 'department_head', 'maintenance', 'infrastructure')];
+
+router.get('/campuses', ...locationReadAccess, listCampuses);
+router.get('/campuses/:id', ...locationReadAccess, getCampus);
 router.post('/campuses', requireAuth, requireRole('admin'), createCampus);
 router.put('/campuses/:id', requireAuth, requireRole('admin'), updateCampus);
 router.delete('/campuses/:id', requireAuth, requireRole('admin'), deleteCampus);
 
-router.get('/buildings', requireAuth, listBuildings);
-router.get('/buildings/:id', requireAuth, getBuilding);
+router.get('/buildings', ...locationReadAccess, listBuildings);
+router.get('/buildings/:id', ...locationReadAccess, getBuilding);
 router.post('/buildings', requireAuth, requireRole('admin'), createBuilding);
 router.put('/buildings/:id', requireAuth, requireRole('admin'), updateBuilding);
 router.delete('/buildings/:id', requireAuth, requireRole('admin'), deleteBuilding);
 
-router.get('/rooms', requireAuth, listRooms);
-router.get('/rooms/:id', requireAuth, getRoom);
+router.get('/rooms', ...locationReadAccess, listRooms);
+router.get('/rooms/:id', ...locationReadAccess, getRoom);
 router.post('/rooms', requireAuth, requireRole('admin'), createRoom);
 router.put('/rooms/:id', requireAuth, requireRole('admin'), updateRoom);
 router.delete('/rooms/:id', requireAuth, requireRole('admin'), deleteRoom);
@@ -58,7 +60,7 @@ const serializeLocation = async (location) => {
 
 const normalizeLocationList = async (rows) => Promise.all(rows.map(serializeLocation));
 
-router.get('/stats', requireAuth, async (req, res, next) => {
+router.get('/stats', ...locationReadAccess, async (req, res, next) => {
   try {
     const [totalLocations, activeLocations, locationsWithAssets, totalAssets] = await Promise.all([
       Location.count(),
@@ -110,7 +112,7 @@ router.get('/', requireAuth, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get('/:id/assets', requireAuth, async (req, res, next) => {
+router.get('/:id/assets', ...locationReadAccess, async (req, res, next) => {
   try {
     const location = await Location.findByPk(req.params.id);
     if (!location) return res.status(404).json({ success: false, message: 'Location not found' });
@@ -123,7 +125,7 @@ router.get('/:id/assets', requireAuth, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get('/:id', requireAuth, async (req, res, next) => {
+router.get('/:id', ...locationReadAccess, async (req, res, next) => {
   try {
     const location = await Location.findByPk(req.params.id);
     if (!location) return res.status(404).json({ success: false, message: 'Location not found' });

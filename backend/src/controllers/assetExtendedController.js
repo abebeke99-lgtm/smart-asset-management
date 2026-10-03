@@ -20,10 +20,9 @@ const {
   Config,
 } = require('../models');
 const { createAuditLog } = require('../services/auditLogService');
+const { saveAssetDocument } = require('../services/assetDocumentStorage');
 const { isCollegeScopedRole, getCollegeScopeId } = require('../middlewares/organizationScope');
 
-const ALLOWED_DOC_TYPES = ['application/pdf', 'application/msword', 'image/jpeg', 'image/png'];
-const MAX_DOC_SIZE = 10 * 1024 * 1024;
 const VALID_CONDITIONS = ['Good', 'Fair', 'Poor', 'Damaged'];
 const VALID_STATUSES = ['available', 'in-use', 'under-maintenance', 'damaged', 'replaced', 'expired', 'disposed', 'testing'];
 const DEFAULT_SOFT_DELETE_RECOVERY_DAYS = 30;
@@ -130,32 +129,6 @@ async function nextDigitalId(transaction) {
   }
   return `${prefix}${String(sequence).padStart(6, '0')}`;
 }
-
-const ensureUploadDir = (subdir) => {
-  const target = path.resolve(__dirname, '..', process.env.UPLOAD_DIR || 'uploads', subdir);
-  fs.mkdirSync(target, { recursive: true });
-  return target;
-};
-
-const saveDocument = ({ fileName = '', mimeType = '', data = '' }, subdir) => {
-  const mime = String(mimeType || '').split(';')[0].trim();
-  if (!ALLOWED_DOC_TYPES.includes(mime)) {
-    const error = new Error(`Unsupported file type: ${mime || 'unknown'}. Allowed: PDF, JPG, PNG.`);
-    error.statusCode = 400;
-    throw error;
-  }
-  const buffer = Buffer.from(data, 'base64');
-  if (!buffer.length || buffer.length > MAX_DOC_SIZE) {
-    const error = new Error('File is empty or exceeds the 10 MB limit');
-    error.statusCode = 400;
-    throw error;
-  }
-  const ext = String(fileName).split('.').pop() || (mime === 'application/pdf' ? 'pdf' : mime.split('/')[1] || 'bin');
-  const storedName = `${Date.now()}-${String(Math.floor(Math.random() * 100000)).padStart(5, '0')}.${ext}`;
-  const dir = ensureUploadDir(subdir);
-  fs.writeFileSync(path.join(dir, storedName), buffer);
-  return { originalName: String(fileName || storedName), storedName, mimeType: mime, fileSize: buffer.length, filePath: path.posix.join('uploads', subdir, storedName) };
-};
 
 const serializedExtended = (asset, extra = {}) => {
   const data = asset.toJSON ? asset.toJSON() : asset;
@@ -276,7 +249,13 @@ const restoreAsset = async (req, res, next) => {
     }
     const previousValue = asset.toJSON();
     const restored = await asset.restore({ transaction });
-    await asset.update({ deletedBy: null }, { transaction });
+    const specifications = asset.specifications && typeof asset.specifications === 'object' ? asset.specifications : {};
+    const { recoveryInfo, ...restoredSpecifications } = specifications;
+    await asset.update({
+      deletedBy: null,
+      status: recoveryInfo?.previousStatus || (asset.status === 'deleted' ? 'available' : asset.status),
+      specifications: restoredSpecifications,
+    }, { transaction });
     await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'RESTORE_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, oldValue: previousValue, newValue: asset.toJSON(), details: { assetId: asset.id, deletedAt, restoredAt: new Date() }, transaction });
     await transaction.commit();
     res.json({ success: true, message: 'Asset restored', data: serializedExtended(restored || asset) });
@@ -321,7 +300,7 @@ const uploadAssetDocument = async (req, res, next) => {
   try {
     const asset = await findAssetInScope(req, req.params.id);
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
-    const saved = saveDocument(req.body, 'assets');
+    const saved = saveAssetDocument(req.body, 'assets');
     const document = await AssetDocument.create({
       assetId: asset.id,
       documentType: req.body.documentType || req.body.document_type || 'warranty',

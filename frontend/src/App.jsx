@@ -11,7 +11,7 @@ import './styles/admin/index.css';
 import './components/ict/ICTModuleThemes.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, GitBranch, House, Info, Languages, LayoutDashboard, LifeBuoy, LockKeyhole, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, Phone, Radio, Search, Settings, ShieldCheck, Sparkles, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
+import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, Folder, GitBranch, House, Info, Languages, Layers, LayoutDashboard, LifeBuoy, LockKeyhole, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, Phone, Radio, Search, Settings, ShieldCheck, Sparkles, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
@@ -494,8 +494,31 @@ const getAssetLocationFallback = (assets = []) => {
   return Object.values(buckets).sort((left, right) => left.name.localeCompare(right.name));
 };
 
+const CategoryIcon = ({ icon, size = 14 }) => {
+  const Icon = icon === 'folder' ? Folder : icon === 'layers' ? Layers : Package;
+  return <Icon size={size} aria-hidden="true" />;
+};
+
+const normalizeAssetCategory = (entry = {}) => {
+  const status = String(entry.status || 'active').trim().toLowerCase();
+  const assetCount = Number(entry.assetCount ?? entry.asset_count ?? entry.assets ?? entry.count ?? 0);
+  return {
+    id: entry.id,
+    name: entry.name || 'Unnamed category',
+    code: entry.code || '',
+    description: entry.description || '',
+    icon: entry.icon || 'package',
+    status: ['active', 'inactive'].includes(status) ? status : 'active',
+    assetCount: Number.isFinite(assetCount) ? assetCount : 0,
+    activeAssetCount: Number(entry.activeAssetCount ?? entry.active_asset_count ?? assetCount),
+    createdAt: entry.createdAt || entry.created_at || null,
+    updatedAt: entry.updatedAt || entry.updated_at || null,
+  };
+};
+
 const AdminAssetCategories = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -511,51 +534,70 @@ const AdminAssetCategories = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [viewCategory, setViewCategory] = useState(null);
   const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const [statusCandidate, setStatusCandidate] = useState(null);
   const [menuOpenId, setMenuOpenId] = useState(null);
+  const categoryNameInputRef = useRef(null);
 
   const role = String(user?.role || '').trim().toLowerCase();
   const canManageCategories = ['admin', 'ict_officer', 'department_head', 'finance', 'store_manager', 'maintenance', 'infrastructure'].includes(role);
   const canDeleteCategory = role === 'admin';
 
-  const normalizeCategory = (category = {}) => {
-    const entry = category || {};
-    const status = String(entry.status || 'active').trim().toLowerCase();
-    const assetCount = Number(entry.assetCount ?? entry.asset_count ?? entry.assets ?? entry.count ?? 0);
-    return {
-      id: entry.id,
-      name: entry.name || 'Unnamed category',
-      code: entry.code || '',
-      description: entry.description || '',
-      icon: entry.icon || 'package',
-      status: ['active', 'inactive'].includes(status) ? status : 'active',
-      assetCount: Number.isFinite(assetCount) ? assetCount : 0,
-      createdAt: entry.createdAt || entry.created_at || null,
-      updatedAt: entry.updatedAt || entry.updated_at || null,
-    };
-  };
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const response = await axios.get('/api/categories', { params: { page: 1, limit: 100 } });
       const rows = normalizeListResponse(response?.data ?? []);
-      setCategories(Array.isArray(rows) ? rows.map(normalizeCategory) : []);
+      const totalPages = Math.max(1, Number(response?.data?.pagination?.totalPages) || 1);
+      const remainingPages = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) => axios.get('/api/categories', {
+          params: { page: index + 2, limit: 100 },
+        }))
+      );
+      const allRows = [
+        ...(Array.isArray(rows) ? rows : []),
+        ...remainingPages.flatMap((pageResponse) => normalizeListResponse(pageResponse?.data ?? [])),
+      ];
+      setCategories(allRows.map(normalizeAssetCategory));
+      return true;
     } catch (loadError) {
       console.error('Category load failed:', loadError);
       setCategories([]);
       setError('Unable to load asset categories. Please check the server connection and try again.');
+      return false;
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
+
+  useEffect(() => {
+    if (isFormOpen) categoryNameInputRef.current?.focus();
+
+    const handleEscape = (event) => {
+      if (event.key !== 'Escape') return;
+      if (isFormOpen && !saving) {
+        setIsFormOpen(false);
+        resetCategoryForm();
+      } else if (deleteCandidate) {
+        setDeleteCandidate(null);
+      } else if (statusCandidate) {
+        setStatusCandidate(null);
+      } else if (viewCategory) {
+        setViewCategory(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isFormOpen, saving, deleteCandidate, statusCandidate, viewCategory]);
 
   const summary = useMemo(() => ({
     total: categories.length,
@@ -570,7 +612,7 @@ const AdminAssetCategories = () => {
       if (!matchesStatus) return false;
       if (!query) return true;
 
-      const haystack = [category.name, category.code, category.description, category.status].join(' ').toLowerCase();
+      const haystack = [category.name, category.code].join(' ').toLowerCase();
       return haystack.includes(query);
     });
   }, [categories, search, statusFilter]);
@@ -589,6 +631,7 @@ const AdminAssetCategories = () => {
 
   const openCreateForm = () => {
     resetCategoryForm();
+    setNotice('');
     setIsFormOpen(true);
   };
 
@@ -602,6 +645,7 @@ const AdminAssetCategories = () => {
       status: category.status || 'active',
     });
     setFormErrors({});
+    setNotice('');
     setIsFormOpen(true);
   };
 
@@ -617,18 +661,34 @@ const AdminAssetCategories = () => {
       nextErrors.name = 'Category name must be 120 characters or fewer.';
     }
 
-    if (code.length > 80) {
-      nextErrors.code = 'Category code is too long.';
+    if (code && !/^[A-Z0-9-]+$/i.test(code)) {
+      nextErrors.code = 'Use uppercase letters, numbers, and hyphens only.';
+    } else if (code.length > 80) {
+      nextErrors.code = 'Category code must be 80 characters or fewer.';
     }
 
     if (!['active', 'inactive'].includes(status)) {
       nextErrors.status = 'A valid status is required.';
     }
 
+    const normalizedName = name.toLocaleLowerCase();
+    const normalizedCode = code.toUpperCase();
+    const duplicateName = categories.some((category) => (
+      String(category.id) !== String(editingId) &&
+      category.name.trim().toLocaleLowerCase() === normalizedName
+    ));
+    const duplicateCode = normalizedCode && categories.some((category) => (
+      String(category.id) !== String(editingId) &&
+      category.code.trim().toUpperCase() === normalizedCode
+    ));
+    if (duplicateName) nextErrors.name = 'A category with this name already exists.';
+    if (duplicateCode) nextErrors.code = 'A category with this code already exists.';
+
     return nextErrors;
   };
 
-  const saveCategory = async () => {
+  const saveCategory = async (event) => {
+    event?.preventDefault();
     const nextErrors = validateCategory();
     if (Object.keys(nextErrors).length > 0) {
       setFormErrors(nextErrors);
@@ -643,6 +703,7 @@ const AdminAssetCategories = () => {
 
     setSaving(true);
     setError('');
+    setNotice('');
     setFormErrors({});
 
     try {
@@ -652,17 +713,18 @@ const AdminAssetCategories = () => {
         const response = await axios.put(`/api/categories/${editingId}`, payload);
         const updatedItem = normalizeListResponse(response?.data ?? []);
         setCategories((previous) => previous.map((category) => String(category.id) === String(editingId)
-          ? normalizeCategory({ ...category, ...(Array.isArray(updatedItem) ? updatedItem[0] : updatedItem) })
+          ? normalizeAssetCategory({ ...category, ...(Array.isArray(updatedItem) ? updatedItem[0] : updatedItem) })
           : category));
       } else {
         const response = await axios.post('/api/categories', payload);
         const createdItem = normalizeListResponse(response?.data ?? []);
-        setCategories((previous) => [normalizeCategory(createdItem.length > 0 ? createdItem[0] : createdItem), ...previous]);
+        setCategories((previous) => [normalizeAssetCategory(createdItem.length > 0 ? createdItem[0] : createdItem), ...previous]);
       }
 
       setIsFormOpen(false);
       resetCategoryForm();
       await loadData();
+      setNotice(editingId ? 'Category updated successfully.' : 'Category created successfully.');
     } catch (saveError) {
       const message = saveError?.response?.data?.message || 'Unable to save category.';
       setFormErrors({ submit: message });
@@ -675,29 +737,60 @@ const AdminAssetCategories = () => {
   const removeCategory = async () => {
     if (!deleteCandidate) return;
 
+    setSaving(true);
+    setError('');
+    setNotice('');
     try {
       await axios.delete(`/api/categories/${deleteCandidate?.id}`);
-      setCategories((previous) => previous.filter((category) => String(category.id) !== String(deleteCandidate?.id)));
+      await loadData();
       setDeleteCandidate(null);
       setMenuOpenId(null);
       if (editingId === deleteCandidate?.id) {
         resetCategoryForm();
       }
+      setNotice('Category deleted successfully.');
     } catch (deleteError) {
       const message = deleteError?.response?.data?.message || 'Unable to delete category.';
       setError(message);
-      setDeleteCandidate(null);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDeleteClick = (category) => {
     setMenuOpenId(null);
-    if (Number(category.assetCount || 0) > 0) {
-      setDeleteCandidate(category);
+    setNotice('');
+    setDeleteCandidate(category);
+  };
+
+  const updateCategoryStatus = async (category, nextStatus) => {
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      await axios.put(`/api/categories/${category.id}`, { ...category, status: nextStatus });
+      await loadData();
+      setStatusCandidate(null);
+      setNotice(`Category ${nextStatus === 'active' ? 'activated' : 'deactivated'} successfully.`);
+    } catch (statusError) {
+      setError(statusError?.response?.data?.message || 'Unable to update category status.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const requestStatusChange = (category) => {
+    setMenuOpenId(null);
+    setNotice('');
+    if (category.status === 'active') {
+      setStatusCandidate(category);
       return;
     }
+    updateCategoryStatus(category, 'active');
+  };
 
-    setDeleteCandidate(category);
+  const showAssets = (category) => {
+    navigate(`/admin/assets?category=${encodeURIComponent(category.name)}`);
   };
 
   const resetFilters = () => {
@@ -723,6 +816,8 @@ const AdminAssetCategories = () => {
           </button>
         )}
       </div>
+
+      {notice && <div className="asset-category-success" role="status">{notice}</div>}
 
       <div className="asset-category-summary-grid" aria-label="Category summary">
         <div className="asset-category-summary-card">
@@ -809,10 +904,12 @@ const AdminAssetCategories = () => {
             <table className="asset-category-table" aria-label="Asset category list">
               <thead>
                 <tr>
-                  <th>Category</th>
+                  <th>Icon</th>
+                  <th>Category Name</th>
+                  <th>Category Code</th>
                   <th>Description</th>
-                  <th>Assets</th>
                   <th>Status</th>
+                  <th>Number of Assets</th>
                   <th>Created</th>
                   <th>Actions</th>
                 </tr>
@@ -822,20 +919,21 @@ const AdminAssetCategories = () => {
                   <tr key={category.id}>
                     <td>
                       <div className="asset-category-name-cell">
-                        <span className="asset-category-name-icon" aria-hidden="true"><Package size={14} /></span>
-                        <span>{category.name}</span>
+                        <span className="asset-category-name-icon"><CategoryIcon icon={category.icon} /></span>
                       </div>
                     </td>
+                    <td className="asset-category-name-cell">{category.name}</td>
+                    <td><span className="asset-category-code">{category.code || '—'}</span></td>
                     <td className="asset-category-cell-muted">{category.description || '—'}</td>
-                    <td>
-                      <span className="asset-category-count-pill" title={`${category.assetCount} assets`}>
-                        {category.assetCount} {category.assetCount === 1 ? 'asset' : 'assets'}
-                      </span>
-                    </td>
                     <td>
                       <span className={`asset-category-status-badge ${category.status === 'active' ? 'is-active' : 'is-inactive'}`}>
                         <span className="asset-category-status-dot" aria-hidden="true" />
                         {categoryStatusLabel(category.status)}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="asset-category-count-pill" title={`${category.assetCount} assets`}>
+                        {category.assetCount} {category.assetCount === 1 ? 'asset' : 'assets'}
                       </span>
                     </td>
                     <td className="asset-category-cell-muted">
@@ -867,18 +965,10 @@ const AdminAssetCategories = () => {
                               <div className="asset-category-menu" role="menu" aria-label={`Actions for ${category.name}`}>
                                 <button type="button" role="menuitem" onClick={() => setViewCategory(category)}>View</button>
                                 <button type="button" role="menuitem" onClick={() => openEditForm(category)}>Edit</button>
-                                <button type="button" role="menuitem" onClick={() => {
-                                  const nextStatus = category.status === 'active' ? 'inactive' : 'active';
-                                  setCategories((previous) => previous.map((item) => String(item.id) === String(category.id)
-                                    ? { ...item, status: nextStatus }
-                                    : item));
-                                  axios.put(`/api/categories/${category.id}`, { ...category, status: nextStatus })
-                                    .catch((updateError) => setError(updateError?.response?.data?.message || 'Unable to update category status.'));
-                                  setMenuOpenId(null);
-                                }}>
+                                <button type="button" role="menuitem" onClick={() => requestStatusChange(category)}>
                                   {category.status === 'active' ? 'Deactivate' : 'Activate'}
                                 </button>
-                                <button type="button" role="menuitem" onClick={() => setViewCategory({ ...category, assetCount: category.assetCount, showAssets: true })}>View Assets</button>
+                                <button type="button" role="menuitem" onClick={() => showAssets(category)}>View Assets</button>
                                 {canDeleteCategory && (
                                   <button type="button" role="menuitem" className="danger" onClick={() => handleDeleteClick(category)}>
                                     Delete
@@ -901,7 +991,7 @@ const AdminAssetCategories = () => {
               <div key={category.id} className="asset-category-mobile-card">
                 <div className="asset-category-mobile-header">
                   <div className="asset-category-name-cell">
-                    <span className="asset-category-name-icon" aria-hidden="true"><Package size={14} /></span>
+                    <span className="asset-category-name-icon"><CategoryIcon icon={category.icon} /></span>
                     <span>{category.name}</span>
                   </div>
                   <span className={`asset-category-status-badge ${category.status === 'active' ? 'is-active' : 'is-inactive'}`}>
@@ -913,6 +1003,7 @@ const AdminAssetCategories = () => {
                 <p className="asset-category-mobile-description">{category.description || 'No description available.'}</p>
 
                 <div className="asset-category-mobile-meta">
+                  <span>Code: {category.code || '—'}</span>
                   <span>{category.assetCount} assets</span>
                   <span>{category.createdAt ? new Date(category.createdAt).toLocaleDateString() : 'No date'}</span>
                 </div>
@@ -931,16 +1022,10 @@ const AdminAssetCategories = () => {
                         <div className="asset-category-menu" role="menu" aria-label={`Actions for ${category.name}`}>
                           <button type="button" role="menuitem" onClick={() => setViewCategory(category)}>View</button>
                           <button type="button" role="menuitem" onClick={() => openEditForm(category)}>Edit</button>
-                          <button type="button" role="menuitem" onClick={() => {
-                            const nextStatus = category.status === 'active' ? 'inactive' : 'active';
-                            setCategories((previous) => previous.map((item) => String(item.id) === String(category.id) ? { ...item, status: nextStatus } : item));
-                            axios.put(`/api/categories/${category.id}`, { ...category, status: nextStatus })
-                              .catch((updateError) => setError(updateError?.response?.data?.message || 'Unable to update category status.'));
-                            setMenuOpenId(null);
-                          }}>
+                          <button type="button" role="menuitem" onClick={() => requestStatusChange(category)}>
                             {category.status === 'active' ? 'Deactivate' : 'Activate'}
                           </button>
-                          <button type="button" role="menuitem" onClick={() => setViewCategory({ ...category, assetCount: category.assetCount, showAssets: true })}>View Assets</button>
+                          <button type="button" role="menuitem" onClick={() => showAssets(category)}>View Assets</button>
                           {canDeleteCategory && (
                             <button type="button" role="menuitem" className="danger" onClick={() => handleDeleteClick(category)}>Delete</button>
                           )}
@@ -956,23 +1041,26 @@ const AdminAssetCategories = () => {
       )}
 
       {isFormOpen && (
-        <div className="asset-category-modal-backdrop" onClick={() => { setIsFormOpen(false); resetCategoryForm(); }}>
+        <div className="asset-category-modal-backdrop" onClick={() => { if (!saving) { setIsFormOpen(false); resetCategoryForm(); } }}>
           <div className="asset-category-modal" role="dialog" aria-modal="true" aria-labelledby="category-form-title" onClick={(event) => event.stopPropagation()}>
             <div className="asset-category-modal-header">
               <div>
                 <span className="asset-category-modal-kicker">Asset Management</span>
                 <h3 id="category-form-title">{editingId ? 'Edit Category' : 'Create Category'}</h3>
               </div>
-              <button type="button" className="asset-category-close-button" onClick={() => { setIsFormOpen(false); resetCategoryForm(); }} aria-label="Close category form">
+              <button type="button" className="asset-category-close-button" onClick={() => { if (!saving) { setIsFormOpen(false); resetCategoryForm(); } }} aria-label="Close category form" disabled={saving}>
                 <X size={18} aria-hidden="true" />
               </button>
             </div>
 
-            <div className="asset-category-form-grid">
+            <form className="asset-category-form-grid" onSubmit={saveCategory}>
               <label className="asset-category-field">
                 <span>Category Name <strong aria-hidden="true">*</strong></span>
                 <input
+                  ref={categoryNameInputRef}
                   type="text"
+                  required
+                  maxLength={120}
                   value={form.name}
                   onChange={(event) => setForm((previous) => ({ ...previous, name: event.target.value }))}
                   placeholder="Computer Equipment"
@@ -984,6 +1072,7 @@ const AdminAssetCategories = () => {
                 <span>Category Code</span>
                 <input
                   type="text"
+                  maxLength={80}
                   value={form.code}
                   onChange={(event) => setForm((previous) => ({ ...previous, code: event.target.value }))}
                   placeholder="COMP-IT"
@@ -1018,33 +1107,58 @@ const AdminAssetCategories = () => {
                   <option value="layers">Layers</option>
                 </select>
               </label>
-            </div>
 
             {formErrors.submit && (
               <div className="asset-category-form-error" role="alert">{formErrors.submit}</div>
             )}
 
             <div className="asset-category-modal-actions">
-              <button type="button" className="asset-category-secondary-button" onClick={() => { setIsFormOpen(false); resetCategoryForm(); }}>
+              <button type="button" className="asset-category-secondary-button" onClick={() => { setIsFormOpen(false); resetCategoryForm(); }} disabled={saving}>
                 Cancel
               </button>
-              <button type="button" className="asset-category-primary-button" onClick={saveCategory} disabled={saving}>
+              <button type="submit" className="asset-category-primary-button" disabled={saving}>
                 {saving ? 'Saving...' : editingId ? 'Save Changes' : 'Create Category'}
               </button>
             </div>
+            </form>
           </div>
         </div>
       )}
 
-      {(viewCategory || deleteCandidate) && (
-        <div className="asset-category-modal-backdrop" onClick={() => { setViewCategory(null); setDeleteCandidate(null); }}>
+      {(viewCategory || deleteCandidate || statusCandidate) && (
+        <div className="asset-category-modal-backdrop" onClick={() => { setViewCategory(null); setDeleteCandidate(null); setStatusCandidate(null); }}>
           <div className="asset-category-modal asset-category-modal--compact" role="dialog" aria-modal="true" aria-labelledby="category-detail-title" onClick={(event) => event.stopPropagation()}>
-            {deleteCandidate ? (
+            {statusCandidate ? (
               <>
                 <div className="asset-category-modal-header">
                   <div>
-                    <span className="asset-category-modal-kicker">Delete protection</span>
-                    <h3 id="category-detail-title">Category Cannot Be Deleted</h3>
+                    <span className="asset-category-modal-kicker">Confirm category change</span>
+                    <h3 id="category-detail-title">Deactivate Category?</h3>
+                  </div>
+                  <button type="button" className="asset-category-close-button" onClick={() => setStatusCandidate(null)} aria-label="Close deactivation confirmation">
+                    <X size={18} aria-hidden="true" />
+                  </button>
+                </div>
+                <div className="asset-category-delete-panel">
+                  <p>Deactivate <strong>{statusCandidate.name}</strong>?</p>
+                  <p>It will no longer be available for new asset registrations. Existing assets will keep this category.</p>
+                  {Number(statusCandidate.activeAssetCount || 0) > 0 && (
+                    <p><strong>Warning:</strong> {statusCandidate.activeAssetCount} active {statusCandidate.activeAssetCount === 1 ? 'asset uses' : 'assets use'} this category.</p>
+                  )}
+                </div>
+                <div className="asset-category-modal-actions">
+                  <button type="button" className="asset-category-secondary-button" onClick={() => setStatusCandidate(null)} disabled={saving}>Cancel</button>
+                  <button type="button" className="asset-category-primary-button" onClick={() => updateCategoryStatus(statusCandidate, 'inactive')} disabled={saving}>
+                    {saving ? 'Saving...' : 'Deactivate'}
+                  </button>
+                </div>
+              </>
+            ) : deleteCandidate ? (
+              <>
+                <div className="asset-category-modal-header">
+                  <div>
+                    <span className="asset-category-modal-kicker">Confirm deletion</span>
+                    <h3 id="category-detail-title">{Number(deleteCandidate.assetCount || 0) > 0 ? 'Category Cannot Be Deleted' : 'Delete Category?'}</h3>
                   </div>
                   <button type="button" className="asset-category-close-button" onClick={() => setDeleteCandidate(null)} aria-label="Close delete confirmation">
                     <X size={18} aria-hidden="true" />
@@ -1052,12 +1166,32 @@ const AdminAssetCategories = () => {
                 </div>
 
                 <div className="asset-category-delete-panel">
-                  <p>This category is currently used by <strong>{deleteCandidate.assetCount}</strong> assets.</p>
-                  <p>Move or update those assets before deleting this category.</p>
+                  {Number(deleteCandidate.assetCount || 0) > 0 ? (
+                    <>
+                      <p>This category is currently used by <strong>{deleteCandidate.assetCount}</strong> assets and cannot be deleted.</p>
+                      <p>Reassign those assets first, or deactivate the category instead.</p>
+                    </>
+                  ) : (
+                    <p>Delete <strong>{deleteCandidate.name}</strong>? This action cannot be undone.</p>
+                  )}
                 </div>
 
                 <div className="asset-category-modal-actions">
-                  <button type="button" className="asset-category-primary-button" onClick={() => setDeleteCandidate(null)}>Close</button>
+                  <button type="button" className="asset-category-secondary-button" onClick={() => setDeleteCandidate(null)} disabled={saving}>
+                    {Number(deleteCandidate.assetCount || 0) > 0 ? 'Close' : 'Cancel'}
+                  </button>
+                  {Number(deleteCandidate.assetCount || 0) > 0 ? (
+                    <button type="button" className="asset-category-primary-button" onClick={() => {
+                      setStatusCandidate(deleteCandidate);
+                      setDeleteCandidate(null);
+                    }}>
+                      Deactivate Instead
+                    </button>
+                  ) : (
+                    <button type="button" className="asset-category-primary-button" onClick={removeCategory} disabled={saving}>
+                      {saving ? 'Deleting...' : 'Delete Category'}
+                    </button>
+                  )}
                 </div>
               </>
             ) : (
@@ -1098,6 +1232,7 @@ const AdminAssetCategories = () => {
 
                 <div className="asset-category-modal-actions">
                   <button type="button" className="asset-category-secondary-button" onClick={() => setViewCategory(null)}>Close</button>
+                  <button type="button" className="asset-category-link-button" onClick={() => showAssets(viewCategory)}>View Assets</button>
                   {canManageCategories && (
                     <button type="button" className="asset-category-primary-button" onClick={() => {
                       setViewCategory(null);
@@ -2415,7 +2550,6 @@ const AdminHeader = ({ userName, roleLabel, unreadCount, onLogout, adminTheme, s
 
             const AdminLayout = () => (
               <>
-                <a className="admin-skip-link" href="#admin-main-content">Skip to content</a>
                 <Outlet />
               </>
             );
@@ -3518,7 +3652,7 @@ function AppContent() {
             
             {/* Asset Management */}
             <Route path="assets" element={<AdminAssets />} />
-            <Route path="assets/create" element={<AssetCreate />} />
+            <Route path="assets/create" element={<Navigate to="/admin/assets" replace />} />
             <Route path="assets/:id" element={<AssetDetails />} />
             <Route path="assets/categories" element={<AdminAssetCategories />} />
             <Route path="assets/locations" element={<AdminAssetLocations />} />

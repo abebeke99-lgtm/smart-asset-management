@@ -2895,17 +2895,34 @@ body.dark .spinner {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  background: #2563EB;
   color: #ffffff;
-  border-color: #1d4ed8;
+  border-color: #2563EB;
   padding: 11px 18px;
   min-height: 44px;
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.18);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.18);
 }
 
 .asset-category-primary-button:hover,
 .asset-category-primary-button:focus-visible {
-  background: linear-gradient(135deg, #1e40af, #1d4ed8);
+  background: #1D4ED8;
+  border-color: #1D4ED8;
+}
+
+.asset-category-primary-button:disabled,
+.asset-category-secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.asset-category-success {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  background: #f0fdf4;
+  color: #166534;
+  font-weight: 700;
 }
 
 .asset-category-secondary-button {
@@ -3090,7 +3107,7 @@ body.dark .spinner {
 .asset-category-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 820px;
+  min-width: 1040px;
 }
 
 .asset-category-table th,
@@ -3128,6 +3145,16 @@ body.dark .spinner {
   background: #eff6ff;
   color: #1d4ed8;
   flex-shrink: 0;
+}
+
+.asset-category-code {
+  display: inline-flex;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .asset-category-cell-muted {
@@ -3394,6 +3421,7 @@ body.dark .spinner {
 }
 
 .asset-category-form-error {
+  grid-column: 1 / -1;
   margin-top: 16px;
   background: #fef2f2;
   color: #b91c1c;
@@ -3404,6 +3432,7 @@ body.dark .spinner {
 }
 
 .asset-category-modal-actions {
+  grid-column: 1 / -1;
   display: flex;
   justify-content: flex-end;
   gap: 12px;

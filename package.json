@@ -8,6 +8,6 @@
   "scripts": {
     "start": "npm --prefix backend start",
     "test": "npm --prefix backend test",
-    "dev": "node scripts/start-all.js --dev"
+    "dev": "npm --prefix backend run dev"
   }
 }

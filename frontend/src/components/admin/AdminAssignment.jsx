@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, ArrowRight, Building2, CalendarClock, CheckCircle2, ChevronDown, ClipboardList, Clock3, Eye, Filter, LoaderCircle, MoreHorizontal, PackageSearch, Plus, RefreshCw, Search, ShieldCheck, UserCheck, X } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { AlertTriangle, Building2, CalendarClock, CheckCircle2, ClipboardList, Clock3, Eye, Filter, LoaderCircle, MoreHorizontal, PackageSearch, Plus, RefreshCw, Search, ShieldCheck, UserCheck, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useLanguage } from '../../contexts/UiContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { apiClient as axios } from '../../utils/api';
+
+const ASSIGNMENT_ASSET_PAGE_LIMIT = 50;
 
 export const parseExpectedReturnDate = (assignment) => {
   if (assignment?.expected_return_date) return assignment.expected_return_date;
@@ -39,6 +42,9 @@ export const getAssignmentLifecycleStatus = (assignment) => {
 
   if (isReturned) {
     return 'returned';
+  }
+  if (['closed', 'reassigned', 'cancelled'].includes(rawStatus)) {
+    return 'closed';
   }
 
   const expectedReturn = parseExpectedReturnDate(assignment);
@@ -87,6 +93,8 @@ export const buildAssignmentSummary = (rows = []) => {
 
 const AdminAssignment = () => {
   const { language, theme } = useLanguage();
+  const { user } = useAuth();
+  const routeLocation = useLocation();
   const isDark = theme === 'dark';
   const t = language === 'en' ? englishTranslations : amharicTranslations;
 
@@ -94,9 +102,13 @@ const AdminAssignment = () => {
   const [assets, setAssets] = useState([]);
   const [users, setUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [colleges, setColleges] = useState([]);
+  const [laboratories, setLaboratories] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [referenceDataError, setReferenceDataError] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [selectedReturnAssignment, setSelectedReturnAssignment] = useState(null);
@@ -107,22 +119,34 @@ const AdminAssignment = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterDepartment, setFilterDepartment] = useState('all');
   const [filterUser, setFilterUser] = useState('all');
+  const [filterType, setFilterType] = useState('all');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
   const [filterDateRange, setFilterDateRange] = useState('all');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [serverPagination, setServerPagination] = useState({ total: 0, pages: 1 });
   const [saving, setSaving] = useState(false);
   const [returningId, setReturningId] = useState(null);
   const [actionMenuId, setActionMenuId] = useState(null);
+  const [reassignCandidate, setReassignCandidate] = useState(null);
+  const [reassigningAssignment, setReassigningAssignment] = useState(null);
   const [summary, setSummary] = useState(buildAssignmentSummary([]));
 
   const [formData, setFormData] = useState({
     assetId: '',
+    assignedToType: 'user',
     assignedTo: '',
+    college: '',
     department: '',
+    laboratory: '',
     location: '',
+    condition: 'Good',
     assignmentDate: new Date().toISOString().split('T')[0],
     expectedReturnDate: '',
     notes: '',
   });
+  const [assetSearch, setAssetSearch] = useState('');
 
   const itemsPerPage = 10;
 
@@ -142,12 +166,32 @@ const AdminAssignment = () => {
   const getAssetTag = (asset) => asset?.assetCode || asset?.asset_code || asset?.assetTag || asset?.asset_tag || `AST-${asset?.id || ''}`;
   const getAssetName = (asset) => asset?.name || asset?.asset_name || 'Unnamed asset';
 
-  const fetchAssignments = useCallback(async () => {
+  const fetchAssignments = useCallback(async (requestedPage = currentPage) => {
     try {
-      const response = await axios.get('/api/assignments', { params: { page: 1, limit: 500 } });
+      const params = {
+        page: requestedPage,
+        limit: itemsPerPage,
+        search: debouncedSearch || undefined,
+        status: filterStatus === 'all' ? undefined : filterStatus,
+        department: filterDepartment === 'all' ? undefined : filterDepartment,
+        assigned_to: filterUser === 'all' ? undefined : filterUser,
+        type: filterType === 'all' ? undefined : filterType,
+        dateFrom: filterDateFrom || undefined,
+        dateTo: filterDateTo || undefined,
+      };
+      if (filterDateRange === 'assignment-30' && !params.dateFrom) {
+        params.dateFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      } else if (filterDateRange === 'overdue' && !params.status) {
+        params.status = 'overdue';
+      } else if (filterDateRange === 'expected-30') {
+        params.expectedFrom = new Date().toISOString().slice(0, 10);
+        params.expectedTo = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      }
+      const response = await axios.get('/api/assignments', { params });
       const rows = extractArray(response, ['assignments', 'data']);
       setAssignments(rows);
       setSummary(buildAssignmentSummary(rows));
+      setServerPagination(response?.data?.pagination || { total: response?.data?.total || rows.length, pages: 1 });
       setLoadError(false);
       return rows;
     } catch (error) {
@@ -157,53 +201,107 @@ const AdminAssignment = () => {
       setLoadError(true);
       throw error;
     }
-  }, [extractArray]);
+  }, [currentPage, debouncedSearch, extractArray, filterDateFrom, filterDateRange, filterDateTo, filterDepartment, filterStatus, filterType, filterUser]);
 
   const fetchAssets = useCallback(async () => {
     try {
-      const response = await axios.get('/api/assets');
+      const response = await axios.get('/api/assets', { params: { page: 1, limit: ASSIGNMENT_ASSET_PAGE_LIMIT } });
       const rows = extractArray(response, ['assets', 'data']);
-      setAssets(rows);
-      return rows;
+      const pages = Number(response?.data?.pagination?.pages) || 1;
+      const remainingPages = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, index) => axios.get('/api/assets', { params: { page: index + 2, limit: ASSIGNMENT_ASSET_PAGE_LIMIT } })));
+      const allRows = rows.concat(...remainingPages.map((page) => extractArray(page, ['assets', 'data'])));
+      setAssets(allRows);
+      return allRows;
     } catch (error) {
       console.error('Failed to load assets:', error);
       setAssets([]);
-      return [];
+      throw error;
     }
   }, [extractArray]);
 
   const fetchUsers = useCallback(async () => {
     try {
       const response = await axios.get('/api/users');
-      const rows = extractArray(response, ['users', 'data']);
+      const rows = extractArray(response, ['users', 'data']).filter((recipient) => recipient.active !== false && recipient.active !== 0 && !['disabled', 'suspended', 'blocked'].includes(String(recipient.status || '').toLowerCase()));
       setUsers(rows);
       return rows;
     } catch (error) {
       console.error('Failed to load users:', error);
       setUsers([]);
-      return [];
+      throw error;
     }
   }, [extractArray]);
 
   const fetchDepartments = useCallback(async () => {
     try {
-      const response = await axios.get('/api/departments');
-      const rows = extractArray(response, ['departments', 'data']);
-      setDepartments(rows);
-      return rows;
+      const firstPage = await axios.get('/api/departments', { params: { page: 1, limit: 100 } });
+      const rows = extractArray(firstPage, ['departments', 'data']);
+      const pages = Number(firstPage?.data?.pagination?.pages) || 1;
+      const remainingPages = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, index) => axios.get('/api/departments', { params: { page: index + 2, limit: 100 } })));
+      const allRows = rows.concat(...remainingPages.map((page) => extractArray(page, ['departments', 'data']))).filter((department) => String(department.status || 'active').toLowerCase() === 'active');
+      setDepartments(allRows);
+      return allRows;
     } catch (error) {
       console.error('Failed to load departments:', error);
       setDepartments([]);
-      return [];
+      throw error;
+    }
+  }, [extractArray]);
+
+  const fetchColleges = useCallback(async () => {
+    try {
+      const firstPage = await axios.get('/api/admin/colleges', { params: { page: 1, limit: 100 } });
+      const rows = extractArray(firstPage, ['colleges', 'data']);
+      const pages = Number(firstPage?.data?.pagination?.pages) || 1;
+      const remainingPages = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, index) => axios.get('/api/admin/colleges', { params: { page: index + 2, limit: 100 } })));
+      const allRows = rows.concat(...remainingPages.map((page) => extractArray(page, ['colleges', 'data']))).filter((college) => String(college.status || 'active').toLowerCase() === 'active');
+      setColleges(allRows);
+      return allRows;
+    } catch (error) {
+      console.error('Failed to load colleges:', error);
+      setColleges([]);
+      throw error;
+    }
+  }, [extractArray]);
+
+  const fetchLaboratories = useCallback(async () => {
+    try {
+      const response = await axios.get('/api/locations/rooms', { params: { room_type: 'laboratory', status: 'active', limit: 500 } });
+      const rows = extractArray(response, ['rooms', 'data']).filter((room) => String(room.status || 'active').toLowerCase() === 'active' && String(room.roomType || room.room_type || '').toLowerCase().includes('lab'));
+      setLaboratories(rows);
+      return rows;
+    } catch (error) {
+      console.error('Failed to load laboratories:', error);
+      setLaboratories([]);
+      throw error;
+    }
+  }, [extractArray]);
+
+  const fetchLocations = useCallback(async () => {
+    try {
+      const response = await axios.get('/api/locations');
+      const rows = extractArray(response, ['locations', 'data']);
+      setLocations(rows);
+      return rows;
+    } catch (error) {
+      console.error('Failed to load locations:', error);
+      setLocations([]);
+      throw error;
     }
   }, [extractArray]);
 
   const resetForm = useCallback(() => {
+    setReassigningAssignment(null);
+    setAssetSearch('');
     setFormData({
       assetId: '',
+      assignedToType: 'user',
       assignedTo: '',
+      college: '',
       department: '',
+      laboratory: '',
       location: '',
+      condition: 'Good',
       assignmentDate: new Date().toISOString().split('T')[0],
       expectedReturnDate: '',
       notes: '',
@@ -217,13 +315,18 @@ const AdminAssignment = () => {
       setLoading(true);
       try {
         await Promise.all([
-          fetchAssignments(),
           fetchAssets(),
           fetchUsers(),
           fetchDepartments(),
+          fetchColleges(),
+          fetchLaboratories(),
+          fetchLocations(),
         ]);
       } catch (error) {
-        if (mounted) setLoadError(true);
+        if (mounted) {
+          setReferenceDataError(true);
+          setLoadError(true);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -233,7 +336,38 @@ const AdminAssignment = () => {
     return () => {
       mounted = false;
     };
-  }, [fetchAssignments, fetchAssets, fetchUsers, fetchDepartments]);
+  }, [fetchAssets, fetchUsers, fetchDepartments, fetchColleges, fetchLaboratories, fetchLocations]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(searchQuery.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchAssignments()
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false));
+  }, [fetchAssignments]);
+
+  useEffect(() => {
+    const requestedAssetId = new URLSearchParams(routeLocation.search).get('assetId') || routeLocation.state?.assetId || routeLocation.state?.asset?.id;
+    if (!requestedAssetId || !assets.length) return;
+    const availableAsset = assets.find((asset) => String(asset.id) === String(requestedAssetId) && getAssetStatus(asset) === 'available');
+    if (!availableAsset) {
+      toast.error('The requested asset is no longer available for assignment.');
+      return;
+    }
+    setFormData((current) => ({
+      ...current,
+      assetId: String(availableAsset.id),
+      college: String(availableAsset.collegeId || availableAsset.college_id || ''),
+      department: String(availableAsset.departmentId || availableAsset.department_id || ''),
+      location: availableAsset.location || '',
+    }));
+    setAssetSearch(`${getAssetTag(availableAsset)} — ${getAssetName(availableAsset)}${availableAsset.serialNumber || availableAsset.serial_number ? ` — ${availableAsset.serialNumber || availableAsset.serial_number}` : ''}`);
+    setShowForm(true);
+  }, [assets, routeLocation]);
 
   const openNewAssignment = () => {
     resetForm();
@@ -246,77 +380,125 @@ const AdminAssignment = () => {
     resetForm();
   };
 
+  const beginReassignment = () => {
+    const assignment = reassignCandidate;
+    if (!assignment) return;
+    const targetType = assignment.assigned_to_type || 'user';
+    const targetId = assignment.assigned_to_id || assignment.assigned_to || '';
+    const asset = assets.find((item) => String(item.id) === String(assignment.asset_id || assignment.assetId));
+    setReassignCandidate(null);
+    setReassigningAssignment(assignment);
+    setFormData({
+      assetId: String(assignment.asset_id || assignment.assetId || ''),
+      assignedToType: targetType,
+      assignedTo: String(targetId),
+      college: String(assignment.asset_college_id || asset?.collegeId || asset?.college_id || ''),
+      department: String(assignment.department_id || asset?.departmentId || asset?.department_id || ''),
+      laboratory: targetType === 'laboratory' ? String(targetId) : '',
+      location: assignment.location || asset?.location || '',
+      condition: assignment.condition || asset?.condition || 'Good',
+      assignmentDate: new Date().toISOString().split('T')[0],
+      expectedReturnDate: parseExpectedReturnDate(assignment) || '',
+      notes: assignment.notes || '',
+    });
+    setAssetSearch(`${assignment.asset_tag || getAssetTag(asset || {})} — ${assignment.asset_name || asset?.name || 'Asset'}${assignment.asset_serial || asset?.serialNumber ? ` — ${assignment.asset_serial || asset.serialNumber}` : ''}`);
+    setShowForm(true);
+  };
+
   const availableAssets = useMemo(
     () => assets.filter((asset) => {
       const status = getAssetStatus(asset);
       const active = assignments.some((assignment) => {
         const sameAsset = String(assignment.asset_id ?? assignment.assetId ?? assignment.asset?.id) === String(asset.id);
-        return sameAsset && getAssignmentLifecycleStatus(assignment) !== 'returned';
+        return sameAsset && String(assignment.status || '').toLowerCase() === 'active';
       });
 
-      return (!status || status === 'available') && !active;
+      return status === 'available' && !active;
     }),
     [assets, assignments]
   );
+  const scopedDepartments = useMemo(
+    () => departments.filter((department) => !formData.college || String(department.collegeId || department.college_id || '') === String(formData.college)),
+    [departments, formData.college]
+  );
+  const scopedUsers = useMemo(
+    () => users.filter((recipient) => (
+      (!formData.college || String(recipient.collegeId || recipient.college_id || '') === String(formData.college))
+      && (!formData.department || String(recipient.departmentId || recipient.department_id || '') === String(formData.department))
+    )),
+    [users, formData.college, formData.department]
+  );
+  const selectedCollege = colleges.find((college) => String(college.id) === String(formData.college));
+  const scopedLaboratories = useMemo(
+    () => laboratories.filter((laboratory) => (
+      (!selectedCollege?.campusId && !selectedCollege?.campus_id)
+      || String(laboratory.campusId || laboratory.campus_id || '') === String(selectedCollege?.campusId || selectedCollege?.campus_id)
+    )),
+    [laboratories, selectedCollege]
+  );
+  const formAsset = assets.find((asset) => String(asset.id) === String(formData.assetId));
+  const assetOptions = reassigningAssignment
+    ? [formAsset].filter(Boolean)
+    : availableAssets;
 
-  const filteredAssignments = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
-    return assignments.filter((assignment) => {
-      const searchValues = [
-        assignment.asset_tag,
-        assignment.asset_name,
-        assignment.asset_code,
-        assignment.assigned_to_name,
-        assignment.user_name,
-        assignment.department_name,
-        assignment.department,
-        assignment.location,
-        assignment.notes,
-      ];
-
-      const matchesSearch = !query || searchValues.some((value) => String(value || '').toLowerCase().includes(query));
-      const status = getAssignmentLifecycleStatus(assignment);
-      const matchesStatus = filterStatus === 'all' || status === filterStatus.replace(' ', '-');
-
-      const assignmentDepartment = String(assignment.department_id || assignment.department || assignment.department_name || '').toLowerCase();
-      const matchesDepartment = filterDepartment === 'all' || assignmentDepartment === String(filterDepartment).toLowerCase();
-      const matchesUser = filterUser === 'all' || String(assignment.assigned_to || assignment.assignedTo) === String(filterUser);
-
-      let matchesDateRange = true;
-      if (filterDateRange === 'assignment-30') {
-        const assignmentDate = new Date(assignment.assigned_date || assignment.assignment_date || assignment.createdAt || '');
-        const now = new Date();
-        const startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        matchesDateRange = !Number.isNaN(assignmentDate.getTime()) && assignmentDate >= startDate;
-      }
-      if (filterDateRange === 'expected-30') {
-        const now = new Date();
-        const expectedDate = new Date(parseExpectedReturnDate(assignment));
-        const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-        matchesDateRange = !Number.isNaN(expectedDate.getTime()) && expectedDate >= now && expectedDate <= endDate;
-      }
-      if (filterDateRange === 'overdue') {
-        matchesDateRange = status === 'overdue';
-      }
-
-      return matchesSearch && matchesStatus && matchesDepartment && matchesUser && matchesDateRange;
-    });
-  }, [assignments, filterDateRange, filterDepartment, filterStatus, filterUser, searchQuery]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredAssignments.length / itemsPerPage));
+  const totalPages = Math.max(1, Number(serverPagination.pages) || 1);
 
   useEffect(() => {
     setCurrentPage((page) => Math.min(page, totalPages));
   }, [totalPages]);
 
-  const paginatedAssignments = filteredAssignments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const startItem = filteredAssignments.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
-  const endItem = Math.min(currentPage * itemsPerPage, filteredAssignments.length);
+  const paginatedAssignments = assignments;
+  const totalRecords = Number(serverPagination.total) || 0;
+  const startItem = totalRecords === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalRecords);
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
-    setFormData((previous) => ({ ...previous, [name]: value }));
+    setFormData((previous) => {
+      if (name === 'assignedToType') {
+        const nextDepartment = value === 'user' ? '' : previous.department;
+        const nextLaboratory = value === 'laboratory' ? previous.laboratory : '';
+        return {
+          ...previous,
+          assignedToType: value,
+          department: nextDepartment,
+          laboratory: nextLaboratory,
+          assignedTo: value === 'department' ? nextDepartment : value === 'laboratory' ? nextLaboratory : '',
+        };
+      }
+      if (name === 'college') return { ...previous, college: value, department: '', laboratory: '', assignedTo: '' };
+      if (name === 'department') return { ...previous, department: value, laboratory: '', assignedTo: previous.assignedToType === 'department' ? value : '' };
+      if (name === 'laboratory') return { ...previous, laboratory: value, assignedTo: previous.assignedToType === 'laboratory' ? value : previous.assignedTo };
+      if (name === 'assignedTo' && previous.assignedToType === 'user') {
+        const selectedUser = users.find((recipient) => String(recipient.id) === String(value));
+        return {
+          ...previous,
+          assignedTo: value,
+          ...(selectedUser ? {
+            college: String(selectedUser.collegeId || selectedUser.college_id || previous.college || ''),
+            department: String(selectedUser.departmentId || selectedUser.department_id || previous.department || ''),
+          } : {}),
+        };
+      }
+      return { ...previous, [name]: value };
+    });
+  };
+
+  const handleAssetSearchChange = (value) => {
+    setAssetSearch(value);
+    const match = assetOptions.find((asset) => (
+      value === String(asset.id)
+      || value === `${getAssetTag(asset)} — ${getAssetName(asset)}${asset.serialNumber || asset.serial_number ? ` — ${asset.serialNumber || asset.serial_number}` : ''} (ID: ${asset.id})`
+    ));
+    setFormData((previous) => ({
+      ...previous,
+      assetId: match ? String(match.id) : '',
+      ...(match ? {
+        college: String(match.collegeId || match.college_id || ''),
+        department: String(match.departmentId || match.department_id || ''),
+        location: match.location || '',
+      } : {}),
+    }));
   };
 
   const handleSubmit = async (event) => {
@@ -329,30 +511,17 @@ const AdminAssignment = () => {
     }
 
     if (!formData.assignedTo) {
-      toast.error(t.assigneeRequired || 'Please select a user.');
+      toast.error('Please select a User, Department or Laboratory.');
       return;
     }
-
-    if (!formData.assignmentDate) {
-      toast.error(t.assignmentDateRequired || 'Assignment date is required.');
-      return;
-    }
-
-    const assignmentDate = new Date(formData.assignmentDate);
     const expectedReturnDate = formData.expectedReturnDate ? new Date(formData.expectedReturnDate) : null;
-
-    if (Number.isNaN(assignmentDate.getTime())) {
-      toast.error(t.invalidDate || 'Please enter a valid assignment date.');
-      return;
-    }
-
     if (expectedReturnDate && Number.isNaN(expectedReturnDate.getTime())) {
       toast.error(t.invalidReturnDate || 'Please enter a valid expected return date.');
       return;
     }
 
-    if (expectedReturnDate && expectedReturnDate < assignmentDate) {
-      toast.error(t.returnDateError || 'Expected return date cannot be before the assignment date.');
+    if (expectedReturnDate && expectedReturnDate < new Date()) {
+      toast.error('Expected return date cannot be in the past.');
       return;
     }
 
@@ -363,18 +532,21 @@ const AdminAssignment = () => {
     }
 
     const status = getAssetStatus(selectedAsset);
-    if (status && status !== 'available') {
+    if (status !== 'available') {
       toast.error(t.assetUnavailable || 'This asset is not available for assignment.');
       return;
     }
 
-    const alreadyAssigned = assignments.some((assignment) => {
-      const sameAsset = String(assignment.asset_id ?? assignment.assetId ?? assignment.asset?.id) === String(formData.assetId);
-      return sameAsset && getAssignmentLifecycleStatus(assignment) !== 'returned';
-    });
-
-    if (alreadyAssigned) {
-      toast.error(t.assetAlreadyAssigned || 'This asset already has an active assignment.');
+    if (formData.assignedToType === 'laboratory' && (!formData.college || !formData.department || !formData.laboratory)) {
+      toast.error('Select a college, department and laboratory.');
+      return;
+    }
+    if (formData.assignedToType === 'department' && (!formData.college || !formData.department)) {
+      toast.error('Select a college and department.');
+      return;
+    }
+    if (formData.assignedToType === 'user' && formData.department && !formData.college) {
+      toast.error('Select the college before selecting a department.');
       return;
     }
 
@@ -383,19 +555,27 @@ const AdminAssignment = () => {
     try {
       const payload = {
         asset_id: formData.assetId,
-        assigned_to: formData.assignedTo,
+        assigned_to_type: formData.assignedToType,
+        assigned_to_id: formData.assignedTo,
+        college_id: formData.college || null,
         department_id: formData.department || null,
+        laboratory_id: formData.laboratory || null,
         location: formData.location.trim() || null,
-        assigned_date: formData.assignmentDate,
+        condition_at_assignment: formData.condition,
         expected_return_date: formData.expectedReturnDate || null,
         notes: formData.notes.trim() || null,
       };
 
-      await axios.post('/api/assignments', payload);
-      toast.success(t.assignmentCreated || 'Asset assigned successfully.');
-      closeForm();
+      if (reassigningAssignment) {
+        await axios.post(`/api/assignments/${reassigningAssignment.id}/transfer`, payload);
+        toast.success('Asset reassigned successfully.');
+      } else {
+        await axios.post('/api/assignments', payload);
+        toast.success(t.assignmentCreated || 'Asset assigned successfully.');
+      }
       setCurrentPage(1);
-      await Promise.all([fetchAssignments(), fetchAssets()]);
+      closeForm();
+      await Promise.all([fetchAssignments(1), fetchAssets()]);
     } catch (error) {
       console.error('Failed to create assignment:', error);
       toast.error(error?.response?.data?.message || t.assignmentCreateFailed || 'Unable to create assignment.');
@@ -445,7 +625,9 @@ const AdminAssignment = () => {
   const refreshData = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([fetchAssignments(), fetchAssets(), fetchUsers(), fetchDepartments()]);
+      await Promise.all([fetchAssignments(), fetchAssets(), fetchUsers(), fetchDepartments(), fetchColleges(), fetchLaboratories(), fetchLocations()]);
+      setLoadError(false);
+      setReferenceDataError(false);
       toast.success(t.refreshed || 'Data refreshed successfully.');
     } catch (error) {
       toast.error(t.refreshFailed || 'Failed to refresh data.');
@@ -459,6 +641,9 @@ const AdminAssignment = () => {
     setFilterStatus('all');
     setFilterDepartment('all');
     setFilterUser('all');
+    setFilterType('all');
+    setFilterDateFrom('');
+    setFilterDateTo('');
     setFilterDateRange('all');
     setCurrentPage(1);
   };
@@ -475,7 +660,7 @@ const AdminAssignment = () => {
     page: {
       minHeight: '100vh',
       padding: '24px',
-      background: isDark ? 'var(--color-background-dark, #0f172a)' : 'var(--color-background, #f8fafc)',
+      background: isDark ? 'var(--color-background-dark, #0f172a)' : 'var(--color-background, #F3F6F9)',
       color: isDark ? '#dfeaf9' : '#0f172a',
     },
     shell: {
@@ -803,7 +988,7 @@ const AdminAssignment = () => {
       cursor: disabled ? 'not-allowed' : 'pointer',
       opacity: disabled ? 0.6 : 1,
     }),
-  }));
+  }), [isDark]);
 
   if (loading) {
     return (
@@ -896,7 +1081,7 @@ const AdminAssignment = () => {
             <div style={styles.modal} onClick={(event) => event.stopPropagation()}>
               <div style={styles.modalHeader}>
                 <div>
-                  <h2 style={styles.modalTitle}>{t.newAssignment}</h2>
+                  <h2 style={styles.modalTitle}>{reassigningAssignment ? 'Reassign Asset' : t.newAssignment}</h2>
                   <p style={{ ...styles.muted, margin: '6px 0 0' }}>{t.assignmentDescription}</p>
                 </div>
                 <button type="button" style={styles.secondaryButton} onClick={closeForm} aria-label={t.close}><X size={16} /></button>
@@ -907,51 +1092,130 @@ const AdminAssignment = () => {
                   <div style={styles.formGrid}>
                     <div style={styles.formGroup}>
                       <label style={styles.label}>{t.asset} *</label>
-                      <select name="assetId" value={formData.assetId} onChange={handleInputChange} style={styles.formInput} required>
-                        <option value="">{t.selectAsset}</option>
-                        {availableAssets.map((asset) => (
-                          <option key={asset.id} value={asset.id}>
-                            {getAssetTag(asset)} — {getAssetName(asset)}
-                          </option>
+                      <input
+                        type="search"
+                        value={assetSearch}
+                        onChange={(event) => handleAssetSearchChange(event.target.value)}
+                        placeholder="Search Asset ID, name or serial number"
+                        style={styles.formInput}
+                        list="available-asset-options"
+                        required
+                        disabled={Boolean(reassigningAssignment)}
+                        aria-label="Search assets by ID, name or serial number"
+                      />
+                      <datalist id="available-asset-options">
+                        {assetOptions.map((asset) => (
+                          <option key={asset.id} value={`${getAssetTag(asset)} — ${getAssetName(asset)}${asset.serialNumber || asset.serial_number ? ` — ${asset.serialNumber || asset.serial_number}` : ''} (ID: ${asset.id})`} />
                         ))}
+                      </datalist>
+                      <label style={styles.label} htmlFor="assignment-asset-id">Asset ID</label>
+                      <input id="assignment-asset-id" value={formData.assetId} readOnly style={styles.formInput} />
+                    </div>
+
+                    <div style={styles.formGroup}>
+                      <label style={styles.label} htmlFor="assignment-recipient-type">Assigned To Type *</label>
+                      <select id="assignment-recipient-type" name="assignedToType" value={formData.assignedToType} onChange={handleInputChange} style={styles.formInput}>
+                        <option value="user">User</option>
+                        <option value="department">Department</option>
+                        <option value="laboratory">Laboratory</option>
                       </select>
                     </div>
 
                     <div style={styles.formGroup}>
-                      <label style={styles.label}>{t.assignedTo} *</label>
-                      <select name="assignedTo" value={formData.assignedTo} onChange={handleInputChange} style={styles.formInput} required>
-                        <option value="">{t.selectUser}</option>
-                        {users.map((user) => (
-                          <option key={user.id} value={user.id}>
-                            {getUserName(user)}{user.role ? ` — ${user.role}` : ''}
-                          </option>
+                      <label style={styles.label} htmlFor="assignment-college">College{formData.assignedToType !== 'user' ? ' *' : ''}</label>
+                      <select id="assignment-college" name="college" value={formData.college} onChange={handleInputChange} style={styles.formInput} required={formData.assignedToType !== 'user'}>
+                        <option value="">Select college</option>
+                        {colleges.map((college) => (
+                          <option key={college.id} value={college.id}>{college.name || college.collegeName || `College ${college.id}`}</option>
                         ))}
                       </select>
                     </div>
 
+                    {(formData.assignedToType !== 'user' || formData.college) && (
+                      <div style={styles.formGroup}>
+                        <label style={styles.label} htmlFor="assignment-department">{formData.assignedToType === 'department' ? 'Assigned To Department *' : `Department${formData.assignedToType === 'laboratory' ? ' *' : ''}`}</label>
+                        <select
+                          id="assignment-department"
+                          name="department"
+                          value={formData.department}
+                          onChange={handleInputChange}
+                          style={styles.formInput}
+                          required={formData.assignedToType !== 'user'}
+                          disabled={!formData.college}
+                        >
+                          <option value="">Select department</option>
+                          {scopedDepartments.map((department) => (
+                            <option key={department.id} value={department.id}>{getDepartmentName(department)}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {formData.assignedToType === 'user' && (
+                      <div style={styles.formGroup}>
+                        <label style={styles.label} htmlFor="assignment-user">Assigned To *</label>
+                        <select id="assignment-user" name="assignedTo" value={formData.assignedTo} onChange={handleInputChange} style={styles.formInput} required>
+                          <option value="">Select user</option>
+                          {scopedUsers.map((recipient) => (
+                            <option key={recipient.id} value={recipient.id}>
+                              {getUserName(recipient)}{recipient.role ? ` — ${recipient.role}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {formData.assignedToType === 'laboratory' && (
+                      <div style={styles.formGroup}>
+                        <label style={styles.label} htmlFor="assignment-laboratory">Assigned To Laboratory *</label>
+                        <select
+                          id="assignment-laboratory"
+                          name="laboratory"
+                          value={formData.laboratory}
+                          onChange={handleInputChange}
+                          style={styles.formInput}
+                          required
+                          disabled={!formData.department}
+                        >
+                          <option value="">Select laboratory</option>
+                          {scopedLaboratories.map((laboratory) => (
+                            <option key={laboratory.id} value={laboratory.id}>
+                              {laboratory.roomName || laboratory.room_name || laboratory.name} ({laboratory.roomCode || laboratory.room_code || laboratory.id})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
                     <div style={styles.formGroup}>
-                      <label style={styles.label}>{t.department}</label>
-                      <select name="department" value={formData.department} onChange={handleInputChange} style={styles.formInput}>
-                        <option value="">{t.selectDepartment}</option>
-                        {departments.map((department) => (
-                          <option key={department.id} value={department.id}>{getDepartmentName(department)}</option>
-                        ))}
+                      <label style={styles.label} htmlFor="assignment-location">{t.location}</label>
+                      <input type="text" id="assignment-location" name="location" value={formData.location} onChange={handleInputChange} placeholder={t.enterLocation} style={styles.formInput} list="assignment-location-options" maxLength={255} />
+                      <datalist id="assignment-location-options">
+                        {locations.map((item) => <option key={item.id} value={item.name || item.locationName || item.location_name || ''} />)}
+                        {laboratories.map((item) => <option key={`room-${item.id}`} value={item.roomName || item.room_name || ''} />)}
+                      </datalist>
+                    </div>
+
+                    <div style={styles.formGroup}>
+                      <label style={styles.label} htmlFor="assignment-date">{t.assignmentDate}</label>
+                      <input id="assignment-date" type="date" value={formData.assignmentDate} readOnly style={styles.formInput} aria-readonly="true" />
+                    </div>
+
+                    <div style={styles.formGroup}>
+                      <label style={styles.label} htmlFor="assignment-condition">Condition *</label>
+                      <select id="assignment-condition" name="condition" value={formData.condition} onChange={handleInputChange} style={styles.formInput} required>
+                        {['Excellent', 'Good', 'Fair', 'Poor', 'Damaged'].map((condition) => <option key={condition} value={condition}>{condition}</option>)}
                       </select>
                     </div>
 
                     <div style={styles.formGroup}>
-                      <label style={styles.label}>{t.location}</label>
-                      <input type="text" name="location" value={formData.location} onChange={handleInputChange} placeholder={t.enterLocation} style={styles.formInput} />
+                      <label style={styles.label} htmlFor="assignment-return-date">{t.expectedReturn}</label>
+                      <input id="assignment-return-date" type="date" name="expectedReturnDate" value={formData.expectedReturnDate} onChange={handleInputChange} min={formData.assignmentDate} style={styles.formInput} />
                     </div>
 
                     <div style={styles.formGroup}>
-                      <label style={styles.label}>{t.assignmentDate} *</label>
-                      <input type="date" name="assignmentDate" value={formData.assignmentDate} onChange={handleInputChange} style={styles.formInput} required />
-                    </div>
-
-                    <div style={styles.formGroup}>
-                      <label style={styles.label}>{t.expectedReturn}</label>
-                      <input type="date" name="expectedReturnDate" value={formData.expectedReturnDate} onChange={handleInputChange} min={formData.assignmentDate} style={styles.formInput} />
+                      <label style={styles.label} htmlFor="assignment-by">Assigned By</label>
+                      <input id="assignment-by" value={user?.fullName || user?.full_name || user?.username || ''} readOnly style={styles.formInput} aria-readonly="true" />
                     </div>
                   </div>
 
@@ -962,9 +1226,9 @@ const AdminAssignment = () => {
 
                   <div style={styles.modalActions}>
                     <button type="button" style={styles.secondaryButton} onClick={closeForm} disabled={saving}>{t.cancel}</button>
-                    <button type="submit" style={{ ...styles.primaryButton, opacity: saving ? 0.7 : 1, cursor: saving ? 'not-allowed' : 'pointer' }} disabled={saving || availableAssets.length === 0}>
+                    <button type="submit" style={{ ...styles.primaryButton, opacity: saving ? 0.7 : 1, cursor: saving ? 'not-allowed' : 'pointer' }} disabled={saving || referenceDataError || (!reassigningAssignment && availableAssets.length === 0)}>
                       {saving ? <LoaderCircle size={16} className="spin" /> : <CheckCircle2 size={16} />}
-                      {saving ? t.saving : t.createAssignment}
+                      {saving ? t.saving : reassigningAssignment ? 'Confirm Reassignment' : t.createAssignment}
                     </button>
                   </div>
                 </form>
@@ -1003,6 +1267,27 @@ const AdminAssignment = () => {
           </div>
         )}
 
+        {reassignCandidate && (
+          <div style={styles.modalBackdrop} role="presentation" onClick={() => setReassignCandidate(null)}>
+            <div style={styles.modal} role="dialog" aria-modal="true" aria-labelledby="reassign-confirm-title" onClick={(event) => event.stopPropagation()}>
+              <div style={styles.modalHeader}>
+                <div>
+                  <h2 id="reassign-confirm-title" style={styles.modalTitle}>Confirm Reassignment</h2>
+                  <p style={{ ...styles.muted, margin: '6px 0 0' }}>The current assignment will be closed and a new history record will be created.</p>
+                </div>
+                <button type="button" style={styles.secondaryButton} onClick={() => setReassignCandidate(null)} aria-label={t.close}><X size={16} /></button>
+              </div>
+              <div style={styles.modalBody}>
+                <p>Reassign {reassignCandidate.asset_name || reassignCandidate.asset_tag || 'this asset'} from {reassignCandidate.assigned_to_name || 'the current holder'}?</p>
+                <div style={styles.modalActions}>
+                  <button type="button" style={styles.secondaryButton} onClick={() => setReassignCandidate(null)}>{t.cancel}</button>
+                  <button type="button" style={styles.primaryButton} onClick={beginReassignment}>Continue</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {selectedAssignment && (
           <div style={styles.modalBackdrop} onClick={() => setSelectedAssignment(null)}>
             <div style={styles.modal} onClick={(event) => event.stopPropagation()}>
@@ -1017,9 +1302,12 @@ const AdminAssignment = () => {
                 <div style={styles.formGrid}>
                   <div><strong>{t.asset}</strong><div style={styles.muted}>{selectedAssignment.asset_name || 'N/A'}</div></div>
                   <div><strong>{t.assignedTo}</strong><div style={styles.muted}>{selectedAssignment.assigned_to_name || selectedAssignment.user_name || 'N/A'}</div></div>
+                  <div><strong>Type</strong><div style={styles.muted}>{selectedAssignment.assigned_to_type || 'user'}</div></div>
                   <div><strong>{t.department}</strong><div style={styles.muted}>{selectedAssignment.department_name || selectedAssignment.department || 'Not specified'}</div></div>
                   <div><strong>{t.location}</strong><div style={styles.muted}>{selectedAssignment.location || 'Not specified'}</div></div>
                   <div><strong>{t.assignmentDate}</strong><div style={styles.muted}>{formatAssignmentDate(selectedAssignment.assigned_date || selectedAssignment.assignment_date)}</div></div>
+                  <div><strong>Condition</strong><div style={styles.muted}>{selectedAssignment.condition || 'Not specified'}</div></div>
+                  <div><strong>Assigned By</strong><div style={styles.muted}>{selectedAssignment.assigned_by_name || 'Not specified'}</div></div>
                   <div><strong>{t.expectedReturn}</strong><div style={styles.muted}>{formatAssignmentDate(parseExpectedReturnDate(selectedAssignment))}</div></div>
                   <div><strong>{t.status}</strong><div style={styles.muted}>{getAssignmentLifecycleStatus(selectedAssignment)}</div></div>
                   <div><strong>{t.notes}</strong><div style={styles.muted}>{selectedAssignment.notes || 'No notes provided.'}</div></div>
@@ -1071,6 +1359,12 @@ const AdminAssignment = () => {
           </div>
         )}
 
+        {referenceDataError && (
+          <div role="alert" style={{ marginBottom: '14px', padding: '12px 14px', borderRadius: '10px', background: '#FEF2F2', color: '#991B1B', border: '1px solid #FECACA' }}>
+            Some live assignment options could not be loaded. Refresh the page to retry before creating an assignment.
+          </div>
+        )}
+
         <section style={styles.toolbar}>
           <div style={styles.searchBox}>
             <Search size={16} color={isDark ? '#9aaec6' : '#64748b'} />
@@ -1083,6 +1377,14 @@ const AdminAssignment = () => {
             <option value="due-soon">{t.dueSoon}</option>
             <option value="overdue">{t.overdue}</option>
             <option value="returned">{t.returned}</option>
+            <option value="closed">Reassigned / Closed</option>
+          </select>
+
+          <select aria-label="Assigned To type" value={filterType} onChange={(event) => { setFilterType(event.target.value); setCurrentPage(1); }} style={styles.select}>
+            <option value="all">All Types</option>
+            <option value="user">User</option>
+            <option value="department">Department</option>
+            <option value="laboratory">Laboratory</option>
           </select>
 
           <select aria-label={t.department} value={filterDepartment} onChange={(event) => { setFilterDepartment(event.target.value); setCurrentPage(1); }} style={styles.select}>
@@ -1106,6 +1408,13 @@ const AdminAssignment = () => {
             <option value="overdue">{t.overdue}</option>
           </select>
 
+          <label style={styles.muted}>
+            From <input type="date" aria-label="Assignment date from" value={filterDateFrom} onChange={(event) => { setFilterDateFrom(event.target.value); setCurrentPage(1); }} style={styles.select} />
+          </label>
+          <label style={styles.muted}>
+            To <input type="date" aria-label="Assignment date to" value={filterDateTo} onChange={(event) => { setFilterDateTo(event.target.value); setCurrentPage(1); }} style={styles.select} />
+          </label>
+
           <button type="button" style={styles.secondaryButton} onClick={clearFilters}>
             <Filter size={16} />
             {t.clearFilters}
@@ -1121,9 +1430,9 @@ const AdminAssignment = () => {
           {paginatedAssignments.length === 0 ? (
             <div style={styles.emptyState}>
               <PackageSearch size={42} style={styles.emptyIcon} />
-              <h2 style={{ margin: '0 0 8px' }}>{searchQuery || filterStatus !== 'all' || filterDepartment !== 'all' || filterUser !== 'all' || filterDateRange !== 'all' ? t.noMatchingAssignments : t.noAssignments}</h2>
-              <p style={{ margin: '0 0 16px', maxWidth: '480px' }}>{searchQuery || filterStatus !== 'all' || filterDepartment !== 'all' || filterUser !== 'all' || filterDateRange !== 'all' ? t.noMatchingDescription : t.noAssignmentsDescription}</p>
-              {(searchQuery || filterStatus !== 'all' || filterDepartment !== 'all' || filterUser !== 'all' || filterDateRange !== 'all') ? (
+              <h2 style={{ margin: '0 0 8px' }}>{searchQuery || filterStatus !== 'all' || filterDepartment !== 'all' || filterUser !== 'all' || filterType !== 'all' || filterDateRange !== 'all' || filterDateFrom || filterDateTo ? t.noMatchingAssignments : t.noAssignments}</h2>
+              <p style={{ margin: '0 0 16px', maxWidth: '480px' }}>{searchQuery || filterStatus !== 'all' || filterDepartment !== 'all' || filterUser !== 'all' || filterType !== 'all' || filterDateRange !== 'all' || filterDateFrom || filterDateTo ? t.noMatchingDescription : t.noAssignmentsDescription}</p>
+              {(searchQuery || filterStatus !== 'all' || filterDepartment !== 'all' || filterUser !== 'all' || filterType !== 'all' || filterDateRange !== 'all' || filterDateFrom || filterDateTo) ? (
                 <button type="button" style={styles.secondaryButton} onClick={clearFilters}>{t.clearFilters}</button>
               ) : (
                 <button type="button" style={styles.primaryButton} onClick={openNewAssignment}><Plus size={16} /> {t.newAssignment}</button>
@@ -1137,8 +1446,12 @@ const AdminAssignment = () => {
                     <tr>
                       <th style={styles.th}>{t.asset}</th>
                       <th style={styles.th}>{t.assignedTo}</th>
+                      <th style={styles.th}>Type</th>
                       <th style={styles.th}>{t.department}</th>
                       <th style={styles.th}>{t.assignmentDate}</th>
+                      <th style={styles.th}>Condition</th>
+                      <th style={styles.th}>{t.location}</th>
+                      <th style={styles.th}>Assigned By</th>
                       <th style={styles.th}>{t.expectedReturn}</th>
                       <th style={styles.th}>{t.status}</th>
                       <th style={styles.th}>{t.actions}</th>
@@ -1150,7 +1463,9 @@ const AdminAssignment = () => {
                       const expectedReturn = parseExpectedReturnDate(assignment);
                       const assetId = assignment.asset_id ?? assignment.assetId ?? assignment.asset?.id;
                       const assetName = assignment.asset_name || assignment.asset?.name || 'Asset';
-                      const assignmentStatusLabel = status === 'active' ? t.active : status === 'due-soon' ? t.dueSoon : status === 'overdue' ? t.overdue : t.returned;
+                      const isOpen = ['active', 'due-soon', 'overdue'].includes(status);
+                      const assignmentStatusLabel = status === 'active' ? t.active : status === 'due-soon' ? t.dueSoon : status === 'overdue' ? t.overdue : status === 'returned' ? t.returned : 'Reassigned / Closed';
+                      const assignedToType = String(assignment.assigned_to_type || assignment.assignedToType || 'user');
 
                       return (
                         <tr key={assignment.id}>
@@ -1158,6 +1473,7 @@ const AdminAssignment = () => {
                             <div style={styles.assetTitle}>{assignment.asset_tag || assignment.asset_code || 'N/A'}</div>
                             <div style={styles.assetSubtitle}>{assetName}</div>
                           </td>
+                          <td style={styles.td}>{assignedToType.charAt(0).toUpperCase() + assignedToType.slice(1)}</td>
                           <td style={styles.td}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(37,99,235,0.12)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}><UserCheck size={14} /></span>
@@ -1174,6 +1490,9 @@ const AdminAssignment = () => {
                             </div>
                           </td>
                           <td style={styles.td}>{formatAssignmentDate(assignment.assigned_date || assignment.assignment_date || assignment.createdAt)}</td>
+                          <td style={styles.td}>{assignment.condition || '—'}</td>
+                          <td style={styles.td}>{assignment.location || '—'}</td>
+                          <td style={styles.td}>{assignment.assigned_by_name || '—'}</td>
                           <td style={styles.td}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <Clock3 size={14} color={status === 'overdue' ? '#b91c1c' : '#f59e0b'} />
@@ -1184,7 +1503,7 @@ const AdminAssignment = () => {
                           <td style={styles.td}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <button type="button" style={styles.actionButton} title={t.viewAsset} onClick={() => setSelectedAssignment(assignment)} aria-label={t.viewAsset}><Eye size={14} /></button>
-                              {status !== 'returned' && (
+                              {isOpen && (
                                 <button type="button" style={{ ...styles.actionButton, background: 'rgba(245,158,11,0.12)', color: '#b45309' }} title={t.returnAsset} aria-label={t.returnAsset} onClick={() => handleReturnAsset(assignment)} disabled={returningId === assignment.id}>
                                   {returningId === assignment.id ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />}
                                 </button>
@@ -1198,11 +1517,14 @@ const AdminAssignment = () => {
                                   <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 8px)', background: isDark ? '#0f172a' : '#ffffff', border: `1px solid ${isDark ? '#243244' : '#e2e8f0'}`, borderRadius: '10px', minWidth: '185px', boxShadow: 'var(--shadow-md)', zIndex: 100 }}>
                                     <button type="button" style={{ display: 'block', width: '100%', border: 'none', background: 'transparent', textAlign: 'left', padding: '10px 12px', cursor: 'pointer', color: isDark ? '#dfeaf9' : '#1e293b' }} onClick={() => { setSelectedAssignment(assignment); setActionMenuId(null); }}>{t.viewDetails}</button>
                                     <button type="button" style={{ display: 'block', width: '100%', border: 'none', background: 'transparent', textAlign: 'left', padding: '10px 12px', cursor: 'pointer', color: isDark ? '#dfeaf9' : '#1e293b' }} onClick={() => { if (assetId) handleViewHistory(assetId, assetName); setActionMenuId(null); }}>{t.viewHistory}</button>
-                                    {status !== 'returned' && (
+                                    {isOpen && (
                                       <button type="button" style={{ display: 'block', width: '100%', border: 'none', background: 'transparent', textAlign: 'left', padding: '10px 12px', cursor: 'pointer', color: isDark ? '#dfeaf9' : '#1e293b' }} onClick={() => { handleReturnAsset(assignment); setActionMenuId(null); }}>{t.returnAsset}</button>
                                     )}
+                                    {isOpen && (
+                                      <button type="button" style={{ display: 'block', width: '100%', border: 'none', background: 'transparent', textAlign: 'left', padding: '10px 12px', cursor: 'pointer', color: isDark ? '#dfeaf9' : '#1e293b' }} onClick={() => { setReassignCandidate(assignment); setActionMenuId(null); }}>Reassign</button>
+                                    )}
                                     {assignment.asset_id && (
-                                      <Link to={`/assets/${assignment.asset_id}`} style={{ display: 'block', textDecoration: 'none', padding: '10px 12px', color: isDark ? '#dfeaf9' : '#1e293b' }} onClick={() => setActionMenuId(null)}>{t.viewAsset}</Link>
+                                      <Link to={`/admin/assets/${assignment.asset_id}`} style={{ display: 'block', textDecoration: 'none', padding: '10px 12px', color: isDark ? '#dfeaf9' : '#1e293b' }} onClick={() => setActionMenuId(null)}>{t.viewAsset}</Link>
                                     )}
                                   </div>
                                 )}
@@ -1217,7 +1539,7 @@ const AdminAssignment = () => {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', flexWrap: 'wrap', gap: '12px', borderTop: `1px solid ${isDark ? '#243244' : '#e2e8f0'}` }}>
-                <div style={styles.muted}>{t.showing} {startItem}–{endItem} {t.of} {filteredAssignments.length}</div>
+                <div style={styles.muted}>{t.showing} {startItem}–{endItem} {t.of} {totalRecords}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1} style={styles.pageButton(false, currentPage === 1)}>{t.previous}</button>
                   {Array.from({ length: Math.min(totalPages, 5) }, (_, index) => {
@@ -1392,4 +1714,3 @@ const amharicTranslations = {
 };
 
 export default AdminAssignment;
-

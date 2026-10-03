@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
-import ForgotPassword from './ForgotPassword';
+import ForgotPassword, { amharicTranslations, englishTranslations } from './ForgotPassword';
 import { apiClient } from '../../utils/api';
 import { toast } from 'react-toastify';
 import { UIProvider } from '../../contexts/UiContext';
@@ -55,6 +55,15 @@ describe('ForgotPassword', () => {
   afterAll(() => {
     if (originalLanguage === null) window.localStorage.removeItem('language');
     else window.localStorage.setItem('language', originalLanguage);
+  });
+
+  it('provides a translated value for every EN and AM message key', () => {
+    const getTranslationShape = (translations) => Object.fromEntries(Object.entries(translations).map(([key, value]) => [
+      key,
+      typeof value === 'object' ? getTranslationShape(value) : typeof value,
+    ]));
+
+    expect(getTranslationShape(englishTranslations)).toEqual(getTranslationShape(amharicTranslations));
   });
 
   it('offers both recovery methods and a single route back to login', () => {
@@ -210,6 +219,16 @@ describe('ForgotPassword', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Email service is temporarily unavailable. Please try again later.');
   });
 
+  it('recognizes a server status when the HTTP client omits the response wrapper', async () => {
+    apiClient.post.mockRejectedValue({ status: 503, code: 'EMAIL_NETWORK_ERROR' });
+
+    renderPage();
+    typeEmail('student@university.edu');
+    submitForm();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Email service is temporarily unavailable. Please try again later.');
+  });
+
   it('shows the translated SMS-unavailable message when no SMS provider is configured', async () => {
     apiClient.post.mockRejectedValue({ response: { status: 503, data: { code: 'SMS_NOT_CONFIGURED' } } });
 
@@ -249,7 +268,7 @@ describe('ForgotPassword', () => {
     ));
 
     expect(await screen.findByRole('heading', { name: 'Verification Code' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Resend code \(\d+s\)$/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Resend code (60s)' })).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText('Verification Code'), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: /Verify Code/ }));

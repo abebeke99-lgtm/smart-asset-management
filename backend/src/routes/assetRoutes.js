@@ -20,7 +20,7 @@ const {
 } = require('../controllers/assetExtendedController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const { resolveDepartmentScope, resolveCollegeScope, isCollegeScopedRole, getCollegeScopeId } = require('../middlewares/organizationScope');
-const { Asset, Assignment, Maintenance, Transfer, RFIDLog, AuditLog, User, Department } = require('../models');
+const { sequelize, Asset, Assignment, Inventory, InventoryTransaction, Maintenance, Transfer, RFIDLog, AuditLog, User, Department } = require('../models');
 const { Op } = require('sequelize');
 const { createAuditLog } = require('../services/auditLogService');
 const trackingController = require('../controllers/assetTrackingController');
@@ -50,45 +50,78 @@ const verifyDepartmentHeadAsset = async (req, res, next) => {
 	return next();
 };
 
-router.get('/', requireAuth, resolveScopedCollegeAssetScope, getAllAssets);
+router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager'), resolveScopedCollegeAssetScope, getAllAssets);
 router.get('/lookup/:assetId', ...requireAdmin, trackingController.lookupByAssetCode);
-router.get('/next-id', requireAuth, getNextAssetId);
-router.get('/next-digital-id', requireAuth, generateDigitalId);
-router.get('/scan/:identifier', requireAuth, resolveScopedCollegeAssetScope, lookupByQr);
+router.get('/next-id', requireAuth, requireRole(...assetManagerRoles), getNextAssetId);
+router.get('/next-digital-id', requireAuth, requireRole(...assetManagerRoles), generateDigitalId);
+router.get('/scan/:identifier', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager'), resolveScopedCollegeAssetScope, lookupByQr);
 router.get('/deleted', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, listDeletedAssets);
 router.get('/import/template', requireAuth, assetImportTemplate);
 router.post('/import', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), bulkImportAssets);
-router.get('/check-id/:value', requireAuth, checkAssetField('assetCode'));
-router.get('/check-serial/:value', requireAuth, checkAssetField('serialNumber'));
-router.get('/check-rfid/:value', requireAuth, checkAssetField('rfidTag'));
+router.get('/check-id/:value', requireAuth, requireRole(...assetManagerRoles), checkAssetField('assetCode'));
+router.get('/check-serial/:value', requireAuth, requireRole(...assetManagerRoles), checkAssetField('serialNumber'));
+router.get('/check-rfid/:value', requireAuth, requireRole(...assetManagerRoles), checkAssetField('rfidTag'));
 router.get('/:id/history', requireAuth, requireRole('admin', 'ict_officer', 'college', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, getAssetHistory);
 router.post('/:id/restore', requireAuth, requireRole('admin'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, restoreAsset);
 router.delete('/:id/permanent', requireAuth, requireRole('admin'), permanentDeleteAsset);
-router.get('/:id/documents', requireAuth, resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, listAssetDocuments);
+router.get('/:id/documents', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, listAssetDocuments);
 router.post('/:id/documents', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, uploadAssetDocument);
 router.delete('/:id/documents/:documentId', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, deleteAssetDocument);
-router.get('/:id/documents/:documentId/file', requireAuth, resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, downloadAssetDocument);
-router.get('/:id/grants', requireAuth, resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, listAssetGrants);
+router.get('/:id/documents/:documentId/file', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, downloadAssetDocument);
+router.get('/:id/grants', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, listAssetGrants);
 router.post('/:id/grants', requireAuth, requireRole('admin', 'ict_officer'), createAssetGrant);
-router.get('/:id/custody', requireAuth, resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, listCustody);
+router.get('/:id/custody', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, listCustody);
 router.post('/:id/custody', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, createAssetCustody);
 router.post('/:id/custody/:custodyId/end', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, endCustody);
-router.post('/:id/assign', requireAuth, requireRole('admin', 'ict_officer'), async (req, res, next) => {
-	const transaction = await require('../models').sequelize.transaction();
+router.post('/:id/assign', requireAuth, requireRole('admin', 'ict_officer'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, async (req, res, next) => {
+	const transaction = await sequelize.transaction();
 	try {
-		const asset = await require('../models').Asset.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
+		const asset = await Asset.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
 		if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
-		const assignee = await User.findByPk(req.body.user_id || req.body.assigned_to, { transaction });
+		const assigneeId = Number(req.body.user_id || req.body.assigned_to);
+		if (!Number.isInteger(assigneeId) || assigneeId <= 0) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'A valid user is required.' }); }
+		const assignee = await User.findByPk(assigneeId, { transaction });
 		if (!assignee || !assignee.active) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'A valid active user is required' }); }
+		if (String(asset.status || '').toLowerCase().replace(/[_ ]/g, '-') !== 'available') { await transaction.rollback(); return res.status(409).json({ success: false, message: `Asset cannot be assigned while its status is ${asset.status}.` }); }
+		if (req.body.location && String(req.body.location).trim().length > 255) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Location must be 255 characters or fewer.' }); }
+		const condition = String(req.body.condition_at_assignment || req.body.condition || asset.condition || 'Good');
+		if (!['excellent', 'good', 'fair', 'poor', 'damaged'].includes(condition.toLowerCase())) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Condition must be Excellent, Good, Fair, Poor or Damaged.' }); }
 		const active = await Assignment.findOne({ where: { assetId: asset.id, status: 'active' }, transaction });
 		if (active) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Asset is already assigned' }); }
+		const inventory = await Inventory.findOne({ where: { assetId: asset.id }, transaction, lock: transaction.LOCK.UPDATE });
+		if (!inventory || Number(inventory.availableQuantity) < 1) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Asset is not available in inventory.' }); }
+		if (req.user.role === 'ict_officer' && Number(assignee.collegeId) !== Number(req.organizationScope.collegeId)) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Recipient is outside your organization scope.' }); }
+		const departmentId = Number(req.body.department_id || assignee.departmentId || 0) || null;
+		if (departmentId) {
+			const department = await Department.findByPk(departmentId, { transaction });
+			if (!department) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Department not found.' }); }
+			if (assignee.departmentId && Number(assignee.departmentId) !== departmentId) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'The selected user does not belong to the selected department.' }); }
+			if (req.user.role === 'ict_officer' && Number(department.collegeId) !== Number(req.organizationScope.collegeId)) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Department is outside your organization scope.' }); }
+		}
 		const previousValue = asset.toJSON();
-		const assignment = await Assignment.create({ assetId: asset.id, assignedTo: assignee.id, assignedBy: req.user.id, status: 'active', notes: JSON.stringify({ department: req.body.department_id || '', location: req.body.location || '', reason: req.body.reason || '' }) }, { transaction });
-		await asset.update({ status: 'in-use', department: req.body.department_id || asset.department, location: req.body.location || asset.location }, { transaction });
-		await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'ASSIGN_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, oldValue: previousValue, newValue: { asset: asset.toJSON(), assignment: assignment.toJSON() }, details: { assetId: asset.id, assignmentId: assignment.id, assignedTo: assignee.id }, transaction });
+		const assignedDate = new Date();
+		const location = String(req.body.location || asset.location || '').trim();
+		await inventory.update({ availableQuantity: inventory.availableQuantity - 1 }, { transaction });
+		const assignment = await Assignment.create({
+			assetId: asset.id,
+			assignedTo: assignee.id,
+			assignedToType: 'user',
+			assignedToId: assignee.id,
+			assignedBy: req.user.id,
+			workflowStatus: 'assigned',
+			assignedDate,
+			departmentId,
+			location,
+			conditionAtAssignment: condition,
+			status: 'active',
+			notes: JSON.stringify({ departmentId, location, condition, notes: req.body.notes || '', reason: req.body.reason || '' }),
+		}, { transaction });
+		await asset.update({ status: 'assigned', ...(departmentId ? { departmentId } : {}), location }, { transaction });
+		await InventoryTransaction.create({ inventoryId: inventory.id, assetId: asset.id, userId: req.user.id, type: 'issue', quantity: 1, reason: 'Asset assignment', notes: req.body.notes || '' }, { transaction });
+		await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'ASSIGN_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, oldValue: previousValue, newValue: { asset: asset.toJSON(), assignment: assignment.toJSON() }, details: { assetId: asset.id, assignmentId: assignment.id, assignedTo: { type: 'user', id: assignee.id }, ip: req.ip, sessionId: req.sessionID || null }, transaction });
 		await transaction.commit();
 		res.status(201).json({ success: true, assignment, asset: asset.toJSON() });
-	} catch (error) { await transaction.rollback(); next(error); }
+	} catch (error) { if (!transaction.finished) await transaction.rollback(); next(error); }
 });
 router.post('/:id/transfer', requireAuth, requireRole('admin', 'ict_officer'), async (req, res, next) => {
 	try {
@@ -134,7 +167,7 @@ router.delete('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer', 'sto
 		res.json({ success: true, asset: asset.toJSON() });
 	} catch (error) { next(error); }
 });
-router.get('/:id', requireAuth, resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, getAssetById);
+router.get('/:id', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager', 'department_head'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, getAssetById);
 router.get('/:id/location', ...requireAdmin, trackingController.getLocation);
 router.get('/:id/assignments', ...requireAdmin, trackingController.getAssignments);
 router.get('/:id/transfers', ...requireAdmin, trackingController.getTransfers);

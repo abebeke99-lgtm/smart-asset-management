@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Asset, Assignment, Transfer, Maintenance, User, Campus, Building, Room } = require('../models');
+const { Asset, Assignment, Transfer, Maintenance, User, Department, Campus, Building, Room } = require('../models');
 
 const locationIncludes = [
   { model: Campus, as: 'CampusRecord', attributes: ['campusName'], required: false },
@@ -12,9 +12,19 @@ const findAsset = (where) => Asset.findOne({ where, include: locationIncludes })
 const serializeAsset = async (asset) => {
   const assignment = await Assignment.findOne({
     where: { assetId: asset.id, status: 'active' },
-    include: [{ model: User, attributes: ['fullName', 'username'], required: false }],
+    include: [
+      { model: User, attributes: ['fullName', 'username'], required: false },
+      { model: Department, as: 'AssignedDepartment', attributes: ['id', 'name'], required: false },
+      { model: Room, as: 'AssignedLaboratory', attributes: ['id', 'roomName'], required: false },
+    ],
     order: [['createdAt', 'DESC']],
   });
+  const assignedToType = String(assignment?.assignedToType || 'user').toLowerCase();
+  const assignedTo = assignedToType === 'department'
+    ? assignment?.AssignedDepartment?.name || null
+    : assignedToType === 'laboratory'
+      ? assignment?.AssignedLaboratory?.roomName || null
+      : assignment?.User?.fullName || assignment?.User?.username || null;
   return {
     id: asset.id,
     assetCode: asset.assetCode,
@@ -25,7 +35,8 @@ const serializeAsset = async (asset) => {
     rfidTag: asset.rfidTag,
     status: asset.status,
     department: asset.department || '',
-    assignedTo: assignment?.User?.fullName || assignment?.User?.username || null,
+    assignedTo,
+    assignedToType: assignment ? assignedToType : null,
     location: {
       campus: asset.CampusRecord?.campusName || null,
       building: asset.BuildingRecord?.buildingName || null,
@@ -87,17 +98,23 @@ const getAssignments = async (req, res) => {
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found.' });
     const rows = await Assignment.findAll({
       where: { assetId: asset.id },
-      include: [{ model: User, attributes: ['fullName', 'username', 'department'], required: false }],
+      include: [
+        { model: User, attributes: ['fullName', 'username', 'department'], required: false },
+        { model: Department, as: 'AssignedDepartment', attributes: ['id', 'name'], required: false },
+        { model: Room, as: 'AssignedLaboratory', attributes: ['id', 'roomName'], required: false },
+      ],
       order: [['createdAt', 'DESC']],
     });
     const history = rows.map((row) => {
       let assignmentNotes = {};
       try { assignmentNotes = JSON.parse(row.notes || '{}'); } catch { assignmentNotes = {}; }
       return {
-        userName: row.User?.fullName || row.User?.username || null,
-        department: assignmentNotes.department || row.User?.department || null,
-        assignedAt: row.createdAt,
+        userName: row.assignedToType === 'department' ? row.AssignedDepartment?.name || null : row.assignedToType === 'laboratory' ? row.AssignedLaboratory?.roomName || null : row.User?.fullName || row.User?.username || null,
+        assignedToType: row.assignedToType || 'user',
+        department: assignmentNotes.departmentName || row.AssignedDepartment?.name || row.User?.department || null,
+        assignedAt: row.assignedDate || row.createdAt,
         returnedAt: row.returnedAt || null,
+        condition: row.conditionAtAssignment || assignmentNotes.condition || null,
         status: row.status,
         notes: row.notes || '',
       };

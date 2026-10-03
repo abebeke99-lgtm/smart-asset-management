@@ -3,12 +3,13 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const { Asset, User, Assignment, Maintenance, MaintenanceCost, RFIDLog, RfidDevice, Category, College, Department, Notification, AuditLog, AuditLogArchive, Config, SettingsVersion, MfaSetting, Transfer, Inventory, InventoryTransaction, Approval, FinancialRecord, DisposalRequest, sequelize } = require('../models');
-const { requireAuth, requireRole } = require('../middlewares/auth');
-const { Op } = require('sequelize');
+const { Asset, User, Assignment, Maintenance, MaintenanceCost, RFIDLog, RfidDevice, Category, College, Department, Campus, Notification, AuditLog, AuditLogArchive, Config, SettingsVersion, MfaSetting, Transfer, Inventory, InventoryTransaction, Approval, FinancialRecord, DisposalRequest, sequelize } = require('../models');
+const { requireAuth, requireRole, requirePermission } = require('../middlewares/auth');
+const { Op, Sequelize } = require('sequelize');
 const speakeasy = require('speakeasy');
 const maintenanceController = require('../controllers/maintenanceController');
 const backupService = require('../services/backupService');
+const { getDashboardAnalytics } = require('../services/dashboardService');
 const { getJwtSecret } = require('../config/jwt');
 const { createAuditLog } = require('../services/auditLogService');
 
@@ -310,6 +311,7 @@ const collegeIdFromRequest = (body) => body.managerId ?? body.college_manager_id
 const collegePayload = (body, existing = {}) => ({
   collegeCode: String(body.collegeCode || body.code || existing.collegeCode || '').trim().toUpperCase(),
   collegeName: String(body.collegeName || body.name || existing.collegeName || '').trim(),
+  campusId: body.campusId !== undefined || body.campus_id !== undefined ? (Number(body.campusId ?? body.campus_id) || null) : (existing.campusId ?? null),
   description: String(body.description ?? existing.description ?? '').trim(),
   managerId: collegeIdFromRequest(body) ?? existing.managerId ?? null,
   location: String(body.location ?? existing.location ?? '').trim(),
@@ -327,6 +329,12 @@ const validateCollegeManager = async (managerId, collegeId = null) => {
   const assignedElsewhere = await College.findOne({ where: { managerId: user.id, status: 'active', ...(collegeId ? { id: { [Op.ne]: collegeId } } : {}) } });
   if (assignedElsewhere) return { error: 'This College Manager already manages another active college' };
   return { user };
+};
+
+const validateCollegeCampus = async (campusId) => {
+  if (campusId === null || campusId === '' || campusId === undefined) return { campus: null };
+  const campus = await Campus.findOne({ where: { id: campusId, status: 'active' } });
+  return campus ? { campus } : { error: 'College campus must be an active campus.' };
 };
 
 const collegeLocations = async (collegeId) => {
@@ -484,6 +492,8 @@ router.post('/colleges', ...requireAdmin, async (req, res, next) => {
     if (await College.findOne({ where: { collegeCode: payload.collegeCode } })) return res.status(409).json({ success: false, message: 'College code already exists' });
     const managerValidation = await validateCollegeManager(payload.managerId);
     if (managerValidation.error) return res.status(400).json({ success: false, message: managerValidation.error });
+    const campusValidation = await validateCollegeCampus(payload.campusId);
+    if (campusValidation.error) return res.status(400).json({ success: false, message: campusValidation.error });
     const college = await College.create(payload);
     await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CREATE_COLLEGE', entity: `college:${college.id}`, entityId: college.id, newValue: college.toJSON(), details: { legacyAction: 'COLLEGE_CREATED' } });
     if (college.managerId) await AuditLog.create({ userId: req.user.id, action: 'COLLEGE_MANAGER_ASSIGNED', entity: `college:${college.id}`, details: JSON.stringify({ managerId: college.managerId }) });
@@ -503,6 +513,8 @@ router.put('/colleges/:id', ...requireAdmin, async (req, res, next) => {
     if (await College.findOne({ where: { collegeCode: payload.collegeCode, id: { [Op.ne]: college.id } } })) return res.status(409).json({ success: false, message: 'College code already exists' });
     const managerValidation = await validateCollegeManager(payload.managerId, college.id);
     if (managerValidation.error) return res.status(400).json({ success: false, message: managerValidation.error });
+    const campusValidation = await validateCollegeCampus(payload.campusId);
+    if (campusValidation.error) return res.status(400).json({ success: false, message: campusValidation.error });
     const previousManagerId = college.managerId;
     await college.update(payload);
     await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_COLLEGE', entity: `college:${college.id}`, entityId: college.id, oldValue: previousValue, newValue: college.toJSON(), details: { legacyAction: 'COLLEGE_UPDATED' } });
@@ -1146,7 +1158,18 @@ router.delete('/departments/:id', ...requireAdmin, async (req, res, next) => {
 
 const normalizeCategoryItem = async (category) => {
   const categoryData = category.toJSON ? category.toJSON() : { ...category };
-  const assetCount = await Asset.count({ where: { category: categoryData.name } });
+  const [assetCount, activeAssetCount] = await Promise.all([
+    Asset.count({ where: { category: categoryData.name } }),
+    Asset.count({
+      where: {
+        category: categoryData.name,
+        [Op.or]: [
+          { status: { [Op.notIn]: ['retired', 'disposed', 'decommissioned'] } },
+          { status: { [Op.is]: null } },
+        ],
+      },
+    }),
+  ]);
   return {
     ...categoryData,
     id: categoryData.id,
@@ -1156,12 +1179,31 @@ const normalizeCategoryItem = async (category) => {
     icon: categoryData.icon || 'layers',
     status: categoryData.status || 'active',
     assetCount,
+    activeAssetCount,
     created_at: categoryData.createdAt || categoryData.created_at || null,
     updated_at: categoryData.updatedAt || categoryData.updated_at || null,
     createdAt: categoryData.createdAt || categoryData.created_at || null,
     updatedAt: categoryData.updatedAt || categoryData.updated_at || null,
   };
 };
+
+const findCategoryDuplicate = (field, value, exceptId) => Category.findOne({
+  where: {
+    [Op.and]: [
+      Sequelize.where(Sequelize.fn('LOWER', Sequelize.col(field)), value.toLowerCase()),
+      ...(exceptId ? [{ id: { [Op.ne]: exceptId } }] : []),
+    ],
+  },
+});
+
+const categoryAuditValue = (category) => ({
+  id: category.id,
+  name: category.name,
+  code: category.code || '',
+  description: category.description || '',
+  icon: category.icon || 'package',
+  status: category.status,
+});
 
 const buildCategoryWhere = (req) => {
   const where = {};
@@ -1183,7 +1225,7 @@ const buildCategoryWhere = (req) => {
   return where;
 };
 
-router.get(['/categories', '/asset-categories'], requireAuth, async (req, res, next) => {
+router.get(['/categories', '/asset-categories'], requireAuth, requirePermission('assets.view'), async (req, res, next) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
@@ -1240,84 +1282,174 @@ router.get(['/categories', '/asset-categories'], requireAuth, async (req, res, n
   }
 });
 
-router.get(['/categories/:id', '/asset-categories/:id'], requireAuth, async (req, res, next) => {
+router.get(['/categories/:id', '/asset-categories/:id'], requireAuth, requirePermission('assets.view'), async (req, res, next) => {
   try {
     const category = await Category.findByPk(req.params.id);
     if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
-    return res.json({ success: true, data: await normalizeCategoryItem(category), category: await normalizeCategoryItem(category) });
+    const item = await normalizeCategoryItem(category);
+    return res.json({ success: true, data: item, category: item });
   } catch (error) {
     return next(error);
   }
 });
 
-router.post(['/categories', '/asset-categories'], ...requireAdmin, async (req, res, next) => {
+router.post(['/categories', '/asset-categories'], ...requireAdmin, requirePermission('assets.create'), async (req, res, next) => {
   try {
     const name = String(req.body.name || '').trim();
     const code = String(req.body.code || '').trim().toUpperCase() || null;
     const description = String(req.body.description || '').trim();
-    const icon = String(req.body.icon || req.body.iconName || 'layers').trim();
+    const icon = String(req.body.icon || req.body.iconName || 'package').trim().toLowerCase();
     const status = String(req.body.status || 'active').trim().toLowerCase();
 
     if (!name) return res.status(400).json({ success: false, message: 'Category name is required' });
     if (name.length < 2 || name.length > 120) return res.status(400).json({ success: false, message: 'Category name must be between 2 and 120 characters' });
-    if (code && code.length > 80) return res.status(400).json({ success: false, message: 'Category code is too long' });
-    if (await Category.findOne({ where: { name } })) return res.status(409).json({ success: false, message: 'Category name already exists' });
-    if (code && await Category.findOne({ where: { code } })) return res.status(409).json({ success: false, message: 'Category code already exists' });
+    if (code && (code.length > 80 || !/^[A-Z0-9-]+$/.test(code))) return res.status(400).json({ success: false, message: 'Category code may contain only uppercase letters, numbers, and hyphens' });
+    if (!['active', 'inactive'].includes(status)) return res.status(400).json({ success: false, message: 'A valid category status is required' });
+    if (await findCategoryDuplicate('name', name)) return res.status(409).json({ success: false, message: 'Category name already exists' });
+    if (code && await findCategoryDuplicate('code', code)) return res.status(409).json({ success: false, message: 'Category code already exists' });
 
-    const category = await Category.create({ name, code, description, icon, status: ['active', 'inactive'].includes(status) ? status : 'active' });
-    await AuditLog.create({ userId: req.user.id, action: 'ASSET_CATEGORY_CREATED', entity: `category:${category.id}`, details: JSON.stringify({ name, code, status }) });
-
-    return res.status(201).json({ success: true, data: await normalizeCategoryItem(category), category: await normalizeCategoryItem(category) });
+    const transaction = await sequelize.transaction();
+    try {
+      const category = await Category.create({ name, code, description, icon, status }, { transaction });
+      await createAuditLog({
+        userId: req.user.id,
+        role: req.user.role,
+        action: 'ASSET_CATEGORY_CREATED',
+        entity: `category:${category.id}`,
+        entityId: category.id,
+        newValue: categoryAuditValue(category),
+        transaction,
+      });
+      await transaction.commit();
+      const item = await normalizeCategoryItem(category);
+      return res.status(201).json({ success: true, data: item, category: item });
+    } catch (error) {
+      await transaction.rollback();
+      if (error.name === 'SequelizeUniqueConstraintError') return res.status(409).json({ success: false, message: 'Category name or code already exists' });
+      throw error;
+    }
   } catch (error) {
     return next(error);
   }
 });
 
-router.put(['/categories/:id', '/asset-categories/:id'], ...requireAdmin, async (req, res, next) => {
+const updateCategory = async (req, res, next) => {
   try {
-    const category = await Category.findByPk(req.params.id);
-    if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
+    const transaction = await sequelize.transaction();
+    try {
+      const category = await Category.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
+      if (!category) {
+        await transaction.rollback();
+        return res.status(404).json({ success: false, message: 'Category not found' });
+      }
 
-    const name = String(req.body.name || category.name).trim();
-    const code = String(req.body.code ?? category.code ?? '').trim().toUpperCase() || null;
-    const description = String(req.body.description ?? category.description ?? '').trim();
-    const icon = String(req.body.icon ?? req.body.iconName ?? category.icon ?? 'layers').trim();
-    const status = String(req.body.status ?? category.status ?? 'active').trim().toLowerCase();
+      const previousValue = categoryAuditValue(category);
+      const name = String(req.body.name ?? category.name).trim();
+      const code = String(req.body.code ?? category.code ?? '').trim().toUpperCase() || null;
+      const description = String(req.body.description ?? category.description ?? '').trim();
+      const icon = String(req.body.icon ?? req.body.iconName ?? category.icon ?? 'package').trim().toLowerCase();
+      const status = String(req.body.status ?? category.status ?? 'active').trim().toLowerCase();
 
-    if (!name) return res.status(400).json({ success: false, message: 'Category name is required' });
-    if (await Category.findOne({ where: { name, id: { [Op.ne]: category.id } } })) return res.status(409).json({ success: false, message: 'Category name already exists' });
-    if (code && await Category.findOne({ where: { code, id: { [Op.ne]: category.id } } })) return res.status(409).json({ success: false, message: 'Category code already exists' });
+      if (!name) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'Category name is required' });
+      }
+      if (name.length < 2 || name.length > 120) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'Category name must be between 2 and 120 characters' });
+      }
+      if (code && (code.length > 80 || !/^[A-Z0-9-]+$/.test(code))) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'Category code may contain only uppercase letters, numbers, and hyphens' });
+      }
+      if (!['active', 'inactive'].includes(status)) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'A valid category status is required' });
+      }
+      if (await findCategoryDuplicate('name', name, category.id)) {
+        await transaction.rollback();
+        return res.status(409).json({ success: false, message: 'Category name already exists' });
+      }
+      if (code && await findCategoryDuplicate('code', code, category.id)) {
+        await transaction.rollback();
+        return res.status(409).json({ success: false, message: 'Category code already exists' });
+      }
 
-    await category.update({ name, code, description, icon, status: ['active', 'inactive'].includes(status) ? status : 'active' });
-    await AuditLog.create({ userId: req.user.id, action: 'ASSET_CATEGORY_UPDATED', entity: `category:${category.id}`, details: JSON.stringify({ name, code, status, description }) });
+      await category.update({ name, code, description, icon, status }, { transaction });
+      if (previousValue.name !== name) {
+        await Asset.update(
+          { category: name },
+          { where: { category: previousValue.name }, transaction },
+        );
+      }
 
-    return res.json({ success: true, data: await normalizeCategoryItem(category), category: await normalizeCategoryItem(category) });
+      const action = previousValue.status === status
+        ? 'ASSET_CATEGORY_UPDATED'
+        : status === 'active' ? 'ASSET_CATEGORY_ACTIVATED' : 'ASSET_CATEGORY_DEACTIVATED';
+      await createAuditLog({
+        userId: req.user.id,
+        role: req.user.role,
+        action,
+        entity: `category:${category.id}`,
+        entityId: category.id,
+        oldValue: previousValue,
+        newValue: categoryAuditValue(category),
+        transaction,
+      });
+      await transaction.commit();
+      const item = await normalizeCategoryItem(category);
+      return res.json({ success: true, data: item, category: item });
+    } catch (error) {
+      await transaction.rollback();
+      if (error.name === 'SequelizeUniqueConstraintError') return res.status(409).json({ success: false, message: 'Category name or code already exists' });
+      throw error;
+    }
   } catch (error) {
     return next(error);
   }
-});
+};
 
-router.patch(['/categories/:id', '/asset-categories/:id'], ...requireAdmin, async (req, res, next) => {
-  try {
-    return router.handle({ method: 'PUT', path: req.path, body: req.body, params: req.params, query: req.query, user: req.user }, res, next);
-  } catch (error) {
-    return next(error);
-  }
-});
+router.put(['/categories/:id', '/asset-categories/:id'], ...requireAdmin, requirePermission('assets.update'), updateCategory);
+router.patch(['/categories/:id', '/asset-categories/:id'], ...requireAdmin, requirePermission('assets.update'), updateCategory);
 
-router.delete(['/categories/:id', '/asset-categories/:id'], ...requireAdmin, async (req, res, next) => {
+router.delete(['/categories/:id', '/asset-categories/:id'], ...requireAdmin, requirePermission('assets.delete'), async (req, res, next) => {
   try {
     const category = await Category.findByPk(req.params.id);
     if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
 
     const assetCount = await Asset.count({ where: { category: category.name } });
     if (assetCount > 0) {
-      await AuditLog.create({ userId: req.user.id, action: 'ASSET_CATEGORY_DELETE_BLOCKED', entity: `category:${category.id}`, details: JSON.stringify({ name: category.name, assetCount }) });
+      await createAuditLog({
+        userId: req.user.id,
+        role: req.user.role,
+        action: 'ASSET_CATEGORY_DELETE_BLOCKED',
+        entity: `category:${category.id}`,
+        entityId: category.id,
+        oldValue: categoryAuditValue(category),
+        details: { assetCount, outcome: 'blocked' },
+      });
       return res.status(409).json({ success: false, message: `This category is currently used by ${assetCount} assets. Deactivate the category instead of deleting it.` });
     }
 
-    await category.destroy();
-    await AuditLog.create({ userId: req.user.id, action: 'ASSET_CATEGORY_DELETED', entity: `category:${category.id}`, details: JSON.stringify({ name: category.name, code: category.code }) });
+    const previousValue = categoryAuditValue(category);
+    const transaction = await sequelize.transaction();
+    try {
+      await category.destroy({ transaction });
+      await createAuditLog({
+        userId: req.user.id,
+        role: req.user.role,
+        action: 'ASSET_CATEGORY_DELETED',
+        entity: `category:${category.id}`,
+        entityId: category.id,
+        oldValue: previousValue,
+        newValue: null,
+        transaction,
+      });
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
 
     return res.json({ success: true, message: 'Category deleted successfully' });
   } catch (error) {
@@ -1947,317 +2079,7 @@ router.get('/recovery', ...requireAdmin, async (req, res, next) => {
 
 router.get(['/dashboard', '/admin/dashboard'], ...requireAdmin, async (req, res, next) => {
   try {
-    const [assets, users, assignments, maintenance, rfidLogs, rfidDevices, departments, auditLogs, transfers, inventory, colleges, disposalRequests] = await Promise.all([
-      Asset.findAll({ order: [['updatedAt', 'DESC']] }),
-      User.findAll({ attributes: ['id', 'username', 'fullName', 'role', 'active', 'createdAt', 'updatedAt'] }),
-      Assignment.findAll({ order: [['createdAt', 'DESC']] }),
-      Maintenance.findAll({ order: [['updatedAt', 'DESC']] }),
-      RFIDLog.findAll({ order: [['createdAt', 'DESC']] }),
-      RfidDevice.findAll({ attributes: ['status'], raw: true }),
-      Department.findAll({ attributes: ['id', 'name', 'createdAt', 'updatedAt'], order: [['name', 'ASC']] }),
-      AuditLog.findAll({ order: [['createdAt', 'DESC']], limit: 20 }),
-      Transfer.findAll({ order: [['transferDate', 'DESC'], ['createdAt', 'DESC']] }),
-      Inventory.findAll({ attributes: ['assetId', 'quantity', 'availableQuantity', 'minimumQuantity', 'status'], raw: true }),
-      College.findAll({ attributes: ['id', 'collegeName', 'collegeCode'], order: [['collegeName', 'ASC']], raw: true }),
-      DisposalRequest.findAll({ order: [['completedDate', 'DESC'], ['createdAt', 'DESC']] }),
-    ]);
-
-    const normalizeStatus = (status) => String(status || '').trim().toLowerCase();
-    const displayStatus = (status) => {
-      const normalized = normalizeStatus(status).replace(/[_-]/g, ' ');
-      const labels = {
-        available: 'Available',
-        'in-use': 'Assigned',
-        active: 'Active',
-        assigned: 'Assigned',
-        'in use': 'Assigned',
-        maintenance: 'Maintenance',
-        'under maintenance': 'Maintenance',
-        'under-maintenance': 'Maintenance',
-        damaged: 'Damaged',
-        missing: 'Missing',
-        lost: 'Missing',
-        retired: 'Retired',
-        disposed: 'Retired',
-      };
-      return labels[normalized] || 'Other';
-    };
-    const statusCounts = assets.reduce((counts, asset) => {
-      const status = displayStatus(asset.status);
-      counts[status] = (counts[status] || 0) + 1;
-      return counts;
-    }, {});
-    const departmentCounts = assets.reduce((counts, asset) => {
-      const department = asset.department || 'Unassigned';
-      counts[department] = (counts[department] || 0) + 1;
-      return counts;
-    }, {});
-    const categoryCounts = assets.reduce((counts, asset) => {
-      const category = asset.category || 'Uncategorized';
-      counts[category] = (counts[category] || 0) + 1;
-      return counts;
-    }, {});
-    const collegeCounts = assets.reduce((counts, asset) => {
-      const collegeName = asset.collegeId ? (colleges.find((college) => Number(college.id) === Number(asset.collegeId))?.collegeName || colleges.find((college) => Number(college.id) === Number(asset.collegeId))?.collegeCode || 'Unassigned College') : 'Unassigned College';
-      counts[collegeName] = (counts[collegeName] || 0) + 1;
-      return counts;
-    }, {});
-    const locationCounts = assets.reduce((counts, asset) => {
-      const location = String(asset.location || '').trim() || 'Unassigned Location';
-      counts[location] = (counts[location] || 0) + 1;
-      return counts;
-    }, {});
-    const conditionCounts = assets.reduce((counts, asset) => {
-      const condition = String(asset.condition || 'Unknown').trim() || 'Unknown';
-      counts[condition] = (counts[condition] || 0) + 1;
-      return counts;
-    }, {});
-    const assetValueByCategory = assets.reduce((counts, asset) => {
-      const category = asset.category || 'Uncategorized';
-      counts[category] = (counts[category] || 0) + Number(asset.currentValue || asset.purchasePrice || 0);
-      return counts;
-    }, {});
-    departments.forEach((department) => {
-      if (departmentCounts[department.name] === undefined) departmentCounts[department.name] = 0;
-    });
-    const maintenanceCounts = maintenance.reduce((counts, item) => {
-      const status = normalizeStatus(item.status);
-      counts[status] = (counts[status] || 0) + 1;
-      return counts;
-    }, {});
-    const roleCounts = users.reduce((counts, account) => {
-      const role = account.role || 'unknown';
-      counts[role] = (counts[role] || 0) + 1;
-      return counts;
-    }, {});
-    const now = Date.now();
-    const weekAgo = now - (7 * 24 * 60 * 60 * 1000);
-    const isWithinLastWeek = (value) => value && new Date(value).getTime() >= weekAgo;
-    const parseAssignmentNotes = (assignment) => {
-      try {
-        return JSON.parse(assignment.notes || '{}');
-      } catch (error) {
-        return {};
-      }
-    };
-    const overdueReturns = assignments.filter((assignment) => {
-      if (assignment.status !== 'active') return false;
-      const expectedReturnDate = parseAssignmentNotes(assignment).expectedReturnDate;
-      return expectedReturnDate && new Date(expectedReturnDate).getTime() < now;
-    }).length;
-    const weeklySummary = {
-      newAssets: assets.filter((asset) => isWithinLastWeek(asset.createdAt)).length,
-      assignments: assignments.filter((assignment) => isWithinLastWeek(assignment.createdAt)).length,
-      maintenanceRequests: maintenance.filter((item) => isWithinLastWeek(item.createdAt)).length,
-      completedMaintenance: maintenance.filter((item) => item.status === 'completed' && isWithinLastWeek(item.updatedAt)).length,
-      rfidActivity: rfidLogs.filter((log) => isWithinLastWeek(log.createdAt)).length,
-    };
-    const recentActivities = [
-      ...auditLogs.map((log) => ({
-        module: 'System',
-        action: log.action,
-        description: log.entity || log.details || '',
-        title: `${log.action}${log.entity ? ` - ${log.entity}` : ''}`,
-        time: log.createdAt,
-        icon: 'audit',
-      })),
-      ...assets.slice(0, 5).map((asset) => ({
-        module: 'Asset',
-        action: asset.status,
-        description: asset.name,
-        type: 'asset',
-        title: `${asset.name} - ${asset.status}`,
-        time: asset.updatedAt,
-        icon: 'asset',
-      })),
-      ...maintenance.slice(0, 5).map((item) => ({
-        module: 'Maintenance',
-        action: item.status,
-        description: item.title,
-        type: 'maintenance',
-        title: `${item.title} - ${item.status}`,
-        time: item.updatedAt,
-        icon: 'maintenance',
-      })),
-      ...users.slice(0, 5).map((account) => ({
-        module: 'User', action: 'created', description: account.fullName || account.username,
-        title: `User created - ${account.username}`, time: account.createdAt, responsibleUser: account.username, icon: 'user',
-      })),
-      ...departments.slice(0, 5).map((department) => ({
-        module: 'Department', action: 'created', description: department.name,
-        title: `Department created - ${department.name}`, time: department.createdAt, icon: 'department',
-      })),
-      ...transfers.slice(0, 5).map((transfer) => ({
-        module: 'Transfer', action: transfer.status, description: `Asset ${transfer.assetId}: ${transfer.sourceDepartment} to ${transfer.destinationDepartment}`,
-        title: `Asset transfer - ${transfer.assetId}`, time: transfer.createdAt, icon: 'transfer',
-      })),
-    ].sort((left, right) => new Date(right.time) - new Date(left.time)).slice(0, 10);
-
-    const today = new Date();
-    const expiredWarranties = assets.filter((asset) => asset.warrantyExpiry && new Date(asset.warrantyExpiry) < today);
-    const lowStockAssets = inventory.filter((item) => Number(item.availableQuantity) <= Number(item.minimumQuantity));
-    const overdueMaintenance = maintenance.filter((item) => {
-      const status = normalizeStatus(item.status);
-      return !['completed', 'cancelled', 'rejected'].includes(status) && item.updatedAt && new Date(item.updatedAt).getTime() < weekAgo;
-    });
-
-    const totalAssetValue = assets.reduce((total, asset) => total + Number(asset.currentValue || asset.purchasePrice || 0), 0);
-    const availableAssets = assets.filter((asset) => normalizeStatus(asset.status) === 'available').length;
-    const assignedAssets = assets.filter((asset) => displayStatus(asset.status) === 'Assigned').length;
-    const maintenanceAssets = assets.filter((asset) => ['under-maintenance', 'under maintenance'].includes(normalizeStatus(asset.status))).length;
-    const activeAssetStatuses = new Set(['active', 'available', 'assigned', 'in-use', 'in use']);
-    const activeAssets = assets.filter((asset) => activeAssetStatuses.has(normalizeStatus(asset.status))).length;
-    const expiredAssets = assets.filter((asset) => asset.expiryDate && new Date(asset.expiryDate) < new Date(new Date().toDateString())).length;
-    const isTrueRfidAnomaly = (log) => {
-      const action = String(log.action || '').trim().toLowerCase();
-      if (['qr-lookup', 'qr lookup', 'qr_lookup', 'qr-scan', 'verification'].includes(action)) {
-        return false;
-      }
-      return !assets.some((asset) => Number(asset.id) === Number(log.assetId));
-    };
-    const unknownRfidLogs = rfidLogs.filter(isTrueRfidAnomaly);
-
-    const data = {
-      totalAssets: assets.length,
-      activeAssets,
-      availableAssets,
-      assignedAssets,
-      maintenanceAssets,
-      expiredAssets,
-      retiredAssets: assets.filter((asset) => ['retired', 'disposed'].includes(normalizeStatus(asset.status))).length,
-      missingAssets: assets.filter((asset) => normalizeStatus(asset.status) === 'missing').length,
-      damagedAssets: assets.filter((asset) => normalizeStatus(asset.status) === 'damaged').length,
-      underMaintenance: maintenanceAssets,
-      totalColleges: colleges.length,
-      totalDepartments: departments.length,
-      totalUsers: users.length,
-      pendingMaintenance: maintenanceCounts.pending || 0,
-      rfidActivity: rfidLogs.length,
-      totalValue: totalAssetValue,
-      totalAssetValue,
-      assignedAssets,
-      overdueReturns,
-      assetByStatus: Object.entries(statusCounts).map(([label, value]) => ({ label, value })),
-      assetByDepartment: Object.entries(departmentCounts).map(([label, value]) => ({ label, value })),
-      assetByCategory: Object.entries(categoryCounts).map(([label, value]) => ({ label, value })),
-      assetByCollege: Object.entries(collegeCounts).map(([label, value]) => ({ label, value })).sort((left, right) => right.value - left.value),
-      assetByLocation: Object.entries(locationCounts).map(([label, value]) => ({ label, value })).sort((left, right) => right.value - left.value),
-      assetCondition: Object.entries(conditionCounts).map(([label, value]) => ({ label, value })),
-      assetValueByCategory: Object.entries(assetValueByCategory).map(([label, value]) => ({ label, value: Number(value) || 0 })).sort((left, right) => right.value - left.value),
-      assetValueByCollege: Object.entries(assets.reduce((counts, asset) => {
-        const collegeName = asset.collegeId ? (colleges.find((college) => Number(college.id) === Number(asset.collegeId))?.collegeName || colleges.find((college) => Number(college.id) === Number(asset.collegeId))?.collegeCode || 'Unassigned College') : 'Unassigned College';
-        counts[collegeName] = (counts[collegeName] || 0) + Number(asset.currentValue || asset.purchasePrice || 0);
-        return counts;
-      }, {})).map(([label, value]) => ({ label, value: Number(value) || 0 })).sort((left, right) => right.value - left.value),
-      assetsPurchasedOverTime: Object.entries(assets.reduce((counts, asset) => {
-        if (asset.purchaseDate) {
-          const year = new Date(asset.purchaseDate).getFullYear();
-          counts[year] = (counts[year] || 0) + 1;
-        }
-        return counts;
-      }, {})).sort(([left], [right]) => Number(left) - Number(right)).map(([label, value]) => ({ label, value })),
-      monthlyAcquisitions: Object.entries(assets.reduce((counts, asset) => {
-        const dateValue = asset.purchaseDate || asset.createdAt;
-        if (!dateValue) return counts;
-        const date = new Date(dateValue);
-        if (Number.isNaN(date.getTime())) return counts;
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const label = date.toLocaleString('en', { month: 'short', year: 'numeric' });
-        counts[monthKey] = { label, value: (counts[monthKey]?.value || 0) + 1 };
-        return counts;
-      }, {})).map(([key, item]) => ({ label: item.label, value: item.value })).sort((left, right) => left.label.localeCompare(right.label)),
-      transferTrend: Object.entries(transfers.reduce((counts, transfer) => {
-        const dateValue = transfer.transferDate || transfer.createdAt;
-        if (!dateValue) return counts;
-        const date = new Date(dateValue);
-        if (Number.isNaN(date.getTime())) return counts;
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const label = date.toLocaleString('en', { month: 'short', year: 'numeric' });
-        counts[monthKey] = { label, value: (counts[monthKey]?.value || 0) + 1 };
-        return counts;
-      }, {})).map(([key, item]) => ({ label: item.label, value: item.value })).sort((left, right) => left.label.localeCompare(right.label)),
-      disposalTrend: Object.entries(disposalRequests.reduce((counts, request) => {
-        const dateValue = request.completedDate || request.createdAt || request.scheduledDate;
-        if (!dateValue) return counts;
-        const date = new Date(dateValue);
-        if (Number.isNaN(date.getTime())) return counts;
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const label = date.toLocaleString('en', { month: 'short', year: 'numeric' });
-        counts[monthKey] = { label, value: (counts[monthKey]?.value || 0) + 1 };
-        return counts;
-      }, {})).map(([key, item]) => ({ label: item.label, value: item.value })).sort((left, right) => left.label.localeCompare(right.label)),
-      maintenanceTrend: (() => {
-        const periods = [];
-        for (let offset = 5; offset >= 0; offset -= 1) {
-          const date = new Date();
-          date.setMonth(date.getMonth() - offset, 1);
-          const nextMonth = new Date(date);
-          nextMonth.setMonth(date.getMonth() + 1);
-          const monthItems = maintenance.filter((item) => item.createdAt >= date && item.createdAt < nextMonth);
-          periods.push({
-            month: date.toLocaleString('en', { month: 'short' }),
-            pending: monthItems.filter((item) => normalizeStatus(item.status) === 'pending').length,
-            inProgress: monthItems.filter((item) => ['in progress', 'in-progress', 'assigned'].includes(normalizeStatus(item.status))).length,
-            completed: monthItems.filter((item) => normalizeStatus(item.status) === 'completed').length,
-            cancelled: monthItems.filter((item) => ['cancelled', 'rejected'].includes(normalizeStatus(item.status))).length,
-            count: monthItems.length,
-          });
-        }
-        return periods;
-      })(),
-      rfidActivityLog: rfidLogs.map((log) => ({
-        id: log.id,
-        asset: assets.find((asset) => asset.id === log.assetId)?.name || `Asset ${log.assetId}`,
-        location: log.location || 'Unknown',
-        timestamp: log.createdAt,
-      })),
-      rfidMetrics: {
-        detectedTags: rfidLogs.length,
-        uniqueTags: new Set(rfidLogs.map((log) => log.tag)).size,
-        latestActivity: rfidLogs[0]?.createdAt || null,
-        totalDevices: rfidDevices.length,
-        onlineDevices: rfidDevices.filter((device) => device.status === 'Active').length,
-        offlineDevices: rfidDevices.filter((device) => device.status === 'Inactive').length,
-        unknownAlerts: unknownRfidLogs.length,
-      },
-      maintenanceSummary: {
-        open: maintenance.filter((item) => ['pending', 'approved'].includes(normalizeStatus(item.status))).length,
-        inProgress: maintenance.filter((item) => ['assigned', 'in-progress', 'in progress'].includes(normalizeStatus(item.status))).length,
-        completed: maintenance.filter((item) => normalizeStatus(item.status) === 'completed').length,
-        overdue: overdueMaintenance.length,
-        scheduled: maintenance.filter((item) => normalizeStatus(item.status) === 'scheduled').length,
-      },
-      userSummary: { active: users.filter((account) => account.active !== false).length, inactive: users.filter((account) => account.active === false).length, byRole: roleCounts },
-      departmentSummary: { mostAssets: Object.entries(departmentCounts).sort((left, right) => right[1] - left[1])[0]?.[0] || null, attention: departments.filter((department) => !departmentCounts[department.name]).map((department) => department.name) },
-      recentAssets: assets.slice(0, 10).map((asset) => ({ id: asset.id, name: asset.name, category: asset.category, department: asset.department, status: displayStatus(asset.status), rfid: asset.rfidTag, updatedAt: asset.updatedAt })),
-      searchCatalog: {
-        assets: assets.map((asset) => ({ id: asset.id, name: asset.name, category: asset.category, department: asset.department, rfid: asset.rfidTag, status: displayStatus(asset.status) })),
-        users: users.map((account) => ({ id: account.id, username: account.username, name: account.fullName, role: account.role })),
-        departments: departments.map((department) => ({ id: department.id, name: department.name })),
-      },
-      alerts: [
-        ...(overdueMaintenance.length ? [{ type: 'danger', category: 'maintenance', count: overdueMaintenance.length, message: `${overdueMaintenance.length} maintenance request(s) are overdue.` }] : []),
-        ...(expiredWarranties.length ? [{ type: 'warning', category: 'warranty', count: expiredWarranties.length, message: `${expiredWarranties.length} asset warranty(ies) have expired.` }] : []),
-        ...(lowStockAssets.length ? [{ type: 'warning', category: 'inventory', count: lowStockAssets.length, message: `${lowStockAssets.length} inventory item(s) are low on stock.` }] : []),
-        ...(assets.filter((asset) => ['missing', 'lost'].includes(normalizeStatus(asset.status))).length ? [{ type: 'danger', category: 'asset', count: assets.filter((asset) => ['missing', 'lost'].includes(normalizeStatus(asset.status))).length, message: 'Assets are marked missing or lost.' }] : []),
-        ...(assets.filter((asset) => normalizeStatus(asset.condition) === 'damaged').length ? [{ type: 'warning', category: 'asset', count: assets.filter((asset) => normalizeStatus(asset.condition) === 'damaged').length, message: 'Assets require damage review.' }] : []),
-        ...(unknownRfidLogs.length ? [{ type: 'danger', category: 'rfid', count: unknownRfidLogs.length, message: 'Unknown RFID activity detected.' }] : []),
-      ],
-      weeklySummary,
-      recentActivities,
-      quickActions: [
-        { icon: '➕', label: 'Create Asset', path: '/admin/assets/create' },
-        { icon: '📋', label: 'Assign Asset', path: '/admin/assets/assign' },
-        { icon: '🔄', label: 'Transfer Asset', path: '/admin/assets/transfer' },
-        { icon: '🔧', label: 'Maintenance', path: '/admin/maintenance' },
-        { icon: '📡', label: 'RFID Tracking', path: '/admin/rfid' },
-        { icon: '👥', label: 'Manage Users', path: '/admin/users' },
-        { icon: '🏛️', label: 'Departments', path: '/admin/departments' },
-        { icon: '📊', label: 'Reports', path: '/admin/reports' },
-        { icon: '📋', label: 'Audit Logs', path: '/admin/audit-logs' },
-      ],
-    };
-
+    const data = await getDashboardAnalytics();
     return res.json({ success: true, data });
   } catch (error) {
     return next(error);

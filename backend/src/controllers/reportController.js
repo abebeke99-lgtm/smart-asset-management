@@ -5,6 +5,7 @@ const {
   Maintenance,
   Inventory,
   Assignment,
+  Room,
   Transfer,
   Department,
   PurchaseOrder,
@@ -178,12 +179,14 @@ const buildReportResult = async (req) => {
   } else if (reportType === 'assignments') {
     const where = {};
     if (status) where.status = status;
-    if (dateFrom || dateTo) buildDateFilter(where, 'createdAt', dateFrom, dateTo);
+    if (dateFrom || dateTo) buildDateFilter(where, 'assignedDate', dateFrom, dateTo);
     if (search) {
       where[Op.or] = [
         { '$Asset.name$': { [Op.like]: `%${search}%` } },
         { '$Asset.assetCode$': { [Op.like]: `%${search}%` } },
         { '$User.fullName$': { [Op.like]: `%${search}%` } },
+        { '$AssignedDepartment.name$': { [Op.like]: `%${search}%` } },
+        { '$AssignedLaboratory.roomName$': { [Op.like]: `%${search}%` } },
       ];
     }
 
@@ -192,6 +195,9 @@ const buildReportResult = async (req) => {
       include: [
         { model: Asset, where: departmentId ? { departmentId } : {}, required: true, attributes: ['id', 'name', 'assetCode', 'departmentId', 'department', 'location', 'status'] },
         { model: User, required: false, attributes: ['id', 'fullName', 'username'] },
+        { model: Department, as: 'AssignedDepartment', required: false, attributes: ['id', 'name'] },
+        { model: Room, as: 'AssignedLaboratory', required: false, attributes: ['id', 'roomName'] },
+        { model: User, as: 'AssignedByUser', required: false, attributes: ['id', 'fullName', 'username'] },
       ],
       order: [['createdAt', 'DESC']],
       limit,
@@ -202,11 +208,18 @@ const buildReportResult = async (req) => {
       id: assignment.id,
       asset: assignment.Asset?.name || `Asset ${assignment.assetId}`,
       assetCode: assignment.Asset?.assetCode || '—',
-      assignedTo: assignment.User ? (assignment.User.fullName || assignment.User.username) : '—',
-      department: assignment.Asset?.department || '—',
-      assignmentDate: assignment.createdAt,
+      assignedTo: assignment.assignedToType === 'department'
+        ? assignment.AssignedDepartment?.name || '—'
+        : assignment.assignedToType === 'laboratory'
+          ? assignment.AssignedLaboratory?.roomName || '—'
+          : assignment.User ? (assignment.User.fullName || assignment.User.username) : '—',
+      assignedToType: assignment.assignedToType || 'user',
+      assignedBy: assignment.AssignedByUser?.fullName || assignment.AssignedByUser?.username || '—',
+      condition: assignment.conditionAtAssignment || '—',
+      department: assignment.AssignedDepartment?.name || assignment.Asset?.department || '—',
+      assignmentDate: assignment.assignedDate || assignment.createdAt,
       status: assignment.status || 'active',
-      location: assignment.Asset?.location || '—',
+      location: assignment.location || assignment.Asset?.location || '—',
     }));
     total = result.count;
     summary = { totalAssignments: result.count, activeAssignments: result.rows.filter((row) => !['returned', 'cancelled', 'closed'].includes(String(row.status || '').toLowerCase())).length };

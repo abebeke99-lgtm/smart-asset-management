@@ -87,5 +87,5 @@ test('OTP recovery fails before account lookup when SMS delivery is unavailable'
   assert.equal(accountLookupAttempted, false);
   assert.equal(response.statusCode, 503);
   assert.equal(response.body.success, false);
-  assert.equal(response.body.message, 'We could not send the verification code right now. Please try again later.');
+  assert.equal(response.body.message, 'SMS service is not available yet.');
 });

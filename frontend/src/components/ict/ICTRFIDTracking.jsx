@@ -138,6 +138,15 @@ const ICTRFIDTracking = () => {
     link.click();
   };
 
+  const handleScanKeyDown = (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (scanValue.trim()) {
+        scanIdentifier(event);
+      }
+    }
+  };
+
   const retry = () => loadTracking();
   const totalPages = Math.max(1, state.pagination.totalPages || 1);
 
@@ -149,7 +158,7 @@ const ICTRFIDTracking = () => {
           <div><p className="eyebrow">Tracking</p><h1>RFID / QR Tracking</h1><p className="subtitle">Track, identify, and manage ICT assets using QR and RFID identifiers.</p></div>
         </div>
         <div className="header-actions">
-          <form className="search-field" onSubmit={scanIdentifier}><ScanLine size={16} /><input value={scanValue} onChange={(event) => setScanValue(event.target.value)} placeholder="Scan QR or enter identifier" aria-label="Scan QR or enter identifier" /><button className="icon-button" type="submit" title="Find identifier"><Search size={16} /></button></form>
+          <form className="search-field" onSubmit={scanIdentifier}><ScanLine size={16} /><input value={scanValue} onKeyDown={handleScanKeyDown} onChange={(event) => setScanValue(event.target.value)} placeholder="Scan QR or enter identifier" aria-label="Scan QR or enter identifier" /><button className="icon-button" type="submit" title="Find identifier"><Search size={16} /></button></form>
           <button className="quiet-button" type="button" onClick={retry} title="Refresh tracking records"><RefreshCw size={16} /> Refresh</button>
         </div>
       </header>

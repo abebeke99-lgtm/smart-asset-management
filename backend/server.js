@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 // Keep the package entry point aligned with the real database-backed API.
 const app = require('./src/app');
 

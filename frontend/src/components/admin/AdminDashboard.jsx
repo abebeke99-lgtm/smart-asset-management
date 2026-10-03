@@ -1,7 +1,32 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Bar, Doughnut } from "react-chartjs-2";
-import { ArcElement, BarElement, CategoryScale, Chart as ChartJS, Legend, LinearScale, Tooltip } from "chart.js";
-import { Activity, Archive, ArrowLeftRight, Bell, Boxes, ClipboardList, Package, Plus, RefreshCw, Users, Wrench } from "lucide-react";
+import {
+  ArcElement,
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Legend,
+  LinearScale,
+  Tooltip,
+} from "chart.js";
+import {
+  Activity,
+  Archive,
+  ArrowUpRight,
+  Bell,
+  Boxes,
+  Building2,
+  CalendarClock,
+  CheckCircle2,
+  Clock3,
+  FlaskConical,
+  Package,
+  RefreshCw,
+  Settings2,
+  ShieldAlert,
+  Users,
+  Wrench,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import apiClient, { getApiErrorMessage } from "../../services/apiClient";
 import PageHeader from "./ui/PageHeader";
@@ -9,533 +34,307 @@ import "./AdminDashboard.css";
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, Legend, LinearScale, Tooltip);
 
-const DASHBOARD_REQUEST_TIMEOUT_MS = 15000;
-const chartColorTokens = ["--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5", "--chart-6"];
-const readAdminToken = (name) => {
-  const adminRoot = document.querySelector(".admin-layout");
-  return adminRoot ? getComputedStyle(adminRoot).getPropertyValue(name).trim() : "";
+const chartPalette = ["#2563EB", "#0EA5D9", "#F4C542", "#EF4444", "#14B8A6", "#8B5CF6", "#F97316"];
+const emptyDashboard = {
+  statistics: {},
+  assetByCondition: [],
+  assetByCategory: [],
+  maintenanceOverview: [],
+  inventoryAlerts: [],
+  recentActivity: [],
+  thresholds: {},
 };
-const chartColors = () => chartColorTokens.map(readAdminToken).filter(Boolean);
-const buildDoughnutData = (rows) => ({
-  labels: rows.map((row) => row.label),
-  datasets: [{ data: rows.map((row) => row.value), backgroundColor: chartColors(), borderWidth: 2, borderColor: readAdminToken("--color-surface") }],
-});
-const buildBarData = (rows) => ({
-  labels: rows.map((row) => row.label),
-  datasets: [{ label: "Assets", data: rows.map((row) => row.value), backgroundColor: readAdminToken("--chart-1"), borderRadius: 4 }],
-});
-const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } };
-const barOptions = { ...chartOptions, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } };
-const quickActionIcons = {
-  "/admin/assets/create": Package,
-  "/admin/assets/assign": ClipboardList,
-  "/admin/assets/transfer": ArrowLeftRight,
-  "/admin/maintenance": Wrench,
-  "/admin/users": Users,
-  "/admin/reports": Activity,
+const emptyStatistics = Object.freeze({});
+const defaultThresholds = {
+  lowStockPercent: 10,
+  expirationNoticeDays: 30,
+  escalationHours: 72,
+};
+const maintenanceLabels = ["Submitted", "Scheduled", "In-Progress", "Completed", "Escalated"];
+const inventoryAlertLabels = ["Low stock", "Out of stock", "Expiring chemicals", "Expired chemicals", "Quarantined chemicals"];
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { position: "bottom" } },
+};
+const numberFormat = new Intl.NumberFormat();
+
+export const normalizeDashboardThresholds = (value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return defaultThresholds;
+  return Object.fromEntries(
+    Object.entries(defaultThresholds).map(([key, fallback]) => {
+      const candidate = Number(value[key]);
+      return [key, Number.isFinite(candidate) && candidate > 0 ? candidate : fallback];
+    }),
+  );
 };
 
-function Dashboard() {
+const formatDate = (value) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Date unavailable"
+    : date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+};
+
+const StatCard = ({ title, value, icon: Icon, to, loading, error }) => (
+  <Link className="admin-dashboard-stat-card" to={to} aria-label={`${title}: ${error ? "unavailable" : numberFormat.format(value || 0)}`}>
+    <span className="admin-dashboard-stat-icon"><Icon size={19} aria-hidden="true" /></span>
+    <span className="admin-dashboard-stat-copy">
+      <span className="admin-dashboard-stat-title">{title}</span>
+      {loading ? (
+        <span className="admin-dashboard-value-skeleton" aria-label="Loading statistic" />
+      ) : error ? (
+        <span className="admin-dashboard-stat-error">Unavailable</span>
+      ) : (
+        <strong>{numberFormat.format(value || 0)}</strong>
+      )}
+    </span>
+    <ArrowUpRight className="admin-dashboard-stat-link-icon" size={15} aria-hidden="true" />
+  </Link>
+);
+
+function AdminDashboard() {
+  const [dashboard, setDashboard] = useState(emptyDashboard);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [dashboard, setDashboard] = useState({
-    assets: {
-      total: 0,
-      active: 0,
-      damaged: 0,
-      assigned: 0,
-      available: 0,
-      maintenance: 0,
-      expired: 0,
-    },
-    users: 0,
-    colleges: 0,
-    departments: 0,
-    maintenance: {
-      submitted: 0,
-      scheduled: 0,
-      inProgress: 0,
-      completed: 0,
-      overdue: 0,
-    },
-    recentActivity: [],
-    recentAssets: [],
-    assetByStatus: [],
-    assetByCategory: [],
-    alerts: [],
-    quickActions: [],
-  });
-
-  const normalizeNumber = (value) => {
-    const number = Number(value);
-    return Number.isFinite(number) ? number : 0;
-  };
-
-  const normalizeDashboard = useCallback((data) => {
-    const source = data?.data || data || {};
-
-    const assets = source.assets || source.assetSummary || {};
-    const maintenance =
-      source.maintenance || source.maintenanceSummary || {};
-    return {
-      assets: {
-        total: normalizeNumber(
-          assets.total ??
-            assets.totalAssets ??
-            source.totalAssets
-        ),
-        active: normalizeNumber(
-          assets.active ??
-            assets.activeAssets ??
-            source.activeAssets
-        ),
-        damaged: normalizeNumber(
-          assets.damaged ??
-            assets.damagedAssets ??
-            source.damagedAssets
-        ),
-        assigned: normalizeNumber(assets.assigned ?? source.assignedAssets),
-        available: normalizeNumber(assets.available ?? source.availableAssets),
-        maintenance: normalizeNumber(assets.maintenance ?? source.maintenanceAssets ?? source.underMaintenance),
-        expired: normalizeNumber(
-          assets.expired ??
-            assets.expiredAssets ??
-            source.expiredAssets
-        ),
-      },
-
-      users: normalizeNumber(
-        source.users ??
-          source.totalUsers ??
-          source.userCount
-      ),
-
-      colleges: normalizeNumber(
-        source.colleges ??
-          source.totalColleges ??
-          source.collegeCount
-      ),
-
-      departments: normalizeNumber(
-        source.departments ??
-          source.totalDepartments ??
-          source.departmentCount
-      ),
-
-      maintenance: {
-        submitted: normalizeNumber(
-          maintenance.submitted ??
-            maintenance.submittedRequests ??
-            maintenance.open ??
-            source.submittedMaintenance
-        ),
-        scheduled: normalizeNumber(
-          maintenance.scheduled ??
-            maintenance.scheduledRequests ??
-            source.scheduledMaintenance
-        ),
-        inProgress: normalizeNumber(
-          maintenance.inProgress ??
-            maintenance.in_progress ??
-            maintenance.inProgressRequests ??
-            source.inProgressMaintenance
-        ),
-        completed: normalizeNumber(
-          maintenance.completed ??
-            maintenance.completedRequests ??
-            source.completedMaintenance
-        ),
-        overdue: normalizeNumber(maintenance.overdue ?? source.overdueMaintenance),
-      },
-
-
-      recentActivity: Array.isArray(source.recentActivity)
-        ? source.recentActivity
-        : Array.isArray(source.recentActivities)
-        ? source.recentActivities
-        : Array.isArray(source.activities)
-          ? source.activities
-        : [],
-      recentAssets: Array.isArray(source.recentAssets) ? source.recentAssets : [],
-      assetByStatus: Array.isArray(source.assetByStatus) ? source.assetByStatus : [],
-      assetByCategory: Array.isArray(source.assetByCategory) ? source.assetByCategory : [],
-      alerts: Array.isArray(source.alerts) ? source.alerts : [],
-      quickActions: Array.isArray(source.quickActions) ? source.quickActions : [],
-    };
-  }, []);
+  const [thresholds, setThresholds] = useState(defaultThresholds);
+  const [savingThresholds, setSavingThresholds] = useState(false);
+  const [thresholdMessage, setThresholdMessage] = useState("");
+  const [thresholdError, setThresholdError] = useState("");
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError("");
-    const controller = new AbortController();
-    let timeoutId;
-
     try {
-      const timeout = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => {
-          const timeoutError = new Error("Dashboard request timed out.");
-          timeoutError.code = "DASHBOARD_TIMEOUT";
-          reject(timeoutError);
-          controller.abort();
-        }, DASHBOARD_REQUEST_TIMEOUT_MS);
-      });
-      const response = await Promise.race([
-        apiClient.get("/api/admin/dashboard", {
-          timeout: DASHBOARD_REQUEST_TIMEOUT_MS,
-          signal: controller.signal,
-        }),
-        timeout,
-      ]);
-      setDashboard(normalizeDashboard(response.data));
+      const response = await apiClient.get("/api/admin/dashboard", { timeout: 15000 });
+      const data = response?.data?.data;
+      if (!data || typeof data !== "object") {
+        throw new Error("The dashboard response was incomplete.");
+      }
+      setDashboard(data);
+      setThresholds(normalizeDashboardThresholds(data.thresholds));
     } catch (requestError) {
       console.error("Dashboard loading error:", requestError);
-      setError(requestError?.code === "DASHBOARD_TIMEOUT"
-        ? "Dashboard data took too long to load. Please try again."
-        : getApiErrorMessage(requestError, "Unable to load administrator dashboard."));
+      setError(getApiErrorMessage(requestError, "Unable to load administrator dashboard."));
     } finally {
-      clearTimeout(timeoutId);
       setLoading(false);
     }
-  }, [normalizeDashboard]);
+  }, []);
 
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
 
-  const statCards = [
-    { title: "Total Assets", value: dashboard.assets.total, icon: Package },
-    { title: "Active Assets", value: dashboard.assets.active, icon: Activity },
-    { title: "Damaged Assets", value: dashboard.assets.damaged, icon: Archive },
-    { title: "Maintenance", value: dashboard.assets.maintenance, icon: Wrench },
-    { title: "Assigned Assets", value: dashboard.assets.assigned, icon: ClipboardList },
-    { title: "Available Assets", value: dashboard.assets.available, icon: Boxes },
-    { title: "Expired Assets", value: dashboard.assets.expired, icon: Bell },
-    { title: "Total Users", value: dashboard.users, icon: Users },
-  ];
+  const saveThresholds = async (event) => {
+    event.preventDefault();
+    setSavingThresholds(true);
+    setThresholdError("");
+    setThresholdMessage("");
+    try {
+      const response = await apiClient.put("/api/admin/settings/dashboard", { data: thresholds });
+      const saved = response?.data?.data;
+      if (!saved || typeof saved !== "object") {
+        throw new Error("The saved threshold settings could not be confirmed.");
+      }
+      setThresholds(normalizeDashboardThresholds(saved));
+      setDashboard((current) => ({ ...current, thresholds: saved }));
+      setThresholdMessage("Dashboard thresholds saved.");
+      await loadDashboard();
+    } catch (saveError) {
+      setThresholdError(getApiErrorMessage(saveError, "Unable to save dashboard thresholds."));
+    } finally {
+      setSavingThresholds(false);
+    }
+  };
 
-  const maintenanceCards = [
-    {
-      title: "Open",
-      value: dashboard.maintenance.submitted,
-    },
-    {
-      title: "Scheduled",
-      value: dashboard.maintenance.scheduled,
-    },
-    {
-      title: "In Progress",
-      value: dashboard.maintenance.inProgress,
-    },
-    {
-      title: "Completed",
-      value: dashboard.maintenance.completed,
-    },
-  ];
+  const statistics = dashboard.statistics || emptyStatistics;
+  const assetStats = statistics.assets || emptyStatistics;
+  const organizationStats = statistics.organization || emptyStatistics;
+  const workflowStats = statistics.workflow || emptyStatistics;
+  const inventoryStats = statistics.inventory || emptyStatistics;
+  const maintenanceStats = statistics.maintenance || emptyStatistics;
+  const maintenanceOverview = dashboard.maintenanceOverview?.length
+    ? dashboard.maintenanceOverview
+    : maintenanceLabels.map((label) => ({ label, value: 0 }));
+  const inventoryAlerts = dashboard.inventoryAlerts?.length
+    ? dashboard.inventoryAlerts
+    : inventoryAlertLabels.map((label) => ({ label, value: 0 }));
+  const statCards = useMemo(() => [
+    { title: "Total Assets", value: assetStats.total, icon: Package, to: "/admin/assets" },
+    { title: "Active Assets", value: assetStats.active, icon: Activity, to: "/admin/assets?status=available" },
+    { title: "Damaged Assets", value: assetStats.damaged, icon: Archive, to: "/admin/assets?status=damaged" },
+    { title: "Replaced Assets", value: assetStats.replaced, icon: RefreshCw, to: "/admin/assets?status=replaced" },
+    { title: "Expired Assets", value: assetStats.expired, icon: Clock3, to: "/admin/assets?status=expired" },
+    { title: "Total Users", value: organizationStats.users, icon: Users, to: "/admin/users" },
+    { title: "Colleges", value: organizationStats.colleges, icon: Building2, to: "/admin/colleges" },
+    { title: "Departments", value: organizationStats.departments, icon: Building2, to: "/admin/departments" },
+    { title: "Open Service Requests", value: workflowStats.openServiceRequests, icon: Bell, to: "/admin/maintenance/requests" },
+    { title: "Pending Approvals", value: workflowStats.pendingApprovals, icon: CheckCircle2, to: "/admin/approvals/pending" },
+    { title: "Low Stock Items", value: inventoryStats.lowStockItems, icon: Boxes, to: "/admin/inventory/quarantine" },
+    { title: "Expiring Chemicals", value: inventoryStats.expiringChemicals, icon: FlaskConical, to: "/admin/inventory/quarantine" },
+    { title: "Assets Under Maintenance", value: assetStats.underMaintenance, icon: Wrench, to: "/admin/maintenance" },
+    { title: "Overdue Maintenance", value: maintenanceStats.overdue, icon: CalendarClock, to: "/admin/maintenance" },
+  ], [assetStats, organizationStats, workflowStats, inventoryStats, maintenanceStats]);
 
-  if (loading) {
-    return (
-      <div className="admin-dashboard-shell admin-dashboard-shell--loading" aria-busy="true" aria-label="Loading administrator dashboard">
-        <PageHeader eyebrow="Administrator" title="Admin Dashboard" subtitle="Overview of assets, maintenance, and system activity." />
-        <div className="admin-dashboard-skeleton admin-dashboard-skeleton--header" />
-        <div className="admin-dashboard-skeleton-grid">
-          {Array.from({ length: 8 }, (_, index) => <div className="admin-dashboard-skeleton admin-dashboard-skeleton--stat" key={index} />)}
-        </div>
-        <div className="admin-dashboard-skeleton-grid admin-dashboard-skeleton-grid--charts">
-          <div className="admin-dashboard-skeleton admin-dashboard-skeleton--chart" />
-          <div className="admin-dashboard-skeleton admin-dashboard-skeleton--chart" />
-        </div>
-      </div>
-    );
-  }
+  const conditionData = useMemo(() => ({
+    labels: (dashboard.assetByCondition || []).map((row) => row.label),
+    datasets: [{
+      data: (dashboard.assetByCondition || []).map((row) => row.value),
+      backgroundColor: chartPalette.slice(0, (dashboard.assetByCondition || []).length),
+      borderWidth: 2,
+      borderColor: "#FFFFFF",
+    }],
+  }), [dashboard.assetByCondition]);
 
-  if (error) {
-    return (
-      <div className="admin-dashboard-page" style={styles.page}>
-        <PageHeader eyebrow="Administrator" title="Admin Dashboard" subtitle="Overview of assets, maintenance, and system activity." />
-        <div style={styles.errorBox} role="alert">
-          <div><strong>Unable to load dashboard</strong><div style={styles.errorText}>{error}</div></div>
-          <button type="button" onClick={loadDashboard} style={styles.retryButton}><RefreshCw size={15} aria-hidden="true" /> Retry</button>
-        </div>
-      </div>
-    );
-  }
+  const categoryData = useMemo(() => ({
+    labels: (dashboard.assetByCategory || []).map((row) => row.label),
+    datasets: [{
+      label: "Assets",
+      data: (dashboard.assetByCategory || []).map((row) => row.value),
+      backgroundColor: (dashboard.assetByCategory || []).map((_, index) => chartPalette[index % chartPalette.length]),
+      borderRadius: 5,
+    }],
+  }), [dashboard.assetByCategory]);
+
+  const chartState = (rows, title) => {
+    if (loading) return <div className="admin-dashboard-chart-skeleton" aria-label={`Loading ${title}`} />;
+    if (error) return <div className="admin-dashboard-inline-error" role="status">Chart data is unavailable.</div>;
+    if (!rows.length || rows.every((row) => Number(row.value) === 0)) {
+      return <div className="admin-dashboard-empty">No {title.toLowerCase()} data available.</div>;
+    }
+    return null;
+  };
 
   return (
-    <div className="admin-dashboard-page" style={styles.page}>
-      <PageHeader eyebrow="Administrator" title="Admin Dashboard" subtitle="Overview of assets, maintenance, and system activity." />
-      <section>
-        <h2 style={styles.sectionTitle}>Asset Overview</h2>
+    <main className="admin-dashboard-page">
+      <div className="admin-dashboard-heading">
+        <PageHeader
+          eyebrow="Administrator"
+          title="Dashboard"
+          subtitle="A real-time overview of institutional assets, operations, inventory, and activity."
+        />
+        <button className="admin-dashboard-refresh" type="button" onClick={loadDashboard} disabled={loading}>
+          <RefreshCw size={16} aria-hidden="true" /> Refresh
+        </button>
+      </div>
 
-        <div style={styles.grid}>
-          {statCards.map(({ title, value, icon: Icon }) => (
-            <div key={title} style={styles.card}>
-              <div style={styles.cardIcon}><Icon size={19} aria-hidden="true" /></div>
+      {error && (
+        <div className="admin-dashboard-error" role="alert">
+          <div><strong>Dashboard data could not be loaded.</strong><span>{error}</span></div>
+          <button type="button" onClick={loadDashboard}>Try again</button>
+        </div>
+      )}
 
-              <div>
-                <div style={styles.cardLabel}>{title}</div>
-                <div style={styles.cardValue}>{value.toLocaleString()}</div>
-              </div>
-            </div>
-          ))}
+      <section className="admin-dashboard-section" aria-labelledby="admin-dashboard-statistics">
+        <div className="admin-dashboard-section-heading">
+          <div><span className="admin-dashboard-eyebrow">Institution snapshot</span><h2 id="admin-dashboard-statistics">Key statistics</h2></div>
+        </div>
+        <div className="admin-dashboard-stat-grid">
+          {statCards.map((card) => <StatCard {...card} key={card.title} loading={loading} error={Boolean(error)} />)}
         </div>
       </section>
 
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Asset Distribution</h2>
+      <section className="admin-dashboard-section" aria-labelledby="admin-dashboard-asset-distribution">
+        <div className="admin-dashboard-section-heading">
+          <div><span className="admin-dashboard-eyebrow">Asset portfolio</span><h2 id="admin-dashboard-asset-distribution">Asset distribution</h2></div>
+        </div>
         <div className="admin-dashboard-chart-grid">
-          <section className="admin-dashboard-panel" aria-labelledby="asset-status-heading">
-            <h3 id="asset-status-heading">Assets by status</h3>
-            {dashboard.assetByStatus.length ? (
-              <div className="admin-dashboard-chart" role="img" aria-label="Assets grouped by status"><Doughnut data={buildDoughnutData(dashboard.assetByStatus)} options={chartOptions} /><p className="admin-sr-only">{dashboard.assetByStatus.map((row) => `${row.label}: ${row.value}`).join(', ')}</p></div>
-            ) : <div className="admin-dashboard-empty">No asset status data available.</div>}
+          <section className="admin-dashboard-panel" aria-labelledby="admin-dashboard-condition">
+            <h3 id="admin-dashboard-condition">Asset condition</h3>
+            {chartState(dashboard.assetByCondition || [], "Asset condition") || (
+              <div className="admin-dashboard-chart" role="img" aria-label="Asset counts by condition">
+                <Doughnut data={conditionData} options={chartOptions} />
+              </div>
+            )}
           </section>
-          <section className="admin-dashboard-panel" aria-labelledby="asset-category-heading">
-            <h3 id="asset-category-heading">Assets by category</h3>
-            {dashboard.assetByCategory.length ? (
-              <div className="admin-dashboard-chart" role="img" aria-label="Assets grouped by category"><Bar data={buildBarData(dashboard.assetByCategory)} options={barOptions} /><p className="admin-sr-only">{dashboard.assetByCategory.map((row) => `${row.label}: ${row.value}`).join(', ')}</p></div>
-            ) : <div className="admin-dashboard-empty">No asset category data available.</div>}
+          <section className="admin-dashboard-panel" aria-labelledby="admin-dashboard-category">
+            <h3 id="admin-dashboard-category">Asset categories</h3>
+            {chartState(dashboard.assetByCategory || [], "Asset category") || (
+              <div className="admin-dashboard-chart" role="img" aria-label="Asset counts by category">
+                <Bar data={categoryData} options={{ ...chartOptions, indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }} />
+              </div>
+            )}
           </section>
         </div>
       </section>
 
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Maintenance Overview</h2>
-
-        <div style={styles.grid}>
-          {maintenanceCards.map((card) => (
-            <div key={card.title} style={styles.card}>
-              <div style={styles.cardLabel}>{card.title}</div>
-              <div style={styles.cardValue}>{card.value}</div>
-            </div>
+      <section className="admin-dashboard-section" aria-labelledby="admin-dashboard-maintenance">
+        <div className="admin-dashboard-section-heading">
+          <div><span className="admin-dashboard-eyebrow">Work management</span><h2 id="admin-dashboard-maintenance">Maintenance overview</h2></div>
+          <Link className="admin-dashboard-text-link" to="/admin/maintenance">View maintenance <ArrowUpRight size={15} aria-hidden="true" /></Link>
+        </div>
+        <div className="admin-dashboard-maintenance-grid">
+          {maintenanceOverview.map((row) => (
+            <Link className="admin-dashboard-maintenance-card" to="/admin/maintenance" key={row.label}>
+              <span>{row.label}</span>
+              {loading ? <span className="admin-dashboard-value-skeleton" /> : error ? <strong className="admin-dashboard-stat-error">Unavailable</strong> : <strong>{numberFormat.format(row.value || 0)}</strong>}
+            </Link>
           ))}
-          <div style={styles.card}>
-            <div><div style={styles.cardLabel}>Overdue</div><div style={styles.cardValue}>{dashboard.maintenance.overdue.toLocaleString()}</div></div>
+        </div>
+      </section>
+
+      <div className="admin-dashboard-lower-grid">
+        <section className="admin-dashboard-section" aria-labelledby="admin-dashboard-inventory-alerts">
+          <div className="admin-dashboard-section-heading">
+            <div><span className="admin-dashboard-eyebrow">Inventory</span><h2 id="admin-dashboard-inventory-alerts">Inventory alerts</h2></div>
+            <Link className="admin-dashboard-text-link" to="/admin/inventory/quarantine">Open inventory <ArrowUpRight size={15} aria-hidden="true" /></Link>
           </div>
-        </div>
-      </section>
-
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Recent Assets</h2>
-        <div className="admin-dashboard-table-wrap">
-          {dashboard.recentAssets.length ? (
-            <table className="admin-dashboard-table">
-              <thead><tr><th scope="col">Asset</th><th scope="col">Category</th><th scope="col">Department</th><th scope="col">Status</th><th scope="col">Updated</th></tr></thead>
-              <tbody>{dashboard.recentAssets.map((asset) => (
-                <tr key={asset.id}>
-                  <td><Link to={`/admin/assets/${asset.id}`}>{asset.name || `Asset ${asset.id}`}</Link></td>
-                  <td>{asset.category || "Uncategorized"}</td>
-                  <td>{asset.department || "Unassigned"}</td>
-                  <td><span className="admin-dashboard-status">{asset.status || "Unknown"}</span></td>
-                  <td>{asset.updatedAt ? new Date(asset.updatedAt).toLocaleDateString() : "—"}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-          ) : <div className="admin-dashboard-empty">No recent assets found.</div>}
-        </div>
-      </section>
-
-      <section style={styles.section}>
-        <div style={styles.sectionHeader}><h2 style={styles.sectionTitle}>Alerts</h2></div>
-        <div className="admin-dashboard-alerts">
-          {dashboard.alerts.length ? dashboard.alerts.map((alert, index) => (
-            <div className={`admin-dashboard-alert admin-dashboard-alert--${alert.type || "info"}`} key={`${alert.category || "alert"}-${index}`}>
-              <Bell size={17} aria-hidden="true" /><div><strong>{alert.message}</strong><span>{Number(alert.count || 0).toLocaleString()} item{Number(alert.count) === 1 ? "" : "s"}</span></div>
-            </div>
-          )) : <div className="admin-dashboard-empty">No active alerts.</div>}
-        </div>
-      </section>
-
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Quick Actions</h2>
-        <div className="admin-dashboard-actions">
-          {dashboard.quickActions.length ? dashboard.quickActions.map((action) => {
-            const ActionIcon = quickActionIcons[action.path] || Plus;
-            return (
-              <Link className="admin-dashboard-action" to={action.path} key={action.path}>
-                <ActionIcon size={17} aria-hidden="true" /><span>{action.label}</span>
+          <div className="admin-dashboard-alert-list">
+            {inventoryAlerts.map((alert) => (
+              <Link className="admin-dashboard-alert-row" to="/admin/inventory/quarantine" key={alert.label}>
+                <span className="admin-dashboard-alert-icon"><ShieldAlert size={17} aria-hidden="true" /></span>
+                <span>{alert.label}</span>
+                {loading ? <span className="admin-dashboard-value-skeleton" /> : error ? <strong className="admin-dashboard-stat-error">Unavailable</strong> : <strong>{numberFormat.format(alert.value || 0)}</strong>}
+                <ArrowUpRight size={14} aria-hidden="true" />
               </Link>
-            );
-          }) : <div className="admin-dashboard-empty">No quick actions are available.</div>}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
 
-    </div>
+        <section className="admin-dashboard-section" aria-labelledby="admin-dashboard-recent-activity">
+          <div className="admin-dashboard-section-heading">
+            <div><span className="admin-dashboard-eyebrow">Audit trail</span><h2 id="admin-dashboard-recent-activity">Recent activity</h2></div>
+            <Link className="admin-dashboard-text-link" to="/admin/audit-logs">View audit log <ArrowUpRight size={15} aria-hidden="true" /></Link>
+          </div>
+          <div className="admin-dashboard-activity-list" aria-live="polite">
+            {loading && <div className="admin-dashboard-empty">Loading recent activity…</div>}
+            {error && <div className="admin-dashboard-inline-error" role="status">Activity data is unavailable.</div>}
+            {!loading && !error && !(dashboard.recentActivity || []).length && <div className="admin-dashboard-empty">No recent activity recorded.</div>}
+            {!loading && !error && (dashboard.recentActivity || []).map((item) => (
+              <article className="admin-dashboard-activity-row" key={item.id}>
+                <span className="admin-dashboard-activity-icon"><Activity size={16} aria-hidden="true" /></span>
+                <div><strong>{item.label || item.action || "System event"}</strong><span>{item.entity || item.action || "System activity"}</span></div>
+                <time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <details className="admin-dashboard-thresholds">
+        <summary><Settings2 size={17} aria-hidden="true" /> Configurable dashboard thresholds</summary>
+        <form onSubmit={saveThresholds}>
+          <p>These saved settings control stock alerts, chemical expiration notices, and the maintenance escalation window.</p>
+          <div className="admin-dashboard-threshold-fields">
+            <label>Low stock threshold (%)
+              <input type="number" min="0.1" max="100" step="0.1" value={thresholds.lowStockPercent} onChange={(event) => setThresholds((current) => ({ ...current, lowStockPercent: event.target.value }))} required />
+            </label>
+            <label>Chemical expiration notice (days)
+              <input type="number" min="1" max="3650" step="1" value={thresholds.expirationNoticeDays} onChange={(event) => setThresholds((current) => ({ ...current, expirationNoticeDays: event.target.value }))} required />
+            </label>
+            <label>Escalation window (hours)
+              <input type="number" min="1" max="8760" step="1" value={thresholds.escalationHours} onChange={(event) => setThresholds((current) => ({ ...current, escalationHours: event.target.value }))} required />
+            </label>
+            <button className="admin-dashboard-save-button" type="submit" disabled={savingThresholds || loading}>
+              {savingThresholds ? "Saving…" : "Save thresholds"}
+            </button>
+          </div>
+          {thresholdError && <p className="admin-dashboard-form-error" role="alert">{thresholdError}</p>}
+          {thresholdMessage && <p className="admin-dashboard-form-success" role="status">{thresholdMessage}</p>}
+        </form>
+      </details>
+    </main>
   );
 }
 
-const styles = {
-  page: {
-    minHeight: "100%",
-    padding: "0",
-    background: "transparent",
-    boxSizing: "border-box",
-  },
-
-  errorBox: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "16px",
-    padding: "14px 16px",
-    marginBottom: "24px",
-    borderRadius: "10px",
-    border: "1px solid var(--color-danger-bg)",
-    background: "var(--color-danger-bg)",
-    color: "var(--color-danger-text)",
-  },
-
-  errorText: {
-    marginTop: "4px",
-    fontSize: "13px",
-  },
-
-  retryButton: {
-    border: "1px solid var(--color-danger-text)",
-    borderRadius: "7px",
-    padding: "8px 14px",
-    background: "var(--color-surface)",
-    color: "var(--color-danger-text)",
-    cursor: "pointer",
-    fontWeight: 600,
-  },
-
-  loadingCard: {
-    minHeight: "400px",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    background: "var(--color-surface)",
-    borderRadius: "12px",
-  },
-
-  spinner: {
-    width: "34px",
-    height: "34px",
-    border: "4px solid var(--color-border)",
-    borderTop: "4px solid var(--color-primary)",
-    borderRadius: "50%",
-    animation: "spin 1s linear infinite",
-  },
-
-  loadingText: {
-    marginTop: "14px",
-    color: "var(--color-muted)",
-  },
-
-  section: {
-    marginTop: "30px",
-  },
-
-  sectionHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: "14px",
-  },
-
-  sectionTitle: {
-    margin: "0 0 14px",
-    color: "var(--color-text)",
-    fontSize: "18px",
-    fontWeight: 700,
-  },
-
-  grid: {
-    display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: "16px",
-  },
-
-  card: {
-    display: "flex",
-    alignItems: "center",
-    gap: "14px",
-    minHeight: "100px",
-    padding: "18px",
-    background: "var(--color-surface)",
-    borderRadius: "12px",
-    border: "1px solid var(--color-border)",
-    boxSizing: "border-box",
-  },
-
-  cardIcon: {
-    width: "44px",
-    height: "44px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: "10px",
-    background: "var(--color-info-bg)",
-    fontSize: "20px",
-  },
-
-  cardLabel: {
-    color: "var(--color-muted)",
-    fontSize: "13px",
-    fontWeight: 500,
-  },
-
-  cardValue: {
-    marginTop: "5px",
-    color: "var(--color-text)",
-    fontSize: "25px",
-    fontWeight: 700,
-  },
-
-  activityCard: {
-    background: "var(--color-surface)",
-    border: "1px solid var(--color-border)",
-    borderRadius: "12px",
-    overflow: "hidden",
-  },
-
-  activityRow: {
-    display: "flex",
-    gap: "14px",
-    padding: "16px 18px",
-    borderBottom: "1px solid var(--color-border)",
-  },
-
-  activityDot: {
-    width: "9px",
-    height: "9px",
-    marginTop: "6px",
-    borderRadius: "50%",
-    background: "var(--color-primary)",
-    flexShrink: 0,
-  },
-
-  activityContent: {
-    minWidth: 0,
-    flex: 1,
-  },
-
-  activityTitle: {
-    color: "var(--color-text)",
-    fontSize: "14px",
-    fontWeight: 600,
-  },
-
-  activityDescription: {
-    marginTop: "4px",
-    color: "var(--color-muted)",
-    fontSize: "13px",
-  },
-
-  activityDate: {
-    marginTop: "6px",
-    color: "var(--color-muted)",
-    fontSize: "12px",
-  },
-
-  emptyState: {
-    padding: "32px",
-    textAlign: "center",
-    color: "var(--color-muted)",
-    fontSize: "14px",
-  },
-};
-
-export default Dashboard;
+export default AdminDashboard;

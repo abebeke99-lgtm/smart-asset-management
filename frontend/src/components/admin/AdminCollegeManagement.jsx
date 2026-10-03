@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-const COLLEGES_API = "/api/colleges";
+const COLLEGES_API = "/api/admin/colleges";
+const CAMPUSES_API = "/api/locations/campuses";
 
 const EMPTY_FORM = {
   name: "",
   code: "",
+  campusId: "",
   description: "",
   dean: "",
   phone: "",
@@ -105,6 +107,7 @@ function normalizeCollege(item, index) {
       item?.code ??
       item?.collegeCode ??
       "",
+    campusId: item?.campusId ?? item?.campus_id ?? "",
 
     description:
       item?.description ??
@@ -168,6 +171,7 @@ function formatDate(value) {
 
 export default function Colleges() {
   const [colleges, setColleges] = useState([]);
+  const [campuses, setCampuses] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -190,14 +194,17 @@ export default function Colleges() {
     setError("");
 
     try {
-      const response =
-        await apiRequest(COLLEGES_API);
+      const [response, campusResponse] = await Promise.all([
+        apiRequest(`${COLLEGES_API}?limit=100`),
+        apiRequest(`${CAMPUSES_API}?status=active&limit=500`),
+      ]);
 
       setColleges(
         extractArray(response).map(
           normalizeCollege
         )
       );
+      setCampuses(extractArray(campusResponse).filter((campus) => String(campus.status || "active").toLowerCase() === "active"));
     } catch (err) {
       setError(
         err.message ||
@@ -291,6 +298,7 @@ export default function Colleges() {
     setForm({
       name: college.name || "",
       code: college.code || "",
+      campusId: college.campusId || "",
       description:
         college.description || "",
       dean: college.dean || "",
@@ -341,6 +349,7 @@ export default function Colleges() {
       const payload = {
         name: form.name.trim(),
         code: form.code.trim(),
+        campusId: form.campusId ? Number(form.campusId) : null,
         description:
           form.description.trim(),
         dean: form.dean.trim(),
@@ -1269,6 +1278,25 @@ export default function Colleges() {
               className="form"
               onSubmit={saveCollege}
             >
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Campus</label>
+                  <select
+                    name="campusId"
+                    className="form-input"
+                    value={form.campusId}
+                    onChange={updateForm}
+                  >
+                    <option value="">Campus not mapped</option>
+                    {campuses.map((campus) => (
+                      <option key={campus.id} value={campus.id}>
+                        {campus.campusName || campus.campus_name || campus.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">

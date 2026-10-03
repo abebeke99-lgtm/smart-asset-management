@@ -55,7 +55,7 @@ const describePasswordProblem = (value) => {
 };
 
 const extractServerMessage = (error, fallback) => {
-  const status = error?.response?.status;
+  const status = error?.response?.status || error?.status;
   const serverMessage = error?.response?.data?.message;
   const code = error?.response?.data?.code;
   if (code === 'SMS_NOT_CONFIGURED') return fallback.smsUnavailable;
@@ -727,7 +727,7 @@ const ForgotPassword = () => {
   );
 };
 
-const englishTranslations = {
+export const englishTranslations = {
   forgotPassword: 'Forgot Password?',
   instructions: 'Choose how you want to recover access and we will send the right instructions.',
   recoveryMethod: 'Recovery method',
@@ -782,7 +782,7 @@ const englishTranslations = {
   },
 };
 
-const amharicTranslations = {
+export const amharicTranslations = {
   forgotPassword: 'የይለፍ ቃል ረሱ?',
   instructions: 'መግቢያዎን እንደምትን ማግኘት ያለውን ዘዴ ይምረጡ፤ ትክክለኛውን መመሪያ እንልክልዎታለን።',
   recoveryMethod: 'የመልሶ ማግኛ ዘዴ',

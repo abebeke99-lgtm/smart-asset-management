@@ -19,13 +19,13 @@ test('finance router exposes the invoices CRUD contract used by the frontend', (
   }
 });
 
-test('assignment router exposes the removal route used by the assignments admin UI', () => {
+test('assignment history deletion is rejected so assignment records remain auditable', () => {
   const assignmentRoutes = require('../routes/assignmentRoutes');
   const deleteRoute = assignmentRoutes.stack.find((layer) => layer.route && layer.route.path === '/:id' && layer.route.methods.delete);
-  assert.ok(deleteRoute, 'expected DELETE /:id route in the assignment router');
+  assert.ok(deleteRoute, 'expected a protected DELETE /:id rejection route in the assignment router');
   const routeSource = fs.readFileSync(path.join(__dirname, '../routes/assignmentRoutes.js'), 'utf8');
-  assert.match(routeSource, /assignment\.status\)\.toLowerCase\(\) === 'active'/, 'expected active-assignment handling when deleting an assignment');
-  assert.match(routeSource, /restoreIfAvailable|availableQuantity: inventory\.availableQuantity \+ 1/, 'expected inventory quantity restoration on deletion of an active assignment');
+  assert.match(routeSource, /status\(405\)\.json\(\{ success: false, message: 'Assignment history is retained/);
+  assert.doesNotMatch(routeSource, /assignment\.destroy\(/, 'assignment records must never be destroyed');
 });
 
 test('invoice models are registered and associated with the include aliases the controller relies on', () => {

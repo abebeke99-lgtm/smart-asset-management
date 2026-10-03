@@ -23,7 +23,7 @@ describe('AdminAssets data shaping', () => {
       BuildingRecord: { buildingName: 'Science Building' },
       RoomRecord: { roomName: 'Laboratory 204' },
       AssignmentRecord: { User: { fullName: 'Aster Bekele' } },
-      AssetDocument: [{ fileName: 'manual.pdf' }],
+      AssetDocument: [{ documentType: 'manual', fileName: 'manual.pdf' }],
       GrantRecord: { name: 'Research Grant' },
       WarrantyInfo: { provider: 'Dell', status: 'Active' },
     });
@@ -58,9 +58,9 @@ describe('AdminAssets data shaping', () => {
     })).toBe('Main Campus → College of Science → ICT → Computer Lab → Room 204');
   });
 
-  it('tracks exactly 12 required registration fields', () => {
+  it('tracks every required registration field including grant, warranty, and manual', () => {
     const emptyChecks = getRegistrationChecks({});
-    expect(emptyChecks).toHaveLength(12);
+    expect(emptyChecks).toHaveLength(15);
     expect(emptyChecks.filter((item) => item.complete)).toHaveLength(0);
 
     const completeChecks = getRegistrationChecks({
@@ -76,7 +76,10 @@ describe('AdminAssets data shaping', () => {
       buildingId: '5',
       roomId: '6',
       status: 'available',
+      fundingSource: 'Grant 2025',
+      warrantyCoverage: 'none',
+      equipmentManual: { name: 'manual.pdf' },
     });
-    expect(completeChecks.filter((item) => item.complete)).toHaveLength(12);
+    expect(completeChecks.filter((item) => item.complete)).toHaveLength(15);
   });
 });

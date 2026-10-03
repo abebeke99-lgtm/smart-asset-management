@@ -60,7 +60,7 @@ const { verifySmtpConnection } = require('./services/emailService');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : 'loopback');
 const healthHandler = async (_req, res) => {
   try {
     await sequelize.query('SELECT 1');
@@ -140,7 +140,7 @@ app.use(cors({
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(passport.initialize());
 app.use(requestContextMiddleware);

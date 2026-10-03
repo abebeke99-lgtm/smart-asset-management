@@ -49,3 +49,16 @@ test('mailer disables implicit TLS on port 587 even if EMAIL_SECURE is true', ()
   assert.equal(readMailerConfig().secure, false);
   assert.equal(getTransporter().options.secure, false);
 });
+
+test('mailer preserves a quoted display name in EMAIL_FROM', () => {
+  process.env.EMAIL_FROM = '"Mekdela Amba University" <name@gmail.com>';
+
+  assert.equal(readMailerConfig().from, '"Mekdela Amba University" <name@gmail.com>');
+});
+
+test('mailer falls back to EMAIL_USER when EMAIL_FROM is empty', () => {
+  process.env.EMAIL_USER = 'sender@gmail.com';
+  process.env.EMAIL_FROM = '';
+
+  assert.equal(readMailerConfig().from, 'sender@gmail.com');
+});

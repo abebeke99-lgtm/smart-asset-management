@@ -41,7 +41,9 @@ describe('Services page', () => {
     expect(screen.queryByText(/physical reader hardware is supplied/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^0[1-8]$/)).not.toBeInTheDocument();
     expect(container.querySelector('.services-card-number')).toBeNull();
-    expect(screen.getAllByRole('link')).toHaveLength(8);
+    expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/home');
+    expect(screen.getAllByRole('link')).toHaveLength(9);
     [
       '/admin/assets/create',
       '/admin/inventory/overview',

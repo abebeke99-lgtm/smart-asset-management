@@ -112,10 +112,12 @@ test('asset update uses a field whitelist with numeric and date guards', () => {
   assert.match(source, /must be a valid date/);
 });
 
-test('assignment transfer validates the new assignee id', () => {
+test('assignment reassign validates typed targets and closes the previous history row', () => {
   const source = read('../routes/assignmentRoutes.js');
-  assert.match(source, /Number\(req\.body\.new_user_id \|\| req\.body\.newUserId\)/);
-  assert.match(source, /Cannot transfer an assignment to an inactive user/);
+  assert.match(source, /req\.body\.new_user_id \|\| req\.body\.newUserId/);
+  assert.match(source, /Assigned To type must be User, Department or Laboratory/);
+  assert.match(source, /status: 'closed', workflowStatus: 'reassigned'/);
+  assert.match(source, /Select an active user to receive this asset/);
 });
 
 test('backend error middleware never serializes internal 500 details to clients', () => {

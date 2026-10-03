@@ -1,12 +1,13 @@
 ﻿const express = require('express');
 const router = express.Router();
 const { requireAuth, requireRole } = require('../middlewares/auth');
-const { Department, User, Asset, AuditLog, College, Location } = require('../models');
+const { Department, User, Asset, Room, AuditLog, College, Location } = require('../models');
 const { Op } = require('sequelize');
 const { resolveCollegeScope } = require('../middlewares/organizationScope');
 const { createAuditLog } = require('../services/auditLogService');
 
 const requireAdmin = [requireAuth, requireRole('admin')];
+const departmentReadAccess = [requireAuth, requireRole('admin', 'college', 'college_manager', 'ict_officer', 'store_manager', 'department_head', 'maintenance', 'infrastructure')];
 
 const departmentIncludes = [
   { model: College, attributes: ['id', 'collegeCode', 'collegeName'], required: false },
@@ -21,7 +22,7 @@ const buildScope = (req) => {
   const collegeId = organizationScope.collegeId || req.user?.collegeId;
   const departmentId = organizationScope.departmentId || req.user?.departmentId;
 
-  if (['college', 'store_manager'].includes(role) && collegeId) scope.collegeId = collegeId;
+  if (['college', 'store_manager', 'college_manager'].includes(role) && collegeId) scope.collegeId = collegeId;
   if (role === 'department_head' && departmentId) scope.id = departmentId;
   return scope;
 };
@@ -58,7 +59,7 @@ const serializeDepartment = (department, counts = {}) => ({
 });
 
 // Get department statistics from the same scoped, relationship-backed data.
-router.get('/stats', requireAuth, async (req, res, next) => {
+router.get('/stats', ...departmentReadAccess, async (req, res, next) => {
   try {
     const where = buildWhere(req);
     const departments = await Department.findAll({ where, attributes: ['id', 'headId', 'locationId', 'status'] });
@@ -89,7 +90,7 @@ router.get('/stats', requireAuth, async (req, res, next) => {
 });
 
 // Get all departments
-router.get('/', requireAuth, (req, res, next) => req.user.role === 'store_manager' ? resolveCollegeScope(req, res, next) : next(), async (req, res, next) => {
+router.get('/', ...departmentReadAccess, (req, res, next) => ['store_manager', 'college', 'college_manager'].includes(req.user.role) ? resolveCollegeScope(req, res, next) : next(), async (req, res, next) => {
   try {
     const { search = '', page = '1', limit = '25' } = req.query;
     const currentPage = Math.max(1, Number.parseInt(page, 10) || 1);
@@ -123,7 +124,7 @@ router.get('/', requireAuth, (req, res, next) => req.user.role === 'store_manage
 });
 
 // Get single department
-router.get('/:id', requireAuth, async (req, res, next) => {
+router.get('/:id', ...departmentReadAccess, async (req, res, next) => {
   try {
     const dept = await Department.findOne({ where: { id: req.params.id, ...buildScope(req) }, include: departmentIncludes });
     if (!dept) return res.status(404).json({ success: false, message: 'Department not found' });
@@ -258,16 +259,17 @@ router.delete('/:id', ...requireAdmin, async (req, res, next) => {
     if (!dept) return res.status(404).json({ success: false, message: 'Department not found' });
     
     // Check if department has users or assets
-    const [userCount, assetCount] = await Promise.all([
+    const [userCount, assetCount, laboratoryCount] = await Promise.all([
       User.count({ where: { departmentId: dept.id } }),
       Asset.count({ where: { departmentId: dept.id } }),
+      Room.count({ where: { departmentId: dept.id } }),
     ]);
     
-    if (userCount > 0 || assetCount > 0) {
+    if (userCount > 0 || assetCount > 0 || laboratoryCount > 0) {
       return res.status(409).json({
         success: false,
-        message: `Cannot delete department with ${userCount} users and ${assetCount} assets. Please reassign them first.`,
-        details: { userCount, assetCount }
+        message: `Cannot delete department with ${userCount} users, ${assetCount} assets, and ${laboratoryCount} mapped rooms. Reassign or unmap them first.`,
+        details: { userCount, assetCount, laboratoryCount }
       });
     }
     

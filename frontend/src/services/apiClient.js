@@ -79,11 +79,21 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error('API Request Error:', {
-      url: error.config?.baseURL ? `${error.config.baseURL}${error.config.url || ''}` : error.config?.url,
-      method: error.config?.method?.toUpperCase(),
-      status: error.response?.status || 0,
-    });
+    const isCancellation =
+      error?.code === 'ERR_CANCELED' ||
+      error?.code === 'ECONNABORTED' ||
+      error?.name === 'CanceledError' ||
+      axios.isCancel?.(error) ||
+      error?.message === 'canceled' ||
+      error?.message === 'Request aborted';
+
+    if (!isCancellation) {
+      console.error('API Request Error:', {
+        url: error.config?.baseURL ? `${error.config.baseURL}${error.config.url || ''}` : error.config?.url,
+        method: error.config?.method?.toUpperCase(),
+        status: error.response?.status || 0,
+      });
+    }
 
     if (error.response?.status === 401) {
       localStorage.removeItem('token');

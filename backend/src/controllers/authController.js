@@ -317,6 +317,7 @@ const RESET_TOKEN_TTL_MINUTES = Math.min(30, Math.max(15, Number(process.env.PAS
 const RESET_OTP_TTL_MINUTES = Math.min(15, Math.max(5, Number(process.env.PASSWORD_RESET_OTP_TTL_MINUTES) || 5));
 const RESET_OTP_MAX_ATTEMPTS = Math.min(5, Math.max(1, Number(process.env.PASSWORD_RESET_OTP_MAX_ATTEMPTS) || 5));
 const OTP_REQUEST_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const OTP_REQUEST_RATE_LIMIT_PER_EMAIL = 5;
 const OTP_REQUEST_RATE_LIMIT_PER_PHONE = 4;
 const OTP_REQUEST_RATE_LIMIT_PER_IP = 8;
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
@@ -371,7 +372,7 @@ const checkForOtpRateLimit = (destination, ipAddress, method = 'phone') => {
   const destinationState = getRateLimitState(
     otpRequestBuckets,
     normalizedDestination || (method === 'email' ? 'unknown-email' : 'unknown-phone'),
-    method === 'email' ? OTP_REQUEST_RATE_LIMIT_PER_IP : OTP_REQUEST_RATE_LIMIT_PER_PHONE,
+    method === 'email' ? OTP_REQUEST_RATE_LIMIT_PER_EMAIL : OTP_REQUEST_RATE_LIMIT_PER_PHONE,
     OTP_REQUEST_RATE_LIMIT_WINDOW_MS,
   );
   const ipState = getRateLimitState(otpRequestIpBuckets, safeIp, OTP_REQUEST_RATE_LIMIT_PER_IP, OTP_REQUEST_RATE_LIMIT_WINDOW_MS);

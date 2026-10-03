@@ -59,9 +59,10 @@ const validateUserInput = async (input, { requirePassword = false } = {}) => {
 const getAllUsers = async (req, res) => {
   try {
     const where = {};
+    const storeManagerRoleName = 'store_manager';
     if (req.user.role === 'college' && req.query.department && req.query.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department access denied' });
     if (req.user.role === 'college') where.department = req.user.department;
-    if (req.user.role === 'store_manager') {
+    if (req.user.role === storeManagerRoleName) {
       const configuredCollegeId = req.organizationScope?.collegeId ?? req.user.collegeId ?? req.user.college_id;
       const scope = configuredCollegeId == null ? await findCollegeScopeForUser(req.user) : null;
       const collegeId = Number(configuredCollegeId ?? scope?.collegeId);

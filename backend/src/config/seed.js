@@ -1,8 +1,13 @@
 require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const Asset = require('../models/Asset');
+const Assignment = require('../models/Assignment');
+const Maintenance = require('../models/Maintenance');
+const Notification = require('../models/Notification');
 const College = require('../models/College');
 const Department = require('../models/Department');
+const Location = require('../models/Location');
 
 function resolveDemoPassword() {
   const configured = String(process.env.SEED_DEMO_PASSWORD || process.env.DEMO_USER_PASSWORD || '').trim();
@@ -25,7 +30,7 @@ const DEMO_USERS = [
   },
   {
     username: 'ict_officer',
-    email: 'ict@bekelei.com',
+    email: 'ict_officer@bekelei.com',
     fullName: 'ICT Officer',
     role: 'ict_officer',
     department: 'ICT',
@@ -168,39 +173,285 @@ async function ensureDepartmentScopeForUser(userRecord, { collegeModel = College
   }
 }
 
-async function ensureDemoUser(userData, { userModel = User, collegeModel = College, departmentModel = Department } = {}) {
-  const existingUser = await userModel.findOne({ where: { username: userData.username } });
-  if (existingUser) {
-    return false;
+function normalizeDemoUserSeed(userData = {}) {
+  return {
+    username: String(userData.username || '').trim(),
+    email: String(userData.email || '').trim().toLowerCase(),
+    fullName: String(userData.fullName || userData.username || '').trim(),
+    role: String(userData.role || 'student').trim(),
+    department: String(userData.department || '').trim(),
+    phone: String(userData.phone || '').trim(),
+    active: userData.active !== false,
+    password: String(userData.password || '').trim(),
+  };
+}
+
+const applyUserUpdates = async (existingUser, updates, userModel) => {
+  if (!Object.keys(updates).length) {
+    return existingUser;
   }
 
-  const emailOwner = userData.email
-    ? await userModel.findOne({ where: { email: userData.email } })
+  if (typeof existingUser.update === 'function') {
+    await existingUser.update(updates);
+    return existingUser;
+  }
+
+  Object.assign(existingUser, updates);
+  if (typeof userModel?.update === 'function') {
+    await userModel.update(updates, { where: { username: existingUser.username } });
+  }
+  return existingUser;
+};
+
+async function ensureDemoUser(userData, { userModel = User, collegeModel = College, departmentModel = Department } = {}) {
+  const normalizedUserData = normalizeDemoUserSeed(userData);
+  const existingUser = await userModel.findOne({ where: { username: normalizedUserData.username } });
+
+  if (existingUser) {
+    const updates = {};
+    const emailOwner = normalizedUserData.email
+      ? await userModel.findOne({ where: { email: normalizedUserData.email } })
+      : null;
+
+    if (normalizedUserData.email && existingUser.email !== normalizedUserData.email && (!emailOwner || String(emailOwner.username) === normalizedUserData.username)) {
+      updates.email = normalizedUserData.email;
+    } else if (!normalizedUserData.email && existingUser.email) {
+      updates.email = null;
+    }
+
+    if (normalizedUserData.fullName && existingUser.fullName !== normalizedUserData.fullName) updates.fullName = normalizedUserData.fullName;
+    if (normalizedUserData.role && existingUser.role !== normalizedUserData.role) updates.role = normalizedUserData.role;
+    if (normalizedUserData.department && existingUser.department !== normalizedUserData.department) updates.department = normalizedUserData.department;
+    if (normalizedUserData.phone && existingUser.phone !== normalizedUserData.phone) updates.phone = normalizedUserData.phone;
+    if (existingUser.active !== normalizedUserData.active) updates.active = normalizedUserData.active;
+
+    const passwordNeedsReset = normalizedUserData.password && !(await bcrypt.compare(normalizedUserData.password, existingUser.password || ''));
+    if (passwordNeedsReset) updates.password = await bcrypt.hash(normalizedUserData.password, 10);
+
+    if (Object.keys(updates).length > 0) {
+      await applyUserUpdates(existingUser, updates, userModel);
+      return { created: false, updated: true, user: existingUser };
+    }
+
+    return { created: false, updated: false, user: existingUser };
+  }
+
+  const emailOwner = normalizedUserData.email
+    ? await userModel.findOne({ where: { email: normalizedUserData.email } })
     : null;
-  const hashedPassword = await bcrypt.hash(userData.password, 10);
+  const hashedPassword = await bcrypt.hash(normalizedUserData.password, 10);
   const [createdUser, created] = await userModel.findOrCreate({
-    where: { username: userData.username },
+    where: { username: normalizedUserData.username },
     defaults: {
-      ...userData,
-      email: emailOwner ? null : userData.email,
+      ...normalizedUserData,
+      email: emailOwner ? null : normalizedUserData.email,
       password: hashedPassword,
     },
   });
-  if (!created) return false;
+  if (!created) return { created: false, updated: false, user: createdUser };
 
-  if (normalizeCollegeRole(userData.role) === 'college_manager') {
+  if (normalizeCollegeRole(normalizedUserData.role) === 'college_manager') {
     await ensureCollegeScopeForUser(createdUser, collegeModel);
   }
-  if (userData.role === 'department_head') {
+  if (normalizedUserData.role === 'department_head') {
     await ensureDepartmentScopeForUser(createdUser, { collegeModel, departmentModel });
   }
-  if (userData.role === 'store_manager') {
+  if (normalizedUserData.role === 'store_manager') {
     const activeCollege = await collegeModel.findOne({ where: { status: 'active' }, order: [['id', 'ASC']] });
     if (activeCollege && Number(createdUser.collegeId) !== Number(activeCollege.id)) {
       await createdUser.update({ collegeId: activeCollege.id });
     }
   }
-  return true;
+  return { created: true, updated: false, user: createdUser };
+}
+
+function buildSampleAssetRow(index, collegeId, departmentId, locationId) {
+  const pad = String(index + 1).padStart(4, '0');
+  const categoryNames = ['Laptop', 'Desktop', 'Projector', 'Printer', 'Network Device', 'Furniture', 'Server', 'Monitor'];
+  const assetNames = [
+    'Dell Latitude 7440', 'HP EliteDesk 800', 'Epson Projector', 'Brother MFC-L3770', 'Cisco Catalyst Switch',
+    'Office Chair', 'Dell PowerEdge Server', 'Dell 24-inch Monitor', 'Lenovo ThinkPad T14', 'Cisco Access Point',
+    'LaserJet Printer', 'APC UPS', 'Acer Monitor', 'MacBook Pro 14', 'Network Router', 'Conference Table', 'Security Camera',
+    'Storage NAS', 'Tablet Device', 'Video Conference Kit',
+  ];
+  const statusList = ['available', 'in-use', 'under-maintenance', 'reserved', 'available'];
+  const date = new Date(Date.now() - ((index % 12) * 12 + 8) * 86400000);
+  const asset = {
+    name: assetNames[index % assetNames.length] + ` ${pad}`,
+    category: categoryNames[index % categoryNames.length],
+    subcategory: 'IT Equipment',
+    unit: 'unit',
+    description: `Sample ${categoryNames[index % categoryNames.length].toLowerCase()} asset for development testing.`,
+    serialNumber: `SN-${pad}-${(index * 17) % 1000}`,
+    assetCode: `ASSET-${pad}`,
+    digitalId: `DIGI-${pad}`,
+    rfidTag: `RFID-${pad}`,
+    status: statusList[index % statusList.length],
+    condition: ['Excellent', 'Good', 'Fair', 'Poor'][index % 4],
+    department: ['Engineering', 'ICT', 'Administration', 'Library', 'Finance'][index % 5],
+    collegeId,
+    departmentId,
+    location: `Location ${((index % 5) + 1)}`,
+    quantity: 1,
+    specifications: { model: 'Demo', manufacturer: 'Bekelei', purchasedOn: date.toISOString().slice(0, 10) },
+    fundingSource: 'Development Budget',
+    purchaseDate: date,
+    purchasePrice: 1500 + (index * 245),
+    supplier: 'Bekelei Supplies',
+    manufacturer: 'Bekelei Tech',
+    model: `Series-${(index % 6) + 1}`,
+    warrantyExpiry: new Date(Date.now() + (index + 1) * 31536000000),
+    notes: 'Seeded for local verification and UI testing.',
+    currentValue: 1000 + (index * 225),
+    healthScore: 90 + (index % 10),
+    createdBy: 1,
+    campusId: null,
+    buildingId: null,
+    roomId: null,
+  };
+  return asset;
+}
+
+const findOrCreateRecord = async (model, where, defaults = {}) => {
+  if (typeof model?.findOrCreate === 'function') {
+    return model.findOrCreate({ where, defaults });
+  }
+
+  const existing = typeof model?.findOne === 'function' ? await model.findOne({ where }) : null;
+  if (existing) return [existing, false];
+
+  if (typeof model?.create === 'function') {
+    const created = await model.create({ ...defaults, ...where });
+    return [created, true];
+  }
+
+  return [{ ...where, ...defaults }, true];
+};
+
+async function seedOperationalData(options = {}) {
+  const models = {
+    assetModel: options.assetModel || Asset,
+    assignmentModel: options.assignmentModel || Assignment,
+    maintenanceModel: options.maintenanceModel || Maintenance,
+    notificationModel: options.notificationModel || Notification,
+    userModel: options.userModel || User,
+    collegeModel: options.collegeModel || College,
+    departmentModel: options.departmentModel || Department,
+    locationModel: options.locationModel || Location,
+  };
+
+  const userModel = models.userModel || User;
+  const hasFindAll = typeof userModel?.findAll === 'function';
+  const userRows = hasFindAll ? await userModel.findAll({ where: { active: true }, attributes: ['id','username','email','role'] }) : [];
+
+  const normalizedColleges = await Promise.all([
+    findOrCreateRecord(models.collegeModel, { collegeName: 'Engineering' }, { collegeCode: 'ENG-01', description: 'Engineering college', status: 'active' }),
+    findOrCreateRecord(models.collegeModel, { collegeName: 'Business' }, { collegeCode: 'BUS-01', description: 'Business college', status: 'active' }),
+  ]);
+  const collegeIds = normalizedColleges.map(([college]) => college.id);
+
+  const departmentNames = ['Engineering', 'ICT', 'Finance', 'Administration', 'Library'];
+  const departments = [];
+  for (let index = 0; index < departmentNames.length; index += 1) {
+    const departmentName = departmentNames[index];
+    const [department] = await findOrCreateRecord(models.departmentModel, { name: departmentName }, {
+      code: departmentName.slice(0, 6).toUpperCase(),
+      collegeId: collegeIds[index % collegeIds.length],
+      description: `${departmentName} department sample data`,
+      status: 'active',
+    });
+    departments.push(department);
+  }
+
+  const locations = [];
+  for (let index = 0; index < 5; index += 1) {
+    const [location] = await findOrCreateRecord(models.locationModel, { name: `Building ${index + 1}` }, { code: `BLD-${index + 1}`, description: `Sample location ${index + 1}`, status: 'active' });
+    locations.push(location);
+  }
+
+  const seedUsers = userRows.length ? userRows : [
+    { id: 1, username: 'admin', email: 'admin@bekelei.com', role: 'admin' },
+    { id: 2, username: 'ict_officer', email: 'ict_officer@bekelei.com', role: 'ict_officer' },
+  ];
+
+  const assetRows = [];
+  for (let index = 0; index < 20; index += 1) {
+    const department = departments[index % departments.length];
+    const location = locations[index % locations.length];
+    const row = buildSampleAssetRow(index, department.collegeId || collegeIds[index % collegeIds.length], department.id, location.id);
+    const [asset, created] = await findOrCreateRecord(models.assetModel, { digitalId: row.digitalId }, row);
+    if (!created && asset.digitalId !== row.digitalId) {
+      await asset.update(row);
+    }
+    assetRows.push(asset);
+  }
+
+  const assignmentSeed = [
+    { assetId: assetRows[0].id, assignedTo: seedUsers[1]?.id || 1, assignedToId: seedUsers[1]?.id || 1, assignedBy: seedUsers[0]?.id || 1, status: 'active', workflowStatus: 'assigned', location: 'Building 1', notes: 'Initial assignment' },
+    { assetId: assetRows[1].id, assignedTo: seedUsers[2]?.id || 2, assignedToId: seedUsers[2]?.id || 2, assignedBy: seedUsers[0]?.id || 1, status: 'active', workflowStatus: 'assigned', location: 'Building 2', notes: 'Teaching equipment' },
+    { assetId: assetRows[2].id, assignedTo: seedUsers[3]?.id || 3, assignedToId: seedUsers[3]?.id || 3, assignedBy: seedUsers[0]?.id || 1, status: 'returned', workflowStatus: 'returned', location: 'Building 3', notes: 'Returned after check' },
+    { assetId: assetRows[3].id, assignedTo: seedUsers[1]?.id || 1, assignedToId: seedUsers[1]?.id || 1, assignedBy: seedUsers[0]?.id || 1, status: 'active', workflowStatus: 'assigned', location: 'Building 4', notes: 'Shared ICT resource' },
+    { assetId: assetRows[4].id, assignedTo: seedUsers[0]?.id || 1, assignedToId: seedUsers[0]?.id || 1, assignedBy: seedUsers[0]?.id || 1, status: 'active', workflowStatus: 'assigned', location: 'Building 5', notes: 'Admin asset' },
+  ];
+
+  for (const assignment of assignmentSeed) {
+    const [record] = await models.assignmentModel.findOrCreate({
+      where: { assetId: assignment.assetId, assignedToId: assignment.assignedToId || assignment.assignedTo },
+      defaults: {
+        ...assignment,
+        assignedToType: 'user',
+        assignedDate: new Date(Date.now() - 86400000 * (assignment.workflowStatus === 'returned' ? 25 : 2)),
+        expectedReturnDate: new Date(Date.now() + 86400000 * (assignment.workflowStatus === 'returned' ? 2 : 20)),
+      },
+    });
+    if (record && record.status !== assignment.status) {
+      await record.update({ ...assignment, assignedDate: new Date(Date.now() - 86400000), expectedReturnDate: new Date(Date.now() + 86400000 * 14) });
+    }
+  }
+
+  const maintenanceSeeds = [
+    { assetId: assetRows[5].id, requestedBy: seedUsers[0]?.id || 1, assignedTo: seedUsers[1]?.id || 1, title: 'Keyboard replacement', description: 'Replace worn keyboard', status: 'pending', priority: 'medium' },
+    { assetId: assetRows[6].id, requestedBy: seedUsers[1]?.id || 1, assignedTo: seedUsers[1]?.id || 1, title: 'Server inspection', description: 'Check uptime and thermal output', status: 'in_progress', priority: 'high' },
+    { assetId: assetRows[7].id, requestedBy: seedUsers[2]?.id || 2, assignedTo: seedUsers[1]?.id || 1, title: 'Monitor calibration', description: 'Calibrate display brightness', status: 'completed', priority: 'low' },
+    { assetId: assetRows[8].id, requestedBy: seedUsers[3]?.id || 3, assignedTo: seedUsers[1]?.id || 1, title: 'Router reset', description: 'Faulty network link', status: 'scheduled', priority: 'high' },
+    { assetId: assetRows[9].id, requestedBy: seedUsers[0]?.id || 1, assignedTo: seedUsers[1]?.id || 1, title: 'Battery replacement', description: 'Laptop battery issue', status: 'completed', priority: 'medium' },
+  ];
+
+  for (const maintenance of maintenanceSeeds) {
+    await models.maintenanceModel.findOrCreate({
+      where: { assetId: maintenance.assetId, title: maintenance.title },
+      defaults: maintenance,
+    });
+  }
+
+  const notificationSeeds = Array.from({ length: 10 }, (_, index) => ({
+    userId: seedUsers[index % seedUsers.length]?.id || 1,
+    recipientId: seedUsers[index % seedUsers.length]?.id || 1,
+    title: `Notification ${index + 1}`,
+    message: `Seeded notification ${index + 1} for local testing and dashboard review.`,
+    type: ['system', 'alert', 'maintenance', 'assignment', 'info'][index % 5],
+    category: 'general',
+    priority: ['low', 'medium', 'high'][index % 3],
+    channel: 'in_app',
+    status: 'sent',
+    read: index % 3 === 0,
+    role: seedUsers[index % seedUsers.length]?.role || 'admin',
+    actionUrl: '/assets',
+  }));
+
+  for (const notification of notificationSeeds) {
+    await models.notificationModel.findOrCreate({
+      where: { title: notification.title, message: notification.message },
+      defaults: notification,
+    });
+  }
+
+  return {
+    assets: assetRows.length,
+    assignments: assignmentSeed.length,
+    maintenances: maintenanceSeeds.length,
+    notifications: notificationSeeds.length,
+  };
 }
 
 async function seedDatabase(options = {}) {
@@ -209,15 +460,31 @@ async function seedDatabase(options = {}) {
     userModel: options.userModel || User,
     collegeModel: options.collegeModel || College,
     departmentModel: options.departmentModel || Department,
+    assetModel: options.assetModel || Asset,
+    assignmentModel: options.assignmentModel || Assignment,
+    maintenanceModel: options.maintenanceModel || Maintenance,
+    notificationModel: options.notificationModel || Notification,
+    locationModel: options.locationModel || Location,
   };
   const counts = { created: 0, existing: 0 };
 
   for (const userData of DEMO_USERS) {
-    const created = await ensureDemoUser({ ...userData, password }, models);
-    counts[created ? 'created' : 'existing'] += 1;
+    const result = await ensureDemoUser({ ...userData, password }, models);
+    counts[result.created ? 'created' : 'existing'] += 1;
+  }
+
+  if (process.env.SEED_DEMO_DATA !== 'false' || process.env.NODE_ENV === 'development') {
+    const operationalData = await seedOperationalData(models);
+    console.log(`[seed] Operational data seeded: ${operationalData.assets} assets, ${operationalData.assignments} assignments, ${operationalData.maintenances} maintenance records, ${operationalData.notifications} notifications.`);
+  }
+
+  const demoPassword = password || resolveDemoPassword();
+  console.log('[seed] Development credentials:');
+  for (const user of DEMO_USERS) {
+    console.log(` - ${user.username} | ${user.email} | ${demoPassword}`);
   }
 
   return counts;
 }
 
-module.exports = { seedDatabase, DEMO_USERS, resolveDemoPassword };
+module.exports = { seedDatabase, seedOperationalData, DEMO_USERS, resolveDemoPassword };
