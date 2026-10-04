@@ -101,12 +101,13 @@
 - Export (Excel/PDF)
 
 ### Inventory
-- Create items
-- Issue/return tracking
-- Stock adjustment
-- History tracking
-- Low stock alerts
-- Export
+- View ICT assets from the shared central MySQL `assets` table
+- Dashboard totals for total, available, assigned, damaged, missing, under maintenance, replaced, and expired assets
+- Search and filter by category, status, condition, campus, college, department, and location
+- Sort, paginate, and inspect complete asset details
+- Import Excel/CSV with a server-validated preview, duplicate serial detection, and required-field/category/status/date validation
+- Commit valid import rows in a database transaction and review total/imported/rejected/duplicates/errors
+- Export the current inventory page to CSV
 
 ### Asset Requests
 - Create requests
@@ -176,6 +177,18 @@ All data comes from these API endpoints:
 - `/api/rfid` - RFID tracking
 - `/api/inventory` - Inventory management
 - `/api/reports` - Reporting
+
+**ICT Inventory API:**
+- `GET /api/ict/inventory` - Scoped asset data, filters, pagination, options, and dashboard totals
+- `POST /api/ict/inventory/import` - Validate spreadsheet rows (`preview: true`) or import valid rows transactionally
+
+**IT Equipment API:**
+- `GET /api/ict/equipment` - Search and filter central inventory equipment with pagination and sorting
+- `GET /api/ict/equipment/options` - Authorized campus, college, department, building, and room choices
+- `GET /api/ict/equipment/:id` - Equipment details
+- `POST /api/ict/equipment` - Create an asset and its inventory balance transactionally
+- `PUT /api/ict/equipment/:id` - Update equipment details and inventory quantity
+- `DELETE /api/ict/equipment/:id` - Soft-delete equipment using the central asset recovery and audit flow
 
 ## 💡 Usage Examples
 

@@ -395,65 +395,21 @@ The ICT Officer Management System has been **completely implemented** with all 1
 
 ---
 
-### ✅ Module 8: Inventory Management (85% Complete)
+### ✅ Module 8: ICT Inventory Visibility
 **Route:** `/ict/inventory`
 
 **Features:**
-- **Inventory List:**
-  - Item name
-  - Category
-  - Current quantity
-  - Min/Max quantity
-  - Status (Normal, Low Stock, Out of Stock)
-  - Location
-  - Supplier
-  - Unit cost
-
-- **Create Inventory Item:**
-  - Item name
-  - Category
-  - Initial quantity
-  - Min quantity (alert level)
-  - Max quantity
-  - Location
-  - Supplier
-  - Unit cost
-
-- **Issue Items:**
-  - Select quantity to issue
-  - Assign to user/department
-  - Add remarks
-  - Track issuer
-
-- **Return Items:**
-  - Record quantity returned
-  - Return reason
-  - Condition notes
-  - Track returner
-
-- **Adjust Quantity:**
-  - Manual adjustment
-  - Reason for adjustment
-  - Audit trail
-
-- **Inventory History:**
-  - All transactions
-  - Issue/return log
-  - Adjustments
-  - Stock movements
-
-- **Alerts:**
-  - Low stock warnings
-  - Out of stock alerts
-  - Stock movement notifications
-
-- **Export:**
-  - Export inventory list
-  - Export to PDF
-  - Export to Excel
+- Real ICT asset records from the shared central MySQL `assets` table
+- Dashboard totals for total, available, assigned, damaged, missing, under maintenance, replaced, and expired assets
+- Search, filter by category/status/condition/campus/college/department/location, sort, and paginate
+- View asset details and export the current results as CSV
+- Preview Excel/CSV imports with database-backed validation for required fields, serial duplicates, dates, ICT categories, and asset statuses
+- Save valid rows with a MySQL transaction and an audit log entry; show total/imported/rejected/duplicates/errors
+- ICT-officer access is restricted to the officer's configured college; admins may inspect all ICT assets
 
 **Data Source:**
-- `/api/inventory` (CRUD)
+- `GET /api/ict/inventory`
+- `POST /api/ict/inventory/import` (`preview: true` validates without writing)
 
 ---
 
@@ -523,52 +479,18 @@ The ICT Officer Management System has been **completely implemented** with all 1
 
 ---
 
-### ✅ Module 10: IT Equipment (80% Complete)
+### ✅ Module 10: IT Equipment (Complete)
 **Route:** `/ict/equipment`
 
 **Features:**
-- **Equipment Categories:**
-  - Computers
-  - Laptops
-  - Printers
-  - Servers
-  - Network Devices
-  - Monitors
-  - UPS
-  - Other Devices
-
-- **Equipment List:**
-  - Show all equipment of selected type
-  - Table view with specifications
-  - Filter by status
-  - Filter by condition
-  - Search functionality
-
-- **Statistics:**
-  - Total equipment by type
-  - Status breakdown
-  - Condition breakdown
-  - Department distribution
-
-- **Equipment Information:**
-  - Asset tag
-  - Model
-  - Serial number
-  - Status
-  - Condition
-  - Location
-  - Department
-  - Last maintenance
-
-- **Quick Actions:**
-  - View details
-  - Edit information
-  - Assign equipment
-  - Schedule maintenance
-  - View history
+- Search central inventory by asset, serial, campus, college, department, building, or room
+- Filter by equipment category, status, and condition with sortable, paginated results
+- Add, view, edit, and soft-delete using scoped Express APIs and the existing MySQL `assets` and `inventory` tables
+- Validate required fields, quantity, dates, purchase cost, location hierarchy, and unique serial numbers
+- Use authenticated ICT Officer/admin access and college-scoped location choices
 
 **Data Source:**
-- `/api/assets` (filtered by category)
+- `GET`, `POST`, `PUT`, and `DELETE /api/ict/equipment` (scoped central asset inventory APIs)
 
 ---
 

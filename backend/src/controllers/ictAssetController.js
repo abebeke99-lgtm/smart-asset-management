@@ -1,9 +1,11 @@
 const { Op, fn, col } = require('sequelize');
 const fs = require('fs');
 const path = require('path');
-const { sequelize, Approval, Asset, Assignment, AuditLog, Inventory, InventoryTransaction, Category, Department, Incident, IncidentHistory, Maintenance, MaintenanceHistory, Notification, PreventiveMaintenance, RFIDLog, RfidDevice, RequestStatusHistory, ServiceRequest, SoftwareLicense, Transfer, User, AssetDocument } = require('../models');
+const { sequelize, Approval, Asset, Assignment, AuditLog, Inventory, InventoryTransaction, Category, Campus, College, Department, Building, Room, Incident, IncidentHistory, Maintenance, MaintenanceHistory, Notification, PreventiveMaintenance, RFIDLog, RfidDevice, RequestStatusHistory, ServiceRequest, SoftwareLicense, Transfer, User, AssetDocument } = require('../models');
 const { createAuditLog } = require('../services/auditLogService');
-const { equipmentTerms, networkTerms, equipmentPredicate, networkPredicate } = require('../utils/ictAssetFilters');
+const { getRecoveryDays } = require('../services/assetRetentionService');
+const { nextDigitalId, buildAssetCodeFromConfig } = require('./assetExtendedController');
+const { equipmentTerms, networkTerms, equipmentCategoryTermsByName, equipmentPredicate, networkPredicate } = require('../utils/ictAssetFilters');
 
 const ALLOWED_DOC_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_DOC_SIZE = 10 * 1024 * 1024;
@@ -34,6 +36,124 @@ const scopeWhere = (req) => req.user.role === 'admin' ? {} : { collegeId: req.or
 
 const equipmentWhere = (req) => ({ ...scopeWhere(req), ...equipmentPredicate() });
 const networkWhere = (req) => ({ ...scopeWhere(req), ...networkPredicate() });
+const equipmentLocationIncludes = [
+  { model: College, attributes: ['id', 'collegeName'], required: false },
+  { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name'], required: false },
+  { model: Campus, as: 'CampusRecord', attributes: ['id', 'campusName'], required: false },
+  { model: Building, as: 'BuildingRecord', attributes: ['id', 'buildingName', 'buildingCode'], required: false },
+  { model: Room, as: 'RoomRecord', attributes: ['id', 'roomName', 'roomCode'], required: false },
+];
+const equipmentCategories = ['Computing', 'Networking', 'Printing', 'Display', 'Power', 'Storage', 'Communication'];
+const equipmentStatuses = ['Available', 'Assigned', 'Under Maintenance', 'In Transit', 'Retired', 'Disposed'];
+const equipmentConditions = ['Functional', 'Needs Repair', 'Damaged', 'Missing', 'Expired', 'Replaced'];
+const validDate = (value) => {
+  if (value === null || value === undefined || value === '') return true;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+const equipmentInputError = (message, statusCode = 422) => Object.assign(new Error(message), { statusCode });
+const equipmentPayload = (body = {}) => ({
+  name: String(body.name || '').trim(),
+  category: String(body.category || '').trim(),
+  serialNumber: String(body.serialNumber || '').trim(),
+  quantity: Number(body.quantity),
+  campusId: Number(body.campusId),
+  collegeId: body.collegeId ? Number(body.collegeId) : null,
+  departmentId: body.departmentId ? Number(body.departmentId) : null,
+  buildingId: body.buildingId ? Number(body.buildingId) : null,
+  roomId: body.roomId ? Number(body.roomId) : null,
+  status: String(body.status || '').trim(),
+  condition: String(body.condition || '').trim(),
+  purchaseDate: body.purchaseDate || null,
+  purchasePrice: body.purchasePrice === '' || body.purchasePrice === undefined
+    ? (body.purchaseCost === undefined ? 0 : Number(body.purchaseCost))
+    : Number(body.purchasePrice),
+  warrantyExpiry: body.warrantyExpiry || null,
+  description: String(body.description || '').trim(),
+});
+const validateEquipmentPayload = (input, { creating, current = null } = {}) => {
+  if (creating || input.name !== undefined) {
+    if (!input.name) throw equipmentInputError('Asset name is required');
+    if (input.name.length > 255) throw equipmentInputError('Asset name must be 255 characters or fewer');
+  }
+  if (creating || input.category !== undefined) {
+    if (!equipmentCategories.includes(input.category)) throw equipmentInputError('Select a valid equipment category');
+  }
+  if (creating || input.quantity !== undefined) {
+    if (!Number.isSafeInteger(input.quantity) || input.quantity < 1) throw equipmentInputError('Quantity must be a positive whole number');
+  }
+  if (creating || input.campusId !== undefined) {
+    if (!Number.isSafeInteger(input.campusId) || input.campusId < 1) throw equipmentInputError('Select a campus');
+  }
+  for (const field of ['collegeId', 'departmentId', 'buildingId', 'roomId']) {
+    if (input[field] !== undefined && input[field] !== null && (!Number.isSafeInteger(input[field]) || input[field] < 1)) {
+      throw equipmentInputError(`Select a valid ${field.replace('Id', '').toLowerCase()}`);
+    }
+  }
+  if (creating || input.status !== undefined) {
+    if (!equipmentStatuses.includes(input.status)) throw equipmentInputError('Select a valid equipment status');
+  }
+  if (creating || input.condition !== undefined) {
+    if (!equipmentConditions.includes(input.condition)) throw equipmentInputError('Select a valid equipment condition');
+  }
+  if (input.serialNumber !== undefined && input.serialNumber.length > 255) throw equipmentInputError('Serial number must be 255 characters or fewer');
+  if (input.description !== undefined && input.description.length > 10000) throw equipmentInputError('Description must be 10,000 characters or fewer');
+  if (input.purchasePrice !== undefined && (!Number.isFinite(input.purchasePrice) || input.purchasePrice < 0)) {
+    throw equipmentInputError('Purchase cost must be a non-negative number');
+  }
+  for (const field of ['purchaseDate', 'warrantyExpiry']) {
+    if (input[field] !== undefined && !validDate(input[field])) throw equipmentInputError(`${field === 'purchaseDate' ? 'Purchase date' : 'Warranty expiry'} must be a valid date`);
+  }
+  const purchaseDate = input.purchaseDate ?? current?.purchaseDate;
+  const warrantyExpiry = input.warrantyExpiry ?? current?.warrantyExpiry;
+  if (purchaseDate && warrantyExpiry && new Date(warrantyExpiry) < new Date(purchaseDate)) {
+    throw equipmentInputError('Warranty expiry cannot precede purchase date');
+  }
+};
+const resolveEquipmentLocations = async (req, values, transaction) => {
+  const scopeCollegeId = req.user.role === 'admin' ? null : Number(req.organizationScope.collegeId);
+  const collegeId = values.collegeId || scopeCollegeId;
+  if (scopeCollegeId && collegeId !== scopeCollegeId) {
+    throw equipmentInputError('College is outside your authorized scope', 403);
+  }
+  const [campus, college, department, building, room] = await Promise.all([
+    Campus.findOne({ where: { id: values.campusId, status: 'active' }, transaction }),
+    collegeId ? College.findOne({ where: { id: collegeId, status: 'active' }, transaction }) : null,
+    values.departmentId ? Department.findOne({ where: { id: values.departmentId, status: 'active' }, transaction }) : null,
+    values.buildingId ? Building.findOne({ where: { id: values.buildingId, status: 'active' }, transaction }) : null,
+    values.roomId ? Room.findOne({ where: { id: values.roomId, status: 'active' }, transaction }) : null,
+  ]);
+  if (!campus) throw equipmentInputError('Select an active campus');
+  if (collegeId && !college) throw equipmentInputError('Select a valid college');
+  if (values.departmentId && !department) throw equipmentInputError('Select a valid department');
+
+  if (college?.campusId && Number(college.campusId) !== Number(campus.id)) {
+    throw equipmentInputError('College must belong to the selected campus');
+  }
+  if (department && !collegeId && req.user.role === 'admin') {
+    throw equipmentInputError('Select the college that owns the department');
+  }
+  if (values.buildingId && !building) throw equipmentInputError('Select a valid building');
+  if (building && Number(building.campusId) !== Number(campus.id)) {
+    throw equipmentInputError('Building must belong to the selected campus');
+  }
+  if (values.roomId && !room) throw equipmentInputError('Select a valid room');
+  if (room && (!building || Number(room.buildingId) !== Number(building.id) || Number(room.campusId || building.campusId) !== Number(campus.id))) {
+    throw equipmentInputError('Room must belong to the selected building and campus');
+  }
+  if (department && collegeId && Number(department.collegeId) !== Number(collegeId)) {
+    throw equipmentInputError('Department must belong to the selected college');
+  }
+  return {
+    campus,
+    college,
+    department,
+    building,
+    room,
+    collegeId: collegeId || department?.collegeId || null,
+  };
+};
 const ictTerms = [...new Set([...equipmentTerms, ...networkTerms, 'ict'])];
 const ictAssetWhere = (req) => ({
   ...scopeWhere(req),
@@ -48,6 +168,10 @@ const ictCategoryWhere = {
 };
 
 const normalizeStatus = (value = '') => String(value || '').trim().toLowerCase().replace(/[_\s]+/g, '-');
+const equipmentStatusForStorage = (value) => {
+  const status = normalizeStatus(value);
+  return status === 'assigned' ? 'in-use' : status;
+};
 
 const summarizeEquipmentStatus = (value = '') => {
   const normalized = normalizeStatus(value);
@@ -172,11 +296,13 @@ const listIctEquipment = async (req, res, next) => {
   try {
     const baseWhere = equipmentWhere(req);
     const search = String(req.query.search || '').trim();
-    const page = Math.max(1, Number(req.query.page) || 1);
-    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+    const requestedPage = Number(req.query.page);
+    const requestedLimit = Number(req.query.limit);
+    const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+    const limit = Number.isSafeInteger(requestedLimit) ? Math.min(50, Math.max(1, requestedLimit)) : 20;
     const sortBy = String(req.query.sortBy || 'updatedAt').trim();
     const sortOrder = String(req.query.sortOrder || 'DESC').toUpperCase();
-    const allowedSortFields = ['name', 'assetCode', 'category', 'status', 'condition', 'location', 'department', 'purchaseDate', 'updatedAt'];
+    const allowedSortFields = ['id', 'name', 'assetCode', 'category', 'serialNumber', 'quantity', 'status', 'condition', 'location', 'department', 'purchaseDate', 'warrantyExpiry', 'updatedAt'];
     const orderField = allowedSortFields.includes(sortBy) ? sortBy : 'updatedAt';
     const orderDirection = ['ASC', 'DESC'].includes(sortOrder) ? sortOrder : 'DESC';
     const where = { ...baseWhere };
@@ -190,18 +316,70 @@ const listIctEquipment = async (req, res, next) => {
         { model: { [Op.like]: `%${search}%` } },
         { department: { [Op.like]: `%${search}%` } },
         { location: { [Op.like]: `%${search}%` } },
+        { '$College.collegeName$': { [Op.like]: `%${search}%` } },
+        { '$DepartmentRecord.name$': { [Op.like]: `%${search}%` } },
+        { '$CampusRecord.campusName$': { [Op.like]: `%${search}%` } },
+        { '$BuildingRecord.buildingName$': { [Op.like]: `%${search}%` } },
+        { '$RoomRecord.roomName$': { [Op.like]: `%${search}%` } },
       ] }];
     }
-    if (req.query.type) where.category = { [Op.like]: `%${String(req.query.type).trim()}%` };
-    if (req.query.status) where.status = String(req.query.status).trim();
-    if (req.query.condition) where.condition = String(req.query.condition).trim();
+    const category = String(req.query.category || req.query.type || '').trim();
+    if (category) {
+      const categoryTerms = equipmentCategoryTermsByName[category.toLowerCase()] || [category];
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        { [Op.or]: categoryTerms.map((term) => ({ category: { [Op.like]: `%${term}%` } })) },
+      ];
+    }
+    if (req.query.status) {
+      const status = normalizeStatus(req.query.status);
+      const statusAliases = {
+        available: ['available', 'active'],
+        assigned: ['assigned', 'in-use', 'in use'],
+        'under-maintenance': ['under-maintenance', 'under maintenance', 'maintenance'],
+        'in-transit': ['in-transit', 'in transit'],
+        retired: ['retired'],
+        disposed: ['disposed'],
+      };
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        sequelize.where(fn('LOWER', col('status')), { [Op.in]: statusAliases[status] || [status] }),
+      ];
+    }
+    if (req.query.condition) {
+      const condition = String(req.query.condition).trim().toLowerCase();
+      const conditionAliases = {
+        functional: ['functional', 'good', 'excellent'],
+        'needs repair': ['needs repair', 'fair', 'poor', 'needs-repair'],
+        damaged: ['damaged'],
+        missing: ['missing'],
+        expired: ['expired'],
+        replaced: ['replaced'],
+      };
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        sequelize.where(fn('LOWER', col('condition')), { [Op.in]: conditionAliases[condition] || [condition] }),
+      ];
+    }
     if (req.query.location) where.location = { [Op.like]: `%${String(req.query.location).trim()}%` };
     if (req.query.department) where.department = String(req.query.department).trim();
 
-    const [result, summaryRows] = await Promise.all([
-      Asset.findAndCountAll({ where, order: [[orderField, orderDirection]], limit, offset: (page - 1) * limit }),
+    const [initialResult, summaryRows] = await Promise.all([
+      Asset.findAndCountAll({ where, include: equipmentLocationIncludes, distinct: true, order: [[orderField, orderDirection]], limit, offset: (page - 1) * limit }),
       Asset.findAll({ where: baseWhere, attributes: ['status'], raw: true }),
     ]);
+    const totalPages = Math.max(1, Math.ceil(initialResult.count / limit));
+    const currentPage = Math.min(page, totalPages);
+    const result = currentPage === page
+      ? initialResult
+      : await Asset.findAndCountAll({
+        where,
+        include: equipmentLocationIncludes,
+        distinct: true,
+        order: [[orderField, orderDirection]],
+        limit,
+        offset: (currentPage - 1) * limit,
+      });
 
     const summary = summaryRows.reduce((resultValue, row) => {
       const keyedStatus = summarizeEquipmentStatus(row.status);
@@ -221,9 +399,228 @@ const listIctEquipment = async (req, res, next) => {
       data: result.rows.map((asset) => serialize(asset)),
       total: result.count,
       summary: { ...summary, total: result.count },
-      pagination: { page, limit, total: result.count, pages: Math.max(1, Math.ceil(result.count / limit)), totalPages: Math.max(1, Math.ceil(result.count / limit)) },
+      pagination: { page: currentPage, limit, total: result.count, pages: totalPages, totalPages },
     };
     return res.json(payload);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getIctEquipment = async (req, res, next) => {
+  try {
+    const asset = await Asset.findOne({
+      where: { id: req.params.id, ...equipmentWhere(req) },
+      include: equipmentLocationIncludes,
+    });
+    if (!asset) return res.status(404).json({ success: false, message: 'IT equipment not found' });
+    return res.json({ success: true, equipment: serialize(asset), data: serialize(asset) });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const listIctEquipmentOptions = async (req, res, next) => {
+  try {
+    const collegeWhere = req.user.role === 'admin' ? { status: 'active' } : { collegeId: req.organizationScope.collegeId, status: 'active' };
+    const [colleges, departments, allCampuses, allBuildings, allRooms] = await Promise.all([
+      College.findAll({ where: collegeWhere, attributes: ['id', 'collegeName', 'campusId'], order: [['collegeName', 'ASC']] }),
+      Department.findAll({
+        where: req.user.role === 'admin' ? { status: 'active' } : { collegeId: req.organizationScope.collegeId, status: 'active' },
+        attributes: ['id', 'name', 'collegeId'],
+        order: [['name', 'ASC']],
+      }),
+      Campus.findAll({ where: { status: 'active' }, attributes: ['id', 'campusName'], order: [['campusName', 'ASC']] }),
+      Building.findAll({ where: { status: 'active' }, attributes: ['id', 'campusId', 'buildingName'], order: [['buildingName', 'ASC']] }),
+      Room.findAll({ where: { status: 'active' }, attributes: ['id', 'campusId', 'buildingId', 'roomName', 'roomCode'], order: [['roomName', 'ASC']] }),
+    ]);
+    const allowedCampusIds = new Set(colleges.map((college) => Number(college.campusId)).filter(Boolean));
+    const campuses = req.user.role === 'admin'
+      ? allCampuses
+      : allCampuses.filter((campus) => allowedCampusIds.has(Number(campus.id)));
+    const campusIds = new Set(campuses.map((campus) => Number(campus.id)));
+    const buildings = allBuildings.filter((building) => campusIds.has(Number(building.campusId)));
+    const buildingIds = new Set(buildings.map((building) => Number(building.id)));
+    const rooms = allRooms.filter((room) => buildingIds.has(Number(room.buildingId)));
+    return res.json({
+      success: true,
+      campuses,
+      colleges,
+      departments,
+      buildings,
+      rooms,
+      categories: equipmentCategories,
+      statuses: equipmentStatuses,
+      conditions: equipmentConditions,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const createIctEquipment = async (req, res, next) => {
+  try {
+    const values = equipmentPayload(req.body);
+    validateEquipmentPayload(values, { creating: true });
+    validateEquipmentPayload(values, { creating: true });
+    const serialNumber = values.serialNumber;
+    if (serialNumber) {
+      const duplicate = await Asset.findOne({ where: { serialNumber } });
+      if (duplicate) throw equipmentInputError('Serial number already exists', 409);
+    }
+    const result = await sequelize.transaction(async (transaction) => {
+      const locations = await resolveEquipmentLocations(req, values, transaction);
+      if (serialNumber) {
+        const duplicate = await Asset.findOne({ where: { serialNumber }, transaction });
+        if (duplicate) throw equipmentInputError('Serial number already exists', 409);
+      }
+      const digitalId = await nextDigitalId(transaction);
+      const assetCode = await buildAssetCodeFromConfig({ category: values.category, transaction }) || digitalId;
+      const status = equipmentStatusForStorage(values.status);
+      const asset = await Asset.create({
+        name: values.name,
+        assetCode,
+        digitalId,
+        category: values.category,
+        description: values.description,
+        serialNumber,
+        quantity: values.quantity,
+        status,
+        condition: values.condition,
+        campusId: locations.campus.id,
+        collegeId: locations.collegeId,
+        departmentId: locations.department?.id || null,
+        department: locations.department?.name || '',
+        buildingId: locations.building?.id || null,
+        roomId: locations.room?.id || null,
+        location: locations.room?.roomName || locations.building?.buildingName || locations.campus.campusName,
+        purchaseDate: values.purchaseDate,
+        purchasePrice: values.purchasePrice,
+        currentValue: values.purchasePrice,
+        warrantyExpiry: values.warrantyExpiry,
+        createdBy: req.user.id,
+      }, { transaction });
+      await Inventory.create({
+        assetId: asset.id,
+        departmentId: locations.department?.id || null,
+        quantity: values.quantity,
+        availableQuantity: values.quantity,
+        location: asset.location,
+        status,
+      }, { transaction });
+      await createAuditLog({
+        userId: req.user.id,
+        role: req.user.role,
+        action: 'CREATE_ICT_EQUIPMENT',
+        entity: `asset:${asset.id}`,
+        entityId: asset.id,
+        newValue: asset.toJSON(),
+        transaction,
+      });
+      return Asset.findOne({ where: { id: asset.id }, include: equipmentLocationIncludes, transaction });
+    });
+    return res.status(201).json({ success: true, equipment: serialize(result), data: serialize(result), message: 'IT equipment created successfully' });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+    return next(error);
+  }
+};
+
+const updateIctEquipment = async (req, res, next) => {
+  try {
+    const asset = await Asset.findOne({ where: { id: req.params.id, ...equipmentWhere(req) } });
+    if (!asset) return res.status(404).json({ success: false, message: 'IT equipment not found' });
+    const values = equipmentPayload({ ...asset.toJSON(), ...req.body });
+    validateEquipmentPayload(values, { creating: true, current: asset });
+    validateEquipmentPayload(values, { creating: true, current: asset });
+    if (values.serialNumber && values.serialNumber !== asset.serialNumber) {
+      const duplicate = await Asset.findOne({ where: { id: { [Op.ne]: asset.id }, serialNumber: values.serialNumber } });
+      if (duplicate) throw equipmentInputError('Serial number already exists', 409);
+    }
+    const updated = await sequelize.transaction(async (transaction) => {
+      const locations = await resolveEquipmentLocations(req, values, transaction);
+      const previousValue = asset.toJSON();
+      const status = equipmentStatusForStorage(values.status);
+      await asset.update({
+        name: values.name,
+        category: values.category,
+        description: values.description,
+        serialNumber: values.serialNumber,
+        quantity: values.quantity,
+        status,
+        condition: values.condition,
+        campusId: locations.campus.id,
+        collegeId: locations.collegeId,
+        departmentId: locations.department?.id || null,
+        department: locations.department?.name || '',
+        buildingId: locations.building?.id || null,
+        roomId: locations.room?.id || null,
+        location: locations.room?.roomName || locations.building?.buildingName || locations.campus.campusName,
+        purchaseDate: values.purchaseDate,
+        purchasePrice: values.purchasePrice,
+        warrantyExpiry: values.warrantyExpiry,
+      }, { transaction });
+      const inventory = await Inventory.findOne({ where: { assetId: asset.id }, transaction });
+      const inventoryValues = {
+        departmentId: locations.department?.id || null,
+        quantity: values.quantity,
+        availableQuantity: inventory
+          ? Math.max(0, Number(inventory.availableQuantity) + values.quantity - Number(inventory.quantity))
+          : values.quantity,
+        location: asset.location,
+        status,
+      };
+      if (inventory) await inventory.update(inventoryValues, { transaction });
+      else await Inventory.create({ assetId: asset.id, ...inventoryValues }, { transaction });
+      await createAuditLog({
+        userId: req.user.id,
+        role: req.user.role,
+        action: 'UPDATE_ICT_EQUIPMENT',
+        entity: `asset:${asset.id}`,
+        entityId: asset.id,
+        oldValue: previousValue,
+        newValue: asset.toJSON(),
+        transaction,
+      });
+      return Asset.findOne({ where: { id: asset.id }, include: equipmentLocationIncludes, transaction });
+    });
+    return res.json({ success: true, equipment: serialize(updated), data: serialize(updated), message: 'IT equipment updated successfully' });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+    return next(error);
+  }
+};
+
+const deleteIctEquipment = async (req, res, next) => {
+  try {
+    const asset = await Asset.findOne({ where: { id: req.params.id, ...equipmentWhere(req) } });
+    if (!asset) return res.status(404).json({ success: false, message: 'IT equipment not found' });
+    await sequelize.transaction(async (transaction) => {
+      const previousValue = asset.toJSON();
+      const recoveryDays = await getRecoveryDays();
+      const deletedAt = new Date();
+      await asset.update({
+        deletedBy: req.user.id,
+        status: 'deleted',
+        specifications: {
+          ...(asset.specifications && typeof asset.specifications === 'object' ? asset.specifications : {}),
+          recoveryInfo: { previousStatus: asset.status, deletedAt: deletedAt.toISOString(), recoveryDays },
+        },
+      }, { transaction });
+      await asset.destroy({ transaction });
+      await createAuditLog({
+        userId: req.user.id,
+        role: req.user.role,
+        action: 'DELETE_ICT_EQUIPMENT',
+        entity: `asset:${asset.id}`,
+        entityId: asset.id,
+        oldValue: previousValue,
+        newValue: asset.toJSON(),
+        details: { recoveryDays },
+        transaction,
+      });
+    });
+    return res.json({ success: true, message: 'IT equipment deleted successfully' });
   } catch (error) {
     return next(error);
   }
@@ -1280,4 +1677,4 @@ const listIctWarranties = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-module.exports = { listIctAssets, listIctEquipment, listNetworkEquipment, getNetworkEquipment, getIctAsset, retireIctAsset, createIctMaintenanceRequest, createIctAsset, updateIctAsset, getIctOptions, getIctDashboard, listIctTracking, getIctTracking, scanIctTracking, assignIctRfid, unassignIctRfid, listIctAssetHistory, getIctAssetHistoryRecord, getIctAssetHistoryByAsset, globalIctSearch, listIctPreventiveMaintenance, createIctPreventiveMaintenance, assignIctAsset, transferIctAsset, listIctAssetDocuments, uploadIctAssetDocument, deleteIctAssetDocument, getIctWarrantyInfo, listIctWarranties };
+module.exports = { listIctAssets, listIctEquipment, getIctEquipment, listIctEquipmentOptions, createIctEquipment, updateIctEquipment, deleteIctEquipment, listNetworkEquipment, getNetworkEquipment, getIctAsset, retireIctAsset, createIctMaintenanceRequest, createIctAsset, updateIctAsset, getIctOptions, getIctDashboard, listIctTracking, getIctTracking, scanIctTracking, assignIctRfid, unassignIctRfid, listIctAssetHistory, getIctAssetHistoryRecord, getIctAssetHistoryByAsset, globalIctSearch, listIctPreventiveMaintenance, createIctPreventiveMaintenance, assignIctAsset, transferIctAsset, listIctAssetDocuments, uploadIctAssetDocument, deleteIctAssetDocument, getIctWarrantyInfo, listIctWarranties };

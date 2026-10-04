@@ -81,6 +81,7 @@ import ICTInventory from './components/ict/ICTInventory';
 import ICTAssetRequests from './components/ict/ICTAssetRequests';
 import ICTEquipment from './components/ict/ICTEquipment';
 import ICTNetwork from './components/ict/ICTNetwork';
+import ICTNetworkEquipment from './components/ict/ICTNetworkEquipment';
 import ICTSoftwareLicenses from './components/ict/ICTSoftwareLicenses';
 import ICTTechnicalSupport from './components/ict/ICTTechnicalSupport';
 import IncidentManagement from './components/ict/IncidentManagement';
@@ -3332,7 +3333,7 @@ function AppContent() {
         { path: '/ict/assignments', label: 'Assignments', section: 'ASSET MANAGEMENT' },
         { path: '/ict/asset-requests', label: 'Asset Requests', section: 'ASSET MANAGEMENT' },
         { path: '/ict/equipment', label: 'IT Equipment', section: 'TECHNICAL OPERATIONS' },
-        { path: '/ict/network', label: 'Network Equipment', section: 'TECHNICAL OPERATIONS' },
+        { path: '/ict/equipment/network', label: 'Network Equipment', section: 'TECHNICAL OPERATIONS' },
         { path: '/ict/software-licenses', label: 'Software Licenses', section: 'TECHNICAL OPERATIONS' },
         { path: '/ict/support', label: 'Technical Support', section: 'TECHNICAL OPERATIONS' },
         { path: '/ict/incidents', label: 'Incident Management', section: 'TECHNICAL OPERATIONS' },
@@ -3800,6 +3801,7 @@ function AppContent() {
             <Route path="inventory" element={<ICTInventory />} />
             <Route path="asset-requests" element={<ICTAssetRequests />} />
             <Route path="requests" element={<Navigate to="/ict/asset-requests" replace />} />
+            <Route path="equipment/network" element={<ICTNetworkEquipment />} />
             <Route path="equipment" element={<ICTEquipment />} />
             <Route path="network" element={<ICTNetwork />} />
             <Route path="network-equipment" element={<ICTNetwork />} />

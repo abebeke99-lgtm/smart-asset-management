@@ -48,7 +48,7 @@ const ensureSmsConfig = () => {
 
 const isSmsConfigured = () => {
   const config = ensureSmsConfig();
-  return config.ok && ['twilio', 'africastalking', 'africa_talking', 'log', 'mock', 'dev', 'test'].includes(config.provider);
+  return config.ok && ['twilio', 'africastalking', 'africa_talking'].includes(config.provider);
 };
 
 const smsHeaders = (contentType = 'application/json') => ({

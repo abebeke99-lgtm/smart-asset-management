@@ -23,8 +23,17 @@ const hasExplicitSmtpConfig = () => {
 
 const getMailDriver = () => {
   const explicitDriver = String(process.env.MAIL_DRIVER || process.env.EMAIL_DRIVER || process.env.SMTP_DRIVER || '').trim().toLowerCase();
+  const devDrivers = new Set(['log', 'console', 'mock', 'dev', 'test', 'memory']);
+
+  if (explicitDriver && !devDrivers.has(explicitDriver)) {
+    return explicitDriver;
+  }
+
+  if (hasExplicitSmtpConfig()) {
+    return explicitDriver && devDrivers.has(explicitDriver) ? 'smtp' : (explicitDriver || 'smtp');
+  }
+
   if (explicitDriver) return explicitDriver;
-  if (hasExplicitSmtpConfig()) return 'smtp';
   return 'smtp';
 };
 const isDevelopmentMailDriver = () => ['log', 'console', 'mock', 'dev', 'test', 'memory'].includes(getMailDriver());

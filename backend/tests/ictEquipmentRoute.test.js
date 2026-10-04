@@ -1,10 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { Op } = require('sequelize');
 const controller = require('../src/controllers/ictAssetController');
 const { Asset } = require('../src/models');
 
 const originalFindAndCountAll = Asset.findAndCountAll;
 const originalFindAll = Asset.findAll;
+const originalFindOne = Asset.findOne;
 
 const buildReq = (overrides = {}) => ({
   user: { id: 1, role: 'admin' },
@@ -57,7 +61,115 @@ test('ICT equipment list returns normalized database summary totals for all dash
   assert.equal(res.payload.equipment.length, 4);
 });
 
+test('IT equipment routes use scoped CRUD handlers on the central inventory asset controller', () => {
+  const routeSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/ictAssetRoutes.js'), 'utf8');
+  assert.match(routeSource, /router\.get\('\/equipment', \.\.\.scopedIctAccess, controller\.listIctEquipment\)/);
+  assert.match(routeSource, /router\.get\('\/equipment\/:id', \.\.\.scopedIctAccess, controller\.getIctEquipment\)/);
+  assert.match(routeSource, /router\.post\('\/equipment', \.\.\.scopedIctAccess, controller\.createIctEquipment\)/);
+  assert.match(routeSource, /router\.put\('\/equipment\/:id', \.\.\.scopedIctAccess, controller\.updateIctEquipment\)/);
+  assert.match(routeSource, /router\.delete\('\/equipment\/:id', \.\.\.scopedIctAccess, controller\.deleteIctEquipment\)/);
+  assert.ok(routeSource.indexOf("router.get('/equipment/options'") < routeSource.indexOf("router.get('/equipment/:id'"));
+});
+
+test('IT equipment creation rejects incomplete records before attempting database writes', async () => {
+  const req = { body: {}, user: { id: 3, role: 'admin' } };
+  const res = {
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body) {
+      this.body = body;
+      return this;
+    },
+  };
+
+  await controller.createIctEquipment(req, res, (error) => {
+    throw error || new Error('Unexpected error middleware call');
+  });
+
+  assert.equal(res.statusCode, 422);
+  assert.equal(res.body.message, 'Asset name is required');
+});
+
+test('IT equipment creation rejects a serial number already used by a central inventory asset', async () => {
+  Asset.findOne = async () => ({ id: 9 });
+  const req = {
+    body: {
+      name: 'Workstation',
+      category: 'Computing',
+      serialNumber: 'SERIAL-9',
+      quantity: 1,
+      campusId: 1,
+      status: 'Available',
+      condition: 'Functional',
+    },
+    user: { id: 3, role: 'admin' },
+  };
+  const res = {
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body) {
+      this.body = body;
+      return this;
+    },
+  };
+
+  await controller.createIctEquipment(req, res, (error) => {
+    throw error || new Error('Unexpected error middleware call');
+  });
+
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body.message, 'Serial number already exists');
+});
+
+test('IT equipment list applies all filters, sorting, pagination, and clamps an out-of-range page', async () => {
+  const queries = [];
+  Asset.findAndCountAll = async (query) => {
+    queries.push(query);
+    return { count: 21, rows: [] };
+  };
+  Asset.findAll = async () => [];
+  const req = buildReq({
+    query: {
+      search: 'Room 204',
+      category: 'Display',
+      status: 'Under Maintenance',
+      condition: 'Needs Repair',
+      page: '9',
+      limit: '10',
+      sortBy: 'name',
+      sortOrder: 'ASC',
+    },
+  });
+  const res = {
+    json(payload) {
+      this.payload = payload;
+      return payload;
+    },
+  };
+
+  await controller.listIctEquipment(req, res, (error) => {
+    throw error || new Error('Unexpected error middleware call');
+  });
+
+  assert.equal(queries.length, 2);
+  assert.equal(queries[0].offset, 80);
+  assert.equal(queries[1].offset, 20);
+  assert.equal(queries[1].limit, 10);
+  assert.deepEqual(queries[1].order, [['name', 'ASC']]);
+  assert.equal(queries[1].where[Op.and].length, 4);
+  const searchFields = queries[1].where[Op.and][0][Op.or].flatMap((entry) => Object.keys(entry));
+  for (const field of ['$College.collegeName$', '$CampusRecord.campusName$', '$BuildingRecord.buildingName$', '$RoomRecord.roomName$']) {
+    assert.ok(searchFields.includes(field));
+  }
+  assert.deepEqual(res.payload.pagination, { page: 3, limit: 10, total: 21, pages: 3, totalPages: 3 });
+});
+
 test.afterEach(() => {
   Asset.findAndCountAll = originalFindAndCountAll;
   Asset.findAll = originalFindAll;
+  Asset.findOne = originalFindOne;
 });

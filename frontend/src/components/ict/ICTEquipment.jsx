@@ -1,1778 +1,666 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Search,
-  Plus,
-  Eye,
-  Pencil,
-  Trash2,
-  Download,
-  RefreshCw,
-  X,
-  Router,
-  Wifi,
-  Server,
-  Network,
-  ShieldCheck,
-  CheckCircle2,
-  AlertTriangle,
-  Wrench,
-  Package,
+  AlertCircle,
+  ArrowDown,
+  ArrowUp,
+  Building2,
   ChevronLeft,
   ChevronRight,
+  Edit2,
+  Eye,
   Filter,
-  Building2,
   MapPin,
-  CalendarDays,
-  Hash,
-  Cable,
-  Activity,
-} from "lucide-react";
+  Monitor,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react';
+import { toast } from 'react-toastify';
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "/api";
-
+const API_BASE_URL = (process.env.REACT_APP_API_URL || '').replace(/\/api\/?$/i, '').replace(/\/+$/, '');
+const EQUIPMENT_URL = `${API_BASE_URL}/api/ict/equipment`;
 const PAGE_SIZE = 10;
-
-const STATUS_OPTIONS = [
-  "Active",
-  "Available",
-  "Assigned",
-  "Maintenance",
-  "Faulty",
-  "Retired",
-];
-
-const CONDITION_OPTIONS = [
-  "Excellent",
-  "Good",
-  "Fair",
-  "Poor",
-  "Damaged",
-];
-
-const TYPE_OPTIONS = [
-  "Router",
-  "Switch",
-  "Access Point",
-  "Firewall",
-  "Server",
-  "Modem",
-  "Network Controller",
-  "Rack",
-  "Other",
-];
-
-const initialForm = {
- assetTag: "",
-  serialNumber: "",
-  equipmentName: "",
-  equipmentType: "Switch",
-  manufacturer: "",
-  model: "",
-  ipAddress: "",
-  macAddress: "",
-  portCount: "",
-  networkRole: "",
-  department: "",
-  location: "",
-  assignedTo: "",
-  purchaseDate: "",
-  warrantyExpiry: "",
-  condition: "Good",
-  status: "Active",
-  specifications: "",
-  notes: "",
+const CATEGORIES = ['Computing', 'Networking', 'Printing', 'Display', 'Power', 'Storage', 'Communication'];
+const STATUSES = ['Available', 'Assigned', 'Under Maintenance', 'In Transit', 'Retired', 'Disposed'];
+const CONDITIONS = ['Functional', 'Needs Repair', 'Damaged', 'Missing', 'Expired', 'Replaced'];
+const EMPTY_FORM = {
+  name: '',
+  category: '',
+  serialNumber: '',
+  quantity: '1',
+  campusId: '',
+  collegeId: '',
+  departmentId: '',
+  buildingId: '',
+  roomId: '',
+  status: 'Available',
+  condition: 'Functional',
+  purchaseDate: '',
+  purchasePrice: '',
+  warrantyExpiry: '',
+  description: '',
 };
 
-async function request(url, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${url}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
+const getToken = () => (
+  localStorage.getItem('token')
+  || localStorage.getItem('authToken')
+  || sessionStorage.getItem('token')
+  || ''
+);
 
+async function requestEquipment(path = '', { signal, method = 'GET', data } = {}) {
+  const token = getToken();
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (data !== undefined) headers['Content-Type'] = 'application/json';
+  const response = await fetch(`${EQUIPMENT_URL}${path}`, {
+    method,
+    signal,
+    credentials: 'include',
+    headers,
+    ...(data === undefined ? {} : { body: JSON.stringify(data) }),
+  });
+  const body = await response.json().catch(() => null);
   if (!response.ok) {
-    let message = `Request failed with status ${response.status}`;
-
-    try {
-      const error = await response.json();
-      message = error?.message || error?.error || message;
-    } catch {
-      // Ignore invalid error responses.
-    }
-
-    throw new Error(message);
+    if (response.status === 401) throw new Error('Your session has expired. Please sign in again.');
+    if (response.status === 403) throw new Error('You do not have permission to access IT equipment.');
+    if (response.status >= 500) throw new Error('The equipment service is unavailable. Please try again.');
+    throw new Error(body?.message || `The equipment request failed (${response.status}).`);
   }
-
-  if (response.status === 204) return null;
-
-  return response.json();
+  if (!body || typeof body !== 'object') throw new Error('The equipment service returned an invalid response.');
+  return body;
 }
 
-function getArray(data) {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.data)) return data.data;
-  if (Array.isArray(data?.items)) return data.items;
-  if (Array.isArray(data?.equipment)) return data.equipment;
-  if (Array.isArray(data?.networkEquipment)) return data.networkEquipment;
-  if (Array.isArray(data?.results)) return data.results;
-  return [];
-}
-
-function normalizeEquipment(item, index) {
-  return {
-    id:
-      item.id ??
-      item._id ??
-      item.assetId ??
-      item.asset_id ??
-      `NET-${String(index + 1).padStart(4, "0")}`,
-
-    assetTag:
-      item.assetTag ??
-      item.asset_tag ??
-      item.assetNumber ??
-      item.tagNumber ??
-      `NET-${String(index + 1).padStart(4, "0")}`,
-
-    serialNumber:
-      item.serialNumber ??
-      item.serial_number ??
-      item.serial ??
-      "",
-
-    equipmentName:
-      item.equipmentName ??
-      item.equipment_name ??
-      item.name ??
-      item.assetName ??
-      "",
-
-    equipmentType:
-      item.equipmentType ??
-      item.equipment_type ??
-      item.type ??
-      item.category ??
-      "Other",
-
-    manufacturer:
-      item.manufacturer ??
-      item.brand ??
-      "",
-
-    model:
-      item.model ??
-      item.modelNumber ??
-      item.model_number ??
-      "",
-
-    ipAddress:
-      item.ipAddress ??
-      item.ip_address ??
-      item.ip ??
-      "",
-
-    macAddress:
-      item.macAddress ??
-      item.mac_address ??
-      item.mac ??
-      "",
-
-    portCount:
-      item.portCount ??
-      item.port_count ??
-      item.ports ??
-      "",
-
-    networkRole:
-      item.networkRole ??
-      item.network_role ??
-      item.role ??
-      "",
-
-    department:
-      item.department ??
-      item.departmentName ??
-      item.department_name ??
-      "",
-
-    location:
-      item.location ??
-      item.room ??
-      item.locationName ??
-      "",
-
-    assignedTo:
-      item.assignedTo ??
-      item.assigned_to ??
-      item.assignee?.name ??
-      item.user?.name ??
-      "",
-
-    purchaseDate:
-      item.purchaseDate ??
-      item.purchase_date ??
-      "",
-
-    warrantyExpiry:
-      item.warrantyExpiry ??
-      item.warranty_expiry ??
-      item.warrantyEndDate ??
-      "",
-
-    condition: item.condition ?? "Good",
-
-    status: item.status ?? "Active",
-
-    specifications:
-      item.specifications ??
-      item.specs ??
-      item.description ??
-      "",
-
-    notes: item.notes ?? "",
-
-    createdAt: item.createdAt ?? item.created_at ?? "",
-
-    updatedAt: item.updatedAt ?? item.updated_at ?? "",
-
-    raw: item,
+const formatDate = (value) => {
+  if (!value) return '—';
+  const dateValue = String(value).slice(0, 10);
+  const date = new Date(`${dateValue}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? '—'
+    : date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+};
+const dateInputValue = (value) => value ? String(value).slice(0, 10) : '';
+const assetIdentifier = (asset) => asset.assetCode || asset.digitalId || asset.id || '—';
+const categoryName = (asset) => asset.category || asset.subcategory || 'Uncategorized';
+const categoryGroup = (value) => {
+  const normalized = String(value || '').toLowerCase();
+  if (CATEGORIES.includes(value)) return value;
+  const terms = {
+    Computing: ['computing', 'computer', 'desktop', 'laptop', 'tablet', 'workstation'],
+    Networking: ['network', 'router', 'switch', 'firewall', 'wireless', 'gateway', 'modem'],
+    Printing: ['printing', 'printer', 'scanner'],
+    Display: ['display', 'monitor', 'projector'],
+    Power: ['power', 'ups', 'uninterruptible', 'surge'],
+    Storage: ['storage', 'hard drive', 'disk', 'drive'],
+    Communication: ['communication', 'telephone', 'phone', 'radio', 'voip'],
   };
-}
+  return CATEGORIES.find((category) => terms[category].some((term) => normalized.includes(term))) || '';
+};
+const campusName = (asset) => asset.CampusRecord?.campusName || asset.campus?.campusName || '—';
+const collegeName = (asset) => asset.College?.collegeName || asset.CollegeRecord?.collegeName || '—';
+const departmentName = (asset) => asset.DepartmentRecord?.name || asset.department || '—';
+const buildingName = (asset) => asset.BuildingRecord?.buildingName || '—';
+const roomName = (asset) => asset.RoomRecord?.roomName || asset.RoomRecord?.roomCode || asset.location || '—';
+const displayStatus = (value) => {
+  const normalized = String(value || '').toLowerCase().replace(/[_-]+/g, ' ');
+  if (normalized === 'active' || normalized === 'ready') return 'Available';
+  if (normalized === 'in use') return 'Assigned';
+  if (normalized === 'maintenance') return 'Under Maintenance';
+  return normalized.replace(/\b\w/g, (character) => character.toUpperCase()) || 'Unknown';
+};
+const displayCondition = (value) => {
+  const normalized = String(value || '').toLowerCase();
+  if (normalized === 'good' || normalized === 'excellent') return 'Functional';
+  if (normalized === 'fair' || normalized === 'poor') return 'Needs Repair';
+  return normalized.replace(/\b\w/g, (character) => character.toUpperCase()) || 'Unknown';
+};
+const formForAsset = (asset) => ({
+  ...EMPTY_FORM,
+  id: asset.id,
+  name: asset.name || '',
+  category: categoryGroup(asset.category),
+  serialNumber: asset.serialNumber || '',
+  quantity: String(asset.quantity ?? 1),
+  campusId: String(asset.campusId || asset.CampusRecord?.id || ''),
+  collegeId: String(asset.collegeId || asset.College?.id || ''),
+  departmentId: String(asset.departmentId || asset.DepartmentRecord?.id || ''),
+  buildingId: String(asset.buildingId || asset.BuildingRecord?.id || ''),
+  roomId: String(asset.roomId || asset.RoomRecord?.id || ''),
+  status: displayStatus(asset.status),
+  condition: displayCondition(asset.condition),
+  purchaseDate: dateInputValue(asset.purchaseDate),
+  purchasePrice: asset.purchasePrice ?? '',
+  warrantyExpiry: dateInputValue(asset.warrantyExpiry),
+  description: asset.description || '',
+});
 
-function formatDate(value) {
-  if (!value) return "—";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return value;
-
-  return date.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function statusClasses(status) {
-  switch (String(status).toLowerCase()) {
-    case "active":
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-
-    case "available":
-      return "bg-blue-50 text-blue-700 border-blue-200";
-
-    case "assigned":
-      return "bg-indigo-50 text-indigo-700 border-indigo-200";
-
-    case "maintenance":
-      return "bg-amber-50 text-amber-700 border-amber-200";
-
-    case "faulty":
-      return "bg-red-50 text-red-700 border-red-200";
-
-    case "retired":
-      return "bg-slate-100 text-slate-600 border-slate-200";
-
-    default:
-      return "bg-slate-100 text-slate-600 border-slate-200";
+const badgeClass = (value, type) => {
+  const normalized = String(value || '').toLowerCase().replace(/[_-]+/g, ' ');
+  if (type === 'status') {
+    if (['available', 'active'].includes(normalized)) return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    if (['assigned', 'in use'].includes(normalized)) return 'border-blue-200 bg-blue-50 text-blue-700';
+    if (normalized.includes('maintenance') || normalized === 'in transit') return 'border-amber-200 bg-amber-50 text-amber-700';
+    if (['retired', 'disposed'].includes(normalized)) return 'border-slate-200 bg-slate-100 text-slate-600';
+  } else {
+    if (['functional', 'good', 'excellent', 'replaced'].includes(normalized)) return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    if (normalized === 'needs repair' || normalized === 'expired') return 'border-amber-200 bg-amber-50 text-amber-700';
+    if (['damaged', 'missing', 'poor'].includes(normalized)) return 'border-rose-200 bg-rose-50 text-rose-700';
   }
-}
+  return 'border-slate-200 bg-slate-50 text-slate-600';
+};
 
-function conditionClasses(condition) {
-  switch (String(condition).toLowerCase()) {
-    case "excellent":
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-
-    case "good":
-      return "bg-blue-50 text-blue-700 border-blue-200";
-
-    case "fair":
-      return "bg-amber-50 text-amber-700 border-amber-200";
-
-    case "poor":
-      return "bg-orange-50 text-orange-700 border-orange-200";
-
-    case "damaged":
-      return "bg-red-50 text-red-700 border-red-200";
-
-    default:
-      return "bg-slate-100 text-slate-600 border-slate-200";
-  }
-}
-
-function EquipmentIcon({ type, size = 19 }) {
-  const value = String(type).toLowerCase();
-
-  if (value.includes("router")) return <Router size={size} />;
-  if (value.includes("switch")) return <Network size={size} />;
-  if (value.includes("access")) return <Wifi size={size} />;
-  if (value.includes("firewall")) return <ShieldCheck size={size} />;
-  if (value.includes("server")) return <Server size={size} />;
-  if (value.includes("modem")) return <Cable size={size} />;
-
-  return <Router size={size} />;
-}
-
-function SummaryCard({ title, value, icon: Icon, iconClass }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-slate-500">{title}</p>
-          <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
-        </div>
-
-        <div
-          className={`flex h-11 w-11 items-center justify-center rounded-xl ${iconClass}`}
-        >
-          <Icon size={21} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ActionButton({ children, title, onClick, className = "" }) {
+function SortButton({ label, field, sort, onSort }) {
+  const selected = sort.sortBy === field;
   return (
     <button
       type="button"
-      title={title}
-      aria-label={title}
-      onClick={onClick}
-      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 ${className}`}
+      onClick={() => onSort(field)}
+      className="inline-flex items-center gap-1.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 transition hover:text-blue-700"
+      aria-label={`Sort by ${label}`}
     >
-      {children}
+      {label}
+      {selected ? (sort.sortOrder === 'ASC' ? <ArrowUp size={13} /> : <ArrowDown size={13} />) : null}
     </button>
   );
 }
 
-function FormField({
-  label,
-  name,
-  value,
-  onChange,
-  placeholder,
-  type = "text",
-  required = false,
-}) {
+function EquipmentDetails({ asset, loading, error, onClose }) {
+  if (!asset && !loading && !error) return null;
+  const details = asset || {};
+  const fields = [
+    ['Asset ID', assetIdentifier(details)],
+    ['Asset Name', details.name || '—'],
+    ['Category', categoryName(details)],
+    ['Serial Number', details.serialNumber || '—'],
+    ['Quantity', details.quantity ?? '—'],
+    ['Campus', campusName(details)],
+    ['College', collegeName(details)],
+    ['Department', departmentName(details)],
+    ['Building', buildingName(details)],
+    ['Room', roomName(details)],
+    ['Status', displayStatus(details.status)],
+    ['Condition', displayCondition(details.condition)],
+    ['Purchase Date', formatDate(details.purchaseDate)],
+    ['Purchase Cost', details.purchasePrice === null || details.purchasePrice === undefined ? '—' : Number(details.purchasePrice).toLocaleString()],
+    ['Warranty Expiry', formatDate(details.warrantyExpiry)],
+    ['Description', details.description || '—'],
+  ];
+
   return (
-    <div>
-      <label className="mb-1.5 block text-sm font-medium text-slate-700">
-        {label}
-        {required && <span className="ml-1 text-red-500">*</span>}
-      </label>
-
-      <input
-        type={type}
-        name={name}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        required={required}
-        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-      />
-    </div>
-  );
-}
-
-function SelectField({ label, name, value, onChange, options }) {
-  return (
-    <div>
-      <label className="mb-1.5 block text-sm font-medium text-slate-700">
-        {label}
-      </label>
-
-      <select
-        name={name}
-        value={value}
-        onChange={onChange}
-        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-      >
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-function DetailItem({ label, value, icon: Icon }) {
-  return (
-    <div>
-      <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-400">
-        {Icon && <Icon size={13} />}
-        {label}
-      </div>
-
-      <div className="mt-1 text-sm font-medium text-slate-800">
-        {value || "—"}
-      </div>
-    </div>
-  );
-}
-
-function Modal({ title, icon: Icon, children, onClose, large = false }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-slate-950/50 backdrop-blur-[2px]"
-        onClick={onClose}
-      />
-
-      <div
-        className={`relative flex max-h-[92vh] w-full ${
-          large ? "max-w-5xl" : "max-w-2xl"
-        } flex-col overflow-hidden rounded-2xl bg-white shadow-2xl`}
-      >
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="presentation">
+      <button type="button" className="absolute inset-0 cursor-default bg-slate-950/50 backdrop-blur-[2px]" aria-label="Close equipment details" onClick={onClose} />
+      <section role="dialog" aria-modal="true" aria-labelledby="equipment-details-title" className="relative max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-              <Icon size={18} />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700"><Monitor size={20} /></div>
+            <div>
+              <h2 id="equipment-details-title" className="text-lg font-semibold text-slate-900">Equipment details</h2>
+              <p className="text-sm text-slate-500">{asset?.name || (loading ? 'Loading equipment record' : '')}</p>
             </div>
-
-            <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
           </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-          >
-            <X size={19} />
-          </button>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close details"><X size={19} /></button>
+        </header>
+        <div className="max-h-[calc(90vh-73px)] overflow-y-auto p-5 sm:p-6">
+          {loading && <div className="flex items-center justify-center gap-3 py-14 text-sm text-slate-500" role="status"><RefreshCw size={18} className="animate-spin text-blue-600" />Loading equipment details…</div>}
+          {error && <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700" role="alert"><AlertCircle size={18} className="mt-0.5 shrink-0" />{error}</div>}
+          {asset && !loading && !error && (
+            <>
+              <div className="mb-5 flex flex-wrap items-center gap-2">
+                <span className="rounded-lg bg-slate-100 px-3 py-1.5 font-mono text-sm font-semibold text-slate-700">{assetIdentifier(asset)}</span>
+                <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${badgeClass(asset.status, 'status')}`}>{displayStatus(asset.status)}</span>
+                <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${badgeClass(asset.condition, 'condition')}`}>{displayCondition(asset.condition)}</span>
+              </div>
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
+                {fields.map(([label, value]) => (
+                  <div key={label} className={label === 'Description' ? 'sm:col-span-2' : ''}>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</dt>
+                    <dd className="mt-1 break-words text-sm font-medium text-slate-800">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </>
+          )}
         </div>
-
-        {children}
-      </div>
+      </section>
     </div>
   );
 }
 
-export default function NetworkEquipment() {
-  const [equipment, setEquipment] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [typeFilter, setTypeFilter] = useState("All");
-  const [conditionFilter, setConditionFilter] = useState("All");
-
-  const [page, setPage] = useState(1);
-
-  const [showForm, setShowForm] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
-
-  const [editingItem, setEditingItem] = useState(null);
-  const [selectedItem, setSelectedItem] = useState(null);
-
-  const [form, setForm] = useState(initialForm);
-
-  const loadEquipment = async () => {
-    setLoading(true);
-    setError("");
-
-    try {
-      let data;
-
-      try {
-        data = await request("/network-equipment");
-      } catch {
-        try {
-          data = await request("/networkEquipment");
-        } catch {
-          data = await request("/assets?category=Network");
-        }
-      }
-
-      setEquipment(getArray(data).map(normalizeEquipment));
-    } catch (err) {
-      setError(err.message || "Unable to load network equipment.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadEquipment();
-  }, []);
-
-  useEffect(() => {
-    setPage(1);
-  }, [search, statusFilter, typeFilter, conditionFilter]);
-
-  const statistics = useMemo(() => {
-    return {
-      total: equipment.length,
-
-      active: equipment.filter(
-        (item) => String(item.status).toLowerCase() === "active"
-      ).length,
-
-      available: equipment.filter(
-        (item) => String(item.status).toLowerCase() === "available"
-      ).length,
-
-      maintenance: equipment.filter(
-        (item) => String(item.status).toLowerCase() === "maintenance"
-      ).length,
-
-      faulty: equipment.filter(
-        (item) => String(item.status).toLowerCase() === "faulty"
-      ).length,
-    };
-  }, [equipment]);
-
-  const filteredEquipment = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    return equipment.filter((item) => {
-      const matchesSearch =
-        !query ||
-        [
-          item.assetTag,
-          item.serialNumber,
-          item.equipmentName,
-          item.equipmentType,
-          item.manufacturer,
-          item.model,
-          item.ipAddress,
-          item.macAddress,
-          item.networkRole,
-          item.department,
-          item.location,
-          item.assignedTo,
-        ].some((value) =>
-          String(value || "")
-            .toLowerCase()
-            .includes(query)
-        );
-
-      const matchesStatus =
-        statusFilter === "All" ||
-        String(item.status).toLowerCase() === statusFilter.toLowerCase();
-
-      const matchesType =
-        typeFilter === "All" ||
-        String(item.equipmentType).toLowerCase() === typeFilter.toLowerCase();
-
-      const matchesCondition =
-        conditionFilter === "All" ||
-        String(item.condition).toLowerCase() ===
-          conditionFilter.toLowerCase();
-
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesType &&
-        matchesCondition
-      );
-    });
-  }, [
-    equipment,
-    search,
-    statusFilter,
-    typeFilter,
-    conditionFilter,
-  ]);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredEquipment.length / PAGE_SIZE)
+function FormField({ label, name, value, onChange, required = false, type = 'text', options, wide = false, min, step, maxLength, disabled = false }) {
+  const controlClass = 'mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50';
+  return (
+    <label className={`block min-w-0 ${wide ? 'sm:col-span-2' : ''}`}>
+      <span className="text-sm font-medium text-slate-700">{label}{required ? ' *' : ''}</span>
+      {options ? (
+        <select name={name} value={value} onChange={onChange} required={required} disabled={disabled} className={controlClass}>
+          <option value="">{required ? `Select ${label.toLowerCase()}` : 'Not specified'}</option>
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      ) : type === 'textarea' ? (
+        <textarea name={name} value={value} onChange={onChange} maxLength={maxLength} rows={3} disabled={disabled} className={`${controlClass} h-auto py-2`} />
+      ) : (
+        <input name={name} type={type} value={value} onChange={onChange} required={required} min={min} step={step} maxLength={maxLength} disabled={disabled} className={controlClass} />
+      )}
+    </label>
   );
+}
 
-  const paginatedEquipment = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filteredEquipment.slice(start, start + PAGE_SIZE);
-  }, [filteredEquipment, page]);
+function EquipmentForm({ form, options, saving, error, loadingOptions, onChange, onSubmit, onClose, onRetryOptions }) {
+  const buildings = useMemo(
+    () => (options.buildings || []).filter((item) => String(item.campusId) === String(form.campusId)),
+    [options.buildings, form.campusId],
+  );
+  const rooms = useMemo(
+    () => (options.rooms || []).filter((item) => String(item.buildingId) === String(form.buildingId)),
+    [options.rooms, form.buildingId],
+  );
+  const colleges = useMemo(
+    () => (options.colleges || []).filter((item) => !item.campusId || String(item.campusId) === String(form.campusId)),
+    [options.colleges, form.campusId],
+  );
+  const departments = useMemo(
+    () => (options.departments || []).filter((item) => !form.collegeId || String(item.collegeId) === String(form.collegeId)),
+    [options.departments, form.collegeId],
+  );
+  const availableOptions = Boolean(options.campuses?.length);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-5" role="presentation">
+      <button type="button" className="absolute inset-0 cursor-default bg-slate-950/50 backdrop-blur-[2px]" aria-label="Close equipment form" onClick={onClose} disabled={saving} />
+      <section role="dialog" aria-modal="true" aria-labelledby="equipment-form-title" className="relative my-auto max-h-[94vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-6">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-600">Central asset inventory</p>
+            <h2 id="equipment-form-title" className="mt-1 text-lg font-semibold text-slate-900">{form.id ? 'Edit IT equipment' : 'Add IT equipment'}</h2>
+          </div>
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50" aria-label="Close form"><X size={19} /></button>
+        </header>
+        <form onSubmit={onSubmit} className="flex max-h-[calc(94vh-73px)] flex-col">
+          <div className="overflow-y-auto p-5 sm:p-6">
+            {error && <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700" role="alert"><AlertCircle size={17} className="mt-0.5 shrink-0" /><span>{error}</span></div>}
+            {loadingOptions && <div className="mb-4 flex items-center gap-2 text-sm text-slate-500" role="status"><RefreshCw size={16} className="animate-spin" />Loading campus and department options…</div>}
+            {!loadingOptions && !availableOptions && (
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="alert">
+                <span>No active campus options are available. Retry loading the form options.</span>
+                <button type="button" onClick={onRetryOptions} className="shrink-0 font-semibold underline">Retry</button>
+              </div>
+            )}
+            <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
+              <FormField label="Asset Name" name="name" value={form.name} onChange={onChange} required maxLength={255} />
+              <FormField label="Category" name="category" value={form.category} onChange={onChange} required options={(options.categories?.length ? options.categories : CATEGORIES).map((value) => ({ value, label: value }))} />
+              <FormField label="Quantity" name="quantity" value={form.quantity} onChange={onChange} required type="number" min="1" step="1" />
+              <FormField label="Serial Number" name="serialNumber" value={form.serialNumber} onChange={onChange} maxLength={255} />
+              <FormField label="Campus" name="campusId" value={form.campusId} onChange={onChange} required options={(options.campuses || []).map((item) => ({ value: String(item.id), label: item.campusName }))} />
+              <FormField label="College" name="collegeId" value={form.collegeId} onChange={onChange} options={colleges.map((item) => ({ value: String(item.id), label: item.collegeName }))} />
+              <FormField label="Department" name="departmentId" value={form.departmentId} onChange={onChange} options={departments.map((item) => ({ value: String(item.id), label: item.name }))} />
+              <FormField label="Building" name="buildingId" value={form.buildingId} onChange={onChange} options={buildings.map((item) => ({ value: String(item.id), label: item.buildingName }))} disabled={!form.campusId} />
+              <FormField label="Room" name="roomId" value={form.roomId} onChange={onChange} options={rooms.map((item) => ({ value: String(item.id), label: item.roomName || item.roomCode }))} disabled={!form.buildingId} />
+              <FormField label="Status" name="status" value={form.status} onChange={onChange} required options={(options.statuses?.length ? options.statuses : STATUSES).map((value) => ({ value, label: value }))} />
+              <FormField label="Condition" name="condition" value={form.condition} onChange={onChange} required options={(options.conditions?.length ? options.conditions : CONDITIONS).map((value) => ({ value, label: value }))} />
+              <FormField label="Purchase Date" name="purchaseDate" value={form.purchaseDate} onChange={onChange} type="date" />
+              <FormField label="Purchase Cost" name="purchasePrice" value={form.purchasePrice} onChange={onChange} type="number" min="0" step="0.01" />
+              <FormField label="Warranty Expiry" name="warrantyExpiry" value={form.warrantyExpiry} onChange={onChange} type="date" />
+              <FormField label="Description" name="description" value={form.description} onChange={onChange} type="textarea" wide maxLength={10000} />
+            </div>
+          </div>
+          <footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50/80 px-5 py-4 sm:px-6">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+            <button type="submit" disabled={saving || loadingOptions || !availableOptions} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+              {saving && <RefreshCw size={15} className="animate-spin" />}
+              {saving ? 'Saving…' : form.id ? 'Save Changes' : 'Add IT Equipment'}
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+export default function ICTEquipment() {
+  const [equipment, setEquipment] = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, total: 0, totalPages: 1 });
+  const [filters, setFilters] = useState({ search: '', category: '', status: '', condition: '' });
+  const [sort, setSort] = useState({ sortBy: 'updatedAt', sortOrder: 'DESC' });
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState('');
+  const [refreshCount, setRefreshCount] = useState(0);
+  const [form, setForm] = useState(null);
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [loadingOptions, setLoadingOptions] = useState(false);
+  const [editLoadingId, setEditLoadingId] = useState(null);
+  const [options, setOptions] = useState({});
+  const hasActiveFilters = Object.values(filters).some(Boolean);
+
+  const loadEquipment = useCallback(async (signal) => {
+    setLoading(true);
+    setError('');
+    const query = new URLSearchParams({
+      page: String(page),
+      limit: String(PAGE_SIZE),
+      sortBy: sort.sortBy,
+      sortOrder: sort.sortOrder,
+    });
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value.trim()) query.set(key, value.trim());
+    });
+    try {
+      const result = await requestEquipment(`?${query.toString()}`, { signal });
+      const rows = result.equipment || result.data;
+      if (!Array.isArray(rows) || !result.pagination) throw new Error('The equipment service returned an incomplete list response.');
+      setEquipment(rows);
+      const totalPages = Math.max(1, Number(result.pagination.totalPages ?? result.pagination.pages) || 1);
+      const currentPage = Number(result.pagination.page) || page;
+      setPagination({ page: currentPage, total: Number(result.pagination.total ?? result.total) || 0, totalPages });
+      if (currentPage !== page) setPage(currentPage);
+    } catch (requestError) {
+      if (requestError.name !== 'AbortError') {
+        setError(requestError.message || 'Unable to load IT equipment. Please try again.');
+      }
+    } finally {
+      if (!signal.aborted) setLoading(false);
+    }
+  }, [filters, page, sort]);
 
   useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
-  }, [page, totalPages]);
-
-  const openCreate = () => {
-    setEditingItem(null);
-
-    setForm({
-      ...initialForm,
-      assetTag: `NET-${Date.now().toString().slice(-6)}`,
-    });
-
-    setShowForm(true);
-  };
-
-  const openEdit = (item) => {
-    setEditingItem(item);
-
-    setForm({
-      assetTag: item.assetTag || "",
-      serialNumber: item.serialNumber || "",
-      equipmentName: item.equipmentName || "",
-      equipmentType: item.equipmentType || "Switch",
-      manufacturer: item.manufacturer || "",
-      model: item.model || "",
-      ipAddress: item.ipAddress || "",
-      macAddress: item.macAddress || "",
-      portCount: item.portCount || "",
-      networkRole: item.networkRole || "",
-      department: item.department || "",
-      location: item.location || "",
-      assignedTo: item.assignedTo || "",
-      purchaseDate: item.purchaseDate?.slice?.(0, 10) || "",
-      warrantyExpiry: item.warrantyExpiry?.slice?.(0, 10) || "",
-      condition: item.condition || "Good",
-      status: item.status || "Active",
-      specifications: item.specifications || "",
-      notes: item.notes || "",
-    });
-
-    setShowForm(true);
-  };
-
-  const openDetails = (item) => {
-    setSelectedItem(item);
-    setShowDetails(true);
-  };
-
-  const closeAll = () => {
-    if (!saving) {
-      setShowForm(false);
-      setShowDetails(false);
-      setEditingItem(null);
-      setSelectedItem(null);
-    }
-  };
-
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-
-    setForm((current) => ({
-      ...current,
-      [name]: value,
-    }));
-  };
-
-  const saveEquipment = async (event) => {
-    event.preventDefault();
-
-    if (!form.assetTag.trim()) {
-      setError("Asset tag is required.");
-      return;
-    }
-
-    if (!form.equipmentName.trim()) {
-      setError("Equipment name is required.");
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-
-    const payload = {
-      assetTag: form.assetTag,
-      serialNumber: form.serialNumber,
-      equipmentName: form.equipmentName,
-      equipmentType: form.equipmentType,
-      manufacturer: form.manufacturer,
-      model: form.model,
-      ipAddress: form.ipAddress,
-      macAddress: form.macAddress,
-      portCount: form.portCount,
-      networkRole: form.networkRole,
-      department: form.department,
-      location: form.location,
-      assignedTo: form.assignedTo,
-      purchaseDate: form.purchaseDate,
-      warrantyExpiry: form.warrantyExpiry,
-      condition: form.condition,
-      status: form.status,
-      specifications: form.specifications,
-      notes: form.notes,
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => loadEquipment(controller.signal), filters.search ? 250 : 0);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
     };
+  }, [loadEquipment, filters.search, refreshCount]);
 
+  const loadOptions = async () => {
+    setLoadingOptions(true);
+    setFormError('');
     try {
-      if (editingItem) {
-        let response;
+      const result = await requestEquipment('/options');
+      if (!Array.isArray(result.campuses) || !Array.isArray(result.colleges)) throw new Error('Equipment form options are incomplete.');
+      setOptions(result);
+    } catch (requestError) {
+      setFormError(requestError.message || 'Unable to load campus and department options.');
+    } finally {
+      setLoadingOptions(false);
+    }
+  };
 
-        try {
-          response = await request(
-            `/network-equipment/${editingItem.id}`,
-            {
-              method: "PUT",
-              body: JSON.stringify(payload),
-            }
-          );
-        } catch {
-          response = await request(`/networkEquipment/${editingItem.id}`, {
-            method: "PUT",
-            body: JSON.stringify(payload),
-          });
-        }
+  const updateFilter = (field, value) => {
+    setFilters((previous) => ({ ...previous, [field]: value }));
+    setPage(1);
+  };
 
-        const updated = normalizeEquipment(
-          response?.data || response || payload,
-          0
-        );
+  const updateSort = (field) => {
+    setSort((previous) => ({
+      sortBy: field,
+      sortOrder: previous.sortBy === field && previous.sortOrder === 'ASC' ? 'DESC' : 'ASC',
+    }));
+    setPage(1);
+  };
 
-        setEquipment((current) =>
-          current.map((item) =>
-            item.id === editingItem.id
-              ? {
-                  ...item,
-                  ...updated,
-                  id: editingItem.id,
-                }
-              : item
-          )
-        );
-      } else {
-        let response;
+  const openDetails = async (row) => {
+    setSelectedAsset(null);
+    setDetailError('');
+    setDetailLoading(true);
+    try {
+      const result = await requestEquipment(`/${encodeURIComponent(row.id)}`);
+      const asset = result.equipment || result.data;
+      if (!asset || typeof asset !== 'object') throw new Error('The equipment service returned an invalid detail record.');
+      setSelectedAsset(asset);
+    } catch (requestError) {
+      setDetailError(requestError.message || 'Unable to load equipment details.');
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
-        try {
-          response = await request("/network-equipment", {
-            method: "POST",
-            body: JSON.stringify(payload),
-          });
-        } catch {
-          response = await request("/networkEquipment", {
-            method: "POST",
-            body: JSON.stringify(payload),
-          });
-        }
-
-        const created = normalizeEquipment(
-          response?.data || response || payload,
-          equipment.length
-        );
-
-        setEquipment((current) => [created, ...current]);
+  const openForm = async (asset = null) => {
+    setForm(asset ? formForAsset(asset) : { ...EMPTY_FORM });
+    setFormError('');
+    await loadOptions();
+    if (asset) {
+      setEditLoadingId(asset.id);
+      try {
+        const result = await requestEquipment(`/${encodeURIComponent(asset.id)}`);
+        const current = result.equipment || result.data;
+        if (!current || typeof current !== 'object') throw new Error('The equipment service returned an invalid detail record.');
+        setForm(formForAsset(current));
+      } catch (requestError) {
+        setFormError(requestError.message || 'Unable to load equipment for editing.');
+      } finally {
+        setEditLoadingId(null);
       }
+    }
+  };
 
-      setShowForm(false);
-      setEditingItem(null);
-      setForm(initialForm);
-    } catch (err) {
-      setError(err.message || "Unable to save network equipment.");
+  const closeForm = () => {
+    if (saving) return;
+    setForm(null);
+    setFormError('');
+  };
+
+  const handleFormChange = (event) => {
+    const { name, value } = event.target;
+    setForm((previous) => {
+      const next = { ...previous, [name]: value };
+      if (name === 'campusId') {
+        next.buildingId = '';
+        next.roomId = '';
+        next.collegeId = '';
+        next.departmentId = '';
+      }
+      if (name === 'buildingId') next.roomId = '';
+      if (name === 'collegeId') next.departmentId = '';
+      return next;
+    });
+    setFormError('');
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!event.currentTarget.reportValidity()) return;
+    if (form.purchaseDate && form.warrantyExpiry && form.warrantyExpiry < form.purchaseDate) {
+      setFormError('Warranty expiry cannot precede the purchase date.');
+      return;
+    }
+    const quantity = Number(form.quantity);
+    const purchasePrice = form.purchasePrice === '' ? 0 : Number(form.purchasePrice);
+    if (!Number.isSafeInteger(quantity) || quantity < 1) {
+      setFormError('Quantity must be a positive whole number.');
+      return;
+    }
+    if (!Number.isFinite(purchasePrice) || purchasePrice < 0) {
+      setFormError('Purchase cost must be a non-negative number.');
+      return;
+    }
+    const payload = {
+      name: form.name.trim(),
+      category: form.category,
+      serialNumber: form.serialNumber.trim(),
+      quantity,
+      campusId: Number(form.campusId),
+      collegeId: form.collegeId ? Number(form.collegeId) : null,
+      departmentId: form.departmentId ? Number(form.departmentId) : null,
+      buildingId: form.buildingId ? Number(form.buildingId) : null,
+      roomId: form.roomId ? Number(form.roomId) : null,
+      status: form.status,
+      condition: form.condition,
+      purchaseDate: form.purchaseDate || null,
+      purchasePrice,
+      warrantyExpiry: form.warrantyExpiry || null,
+      description: form.description.trim(),
+    };
+    setSaving(true);
+    setFormError('');
+    try {
+      const isEdit = Boolean(form.id);
+      await requestEquipment(isEdit ? `/${encodeURIComponent(form.id)}` : '', {
+        method: isEdit ? 'PUT' : 'POST',
+        data: payload,
+      });
+      toast.success(isEdit ? 'IT equipment updated successfully.' : 'IT equipment added successfully.');
+      setForm(null);
+      setRefreshCount((count) => count + 1);
+    } catch (requestError) {
+      setFormError(requestError.message || 'Unable to save IT equipment. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
-  const deleteEquipment = async (item) => {
-    const confirmed = window.confirm(
-      `Delete ${item.assetTag} - ${item.equipmentName}? This action cannot be undone.`
-    );
-
-    if (!confirmed) return;
-
-    setError("");
-
+  const deleteEquipment = async (asset) => {
+    if (!window.confirm('Are you sure you want to delete this IT equipment?')) return;
     try {
-      try {
-        await request(`/network-equipment/${item.id}`, {
-          method: "DELETE",
-        });
-      } catch {
-        await request(`/networkEquipment/${item.id}`, {
-          method: "DELETE",
-        });
-      }
-
-      setEquipment((current) =>
-        current.filter((equipmentItem) => equipmentItem.id !== item.id)
-      );
-
-      if (selectedItem?.id === item.id) {
-        setSelectedItem(null);
-        setShowDetails(false);
-      }
-    } catch (err) {
-      setError(err.message || "Unable to delete network equipment.");
+      await requestEquipment(`/${encodeURIComponent(asset.id)}`, { method: 'DELETE' });
+      toast.success('IT equipment deleted successfully.');
+      setRefreshCount((count) => count + 1);
+    } catch (requestError) {
+      toast.error(requestError.message || 'Unable to delete IT equipment.');
     }
   };
 
-  const exportCSV = () => {
-    if (!filteredEquipment.length) return;
-
-    const headers = [
-      "Asset Tag",
-      "Serial Number",
-      "Equipment Name",
-      "Type",
-      "Manufacturer",
-      "Model",
-      "IP Address",
-      "MAC Address",
-      "Port Count",
-      "Network Role",
-      "Department",
-      "Location",
-      "Assigned To",
-      "Purchase Date",
-      "Warranty Expiry",
-      "Condition",
-      "Status",
-    ];
-
-    const rows = filteredEquipment.map((item) => [
-      item.assetTag,
-      item.serialNumber,
-      item.equipmentName,
-      item.equipmentType,
-      item.manufacturer,
-      item.model,
-      item.ipAddress,
-      item.macAddress,
-      item.portCount,
-      item.networkRole,
-      item.department,
-      item.location,
-      item.assignedTo,
-      item.purchaseDate,
-      item.warrantyExpiry,
-      item.condition,
-      item.status,
-    ]);
-
-    const escapeCSV = (value) => {
-      const text = String(value ?? "");
-
-      if (
-        text.includes(",") ||
-        text.includes('"') ||
-        text.includes("\n")
-      ) {
-        return `"${text.replace(/"/g, '""')}"`;
-      }
-
-      return text;
-    };
-
-    const csv = [headers, ...rows]
-      .map((row) => row.map(escapeCSV).join(","))
-      .join("\n");
-
-    const blob = new Blob([csv], {
-      type: "text/csv;charset=utf-8;",
-    });
-
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-
-    link.href = url;
-    link.download = `network-equipment-${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
-
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    URL.revokeObjectURL(url);
+  const closeDetails = () => {
+    setSelectedAsset(null);
+    setDetailError('');
+    setDetailLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6 ict-module-theme ict-theme-equipment">
-      <div className="mx-auto max-w-[1600px] space-y-6">
-        {/* Header */}
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between ict-page-header">
+    <main className="min-h-screen bg-slate-50 p-4 md:p-6 ict-module-theme ict-theme-equipment">
+      <div className="mx-auto max-w-[1800px] space-y-6">
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="mb-2 flex items-center gap-2 text-sm text-slate-500">
-              <Network size={16} />
-              <span>ICT Asset Management</span>
-              <span>/</span>
-              <span className="text-slate-700">
-                Network Equipment
-              </span>
+              <Building2 size={16} />
+              <span>ICT Asset Management</span><span>/</span><span className="text-slate-700">IT Equipment</span>
             </div>
-
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl ict-page-title">
-              Network Equipment
-            </h1>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Manage routers, switches, access points, firewalls, and other
-              university network infrastructure.
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">IT Equipment</h1>
+            <p className="mt-1 max-w-2xl text-sm text-slate-500">Browse and inspect IT assets registered in the central asset inventory.</p>
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={loadEquipment}
-              disabled={loading}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
-            >
-              <RefreshCw
-                size={17}
-                className={loading ? "animate-spin" : ""}
-              />
-              Refresh
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setRefreshCount((count) => count + 1)} disabled={loading} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />Refresh
             </button>
-
-            <button
-              type="button"
-              onClick={exportCSV}
-              disabled={!filteredEquipment.length}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
-            >
-              <Download size={17} />
-              Export
-            </button>
-
-            <button
-              type="button"
-              onClick={openCreate}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-            >
-              <Plus size={18} />
-              Add Equipment
+            <button type="button" onClick={() => openForm()} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700">
+              <Plus size={16} />Add IT Equipment
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* Error */}
-        {error && (
-          <div className="flex items-start justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            <div className="flex gap-3">
-              <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-
-              <div>
-                <p className="font-semibold">Operation failed</p>
-                <p className="mt-0.5">{error}</p>
-              </div>
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="relative w-full lg:max-w-md">
+              <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input type="search" value={filters.search} onChange={(event) => updateFilter('search', event.target.value)} placeholder="Search asset, serial, campus, department..." aria-label="Search IT equipment" className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100" />
             </div>
-
-            <button
-              type="button"
-              onClick={() => setError("")}
-              className="rounded-md p-1 hover:bg-red-100"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        )}
-
-        {/* Summary */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          <SummaryCard
-            title="Total Equipment"
-            value={statistics.total}
-            icon={Package}
-            iconClass="bg-blue-50 text-blue-600"
-          />
-
-          <SummaryCard
-            title="Active"
-            value={statistics.active}
-            icon={Activity}
-            iconClass="bg-emerald-50 text-emerald-600"
-          />
-
-          <SummaryCard
-            title="Available"
-            value={statistics.available}
-            icon={CheckCircle2}
-            iconClass="bg-indigo-50 text-indigo-600"
-          />
-
-          <SummaryCard
-            title="Maintenance"
-            value={statistics.maintenance}
-            icon={Wrench}
-            iconClass="bg-amber-50 text-amber-600"
-          />
-
-          <SummaryCard
-            title="Faulty"
-            value={statistics.faulty}
-            icon={AlertTriangle}
-            iconClass="bg-red-50 text-red-600"
-          />
-        </div>
-
-        {/* Main Table */}
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          {/* Filters */}
-          <div className="border-b border-slate-200 p-4 ict-filter-panel">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="relative w-full xl:max-w-md">
-                <Search
-                  size={18}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search tag, serial, IP, equipment..."
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <div className="relative">
-                  <Filter
-                    size={16}
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-
-                  <select
-                    value={statusFilter}
-                    onChange={(event) =>
-                      setStatusFilter(event.target.value)
-                    }
-                    className="h-10 min-w-[150px] appearance-none rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  >
-                    <option value="All">All Statuses</option>
-
-                    {STATUS_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <select
-                  value={typeFilter}
-                  onChange={(event) =>
-                    setTypeFilter(event.target.value)
-                  }
-                  className="h-10 min-w-[145px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                >
-                  <option value="All">All Types</option>
-
-                  {TYPE_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="relative">
+                <Filter size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <select aria-label="Filter by category" value={filters.category} onChange={(event) => updateFilter('category', event.target.value)} className="h-10 min-w-[150px] appearance-none rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-sm text-slate-700 outline-none focus:border-blue-500">
+                  <option value="">All categories</option>
+                  {CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
                 </select>
-
-                <select
-                  value={conditionFilter}
-                  onChange={(event) =>
-                    setConditionFilter(event.target.value)
-                  }
-                  className="h-10 min-w-[145px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                >
-                  <option value="All">All Conditions</option>
-
-                  {CONDITION_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              </label>
+              <select aria-label="Filter by status" value={filters.status} onChange={(event) => updateFilter('status', event.target.value)} className="h-10 min-w-[145px] rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500">
+                <option value="">All statuses</option>
+                {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+              </select>
+              <select aria-label="Filter by condition" value={filters.condition} onChange={(event) => updateFilter('condition', event.target.value)} className="h-10 min-w-[145px] rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500">
+                <option value="">All conditions</option>
+                {CONDITIONS.map((condition) => <option key={condition} value={condition}>{condition}</option>)}
+              </select>
+              {hasActiveFilters && <button type="button" onClick={() => { setFilters({ search: '', category: '', status: '', condition: '' }); setPage(1); }} className="h-10 rounded-lg px-3 text-sm font-medium text-blue-700 hover:bg-blue-50">Clear filters</button>}
             </div>
           </div>
 
-          {/* Table */}
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+            <p className="text-sm text-slate-500" aria-live="polite">{loading ? 'Loading equipment…' : `${pagination.total.toLocaleString()} ${pagination.total === 1 ? 'asset' : 'assets'} found`}</p>
+            {hasActiveFilters && <span className="text-xs text-slate-400">Filtered central inventory</span>}
+          </div>
+
+          {error && (
+            <div className="mx-4 mb-4 flex items-start justify-between gap-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700" role="alert">
+              <div className="flex items-start gap-3"><AlertCircle size={18} className="mt-0.5 shrink-0" /><div><p className="font-semibold">Unable to load IT equipment. Please try again.</p><p className="mt-0.5">{error}</p></div></div>
+              <button type="button" onClick={() => setRefreshCount((count) => count + 1)} className="shrink-0 rounded-md px-2 py-1 font-semibold hover:bg-rose-100">Retry</button>
+            </div>
+          )}
+
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1350px] text-left">
-              <thead className="bg-slate-50">
-                <tr className="border-b border-slate-200">
-                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Equipment
-                  </th>
-
-                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Network
-                  </th>
-
-                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Manufacturer / Model
-                  </th>
-
-                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Department
-                  </th>
-
-                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Location
-                  </th>
-
-                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Condition
-                  </th>
-
-                  <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Status
-                  </th>
-
-                  <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Actions
-                  </th>
+            <table className="w-full min-w-[1450px] border-collapse text-left">
+              <thead className="border-y border-slate-200 bg-slate-50/80">
+                <tr>
+                  <th className="px-4 py-3"><SortButton label="Asset ID" field="assetCode" sort={sort} onSort={updateSort} /></th>
+                  <th className="px-4 py-3"><SortButton label="Asset Name" field="name" sort={sort} onSort={updateSort} /></th>
+                  <th className="px-4 py-3"><SortButton label="Category" field="category" sort={sort} onSort={updateSort} /></th>
+                  <th className="px-4 py-3"><SortButton label="Serial Number" field="serialNumber" sort={sort} onSort={updateSort} /></th>
+                  <th className="px-4 py-3"><SortButton label="Quantity" field="quantity" sort={sort} onSort={updateSort} /></th>
+                  {['Campus', 'College', 'Department', 'Building', 'Room'].map((label) => <th key={label} className="px-4 py-3"><span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</span></th>)}
+                  <th className="px-4 py-3"><SortButton label="Status" field="status" sort={sort} onSort={updateSort} /></th>
+                  <th className="px-4 py-3"><SortButton label="Condition" field="condition" sort={sort} onSort={updateSort} /></th>
+                  <th className="px-4 py-3"><SortButton label="Warranty Expiry" field="warrantyExpiry" sort={sort} onSort={updateSort} /></th>
+                  <th className="px-4 py-3"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
-
               <tbody className="divide-y divide-slate-100">
-                {loading ? (
-                  Array.from({ length: 7 }).map((_, rowIndex) => (
-                    <tr key={rowIndex}>
-                      {Array.from({ length: 8 }).map((__, cellIndex) => (
-                        <td key={cellIndex} className="px-5 py-5">
-                          <div className="h-4 animate-pulse rounded bg-slate-100" />
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                ) : paginatedEquipment.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-6 py-16 text-center">
-                      <div className="mx-auto flex max-w-sm flex-col items-center">
-                        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
-                          <Router size={27} />
-                        </div>
-
-                        <h3 className="text-base font-semibold text-slate-900">
-                          No network equipment found
-                        </h3>
-
-                        <p className="mt-1 text-sm text-slate-500">
-                          Change your filters or add new network equipment.
-                        </p>
-
-                        <button
-                          type="button"
-                          onClick={openCreate}
-                          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-                        >
-                          <Plus size={16} />
-                          Add Equipment
-                        </button>
+                {loading && Array.from({ length: 5 }, (_, index) => (
+                  <tr key={`loading-${index}`} aria-hidden="true">{Array.from({ length: 14 }, (_, cell) => <td key={cell} className="px-4 py-4"><div className="h-4 animate-pulse rounded bg-slate-100" /></td>)}</tr>
+                ))}
+                {!loading && !error && equipment.map((asset) => (
+                  <tr key={asset.id} className="transition hover:bg-blue-50/40">
+                    <td className="whitespace-nowrap px-4 py-4 font-mono text-xs font-semibold text-blue-700">{assetIdentifier(asset)}</td>
+                    <td className="max-w-[230px] px-4 py-4"><div className="truncate text-sm font-semibold text-slate-800" title={asset.name}>{asset.name || 'Unnamed asset'}</div></td>
+                    <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{categoryName(asset)}</td>
+                    <td className="whitespace-nowrap px-4 py-4 font-mono text-xs text-slate-600">{asset.serialNumber || '—'}</td>
+                    <td className="px-4 py-4 text-sm text-slate-700">{asset.quantity ?? '—'}</td>
+                    <td className="max-w-[145px] truncate px-4 py-4 text-sm text-slate-600" title={campusName(asset)}>{campusName(asset)}</td>
+                    <td className="max-w-[145px] truncate px-4 py-4 text-sm text-slate-600" title={collegeName(asset)}>{collegeName(asset)}</td>
+                    <td className="max-w-[145px] truncate px-4 py-4 text-sm text-slate-600" title={departmentName(asset)}>{departmentName(asset)}</td>
+                    <td className="max-w-[145px] truncate px-4 py-4 text-sm text-slate-600" title={buildingName(asset)}>{buildingName(asset)}</td>
+                    <td className="max-w-[130px] truncate px-4 py-4 text-sm text-slate-600" title={roomName(asset)}>{roomName(asset)}</td>
+                    <td className="whitespace-nowrap px-4 py-4"><span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${badgeClass(asset.status, 'status')}`}>{displayStatus(asset.status)}</span></td>
+                    <td className="whitespace-nowrap px-4 py-4"><span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${badgeClass(asset.condition, 'condition')}`}>{displayCondition(asset.condition)}</span></td>
+                    <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-600">{formatDate(asset.warrantyExpiry)}</td>
+                    <td className="whitespace-nowrap px-4 py-4">
+                      <div className="flex items-center justify-end gap-1">
+                        <button type="button" onClick={() => openDetails(asset)} aria-label={`View details for ${asset.name || assetIdentifier(asset)}`} title="View" className="rounded-lg p-2 text-slate-500 transition hover:bg-blue-50 hover:text-blue-700"><Eye size={16} /></button>
+                        <button type="button" onClick={() => openForm(asset)} disabled={editLoadingId === asset.id} aria-label={`Edit ${asset.name || assetIdentifier(asset)}`} title="Edit" className="rounded-lg p-2 text-slate-500 transition hover:bg-blue-50 hover:text-blue-700 disabled:opacity-50"><Edit2 size={16} /></button>
+                        <button type="button" onClick={() => deleteEquipment(asset)} aria-label={`Delete ${asset.name || assetIdentifier(asset)}`} title="Delete" className="rounded-lg p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-700"><Trash2 size={16} /></button>
                       </div>
                     </td>
                   </tr>
-                ) : (
-                  paginatedEquipment.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="group transition hover:bg-slate-50/80"
-                    >
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                            <EquipmentIcon
-                              type={item.equipmentType}
-                              size={19}
-                            />
-                          </div>
-
-                          <div>
-                            <button
-                              type="button"
-                              onClick={() => openDetails(item)}
-                              className="font-semibold text-blue-600 hover:text-blue-700"
-                            >
-                              {item.assetTag}
-                            </button>
-
-                            <div className="mt-0.5 max-w-[220px] truncate text-sm text-slate-700">
-                              {item.equipmentName || "Unnamed equipment"}
-                            </div>
-
-                            <div className="mt-0.5 text-xs text-slate-400">
-                              {item.equipmentType}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="font-mono text-sm text-slate-700">
-                          {item.ipAddress || "No IP"}
-                        </div>
-
-                        <div className="mt-1 text-xs text-slate-500">
-                          {item.macAddress || "No MAC"}
-                        </div>
-
-                        {item.portCount && (
-                          <div className="mt-1 text-xs text-slate-400">
-                            {item.portCount} ports
-                          </div>
-                        )}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="text-sm font-medium text-slate-800">
-                          {item.manufacturer || "—"}
-                        </div>
-
-                        <div className="mt-1 text-xs text-slate-500">
-                          {item.model || "No model"}
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2 text-sm text-slate-700">
-                          <Building2
-                            size={15}
-                            className="text-slate-400"
-                          />
-                          {item.department || "—"}
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2 text-sm text-slate-700">
-                          <MapPin size={15} className="text-slate-400" />
-                          {item.location || "—"}
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${conditionClasses(
-                            item.condition
-                          )}`}
-                        >
-                          {item.condition}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClasses(
-                            item.status
-                          )}`}
-                        >
-                          {item.status}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="flex justify-end gap-1">
-                          <ActionButton
-                            title="View equipment"
-                            onClick={() => openDetails(item)}
-                          >
-                            <Eye size={16} />
-                          </ActionButton>
-
-                          <ActionButton
-                            title="Edit equipment"
-                            onClick={() => openEdit(item)}
-                          >
-                            <Pencil size={16} />
-                          </ActionButton>
-
-                          <ActionButton
-                            title="Delete equipment"
-                            onClick={() => deleteEquipment(item)}
-                            className="text-red-500 hover:bg-red-50 hover:text-red-700"
-                          >
-                            <Trash2 size={16} />
-                          </ActionButton>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                ))}
+                {!loading && !error && equipment.length === 0 && (
+                  <tr><td colSpan="14" className="px-6 py-16 text-center">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><MapPin size={22} /></div>
+                    <h2 className="mt-4 text-sm font-semibold text-slate-800">{hasActiveFilters ? 'No matching equipment' : 'No IT equipment found'}</h2>
+                    <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">{hasActiveFilters ? 'Adjust your search or filters and try again.' : 'No IT equipment records are currently available in the central asset inventory.'}</p>
+                    {hasActiveFilters && <button type="button" onClick={() => { setFilters({ search: '', category: '', status: '', condition: '' }); setPage(1); }} className="mt-4 text-sm font-semibold text-blue-700 hover:text-blue-800">Clear filters</button>}
+                  </td></tr>
                 )}
               </tbody>
             </table>
           </div>
 
-          {/* Pagination */}
-          {!loading && filteredEquipment.length > 0 && (
-            <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-slate-500">
-                Showing{" "}
-                <span className="font-medium text-slate-700">
-                  {(page - 1) * PAGE_SIZE + 1}
-                </span>{" "}
-                to{" "}
-                <span className="font-medium text-slate-700">
-                  {Math.min(page * PAGE_SIZE, filteredEquipment.length)}
-                </span>{" "}
-                of{" "}
-                <span className="font-medium text-slate-700">
-                  {filteredEquipment.length}
-                </span>{" "}
-                equipment records
-              </p>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={page === 1}
-                  onClick={() => setPage((current) => current - 1)}
-                  className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-                >
-                  <ChevronLeft size={16} />
-                  Previous
-                </button>
-
-                <div className="flex h-9 min-w-9 items-center justify-center rounded-lg bg-blue-600 px-3 text-sm font-semibold text-white">
-                  {page}
-                </div>
-
-                <button
-                  type="button"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((current) => current + 1)}
-                  className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-                >
-                  Next
-                  <ChevronRight size={16} />
-                </button>
-              </div>
+          <footer className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-500">{pagination.total ? `Showing ${((page - 1) * PAGE_SIZE) + 1}–${Math.min(page * PAGE_SIZE, pagination.total)} of ${pagination.total.toLocaleString()}` : 'No records'}</p>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1 || loading} className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={16} />Previous</button>
+              <span className="min-w-[94px] text-center text-sm text-slate-500">Page {page} of {pagination.totalPages}</span>
+              <button type="button" onClick={() => setPage((current) => Math.min(pagination.totalPages, current + 1))} disabled={page >= pagination.totalPages || loading} className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Next<ChevronRight size={16} /></button>
             </div>
-          )}
-        </div>
+          </footer>
+        </section>
       </div>
 
-      {/* Add / Edit Modal */}
-      {showForm && (
-        <Modal
-          title={
-            editingItem
-              ? "Edit Network Equipment"
-              : "Add Network Equipment"
-          }
-          icon={editingItem ? Pencil : Plus}
-          onClose={closeAll}
-          large
-        >
-          <form onSubmit={saveEquipment}>
-            <div className="max-h-[70vh] overflow-y-auto px-6 py-5">
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <FormField
-                  label="Asset Tag"
-                  name="assetTag"
-                  value={form.assetTag}
-                  onChange={handleChange}
-                  placeholder="NET-0001"
-                  required
-                />
-
-                <FormField
-                  label="Serial Number"
-                  name="serialNumber"
-                  value={form.serialNumber}
-                  onChange={handleChange}
-                  placeholder="Serial number"
-                />
-
-                <FormField
-                  label="Equipment Name"
-                  name="equipmentName"
-                  value={form.equipmentName}
-                  onChange={handleChange}
-                  placeholder="e.g. Cisco Catalyst Switch"
-                  required
-                />
-
-                <SelectField
-                  label="Equipment Type"
-                  name="equipmentType"
-                  value={form.equipmentType}
-                  onChange={handleChange}
-                  options={TYPE_OPTIONS}
-                />
-
-                <FormField
-                  label="Manufacturer"
-                  name="manufacturer"
-                  value={form.manufacturer}
-                  onChange={handleChange}
-                  placeholder="e.g. Cisco"
-                />
-
-                <FormField
-                  label="Model"
-                  name="model"
-                  value={form.model}
-                  onChange={handleChange}
-                  placeholder="e.g. Catalyst 2960"
-                />
-
-                <FormField
-                  label="IP Address"
-                  name="ipAddress"
-                  value={form.ipAddress}
-                  onChange={handleChange}
-                  placeholder="192.168.1.1"
-                />
-
-                <FormField
-                  label="MAC Address"
-                  name="macAddress"
-                  value={form.macAddress}
-                  onChange={handleChange}
-                  placeholder="00:1A:2B:3C:4D:5E"
-                />
-
-                <FormField
-                  label="Port Count"
-                  name="portCount"
-                  value={form.portCount}
-                  onChange={handleChange}
-                  placeholder="24"
-                  type="number"
-                />
-
-                <FormField
-                  label="Network Role"
-                  name="networkRole"
-                  value={form.networkRole}
-                  onChange={handleChange}
-                  placeholder="Core / Distribution / Access"
-                />
-
-                <FormField
-                  label="Department"
-                  name="department"
-                  value={form.department}
-                  onChange={handleChange}
-                  placeholder="Department / College"
-                />
-
-                <FormField
-                  label="Location"
-                  name="location"
-                  value={form.location}
-                  onChange={handleChange}
-                  placeholder="Building / Server Room"
-                />
-
-                <FormField
-                  label="Assigned To"
-                  name="assignedTo"
-                  value={form.assignedTo}
-                  onChange={handleChange}
-                  placeholder="Responsible staff"
-                />
-
-                <FormField
-                  label="Purchase Date"
-                  name="purchaseDate"
-                  type="date"
-                  value={form.purchaseDate}
-                  onChange={handleChange}
-                />
-
-                <FormField
-                  label="Warranty Expiry"
-                  name="warrantyExpiry"
-                  type="date"
-                  value={form.warrantyExpiry}
-                  onChange={handleChange}
-                />
-
-                <SelectField
-                  label="Condition"
-                  name="condition"
-                  value={form.condition}
-                  onChange={handleChange}
-                  options={CONDITION_OPTIONS}
-                />
-
-                <SelectField
-                  label="Status"
-                  name="status"
-                  value={form.status}
-                  onChange={handleChange}
-                  options={STATUS_OPTIONS}
-                />
-
-                <div className="md:col-span-2">
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Specifications
-                  </label>
-
-                  <textarea
-                    name="specifications"
-                    value={form.specifications}
-                    onChange={handleChange}
-                    rows={4}
-                    placeholder="Bandwidth, VLAN support, firmware version, interfaces, routing protocols, etc."
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Notes
-                  </label>
-
-                  <textarea
-                    name="notes"
-                    value={form.notes}
-                    onChange={handleChange}
-                    rows={3}
-                    placeholder="Additional information..."
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
-              <button
-                type="button"
-                onClick={closeAll}
-                disabled={saving}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-              >
-                {saving && (
-                  <RefreshCw size={16} className="animate-spin" />
-                )}
-
-                {editingItem ? "Save Changes" : "Add Equipment"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* Details Modal */}
-      {showDetails && selectedItem && (
-        <Modal
-          title="Network Equipment Details"
-          icon={Router}
-          onClose={closeAll}
-          large
-        >
-          <div className="max-h-[78vh] overflow-y-auto">
-            <div className="border-b border-slate-200 bg-slate-50 px-6 py-5">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
-                    <EquipmentIcon
-                      type={selectedItem.equipmentType}
-                      size={27}
-                    />
-                  </div>
-
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      {selectedItem.assetTag}
-                    </div>
-
-                    <h2 className="mt-1 text-xl font-bold text-slate-900">
-                      {selectedItem.equipmentName}
-                    </h2>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                      {selectedItem.manufacturer || "Unknown manufacturer"}{" "}
-                      {selectedItem.model
-                        ? `• ${selectedItem.model}`
-                        : ""}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <span
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${statusClasses(
-                      selectedItem.status
-                    )}`}
-                  >
-                    {selectedItem.status}
-                  </span>
-
-                  <span
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${conditionClasses(
-                      selectedItem.condition
-                    )}`}
-                  >
-                    {selectedItem.condition}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-6 px-6 py-6">
-              <section>
-                <h3 className="mb-3 text-sm font-semibold text-slate-900">
-                  Equipment Identification
-                </h3>
-
-                <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-3">
-                  <DetailItem
-                    label="Asset Tag"
-                    value={selectedItem.assetTag}
-                    icon={Hash}
-                  />
-
-                  <DetailItem
-                    label="Serial Number"
-                    value={selectedItem.serialNumber}
-                    icon={Hash}
-                  />
-
-                  <DetailItem
-                    label="Equipment Type"
-                    value={selectedItem.equipmentType}
-                    icon={Router}
-                  />
-
-                  <DetailItem
-                    label="Manufacturer"
-                    value={selectedItem.manufacturer}
-                  />
-
-                  <DetailItem
-                    label="Model"
-                    value={selectedItem.model}
-                  />
-
-                  <DetailItem
-                    label="Network Role"
-                    value={selectedItem.networkRole}
-                    icon={Network}
-                  />
-                </div>
-              </section>
-
-              <section>
-                <h3 className="mb-3 text-sm font-semibold text-slate-900">
-                  Network Configuration
-                </h3>
-
-                <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-3">
-                  <DetailItem
-                    label="IP Address"
-                    value={selectedItem.ipAddress}
-                    icon={Activity}
-                  />
-
-                  <DetailItem
-                    label="MAC Address"
-                    value={selectedItem.macAddress}
-                    icon={Hash}
-                  />
-
-                  <DetailItem
-                    label="Port Count"
-                    value={selectedItem.portCount}
-                    icon={Cable}
-                  />
-                </div>
-              </section>
-
-              <section>
-                <h3 className="mb-3 text-sm font-semibold text-slate-900">
-                  Assignment & Location
-                </h3>
-
-                <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-3">
-                  <DetailItem
-                    label="Department"
-                    value={selectedItem.department}
-                    icon={Building2}
-                  />
-
-                  <DetailItem
-                    label="Location"
-                    value={selectedItem.location}
-                    icon={MapPin}
-                  />
-
-                  <DetailItem
-                    label="Assigned To"
-                    value={selectedItem.assignedTo}
-                  />
-                </div>
-              </section>
-
-              <section>
-                <h3 className="mb-3 text-sm font-semibold text-slate-900">
-                  Lifecycle Information
-                </h3>
-
-                <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-3">
-                  <DetailItem
-                    label="Purchase Date"
-                    value={formatDate(selectedItem.purchaseDate)}
-                    icon={CalendarDays}
-                  />
-
-                  <DetailItem
-                    label="Warranty Expiry"
-                    value={formatDate(selectedItem.warrantyExpiry)}
-                    icon={CalendarDays}
-                  />
-
-                  <DetailItem
-                    label="Condition"
-                    value={selectedItem.condition}
-                  />
-
-                  <DetailItem
-                    label="Status"
-                    value={selectedItem.status}
-                  />
-                </div>
-              </section>
-
-              <section>
-                <h3 className="mb-3 text-sm font-semibold text-slate-900">
-                  Specifications
-                </h3>
-
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-                  {selectedItem.specifications ||
-                    "No specifications have been recorded."}
-                </div>
-              </section>
-
-              <section>
-                <h3 className="mb-3 text-sm font-semibold text-slate-900">
-                  Notes
-                </h3>
-
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-                  {selectedItem.notes || "No additional notes."}
-                </div>
-              </section>
-            </div>
-
-            <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowDetails(false);
-                  openEdit(selectedItem);
-                }}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                <Pencil size={16} />
-                Edit Equipment
-              </button>
-
-              <button
-                type="button"
-                onClick={closeAll}
-                className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-    </div>
+      <EquipmentDetails asset={selectedAsset} loading={detailLoading} error={detailError} onClose={closeDetails} />
+      {form && <EquipmentForm form={form} options={options} saving={saving} error={formError} loadingOptions={loadingOptions} onChange={handleFormChange} onSubmit={handleSubmit} onClose={closeForm} onRetryOptions={loadOptions} />}
+    </main>
   );
 }

@@ -6,12 +6,16 @@ const reportController = require('../controllers/ictReportController');
 const deviceHealthController = require('../controllers/deviceHealthController');
 const { getIctAssetAnalytics } = require('../services/ictAnalyticsService');
 const verification = require('../controllers/verificationController');
+const ictInventoryController = require('../controllers/ictInventoryController');
+const ictNetworkEquipmentController = require('../controllers/ictNetworkEquipmentController');
 
 const router = express.Router();
 const scopedIctAccess = [requireAuth, requireRole('admin', 'ict_officer'), (req, res, next) => req.user.role === 'admin' ? next() : resolveCollegeScope(req, res, next)];
 const scopedIctVerificationAccess = [requireAuth, requireRole('ict_officer'), resolveCollegeScope];
 
 router.get('/dashboard', ...scopedIctAccess, controller.getIctDashboard);
+router.get('/inventory', ...scopedIctAccess, ictInventoryController.getInventory);
+router.post('/inventory/import', ...scopedIctAccess, ictInventoryController.importInventory);
 router.get('/reports/export', ...scopedIctAccess, reportController.exportIctReport);
 router.get('/reports', ...scopedIctAccess, reportController.getIctReports);
 router.get('/analytics', ...scopedIctAccess, async (req, res, next) => {
@@ -39,12 +43,19 @@ router.delete('/tracking/:id/rfid', ...scopedIctAccess, controller.unassignIctRf
 router.get('/device-health', ...scopedIctAccess, deviceHealthController.listDeviceHealth);
 router.get('/device-health/:id', ...scopedIctAccess, deviceHealthController.getDeviceHealth);
 router.post('/device-health', ...scopedIctAccess, deviceHealthController.createInspection);
+router.get('/equipment/options', ...scopedIctAccess, controller.listIctEquipmentOptions);
+router.get('/equipment/network', ...scopedIctAccess, ictNetworkEquipmentController.listNetworkEquipment);
+router.post('/equipment/network', ...scopedIctAccess, ictNetworkEquipmentController.createNetworkEquipment);
+router.get('/equipment/network/:id', ...scopedIctAccess, ictNetworkEquipmentController.getNetworkEquipment);
+router.put('/equipment/network/:id', ...scopedIctAccess, ictNetworkEquipmentController.updateNetworkEquipment);
+router.delete('/equipment/network/:id', ...scopedIctAccess, ictNetworkEquipmentController.deleteNetworkEquipment);
 router.get('/network', ...scopedIctAccess, controller.listNetworkEquipment);
 router.get('/network/:id', ...scopedIctAccess, controller.getNetworkEquipment);
 router.get('/equipment', ...scopedIctAccess, controller.listIctEquipment);
-router.get('/equipment/:id', ...scopedIctAccess, controller.getIctAsset);
-router.post('/equipment', ...scopedIctAccess, controller.createIctAsset);
-router.put('/equipment/:id', ...scopedIctAccess, controller.updateIctAsset);
+router.get('/equipment/:id', ...scopedIctAccess, controller.getIctEquipment);
+router.post('/equipment', ...scopedIctAccess, controller.createIctEquipment);
+router.put('/equipment/:id', ...scopedIctAccess, controller.updateIctEquipment);
+router.delete('/equipment/:id', ...scopedIctAccess, controller.deleteIctEquipment);
 router.patch('/equipment/:id/retire', ...scopedIctAccess, controller.retireIctAsset);
 router.get('/assets', ...scopedIctAccess, controller.listIctAssets);
 router.post('/assets', ...scopedIctAccess, controller.createIctAsset);
