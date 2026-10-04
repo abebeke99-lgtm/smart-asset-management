@@ -214,7 +214,7 @@ export const AuthProvider = ({ children }) => {
 
     restoreSession();
     return () => { mounted = false; };
-  }, []);
+  }, [api]);
 
   useEffect(() => {
     if (!user?.id) return undefined;

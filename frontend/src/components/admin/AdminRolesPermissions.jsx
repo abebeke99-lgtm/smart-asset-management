@@ -80,6 +80,7 @@ function AdminRolesPermissions() {
   const [selectedRoleId, setSelectedRoleId] = useState("");
   const [selectedPermissions, setSelectedPermissions] = useState([]);
   const [permissionSearch, setPermissionSearch] = useState("");
+  const [permissionTypeFilter, setPermissionTypeFilter] = useState("");
   const [roleSearch, setRoleSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [permissionsLoading, setPermissionsLoading] = useState(false);
@@ -161,15 +162,23 @@ function AdminRolesPermissions() {
     );
   }, [roles, roleSearch]);
 
-  const groupedPermissions = useMemo(() => {
+  const permissionMatrix = useMemo(() => {
     const query = permissionSearch.trim().toLowerCase();
     return permissions.reduce((groups, permissionName) => {
       if (query && !permissionName.toLowerCase().includes(query)) return groups;
+      const permissionType = getPermissionType(permissionName);
+      if (permissionTypeFilter && permissionType !== permissionTypeFilter) return groups;
       const moduleName = getPermissionModule(permissionName);
-      groups[moduleName] = [...(groups[moduleName] || []), permissionName];
+      groups[moduleName] ||= { types: {}, additional: [] };
+      if (permissionType) {
+        groups[moduleName].types[permissionType] ||= [];
+        groups[moduleName].types[permissionType].push(permissionName);
+      } else {
+        groups[moduleName].additional.push(permissionName);
+      }
       return groups;
     }, {});
-  }, [permissions, permissionSearch]);
+  }, [permissions, permissionSearch, permissionTypeFilter]);
 
   const isDirty = useMemo(() => {
     const rolePermissions = (selectedRole?.permissions || []).map(getPermissionName).sort();
@@ -308,15 +317,24 @@ function AdminRolesPermissions() {
               </div>
             </div>
 
-            <label className="admin-roles-search admin-roles-permission-search">
-              <Search size={16} aria-hidden="true" />
-              <span className="admin-roles-visually-hidden">Search permissions</span>
-              <input value={permissionSearch} onChange={(event) => setPermissionSearch(event.target.value)} placeholder="Search permissions" />
-            </label>
+            <div className="admin-roles-permission-filters">
+              <label className="admin-roles-search admin-roles-permission-search">
+                <Search size={16} aria-hidden="true" />
+                <span className="admin-roles-visually-hidden">Search permissions</span>
+                <input value={permissionSearch} onChange={(event) => setPermissionSearch(event.target.value)} placeholder="Search permissions" />
+              </label>
+              <label className="admin-roles-type-filter">
+                <span>Permission type</span>
+                <select value={permissionTypeFilter} onChange={(event) => setPermissionTypeFilter(event.target.value)}>
+                  <option value="">All types</option>
+                  {PERMISSION_TYPES.map((permissionType) => <option key={permissionType} value={permissionType}>{permissionType}</option>)}
+                </select>
+              </label>
+            </div>
 
             {permissionsLoading ? (
               <div className="admin-roles-state" role="status">Loading role permissions...</div>
-            ) : Object.keys(groupedPermissions).length === 0 ? (
+            ) : Object.keys(permissionMatrix).length === 0 ? (
               <div className="admin-roles-state">{EMPTY_MESSAGE}</div>
             ) : (
               <div className="admin-roles-matrix-scroll">
@@ -324,34 +342,58 @@ function AdminRolesPermissions() {
                   <thead>
                     <tr>
                       <th scope="col">Module</th>
-                      <th scope="col">Permission</th>
-                      <th scope="col">Type</th>
-                      <th scope="col">Granted</th>
+                      {PERMISSION_TYPES.map((permissionType) => <th scope="col" key={permissionType}>{permissionType}</th>)}
+                      <th scope="col">Other supported permissions</th>
                     </tr>
                   </thead>
-                  {Object.entries(groupedPermissions).map(([moduleName, modulePermissions]) => (
-                    <tbody key={moduleName}>
-                      {modulePermissions.map((permissionName) => (
-                        <tr key={permissionName}>
-                          <td data-label="Module">{formatLabel(moduleName)}</td>
-                          <td data-label="Permission"><code>{permissionName}</code></td>
-                          <td data-label="Type">{getPermissionType(permissionName) || formatLabel(permissionName.split(".").at(-1))}</td>
-                          <td data-label="Granted">
-                            <label className="admin-roles-permission-toggle">
-                              <input
-                                type="checkbox"
-                                checked={selectedPermissions.includes(permissionName)}
-                                onChange={() => togglePermission(permissionName)}
-                                disabled={saving || permissionsLoading}
-                                aria-label={`${permissionName} permission`}
-                              />
-                              <span>{selectedPermissions.includes(permissionName) ? "Granted" : "Not granted"}</span>
-                            </label>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  ))}
+                  <tbody>
+                    {Object.entries(permissionMatrix).map(([moduleName, modulePermissions]) => (
+                      <tr key={moduleName}>
+                        <th scope="row" data-label="Module">{formatLabel(moduleName)}</th>
+                        {PERMISSION_TYPES.map((permissionType) => {
+                          const names = modulePermissions.types[permissionType] || [];
+                          return (
+                            <td key={permissionType} data-label={permissionType}>
+                              {names.length ? (
+                                <div className="admin-roles-permission-items">
+                                  {names.map((permissionName) => (
+                                    <label className="admin-roles-permission-toggle" key={permissionName}>
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedPermissions.includes(permissionName)}
+                                        onChange={() => togglePermission(permissionName)}
+                                        disabled={saving || permissionsLoading}
+                                        aria-label={`${permissionName} permission`}
+                                      />
+                                      <code>{permissionName}</code>
+                                    </label>
+                                  ))}
+                                </div>
+                              ) : <span className="admin-roles-not-defined">Not defined</span>}
+                            </td>
+                          );
+                        })}
+                        <td data-label="Other supported permissions">
+                          {modulePermissions.additional.length ? (
+                            <div className="admin-roles-permission-items">
+                              {modulePermissions.additional.map((permissionName) => (
+                                <label className="admin-roles-permission-toggle" key={permissionName}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedPermissions.includes(permissionName)}
+                                    onChange={() => togglePermission(permissionName)}
+                                    disabled={saving || permissionsLoading}
+                                    aria-label={`${permissionName} permission`}
+                                  />
+                                  <code>{permissionName}</code>
+                                </label>
+                              ))}
+                            </div>
+                          ) : <span className="admin-roles-not-defined">Not defined</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
                 </table>
               </div>
             )}

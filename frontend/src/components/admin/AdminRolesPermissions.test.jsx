@@ -73,6 +73,8 @@ describe("Admin Roles & Permissions", () => {
     expect(await screen.findByRole("checkbox", { name: "assets.view permission" })).toBeChecked();
     expect(apiClient.get).toHaveBeenCalledWith("/api/admin/roles/admin/permissions");
     expect(screen.getByRole("checkbox", { name: "assets.create permission" })).not.toBeChecked();
+    expect(screen.getByRole("columnheader", { name: "Create" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Configure" })).toBeInTheDocument();
   });
 
   it("loads the selected role permissions and persists changes through the API", async () => {

@@ -261,7 +261,36 @@
 }
 
 .admin-roles-permission-search {
-  margin-bottom: 16px;
+  flex: 1;
+  margin-bottom: 14px;
+}
+
+.admin-roles-permission-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-roles-type-filter {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 16px;
+  color: var(--roles-muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.admin-roles-type-filter select {
+  min-height: 40px;
+  max-width: 155px;
+  border: 1px solid var(--roles-border);
+  border-radius: 9px;
+  padding: 0 10px;
+  background: #fff;
+  color: #172033;
+  font: inherit;
 }
 
 .admin-roles-matrix-scroll {
@@ -272,6 +301,7 @@
 
 .admin-roles-matrix {
   width: 100%;
+  min-width: 1380px;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 0.88rem;
@@ -279,7 +309,8 @@
 
 .admin-roles-matrix th,
 .admin-roles-matrix td {
-  padding: 11px 15px;
+  min-width: 112px;
+  padding: 11px 12px;
   border-bottom: 1px solid #edf1f5;
   text-align: left;
   vertical-align: middle;
@@ -297,8 +328,9 @@
   text-transform: uppercase;
 }
 
-.admin-roles-matrix td:first-child {
-  width: 18%;
+.admin-roles-matrix tbody th {
+  min-width: 125px;
+  background: #fff;
   color: #475569;
   font-weight: 600;
 }
@@ -314,19 +346,34 @@
 
 .admin-roles-permission-toggle {
   display: inline-flex;
-  min-width: 112px;
+  min-width: 0;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   color: #475569;
   cursor: pointer;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .admin-roles-permission-toggle input {
   width: 17px;
   height: 17px;
+  flex: 0 0 auto;
   accent-color: var(--roles-blue);
   cursor: pointer;
+}
+
+.admin-roles-permission-items {
+  display: grid;
+  gap: 9px;
+}
+
+.admin-roles-permission-toggle code {
+  overflow-wrap: anywhere;
+}
+
+.admin-roles-not-defined {
+  color: #94a3b8;
+  font-size: 0.79rem;
 }
 
 .admin-roles-empty {
@@ -366,6 +413,21 @@
     width: 100%;
   }
 
+  .admin-roles-permission-filters {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .admin-roles-type-filter {
+    justify-content: space-between;
+    margin-top: 0;
+  }
+
+  .admin-roles-type-filter select {
+    max-width: none;
+  }
+
   .admin-roles-matrix-scroll {
     max-height: none;
     overflow: visible;
@@ -375,9 +437,14 @@
   .admin-roles-matrix,
   .admin-roles-matrix tbody,
   .admin-roles-matrix tr,
+  .admin-roles-matrix th,
   .admin-roles-matrix td {
     display: block;
     width: 100%;
+  }
+
+  .admin-roles-matrix {
+    min-width: 0;
   }
 
   .admin-roles-matrix thead {
@@ -402,33 +469,34 @@
     background: #fff;
   }
 
-  .admin-roles-matrix td,
-  .admin-roles-matrix td:first-child {
+  .admin-roles-matrix tbody th,
+  .admin-roles-matrix td {
     display: flex;
     width: 100%;
-    justify-content: space-between;
-    gap: 18px;
-    padding: 9px 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 7px;
+    padding: 11px 0;
     border-bottom: 1px solid #edf1f5;
-    text-align: right;
+    text-align: left;
   }
 
   .admin-roles-matrix td:last-child {
     border-bottom: 0;
   }
 
-  .admin-roles-matrix td::before {
+  .admin-roles-matrix td::before,
+  .admin-roles-matrix tbody th::before {
     content: attr(data-label);
     color: var(--roles-muted);
     font-size: 0.76rem;
     font-weight: 700;
     letter-spacing: 0.035em;
-    text-align: left;
     text-transform: uppercase;
   }
 
   .admin-roles-permission-toggle {
-    justify-content: flex-end;
+    justify-content: flex-start;
   }
 }
 

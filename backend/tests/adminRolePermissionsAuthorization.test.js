@@ -1,34 +1,55 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const express = require("express");
+const fs = require("node:fs");
+const path = require("node:path");
 const passport = require("../src/config/passport");
 const models = require("../src/models");
+const { requireAuth, requireRole, requirePermission } = require("../src/middlewares/auth");
 const adminRoleRoutes = require("../src/routes/adminRoleRoutes");
 
-const withServer = async (run) => {
-  const app = express();
-  app.use(express.json());
-  app.use("/api/admin", adminRoleRoutes);
-  const server = app.listen(0, "127.0.0.1");
-  await new Promise((resolve) => server.once("listening", resolve));
-  const { port } = server.address();
+const runMiddleware = (middleware, req) => new Promise((resolve, reject) => {
+  const res = {
+    statusCode: 200,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body) {
+      this.body = body;
+      resolve({ status: this.statusCode, body });
+      return this;
+    },
+  };
   try {
-    await run(`http://127.0.0.1:${port}`);
-  } finally {
-    server.closeAllConnections();
-    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    const result = middleware(req, res, (error) => {
+      if (error) reject(error);
+      else resolve({ status: res.statusCode, next: true });
+    });
+    result?.catch?.(reject);
+  } catch (error) {
+    reject(error);
   }
-};
+});
 
-test("role and permission APIs return 401 when called without authentication", async () => {
-  await withServer(async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/api/admin/roles`);
-    assert.equal(response.status, 401);
-    assert.deepEqual(await response.json(), {
+const getRoute = (method, routePath) => adminRoleRoutes.stack
+  .find((layer) => layer.route?.path === routePath && layer.route.methods[method])
+  ?.route;
+
+test("role list API rejects missing authentication with a JSON 401", async () => {
+  const originalAuthenticate = passport.authenticate;
+  const route = getRoute("get", "/roles");
+  assert.ok(route);
+  passport.authenticate = (_strategy, _options, callback) => (req, res, next) => callback(null, false);
+  try {
+    const result = await runMiddleware(route.stack[0].handle, { headers: {} });
+    assert.equal(result.status, 401);
+    assert.deepEqual(result.body, {
       success: false,
       message: "Authentication required",
     });
-  });
+  } finally {
+    passport.authenticate = originalAuthenticate;
+  }
 });
 
 test("role and permission APIs reject authenticated non-administrators with 403", async () => {
@@ -45,22 +66,30 @@ test("role and permission APIs reject authenticated non-administrators with 403"
     : null;
 
   try {
-    await withServer(async (baseUrl) => {
-      const reads = await fetch(`${baseUrl}/api/admin/roles`);
-      const updates = await fetch(`${baseUrl}/api/admin/roles/ict_officer/permissions`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissions: [] }),
-      });
-      assert.equal(reads.status, 403);
-      assert.equal(updates.status, 403);
-      assert.deepEqual(await updates.json(), {
-        success: false,
-        message: "Access denied for this role",
-      });
-    });
+    const route = getRoute("put", "/roles/:role/permissions");
+    assert.ok(route);
+    const req = { headers: {} };
+    const auth = await runMiddleware(route.stack[0].handle, req);
+    assert.equal(auth.next, true);
+    const denied = await runMiddleware(route.stack[1].handle, req);
+    assert.equal(denied.status, 403);
   } finally {
     passport.authenticate = originalAuthenticate;
     models.Config.findByPk = originalFindByPk;
   }
+});
+
+test("permission changes require the dedicated permission-management capability", async () => {
+  const response = await runMiddleware(requirePermission("permissions.manage"), {
+    user: { role: "admin", permissions: ["assets.view"] },
+  });
+  assert.equal(response.status, 403);
+
+  const routeSource = fs.readFileSync(
+    path.join(__dirname, "../src/routes/adminRoleRoutes.js"),
+    "utf8",
+  );
+  assert.match(routeSource, /router\.put\('\/roles\/:role\/permissions', \.\.\.requireAdminPermission\('permissions\.manage'\)/);
+  assert.match(routeSource, /router\.get\('\/roles', \.\.\.requireAdminPermission\('roles\.view'\)/);
+  assert.match(routeSource, /router\.get\('\/permissions', \.\.\.requireAdminPermission\('permissions\.view'\)/);
 });

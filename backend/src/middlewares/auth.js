@@ -57,7 +57,7 @@ const requireAuth = (req, res, next) => {
     } catch (authorizationError) {
       return next(authorizationError);
     }
-  });
+  })(req, res, next);
 };
 
 const requireActiveAccount = (req, res, next) => {
