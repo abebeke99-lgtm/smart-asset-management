@@ -108,6 +108,20 @@ describe('ICTEquipment', () => {
     expect(screen.queryByText('Design workstation')).not.toBeInTheDocument();
   });
 
+  test('explains that an active campus must be configured when no campus options exist', async () => {
+    global.fetch.mockImplementation((url) => (
+      String(url).endsWith('/options')
+        ? Promise.resolve(jsonResponse({ success: true, campuses: [], colleges: [], departments: [], buildings: [], rooms: [] }))
+        : Promise.resolve(jsonResponse({ success: true, equipment: [], total: 0, pagination: { page: 1, total: 0, totalPages: 1 } }))
+    ));
+    render(<ICTEquipment />);
+    await screen.findByRole('button', { name: 'Add IT Equipment' });
+    fireEvent.click(screen.getByRole('button', { name: 'Add IT Equipment' }));
+
+    expect(await screen.findByText(/No active campus is linked to this college/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
   test('adds equipment through the API and reloads the database-backed list', async () => {
     const createdAsset = { ...inventoryRecord, id: 73, assetCode: 'ICT-073', name: 'New workstation' };
     let currentEquipment = [inventoryRecord];

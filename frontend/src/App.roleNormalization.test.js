@@ -21,17 +21,19 @@ describe('normalizeRole', () => {
       staff: getDashboardRoute('staff'),
       student: getDashboardRoute('student'),
     }).toEqual({
-      admin: '/admin',
-      ict_officer: '/ict',
-      college: '/college',
-      college_manager: '/college',
-      department_head: '/department',
-      finance: '/finance',
-      store_manager: '/store',
-      maintenance: '/maintenance',
-      infrastructure: '/infrastructure',
-      staff: '/department',
-      student: '/student',
+      admin: '/admin/dashboard',
+      ict_officer: '/ict/dashboard',
+      college: '/college/dashboard',
+      college_manager: '/college-manager/dashboard',
+      department_head: '/department-head/dashboard',
+      finance: '/finance/dashboard',
+      store_manager: '/store/dashboard',
+      maintenance: '/maintenance/dashboard',
+      infrastructure: '/infrastructure/dashboard',
+      staff: '/staff/dashboard',
+      student: '/student/dashboard',
     });
+    expect(normalizeRole('college')).toBe('college');
+    expect(normalizeRole('college_manager')).toBe('college_manager');
   });
 });

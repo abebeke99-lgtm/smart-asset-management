@@ -128,8 +128,8 @@ test('ICT inventory import preview reports duplicates and invalid fields without
       body: {
         preview: true,
         rows: [
-          { 'Asset Name': 'Laptop', Category: 'Computer Equipment', Department: 'ICT Services', Status: 'Available', 'Serial Number': 'SER-DB' },
-          { 'Asset Name': '', Category: 'Nonexistent', Department: 'ICT Services', Status: 'Not a status', 'Purchase Date': '2/30/2024' },
+          { 'Asset Name': 'Laptop', Category: 'Computer Equipment', Department: 'ICT Services', Location: 'Room 2', Status: 'Available', 'Serial Number': 'SER-DB' },
+          { 'Asset Name': '', Category: 'Nonexistent', Department: 'ICT Services', Location: 'Room 2', Status: 'Not a status', 'Purchase Date': '2/30/2024' },
         ],
       },
     };
@@ -178,7 +178,7 @@ test('ICT inventory import does not write rows with duplicate serial numbers', a
       body: {
         rows: [
           { 'Asset Name': 'Laptop A', Category: 'Computer Equipment', Department: 'ICT Services', Status: 'In Use', 'Serial Number': 'SER-01', Location: 'Room 2' },
-          { 'Asset Name': 'Laptop B', Category: 'Computer Equipment', Department: 'ICT Services', Status: 'Available', 'Serial Number': 'SER-01' },
+          { 'Asset Name': 'Laptop B', Category: 'Computer Equipment', Department: 'ICT Services', Status: 'Available', 'Serial Number': 'SER-01', Location: 'Room 3' },
         ],
       },
     };
@@ -254,6 +254,107 @@ test('ICT inventory import persists valid rows and commits the audit entry', asy
     assert.equal(auditEntry.entry.action, 'ICT_INVENTORY_IMPORT');
     assert.ok(auditEntry.options.transaction);
     assert.equal(committed, true);
+  } finally {
+    restore.reverse().forEach((reset) => reset());
+  }
+});
+
+test('ICT inventory import rejects duplicate asset IDs in existing records and the file', async () => {
+  const restore = setupLookups();
+  restore.push(stub(models.Asset, 'findAll', async () => [{ assetCode: 'ICT-EXISTING', serialNumber: '' }]));
+  let createCalled = false;
+  restore.push(stub(models.Asset, 'bulkCreate', async () => { createCalled = true; }));
+  try {
+    const req = {
+      user: { id: 10, role: 'ict_officer' },
+      organizationScope: { collegeId: 5 },
+      body: {
+        preview: true,
+        rows: [
+          { 'Asset ID': 'ICT-EXISTING', 'Asset Name': 'Laptop A', Category: 'Computer Equipment', Department: 'ICT Services', Location: 'Room 2' },
+          { 'Asset ID': 'ICT-NEW', 'Asset Name': 'Laptop B', Category: 'Computer Equipment', Department: 'ICT Services', Location: 'Room 2' },
+          { 'Asset ID': 'ICT-NEW', 'Asset Name': 'Laptop C', Category: 'Computer Equipment', Department: 'ICT Services', Location: 'Room 2' },
+        ],
+      },
+    };
+    const res = createResponse();
+    let nextError;
+    await importInventory(req, res, (error) => { nextError = error; });
+
+    assert.equal(nextError, undefined);
+    assert.equal(res.body.summary.duplicates, 3);
+    assert.equal(res.body.results[0].duplicateAssetId, true);
+    assert.equal(res.body.results[1].duplicateAssetId, true);
+    assert.equal(res.body.results[2].duplicateAssetId, true);
+    assert.equal(createCalled, false);
+  } finally {
+    restore.reverse().forEach((reset) => reset());
+  }
+});
+
+test('ICT inventory import rolls back all records if audit logging fails', async () => {
+  const restore = setupLookups();
+  restore.push(stub(models.Asset, 'findAll', async () => []));
+  restore.push(stub(models.Asset, 'bulkCreate', async (records, options) => {
+    assert.ok(options.transaction);
+    return records;
+  }));
+  restore.push(stub(models.AuditLog, 'create', async () => {
+    throw new Error('Audit write failed');
+  }));
+  let committed = false;
+  let rolledBack = false;
+  restore.push(stub(models.sequelize, 'transaction', async () => ({
+    finished: false,
+    async commit() { committed = true; this.finished = 'commit'; },
+    async rollback() { rolledBack = true; this.finished = 'rollback'; },
+  })));
+  try {
+    const req = {
+      user: { id: 10, role: 'ict_officer' },
+      organizationScope: { collegeId: 5 },
+      body: {
+        rows: [{
+          'Asset Name': 'Laptop A',
+          Category: 'Computer Equipment',
+          Department: 'ICT Services',
+          Location: 'Room 2',
+          'Asset ID': 'ICT-ROLLBACK',
+        }],
+      },
+    };
+    const res = createResponse();
+    let nextError;
+    await importInventory(req, res, (error) => { nextError = error; });
+
+    assert.match(nextError.message, /Audit write failed/);
+    assert.equal(committed, false);
+    assert.equal(rolledBack, true);
+  } finally {
+    restore.reverse().forEach((reset) => reset());
+  }
+});
+
+test('ICT inventory import parses a real CSV upload and validates required location', async () => {
+  const restore = setupLookups();
+  restore.push(stub(models.Asset, 'findAll', async () => []));
+  try {
+    const buffer = Buffer.from('Asset ID,Asset Name,Category,Department,Location,Purchase Date\nICT-CSV,CSV Laptop,Computer Equipment,ICT Services,Room 4,2024-02-29');
+    const req = {
+      user: { id: 10, role: 'ict_officer' },
+      organizationScope: { collegeId: 5 },
+      body: { preview: 'true' },
+      file: { buffer },
+    };
+    const res = createResponse();
+    let nextError;
+    await importInventory(req, res, (error) => { nextError = error; });
+
+    assert.equal(nextError, undefined);
+    assert.equal(res.body.preview, true);
+    assert.equal(res.body.summary.valid, 1, JSON.stringify(res.body.results));
+    assert.equal(res.body.results[0].record.assetCode, 'ICT-CSV');
+    assert.equal(res.body.results[0].record.purchaseDate, '2024-02-29');
   } finally {
     restore.reverse().forEach((reset) => reset());
   }

@@ -14,12 +14,40 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { useAuth } from '../../contexts/AuthContext';
 import './ICTInventory.css';
 
 const API_URL = `${process.env.REACT_APP_API_URL || '/api'}/ict/inventory`;
 const PAGE_SIZE = 25;
 const MAX_IMPORT_SIZE = 10 * 1024 * 1024;
+const IMPORT_TEMPLATE_COLUMNS = [
+  'Asset ID',
+  'Asset Name',
+  'Category',
+  'Serial Number',
+  'Department',
+  'Status',
+  'Condition',
+  'Campus',
+  'College',
+  'Location',
+  'Description',
+  'Manufacturer',
+  'Model',
+  'Supplier',
+  'Purchase Date',
+  'Expiry Date',
+  'Warranty Expiry',
+  'Purchase Price',
+  'Quantity',
+];
+const IMPORT_SUMMARY_LABELS = {
+  total: 'Total Rows',
+  imported: 'Imported',
+  rejected: 'Rejected',
+  duplicates: 'Duplicates',
+  errors: 'Validation Errors',
+};
 
 const SUMMARY_CARDS = [
   { key: 'totalItems', label: 'Total Items', icon: Package, tone: 'blue' },
@@ -40,7 +68,7 @@ const EMPTY_SUMMARY = SUMMARY_CARDS.reduce((summary, card) => {
 const displayDate = (date) => {
   if (!date) return '—';
   const value = String(date).slice(0, 10);
-  return value === 'Invalid ' ? '—' : value;
+  return value === 'Invalid Date' ? '—' : value;
 };
 
 const displayName = (asset) => asset.name || asset.itemName || 'Unnamed asset';
@@ -53,10 +81,11 @@ const getToken = () =>
 
 const requestJson = async (url, options = {}) => {
   const token = getToken();
+  const multipart = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const response = await fetch(url, {
     ...options,
     headers: {
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.body && !multipart ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
@@ -69,6 +98,8 @@ const requestJson = async (url, options = {}) => {
 };
 
 const ICTInventory = () => {
+  const auth = useAuth();
+  const canImport = typeof auth?.hasPermission !== 'function' || auth.hasPermission('ict.inventory.import');
   const [assets, setAssets] = useState([]);
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [options, setOptions] = useState({
@@ -189,18 +220,14 @@ const ICTInventory = () => {
 
     setImportBusy(true);
     try {
-      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
-      const firstSheet = workbook.SheetNames[0];
-      if (!firstSheet) throw new Error('The selected file does not contain a worksheet.');
-      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: '', raw: false });
-      if (!rows.length) throw new Error('The first worksheet does not contain any inventory rows.');
-      if (rows.length > 2000) throw new Error('A maximum of 2,000 rows may be imported at a time.');
-
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('preview', 'true');
       const response = await requestJson(`${API_URL}/import`, {
         method: 'POST',
-        body: JSON.stringify({ rows, preview: true }),
+        body: formData,
       });
-      setImportPreview({ fileName: file.name, rows, results: response.results || [], summary: response.summary });
+      setImportPreview({ fileName: file.name, file, results: response.results || [], summary: response.summary });
     } catch (previewError) {
       setImportError(previewError.message || 'Unable to read or validate this spreadsheet.');
     } finally {
@@ -213,9 +240,11 @@ const ICTInventory = () => {
     setImportBusy(true);
     setImportError('');
     try {
+      const formData = new FormData();
+      formData.append('file', importPreview.file);
       const response = await requestJson(`${API_URL}/import`, {
         method: 'POST',
-        body: JSON.stringify({ rows: importPreview.rows }),
+        body: formData,
       });
       setImportSummary(response.summary);
       setImportPreview(null);
@@ -242,6 +271,15 @@ const ICTInventory = () => {
     URL.revokeObjectURL(link.href);
   };
 
+  const downloadImportTemplate = () => {
+    const csv = `${IMPORT_TEMPLATE_COLUMNS.map((value) => `"${value}"`).join(',')}\r\n`;
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    link.download = 'ict-inventory-import-template.csv';
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
   const filterCount = useMemo(
     () => Object.entries(filters).filter(([key, value]) => key !== 'search' && value).length,
     [filters],
@@ -261,17 +299,24 @@ const ICTInventory = () => {
           <button className="secondary-button" type="button" onClick={exportCsv} disabled={!assets.length}>
             Export CSV
           </button>
-          <label className={`primary-button import-trigger${importBusy ? ' is-disabled' : ''}`}>
-            <Upload size={16} />
-            {importBusy ? 'Validating…' : 'Import Excel / CSV'}
-            <input
-              aria-label="Import Excel or CSV inventory"
-              type="file"
-              accept=".csv,.xls,.xlsx"
-              onChange={importFile}
-              disabled={importBusy}
-            />
-          </label>
+          {canImport && (
+            <>
+              <button className="secondary-button" type="button" onClick={downloadImportTemplate}>
+                Download import template
+              </button>
+              <label className={`primary-button import-trigger${importBusy ? ' is-disabled' : ''}`}>
+                <Upload size={16} />
+                {importBusy ? 'Validating…' : 'Import Excel / CSV'}
+                <input
+                  aria-label="Import Excel or CSV inventory"
+                  type="file"
+                  accept=".csv,.xls,.xlsx"
+                  onChange={importFile}
+                  disabled={importBusy}
+                />
+              </label>
+            </>
+          )}
           <button className="secondary-button" type="button" onClick={() => loadInventory(undefined, true)} disabled={refreshing}>
             <RefreshCw size={15} className={refreshing ? 'spinning' : ''} />
             Refresh
@@ -305,8 +350,8 @@ const ICTInventory = () => {
             <button type="button" aria-label="Dismiss import summary" onClick={() => setImportSummary(null)}><X size={17} /></button>
           </div>
           <div className="import-totals">
-            {['total', 'imported', 'rejected', 'duplicates', 'errors'].map((key) => (
-              <span key={key}><strong>{Number(importSummary[key] || 0).toLocaleString()}</strong>{key[0].toUpperCase() + key.slice(1)}</span>
+            {Object.entries(IMPORT_SUMMARY_LABELS).map(([key, label]) => (
+              <span key={key}><strong>{Number(importSummary[key] || 0).toLocaleString()}</strong>{label}</span>
             ))}
           </div>
         </section>
@@ -422,8 +467,8 @@ const ICTInventory = () => {
               <button type="button" aria-label="Close import preview" onClick={() => setImportPreview(null)}><X size={18} /></button>
             </div>
             <div className="import-totals preview-totals">
-              {['total', 'imported', 'rejected', 'duplicates', 'errors'].map((key) => (
-                <span key={key}><strong>{Number(importPreview.summary?.[key] || 0).toLocaleString()}</strong>{key[0].toUpperCase() + key.slice(1)}</span>
+              {Object.entries(IMPORT_SUMMARY_LABELS).map(([key, label]) => (
+                <span key={key}><strong>{Number(importPreview.summary?.[key] || 0).toLocaleString()}</strong>{label}</span>
               ))}
             </div>
             <p className="preview-note">Review the server validation below. Only valid, non-duplicate rows will be saved.</p>
@@ -438,7 +483,11 @@ const ICTInventory = () => {
                       <td>{item.record?.serialNumber || '—'}</td>
                       <td>{item.record?.category || '—'}</td>
                       <td>{item.record?.status || '—'}</td>
-                      <td>{item.valid ? <span className="valid-label">Ready</span> : <span className="invalid-label">{item.duplicate ? 'Duplicate serial number' : ''}{item.errors?.map((issue) => `${issue.field}: ${issue.message}`).join('; ')}</span>}</td>
+                      <td>{item.valid ? <span className="valid-label">Ready</span> : <span className="invalid-label">{[
+                        item.duplicateSerial && 'Duplicate serial number',
+                        item.duplicateAssetId && 'Duplicate asset ID',
+                        ...((item.errors || []).map((issue) => `${issue.field}: ${issue.message}`)),
+                      ].filter(Boolean).join('; ')}</span>}</td>
                     </tr>
                   ))}
                 </tbody>

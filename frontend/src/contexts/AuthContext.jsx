@@ -35,7 +35,6 @@ const normalizeRoleValue = (role) => {
     'college manager': 'college_manager',
     'college-manager': 'college_manager',
     college_manager: 'college_manager',
-    college: 'college_manager',
     'infrastructure director': 'infrastructure',
     'infrastructure directorate': 'infrastructure',
     'infrastructure_directorate': 'infrastructure',
@@ -216,6 +215,45 @@ export const AuthProvider = ({ children }) => {
     restoreSession();
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+
+    let active = true;
+    let refreshing = false;
+    const refreshAuthorization = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const response = await api.get('/api/users/profile');
+        const currentUser = response.data?.data || response.data?.user;
+        if (!currentUser) throw new Error('Invalid profile refresh response');
+        const normalizedUser = normalizeUser(currentUser);
+        if (active) {
+          setUser(normalizedUser);
+          localStorage.setItem('user', JSON.stringify(normalizedUser));
+        }
+      } catch (error) {
+        if (active && error.response?.status !== 401) {
+          console.error('Authorization refresh failed:', error);
+        }
+      } finally {
+        refreshing = false;
+      }
+    };
+
+    const refreshWhenFocused = () => {
+      if (document.visibilityState === 'visible') refreshAuthorization();
+    };
+    const interval = window.setInterval(refreshWhenFocused, 30000);
+    window.addEventListener('focus', refreshWhenFocused);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshWhenFocused);
+    };
+  }, [api, user?.id]);
 
   const hasRole = (roleToCheck) => {
     const target = normalizeRoleValue(roleToCheck);

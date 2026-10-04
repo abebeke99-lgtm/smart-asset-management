@@ -75,13 +75,16 @@ Set these in the Render service environment. Do not commit populated environment
 | `DB_TIMEZONE` | Optional | Defaults to `+00:00` (UTC). |
 | `FRONTEND_URL` | Required | Exact HTTPS Vercel production origin, e.g. `https://uams-college.vercel.app`, without `/api`. Used by CORS and reset links. |
 | `CORS_ORIGINS` | Optional | Comma-separated additional exact origins, such as approved Vercel preview domains. No wildcard. |
-| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM` | Required for email OTP | For Gmail use `smtp.gmail.com`, port `465` (implicit TLS), and a Google App Password created with 2-Step Verification enabled. Do not use the normal account password. Equivalent `SMTP_*` names are supported. |
+| `MAIL_DRIVER` | `smtp` in deployed environments | Must be explicitly set to `smtp` to deliver email. `log` is development-only and prints recovery codes to the backend console instead of emailing them. |
+| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_SECURE`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM` | Required for email OTP | For Gmail use `smtp.gmail.com`, port `465` with `EMAIL_SECURE=true` (implicit TLS), and a Google App Password created with 2-Step Verification enabled. Do not use the normal account password. Port `587` uses `EMAIL_SECURE=false` (STARTTLS). Equivalent `SMTP_*` names are supported. |
 | `SMS_PROVIDER`, `SMS_API_KEY`, `SMS_API_SECRET`, `SMS_SENDER_ID` | Required for SMS OTP | Use `twilio` or `africastalking` and the corresponding provider credentials. `SMS_SENDER` remains a compatibility alias. |
 | `PASSWORD_RESET_OTP_TTL_MINUTES` | `5` | OTP expiry. |
 | `PASSWORD_RESET_OTP_MAX_ATTEMPTS` | `5` | The implementation caps this setting at five. |
 | `UPLOAD_DIR` | Optional | Defaults to backend-local `uploads/`. Render local disk is ephemeral. Use a persistent Render disk mounted at a path such as `/var/data/uploads`, or move uploads to external object storage (for example, an S3-compatible bucket) before relying on production persistence. |
 
 Password-recovery and general API rate limiters currently keep state in process memory. They do not coordinate across multiple Render instances and reset on process restart. Run a single backend instance until a shared rate-limit store is implemented and configured.
+
+For local `.env` setup, the development default is `MAIL_DRIVER=log` with blank SMTP credentials. To test real delivery, switch to `MAIL_DRIVER=smtp` and set the SMTP host, port, secure mode, username, password/app password, and sender address. The backend runs an SMTP `verify()` check at startup and logs connection/authentication diagnostics; check these server logs without exposing credentials. You can also check connectivity from `backend/` with `node scripts/check-smtp.js`.
 
 `DB_SSL_CA` should contain the certificate text, not a private key. The application uses SSL automatically for Aiven hostnames and keeps `rejectUnauthorized` enabled by default. MySQL pool capacity, foreign keys, transactions, and indexes use Sequelize/mysql2; verify target behavior against the selected Aiven MySQL version and plan before cutover.
 
@@ -103,8 +106,8 @@ Set the same variable for Preview only if preview deployments should call a back
 4. Back up and import the existing database using the safe procedure above. Preserve the source database and compare row counts.
 5. Verify the Aiven host, port, schema, user, TLS handshake, tables, indexes, and foreign keys using a staging connection first.
 6. Create a Render Node/Express Web Service from `render.yaml`; it contains only the backend service.
-7. Configure the Render variables above. Set `FRONTEND_URL` to the intended HTTPS Vercel origin. Add SMTP/SMS provider credentials only in the Render dashboard.
-8. Deploy the backend. Review startup logs for successful MySQL authentication and schema synchronization; logs should not contain credentials or OTPs.
+7. Configure the Render variables above, including `MAIL_DRIVER=smtp`. Set `FRONTEND_URL` to the intended HTTPS Vercel origin. Add SMTP/SMS provider credentials only in the Render dashboard.
+8. Deploy the backend. Review startup logs for successful MySQL authentication, schema synchronization, and SMTP verification; logs should not contain credentials or OTPs.
 9. Test `https://YOUR-RENDER-SERVICE.onrender.com/health`. It must return HTTP 200 and `{"status":"ok"}` when the database is ready.
 10. Copy the assigned Render backend URL.
 11. Configure Vercel `REACT_APP_API_URL` as the Render URL plus `/api`.

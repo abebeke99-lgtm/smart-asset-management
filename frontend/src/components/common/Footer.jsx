@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BarChart3, Building2, ClipboardList, FileText, Languages, LifeBuoy, LockKeyhole, Mail, MapPin, Package, Phone, Radio, Scale, ShieldCheck, Wrench } from 'lucide-react';
+import { BarChart3, Building2, ClipboardList, FileText, LifeBuoy, LockKeyhole, Mail, MapPin, Package, Phone, Radio, Scale, ShieldCheck, Wrench } from 'lucide-react';
 
 const publicLinks = [
   { to: '/home', key: 'home' },
@@ -29,7 +29,7 @@ const systemItems = [
   { key: 'reports', icon: BarChart3 }
 ];
 
-const Footer = ({ t, language, setLanguage, organization, role, onPublicNavigation }) => {
+const Footer = ({ t, organization, role, onPublicNavigation }) => {
   const { pathname } = useLocation();
   const systemDestinations = roleSystemLinks[role] || ['/services', '/services', '/services', '/services', '/services'];
   const organizationName = organization?.institutionName || organization?.name || t.university;
@@ -108,11 +108,6 @@ const Footer = ({ t, language, setLanguage, organization, role, onPublicNavigati
 
       <div className="footer-bottom">
         <span>© {year} Mekdela Amba University. All rights reserved. Developed by Bekele (0986481821)</span>
-        <div className="footer-controls" role="group" aria-label={t.language}>
-          <Languages size={16} aria-hidden="true" />
-          <button type="button" onClick={() => setLanguage('en')} aria-label={t.languageEnglish} aria-pressed={language === 'en'}>EN</button>
-          <button type="button" onClick={() => setLanguage('am')} aria-label={t.languageAmharic} aria-pressed={language === 'am'}>አማ</button>
-        </div>
       </div>
     </footer>
   );

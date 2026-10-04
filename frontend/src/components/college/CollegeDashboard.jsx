@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BarChart3, Building2, CheckCircle2, ClipboardCheck, ClipboardList, MapPin, Package, RotateCcw, ShieldCheck, Truck, Wrench } from 'lucide-react';
+import { Activity, ArrowRight, BarChart3, Building2, CheckCircle2, ClipboardCheck, ClipboardList, MapPin, Package, RotateCcw, ShieldCheck, Truck, Wrench } from 'lucide-react';
 import apiClient from '../../services/apiClient';
 import './CollegeDashboard.css';
 
@@ -12,10 +12,17 @@ const quickActions = [
   ['/college/transfers', 'Transfers', Truck],
   ['/college/verification', 'Verification', ShieldCheck],
 ];
+const collegeQuickActions = [
+  ['/college/assets', 'College Assets', Package],
+  ['/college/requests', 'College Requests', ClipboardList],
+  ['/college/assignments', 'Assignments', ClipboardCheck],
+  ['/college/history', 'College Activity', Activity],
+];
 
 const normalizeLabel = (value = '') => String(value).replace(/[_-]+/g, ' ').trim() || 'Unknown';
 
-const CollegeDashboard = () => {
+const CollegeDashboard = ({ audience = 'manager' }) => {
+  const isManager = audience === 'manager';
   const [state, setState] = useState({ loading: true, error: '', data: null });
 
   const loadDashboard = useCallback(async () => {
@@ -54,6 +61,7 @@ const CollegeDashboard = () => {
     ['openMaintenance', 'Open Maintenance', 'Maintenance records still requiring attention.', Wrench, 'red', '/college/maintenance'],
     ['verificationProgress', 'Verification Progress', summary.verificationProgress || '0 / 0', ShieldCheck, 'teal', '/college/verification'],
   ], [summary.verificationProgress]);
+  const visibleMetrics = isManager ? metrics : metrics.filter(([key]) => ['totalAssets', 'activeAssets', 'pendingRequests'].includes(key));
 
   const maxStatusValue = Math.max(1, ...assetStatus.map((item) => Number(item.value) || 0));
   const maxConditionValue = Math.max(1, ...assetCondition.map((item) => Number(item.value) || 0));
@@ -64,8 +72,8 @@ const CollegeDashboard = () => {
       <div className="college-dashboard" aria-live="polite" aria-busy="true">
         <div className="college-dashboard-hero college-dashboard-hero--loading">
           <div>
-            <span className="college-eyebrow">Loading</span>
-            <h1>College Manager Dashboard</h1>
+            <span className="college-eyebrow">{isManager ? 'College Manager' : 'College'}</span>
+            <h1>{isManager ? 'College Manager Dashboard' : 'College Dashboard'}</h1>
             <p>Collecting the latest college metrics and activity.</p>
           </div>
         </div>
@@ -98,9 +106,9 @@ const CollegeDashboard = () => {
     <div className="college-dashboard">
       <div className="college-dashboard-hero">
         <div>
-          <span className="college-eyebrow">College Manager</span>
-          <h1>College Manager Dashboard</h1>
-          <p>Overview of assets, requests, approvals, maintenance, and verification activities for your college.</p>
+          <span className="college-eyebrow">{isManager ? 'College Manager' : 'College'}</span>
+          <h1>{isManager ? 'College Manager Dashboard' : 'College Dashboard'}</h1>
+          <p>{isManager ? 'Overview of assets, requests, approvals, maintenance, and verification activities for your college.' : 'College assets, requests, assignments, and recent college activity.'}</p>
           <p className="college-hero-subtitle">Authorized college: {college.name || 'Current college'}</p>
         </div>
         <div className="college-college-badge">
@@ -111,7 +119,7 @@ const CollegeDashboard = () => {
       </div>
 
       <div className="college-dashboard-kpis">
-        {metrics.map(([key, label, description, Icon, tone, to]) => {
+        {visibleMetrics.map(([key, label, description, Icon, tone, to]) => {
           const value = key === 'verificationProgress'
             ? verificationProgressValue
             : Number(summary[key] || 0).toLocaleString();
@@ -399,7 +407,7 @@ const CollegeDashboard = () => {
           <ArrowRight size={20} />
         </div>
         <div className="college-actions-grid">
-          {quickActions.map(([to, label, Icon]) => (
+          {(isManager ? quickActions : collegeQuickActions).map(([to, label, Icon]) => (
             <Link className="college-action-card" key={to} to={to}>
               <span className="college-action-icon"><Icon size={19} /></span>
               <span className="college-action-copy">

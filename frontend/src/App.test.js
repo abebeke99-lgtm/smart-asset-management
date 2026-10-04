@@ -166,6 +166,7 @@ describe('Administrator route wiring', () => {
     ['/admin/assets/disposal', 'assets/disposal', 'AdminAssetDisposal'],
     ['/admin/maintenance', 'maintenance', 'AdminMaintenance'],
     ['/admin/rfid', 'rfid', 'AdminRFIDTracking'],
+    ['/admin/inventory/quarantine', 'inventory/quarantine', 'AdminChemicalQuarantine'],
     ['/admin/users', 'users', 'AdminUserManagement'],
     ['/admin/roles-permissions', 'roles-permissions', 'AdminRolesPermissions'],
     ['/admin/colleges', 'colleges', 'AdminCollegeManagement'],
@@ -174,35 +175,101 @@ describe('Administrator route wiring', () => {
     ['/admin/reports', 'reports', 'AdminReports'],
     ['/admin/reports/analytics', 'reports/analytics', 'AdminAssetAnalytics'],
     ['/admin/analytics/system', 'analytics/system', 'AdminAnalyticsCenter'],
-    ['/admin/system-analytics', 'system-analytics', 'AdminAnalyticsCenter'],
-    ['/admin/audit-logs', 'audit-logs', 'AdminAuditLogs'],
     ['/admin/settings', 'settings', 'AdminSettings'],
     ['/admin/notifications', 'notifications', 'AdminNotifications'],
     ['/admin/backup', 'backup', 'AdminBackup'],
-    ['/admin/monitoring', 'monitoring', 'SystemMonitoring'],
-    ['/admin/inventory/quarantine', 'inventory/quarantine', 'AdminChemicalQuarantine'],
-    ['/admin/recovery', 'recovery', 'AdminRecovery'],
     ['/admin/enam', 'enam', 'EnamIntegration'],
+    ['/admin/monitoring', 'monitoring', 'SystemMonitoring'],
   ];
 
   it('registers all documented paths in the sidebar and renders their owning page under admin RBAC', () => {
     expect(appSource).toContain('<Route path="/admin" element={<ProtectedRoute allowedRoles={[\'admin\']}><AdminLayout /></ProtectedRoute>}>');
+    expect(appSource).toContain('<Route path="roles-permissions" element={<ProtectedRoute allowedRoles={[\'admin\']} allowedPermissions={[\'roles.view\']}><AdminRolesPermissions /></ProtectedRoute>} />');
     for (const [route, nestedPath, component] of documentedRoutes) {
       if (nestedPath) {
-        expect(appSource).toContain(`<Route path="${nestedPath}" element={<${component}`);
+        if (nestedPath !== 'roles-permissions') {
+          expect(appSource).toContain(`<Route path="${nestedPath}" element={<${component}`);
+        }
       } else {
         expect(appSource).toContain('<Route index element={<AdminDashboard />} />');
       }
     }
   });
 
-  it('has one canonical shared app shell and redirects the analytics alias to system analytics', () => {
+  it('has one canonical shared app shell and redirects the analytics grouping to system analytics', () => {
     expect(appSource).toContain('const DashboardLayout = ({ header, sidebar, sidebarOpen, onCloseSidebar');
     expect(appSource).toContain('return <AuthenticatedLayout>{routeTree}</AuthenticatedLayout>;');
     expect(appSource).toContain('const AdminLayout = () => (');
-    expect(appSource).toContain('<Route path="/admin" element={<ProtectedRoute allowedRoles={[\'admin\']}><AdminLayout /></ProtectedRoute>}>');
+    expect(appSource).toContain('<Route path="/admin" element={<ProtectedRoute allowedRoles={[\'admin\']}><AdminLayout /></ProtectedRoute>}>' );
     expect(appSource).toContain('<Route path="analytics" element={<Navigate to="/admin/analytics/system" replace />} />');
-    expect(appSource).toContain('<Route path="system-analytics" element={<AdminAnalyticsCenter system />} />');
+    expect(appSource).not.toContain('<Route path="system-analytics" element={<AdminAnalyticsCenter system />} />');
+  });
+});
+
+describe('ICT Officer sidebar specification', () => {
+  const appSource = fs.readFileSync(path.resolve(__dirname, 'App.jsx'), 'utf8');
+  const dashboardSource = fs.readFileSync(path.resolve(__dirname, 'components/ict/ICTDashboard.jsx'), 'utf8');
+  const sidebarMatch = appSource.match(/'ict_officer': \[([\s\S]*?)\],\s*'college_manager':/);
+  const sidebarItems = [...(sidebarMatch?.[1] || '').matchAll(/\{ path: '([^']+)', label: '([^']+)',(?: icon: [^,}]+,)? section: '([^']+)' \}/g)]
+    .map(([, route, label, section]) => ({ route, label, section }));
+  const expectedSidebarItems = [
+    { route: '/ict/dashboard', label: 'Dashboard', section: 'DASHBOARD' },
+    { route: '/ict/assets', label: 'ICT Assets', section: 'ASSET MANAGEMENT' },
+    { route: '/ict/inventory', label: 'Inventory', section: 'ASSET MANAGEMENT' },
+    { route: '/ict/assignments', label: 'Assignments', section: 'ASSET MANAGEMENT' },
+    { route: '/ict/asset-requests', label: 'Asset Requests', section: 'ASSET MANAGEMENT' },
+    { route: '/ict/equipment', label: 'IT Equipment', section: 'TECHNICAL OPERATIONS' },
+    { route: '/ict/network', label: 'Network Equipment', section: 'TECHNICAL OPERATIONS' },
+    { route: '/ict/software-licenses', label: 'Software Licenses', section: 'TECHNICAL OPERATIONS' },
+    { route: '/ict/support', label: 'Technical Support', section: 'TECHNICAL OPERATIONS' },
+    { route: '/ict/incidents', label: 'Incident Management', section: 'TECHNICAL OPERATIONS' },
+    { route: '/ict/maintenance', label: 'ICT Maintenance', section: 'MAINTENANCE' },
+    { route: '/ict/repairs', label: 'Repair History', section: 'MAINTENANCE' },
+    { route: '/ict/device-health', label: 'Device Health', section: 'MAINTENANCE' },
+    { route: '/ict/tracking', label: 'RFID / QR Tracking', section: 'TRACKING' },
+    { route: '/ict/asset-history', label: 'Asset History', section: 'TRACKING' },
+    { route: '/ict/reports', label: 'ICT Reports', section: 'ANALYTICS & REPORTS' },
+    { route: '/ict/analytics', label: 'Asset Analytics', section: 'ANALYTICS & REPORTS' },
+    { route: '/ict/notifications', label: 'Notifications', section: 'SYSTEM' },
+  ];
+
+  it('contains only the documented ICT sidebar items and sections in the approved order', () => {
+    expect(sidebarMatch).not.toBeNull();
+    expect(sidebarItems).toEqual(expectedSidebarItems);
+  });
+
+  it('maps every ICT sidebar item to its page within the role-protected ICT route tree', () => {
+    expect(appSource).toContain('<Route path="/ict" element={<ProtectedRoute allowedRoles={[\'ict_officer\', \'admin\']}><RoleLayout /></ProtectedRoute>}>');
+    const pageRoutes = {
+      '/ict/dashboard': 'dashboard',
+      '/ict/assets': 'assets',
+      '/ict/inventory': 'inventory',
+      '/ict/assignments': 'assignments',
+      '/ict/asset-requests': 'asset-requests',
+      '/ict/equipment': 'equipment',
+      '/ict/network': 'network',
+      '/ict/software-licenses': 'software-licenses',
+      '/ict/support': 'support',
+      '/ict/incidents': 'incidents',
+      '/ict/maintenance': 'maintenance',
+      '/ict/repairs': 'repairs',
+      '/ict/device-health': 'device-health',
+      '/ict/tracking': 'tracking',
+      '/ict/asset-history': 'asset-history',
+      '/ict/reports': 'reports',
+      '/ict/analytics': 'analytics',
+      '/ict/notifications': 'notifications',
+    };
+
+    for (const path of Object.keys(pageRoutes)) {
+      expect(appSource).toContain(`<Route path="${pageRoutes[path]}" element={<`);
+    }
+  });
+
+  it('keeps the ICT dashboard free of extra module cards and navigation shortcuts', () => {
+    expect(dashboardSource).not.toContain('ICT_MODULES');
+    expect(dashboardSource).not.toContain('ict-module-card');
+    expect(dashboardSource).not.toMatch(/<Link\b|<a\b|href=|to=\s*["'{]/);
   });
 });
 

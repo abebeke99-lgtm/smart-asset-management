@@ -240,6 +240,18 @@ describe('ForgotPassword', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('SMS service is not available yet.');
   });
 
+  it('shows an SMS error for a phone request that fails with HTTP 503', async () => {
+    apiClient.post.mockRejectedValue({ response: { status: 503 } });
+
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /Mobile Phone/ }));
+    fireEvent.change(screen.getByLabelText('Mobile phone number'), { target: { value: '0912345678' } });
+    fireEvent.click(screen.getByRole('button', { name: /Send Verification Code/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('SMS service is not available yet.');
+    expect(screen.queryByText('Email service is temporarily unavailable. Please try again later.')).not.toBeInTheDocument();
+  });
+
   it('translates the email service error into Amharic', async () => {
     window.localStorage.setItem('language', 'am');
     apiClient.post.mockRejectedValue({ response: { status: 503 } });

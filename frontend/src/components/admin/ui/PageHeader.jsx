@@ -1,17 +1,26 @@
 import React from 'react';
 import { ChevronRight, House } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useInRouterContext } from 'react-router-dom';
+
+const SafeLink = React.forwardRef(({ to, ...props }, ref) => {
+  const inRouter = useInRouterContext();
+  if (!inRouter) {
+    const href = typeof to === 'string' ? to : to?.pathname || '/';
+    return <a ref={ref} href={href} {...props} />;
+  }
+  return <Link ref={ref} to={to} {...props} />;
+});
 
 export default function PageHeader({ eyebrow, title, subtitle, actions, breadcrumb = [] }) {
   return (
     <>
       {breadcrumb.length > 0 && (
         <nav className="admin-content-breadcrumb" aria-label="Breadcrumb">
-          <Link to="/admin" aria-label="Admin home"><House size={14} /></Link>
+          <SafeLink to="/admin" aria-label="Admin home"><House size={14} /></SafeLink>
           {breadcrumb.map((item, index) => (
             <React.Fragment key={`${item.label}-${index}`}>
               <ChevronRight size={13} aria-hidden="true" />
-              {item.href && index < breadcrumb.length - 1 ? <Link to={item.href}>{item.label}</Link> : <span aria-current="page">{item.label}</span>}
+              {item.href && index < breadcrumb.length - 1 ? <SafeLink to={item.href}>{item.label}</SafeLink> : <span aria-current="page">{item.label}</span>}
             </React.Fragment>
           ))}
         </nav>

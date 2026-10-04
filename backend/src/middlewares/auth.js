@@ -7,7 +7,7 @@ const normalizeRoleValue = (role) => {
   if (!role) return '';
   const value = String(role).trim().toLowerCase();
   if (['department head', 'dept_head', 'department-head', 'department'].includes(value)) return 'department_head';
-  if (['college manager', 'college-manager', 'college_manager', 'college'].includes(value)) return 'college_manager';
+  if (['college manager', 'college-manager', 'college_manager'].includes(value)) return 'college_manager';
   if (['infrastructure director', 'infrastructure directorate', 'infrastructure_directorate', 'infrastructure-directorate', 'infra'].includes(value)) return 'infrastructure';
   return value;
 };
@@ -32,22 +32,31 @@ const resolveUserPermissions = (user) => {
 };
 
 const requireAuth = (req, res, next) => {
-  return passport.authenticate('jwt', { session: false })(req, res, async () => {
-    if (!req.user) {
+  return passport.authenticate('jwt', { session: false }, async (error, user) => {
+    if (error) {
+      return next(error);
+    }
+
+    if (!user) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
 
-    const normalizedRole = normalizeRoleValue(req.user.role);
-    req.user.role = normalizedRole;
-    const configuredPermissions = await getConfiguredRolePermissions(normalizedRole);
-    if (configuredPermissions !== null) req.user.rolePermissions = configuredPermissions;
-    req.user.permissions = resolveUserPermissions(req.user);
+    req.user = user;
+    try {
+      const normalizedRole = normalizeRoleValue(req.user.role);
+      req.user.role = normalizedRole;
+      const configuredPermissions = await getConfiguredRolePermissions(normalizedRole);
+      if (configuredPermissions !== null) req.user.rolePermissions = configuredPermissions;
+      req.user.permissions = resolveUserPermissions(req.user);
 
-    if (req.user.active === false || req.user.active === 0 || req.user.status === 'disabled' || req.user.status === 'suspended' || req.user.status === 'blocked') {
-      return res.status(403).json({ success: false, message: 'This account is not active.' });
+      if (req.user.active === false || req.user.active === 0 || req.user.status === 'disabled' || req.user.status === 'suspended' || req.user.status === 'blocked') {
+        return res.status(403).json({ success: false, message: 'This account is not active.' });
+      }
+
+      return next();
+    } catch (authorizationError) {
+      return next(authorizationError);
     }
-
-    return next();
   });
 };
 
@@ -64,30 +73,21 @@ const requireActiveAccount = (req, res, next) => {
   return next();
 };
 
-const requireRole = (...roles) => {
-  const middleware = (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: 'Authentication required' });
-    }
+const requireRole = (...roles) => (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: 'Authentication required' });
+  }
 
-    const normalizedUserRole = normalizeRoleValue(req.user.role);
-    const allowedRoles = new Set(roles.map(normalizeRoleValue));
+  const normalizedUserRole = normalizeRoleValue(req.user.role);
+  const allowedRoles = new Set(roles.map(normalizeRoleValue));
 
-    if (roles.length && !allowedRoles.has(normalizedUserRole)) {
-      return res.status(403).json({ success: false, message: 'Access denied for this role' });
-    }
+  if (roles.length && !allowedRoles.has(normalizedUserRole)) {
+    return res.status(403).json({ success: false, message: 'Access denied for this role' });
+  }
 
-    req.user.role = normalizedUserRole;
-    req.user.permissions = resolveUserPermissions(req.user);
-    return next();
-  };
-
-  Object.defineProperty(middleware, 'toString', {
-    value: () => `requireRole(${roles.map((role) => `'${String(role).replace(/'/g, "\\'")}'`).join(', ')})`,
-    configurable: true,
-  });
-
-  return middleware;
+  req.user.role = normalizedUserRole;
+  req.user.permissions = resolveUserPermissions(req.user);
+  return next();
 };
 
 const requirePermission = (...permissions) => (req, res, next) => {

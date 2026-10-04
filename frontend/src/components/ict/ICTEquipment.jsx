@@ -284,7 +284,7 @@ function EquipmentForm({ form, options, saving, error, loadingOptions, onChange,
             {loadingOptions && <div className="mb-4 flex items-center gap-2 text-sm text-slate-500" role="status"><RefreshCw size={16} className="animate-spin" />Loading campus and department options…</div>}
             {!loadingOptions && !availableOptions && (
               <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="alert">
-                <span>No active campus options are available. Retry loading the form options.</span>
+                <span>No active campus is linked to this college. Ask an administrator to add or activate a campus and link it to this college in Admin Locations/Colleges, then retry.</span>
                 <button type="button" onClick={onRetryOptions} className="shrink-0 font-semibold underline">Retry</button>
               </div>
             )}

@@ -349,45 +349,39 @@ The ICT Officer Management System has been **completely implemented** with all 1
 
 ---
 
-### ✅ Module 7: Reports (85% Complete)
+### ✅ Module 7: ICT Reports
 **Route:** `/ict/reports`
+**Permission:** `ict.reports.view` (CSV export: `ict.reports.export`)
 
 **Features:**
 - **Report Types:**
-  - Asset Report (all assets)
-  - ICT Asset Report (ICT-only assets)
-  - Assignment Report (assignment statistics)
-  - Maintenance Report (maintenance statistics)
-  - Inventory Report (inventory status)
-  - RFID Activity Report (RFID tracking data)
+  - Asset inventory
+  - Assignments
+  - Maintenance
+  - Damaged assets
+  - Warranty
+  - Transfers
+  - Service tickets
+  - Incidents
+  - Software licenses
 
 - **Filtering Options:**
-  - Date range filter
-  - Department filter
-  - Category filter
-  - Status filter
-  - Location filter
+  - Search, status, category, condition, priority, department, and location
+  - Report-specific date ranges
+  - Pagination
 
-- **Report Data:**
-  - Summary statistics
-  - Detailed records
-  - Trends and patterns
-  - Cost analysis
+- **Access Scope:**
+  - ICT officers see records belonging to their authorized college
+  - Administrators can report across colleges
 
 - **Export Functionality:**
-  - Export to Excel (with formatting)
+  - Export to CSV and Excel
   - Export to PDF
-  - Export with applied filters
-
-- **Summary Statistics:**
-  - Total count
-  - Status breakdown
-  - Condition breakdown
-  - Department breakdown
-  - Category breakdown
+  - Print the current report
 
 **Data Source:**
-- `/api/assets`
+- `/api/ict/reports`
+- `/api/ict/reports/export`
 - `/api/assignments`
 - `/api/maintenance`
 - `/api/inventory`

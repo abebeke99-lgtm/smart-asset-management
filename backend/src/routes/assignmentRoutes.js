@@ -489,7 +489,7 @@ router.post('/', ...canManageAssignments, resolveAssignmentOrganizationScope, as
     }, { transaction });
 
     await createAuditLog({
-      userId: isAssignedTo,
+      userId: actorId,
       role: req.user.role,
       action: 'ASSIGN_ASSET',
       entity: `asset:${assetId}`,

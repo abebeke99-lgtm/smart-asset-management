@@ -20,3 +20,8 @@ test('department-scoped assignment access includes department heads and filters 
   assert.match(source, /const numericDepartmentId = Number\(departmentScope\)/);
   assert.match(source, /andClauses\.push\(\{\s*['"]\$Asset\.departmentId\$['"]\s*:\s*departmentScope\s*\}\)/);
 });
+
+test('assignment audit records the authenticated actor as its user', () => {
+  assert.match(source, /userId:\s*actorId/);
+  assert.doesNotMatch(source, /userId:\s*isAssignedTo/);
+});

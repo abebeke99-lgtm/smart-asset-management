@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Op } = require('sequelize');
 const controller = require('../src/controllers/ictAssetController');
-const { Asset } = require('../src/models');
+const { Asset, Building, Campus, College, Department, Room } = require('../src/models');
 
 const originalFindAndCountAll = Asset.findAndCountAll;
 const originalFindAll = Asset.findAll;
@@ -63,12 +63,47 @@ test('ICT equipment list returns normalized database summary totals for all dash
 
 test('IT equipment routes use scoped CRUD handlers on the central inventory asset controller', () => {
   const routeSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/ictAssetRoutes.js'), 'utf8');
-  assert.match(routeSource, /router\.get\('\/equipment', \.\.\.scopedIctAccess, controller\.listIctEquipment\)/);
-  assert.match(routeSource, /router\.get\('\/equipment\/:id', \.\.\.scopedIctAccess, controller\.getIctEquipment\)/);
-  assert.match(routeSource, /router\.post\('\/equipment', \.\.\.scopedIctAccess, controller\.createIctEquipment\)/);
-  assert.match(routeSource, /router\.put\('\/equipment\/:id', \.\.\.scopedIctAccess, controller\.updateIctEquipment\)/);
-  assert.match(routeSource, /router\.delete\('\/equipment\/:id', \.\.\.scopedIctAccess, controller\.deleteIctEquipment\)/);
+  assert.match(routeSource, /router\.get\('\/equipment', \.\.\.scopedIctAccess\('ict\.assets\.view'\), controller\.listIctEquipment\)/);
+  assert.match(routeSource, /router\.get\('\/equipment\/:id', \.\.\.scopedIctAccess\('ict\.assets\.view'\), controller\.getIctEquipment\)/);
+  assert.match(routeSource, /router\.post\('\/equipment', \.\.\.scopedIctAccess\('ict\.assets\.create'\), controller\.createIctEquipment\)/);
+  assert.match(routeSource, /router\.put\('\/equipment\/:id', \.\.\.scopedIctAccess\('ict\.assets\.update'\), controller\.updateIctEquipment\)/);
+  assert.match(routeSource, /router\.delete\('\/equipment\/:id', \.\.\.scopedIctAccess\('ict\.assets\.delete'\), controller\.deleteIctEquipment\)/);
   assert.ok(routeSource.indexOf("router.get('/equipment/options'") < routeSource.indexOf("router.get('/equipment/:id'"));
+});
+
+test('IT equipment form options scope colleges by their primary key', async () => {
+  const models = [College, Department, Campus, Building, Room];
+  const originals = models.map((model) => model.findAll);
+  const queries = new Map();
+  models.forEach((model) => {
+    model.findAll = async (query) => {
+      queries.set(model, query);
+      if (model === College) return [{ id: 17, collegeName: 'Test College', campusId: null }];
+      return [];
+    };
+  });
+  const res = {
+    json(payload) {
+      this.payload = payload;
+      return payload;
+    },
+  };
+
+  try {
+    await controller.listIctEquipmentOptions({
+      user: { role: 'ict_officer' },
+      organizationScope: { collegeId: 17 },
+    }, res, (error) => {
+      throw error || new Error('Unexpected error middleware call');
+    });
+
+    assert.deepEqual(queries.get(College).where, { id: 17, status: 'active' });
+    assert.equal(res.payload.success, true);
+    assert.equal(res.payload.colleges[0].id, 17);
+    assert.deepEqual(res.payload.campuses, []);
+  } finally {
+    models.forEach((model, index) => { model.findAll = originals[index]; });
+  }
 });
 
 test('IT equipment creation rejects incomplete records before attempting database writes', async () => {

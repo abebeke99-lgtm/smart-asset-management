@@ -450,6 +450,25 @@ const normalizeRecoveryDestination = (body = {}, method = 'email') => {
   return rawDestination.toLowerCase();
 };
 
+const getPhoneLookupCandidates = (phone, rawPhone = '') => {
+  const normalizedPhone = normalizePhoneNumber(phone);
+  if (!normalizedPhone) return [];
+
+  return [...new Set([
+    normalizedPhone,
+    normalizedPhone.slice(1),
+    `0${normalizedPhone.slice(4)}`,
+    normalizedPhone.slice(4),
+    String(rawPhone || '').trim(),
+  ].filter(Boolean))];
+};
+
+const findUserByPhoneNumber = (phone, rawPhone = '') => {
+  const phoneCandidates = getPhoneLookupCandidates(phone, rawPhone);
+  if (!phoneCandidates.length) return null;
+  return User.findOne({ where: { phone: { [Op.in]: phoneCandidates } } });
+};
+
 const requestForgotPassword = async (req, res) => {
   try {
     const method = normalizeRecoveryMethod(req.body?.method || req.body?.recoveryMethod || 'email');
@@ -577,7 +596,15 @@ const requestForgotPasswordOtp = async (req, res) => {
         });
       } catch (error) {
         await clearOtpState(recovery);
-        console.error('Password reset OTP email delivery failed:', error.message, error.code || 'UNKNOWN');
+        console.error(
+          'Password reset OTP email delivery failed:',
+          error.message || 'Unknown SMTP error',
+          error.code || 'UNKNOWN',
+          error.command || '',
+          error.responseCode || '',
+          error.errno || '',
+          error.syscall || '',
+        );
         const mappedError = mapEmailDeliveryError(error);
         return res.status(503).json({ success: false, ...mappedError });
       }
@@ -600,7 +627,7 @@ const requestForgotPasswordOtp = async (req, res) => {
       return res.status(503).json({ success: false, code: 'SMS_NOT_CONFIGURED', message: 'SMS service is not available yet.' });
     }
 
-    const user = await User.findOne({ where: { phone } });
+    const user = await findUserByPhoneNumber(phone, rawPhone);
     if (!user || !user.active || (user.lockoutUntil && new Date(user.lockoutUntil) > new Date())) {
       return res.json({ success: true, message: getGenericOtpMessage('phone') });
     }
@@ -636,7 +663,14 @@ const requestForgotPasswordOtp = async (req, res) => {
     const smsResult = await sendOtpSms(phone, otp, { ttlMinutes: RESET_OTP_TTL_MINUTES });
     if (smsResult.status !== 'sent') {
       await clearOtpState(recovery);
-      console.error('Password reset OTP SMS delivery failed for phone ending with', phone.slice(-4), 'provider:', process.env.SMS_PROVIDER || 'unconfigured');
+      console.error(
+        'Password reset OTP SMS delivery failed for phone ending with',
+        phone.slice(-4),
+        'provider:',
+        process.env.SMS_PROVIDER || 'unconfigured',
+        'reason:',
+        smsResult.reason || 'Unknown SMS provider error',
+      );
       return res.status(503).json({ success: false, message: 'We could not send the verification code right now. Please try again later.' });
     }
 
@@ -645,7 +679,7 @@ const requestForgotPasswordOtp = async (req, res) => {
     return res.json({ success: true, message: getGenericOtpMessage('phone') });
   } catch (error) {
     await recordRecoveryEvent({ event: 'REQUEST_FAILED', result: 'Failure', req });
-    console.error('Request password reset OTP failed.');
+    console.error('Request password reset OTP failed:', error.message || 'Unknown recovery error', error.code || 'UNKNOWN');
     return res.status(500).json({ success: false, message: 'Unable to process the OTP request.' });
   }
 };
@@ -677,7 +711,9 @@ const verifyForgotPasswordOtp = async (req, res) => {
       return failVerification(400, 'Please enter a valid 6-digit verification code.');
     }
 
-    const user = await User.findOne({ where: method === 'email' ? { email: targetEmail } : { phone: targetPhone } });
+    const user = method === 'email'
+      ? await User.findOne({ where: { email: targetEmail } })
+      : await findUserByPhoneNumber(targetPhone, rawPhone);
     if (!user) return failVerification(400, 'Invalid or expired verification code.');
 
     const eligibility = await ensureEligibleResetUser(user, method);

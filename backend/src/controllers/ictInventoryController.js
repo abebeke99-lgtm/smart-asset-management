@@ -1,4 +1,5 @@
 const { Op, fn, col } = require('sequelize');
+const XLSX = require('xlsx');
 const {
   sequelize,
   Asset,
@@ -18,11 +19,6 @@ const ICT_ASSET_WHERE = {
     { name: { [Op.like]: `%${term}%` } },
   ]),
 };
-const ASSET_STATUS_VALUES = new Set([
-  ...Object.values(ASSET_STATUSES),
-  'replaced',
-  'expired',
-]);
 const STATUS_GROUPS = {
   available: ['available', 'ready', 'idle', 'new'],
   assigned: ['assigned', 'in-use', 'issued', 'allocated'],
@@ -37,6 +33,11 @@ const STATUS_GROUPS = {
   missing: ['missing', 'lost', 'stolen'],
   replaced: ['replaced', 'replacement'],
 };
+const ASSET_STATUS_VALUES = new Set([
+  ...Object.values(ASSET_STATUSES),
+  ...Object.values(STATUS_GROUPS).flat(),
+  'expired',
+]);
 const SORT_FIELDS = new Set([
   'name',
   'assetCode',
@@ -83,9 +84,6 @@ const getScope = (req) => {
   }
   return { collegeId };
 };
-
-const isIctCategory = (name) =>
-  ICT_TERMS.some((term) => String(name || '').toLowerCase().includes(term));
 
 const makeAssetWhere = (scope) => ({
   [Op.and]: [scope, ICT_ASSET_WHERE],
@@ -198,16 +196,16 @@ const getInventory = async (req, res, next) => {
     });
 
     const colleges = await College.findAll({
-      where: req.user.role === 'admin' ? {} : scope,
+      where: req.user.role === 'admin' ? {} : { id: scope.collegeId },
       attributes: ['id', 'collegeName', 'campusId'],
       order: [['collegeName', 'ASC']],
     });
     const campusIds = [...new Set(colleges.map((college) => college.campusId).filter(Boolean))];
     const [categories, departments, campuses, statuses, conditions, locations] = await Promise.all([
-      Category.findAll({
-        where: { status: 'active' },
-        attributes: ['id', 'name'],
-        order: [['name', 'ASC']],
+      Asset.findAll({
+        where: makeAssetWhere(scope),
+        attributes: [[fn('DISTINCT', col('category')), 'value']],
+        raw: true,
       }),
       Department.findAll({
         where: req.user.role === 'admin' ? {} : { ...scope, status: 'active' },
@@ -258,7 +256,7 @@ const getInventory = async (req, res, next) => {
         totalPages: Math.ceil(result.count / limit),
       },
       options: {
-        categories: categories.filter((category) => isIctCategory(category.name)),
+        categories: categories.map((item) => item.value).filter(Boolean).sort().map((name) => ({ name })),
         statuses: statuses.map((item) => item.value).filter(Boolean).sort(),
         conditions: conditions.map((item) => item.value).filter(Boolean).sort(),
         campuses,
@@ -277,7 +275,7 @@ const normalizeHeader = (header) =>
 
 const FIELD_ALIASES = {
   name: ['name', 'itemname', 'assetname'],
-  assetCode: ['assetcode', 'assettag', 'assetid'],
+  assetCode: ['assetcode', 'assettag', 'assetid', 'assetnumber'],
   serialNumber: ['serialnumber', 'serial', 'sn'],
   category: ['category'],
   department: ['department', 'departmentname', 'departmentid'],
@@ -321,22 +319,21 @@ const parseDate = (value) => {
     }
     return { error: 'must be a valid date' };
   }
-  const usDate = input.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  const usDate = input.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
   if (usDate) {
     const [, monthValue, dayValue, yearValue] = usDate;
     const month = Number(monthValue);
     const day = Number(dayValue);
-    const year = Number(yearValue);
+    const year = yearValue.length === 2
+      ? (Number(yearValue) < 50 ? 2000 + Number(yearValue) : 1900 + Number(yearValue))
+      : Number(yearValue);
     const date = new Date(Date.UTC(year, month - 1, day));
     if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
       return { error: 'must be a valid date' };
     }
     return { value: date.toISOString().slice(0, 10) };
   }
-  const date = new Date(input);
-  return Number.isNaN(date.getTime())
-    ? { error: 'must be a valid date' }
-    : { value: date.toISOString().slice(0, 10) };
+  return { error: 'must be a valid date in YYYY-MM-DD or MM/DD/YYYY format' };
 };
 
 const lookupByIdOrName = (values, input, nameField) => {
@@ -347,11 +344,38 @@ const lookupByIdOrName = (values, input, nameField) => {
     || null;
 };
 
+const readSpreadsheetRows = (file) => {
+  try {
+    const workbook = XLSX.read(file.buffer, { type: 'buffer', cellDates: true });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+      const error = new Error('The uploaded spreadsheet does not contain a worksheet');
+      error.statusCode = 400;
+      throw error;
+    }
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+      defval: '',
+      raw: false,
+    });
+    if (!rows.length) {
+      const error = new Error('The uploaded worksheet does not contain inventory rows');
+      error.statusCode = 400;
+      throw error;
+    }
+    return rows;
+  } catch (error) {
+    if (error.statusCode) throw error;
+    const invalidFile = new Error('The uploaded file is not a readable Excel or CSV inventory spreadsheet');
+    invalidFile.statusCode = 400;
+    throw invalidFile;
+  }
+};
+
 const importInventory = async (req, res, next) => {
   let transaction;
   try {
     const scope = getScope(req);
-    const rows = req.body?.rows;
+    const rows = req.file ? readSpreadsheetRows(req.file) : req.body?.rows;
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({ success: false, message: 'Provide at least one spreadsheet row' });
     }
@@ -368,20 +392,32 @@ const importInventory = async (req, res, next) => {
       College.findAll({ where: req.user.role === 'admin' ? {} : scope }),
       Campus.findAll({ where: { status: 'active' } }),
     ]);
-    const categoryLookup = new Map(categories.filter((item) => isIctCategory(item.name)).map((item) => [String(item.name).toLowerCase(), item]));
+    const categoryLookup = new Map(categories.map((item) => [String(item.name).trim().toLowerCase(), item]));
     const serials = rows.map((row) => cleanString(readField(row || {}, 'serialNumber'))).filter(Boolean);
-    const existingSerials = serials.length
+    const assetCodes = rows.map((row) => cleanString(readField(row || {}, 'assetCode'))).filter(Boolean);
+    const existingIdentifiers = serials.length || assetCodes.length
       ? await Asset.findAll({
-        where: { serialNumber: { [Op.in]: [...new Set(serials)] } },
-        attributes: ['serialNumber'],
+        where: {
+          [Op.or]: [
+            ...(serials.length ? [{ serialNumber: { [Op.in]: [...new Set(serials)] } }] : []),
+            ...(assetCodes.length ? [{ assetCode: { [Op.in]: [...new Set(assetCodes)] } }] : []),
+          ],
+        },
+        attributes: ['serialNumber', 'assetCode'],
         raw: true,
       })
       : [];
-    const existingSerialLookup = new Set(existingSerials.map((item) => cleanString(item.serialNumber).toLowerCase()));
+    const existingSerialLookup = new Set(existingIdentifiers.map((item) => cleanString(item.serialNumber).toLowerCase()));
+    const existingAssetCodeLookup = new Set(existingIdentifiers.map((item) => cleanString(item.assetCode).toLowerCase()));
     const fileSerialRows = new Map();
     serials.forEach((serial) => {
       const normalized = serial.toLowerCase();
       fileSerialRows.set(normalized, (fileSerialRows.get(normalized) || 0) + 1);
+    });
+    const fileAssetCodeRows = new Map();
+    assetCodes.forEach((assetCode) => {
+      const normalized = assetCode.toLowerCase();
+      fileAssetCodeRows.set(normalized, (fileAssetCodeRows.get(normalized) || 0) + 1);
     });
 
     const results = rows.map((source, index) => {
@@ -398,19 +434,27 @@ const importInventory = async (req, res, next) => {
       if (!name) addError('name', 'Name is required');
       else if (name.length > 255) addError('name', 'Name must be 255 characters or fewer');
       if (!categoryName) addError('category', 'Category is required');
-      else if (!category) addError('category', 'Category is not a valid active ICT category');
+      else if (!category) addError('category', 'Category is not a valid active category');
       if (!departmentInput) addError('department', 'Department is required');
       else if (!department) addError('department', 'Department is not available in your authorized college');
+      const location = cleanString(readField(row, 'location'));
+      if (!location) addError('location', 'Location is required');
 
       const statusInput = cleanString(readField(row, 'status')) || 'available';
       const status = normalizedValue(statusInput);
       if (!ASSET_STATUS_VALUES.has(status)) addError('status', 'Status is not valid');
 
       const serialNumber = cleanString(readField(row, 'serialNumber'));
-      const duplicate = Boolean(serialNumber) && (
+      const assetCode = cleanString(readField(row, 'assetCode'));
+      const duplicateSerial = Boolean(serialNumber) && (
         existingSerialLookup.has(serialNumber.toLowerCase())
         || (fileSerialRows.get(serialNumber.toLowerCase()) || 0) > 1
       );
+      const duplicateAssetId = Boolean(assetCode) && (
+        existingAssetCodeLookup.has(assetCode.toLowerCase())
+        || (fileAssetCodeRows.get(assetCode.toLowerCase()) || 0) > 1
+      );
+      const duplicate = duplicateSerial || duplicateAssetId;
 
       const dates = {};
       for (const field of ['purchaseDate', 'expiryDate', 'warrantyExpiry']) {
@@ -447,11 +491,10 @@ const importInventory = async (req, res, next) => {
         }
       }
 
-      const assetCode = cleanString(readField(row, 'assetCode'));
       const strings = {
         serialNumber,
         condition: cleanString(readField(row, 'condition')) || 'Good',
-        location: cleanString(readField(row, 'location')),
+        location,
         description: cleanString(readField(row, 'description')),
         manufacturer: cleanString(readField(row, 'manufacturer')),
         model: cleanString(readField(row, 'model')),
@@ -498,6 +541,8 @@ const importInventory = async (req, res, next) => {
         record,
         errors,
         duplicate,
+        duplicateSerial,
+        duplicateAssetId,
         valid: errors.length === 0 && !duplicate,
       };
     });
@@ -511,16 +556,18 @@ const importInventory = async (req, res, next) => {
       errors: results.filter((item) => item.errors.length > 0).length,
       valid: validRows.length,
     };
-    const preview = req.body.preview === true;
+    const preview = req.body.preview === true || req.body.preview === 'true';
     if (preview || validRows.length === 0) {
       return res.json({
         success: true,
         preview,
         summary,
-        results: results.map(({ row, errors, duplicate, valid, record }) => ({
+        results: results.map(({ row, errors, duplicate, duplicateSerial, duplicateAssetId, valid, record }) => ({
           row,
           errors,
           duplicate,
+          duplicateSerial,
+          duplicateAssetId,
           valid,
           record,
         })),
@@ -549,10 +596,12 @@ const importInventory = async (req, res, next) => {
     return res.status(201).json({
       success: true,
       summary,
-      results: results.map(({ row, errors, duplicate, valid }) => ({
+      results: results.map(({ row, errors, duplicate, duplicateSerial, duplicateAssetId, valid }) => ({
         row,
         errors,
         duplicate,
+        duplicateSerial,
+        duplicateAssetId,
         valid,
       })),
     });

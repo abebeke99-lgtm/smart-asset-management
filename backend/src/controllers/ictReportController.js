@@ -1,9 +1,38 @@
 const { Op } = require('sequelize');
-const { Asset, Assignment, Department, Room, Incident, IncidentHistory, Maintenance, RFIDLog, ServiceRequest, SoftwareLicense, SoftwareLicenseAssignment, User } = require('../models');
+const {
+  Asset,
+  Assignment,
+  Department,
+  Room,
+  Incident,
+  IncidentHistory,
+  Maintenance,
+  RFIDLog,
+  ServiceRequest,
+  SoftwareLicense,
+  SoftwareLicenseAssignment,
+  Transfer,
+  User,
+} = require('../models');
 const { equipmentPredicate, networkPredicate } = require('../utils/ictAssetFilters');
 const { calculateSoftwareLicenseStatus } = require('../utils/softwareLicenseStatus');
 
-const REPORT_TYPES = ['inventory', 'equipment', 'network', 'software-licenses', 'support', 'incidents', 'assignments', 'maintenance', 'rfid', 'status'];
+const REPORT_TYPES = [
+  'inventory',
+  'equipment',
+  'network',
+  'software-licenses',
+  'support',
+  'service-tickets',
+  'incidents',
+  'assignments',
+  'maintenance',
+  'damaged',
+  'warranty',
+  'transfers',
+  'rfid',
+  'status',
+];
 const SORT_FIELDS = {
   assetCode: 'assetCode',
   name: 'name',
@@ -38,8 +67,19 @@ const parseDate = (value, label) => {
 
 const endOfDay = (date) => {
   const value = new Date(date);
-  value.setHours(23, 59, 59, 999);
+  value.setUTCHours(23, 59, 59, 999);
   return value;
+};
+
+const getReportCollegeId = (req) => {
+  if (req.user?.role === 'admin') return null;
+  const collegeId = Number(req.organizationScope?.collegeId);
+  if (!Number.isSafeInteger(collegeId) || collegeId <= 0) {
+    const error = new Error('College scope is not configured for this account');
+    error.status = 403;
+    throw error;
+  }
+  return collegeId;
 };
 
 const parseFilters = async (req, collegeId) => {
@@ -67,7 +107,8 @@ const parseFilters = async (req, collegeId) => {
     throw error;
   }
   if (departmentId) {
-    const department = await Department.findOne({ where: { id: departmentId, collegeId }, attributes: ['id'] });
+    const departmentWhere = { id: departmentId, ...(collegeId ? { collegeId } : {}) };
+    const department = await Department.findOne({ where: departmentWhere, attributes: ['id'] });
     if (!department) {
       const error = new Error('Department is not part of your college');
       error.status = 422;
@@ -82,7 +123,7 @@ const parseFilters = async (req, collegeId) => {
     page,
     limit,
     offset: (page - 1) * limit,
-    search: String(req.query.search || '').trim(),
+    search: String(req.query.search || '').trim().slice(0, 200),
     category: String(req.query.category || '').trim(),
     status: String(req.query.status || '').trim(),
     priority: String(req.query.priority || '').trim(),
@@ -98,7 +139,7 @@ const parseFilters = async (req, collegeId) => {
 };
 
 const assetWhere = (filters, assetType = null) => {
-  const where = { collegeId: filters.collegeId };
+  const where = filters.collegeId ? { collegeId: filters.collegeId } : {};
   const predicate = assetType === 'equipment' ? equipmentPredicate() : assetType === 'network' ? networkPredicate() : null;
   const andFilters = predicate ? [predicate] : [];
   if (filters.category) where.category = filters.category;
@@ -122,27 +163,41 @@ const dateWhere = (field, filters) => {
 
 const personName = (person) => person ? (person.fullName || person.username || '—') : '—';
 
-const incidentScopeWhere = (collegeId) => ({ [Op.or]: [
-  { '$Reporter.collegeId$': collegeId },
-  { '$Asset.collegeId$': collegeId },
-  { '$DepartmentRecord.collegeId$': collegeId },
-] });
+const getWarrantyStatus = (expiryDate) => {
+  if (!expiryDate) return 'No Warranty';
+  const expiry = expiryDate instanceof Date ? expiryDate.toISOString().slice(0, 10) : String(expiryDate).slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  const expiryLimit = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  if (expiry < today) return 'Expired';
+  if (expiry <= expiryLimit) return 'Expiring Soon';
+  return 'Active';
+};
 
-const incidentScopeIncludes = () => [
-  { model: User, as: 'Reporter', attributes: ['id', 'fullName', 'username', 'collegeId'], required: false },
-  { model: User, as: 'Technician', attributes: ['id', 'fullName', 'username'], required: false },
-  { model: Asset, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'collegeId'], required: false },
-  { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name', 'collegeId'], required: false },
+const scopedWhere = (collegeId) => (collegeId ? { collegeId } : {});
+
+const incidentScopeWhere = (collegeId) => (collegeId ? { [Op.or]: [
+  { '$Reporter.college_id$': collegeId },
+  { '$Asset.college_id$': collegeId },
+  { '$DepartmentRecord.college_id$': collegeId },
+] } : {});
+
+const incidentScopeIncludes = (collegeId) => [
+  { model: User, as: 'Reporter', attributes: ['id', 'fullName', 'username', 'collegeId'], where: scopedWhere(collegeId), required: false },
+  { model: User, as: 'Technician', attributes: ['id', 'fullName', 'username'], where: scopedWhere(collegeId), required: false },
+  { model: Asset, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'collegeId'], where: scopedWhere(collegeId), required: false },
+  { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name', 'collegeId'], where: scopedWhere(collegeId), required: false },
 ];
 
 const fetchReport = async (filters, { paginate = true } = {}) => {
   const { reportType } = filters;
   const allowedSortFields = reportType === 'software-licenses'
     ? ['softwareName', 'vendor', 'expiryDate', 'status', 'quantity', 'usedQuantity', 'updatedAt', 'createdAt']
-    : reportType === 'support'
+    : reportType === 'support' || reportType === 'service-tickets'
       ? ['requestCode', 'title', 'status', 'priority', 'createdAt', 'updatedAt', 'completedAt']
       : reportType === 'incidents'
         ? ['incidentNumber', 'status', 'priority', 'reportedAt', 'createdAt', 'resolvedAt', 'updatedAt']
+        : reportType === 'transfers'
+          ? ['transferNumber', 'status', 'transferDate', 'createdAt', 'updatedAt']
     : Object.values(SORT_FIELDS);
   const options = {
     limit: paginate ? filters.limit : undefined,
@@ -151,7 +206,8 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
   };
 
   if (reportType === 'software-licenses') {
-    const where = { collegeId: filters.collegeId, archivedAt: null };
+    const where = { ...scopedWhere(filters.collegeId), archivedAt: null };
+    if (filters.departmentId) where.departmentId = filters.departmentId;
     if (filters.search) {
       where[Op.or] = ['softwareName', 'vendor', 'licenseNumber', 'licenseType', 'version']
         .map((field) => ({ [field]: { [Op.like]: `%${filters.search}%` } }));
@@ -179,8 +235,8 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
     const assignments = result.rows.length ? await SoftwareLicenseAssignment.findAll({
       where: { softwareLicenseId: { [Op.in]: result.rows.map((license) => license.id) }, status: 'active' },
       include: [
-        { model: User, as: 'User', attributes: ['id', 'fullName', 'username'] },
-        { model: Asset, as: 'Asset', attributes: ['id', 'name', 'assetCode'] },
+        { model: User, as: 'User', attributes: ['id', 'fullName', 'username'], where: scopedWhere(filters.collegeId), required: false },
+        { model: Asset, as: 'Asset', attributes: ['id', 'name', 'assetCode'], where: scopedWhere(filters.collegeId), required: false },
       ],
     }) : [];
     const grouped = new Map();
@@ -220,8 +276,8 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
     };
   }
 
-  if (reportType === 'support') {
-    const where = { collegeId: filters.collegeId, requestType: 'support', ...dateWhere('createdAt', filters) };
+  if (reportType === 'support' || reportType === 'service-tickets') {
+    const where = { ...scopedWhere(filters.collegeId), requestType: 'support', ...dateWhere('createdAt', filters) };
     if (filters.status) where.status = filters.status;
     if (filters.priority) where.priority = filters.priority;
     if (filters.category) where.category = filters.category;
@@ -238,10 +294,10 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
       ] }];
     }
     const include = [
-      { model: User, as: 'Reporter', attributes: ['id', 'fullName', 'username'], required: false },
-      { model: User, as: 'Assignee', attributes: ['id', 'fullName', 'username'], required: false },
-      { model: Asset, attributes: ['id', 'name', 'assetCode'], required: false },
-      { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name'], required: false },
+      { model: User, as: 'Reporter', attributes: ['id', 'fullName', 'username'], where: scopedWhere(filters.collegeId), required: false },
+      { model: User, as: 'Assignee', attributes: ['id', 'fullName', 'username'], where: scopedWhere(filters.collegeId), required: false },
+      { model: Asset, attributes: ['id', 'name', 'assetCode'], where: scopedWhere(filters.collegeId), required: false },
+      { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name'], where: scopedWhere(filters.collegeId), required: false },
     ];
     const [result, allRequests] = await Promise.all([
       ServiceRequest.findAndCountAll({ where, ...options, include, distinct: true }),
@@ -272,7 +328,7 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
       total: result.count,
       summary: {
         totalRequests: allRequests.length,
-        active: allRequests.filter((request) => ['open', 'assigned', 'in-progress', 'pending-user', 'pending-parts'].includes(String(request.status).toLowerCase())).length,
+        active: allRequests.filter((request) => !['resolved', 'closed', 'completed', 'cancelled', 'rejected'].includes(String(request.status).toLowerCase())).length,
         resolved: byStatus.resolved || 0,
         closed: byStatus.closed || 0,
         byStatus,
@@ -299,12 +355,12 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
     }
     if (filters.priority) where.priority = filters.priority;
     const include = [
-      ...incidentScopeIncludes(),
-      { model: IncidentHistory, separate: true, order: [['createdAt', 'DESC']], include: [{ model: User, as: 'Actor', attributes: ['id', 'fullName', 'username'] }] },
+      ...incidentScopeIncludes(filters.collegeId),
+      { model: IncidentHistory, separate: true, order: [['createdAt', 'DESC']], include: [{ model: User, as: 'Actor', attributes: ['id', 'fullName', 'username'], where: scopedWhere(filters.collegeId), required: false }] },
     ];
     const [result, allIncidents] = await Promise.all([
       Incident.findAndCountAll({ where, ...options, include, distinct: true }),
-      Incident.findAll({ where, include: incidentScopeIncludes(), attributes: ['status', 'priority', 'resolvedAt'], raw: true }),
+      Incident.findAll({ where, include: incidentScopeIncludes(filters.collegeId), attributes: ['status', 'priority', 'resolvedAt'], raw: true }),
     ]);
     const rows = result.rows.map((incident) => ({
       id: incident.id,
@@ -333,7 +389,7 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
       total: result.count,
       summary: {
         totalIncidents: allIncidents.length,
-        open: allIncidents.filter((incident) => ['new', 'assigned', 'investigating', 'in_progress', 'pending', 'escalated'].includes(String(incident.status).toLowerCase())).length,
+        open: allIncidents.filter((incident) => !['resolved', 'closed', 'cancelled'].includes(String(incident.status).toLowerCase())).length,
         resolved: byStatus.resolved || 0,
         critical: byPriority.critical || 0,
         byStatus,
@@ -342,23 +398,62 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
     };
   }
 
-  if (reportType === 'inventory' || reportType === 'equipment' || reportType === 'network' || reportType === 'status') {
-    const where = { ...assetWhere(filters, reportType), ...dateWhere('updatedAt', filters) };
+  if (reportType === 'inventory' || reportType === 'equipment' || reportType === 'network' || reportType === 'status' || reportType === 'damaged' || reportType === 'warranty') {
+    const assetFilters = reportType === 'warranty' ? { ...filters, status: '' } : filters;
+    const dateField = reportType === 'warranty' ? 'warrantyExpiry' : reportType === 'damaged' ? 'updatedAt' : 'purchaseDate';
+    const where = { ...assetWhere(assetFilters, reportType), ...dateWhere(dateField, filters) };
+    if (reportType === 'damaged') {
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        {
+          [Op.or]: [
+            { status: { [Op.in]: ['damaged', 'broken', 'faulty'] } },
+            { condition: { [Op.in]: ['damaged', 'broken', 'faulty'] } },
+          ],
+        },
+      ];
+    }
+    if (reportType === 'warranty') {
+      const today = new Date().toISOString().slice(0, 10);
+      const expiryLimit = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+      const warrantyStatusFilters = {
+        Expired: { warrantyExpiry: { [Op.lt]: today } },
+        'Expiring Soon': { warrantyExpiry: { [Op.gte]: today, [Op.lte]: expiryLimit } },
+        Active: { warrantyExpiry: { [Op.gt]: expiryLimit } },
+        'No Warranty': { warrantyExpiry: { [Op.is]: null } },
+      };
+      if (warrantyStatusFilters[filters.status]) {
+        where[Op.and] = [...(where[Op.and] || []), warrantyStatusFilters[filters.status]];
+      }
+    }
     const result = reportType === 'status'
       ? { rows: await Asset.findAll({ where, attributes: ['status'], raw: true }), count: 0 }
       : await Asset.findAndCountAll({
         where,
         ...options,
         include: [
-          { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name'], required: false },
+          { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name'], where: scopedWhere(filters.collegeId), required: false },
           {
             model: Assignment,
             required: false,
             where: { status: { [Op.notIn]: ['returned', 'cancelled', 'closed'] } },
             include: [
-              { model: User, attributes: ['id', 'fullName', 'username'], required: false },
-              { model: Department, as: 'AssignedDepartment', attributes: ['id', 'name'], required: false },
-              { model: Room, as: 'AssignedLaboratory', attributes: ['id', 'roomName'], required: false },
+              { model: User, attributes: ['id', 'fullName', 'username'], where: scopedWhere(filters.collegeId), required: false },
+              { model: Department, as: 'AssignedDepartment', attributes: ['id', 'name'], where: scopedWhere(filters.collegeId), required: false },
+              {
+                model: Room,
+                as: 'AssignedLaboratory',
+                attributes: ['id', 'roomName'],
+                required: false,
+                include: [{
+                  model: Department,
+                  as: 'DepartmentRecord',
+                  attributes: [],
+                  where: scopedWhere(filters.collegeId),
+                  required: Boolean(filters.collegeId),
+                }],
+              },
+              { model: User, as: 'AssignedByUser', attributes: ['id', 'fullName', 'username'], where: scopedWhere(filters.collegeId), required: false },
             ],
           },
         ],
@@ -387,6 +482,12 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
             : personName(assignment?.User),
         purchaseDate: data.purchaseDate,
         lastUpdated: data.updatedAt,
+        ...(reportType === 'warranty'
+          ? {
+            warrantyExpiry: data.warrantyExpiry || '—',
+            warrantyStatus: getWarrantyStatus(data.warrantyExpiry),
+          }
+          : {}),
       };
     });
     if (reportType === 'status') {
@@ -395,6 +496,39 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
       return { rows: statusRows, total: statusRows.length, summary: { totalAssets: rows.length, statuses: counts } };
     }
     const allAssets = await Asset.findAll({ where, attributes: ['status'], raw: true });
+    if (reportType === 'damaged') {
+      return {
+        rows,
+        total: result.count,
+        summary: {
+          totalDamaged: allAssets.length,
+          byStatus: allAssets.reduce((counts, asset) => {
+            const status = asset.status || 'unknown';
+            counts[status] = (counts[status] || 0) + 1;
+            return counts;
+          }, {}),
+        },
+      };
+    }
+    if (reportType === 'warranty') {
+      const allWarranties = await Asset.findAll({ where, attributes: ['warrantyExpiry'], raw: true });
+      const warrantyTotals = allWarranties.reduce((counts, asset) => {
+        const status = getWarrantyStatus(asset.warrantyExpiry);
+        counts[status] = (counts[status] || 0) + 1;
+        return counts;
+      }, {});
+      return {
+        rows,
+        total: result.count,
+        summary: {
+          totalWarranties: (warrantyTotals.Active || 0) + (warrantyTotals['Expiring Soon'] || 0) + (warrantyTotals.Expired || 0),
+          active: warrantyTotals.Active || 0,
+          expiringSoon: warrantyTotals['Expiring Soon'] || 0,
+          expired: warrantyTotals.Expired || 0,
+          noWarranty: warrantyTotals['No Warranty'] || 0,
+        },
+      };
+    }
     const statuses = allAssets.reduce((map, asset) => { const key = asset.status || 'unknown'; map[key] = (map[key] || 0) + 1; return map; }, {});
     return {
       rows,
@@ -411,18 +545,89 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
     };
   }
 
+  if (reportType === 'transfers') {
+    const where = { ...dateWhere('transferDate', filters) };
+    if (filters.status) where.status = filters.status;
+    const assetFilters = { ...filters, search: '' };
+    const include = [{
+      model: Asset,
+      required: true,
+      where: assetWhere(assetFilters),
+      attributes: ['id', 'assetCode', 'name', 'department', 'location'],
+    }];
+    if (filters.search) {
+      where[Op.and] = [{
+        [Op.or]: [
+          { transferNumber: { [Op.like]: `%${filters.search}%` } },
+          { sourceDepartment: { [Op.like]: `%${filters.search}%` } },
+          { destinationDepartment: { [Op.like]: `%${filters.search}%` } },
+          { currentLocation: { [Op.like]: `%${filters.search}%` } },
+          { newLocation: { [Op.like]: `%${filters.search}%` } },
+          { transferReason: { [Op.like]: `%${filters.search}%` } },
+          { '$Asset.assetCode$': { [Op.like]: `%${filters.search}%` } },
+          { '$Asset.name$': { [Op.like]: `%${filters.search}%` } },
+          { '$Asset.serialNumber$': { [Op.like]: `%${filters.search}%` } },
+        ],
+      }];
+    }
+    const [result, allTransfers] = await Promise.all([
+      Transfer.findAndCountAll({ where, ...options, include, distinct: true }),
+      Transfer.findAll({ where, include, attributes: ['status'], raw: true }),
+    ]);
+    const rows = result.rows.map((transfer) => ({
+      id: transfer.id,
+      transferNumber: transfer.transferNumber || `TR-${transfer.id}`,
+      assetTag: transfer.Asset?.assetCode || '—',
+      asset: transfer.Asset?.name || '—',
+      fromDepartment: transfer.sourceDepartment || '—',
+      toDepartment: transfer.destinationDepartment || '—',
+      fromLocation: transfer.currentLocation || transfer.Asset?.location || '—',
+      toLocation: transfer.newLocation || '—',
+      transferDate: transfer.transferDate,
+      status: transfer.status || 'Pending',
+      reason: transfer.transferReason || '—',
+    }));
+    const byStatus = allTransfers.reduce((counts, transfer) => {
+      const status = transfer.status || 'unknown';
+      counts[status] = (counts[status] || 0) + 1;
+      return counts;
+    }, {});
+    return {
+      rows,
+      total: result.count,
+      summary: {
+        totalTransfers: allTransfers.length,
+        pending: Object.entries(byStatus).filter(([status]) => ['pending', 'requested', 'in progress', 'in-progress'].includes(status.toLowerCase())).reduce((sum, [, count]) => sum + count, 0),
+        completed: Object.entries(byStatus).filter(([status]) => ['completed', 'received'].includes(status.toLowerCase())).reduce((sum, [, count]) => sum + count, 0),
+        byStatus,
+      },
+    };
+  }
+
   if (reportType === 'assignments') {
-    const where = { ...dateWhere('createdAt', filters) };
+    const where = { ...dateWhere('assignedDate', filters) };
     if (filters.status) where.status = filters.status;
     const result = await Assignment.findAndCountAll({
       where,
       ...options,
       include: [
-        { model: Asset, required: true, where: assetWhere(filters), attributes: ['id', 'assetCode', 'name', 'department', 'location'], include: [{ model: Department, as: 'DepartmentRecord', attributes: ['id', 'name'], required: false }] },
-        { model: User, attributes: ['id', 'fullName', 'username'], required: false },
-        { model: Department, as: 'AssignedDepartment', attributes: ['id', 'name'], required: false },
-        { model: Room, as: 'AssignedLaboratory', attributes: ['id', 'roomName'], required: false },
-        { model: User, as: 'AssignedByUser', attributes: ['id', 'fullName', 'username'], required: false },
+        { model: Asset, required: true, where: assetWhere(filters), attributes: ['id', 'assetCode', 'name', 'department', 'location'], include: [{ model: Department, as: 'DepartmentRecord', attributes: ['id', 'name'], where: scopedWhere(filters.collegeId), required: false }] },
+        { model: User, attributes: ['id', 'fullName', 'username'], where: scopedWhere(filters.collegeId), required: false },
+        { model: Department, as: 'AssignedDepartment', attributes: ['id', 'name'], where: scopedWhere(filters.collegeId), required: false },
+        {
+          model: Room,
+          as: 'AssignedLaboratory',
+          attributes: ['id', 'roomName'],
+          required: false,
+          include: [{
+            model: Department,
+            as: 'DepartmentRecord',
+            attributes: [],
+            where: scopedWhere(filters.collegeId),
+            required: Boolean(filters.collegeId),
+          }],
+        },
+        { model: User, as: 'AssignedByUser', attributes: ['id', 'fullName', 'username'], where: scopedWhere(filters.collegeId), required: false },
       ],
     });
     const rows = result.rows.map((record) => ({
@@ -449,12 +654,13 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
   if (reportType === 'maintenance') {
     const where = { ...dateWhere('createdAt', filters) };
     if (filters.status) where.status = filters.status;
+    if (filters.priority) where.priority = filters.priority;
     const result = await Maintenance.findAndCountAll({
       where,
       ...options,
       include: [
         { model: Asset, required: true, where: assetWhere(filters), attributes: ['id', 'assetCode', 'name', 'department', 'location', 'category'] },
-        { model: User, as: 'Technician', attributes: ['id', 'fullName', 'username'], required: false },
+        { model: User, as: 'Technician', attributes: ['id', 'fullName', 'username'], where: scopedWhere(filters.collegeId), required: false },
       ],
     });
     const rows = result.rows.map((record) => ({ id: record.id, assetTag: record.Asset?.assetCode || '—', asset: record.Asset?.name || '—', type: record.Asset?.category || 'Maintenance', status: record.status || 'pending', priority: record.priority || 'medium', reportedDate: record.createdAt, completedDate: record.updatedAt, technician: personName(record.Technician), location: record.Asset?.location || '—', title: record.title }));
@@ -470,13 +676,53 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
 
 const getOptions = async (collegeId, reportType) => {
   if (reportType === 'software-licenses') {
-    const licenses = await SoftwareLicense.findAll({ where: { collegeId, archivedAt: null }, attributes: ['status', 'expiryDate'], raw: true });
-    return { statuses: [...new Set(licenses.map((license) => calculateSoftwareLicenseStatus(license)))].sort(), categories: [], conditions: [], locations: [], departments: [] };
+    const [licenses, departments] = await Promise.all([
+      SoftwareLicense.findAll({ where: { ...scopedWhere(collegeId), archivedAt: null }, attributes: ['status', 'expiryDate'], raw: true }),
+      Department.findAll({ where: scopedWhere(collegeId), attributes: ['id', 'name'], order: [['name', 'ASC']] }),
+    ]);
+    return {
+      statuses: [...new Set(licenses.map((license) => calculateSoftwareLicenseStatus(license)))].sort(),
+      categories: [],
+      conditions: [],
+      locations: [],
+      departments: departments.map((department) => ({ id: department.id, name: department.name })),
+    };
   }
-  if (reportType === 'support') {
+  if (reportType === 'warranty') {
+    const departments = await Department.findAll({
+      where: scopedWhere(collegeId),
+      attributes: ['id', 'name'],
+      order: [['name', 'ASC']],
+    });
+    return {
+      statuses: ['Active', 'Expiring Soon', 'Expired', 'No Warranty'],
+      categories: [],
+      conditions: [],
+      locations: [],
+      departments: departments.map((department) => ({ id: department.id, name: department.name })),
+    };
+  }
+  if (reportType === 'transfers') {
+    const [transfers, departments] = await Promise.all([
+      Transfer.findAll({
+        include: [{ model: Asset, required: true, where: scopedWhere(collegeId), attributes: [] }],
+        attributes: ['status'],
+        raw: true,
+      }),
+      Department.findAll({ where: scopedWhere(collegeId), attributes: ['id', 'name'], order: [['name', 'ASC']] }),
+    ]);
+    return {
+      statuses: [...new Set(transfers.map((transfer) => transfer.status).filter(Boolean))].sort(),
+      categories: [],
+      conditions: [],
+      locations: [],
+      departments: departments.map((department) => ({ id: department.id, name: department.name })),
+    };
+  }
+  if (reportType === 'support' || reportType === 'service-tickets') {
     const [requests, departments] = await Promise.all([
-      ServiceRequest.findAll({ where: { collegeId, requestType: 'support' }, attributes: ['status', 'category', 'priority'], raw: true }),
-      Department.findAll({ where: { collegeId }, attributes: ['id', 'name'], order: [['name', 'ASC']] }),
+      ServiceRequest.findAll({ where: { ...scopedWhere(collegeId), requestType: 'support' }, attributes: ['status', 'category', 'priority'], raw: true }),
+      Department.findAll({ where: scopedWhere(collegeId), attributes: ['id', 'name'], order: [['name', 'ASC']] }),
     ]);
     return {
       statuses: [...new Set(requests.map((request) => request.status).filter(Boolean))].sort(),
@@ -488,8 +734,8 @@ const getOptions = async (collegeId, reportType) => {
   }
   if (reportType === 'incidents') {
     const [incidents, departments] = await Promise.all([
-      Incident.findAll({ where: incidentScopeWhere(collegeId), include: incidentScopeIncludes(), attributes: ['status', 'priority', 'category'], raw: true }),
-      Department.findAll({ where: { collegeId }, attributes: ['id', 'name'], order: [['name', 'ASC']] }),
+      Incident.findAll({ where: incidentScopeWhere(collegeId), include: incidentScopeIncludes(collegeId), attributes: ['status', 'priority', 'category'], raw: true }),
+      Department.findAll({ where: scopedWhere(collegeId), attributes: ['id', 'name'], order: [['name', 'ASC']] }),
     ]);
     return {
       statuses: [...new Set(incidents.map((incident) => incident.status).filter(Boolean))].sort(),
@@ -500,21 +746,68 @@ const getOptions = async (collegeId, reportType) => {
       departments: departments.map((department) => ({ id: department.id, name: department.name })),
     };
   }
-  const [assets, departments] = await Promise.all([
-    Asset.findAll({ where: { collegeId }, attributes: ['category', 'status', 'condition', 'location'], raw: true }),
-    Department.findAll({ where: { collegeId }, attributes: ['id', 'name'], order: [['name', 'ASC']] }),
+  const [assets, departments, statusRows, priorityRows] = await Promise.all([
+    Asset.findAll({ where: scopedWhere(collegeId), attributes: ['category', 'status', 'condition', 'location'], raw: true }),
+    Department.findAll({ where: scopedWhere(collegeId), attributes: ['id', 'name'], order: [['name', 'ASC']] }),
+    reportType === 'assignments'
+      ? Assignment.findAll({
+        include: [{ model: Asset, required: true, where: scopedWhere(collegeId), attributes: [] }],
+        attributes: ['status'],
+        raw: true,
+      })
+      : reportType === 'maintenance'
+        ? Maintenance.findAll({
+          include: [{ model: Asset, required: true, where: scopedWhere(collegeId), attributes: [] }],
+          attributes: ['status'],
+          raw: true,
+        })
+        : Promise.resolve(null),
+    reportType === 'maintenance'
+      ? Maintenance.findAll({
+        include: [{ model: Asset, required: true, where: scopedWhere(collegeId), attributes: [] }],
+        attributes: ['priority'],
+        raw: true,
+      })
+      : Promise.resolve(null),
   ]);
   const unique = (field) => [...new Set(assets.map((asset) => asset[field]).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
-  return { categories: unique('category'), statuses: unique('status'), conditions: unique('condition'), locations: unique('location'), departments: departments.map((department) => ({ id: department.id, name: department.name })) };
+  return {
+    categories: unique('category'),
+    statuses: statusRows
+      ? [...new Set(statusRows.map((row) => row.status).filter(Boolean))].sort()
+      : unique('status'),
+    priorities: priorityRows ? [...new Set(priorityRows.map((row) => row.priority).filter(Boolean))].sort() : [],
+    conditions: unique('condition'),
+    locations: unique('location'),
+    departments: departments.map((department) => ({ id: department.id, name: department.name })),
+  };
 };
 
 const getIctReports = async (req, res, next) => {
   try {
-    const collegeId = Number(req.organizationScope?.collegeId);
-    if (!collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+    const collegeId = getReportCollegeId(req);
     const filters = await parseFilters(req, collegeId);
     const [report, options] = await Promise.all([fetchReport(filters), getOptions(collegeId, filters.reportType)]);
-    return res.json({ success: true, reportType: filters.reportType, data: report.rows, summary: report.summary, filters: options, pagination: { page: filters.page, limit: filters.limit, total: report.total, totalPages: Math.ceil(report.total / filters.limit) }, generatedAt: new Date().toISOString(), scope: { collegeId, collegeName: req.organizationScope.college?.collegeName || 'Authorized college' } });
+    return res.json({
+      success: true,
+      reportType: filters.reportType,
+      data: report.rows,
+      summary: report.summary,
+      filters: options,
+      pagination: {
+        page: filters.page,
+        limit: filters.limit,
+        total: report.total,
+        totalPages: Math.ceil(report.total / filters.limit),
+      },
+      generatedAt: new Date().toISOString(),
+      scope: {
+        collegeId,
+        collegeName: req.user?.role === 'admin'
+          ? 'All colleges'
+          : req.organizationScope?.college?.collegeName || 'Authorized college',
+      },
+    });
   } catch (error) {
     return next(error);
   }
@@ -522,15 +815,16 @@ const getIctReports = async (req, res, next) => {
 
 const exportIctReport = async (req, res, next) => {
   try {
-    const collegeId = Number(req.organizationScope?.collegeId);
-    if (!collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
-    const filters = await parseFilters({ ...req, query: { ...req.query, page: 1, limit: 5000 } }, collegeId);
+    const collegeId = getReportCollegeId(req);
+    const filters = await parseFilters({ ...req, query: { ...req.query, page: 1, limit: 100 } }, collegeId);
     const report = await fetchReport(filters, { paginate: false });
     const rows = report.rows;
     const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))];
     const escape = (value) => {
       const printable = value && typeof value === 'object' ? JSON.stringify(value) : value;
-      return `"${String(printable ?? '').replace(/"/g, '""')}"`;
+      const text = String(printable ?? '');
+      const safe = /^[\s]*[=+\-@]/.test(text) ? `'${text}` : text;
+      return `"${safe.replace(/"/g, '""')}"`;
     };
     const csv = [headers.join(','), ...rows.map((row) => headers.map((header) => escape(row[header])).join(','))].join('\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');

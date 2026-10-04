@@ -93,6 +93,21 @@ describe('ProtectedRoute auth flow', () => {
     expect(screen.queryByText('ICT Network')).not.toBeInTheDocument();
   });
 
+  it('blocks a college user from manually opening the college-manager dashboard URL', () => {
+    useAuth.mockReturnValue({ user: { role: 'college' }, loading: false });
+
+    render(
+      <MemoryRouter initialEntries={['/college-manager/dashboard']}>
+        <Routes>
+          <Route path="/college-manager/dashboard" element={<ProtectedRoute allowedRoles={['college_manager']}><div>College Manager Dashboard</div></ProtectedRoute>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('You do not have permission to access this section.');
+    expect(screen.queryByText('College Manager Dashboard')).not.toBeInTheDocument();
+  });
+
   it('uploads profile photos without forcing a multipart content-type header', async () => {
     const updateUser = jest.fn();
     useAuth.mockReturnValue({ updateUser });

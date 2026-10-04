@@ -63,9 +63,9 @@ import AdminAssetAnalytics from './components/admin/AdminAssetAnalytics';
 import AdminAuditLogs from './components/admin/AdminAuditLogs';
 import AdminChemicalQuarantine from './components/admin/AdminChemicalQuarantine';
 import SystemMonitoring from './components/admin/SystemMonitoring';
-import EnamIntegration from './components/admin/EnamIntegration';
 import AdminCollegeManagement from './components/admin/AdminCollegeManagement';
 import AdminCollegeDetails from './components/admin/AdminCollegeDetails';
+import EnamIntegration from './components/admin/EnamIntegration';
 
 import ICTDashboard from './components/ict/ICTDashboard';
 import ICTAssets from './components/ict/ICTAssets';
@@ -2329,19 +2329,19 @@ const adminSidebarSections = [
     heading: 'ASSET GOVERNANCE',
     items: [
       { to: '/admin/assets', label: 'All Assets', icon: Package },
-      { to: '/admin/assets/categories', label: 'Categories', icon: Package },
-      { to: '/admin/assets/assign', label: 'Assignment', icon: ClipboardList },
-      { to: '/admin/assets/transfer', label: 'Transfer', icon: ArrowLeftRight },
+      { to: '/admin/assets/categories', label: 'Asset Categories', icon: Package },
+      { to: '/admin/assets/assign', label: 'Asset Assignment', icon: ClipboardList },
+      { to: '/admin/assets/transfer', label: 'Asset Transfer', icon: ArrowLeftRight },
       { to: '/admin/assets/disposal', label: 'Disposal & Retirement', icon: Archive },
+      { to: '/admin/maintenance', label: 'Maintenance Oversight', icon: Wrench },
+      { to: '/admin/rfid', label: 'RFID / QR Tracking', icon: Radio },
     ]
   },
   {
     id: 'inventory',
     heading: 'INVENTORY',
     items: [
-      { to: '/admin/maintenance', label: 'Maintenance', icon: Wrench },
-      { to: '/admin/rfid', label: 'RFID / QR Tracking', icon: Radio },
-      { to: '/admin/inventory/quarantine', label: 'Chemical Quarantine', icon: ShieldCheck },
+      { to: '/admin/inventory/quarantine', label: 'Quarantine', icon: ShieldCheck },
     ]
   },
   {
@@ -2359,9 +2359,9 @@ const adminSidebarSections = [
     id: 'analytics',
     heading: 'ANALYTICS',
     items: [
-      { to: '/admin/reports', label: 'Reports', icon: BarChart3 },
+      { to: '/admin/reports', label: 'Reports & Analytics', icon: BarChart3 },
       { to: '/admin/reports/analytics', label: 'Asset Analytics', icon: BarChart3 },
-      { to: '/admin/system-analytics', label: 'System Analytics', icon: BarChart3 },
+      { to: '/admin/analytics/system', label: 'System Analytics', icon: BarChart3 },
     ]
   },
   {
@@ -2370,15 +2370,9 @@ const adminSidebarSections = [
     items: [
       { to: '/admin/settings', label: 'Settings', icon: Settings },
       { to: '/admin/notifications', label: 'Notifications', icon: Bell },
-      { to: '/admin/backup', label: 'Backup & Restore', icon: DatabaseBackup },
+      { to: '/admin/backup', label: 'Backup', icon: DatabaseBackup },
+      { to: '/admin/enam', label: 'ENAM Integration', icon: GitBranch },
       { to: '/admin/monitoring', label: 'System Monitoring', icon: BarChart3 },
-    ]
-  },
-  {
-    id: 'enam',
-    heading: 'ENAM',
-    items: [
-      { to: '/admin/enam', label: 'ENAM', icon: GitBranch },
     ]
   }
 ];
@@ -3180,7 +3174,7 @@ function AppContent() {
               )}
               {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'ict_officer' && (
                 <>
-                  {['IT ASSET MANAGEMENT', 'ASSET MANAGEMENT', 'TECHNICAL OPERATIONS', 'MAINTENANCE', 'TRACKING', 'ANALYTICS & REPORTS', 'SYSTEM'].map((sectionName) => {
+                  {['DASHBOARD', 'ASSET MANAGEMENT', 'TECHNICAL OPERATIONS', 'MAINTENANCE', 'TRACKING', 'ANALYTICS & REPORTS', 'SYSTEM'].map((sectionName) => {
                     const visibleItems = sidebarItems.filter((item) => item.section === sectionName);
                     if (!visibleItems.length) return null;
                     return (
@@ -3327,13 +3321,13 @@ function AppContent() {
     const items = {
       'admin': adminSidebarSections.flatMap((section) => section.items.map((item) => ({ ...item, path: item.to, group: section.heading }))),
       'ict_officer': [
-        { path: '/ict/dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'IT ASSET MANAGEMENT' },
+        { path: '/ict/dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'DASHBOARD' },
         { path: '/ict/assets', label: 'ICT Assets', section: 'ASSET MANAGEMENT' },
         { path: '/ict/inventory', label: 'Inventory', section: 'ASSET MANAGEMENT' },
         { path: '/ict/assignments', label: 'Assignments', section: 'ASSET MANAGEMENT' },
         { path: '/ict/asset-requests', label: 'Asset Requests', section: 'ASSET MANAGEMENT' },
         { path: '/ict/equipment', label: 'IT Equipment', section: 'TECHNICAL OPERATIONS' },
-        { path: '/ict/equipment/network', label: 'Network Equipment', section: 'TECHNICAL OPERATIONS' },
+        { path: '/ict/network', label: 'Network Equipment', section: 'TECHNICAL OPERATIONS' },
         { path: '/ict/software-licenses', label: 'Software Licenses', section: 'TECHNICAL OPERATIONS' },
         { path: '/ict/support', label: 'Technical Support', section: 'TECHNICAL OPERATIONS' },
         { path: '/ict/incidents', label: 'Incident Management', section: 'TECHNICAL OPERATIONS' },
@@ -3342,9 +3336,6 @@ function AppContent() {
         { path: '/ict/device-health', label: 'Device Health', section: 'MAINTENANCE' },
         { path: '/ict/tracking', label: 'RFID / QR Tracking', section: 'TRACKING' },
         { path: '/ict/asset-history', label: 'Asset History', section: 'TRACKING' },
-        { path: '/ict/documents', label: 'Documents', section: 'TRACKING' },
-        { path: '/ict/warranty', label: 'Warranty', section: 'TRACKING' },
-        { path: '/ict/photo-evidence', label: 'Photo Evidence', section: 'TRACKING' },
         { path: '/ict/reports', label: 'ICT Reports', section: 'ANALYTICS & REPORTS' },
         { path: '/ict/analytics', label: 'Asset Analytics', section: 'ANALYTICS & REPORTS' },
         { path: '/ict/notifications', label: 'Notifications', section: 'SYSTEM' }
@@ -3646,137 +3637,40 @@ function AppContent() {
             <Route path="settings" element={<Navigate to="/admin/settings" replace />} />
           </Route>
 
-          {/* ADMIN ROUTES - Fixed with AdminLayout */}
+          {/* ADMIN ROUTES - canonical administrator module */}
           <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminLayout /></ProtectedRoute>}>
             <Route index element={<AdminDashboard />} />
             <Route path="dashboard" element={<AdminDashboard />} />
-            
-            {/* Asset Management */}
-            <Route path="assets" element={<AdminAssets />} />
-            <Route path="assets/create" element={<Navigate to="/admin/assets" replace />} />
-            <Route path="assets/:id" element={<AssetDetails />} />
-            <Route path="assets/categories" element={<AdminAssetCategories />} />
-            <Route path="assets/locations" element={<AdminAssetLocations />} />
-            <Route path="assets/lifecycle" element={<AdminAssetLifecycle />} />
-            <Route path="assets/disposal" element={<AdminAssetDisposal />} />
-            <Route path="assets/documents" element={<AdminAssetDocuments />} />
-            
-            {/* Asset Assignment */}
-            <Route path="assets/assign" element={<AdminAssignment />} />
-            <Route path="assignment/assigned" element={<AdminAssignment />} />
-            <Route path="assignment/returns" element={<AdminAssignment />} />
-            <Route path="assignment/history" element={<AdminAssignment />} />
-            
-            {/* Asset Transfer */}
-            <Route path="assets/transfer" element={<AdminTransfer />} />
-            <Route path="transfer/pending" element={<AdminTransfer />} />
-            <Route path="transfer/approved" element={<AdminTransfer />} />
-            <Route path="transfer/history" element={<AdminTransfer />} />
-            
-            {/* Inventory */}
-            <Route path="inventory/available" element={<AdminAssets />} />
-            <Route path="inventory/overview" element={<AdminAssets />} />
-            <Route path="inventory/movement" element={<AdminAssets />} />
-            <Route path="inventory/history" element={<AdminAssets />} />
-            
-            {/* RFID/QR Tracking */}
-            <Route path="rfid" element={<AdminRFIDTracking />} />
-            <Route path="rfid/qr" element={<AdminRFIDTracking />} />
-            <Route path="rfid/register" element={<AdminRFIDTracking />} />
-            <Route path="rfid/activity" element={<AdminRFIDTracking />} />
-            <Route path="rfid/history" element={<AdminRFIDTracking />} />
-            
-            {/* Maintenance */}
-            <Route path="maintenance" element={<AdminMaintenance />} />
-            <Route path="maintenance/requests" element={<AdminMaintenance />} />
-            <Route path="maintenance/scheduled" element={<AdminMaintenance />} />
-            <Route path="maintenance/pending" element={<AdminMaintenance />} />
-            <Route path="maintenance/inprogress" element={<AdminMaintenance />} />
-            <Route path="maintenance/completed" element={<AdminMaintenance />} />
-            <Route path="maintenance/technicians" element={<AdminMaintenance />} />
-            <Route path="maintenance/history" element={<AdminMaintenance />} />
-            
-            {/* Warranty */}
-            <Route path="warranty/active" element={<AdminAssets />} />
-            <Route path="warranty/expiring" element={<AdminAssets />} />
-            <Route path="warranty/expired" element={<AdminAssets />} />
-            
-            {/* Procurement (owned by Finance) */}
-            <Route path="procurement/requests" element={<Navigate to="/finance/purchase-requests" replace />} />
-            <Route path="procurement/purchases" element={<Navigate to="/finance/purchase-orders" replace />} />
-            <Route path="procurement/suppliers" element={<Navigate to="/finance/suppliers" replace />} />
-            <Route path="procurement/invoices" element={<Navigate to="/finance/invoices" replace />} />
-            <Route path="procurement/history" element={<Navigate to="/finance/purchase-history" replace />} />
 
-            {/* Organization / governance alias routes */}
-            <Route path="colleges" element={<AdminCollegeManagement />} />
-            <Route path="colleges/create" element={<AdminCollegeManagement initialCreate />} />
-            <Route path="colleges/:id" element={<AdminCollegeDetails />} />
-            <Route path="locations" element={<AdminAssetLocations />} />
-            <Route path="monitoring" element={<SystemMonitoring />} />
-            <Route path="analytics" element={<Navigate to="/admin/analytics/system" replace />} />
-            <Route path="analytics/system" element={<AdminAnalyticsCenter system />} />
-            <Route path="system-analytics" element={<AdminAnalyticsCenter system />} />
-            <Route path="analytics/assets" element={<AdminAnalyticsCenter />} />
-            <Route path="audit-logs" element={<AdminAuditLogs />} />
-            <Route path="recovery" element={<AdminRecovery />} />
-            <Route path="enam" element={<EnamIntegration />} />
-            
-            {/* User Management */}
+            <Route path="assets" element={<AdminAssets />} />
+            <Route path="assets/categories" element={<AdminAssetCategories />} />
+            <Route path="assets/assign" element={<AdminAssignment />} />
+            <Route path="assets/transfer" element={<AdminTransfer />} />
+            <Route path="assets/disposal" element={<AdminAssetDisposal />} />
+            <Route path="maintenance" element={<AdminMaintenance />} />
+            <Route path="rfid" element={<AdminRFIDTracking />} />
+
+            <Route path="inventory/quarantine" element={<AdminChemicalQuarantine />} />
+
             <Route path="users" element={<AdminUserManagement />} />
-            <Route path="users/create" element={<AdminUserManagement initialSection="create" />} />
-            <Route path="users/active" element={<AdminUserManagement initialSection="status" />} />
-            <Route path="users/inactive" element={<AdminUserManagement initialSection="status" />} />
-            <Route path="users/activity" element={<AdminUserManagement initialSection="activity" />} />
-            <Route path="roles-permissions" element={<AdminRolesPermissions />} />
-            <Route path="roles" element={<AdminRolesPermissions />} />
-            <Route path="permissions" element={<AdminRolesPermissions />} />
-            
-            {/* Department Management */}
+            <Route path="roles-permissions" element={<ProtectedRoute allowedRoles={['admin']} allowedPermissions={['roles.view']}><AdminRolesPermissions /></ProtectedRoute>} />
+            <Route path="colleges" element={<AdminCollegeManagement />} />
             <Route path="departments" element={<AdminDepartmentManagement />} />
-            <Route path="departments/create" element={<AdminDepartmentManagement />} />
-            <Route path="departments/heads" element={<AdminDepartmentManagement />} />
-            <Route path="departments/users" element={<AdminDepartmentManagement />} />
-            <Route path="departments/assets" element={<AdminDepartmentManagement />} />
-            <Route path="departments/locations" element={<AdminDepartmentManagement />} />
-            
-            {/* Reports & Analytics */}
+            <Route path="locations" element={<AdminAssetLocations />} />
+
             <Route path="reports" element={<AdminReports />} />
             <Route path="reports/analytics" element={<AdminAssetAnalytics />} />
-            <Route path="reports/:legacyReportType" element={<Navigate to="/admin/reports" replace />} />
-            
-            {/* Notifications */}
-            <Route path="notifications" element={<AdminNotifications />} />
-            <Route path="notifications/:id" element={<AdminNotificationDetails />} />
-            <Route path="notifications/unread" element={<AdminNotifications />} />
-            <Route path="notifications/maintenance" element={<AdminNotifications />} />
-            <Route path="notifications/assignment" element={<AdminNotifications />} />
-            <Route path="notifications/transfer" element={<AdminNotifications />} />
-            <Route path="notifications/missing" element={<AdminNotifications />} />
-            <Route path="notifications/warranty" element={<AdminNotifications />} />
-            <Route path="notifications/rfid" element={<AdminNotifications />} />
-            <Route path="notifications/security" element={<AdminNotifications />} />
-            
-            {/* Approvals */}
-            <Route path="approvals/assignment" element={<AdminAssignment />} />
-            <Route path="approvals/transfer" element={<AdminTransfer />} />
-            <Route path="approvals/purchase" element={<Navigate to="/finance/purchase-requests" replace />} />
-            <Route path="approvals/disposal" element={<AdminAssetDisposal />} />
-            <Route path="approvals/pending" element={<AdminAssignment />} />
-            
-            {/* Settings */}
+            <Route path="analytics" element={<Navigate to="/admin/analytics/system" replace />} />
+            <Route path="analytics/system" element={<AdminAnalyticsCenter system />} />
+
             <Route path="settings" element={<AdminSettings />} />
-            <Route path="settings/system-monitoring" element={<SystemMonitoring />} />
-            <Route path="system-monitoring" element={<SystemMonitoring />} />
-            <Route path="inventory/quarantine" element={<AdminChemicalQuarantine />} />
-            
-            {/* Backup */}
+            <Route path="notifications" element={<AdminNotifications />} />
             <Route path="backup" element={<AdminBackup />} />
-            <Route path="backup/history" element={<AdminBackup />} />
-            <Route path="backup/restore" element={<AdminBackup />} />
-            <Route path="backup/status" element={<AdminBackup />} />
+            <Route path="enam" element={<EnamIntegration />} />
+            <Route path="monitoring" element={<SystemMonitoring />} />
+
+            <Route path="assets/create" element={<Navigate to="/admin/assets" replace />} />
             <Route path="*" element={<AdminNotFound />} />
-            
           </Route>
 
           {/* ICT OFFICER ROUTES - Fixed with RoleLayout */}
@@ -3795,7 +3689,7 @@ function AppContent() {
             <Route path="tracking" element={<ICTRFIDTracking />} />
             <Route path="rfid" element={<Navigate to="/ict/tracking" replace />} />
             <Route path="asset-history" element={<ICTAssetHistory />} />
-            <Route path="reports" element={<ICTReports />} />
+            <Route path="reports" element={<ProtectedRoute allowedPermissions={['ict.reports.view']}><ICTReports /></ProtectedRoute>} />
             <Route path="analytics" element={<ICTAssetAnalytics />} />
             <Route path="asset-analytics" element={<Navigate to="/ict/analytics" replace />} />
             <Route path="inventory" element={<ICTInventory />} />

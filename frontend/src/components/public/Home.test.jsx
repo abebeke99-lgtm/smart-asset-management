@@ -52,7 +52,7 @@ describe('Home', () => {
     expect(screen.queryByText('የአስተዳደርና የፋይናንስ ኦዲት መዝገቦች')).not.toBeInTheDocument();
   });
 
-  it('renders the shared public footer with navigation, legal notice, and language controls', () => {
+  it('renders the shared public footer without footer language controls', () => {
     render(<App />);
 
     const footer = screen.getByRole('contentinfo');
@@ -79,7 +79,6 @@ describe('Home', () => {
     expect(footerContent.getByText('Privacy Policy')).toBeInTheDocument();
     expect(footerContent.getByText('Terms of Use')).toBeInTheDocument();
     expect(footerContent.getByText(/Legal pages are not configured/i)).toBeInTheDocument();
-    expect(footerContent.getByRole('button', { name: 'Switch language to English' })).toBeInTheDocument();
-    expect(footerContent.getByRole('button', { name: 'Switch language to Amharic' })).toBeInTheDocument();
+    expect(footerContent.queryByRole('group', { name: 'Language' })).not.toBeInTheDocument();
   });
 });

@@ -19,7 +19,7 @@ describe('Store Manager route configuration', () => {
 
     expect(routes).toEqual(
       expect.arrayContaining([
-        '/store',
+        '/store/dashboard',
         '/store/inventory',
         '/store/available-assets',
         '/store/assets',
@@ -37,11 +37,11 @@ describe('Store Manager route configuration', () => {
 
     expect(routes).not.toEqual(
       expect.arrayContaining([
-        '/admin',
-        '/ict',
-        '/finance',
-        '/college',
-        '/maintenance'
+        '/admin/dashboard',
+        '/ict/dashboard',
+        '/finance/dashboard',
+        '/college/dashboard',
+        '/maintenance/dashboard'
       ])
     );
   });

@@ -14,6 +14,7 @@ const { ensureUploadDirectories } = require('./utils/uploadUtils');
 const authRoutes = require('./routes/authRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const userRoutes = require('./routes/userRoutes');
+const staffRoutes = require('./routes/staffRoutes');
 const assetRoutes = require('./routes/assetRoutes');
 const ictAssetRoutes = require('./routes/ictAssetRoutes');
 const maintenanceRoutes = require('./routes/maintenanceRoutes');
@@ -55,12 +56,10 @@ const { startAssetRetentionScheduler } = require('./services/assetRetentionServi
 const { requestMetricsMiddleware } = require('./middlewares/requestMetrics');
 const { requestContextMiddleware } = require('./middlewares/requestContext');
 const { requireAuth, requireRole } = require('./middlewares/auth');
-const { getMailerStatus } = require('./utils/mailer');
-const { verifySmtpConnection } = require('./services/emailService');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : 'loopback');
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
 const healthHandler = async (_req, res) => {
   try {
     await sequelize.query('SELECT 1');
@@ -140,7 +139,7 @@ app.use(cors({
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(passport.initialize());
 app.use(requestContextMiddleware);
@@ -151,6 +150,7 @@ app.use('/api/search', searchRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/uploads', express.static(uploadRoot, { index: false, dotfiles: 'ignore' }));
 app.use('/api/users', userRoutes);
+app.use('/api/staff', staffRoutes);
 app.use('/api/admin/users', requireAuth, requireRole('admin'), userRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/ict/software-licenses', softwareLicenseRoutes);
@@ -254,22 +254,6 @@ async function initializeDatabase() {
   }
 }
 
-const verifySmtpAtStartup = async () => {
-  const status = getMailerStatus();
-  if (!status.configured) {
-    console.warn(`SMTP not configured. Missing environment variables: ${status.missingVariables.join(', ')}`);
-    return;
-  }
-
-  const result = await verifySmtpConnection();
-  if (result.ok) {
-    console.log('SMTP ready');
-    return;
-  }
-
-  console.error('SMTP verification failed:', result.reason, result.code || 'UNKNOWN');
-};
-
 async function startServer() {
   try {
     ensureUploadDirectories();
@@ -282,9 +266,6 @@ async function startServer() {
   return new Promise((resolve, reject) => {
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
-      verifySmtpAtStartup().catch((error) => {
-        console.error('SMTP startup verification failed:', error.message, error.code || 'UNKNOWN');
-      });
       resolve();
     });
     server.once('error', reject);

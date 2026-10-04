@@ -22,8 +22,10 @@ test('protected requests enforce the current saved role permission matrix', asyn
   const originalAuthenticate = passport.authenticate;
   const originalConfigFindByPk = models.Config.findByPk;
   let staffPermissions = ['assets.view'];
-  passport.authenticate = () => (req, _res, next) => {
-    req.user = { id: 42, role: 'staff', active: true };
+  passport.authenticate = (_strategy, _options, callback) => (req, res, next) => {
+    const user = { id: 42, role: 'staff', active: true };
+    if (callback) return callback(null, user);
+    req.user = user;
     return next();
   };
   models.Config.findByPk = async (key) => key === 'role_permissions'

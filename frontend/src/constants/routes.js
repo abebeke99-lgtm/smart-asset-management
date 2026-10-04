@@ -25,30 +25,25 @@ export const ROUTES = {
   ADMIN_DASHBOARD: '/admin',
   ADMIN_ASSETS: '/admin/assets',
   ADMIN_ASSET_CATEGORIES: '/admin/assets/categories',
-  ADMIN_CREATE_ASSET: '/admin/assets/create',
   ADMIN_ASSIGNMENT: '/admin/assets/assign',
   ADMIN_TRANSFER: '/admin/assets/transfer',
   ADMIN_DISPOSAL: '/admin/assets/disposal',
   ADMIN_MAINTENANCE: '/admin/maintenance',
   ADMIN_RFID: '/admin/rfid',
-  ADMIN_ANALYTICS: '/admin/analytics',
-  ADMIN_ANALYTICS_ASSETS: '/admin/analytics/assets',
-  ADMIN_ANALYTICS_SYSTEM: '/admin/analytics/system',
-  ADMIN_REPORTS: '/admin/reports',
-  ADMIN_RECOVERY: '/admin/recovery',
-  ADMIN_ENAM: '/admin/enam',
+  ADMIN_INVENTORY_QUARANTINE: '/admin/inventory/quarantine',
   ADMIN_USERS: '/admin/users',
   ADMIN_ROLES: '/admin/roles-permissions',
-  ADMIN_PERMISSIONS: '/admin/roles-permissions',
-  ADMIN_AUDIT_LOGS: '/admin/audit-logs',
   ADMIN_COLLEGES: '/admin/colleges',
+  ADMIN_DEPARTMENTS: '/admin/departments',
+  ADMIN_LOCATIONS: '/admin/locations',
+  ADMIN_REPORTS: '/admin/reports',
+  ADMIN_ANALYTICS: '/admin/analytics',
+  ADMIN_ANALYTICS_SYSTEM: '/admin/analytics/system',
   ADMIN_SETTINGS: '/admin/settings',
   ADMIN_NOTIFICATIONS: '/admin/notifications',
   ADMIN_BACKUP: '/admin/backup',
-  ADMIN_DEPARTMENTS: '/admin/departments',
-  ADMIN_LOCATIONS: '/admin/locations',
+  ADMIN_ENAM: '/admin/enam',
   ADMIN_MONITORING: '/admin/monitoring',
-  ADMIN_INVENTORY_QUARANTINE: '/admin/inventory/quarantine',
 
   // ICT Officer Routes
   ICT_DASHBOARD: '/ict/dashboard',
@@ -78,7 +73,10 @@ export const ROUTES = {
   ICT_ASSET_ANALYTICS_ALIAS: '/ict/analytics',
 
   // College Routes
-  DEPT_DASHBOARD: '/college',
+  DEPT_DASHBOARD: '/college/dashboard',
+  COLLEGE_DASHBOARD: '/college/dashboard',
+  COLLEGE_MANAGER_DASHBOARD: '/college-manager/dashboard',
+  DEPARTMENT_HEAD_DASHBOARD: '/department-head/dashboard',
   DEPT_PROFILE: '/college/profile',
   DEPT_COLLEGE_STAFF: '/college/staff',
   DEPT_LOCATIONS: '/college/locations',
@@ -107,7 +105,7 @@ export const ROUTES = {
   DEPT_ASSET_HISTORY: '/college/history',
 
   // Finance Routes
-  FINANCE_DASHBOARD: '/finance',
+  FINANCE_DASHBOARD: '/finance/dashboard',
   FINANCE_PURCHASE_REQUESTS: '/finance/purchase-requests',
   FINANCE_PURCHASE_ORDERS: '/finance/purchase-orders',
   FINANCE_SUPPLIERS: '/finance/suppliers',
@@ -128,7 +126,7 @@ export const ROUTES = {
   FINANCE_NOTIFICATIONS: '/finance/notifications',
 
   // Maintenance Routes
-  MAINT_DASHBOARD: '/maintenance',
+  MAINT_DASHBOARD: '/maintenance/dashboard',
   MAINT_REQUESTS: '/maintenance/requests',
   MAINT_INSPECTION: '/maintenance/inspection',
   MAINT_WORK_ORDERS: '/maintenance/work-orders',
@@ -148,7 +146,10 @@ export const ROUTES = {
   MAINT_NOTIFICATIONS: '/maintenance/notifications',
 
   // Store Routes
-  STORE_DASHBOARD: '/store',
+  STORE_DASHBOARD: '/store/dashboard',
+  INFRASTRUCTURE_DASHBOARD: '/infrastructure/dashboard',
+  STAFF_DASHBOARD: '/staff/dashboard',
+  STUDENT_DASHBOARD: '/student/dashboard',
   STORE_INVENTORY: '/store/inventory',
   STORE_AVAILABLE_ASSETS: '/store/available-assets',
   STORE_LOW_STOCK: '/store/low-stock',
@@ -193,6 +194,7 @@ export const getRoutesByRole = (role) => {
       ROUTES.ADMIN_DISPOSAL,
       ROUTES.ADMIN_MAINTENANCE,
       ROUTES.ADMIN_RFID,
+      ROUTES.ADMIN_INVENTORY_QUARANTINE,
       ROUTES.ADMIN_USERS,
       ROUTES.ADMIN_ROLES,
       ROUTES.ADMIN_COLLEGES,
@@ -200,16 +202,12 @@ export const getRoutesByRole = (role) => {
       ROUTES.ADMIN_LOCATIONS,
       ROUTES.ADMIN_REPORTS,
       ROUTES.ADMIN_ANALYTICS,
-      ROUTES.ADMIN_ANALYTICS_ASSETS,
       ROUTES.ADMIN_ANALYTICS_SYSTEM,
-      ROUTES.ADMIN_RECOVERY,
-      ROUTES.ADMIN_ENAM,
       ROUTES.ADMIN_SETTINGS,
       ROUTES.ADMIN_NOTIFICATIONS,
-      ROUTES.ADMIN_AUDIT_LOGS,
       ROUTES.ADMIN_BACKUP,
-      ROUTES.ADMIN_MONITORING,
-      ROUTES.ADMIN_INVENTORY_QUARANTINE
+      ROUTES.ADMIN_ENAM,
+      ROUTES.ADMIN_MONITORING
     ],
     ict_officer: [
       ROUTES.ICT_DASHBOARD,
@@ -236,7 +234,15 @@ export const getRoutesByRole = (role) => {
       ROUTES.ICT_NOTIFICATIONS
     ],
     college: [
-      ROUTES.DEPT_DASHBOARD,
+      ROUTES.COLLEGE_DASHBOARD,
+      ROUTES.DEPT_ASSETS,
+      ROUTES.DEPT_REQUESTS,
+      ROUTES.DEPT_ASSIGNMENTS,
+      ROUTES.DEPT_NOTIFICATIONS,
+      ROUTES.DEPT_ASSET_HISTORY
+    ],
+    college_manager: [
+      ROUTES.COLLEGE_MANAGER_DASHBOARD,
       ROUTES.DEPT_PROFILE,
       ROUTES.DEPT_COLLEGE_STAFF,
       ROUTES.DEPT_LOCATIONS,
@@ -248,11 +254,6 @@ export const getRoutesByRole = (role) => {
       ROUTES.DEPT_ASSIGNMENTS,
       ROUTES.DEPT_TRANSFERS,
       ROUTES.DEPT_RETURNS,
-      ROUTES.DEPT_DEPARTMENT_OVERVIEW,
-      ROUTES.DEPT_DEPARTMENT_STAFF,
-      ROUTES.DEPT_DEPARTMENT_ASSETS,
-      ROUTES.DEPT_DEPARTMENT_REQUESTS,
-      ROUTES.DEPT_DEPARTMENT_PERFORMANCE,
       ROUTES.DEPT_MAINTENANCE,
       ROUTES.DEPT_RFID,
       ROUTES.DEPT_VERIFICATION,
@@ -263,7 +264,7 @@ export const getRoutesByRole = (role) => {
       ROUTES.DEPT_ASSET_HISTORY
     ],
     department_head: [
-      ROUTES.DEPT_DASHBOARD,
+      ROUTES.DEPARTMENT_HEAD_DASHBOARD,
       ROUTES.DEPT_PROFILE,
       ROUTES.DEPT_ASSETS,
       ROUTES.DEPT_REQUESTS,
@@ -366,6 +367,21 @@ export const getRoutesByRole = (role) => {
       ROUTES.STORE_MOVEMENT_REPORTS,
       ROUTES.STORE_NOTIFICATIONS
     ],
+    infrastructure: [
+      ROUTES.INFRASTRUCTURE_DASHBOARD,
+      '/infrastructure/assets',
+      '/infrastructure/requests',
+      '/infrastructure/maintenance',
+      '/infrastructure/reports',
+      '/infrastructure/notifications'
+    ],
+    staff: [
+      ROUTES.STAFF_DASHBOARD,
+      `${ROUTES.STAFF_DASHBOARD}#my-assets`,
+      `${ROUTES.STAFF_DASHBOARD}#my-requests`,
+      `${ROUTES.STAFF_DASHBOARD}#recent-activity`
+    ],
+    student: [ROUTES.STUDENT_DASHBOARD],
     user: [ROUTES.ASSETS, ROUTES.NOTIFICATIONS, ROUTES.SETTINGS]
   };
 

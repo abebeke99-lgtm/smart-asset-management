@@ -2149,7 +2149,13 @@ const repairInclude = [
   // Downstream code reads repair.materialsCost and sumNumber() maps undefined to 0.
   { model: MaintenanceRepair, required: true, attributes: ['id', 'workOrderId', 'technicianId', 'status', 'diagnosis', 'repairAction', 'partsUsed', 'laborCost', 'partsCost', 'serviceCost', 'totalCost', 'completionDate', 'notes'], include: [{ model: MaintenanceWorkOrder, attributes: ['id', 'workOrderNumber', 'status', 'priority'] }, { model: MaintenanceCost, attributes: ['id', 'costCategory', 'amount'] }] },
 ];
-const repairScope = (req) => req.user.collegeId ? { '$Asset.collegeId$': req.user.collegeId } : {};
+const scopedRepairIncludes = (req, repairWhere = {}) => repairInclude.map((item) => {
+  if (item.model === Asset && req.user.collegeId) {
+    return { ...item, where: { collegeId: req.user.collegeId }, required: true };
+  }
+  if (item.model === MaintenanceRepair) return { ...item, where: repairWhere };
+  return item;
+});
 const normalizeRepair = (item) => {
   const data = item.toJSON();
   const repair = data.MaintenanceRepairs?.[0] || data.MaintenanceRepair || {};
@@ -2646,9 +2652,9 @@ const getRepairHistory = async (req, res, next) => {
       const search = String(req.query.search).trim();
       where[Op.or] = [{ title: { [Op.like]: `%${search}%` } }, { description: { [Op.like]: `%${search}%` } }, { '$Asset.name$': { [Op.like]: `%${search}%` } }, { '$Asset.assetCode$': { [Op.like]: `%${search}%` } }, { '$Technician.fullName$': { [Op.like]: `%${search}%` } }, ...(Number.isInteger(Number(search)) ? [{ id: Number(search) }] : [])];
     }
-    const scopedRepairInclude = repairInclude.map((item) => item.model === MaintenanceRepair ? { ...item, where: repairWhere } : item);
-    const { count, rows } = await Maintenance.findAndCountAll({ where: { ...where, ...repairScope(req) }, include: scopedRepairInclude, distinct: true, order: [['updatedAt', 'DESC']], limit, offset: (page - 1) * limit });
-    const statsRows = await Maintenance.findAll({ where: { ...where, ...repairScope(req) }, include: [{ model: Asset, attributes: [], required: true }, { model: MaintenanceRepair, required: true, attributes: ['totalCost', 'status'], where: repairWhere }], attributes: ['status'], raw: true });
+    const scopedRepairInclude = scopedRepairIncludes(req, repairWhere);
+    const { count, rows } = await Maintenance.findAndCountAll({ where, include: scopedRepairInclude, distinct: true, order: [['updatedAt', 'DESC']], limit, offset: (page - 1) * limit });
+    const statsRows = await Maintenance.findAll({ where, include: [{ model: Asset, attributes: [], required: true, ...(req.user.collegeId ? { where: { collegeId: req.user.collegeId } } : {}) }, { model: MaintenanceRepair, required: true, attributes: ['totalCost', 'status'], where: repairWhere }], attributes: ['status'], raw: true });
     const summary = buildRepairSummary(statsRows.map((row) => ({ status: row['MaintenanceRepairs.status'] || row.status })));
     const stats = {
       ...summary,
@@ -2665,7 +2671,7 @@ const getRepairHistory = async (req, res, next) => {
 
 const getRepairDetails = async (req, res, next) => {
   try {
-    const item = await Maintenance.findOne({ where: { id: req.params.id, ...repairScope(req) }, include: repairInclude });
+    const item = await Maintenance.findOne({ where: { id: req.params.id }, include: scopedRepairIncludes(req) });
     if (!item) return res.status(404).json({ success: false, message: 'Repair record not found' });
     const history = await MaintenanceHistory.findAll({ where: { maintenanceId: item.id }, order: [['actionDate', 'ASC']] });
     res.json({ success: true, data: { ...normalizeRepair(item), timeline: history } });

@@ -23,16 +23,6 @@ const hasExplicitSmtpConfig = () => {
 
 const getMailDriver = () => {
   const explicitDriver = String(process.env.MAIL_DRIVER || process.env.EMAIL_DRIVER || process.env.SMTP_DRIVER || '').trim().toLowerCase();
-  const devDrivers = new Set(['log', 'console', 'mock', 'dev', 'test', 'memory']);
-
-  if (explicitDriver && !devDrivers.has(explicitDriver)) {
-    return explicitDriver;
-  }
-
-  if (hasExplicitSmtpConfig()) {
-    return explicitDriver && devDrivers.has(explicitDriver) ? 'smtp' : (explicitDriver || 'smtp');
-  }
-
   if (explicitDriver) return explicitDriver;
   return 'smtp';
 };
@@ -70,8 +60,8 @@ const readMailerConfig = () => {
 
 const getMailerStatus = () => {
   const config = readMailerConfig();
-  const configured = config.missingVariables.length === 0 && (isDevelopmentMailDriver() ? hasExplicitSmtpConfig() : !config.missingVariables.length);
-  return { configured, missingVariables: config.missingVariables };
+  const configured = !isDevelopmentMailDriver() && config.missingVariables.length === 0;
+  return { configured, missingVariables: config.missingVariables, driver: config.driver };
 };
 
 const getSmtpTimeouts = () => ({

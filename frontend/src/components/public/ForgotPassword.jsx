@@ -54,12 +54,12 @@ const describePasswordProblem = (value) => {
   return null;
 };
 
-const extractServerMessage = (error, fallback) => {
+const extractServerMessage = (error, fallback, method = 'email') => {
   const status = error?.response?.status || error?.status;
   const serverMessage = error?.response?.data?.message;
   const code = error?.response?.data?.code;
   if (code === 'SMS_NOT_CONFIGURED') return fallback.smsUnavailable;
-  if (status === 503) return fallback.emailServiceUnavailable;
+  if (status === 503) return method === 'phone' ? fallback.smsUnavailable : fallback.emailServiceUnavailable;
   if (status === 429) return fallback.rateLimitError;
   if (!status) return fallback.networkError;
   return serverMessage || fallback.errorMessage;
@@ -68,8 +68,8 @@ const extractServerMessage = (error, fallback) => {
 // Errors raised by this screen carry a message that is safe and already localised.
 const userFacingError = (message) => Object.assign(new Error(message), { isUserFacing: true });
 
-const resolveErrorMessage = (error, fallback) => (
-  error?.isUserFacing ? error.message : extractServerMessage(error, fallback)
+const resolveErrorMessage = (error, fallback, method) => (
+  error?.isUserFacing ? error.message : extractServerMessage(error, fallback, method)
 );
 
 const ForgotPassword = () => {
@@ -191,7 +191,7 @@ const ForgotPassword = () => {
     setStep('verify');
     toast.success(response.data.message || t.otpSent);
   }).catch((err) => {
-    const message = resolveErrorMessage(err, t);
+    const message = resolveErrorMessage(err, t, 'phone');
     setError(message);
     toast.error(message);
   });
@@ -225,7 +225,7 @@ const ForgotPassword = () => {
       setError('');
       toast.success(response.data.message || t.verifyOtpSuccess);
     }).catch((err) => {
-      const message = resolveErrorMessage(err, t);
+      const message = resolveErrorMessage(err, t, method);
       setError(message);
       toast.error(message);
     });

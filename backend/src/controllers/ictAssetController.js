@@ -422,7 +422,7 @@ const getIctEquipment = async (req, res, next) => {
 
 const listIctEquipmentOptions = async (req, res, next) => {
   try {
-    const collegeWhere = req.user.role === 'admin' ? { status: 'active' } : { collegeId: req.organizationScope.collegeId, status: 'active' };
+    const collegeWhere = req.user.role === 'admin' ? { status: 'active' } : { id: req.organizationScope.collegeId, status: 'active' };
     const [colleges, departments, allCampuses, allBuildings, allRooms] = await Promise.all([
       College.findAll({ where: collegeWhere, attributes: ['id', 'collegeName', 'campusId'], order: [['collegeName', 'ASC']] }),
       Department.findAll({
@@ -798,7 +798,7 @@ const listIctTracking = async (req, res, next) => {
       Asset.findAndCountAll({ where, order: [['updatedAt', 'DESC'], ['name', 'ASC']], limit, offset: (page - 1) * limit }),
       Asset.count({ where: { ...where, ...nonBlank('assetCode') } }),
       Asset.count({ where: { ...where, ...nonBlank('rfidTag') } }),
-      RFIDLog.count({ distinct: true, col: 'assetId', include: [{ model: Asset, where, required: true, attributes: [] }], where: { createdAt: { [Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } }),
+      RFIDLog.count({ distinct: true, col: 'asset_id', include: [{ model: Asset, where, required: true, attributes: [] }], where: { createdAt: { [Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } }),
     ]);
     const assetIds = rows.map((asset) => asset.id);
     const [logs, assignments] = await Promise.all([
@@ -1307,6 +1307,7 @@ const findHistoryAssets = async (req) => {
   if (assetId) assetWhere.id = assetId;
 
   const search = String(req.query.search || '').trim();
+  let performerIds = [];
   if (search) {
     const users = await User.findAll({
       where: {

@@ -1,8 +1,24 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { Op } = require('sequelize');
-const { Asset, Department, Incident, ServiceRequest, SoftwareLicense, SoftwareLicenseAssignment } = require('../src/models');
+const {
+  Asset,
+  Department,
+  Incident,
+  ServiceRequest,
+  SoftwareLicense,
+  SoftwareLicenseAssignment,
+  Transfer,
+} = require('../src/models');
 const { exportIctReport, getIctReports } = require('../src/controllers/ictReportController');
+
+const runReport = async (request) => {
+  let response;
+  let error;
+  await getIctReports(request, { json: (value) => { response = value; } }, (caught) => { error = caught; });
+  if (error) throw error;
+  return response;
+};
 
 test('ICT equipment report queries college-scoped equipment assets and returns report rows', async () => {
   const originalFindAndCountAll = Asset.findAndCountAll;
@@ -266,8 +282,8 @@ test('ICT incident report scopes through existing college relations and includes
       (error) => { throw error; },
     );
 
-    assert.ok(reportQuery.where[Op.or].some((term) => term['$Reporter.collegeId$'] === 17));
-    assert.ok(reportQuery.where[Op.or].some((term) => term['$Asset.collegeId$'] === 17));
+    assert.ok(reportQuery.where[Op.or].some((term) => term['$Reporter.college_id$'] === 17));
+    assert.ok(reportQuery.where[Op.or].some((term) => term['$Asset.college_id$'] === 17));
     assert.equal(reportQuery.where.status, 'resolved');
     assert.equal(reportQuery.where.priority, 'critical');
     assert.ok(reportQuery.include.some((item) => item.model === require('../src/models').IncidentHistory && item.separate));
@@ -330,4 +346,134 @@ test('ICT report CSV export uses scoped report data and omits license keys', asy
     SoftwareLicense.findAll = originalLicenseFindAll;
     SoftwareLicenseAssignment.findAll = originalAssignmentFindAll;
   }
+});
+
+test('damaged assets report filters damaged status or condition and permits global admin access', async () => {
+  const originalFindAndCountAll = Asset.findAndCountAll;
+  const originalFindAll = Asset.findAll;
+  const originalDepartmentFindAll = Department.findAll;
+  let reportQuery;
+  Asset.findAndCountAll = async (options) => {
+    reportQuery = options;
+    return {
+      count: 1,
+      rows: [{
+        id: 21,
+        assetCode: 'ICT-021',
+        name: 'Damaged laptop',
+        status: 'available',
+        condition: 'damaged',
+        toJSON() {
+          return { id: this.id, assetCode: this.assetCode, name: this.name, status: this.status, condition: this.condition };
+        },
+      }],
+    };
+  };
+  Asset.findAll = async (options) => options.attributes.includes('status')
+    ? [{ status: 'available' }]
+    : [{ category: 'computer', status: 'available', condition: 'damaged', location: 'Store room' }];
+  Department.findAll = async () => [];
+
+  try {
+    const response = await runReport({ user: { role: 'admin' }, query: { type: 'damaged' } });
+
+    assert.equal(reportQuery.where.collegeId, undefined);
+    assert.ok(reportQuery.where[Op.and].some((condition) => condition[Op.or]?.some((term) => term.condition)));
+    assert.equal(response.data[0].condition, 'damaged');
+    assert.equal(response.summary.totalDamaged, 1);
+    assert.equal(response.pagination.total, 1);
+    assert.equal(response.scope.collegeName, 'All colleges');
+  } finally {
+    Asset.findAndCountAll = originalFindAndCountAll;
+    Asset.findAll = originalFindAll;
+    Department.findAll = originalDepartmentFindAll;
+  }
+});
+
+test('warranty report applies date and warranty-status filters to scoped assets', async () => {
+  const originalFindAndCountAll = Asset.findAndCountAll;
+  const originalFindAll = Asset.findAll;
+  const originalDepartmentFindAll = Department.findAll;
+  let reportQuery;
+  Asset.findAndCountAll = async (options) => {
+    reportQuery = options;
+    return {
+      count: 1,
+      rows: [{ id: 22, assetCode: 'ICT-022', name: 'Covered laptop', warrantyExpiry: '2020-01-01', toJSON() {
+        return { id: this.id, assetCode: this.assetCode, name: this.name, warrantyExpiry: this.warrantyExpiry };
+      } }],
+    };
+  };
+  Asset.findAll = async (options) => options.attributes.includes('warrantyExpiry')
+    ? [{ warrantyExpiry: '2020-01-01' }]
+    : [{ category: 'computer', status: 'available', condition: 'Good', location: 'Office' }];
+  Department.findAll = async () => [];
+
+  try {
+    const response = await runReport({
+      query: { type: 'warranty', status: 'Expired', dateFrom: '2019-01-01', dateTo: '2021-01-01' },
+      organizationScope: { collegeId: 17, college: { collegeName: 'Test College' } },
+    });
+
+    assert.equal(reportQuery.where.collegeId, 17);
+    assert.ok(reportQuery.where[Op.and].some((condition) => condition.warrantyExpiry?.[Op.lt]));
+    assert.ok(reportQuery.where.warrantyExpiry?.[Op.gte]);
+    assert.equal(response.data[0].warrantyStatus, 'Expired');
+    assert.equal(response.summary.expired, 1);
+    assert.equal(response.scope.collegeName, 'Test College');
+  } finally {
+    Asset.findAndCountAll = originalFindAndCountAll;
+    Asset.findAll = originalFindAll;
+    Department.findAll = originalDepartmentFindAll;
+  }
+});
+
+test('transfer report scopes through assets and applies transfer status and date filters', async () => {
+  const originalTransferFindAndCountAll = Transfer.findAndCountAll;
+  const originalTransferFindAll = Transfer.findAll;
+  const originalDepartmentFindAll = Department.findAll;
+  let reportQuery;
+  Transfer.findAndCountAll = async (options) => {
+    reportQuery = options;
+    return {
+      count: 1,
+      rows: [{
+        id: 23,
+        transferNumber: 'TR-023',
+        sourceDepartment: 'ICT',
+        destinationDepartment: 'Finance',
+        transferDate: '2026-03-10',
+        status: 'completed',
+        transferReason: 'Relocation',
+        Asset: { assetCode: 'ICT-023', name: 'Desktop', location: 'Office 1' },
+      }],
+    };
+  };
+  Transfer.findAll = async () => [{ status: 'completed' }];
+  Department.findAll = async () => [];
+
+  try {
+    const response = await runReport({
+      query: { type: 'transfers', status: 'completed', dateFrom: '2026-03-01', dateTo: '2026-03-31' },
+      organizationScope: { collegeId: 17, college: { collegeName: 'Test College' } },
+    });
+
+    assert.equal(reportQuery.where.status, 'completed');
+    assert.ok(reportQuery.where.transferDate[Op.gte]);
+    assert.equal(reportQuery.include[0].where.collegeId, 17);
+    assert.equal(response.data[0].assetTag, 'ICT-023');
+    assert.equal(response.summary.completed, 1);
+    assert.equal(response.pagination.total, 1);
+  } finally {
+    Transfer.findAndCountAll = originalTransferFindAndCountAll;
+    Transfer.findAll = originalTransferFindAll;
+    Department.findAll = originalDepartmentFindAll;
+  }
+});
+
+test('ICT reports reject requests without an authorized college scope', async () => {
+  let error;
+  await getIctReports({ query: { type: 'inventory' } }, {}, (caught) => { error = caught; });
+  assert.equal(error.status, 403);
+  assert.match(error.message, /College scope is not configured/);
 });

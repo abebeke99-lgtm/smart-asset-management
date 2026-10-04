@@ -242,8 +242,10 @@ async function ensureDemoUser(userData, { userModel = User, collegeModel = Colle
     if (normalizedUserData.phone && existingUser.phone !== normalizedUserData.phone) updates.phone = normalizedUserData.phone;
     if (existingUser.active !== normalizedUserData.active) updates.active = normalizedUserData.active;
 
-    const passwordNeedsReset = normalizedUserData.password && !(await bcrypt.compare(normalizedUserData.password, existingUser.password || ''));
-    if (passwordNeedsReset) updates.password = await bcrypt.hash(normalizedUserData.password, 10);
+    const passwordMissing = !existingUser.password || !String(existingUser.password).trim();
+    if (normalizedUserData.password && passwordMissing) {
+      updates.password = await bcrypt.hash(normalizedUserData.password, 10);
+    }
 
     if (Object.keys(updates).length > 0) {
       await applyUserUpdates(existingUser, updates, userModel);

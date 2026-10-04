@@ -73,4 +73,9 @@ const initializeInitialAdmin = async ({ userModel = User } = {}) => {
   }
 };
 
-module.exports = { initializeInitialAdmin };
+const hasExistingAdmin = async ({ userModel = User } = {}) => {
+  const existingAdmin = await userModel.findOne({ where: { username: ADMIN_USERNAME } });
+  return Boolean(existingAdmin);
+};
+
+module.exports = { initializeInitialAdmin, hasExistingAdmin };

@@ -75,6 +75,9 @@ const createUser = (overrides = {}) => ({
 
 const matchesCondition = (actual, condition) => {
   if (condition === null) return actual === null || actual === undefined;
+  if (condition && typeof condition === 'object' && condition[Op.in] !== undefined) {
+    return condition[Op.in].includes(actual);
+  }
   if (condition && typeof condition === 'object' && condition[Op.gt] !== undefined) {
     if (!actual) return false;
     return new Date(actual) > new Date(condition[Op.gt]);
@@ -177,6 +180,7 @@ const withStubs = async ({ user, onFetch, onSendMail, onCreateTransport }, run) 
   const originalFetch = global.fetch;
   const originalCreateTransport = nodemailer.createTransport;
   const emailEnvironment = {
+    MAIL_DRIVER: 'smtp',
     EMAIL_HOST: 'smtp.example.edu',
     EMAIL_PORT: '587',
     EMAIL_USER: 'test@example.edu',
@@ -347,10 +351,44 @@ test('OTP request delivers a real SMS and stores only a hash of the code', async
   assert.ok(new Date(user.resetOtpExpiresAt) > new Date(), 'an expiry must be stored');
 });
 
+test('phone OTP lookup matches a registered local-format number', async () => {
+  const restoreEnvironment = configureSmsProvider();
+  const user = createUser({ phone: '0911000001' });
+  let providerRequest = null;
+
+  try {
+    await withStubs({
+      user,
+      onFetch: async (url, options) => {
+        providerRequest = { url, body: options.body };
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ SMSMessageData: { Recipients: [{ status: 'Success', messageId: 'local-phone-1' }] } }),
+        };
+      },
+    }, async () => {
+      const response = createResponse();
+      await authController.requestForgotPasswordOtp(
+        { body: { phoneNumber: '+251911000001' }, headers: {}, ip: '127.0.0.12' },
+        response,
+      );
+
+      assert.equal(response.statusCode, 200);
+      assert.equal(response.body.success, true);
+    });
+  } finally {
+    restoreEnvironment();
+  }
+
+  assert.ok(providerRequest, 'the registered local-format number must receive the code');
+});
+
 test('email OTP requests use the same generic response for registered and unregistered addresses', async () => {
   const user = createUser();
+  let emailDeliveryCount = 0;
 
-  await withStubs({ user }, async () => {
+  await withStubs({ user, onSendMail: async () => { emailDeliveryCount += 1; return { messageId: 'email-otp' }; } }, async () => {
     const registered = createResponse();
     const unregistered = createResponse();
     await requestEmailOtp(registered, user.email);
@@ -361,6 +399,41 @@ test('email OTP requests use the same generic response for registered and unregi
     assert.equal(registered.body.message, unregistered.body.message);
     assert.equal(registered.body.message, 'If this email address is registered, a verification code has been sent.');
   });
+
+  assert.equal(emailDeliveryCount, 1, 'only the registered email address must receive a code');
+});
+
+test('an unregistered phone number receives no OTP SMS', async () => {
+  const restoreEnvironment = configureSmsProvider();
+  let smsDeliveryCount = 0;
+
+  try {
+    await withStubs({
+      user: null,
+      onFetch: async () => {
+        smsDeliveryCount += 1;
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ SMSMessageData: { Recipients: [{ status: 'Success', messageId: 'unexpected' }] } }),
+        };
+      },
+    }, async () => {
+      const response = createResponse();
+      await authController.requestForgotPasswordOtp(
+        { body: { phoneNumber: '0911999988' }, headers: {}, ip: '127.0.0.13' },
+        response,
+      );
+
+      assert.equal(response.statusCode, 200);
+      assert.equal(response.body.success, true);
+      assert.equal(response.body.message, 'If this phone number is registered, a verification code has been sent.');
+    });
+  } finally {
+    restoreEnvironment();
+  }
+
+  assert.equal(smsDeliveryCount, 0, 'an unknown phone number must not be sent to the SMS provider');
 });
 
 test('the sixth email OTP request in fifteen minutes is rate limited', async () => {

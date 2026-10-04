@@ -3,7 +3,7 @@ const { Config } = require('../models');
 const PERMISSIONS = [
   'users.view', 'users.create', 'users.update', 'users.delete', 'users.activate', 'users.deactivate', 'users.lock', 'users.unlock',
   'roles.view', 'roles.manage', 'permissions.view', 'permissions.manage',
-  'assets.view', 'assets.create', 'assets.update', 'assets.delete', 'assets.assign', 'assets.transfer', 'assets.transfer.approve', 'assets.return', 'assets.dispose',
+  'assets.view', 'assets.create', 'assets.update', 'assets.delete', 'assets.assign', 'assets.transfer', 'assets.return', 'assets.dispose',
   'inventory.view', 'inventory.stock_in', 'inventory.stock_out', 'inventory.stock_movement',
   'colleges.view', 'colleges.manage', 'departments.view', 'departments.manage', 'locations.view', 'locations.manage',
   'notifications.view', 'notifications.manage', 'reports.view', 'reports.generate', 'reports.export', 'reports.print',
@@ -15,9 +15,9 @@ const PERMISSIONS = [
 const DEFAULT_ROLE_PERMISSIONS = {
   admin: PERMISSIONS,
   ict_officer: ['users.view', 'assets.view', 'assets.create', 'assets.update', 'assets.assign', 'assets.transfer', 'inventory.view', 'maintenance.view', 'maintenance.update', 'reports.view', 'reports.generate', 'rfid.view'],
-  college: ['assets.view', 'assets.assign', 'assets.transfer', 'departments.view', 'users.view', 'reports.view'],
-  college_manager: ['college.dashboard.view', 'college.profile.view', 'college.profile.update', 'college.staff.view', 'college.locations.view', 'college.locations.manage', 'college.departments.view', 'college.assets.view', 'college.assets.create', 'college.assets.update', 'college.assets.export', 'college.assets.delete', 'college.assets.restore', 'college.documents.manage', 'college.history.view', 'college.grants.view', 'college.inventory.view', 'college.chemicals.view', 'college.requests.view', 'college.requests.review', 'college.approvals.view', 'college.approvals.approve', 'college.approvals.reject', 'college.approvals.request_changes', 'college.approvals.escalate', 'college.assignments.view', 'college.assignments.manage', 'college.transfers.view', 'college.transfers.manage', 'assets.transfer', 'assets.transfer.approve', 'college.returns.view', 'college.returns.manage', 'college.maintenance.view', 'college.service.view', 'college.rfid.view', 'college.verification.view', 'college.verification.manage', 'college.reports.view', 'college.reports.export', 'college.analytics.view', 'college.notifications.view'],
-  department_head: ['assets.view', 'assets.assign', 'assets.transfer', 'users.view', 'reports.view'],
+  college: ['college.dashboard.view', 'college.assets.view', 'college.requests.view', 'college.assignments.view', 'college.notifications.view'],
+  college_manager: ['college.dashboard.view', 'college.profile.view', 'college.profile.update', 'college.staff.view', 'college.locations.view', 'college.locations.manage', 'college.departments.view', 'college.assets.view', 'college.assets.create', 'college.assets.update', 'college.assets.export', 'college.assets.delete', 'college.assets.restore', 'college.documents.manage', 'college.history.view', 'college.grants.view', 'college.inventory.view', 'college.chemicals.view', 'college.requests.view', 'college.requests.review', 'college.approvals.view', 'college.approvals.approve', 'college.approvals.reject', 'college.approvals.request_changes', 'college.approvals.escalate', 'college.assignments.view', 'college.assignments.manage', 'college.transfers.view', 'college.transfers.manage', 'college.returns.view', 'college.returns.manage', 'college.maintenance.view', 'college.service.view', 'college.rfid.view', 'college.verification.view', 'college.verification.manage', 'college.reports.view', 'college.reports.export', 'college.analytics.view', 'college.notifications.view'],
+  department_head: ['assets.view', 'assets.assign', 'users.view', 'reports.view'],
   finance: ['assets.view', 'financial.view', 'reports.view', 'reports.generate', 'reports.export', 'reports.print'],
   store_manager: ['assets.view', 'assets.create', 'assets.update', 'assets.assign', 'assets.transfer', 'inventory.view', 'inventory.stock_in', 'inventory.stock_out', 'inventory.stock_movement', 'rfid.view', 'reports.view'],
   maintenance: ['assets.view', 'maintenance.view', 'maintenance.request.create', 'maintenance.technician.assign', 'maintenance.update', 'maintenance.complete', 'reports.view'],
@@ -28,7 +28,7 @@ const DEFAULT_ROLE_PERMISSIONS = {
 
 const normalizeRoleName = (role) => {
   const normalized = String(role || '').trim().toLowerCase();
-  if (['college', 'college manager', 'college-manager'].includes(normalized)) return 'college_manager';
+  if (['college manager', 'college-manager'].includes(normalized)) return 'college_manager';
   return normalized.replace(/[\s-]+/g, '_');
 };
 

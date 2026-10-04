@@ -7,9 +7,10 @@ const routeSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/ictAs
 const controllerSource = fs.readFileSync(path.resolve(__dirname, '../src/controllers/ictAssetController.js'), 'utf8');
 
 test('ICT asset history routes are authenticated, role-gated, and college-scoped', () => {
-  assert.match(routeSource, /router\.get\('\/asset-history', \.\.\.scopedIctAccess, controller\.listIctAssetHistory\)/);
-  assert.match(routeSource, /router\.get\('\/asset-history\/asset\/:assetId', \.\.\.scopedIctAccess, controller\.getIctAssetHistoryByAsset\)/);
-  assert.match(routeSource, /const scopedIctAccess = \[requireAuth, requireRole\('admin', 'ict_officer'\)/);
+  assert.match(routeSource, /router\.get\('\/asset-history', \.\.\.scopedIctAccess\('ict\.history\.view'\), controller\.listIctAssetHistory\)/);
+  assert.match(routeSource, /router\.get\('\/asset-history\/asset\/:assetId', \.\.\.scopedIctAccess\('ict\.history\.view'\), controller\.getIctAssetHistoryByAsset\)/);
+  assert.match(routeSource, /const scopedIctAccess = \(permission\) => \[/);
+  assert.match(routeSource, /requirePermission\(permission\)/);
   assert.match(routeSource, /resolveCollegeScope/);
 });
 

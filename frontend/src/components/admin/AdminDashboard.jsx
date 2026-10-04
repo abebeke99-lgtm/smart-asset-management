@@ -27,7 +27,7 @@ import {
   Users,
   Wrench,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useInRouterContext } from "react-router-dom";
 import apiClient, { getApiErrorMessage } from "../../services/apiClient";
 import PageHeader from "./ui/PageHeader";
 import "./AdminDashboard.css";
@@ -59,6 +59,17 @@ const chartOptions = {
 };
 const numberFormat = new Intl.NumberFormat();
 
+const SafeLink = React.forwardRef(({ to, ...props }, ref) => {
+  const inRouter = useInRouterContext();
+
+  if (!inRouter) {
+    const href = typeof to === "string" ? to : to?.pathname || "/";
+    return <a ref={ref} href={href} {...props} />;
+  }
+
+  return <Link ref={ref} to={to} {...props} />;
+});
+
 export const normalizeDashboardThresholds = (value) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return defaultThresholds;
   return Object.fromEntries(
@@ -77,7 +88,7 @@ const formatDate = (value) => {
 };
 
 const StatCard = ({ title, value, icon: Icon, to, loading, error }) => (
-  <Link className="admin-dashboard-stat-card" to={to} aria-label={`${title}: ${error ? "unavailable" : numberFormat.format(value || 0)}`}>
+  <SafeLink className="admin-dashboard-stat-card" to={to} aria-label={`${title}: ${error ? "unavailable" : numberFormat.format(value || 0)}`}>
     <span className="admin-dashboard-stat-icon"><Icon size={19} aria-hidden="true" /></span>
     <span className="admin-dashboard-stat-copy">
       <span className="admin-dashboard-stat-title">{title}</span>
@@ -90,7 +101,7 @@ const StatCard = ({ title, value, icon: Icon, to, loading, error }) => (
       )}
     </span>
     <ArrowUpRight className="admin-dashboard-stat-link-icon" size={15} aria-hidden="true" />
-  </Link>
+  </SafeLink>
 );
 
 function AdminDashboard() {
@@ -105,18 +116,34 @@ function AdminDashboard() {
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError("");
+    let timeoutHandle;
+
     try {
-      const response = await apiClient.get("/api/admin/dashboard", { timeout: 15000 });
-      const data = response?.data?.data;
-      if (!data || typeof data !== "object") {
+      const response = await Promise.race([
+        apiClient.get("/api/admin/dashboard", { timeout: 15000 }),
+        new Promise((_, reject) => {
+          timeoutHandle = setTimeout(() => reject(new Error("Dashboard data took too long to load. Please try again.")), 15000);
+        }),
+      ]);
+
+      const payload = response?.data?.data ?? response?.data ?? response;
+      const data = payload && typeof payload === "object" ? payload : null;
+      if (!data) {
         throw new Error("The dashboard response was incomplete.");
       }
+
       setDashboard(data);
       setThresholds(normalizeDashboardThresholds(data.thresholds));
     } catch (requestError) {
       console.error("Dashboard loading error:", requestError);
-      setError(getApiErrorMessage(requestError, "Unable to load administrator dashboard."));
+      const message = requestError?.message === "Dashboard data took too long to load. Please try again."
+        ? "Dashboard data took too long to load. Please try again."
+        : getApiErrorMessage(requestError, "Unable to load administrator dashboard.");
+      setError(message);
     } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
       setLoading(false);
     }
   }, []);
@@ -210,13 +237,17 @@ function AdminDashboard() {
       <div className="admin-dashboard-heading">
         <PageHeader
           eyebrow="Administrator"
-          title="Dashboard"
+          title="Admin Dashboard"
           subtitle="A real-time overview of institutional assets, operations, inventory, and activity."
         />
         <button className="admin-dashboard-refresh" type="button" onClick={loadDashboard} disabled={loading}>
           <RefreshCw size={16} aria-hidden="true" /> Refresh
         </button>
       </div>
+
+      {loading && (
+        <div className="admin-dashboard-loading" aria-label="Loading administrator dashboard" role="status" />
+      )}
 
       {error && (
         <div className="admin-dashboard-error" role="alert">
@@ -227,7 +258,7 @@ function AdminDashboard() {
 
       <section className="admin-dashboard-section" aria-labelledby="admin-dashboard-statistics">
         <div className="admin-dashboard-section-heading">
-          <div><span className="admin-dashboard-eyebrow">Institution snapshot</span><h2 id="admin-dashboard-statistics">Key statistics</h2></div>
+          <div><span className="admin-dashboard-eyebrow">Institution snapshot</span><h2 id="admin-dashboard-statistics">Asset Overview</h2></div>
         </div>
         <div className="admin-dashboard-stat-grid">
           {statCards.map((card) => <StatCard {...card} key={card.title} loading={loading} error={Boolean(error)} />)}
@@ -261,14 +292,14 @@ function AdminDashboard() {
       <section className="admin-dashboard-section" aria-labelledby="admin-dashboard-maintenance">
         <div className="admin-dashboard-section-heading">
           <div><span className="admin-dashboard-eyebrow">Work management</span><h2 id="admin-dashboard-maintenance">Maintenance overview</h2></div>
-          <Link className="admin-dashboard-text-link" to="/admin/maintenance">View maintenance <ArrowUpRight size={15} aria-hidden="true" /></Link>
+          <SafeLink className="admin-dashboard-text-link" to="/admin/maintenance">View maintenance <ArrowUpRight size={15} aria-hidden="true" /></SafeLink>
         </div>
         <div className="admin-dashboard-maintenance-grid">
           {maintenanceOverview.map((row) => (
-            <Link className="admin-dashboard-maintenance-card" to="/admin/maintenance" key={row.label}>
+            <SafeLink className="admin-dashboard-maintenance-card" to="/admin/maintenance" key={row.label}>
               <span>{row.label}</span>
               {loading ? <span className="admin-dashboard-value-skeleton" /> : error ? <strong className="admin-dashboard-stat-error">Unavailable</strong> : <strong>{numberFormat.format(row.value || 0)}</strong>}
-            </Link>
+            </SafeLink>
           ))}
         </div>
       </section>
@@ -277,16 +308,16 @@ function AdminDashboard() {
         <section className="admin-dashboard-section" aria-labelledby="admin-dashboard-inventory-alerts">
           <div className="admin-dashboard-section-heading">
             <div><span className="admin-dashboard-eyebrow">Inventory</span><h2 id="admin-dashboard-inventory-alerts">Inventory alerts</h2></div>
-            <Link className="admin-dashboard-text-link" to="/admin/inventory/quarantine">Open inventory <ArrowUpRight size={15} aria-hidden="true" /></Link>
+            <SafeLink className="admin-dashboard-text-link" to="/admin/inventory/quarantine">Open inventory <ArrowUpRight size={15} aria-hidden="true" /></SafeLink>
           </div>
           <div className="admin-dashboard-alert-list">
             {inventoryAlerts.map((alert) => (
-              <Link className="admin-dashboard-alert-row" to="/admin/inventory/quarantine" key={alert.label}>
+              <SafeLink className="admin-dashboard-alert-row" to="/admin/inventory/quarantine" key={alert.label}>
                 <span className="admin-dashboard-alert-icon"><ShieldAlert size={17} aria-hidden="true" /></span>
                 <span>{alert.label}</span>
                 {loading ? <span className="admin-dashboard-value-skeleton" /> : error ? <strong className="admin-dashboard-stat-error">Unavailable</strong> : <strong>{numberFormat.format(alert.value || 0)}</strong>}
                 <ArrowUpRight size={14} aria-hidden="true" />
-              </Link>
+              </SafeLink>
             ))}
           </div>
         </section>
@@ -294,7 +325,7 @@ function AdminDashboard() {
         <section className="admin-dashboard-section" aria-labelledby="admin-dashboard-recent-activity">
           <div className="admin-dashboard-section-heading">
             <div><span className="admin-dashboard-eyebrow">Audit trail</span><h2 id="admin-dashboard-recent-activity">Recent activity</h2></div>
-            <Link className="admin-dashboard-text-link" to="/admin/audit-logs">View audit log <ArrowUpRight size={15} aria-hidden="true" /></Link>
+            <SafeLink className="admin-dashboard-text-link" to="/admin/audit-logs">View audit log <ArrowUpRight size={15} aria-hidden="true" /></SafeLink>
           </div>
           <div className="admin-dashboard-activity-list" aria-live="polite">
             {loading && <div className="admin-dashboard-empty">Loading recent activity…</div>}

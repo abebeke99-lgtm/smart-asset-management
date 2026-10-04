@@ -1,11 +1,12 @@
 const express = require('express');
 const { Config, User, AuditLog } = require('../models');
-const { requireAuth, requireRole } = require('../middlewares/auth');
+const { requireAuth, requireRole, requirePermission } = require('../middlewares/auth');
 const { createAuditLog } = require('../services/auditLogService');
 const { getRolePermissionMatrix } = require('../services/rolePermissionService');
 
 const router = express.Router();
 const requireAdmin = [requireAuth, requireRole('admin')];
+const requireAdminPermission = (permission) => [...requireAdmin, requirePermission(permission)];
 const CORE_ROLES = ['admin', 'ict_officer', 'college', 'college_manager', 'department_head', 'finance', 'store_manager', 'maintenance', 'infrastructure', 'staff', 'student'];
 const ROLE_STATUS_VALUES = ['active', 'inactive'];
 const PERMISSIONS = [
@@ -203,14 +204,14 @@ const validateRolePayload = (roleName, payload = {}) => {
   return { valid: true, name, description, status };
 };
 
-router.get('/roles', ...requireAdmin, async (req, res, next) => {
+router.get('/roles', ...requireAdminPermission('roles.view'), async (req, res, next) => {
   try {
     const roles = await listRoleRecords();
     return res.json({ success: true, data: roles, roles, total: roles.length });
   } catch (error) { next(error); }
 });
 
-router.get('/roles/:role', ...requireAdmin, async (req, res, next) => {
+router.get('/roles/:role', ...requireAdminPermission('roles.view'), async (req, res, next) => {
   try {
     const normalizedRole = normalizeRoleName(req.params.role);
     if (!CORE_ROLES.includes(normalizedRole)) {
@@ -221,7 +222,7 @@ router.get('/roles/:role', ...requireAdmin, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get('/permissions', ...requireAdmin, async (req, res, next) => {
+router.get('/permissions', ...requireAdminPermission('permissions.view'), async (req, res, next) => {
   try {
     const permissions = PERMISSIONS.map((name) => ({
       name,
@@ -235,7 +236,7 @@ router.get('/permissions', ...requireAdmin, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get('/roles/:role/permissions', ...requireAdmin, async (req, res, next) => {
+router.get('/roles/:role/permissions', ...requireAdminPermission('roles.view'), async (req, res, next) => {
   try {
     const normalizedRole = normalizeRoleName(req.params.role);
     if (!CORE_ROLES.includes(normalizedRole)) {
@@ -247,7 +248,7 @@ router.get('/roles/:role/permissions', ...requireAdmin, async (req, res, next) =
   } catch (error) { next(error); }
 });
 
-router.get('/roles/:role/users', ...requireAdmin, async (req, res, next) => {
+router.get('/roles/:role/users', ...requireAdminPermission('roles.view'), async (req, res, next) => {
   try {
     const normalizedRole = normalizeRoleName(req.params.role);
     if (!CORE_ROLES.includes(normalizedRole)) {
@@ -262,7 +263,7 @@ router.get('/roles/:role/users', ...requireAdmin, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.post('/roles', ...requireAdmin, async (req, res, next) => {
+router.post('/roles', ...requireAdminPermission('roles.manage'), async (req, res, next) => {
   try {
     const payload = validateRolePayload(req.body.name || req.body.role, req.body);
     if (!payload.valid) {
@@ -292,7 +293,7 @@ router.post('/roles', ...requireAdmin, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.put('/roles/:role', ...requireAdmin, async (req, res, next) => {
+router.put('/roles/:role', ...requireAdminPermission('roles.manage'), async (req, res, next) => {
   try {
     const normalizedRole = normalizeRoleName(req.params.role);
     if (!CORE_ROLES.includes(normalizedRole)) {
@@ -330,7 +331,7 @@ router.put('/roles/:role', ...requireAdmin, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.patch('/roles/:role/status', ...requireAdmin, async (req, res, next) => {
+router.patch('/roles/:role/status', ...requireAdminPermission('roles.manage'), async (req, res, next) => {
   try {
     const normalizedRole = normalizeRoleName(req.params.role);
     if (!CORE_ROLES.includes(normalizedRole)) {
@@ -355,7 +356,7 @@ router.patch('/roles/:role/status', ...requireAdmin, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.delete('/roles/:role', ...requireAdmin, async (req, res, next) => {
+router.delete('/roles/:role', ...requireAdminPermission('roles.manage'), async (req, res, next) => {
   try {
     const normalizedRole = normalizeRoleName(req.params.role);
     const registry = await readRoleRegistry();
@@ -387,7 +388,7 @@ router.delete('/roles/:role', ...requireAdmin, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.put('/roles/:role/permissions', ...requireAdmin, async (req, res, next) => {
+router.put('/roles/:role/permissions', ...requireAdminPermission('permissions.manage'), async (req, res, next) => {
   try {
     const role = normalizeRoleName(req.params.role);
     if (!CORE_ROLES.includes(role)) {
