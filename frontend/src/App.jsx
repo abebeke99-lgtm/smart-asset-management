@@ -200,13 +200,21 @@ const FinanceFinancialReports = lazy(() => import('./components/finance/FinanceF
 export const normalizeRole = (role) => {
   if (!role) return 'user';
 
-  const value = String(role).trim().toLowerCase();
+  const resolvedRole = Array.isArray(role)
+    ? role.find((entry) => entry !== null && entry !== undefined && String(entry).trim())
+    : role && typeof role === 'object'
+      ? role.role ?? role.name ?? role.value ?? (Array.isArray(role.roles) ? role.roles.find((entry) => entry !== null && entry !== undefined && String(entry).trim()) : '')
+      : role;
+
+  const value = String(resolvedRole ?? '').trim().toLowerCase();
+  if (!value) return 'user';
+
+  const normalizedValue = value.replace(/[_-]+/g, ' ');
   const aliases = {
     admin: 'admin',
     administrator: 'admin',
     'ict officer': 'ict_officer',
     ict_officer: 'ict_officer',
-    'ict-officer': 'ict_officer',
     college: 'college_manager',
     'college manager': 'college_manager',
     college_manager: 'college_manager',
@@ -235,7 +243,7 @@ export const normalizeRole = (role) => {
     user: 'user'
   };
 
-  return aliases[value] || value.replace(/\s+/g, '_');
+  return aliases[normalizedValue] || normalizedValue.replace(/\s+/g, '_');
 };
 
 // Removes leading decoration such as an emoji or bullet from a label. Only non-letter,

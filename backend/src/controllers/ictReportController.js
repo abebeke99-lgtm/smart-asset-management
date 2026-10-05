@@ -288,9 +288,9 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
         { title: { [Op.like]: `%${filters.search}%` } },
         { description: { [Op.like]: `%${filters.search}%` } },
         { category: { [Op.like]: `%${filters.search}%` } },
-        { '$Reporter.fullName$': { [Op.like]: `%${filters.search}%` } },
+        { '$Reporter.full_name$': { [Op.like]: `%${filters.search}%` } },
         { '$Reporter.username$': { [Op.like]: `%${filters.search}%` } },
-        { '$Assignee.fullName$': { [Op.like]: `%${filters.search}%` } },
+        { '$Assignee.full_name$': { [Op.like]: `%${filters.search}%` } },
       ] }];
     }
     const include = [
@@ -301,7 +301,7 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
     ];
     const [result, allRequests] = await Promise.all([
       ServiceRequest.findAndCountAll({ where, ...options, include, distinct: true }),
-      ServiceRequest.findAll({ where, attributes: ['status'], raw: true }),
+      ServiceRequest.findAll({ where, attributes: ['status'], include, raw: true }),
     ]);
     const rows = result.rows.map((request) => ({
       id: request.id,
@@ -346,11 +346,11 @@ const fetchReport = async (filters, { paginate = true } = {}) => {
         { incidentNumber: { [Op.like]: `%${filters.search}%` } },
         { title: { [Op.like]: `%${filters.search}%` } },
         { description: { [Op.like]: `%${filters.search}%` } },
-        { '$Reporter.fullName$': { [Op.like]: `%${filters.search}%` } },
+        { '$Reporter.full_name$': { [Op.like]: `%${filters.search}%` } },
         { '$Reporter.username$': { [Op.like]: `%${filters.search}%` } },
-        { '$Technician.fullName$': { [Op.like]: `%${filters.search}%` } },
-        { '$Asset.assetCode$': { [Op.like]: `%${filters.search}%` } },
-        { '$Asset.serialNumber$': { [Op.like]: `%${filters.search}%` } },
+        { '$Technician.full_name$': { [Op.like]: `%${filters.search}%` } },
+        { '$Asset.asset_code$': { [Op.like]: `%${filters.search}%` } },
+        { '$Asset.serial_number$': { [Op.like]: `%${filters.search}%` } },
       ] }];
     }
     if (filters.priority) where.priority = filters.priority;

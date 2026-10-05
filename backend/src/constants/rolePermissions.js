@@ -42,6 +42,11 @@ const ROLE_NAMES = [
   'student',
 ];
 
+const normalizeRoleForStorage = (role) => {
+  const normalized = String(role || '').trim().toLowerCase();
+  return normalized === 'dept_head' ? 'department_head' : normalized;
+};
+
 const DEFAULT_ROLE_PERMISSIONS = {
   admin: PERMISSIONS,
   ict_officer: ['ict.dashboard.view', 'ict.assets.view', 'ict.assets.create', 'ict.assets.update', 'ict.assets.assign', 'ict.assets.transfer', 'ict.assets.qr', 'ict.assets.rfid', 'ict.assets.retire', 'ict.assets.export', 'ict.inventory.view', 'ict.inventory.import', 'ict.maintenance.view', 'ict.maintenance.create', 'ict.devicehealth.view', 'ict.tracking.view', 'ict.history.view', 'ict.analytics.view', 'ict.reports.view', 'ict.reports.export', 'ict.network.view', 'ict.network.manage', 'ict.softwarelicenses.view', 'ict.softwarelicenses.manage', 'ict.support.view', 'ict.support.manage', 'ict.incidents.view', 'ict.incidents.manage', 'ict.notifications.view'],
@@ -57,4 +62,4 @@ const DEFAULT_ROLE_PERMISSIONS = {
   student: ['assets.view'],
 };
 
-module.exports = { PERMISSIONS, ROLE_NAMES, DEFAULT_ROLE_PERMISSIONS };
+module.exports = { PERMISSIONS, ROLE_NAMES, DEFAULT_ROLE_PERMISSIONS, normalizeRoleForStorage };

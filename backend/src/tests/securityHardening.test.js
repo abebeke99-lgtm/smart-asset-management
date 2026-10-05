@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { getJwtSecret } = require('../config/jwt');
+const { ROLE_NAMES, normalizeRoleForStorage } = require('../constants/rolePermissions');
 
 const read = (file) => fs.readFileSync(path.join(__dirname, file), 'utf8');
 
@@ -100,7 +101,17 @@ test('inventory reads are restricted and ICT requests resolve college scope', ()
 
 test('admin user create/update handlers validate role and email', () => {
   const source = read('../routes/adminSupportRoutes.js');
-  assert.match(source, /const allowedRoles = \['admin', 'ict_officer', 'store_manager', 'college', 'finance', 'maintenance', 'department_head', 'student', 'staff'\]/);
+  const userControllerSource = read('../controllers/userController.js');
+  assert.match(source, /const allowedRoles = ROLE_NAMES;/);
+  assert.match(userControllerSource, /normalizeRoleForStorage\(input\.role \|\| input\.roleId\)/);
+  assert.match(userControllerSource, /const requestedRole = input\.role \|\| input\.roleId;/);
+  assert.deepEqual(
+    ['admin', 'store_manager', 'maintenance', 'department_head', 'college_manager', 'infrastructure', 'ict_officer']
+      .filter((role) => !ROLE_NAMES.includes(role)),
+    [],
+  );
+  assert.equal(normalizeRoleForStorage('dept_head'), 'department_head');
+  assert.ok(ROLE_NAMES.includes(normalizeRoleForStorage('dept_head')));
   assert.match(source, /Invalid user role/);
 });
 

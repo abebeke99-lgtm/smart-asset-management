@@ -7,6 +7,7 @@ const originals = {
   sequelizeAuthenticate: sequelize.authenticate,
   assetFindAll: Asset.findAll,
   departmentFindAll: Department.findAll,
+  approvalFindAll: Approval.findAll,
   approvalCount: Approval.count,
   serviceRequestCount: ServiceRequest.count,
   serviceRequestFindAll: ServiceRequest.findAll,
@@ -42,6 +43,7 @@ test('ICT dashboard controller builds payload without undefined term lists', asy
     return [];
   };
   Department.findAll = async () => [];
+  Approval.findAll = async () => [];
   Approval.count = async () => 0;
   ServiceRequest.count = async () => 0;
   ServiceRequest.findAll = async () => [];
@@ -78,6 +80,7 @@ test.afterEach(() => {
   sequelize.authenticate = originals.sequelizeAuthenticate;
   Asset.findAll = originals.assetFindAll;
   Department.findAll = originals.departmentFindAll;
+  Approval.findAll = originals.approvalFindAll;
   Approval.count = originals.approvalCount;
   ServiceRequest.count = originals.serviceRequestCount;
   ServiceRequest.findAll = originals.serviceRequestFindAll;

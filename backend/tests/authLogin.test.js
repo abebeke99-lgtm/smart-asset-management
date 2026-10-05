@@ -9,6 +9,7 @@ const { resolveDemoPassword } = require('../src/config/seed');
 const { isAccountActive } = require('../src/utils/accountStatus');
 const { findCollegeScopeForUser } = require('../src/middlewares/organizationScope');
 const { normalizeOrganizationSettings, resolveOrganizationSettings } = require('../src/routes/adminSettingsRoutes');
+const { College, Department, User } = require('../src/models');
 
 test('demo account seeding requires an explicitly configured password', () => {
   const previousNodeEnv = process.env.NODE_ENV;
@@ -261,15 +262,33 @@ test('generateToken carries organization scope fields needed by the protected co
 
 test('college scope lookup resolves the only available college for a college manager when no assignment is present', async () => {
   assert.equal(typeof findCollegeScopeForUser, 'function');
-  const scope = await findCollegeScopeForUser({
-    id: 99,
-    role: 'college',
-    department: 'Engineering',
-    collegeId: null,
-  });
-  assert.ok(scope && Number.isInteger(scope.collegeId));
-  assert.equal(scope.collegeId, scope.college.id);
-  assert.ok(scope.college);
+  const originals = {
+    collegeFindOne: College.findOne,
+    collegeFindAll: College.findAll,
+    departmentFindOne: Department.findOne,
+    userFindByPk: User.findByPk,
+  };
+  College.findOne = async () => null;
+  College.findAll = async () => [{ id: 7, status: 'active' }];
+  Department.findOne = async () => null;
+  User.findByPk = async () => null;
+
+  try {
+    const scope = await findCollegeScopeForUser({
+      id: 99,
+      role: 'college',
+      department: 'Engineering',
+      collegeId: null,
+    });
+    assert.ok(scope && Number.isInteger(scope.collegeId));
+    assert.equal(scope.collegeId, scope.college.id);
+    assert.ok(scope.college);
+  } finally {
+    College.findOne = originals.collegeFindOne;
+    College.findAll = originals.collegeFindAll;
+    Department.findOne = originals.departmentFindOne;
+    User.findByPk = originals.userFindByPk;
+  }
 });
 
 test('store manager routes expose a real verification workflow using the existing session model', () => {

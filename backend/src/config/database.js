@@ -5,10 +5,44 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 function getDatabaseConfig(environment = process.env) {
   const production = environment.NODE_ENV === 'production';
+  const testing = environment.NODE_ENV === 'test';
   const connectionString = String(environment.DATABASE_URL || environment.MYSQL_URL || '').trim();
   let config;
 
-  if (connectionString) {
+  if (testing) {
+    const testDatabase = {
+      host: String(environment.DB_TEST_HOST || '').trim(),
+      port: environment.DB_TEST_PORT || '3306',
+      database: String(environment.DB_TEST_NAME || '').trim(),
+      username: String(environment.DB_TEST_USER || '').trim(),
+      password: environment.DB_TEST_PASSWORD,
+    };
+    const missing = [
+      ['DB_TEST_HOST', testDatabase.host],
+      ['DB_TEST_NAME', testDatabase.database],
+      ['DB_TEST_USER', testDatabase.username],
+    ].filter(([, value]) => !value).map(([name]) => name);
+    if (environment.DB_TEST_PASSWORD === undefined) missing.push('DB_TEST_PASSWORD');
+    if (missing.length) {
+      const error = new Error(`Missing test database configuration: ${missing.join(', ')}`);
+      error.code = 'DB_TEST_CONFIG_MISSING';
+      throw error;
+    }
+
+    const developmentHost = String(environment.DB_HOST || environment.MYSQLHOST || 'localhost').trim().toLowerCase();
+    const developmentPort = String(environment.DB_PORT || environment.MYSQLPORT || '3306');
+    const developmentDatabase = String(environment.DB_NAME || environment.MYSQLDATABASE || 'smart_asset_db').trim().toLowerCase();
+    if (
+      testDatabase.host.toLowerCase() === developmentHost
+      && String(testDatabase.port) === developmentPort
+      && testDatabase.database.toLowerCase() === developmentDatabase
+    ) {
+      const error = new Error('Test database must be separate from the configured development database');
+      error.code = 'DB_TEST_CONFIG_INVALID';
+      throw error;
+    }
+    config = testDatabase;
+  } else if (connectionString) {
     let parsed;
     try {
       parsed = new URL(connectionString);
@@ -80,14 +114,23 @@ let databaseConfig;
 try {
   databaseConfig = getDatabaseConfig();
 } catch (error) {
-  if (!['DB_CONFIG_MISSING', 'DB_CONFIG_INVALID'].includes(error.code)) throw error;
+  if (!['DB_CONFIG_MISSING', 'DB_CONFIG_INVALID', 'DB_TEST_CONFIG_MISSING', 'DB_TEST_CONFIG_INVALID'].includes(error.code)) throw error;
   databaseConfigError = error;
+  const isTest = process.env.NODE_ENV === 'test';
   databaseConfig = {
-    database: process.env.DB_NAME || process.env.MYSQLDATABASE || 'smart_asset_db',
-    username: process.env.DB_USER || process.env.MYSQLUSER || 'root',
-    password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || '',
-    host: isProduction ? 'database-not-configured.invalid' : process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
-    port: Number(process.env.DB_PORT || process.env.MYSQLPORT) || 3306,
+    database: isTest
+      ? process.env.DB_TEST_NAME || 'smart_asset_test_unconfigured'
+      : process.env.DB_NAME || process.env.MYSQLDATABASE || 'smart_asset_db',
+    username: isTest
+      ? process.env.DB_TEST_USER || 'test_user_unconfigured'
+      : process.env.DB_USER || process.env.MYSQLUSER || 'root',
+    password: isTest
+      ? process.env.DB_TEST_PASSWORD || ''
+      : process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || '',
+    host: isProduction || isTest
+      ? 'database-not-configured.invalid'
+      : process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
+    port: Number(isTest ? process.env.DB_TEST_PORT : process.env.DB_PORT || process.env.MYSQLPORT) || 3306,
   };
   console.error(`Database configuration unavailable: ${error.message}`);
 }

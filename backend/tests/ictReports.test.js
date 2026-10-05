@@ -187,6 +187,7 @@ test('ICT support report scopes support requests and reports requester, assignee
   const originalFindAndCountAll = ServiceRequest.findAndCountAll;
   const originalFindAll = ServiceRequest.findAll;
   let reportQuery;
+  let summaryQuery;
   const requests = [{ status: 'resolved' }, { status: 'open' }];
 
   ServiceRequest.findAndCountAll = async (options) => {
@@ -210,7 +211,10 @@ test('ICT support report scopes support requests and reports requester, assignee
       }],
     };
   };
-  ServiceRequest.findAll = async () => requests;
+  ServiceRequest.findAll = async (options) => {
+    if (options.include) summaryQuery = options;
+    return requests;
+  };
 
   try {
     let response;
@@ -225,6 +229,10 @@ test('ICT support report scopes support requests and reports requester, assignee
     assert.equal(reportQuery.where.priority, 'high');
     assert.ok(reportQuery.include.some((item) => item.as === 'Reporter'));
     assert.ok(reportQuery.include.some((item) => item.as === 'Assignee'));
+    assert.ok(reportQuery.where[Op.and][0][Op.or].some((term) => term['$Reporter.full_name$']));
+    assert.ok(reportQuery.where[Op.and][0][Op.or].some((term) => term['$Assignee.full_name$']));
+    assert.ok(summaryQuery.include.some((item) => item.as === 'Reporter'));
+    assert.ok(summaryQuery.include.some((item) => item.as === 'Assignee'));
     assert.equal(response.reportType, 'support');
     assert.equal(response.data[0].requester, 'Requester Name');
     assert.equal(response.data[0].assignedTo, 'Technician Name');
@@ -284,6 +292,9 @@ test('ICT incident report scopes through existing college relations and includes
 
     assert.ok(reportQuery.where[Op.or].some((term) => term['$Reporter.college_id$'] === 17));
     assert.ok(reportQuery.where[Op.or].some((term) => term['$Asset.college_id$'] === 17));
+    assert.ok(reportQuery.where[Op.and][0][Op.or].some((term) => term['$Reporter.full_name$']));
+    assert.ok(reportQuery.where[Op.and][0][Op.or].some((term) => term['$Technician.full_name$']));
+    assert.ok(reportQuery.where[Op.and][0][Op.or].some((term) => term['$Asset.asset_code$']));
     assert.equal(reportQuery.where.status, 'resolved');
     assert.equal(reportQuery.where.priority, 'critical');
     assert.ok(reportQuery.include.some((item) => item.model === require('../src/models').IncidentHistory && item.separate));

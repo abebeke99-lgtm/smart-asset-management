@@ -223,7 +223,7 @@ async function initializeDatabase() {
       }
     }
     if (databaseConnected && schemaReady) {
-      if (process.env.INITIAL_ADMIN_PASSWORD) {
+      if (process.env.NODE_ENV !== 'test' && process.env.INITIAL_ADMIN_PASSWORD) {
         try {
           const result = await initializeInitialAdmin();
           console.log(result.created ? 'Initial admin account created.' : 'Initial admin account already exists; no changes made.');

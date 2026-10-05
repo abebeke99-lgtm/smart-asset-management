@@ -130,24 +130,20 @@ function AdminRolesPermissions() {
       return undefined;
     }
 
-    if (selectedRoleId === "admin") {
-      setSelectedPermissions([...permissions]);
-      setPermissionsLoading(false);
-      return undefined;
-    }
-
     let active = true;
     setPermissionsLoading(true);
     setError("");
     apiClient
       .get(`${ROLE_API}/${encodeURIComponent(selectedRoleId)}/permissions`)
       .then((response) => {
-        if (active) setSelectedPermissions(responsePermissions(response));
+        if (!active) return;
+        const nextPermissions = responsePermissions(response);
+        setSelectedPermissions(nextPermissions.length > 0 || selectedRoleId !== "admin" ? nextPermissions : [...permissions]);
       })
       .catch((loadError) => {
         console.error("Role permissions loading error:", loadError);
         if (active) {
-          setSelectedPermissions([]);
+          setSelectedPermissions(selectedRoleId === "admin" ? [...permissions] : []);
           setError(LOAD_ERROR);
         }
       })

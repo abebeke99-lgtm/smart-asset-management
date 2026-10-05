@@ -11,7 +11,7 @@
     "dev": "nodemon src/app.js",
     "seed:demo": "node src/scripts/seedDemoAccounts.js",
     "reset:demo-passwords": "node src/scripts/resetDemoPasswords.js",
-    "test": "node --test"
+    "test": "node scripts/runTests.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

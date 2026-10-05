@@ -44,6 +44,11 @@ test('database schema sync runs in production and fails startup when initializat
   assert.match(source, /console\.log\('Database initialization completed\.'\)/);
 });
 
+test('test startup does not bootstrap an admin with the local environment password', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
+  assert.match(source, /process\.env\.NODE_ENV !== 'test' && process\.env\.INITIAL_ADMIN_PASSWORD/);
+});
+
 test('schema initialization rejects startup if any registered model table is missing', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/config/sync.js'), 'utf8');
   assert.match(source, /const unresolvedTables = \[\]/);

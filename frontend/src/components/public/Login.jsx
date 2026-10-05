@@ -8,6 +8,45 @@ import { translateMessage } from '../../i18n/messages';
 import { apiBase } from '../../utils/api';
 import { Activity, ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 
+const normalizeRoleValue = (role) => {
+  if (!role) return '';
+
+  const resolvedRole = Array.isArray(role)
+    ? role.find((entry) => entry !== null && entry !== undefined && String(entry).trim())
+    : role && typeof role === 'object'
+      ? role.role ?? role.name ?? role.value ?? (Array.isArray(role.roles) ? role.roles.find((entry) => entry !== null && entry !== undefined && String(entry).trim()) : '')
+      : role;
+
+  const value = String(resolvedRole ?? '').trim().toLowerCase();
+  if (!value) return '';
+
+  const normalizedValue = value.replace(/[_-]+/g, ' ');
+  const aliases = {
+    admin: 'admin',
+    administrator: 'admin',
+    'ict officer': 'ict_officer',
+    'college': 'college_manager',
+    'college manager': 'college_manager',
+    'department head': 'department_head',
+    'department': 'department_head',
+    'dept head': 'department_head',
+    finance: 'finance',
+    'finance officer': 'finance',
+    'store manager': 'store_manager',
+    maintenance: 'maintenance',
+    maint: 'maintenance',
+    infrastructure: 'infrastructure',
+    'infrastructure director': 'infrastructure',
+    'infrastructure directorate': 'infrastructure',
+    infra: 'infrastructure',
+    staff: 'staff',
+    student: 'student',
+    user: 'user',
+  };
+
+  return aliases[normalizedValue] || normalizedValue.replace(/\s+/g, '_');
+};
+
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -18,7 +57,7 @@ const Login = () => {
   const [backendStatus, setBackendStatus] = useState('checking');
 
   const { login } = useAuth();
-  const { language, setLanguage } = useLanguage();
+  const { language } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const redirectParam = new URLSearchParams(location.search).get('redirect');
@@ -63,10 +102,8 @@ const Login = () => {
         admin: '/admin',
         ict_officer: '/ict',
         teaching_assistant: '/teaching-assistant/dashboard',
-        college: '/college',
         college_manager: '/college',
         department_head: '/department-head',
-        department: '/department-head',
         finance: '/finance',
         store_manager: '/store',
         maintenance: '/maintenance',
@@ -74,16 +111,14 @@ const Login = () => {
         staff: '/department',
         student: '/student',
       };
-      const role = String(result?.user?.role || '').trim().toLowerCase();
+      const role = normalizeRoleValue(result?.user?.role ?? result?.user?.roles ?? result?.user?.roleName ?? result?.user?.userRole);
       const fallbackDestination = roleRoutes[role] || '/home';
       const allowedRedirectPrefixes = {
         admin: '/admin',
         ict_officer: '/ict',
         teaching_assistant: '/teaching-assistant',
-        college: '/college',
         college_manager: '/college',
         department_head: '/department-head',
-        department: '/department-head',
         finance: '/finance',
         store_manager: '/store',
         maintenance: '/maintenance',
@@ -264,10 +299,6 @@ const Login = () => {
       `}</style>
       <main className="login-page">
         <section className="login-panel">
-          <div className="login-language-switch" role="group" aria-label={t.switchLanguage}>
-            <button type="button" className="dashboard-language-button" onClick={() => setLanguage('en')} aria-label="English" aria-pressed={language === 'en'}>EN</button>
-            <button type="button" className="dashboard-language-button" onClick={() => setLanguage('am')} aria-label="አማርኛ" aria-pressed={language === 'am'}>AM</button>
-          </div>
           <main className="login-card">
             <img className="login-logo" src="/assets/mekdela-amba-university-logo.png" alt="Mekdela Amba University logo" />
             <div className="login-heading"><h2>{t.title}</h2><p>{t.subtitle}</p></div>

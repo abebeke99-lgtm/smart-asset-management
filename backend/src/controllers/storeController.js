@@ -50,8 +50,8 @@ const getStoreDashboard = async (req, res, next) => {
       Inventory.count({ where: lowStockWhere, include: [assetInclude(scope)], distinct: true }),
       Inventory.findAll({ where: lowStockWhere, include: [assetInclude(scope)], attributes: ['id', 'assetId', 'availableQuantity', 'minimumQuantity'], order: [['availableQuantity', 'ASC']], limit: 8 }),
       VerificationSession.findOne({ where: { collegeId }, include: [{ model: VerificationItem, attributes: ['state'] }], order: [['createdAt', 'DESC']] }),
-      InventoryTransaction.findAll({ attributes: ['type', [Sequelize.fn('SUM', Sequelize.col('quantity')), 'quantity']], include: [{ model: Asset, attributes: [], required: true, where: scope }], group: ['type'], raw: true }),
-      InventoryTransaction.findAll({ where: { createdAt: { [Op.gte]: yearStart } }, attributes: ['type', [Sequelize.fn('DATE_FORMAT', Sequelize.col('InventoryTransaction.createdAt'), '%Y-%m'), 'month'], [Sequelize.fn('SUM', Sequelize.col('quantity')), 'quantity']], include: [{ model: Asset, attributes: [], required: true, where: scope }], group: ['type', Sequelize.fn('DATE_FORMAT', Sequelize.col('InventoryTransaction.createdAt'), '%Y-%m')], raw: true }),
+      InventoryTransaction.findAll({ attributes: ['type', [Sequelize.fn('SUM', Sequelize.col('InventoryTransaction.quantity')), 'quantity']], include: [{ model: Asset, attributes: [], required: true, where: scope }], group: ['InventoryTransaction.type'], raw: true }),
+      InventoryTransaction.findAll({ where: { createdAt: { [Op.gte]: yearStart } }, attributes: ['type', [Sequelize.fn('DATE_FORMAT', Sequelize.col('InventoryTransaction.created_at'), '%Y-%m'), 'month'], [Sequelize.fn('SUM', Sequelize.col('InventoryTransaction.quantity')), 'quantity']], include: [{ model: Asset, attributes: [], required: true, where: scope }], group: ['InventoryTransaction.type', Sequelize.fn('DATE_FORMAT', Sequelize.col('InventoryTransaction.created_at'), '%Y-%m')], raw: true }),
     ]);
 
     const activeInventory = inventoryRows.filter((row) => !['disposed', 'deleted', 'archived'].includes(String(row.Asset?.status || '').toLowerCase()));

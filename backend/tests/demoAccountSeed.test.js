@@ -51,6 +51,7 @@ test('demo seeding hashes passwords, preserves existing users, and is idempotent
   const options = {
     ...models,
     password: 'seed-test-password',
+    seedOperationalData: false,
   };
 
   const firstRun = await seedDatabase(options);
@@ -70,7 +71,7 @@ test('demo seeding does not claim an email address already used by another accou
     { username: 'existing_user', email: 'ict@bekelei.com', role: 'staff', password: 'existing-hash' },
   ]);
 
-  await seedDatabase({ ...models, password: 'seed-test-password' });
+  await seedDatabase({ ...models, password: 'seed-test-password', seedOperationalData: false });
 
   assert.equal(models.users.get('existing_user').password, 'existing-hash');
   assert.equal(models.users.get('ict_officer').email, 'ict_officer@bekelei.com');

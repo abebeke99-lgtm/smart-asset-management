@@ -7,7 +7,7 @@ const { findCollegeScopeForUser } = require('../middlewares/organizationScope');
 const { saveProfilePhoto, validateProfilePhoto, buildPublicFileUrl } = require('../utils/uploadUtils');
 const { createAuditLog } = require('../services/auditLogService');
 const { getConfiguredRolePermissions } = require('../services/rolePermissionService');
-const { ROLE_NAMES } = require('../constants/rolePermissions');
+const { ROLE_NAMES, normalizeRoleForStorage } = require('../constants/rolePermissions');
 
 const roles = ROLE_NAMES;
 const normalizeLookupValue = (value) => String(value ?? '').trim().toLowerCase();
@@ -115,7 +115,7 @@ const createUser = async (req, res) => {
     const { full_name, phone_number, is_active, ...input } = body;
     const username = String(input.username || '').trim();
     const email = String(input.email || '').trim();
-    const role = input.role || input.roleId;
+    const role = normalizeRoleForStorage(input.role || input.roleId);
     if (!role) return res.status(400).json({ success: false, message: 'Role is required' });
     const departmentRecord = input.departmentId ? await Department.findByPk(input.departmentId) : null;
     if (input.departmentId && !departmentRecord) return res.status(400).json({ success: false, message: 'Department not found' });
@@ -151,7 +151,8 @@ const updateUser = async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     const body = req.body || {};
     const { full_name, phone_number, is_active, ...input } = body;
-    const role = input.role || input.roleId;
+    const requestedRole = input.role || input.roleId;
+    const role = requestedRole ? normalizeRoleForStorage(requestedRole) : requestedRole;
     const departmentRecord = input.departmentId ? await Department.findByPk(input.departmentId) : null;
     if (input.departmentId && !departmentRecord) return res.status(400).json({ success: false, message: 'Department not found' });
     const department = departmentRecord?.name || input.department;

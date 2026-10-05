@@ -15,7 +15,6 @@ const ROLE_OPTIONS = [
   "store_manager",
   "maintenance",
   "infrastructure",
-  "teaching_assistant",
   "staff",
   "student",
 ];

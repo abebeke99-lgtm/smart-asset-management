@@ -10,7 +10,7 @@ const returnWorkflowRoutes = require('../routes/returnWorkflowRoutes');
 const { createReceipt, createStockAdjustment } = require('../controllers/inventoryController');
 const { getInventory, getHistory, getDashboard, getLowStock, getStockAdjustments } = require('../controllers/storeController');
 const { processStoreReturn } = require('../controllers/returnWorkflowController');
-const { Approval, Asset, AssetMovement, AssetReturn, College, Inventory, InventoryTransaction, Maintenance, Transfer, VerificationItem, VerificationSession, sequelize } = require('../models');
+const { Approval, Asset, AssetMovement, AssetReturn, College, Department, Inventory, InventoryTransaction, Maintenance, Transfer, VerificationItem, VerificationSession, sequelize } = require('../models');
 
 test('store routes expose a store manager movement history endpoint', () => {
   const historyRoute = storeRoutes.stack.find((layer) => layer.route && layer.route.path === '/history' && layer.route.methods.get);
@@ -79,6 +79,18 @@ test('store dashboard queries include only assets from the resolved College', as
       else if (model === VerificationItem) assert.equal(options.include[0].where.collegeId, 7);
       else assert.equal(options.include.find((entry) => entry.model === Asset).where.collegeId, 7);
     }
+    const aggregateQueries = queries
+      .filter(({ model, method }) => model === InventoryTransaction && method === 'findAll')
+      .filter(({ options }) => options.attributes.some((attribute) => attribute[1] === 'quantity'));
+    assert.equal(aggregateQueries.length, 2);
+    for (const { options } of aggregateQueries) {
+      const quantitySum = options.attributes.find((attribute) => attribute[1] === 'quantity')[0];
+      assert.equal(quantitySum.args[0].col, 'InventoryTransaction.quantity');
+      assert.ok(options.group.includes('InventoryTransaction.type'));
+    }
+    const monthlyAggregate = aggregateQueries.find(({ options }) => options.attributes.some((attribute) => attribute[1] === 'month'));
+    const monthFormat = monthlyAggregate.options.attributes.find((attribute) => attribute[1] === 'month')[0];
+    assert.equal(monthFormat.args[0].col, 'InventoryTransaction.created_at');
   } finally {
     for (const [model, method, original] of originals) model[method] = original;
   }
@@ -272,10 +284,14 @@ test('Store inventory filters remain scoped to the resolved College', async () =
 test('Store history scopes the selected asset to its resolved College', async () => {
   const originalFindAndCountAll = AssetMovement.findAndCountAll;
   const originalFindAll = AssetMovement.findAll;
+  const originalAssetFindAll = Asset.findAll;
+  const originalDepartmentFindAll = Department.findAll;
   let query;
   let responseBody;
   AssetMovement.findAndCountAll = async (options) => { query = options; return { rows: [], count: 0 }; };
   AssetMovement.findAll = async () => [];
+  Asset.findAll = async () => [];
+  Department.findAll = async () => [];
 
   try {
     await getHistory(
@@ -288,5 +304,7 @@ test('Store history scopes the selected asset to its resolved College', async ()
   } finally {
     AssetMovement.findAndCountAll = originalFindAndCountAll;
     AssetMovement.findAll = originalFindAll;
+    Asset.findAll = originalAssetFindAll;
+    Department.findAll = originalDepartmentFindAll;
   }
 });

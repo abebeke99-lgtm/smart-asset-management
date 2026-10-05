@@ -28,7 +28,9 @@ export default function TeachingAssistantAssets() {
         message: loadError.message,
       });
       setAssets([]);
-      setError(getApiErrorMessage(loadError, "Unable to load department assets."));
+      const nextError = getApiErrorMessage(loadError, "Unable to load department assets.")
+        || "Unable to load department assets.";
+      setError(nextError);
     } finally {
       setLoading(false);
     }
@@ -37,6 +39,37 @@ export default function TeachingAssistantAssets() {
   useEffect(() => {
     loadAssets();
   }, [loadAssets]);
+
+  const content = error ? (
+    <div className="admin-roles-alert admin-roles-alert-error" role="alert">{error}</div>
+  ) : loading ? (
+    <div className="admin-roles-state" role="status">Loading department assets...</div>
+  ) : assets.length === 0 ? (
+    <div className="admin-roles-state">No assets are assigned to your department.</div>
+  ) : (
+    <div className="teaching-assistant-assets-table-scroll">
+      <table className="admin-roles-matrix teaching-assistant-assets-table">
+        <thead>
+          <tr>
+            <th scope="col">Asset ID</th>
+            <th scope="col">Name</th>
+            <th scope="col">Department</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {assets.map((asset) => (
+            <tr key={asset.id}>
+              <td>{displayValue(asset.assetCode || asset.assetId || asset.id)}</td>
+              <td>{displayValue(asset.name)}</td>
+              <td>{displayValue(asset.DepartmentRecord?.name || asset.department)}</td>
+              <td>{displayValue(asset.status)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
     <main className="teaching-assistant-assets">
@@ -58,35 +91,7 @@ export default function TeachingAssistantAssets() {
         </button>
       </div>
 
-      {error && <div className="admin-roles-alert admin-roles-alert-error" role="alert">{error}</div>}
-      {loading ? (
-        <div className="admin-roles-state" role="status">Loading department assets...</div>
-      ) : assets.length === 0 ? (
-        <div className="admin-roles-state">No assets are assigned to your department.</div>
-      ) : (
-        <div className="teaching-assistant-assets-table-scroll">
-          <table className="admin-roles-matrix teaching-assistant-assets-table">
-            <thead>
-              <tr>
-                <th scope="col">Asset ID</th>
-                <th scope="col">Name</th>
-                <th scope="col">Department</th>
-                <th scope="col">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assets.map((asset) => (
-                <tr key={asset.id}>
-                  <td>{displayValue(asset.assetCode || asset.assetId || asset.id)}</td>
-                  <td>{displayValue(asset.name)}</td>
-                  <td>{displayValue(asset.DepartmentRecord?.name || asset.department)}</td>
-                  <td>{displayValue(asset.status)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {content}
     </main>
   );
 }

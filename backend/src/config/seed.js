@@ -495,15 +495,9 @@ async function seedDatabase(options = {}) {
     counts[result.created ? 'created' : 'existing'] += 1;
   }
 
-  if (process.env.SEED_DEMO_DATA !== 'false' || process.env.NODE_ENV === 'development') {
+  if (options.seedOperationalData !== false && (process.env.SEED_DEMO_DATA !== 'false' || process.env.NODE_ENV === 'development')) {
     const operationalData = await seedOperationalData(models);
     console.log(`[seed] Operational data seeded: ${operationalData.assets} assets, ${operationalData.assignments} assignments, ${operationalData.maintenances} maintenance records, ${operationalData.notifications} notifications.`);
-  }
-
-  const demoPassword = password || resolveDemoPassword();
-  console.log('[seed] Development credentials:');
-  for (const user of DEMO_USERS) {
-    console.log(` - ${user.username} | ${user.email} | ${demoPassword}`);
   }
 
   return counts;

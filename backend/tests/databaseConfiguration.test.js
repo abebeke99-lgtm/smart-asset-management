@@ -57,3 +57,51 @@ test('accepts Railway MYSQL_URL and refuses incomplete production configuration'
     { code: 'DB_CONFIG_MISSING' },
   );
 });
+
+test('uses only a distinct test database when NODE_ENV is test', () => {
+  const config = getDatabaseConfig({
+    NODE_ENV: 'test',
+    DB_HOST: 'localhost',
+    DB_PORT: '3306',
+    DB_NAME: 'smart_asset_db',
+    DB_USER: 'development_user',
+    DB_PASSWORD: 'development_password',
+    DB_TEST_HOST: '127.0.0.1',
+    DB_TEST_PORT: '3307',
+    DB_TEST_NAME: 'smart_asset_db_test',
+    DB_TEST_USER: 'test_user',
+    DB_TEST_PASSWORD: '',
+  });
+
+  assert.deepEqual(config, {
+    host: '127.0.0.1',
+    port: 3307,
+    database: 'smart_asset_db_test',
+    username: 'test_user',
+    password: '',
+  });
+});
+
+test('refuses test mode without explicit isolated database credentials', () => {
+  assert.throws(
+    () => getDatabaseConfig({ NODE_ENV: 'test', DB_TEST_HOST: 'localhost' }),
+    { code: 'DB_TEST_CONFIG_MISSING' },
+  );
+});
+
+test('refuses a test target identical to the development database', () => {
+  assert.throws(
+    () => getDatabaseConfig({
+      NODE_ENV: 'test',
+      DB_HOST: 'localhost',
+      DB_PORT: '3306',
+      DB_NAME: 'smart_asset_db',
+      DB_TEST_HOST: 'localhost',
+      DB_TEST_PORT: '3306',
+      DB_TEST_NAME: 'smart_asset_db',
+      DB_TEST_USER: 'root',
+      DB_TEST_PASSWORD: '',
+    }),
+    { code: 'DB_TEST_CONFIG_INVALID' },
+  );
+});

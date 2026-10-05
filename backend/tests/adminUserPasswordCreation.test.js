@@ -9,6 +9,7 @@ const authController = require('../src/controllers/authController');
 
 test('admin-created user stores a bcrypt password and can log in normally', async () => {
   const originalFindOne = models.User.findOne;
+  const originalFindAll = models.User.findAll;
   const originalCreate = models.User.create;
   const originalAuditCreate = models.AuditLog.create;
   const originalConfigFindByPk = models.Config.findByPk;
@@ -18,6 +19,7 @@ test('admin-created user stores a bcrypt password and can log in normally', asyn
 
   process.env.JWT_SECRET = 'test-only-secret-for-admin-user-password-test';
   models.User.findOne = async () => createdUser || null;
+  models.User.findAll = async () => [];
   models.User.create = async (values) => {
     createdUser = {
       id: 918273,
@@ -95,6 +97,7 @@ test('admin-created user stores a bcrypt password and can log in normally', asyn
     assert.equal(Object.hasOwn(loginResponse.payload.user, 'password'), false);
   } finally {
     models.User.findOne = originalFindOne;
+    models.User.findAll = originalFindAll;
     models.User.create = originalCreate;
     models.AuditLog.create = originalAuditCreate;
     models.Config.findByPk = originalConfigFindByPk;

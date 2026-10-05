@@ -26,12 +26,25 @@ const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 const normalizeRoleValue = (role) => {
   if (!role) return '';
-  const value = String(role).trim().toLowerCase();
+
+  const resolvedRole = Array.isArray(role)
+    ? role.find((entry) => entry !== null && entry !== undefined && String(entry).trim())
+    : role && typeof role === 'object'
+      ? role.role ?? role.name ?? role.value ?? (Array.isArray(role.roles) ? role.roles.find((entry) => entry !== null && entry !== undefined && String(entry).trim()) : '')
+      : role;
+
+  const value = String(resolvedRole ?? '').trim().toLowerCase();
+  if (!value) return '';
+
+  const normalizedValue = value.replace(/[_-]+/g, ' ');
   const aliases = {
+    admin: 'admin',
+    administrator: 'admin',
     'department head': 'department_head',
+    'dept head': 'department_head',
     'dept_head': 'department_head',
     'department-head': 'department_head',
-    'department': 'department_head',
+    department: 'department_head',
     college: 'college_manager',
     'college manager': 'college_manager',
     'college-manager': 'college_manager',
@@ -40,9 +53,18 @@ const normalizeRoleValue = (role) => {
     'infrastructure directorate': 'infrastructure',
     'infrastructure_directorate': 'infrastructure',
     'infrastructure-directorate': 'infrastructure',
-    'infra': 'infrastructure'
+    infra: 'infrastructure',
+    'ict officer': 'ict_officer',
+    'finance officer': 'finance',
+    'store manager': 'store_manager',
+    maintenance: 'maintenance',
+    maint: 'maintenance',
+    staff: 'staff',
+    student: 'student',
+    user: 'user',
   };
-  return aliases[value] || value;
+
+  return aliases[normalizedValue] || normalizedValue.replace(/\s+/g, '_');
 };
 
 const normalizePermissionValue = (permission) => String(permission || '').trim().toLowerCase().replace(/\s+/g, '.').replace(/[_-]+/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
@@ -56,7 +78,7 @@ const normalizeUser = (userData) => {
 
   const department = userData.department;
   const profilePhoto = userData.profilePhoto ?? userData.profile_photo ?? userData.avatar ?? userData.photo_url ?? userData.avatar_url ?? null;
-  const role = normalizeRoleValue(userData.role);
+  const role = normalizeRoleValue(userData.role ?? userData.roles ?? userData.roleName ?? userData.userRole);
   const permissionSource = Array.isArray(userData.permissions)
     ? userData.permissions
     : Array.isArray(userData.rolePermissions)

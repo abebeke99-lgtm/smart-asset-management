@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { Asset, ServiceRequest } = require('../models');
+const { Asset, ServiceRequest, User } = require('../models');
 const { globalSearch, organizationWhere, validateSearchQuery } = require('../controllers/globalSearchController');
 
 const makeResponse = () => ({
@@ -22,18 +22,21 @@ test('search validates short, oversized, and SQL control input as 4xx', async ()
 test('search limits each group to five and parameterizes user text through Sequelize', async () => {
   const originalAssetFindAll = Asset.findAll;
   const originalRequestFindAll = ServiceRequest.findAll;
+  const originalUserFindAll = User.findAll;
   const calls = [];
   Asset.findAll = async (options) => { calls.push(options); return [{ id: 7, name: 'QA laptop', status: 'available' }]; };
   ServiceRequest.findAll = async (options) => { calls.push(options); return []; };
+  User.findAll = async (options) => { calls.push(options); return []; };
   const response = makeResponse();
   try {
     await globalSearch({ query: { q: 'QA' }, user: { id: 1, role: 'admin' } }, response);
   } finally {
     Asset.findAll = originalAssetFindAll;
     ServiceRequest.findAll = originalRequestFindAll;
+    User.findAll = originalUserFindAll;
   }
   assert.equal(response.statusCode, 200);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.ok(calls.every((call) => call.limit === 5));
   assert.equal(response.body.data.assets[0].title, 'QA laptop');
 });

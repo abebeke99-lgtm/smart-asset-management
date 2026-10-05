@@ -197,6 +197,9 @@ test('asset list accepts validated filters, allowlisted sorting, search, and del
     departmentFindByPk: models.Department.findByPk,
     departmentFindAll: models.Department.findAll,
     collegeFindAll: models.College.findAll,
+    campusFindAll: models.Campus.findAll,
+    buildingFindAll: models.Building.findAll,
+    roomFindAll: models.Room.findAll,
     userFindAll: models.User.findAll,
     assignmentFindAll: Assignment.findAll,
     maintenanceFindAll: models.Maintenance.findAll,
@@ -208,6 +211,9 @@ test('asset list accepts validated filters, allowlisted sorting, search, and del
   models.Department.findByPk = async () => ({ id: 4, name: 'ICT', collegeId: 3 });
   models.Department.findAll = async () => [];
   models.College.findAll = async (options) => { collegeFindOptions = options; return []; };
+  models.Campus.findAll = async () => [];
+  models.Building.findAll = async () => [];
+  models.Room.findAll = async () => [];
   models.User.findAll = async () => [];
   Assignment.findAll = async () => [];
   models.Maintenance.findAll = async () => [];
@@ -244,6 +250,9 @@ test('asset list accepts validated filters, allowlisted sorting, search, and del
     models.Department.findByPk = originals.departmentFindByPk;
     models.Department.findAll = originals.departmentFindAll;
     models.College.findAll = originals.collegeFindAll;
+    models.Campus.findAll = originals.campusFindAll;
+    models.Building.findAll = originals.buildingFindAll;
+    models.Room.findAll = originals.roomFindAll;
     models.User.findAll = originals.userFindAll;
     Assignment.findAll = originals.assignmentFindAll;
     models.Maintenance.findAll = originals.maintenanceFindAll;

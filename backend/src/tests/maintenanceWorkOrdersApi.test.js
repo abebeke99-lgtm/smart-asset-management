@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { Asset, Maintenance, MaintenanceWorkOrder, User, AuditLog, MaintenanceHistory, sequelize } = require('../models');
+const { Asset, Maintenance, MaintenanceWorkOrder, PreventiveMaintenance, User, AuditLog, MaintenanceHistory, sequelize } = require('../models');
 const { normalizeMaintenanceWorkOrder, getMaintenanceWorkOrderSummary, getMaintenanceWorkOrderOptions, createMaintenanceWorkOrder, updateMaintenanceWorkOrder, rollbackIfPending } = require('../controllers/maintenanceController');
 
 test('maintenance transaction rollback is skipped after commit and used while open', async () => {
@@ -175,6 +175,7 @@ test('maintenance technician directory calculates real workload metrics from ass
   const originalFindAllUsers = User.findAll;
   const originalFindAllMaintenance = Maintenance.findAll;
   const originalFindAllWorkOrders = MaintenanceWorkOrder.findAll;
+  const originalFindAllPreventiveMaintenance = PreventiveMaintenance.findAll;
 
   User.findAll = async () => [{
     id: 7,
@@ -214,13 +215,14 @@ test('maintenance technician directory calculates real workload metrics from ass
     priority: 'low',
     createdAt: '2026-09-14T00:00:00Z',
   }];
+  PreventiveMaintenance.findAll = async () => [];
 
   try {
     let responseBody;
     await getTechnicianDirectory({ query: {}, user: { role: 'maintenance', collegeId: null } }, {
       json(payload) { responseBody = payload; },
       status(code) { this.statusCode = code; return this; },
-    });
+    }, (error) => { throw error; });
 
     assert.equal(responseBody.success, true);
     assert.equal(responseBody.summary.totalTechnicians, 1);
@@ -233,5 +235,6 @@ test('maintenance technician directory calculates real workload metrics from ass
     User.findAll = originalFindAllUsers;
     Maintenance.findAll = originalFindAllMaintenance;
     MaintenanceWorkOrder.findAll = originalFindAllWorkOrders;
+    PreventiveMaintenance.findAll = originalFindAllPreventiveMaintenance;
   }
 });
