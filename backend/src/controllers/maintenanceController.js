@@ -2149,6 +2149,13 @@ const repairInclude = [
   // Downstream code reads repair.materialsCost and sumNumber() maps undefined to 0.
   { model: MaintenanceRepair, required: true, attributes: ['id', 'workOrderId', 'technicianId', 'status', 'diagnosis', 'repairAction', 'partsUsed', 'laborCost', 'partsCost', 'serviceCost', 'totalCost', 'completionDate', 'notes'], include: [{ model: MaintenanceWorkOrder, attributes: ['id', 'workOrderNumber', 'status', 'priority'] }, { model: MaintenanceCost, attributes: ['id', 'costCategory', 'amount'] }] },
 ];
+const repairScope = (req) => {
+  const scope = {};
+  if (req?.user?.collegeId || req?.organizationScope?.collegeId) {
+    scope.collegeId = Number(req.user.collegeId ?? req.organizationScope.collegeId);
+  }
+  return scope;
+};
 const scopedRepairIncludes = (req, repairWhere = {}) => repairInclude.map((item) => {
   if (item.model === Asset && req.user.collegeId) {
     return { ...item, where: { collegeId: req.user.collegeId }, required: true };

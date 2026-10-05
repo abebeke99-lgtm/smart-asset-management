@@ -43,6 +43,7 @@ const getPermissionType = (permissionName) => {
   const actionTypes = {
     view: "View",
     create: "Create",
+    import: "Create",
     update: "Edit",
     edit: "Edit",
     delete: "Delete",
@@ -129,6 +130,12 @@ function AdminRolesPermissions() {
       return undefined;
     }
 
+    if (selectedRoleId === "admin") {
+      setSelectedPermissions([...permissions]);
+      setPermissionsLoading(false);
+      return undefined;
+    }
+
     let active = true;
     setPermissionsLoading(true);
     setError("");
@@ -151,7 +158,7 @@ function AdminRolesPermissions() {
     return () => {
       active = false;
     };
-  }, [selectedRoleId, refreshVersion]);
+  }, [selectedRoleId, refreshVersion, permissions]);
 
   const selectedRole = roles.find((role) => getRoleId(role) === selectedRoleId);
   const filteredRoles = useMemo(() => {
@@ -180,6 +187,8 @@ function AdminRolesPermissions() {
     }, {});
   }, [permissions, permissionSearch, permissionTypeFilter]);
 
+  const isReadOnlyRole = selectedRoleId === "admin";
+
   const isDirty = useMemo(() => {
     const rolePermissions = (selectedRole?.permissions || []).map(getPermissionName).sort();
     const currentPermissions = [...selectedPermissions].sort();
@@ -188,6 +197,7 @@ function AdminRolesPermissions() {
   }, [selectedPermissions, selectedRole]);
 
   const togglePermission = (permissionName) => {
+    if (isReadOnlyRole) return;
     setSuccess("");
     setSelectedPermissions((current) =>
       current.includes(permissionName)
@@ -310,7 +320,7 @@ function AdminRolesPermissions() {
                   className="admin-roles-button admin-roles-button-primary"
                   type="button"
                   onClick={savePermissions}
-                  disabled={!isDirty || saving || permissionsLoading}
+                  disabled={!isDirty || saving || permissionsLoading || isReadOnlyRole}
                 >
                   <Save size={16} aria-hidden="true" /> {saving ? "Saving..." : "Save changes"}
                 </button>
@@ -362,7 +372,7 @@ function AdminRolesPermissions() {
                                         type="checkbox"
                                         checked={selectedPermissions.includes(permissionName)}
                                         onChange={() => togglePermission(permissionName)}
-                                        disabled={saving || permissionsLoading}
+                                        disabled={saving || permissionsLoading || isReadOnlyRole}
                                         aria-label={`${permissionName} permission`}
                                       />
                                       <code>{permissionName}</code>

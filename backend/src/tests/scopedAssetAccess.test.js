@@ -6,6 +6,7 @@ const { Asset, Assignment, Inventory, sequelize } = require('../models');
 const { getAllAssets, getAssetById, updateAsset, createAsset } = require('../controllers/assetController');
 const { getInventory } = require('../controllers/inventoryController');
 const { restoreAsset } = require('../controllers/assetExtendedController');
+const assetRoutes = require('../routes/assetRoutes');
 
 const routeSource = fs.readFileSync(path.resolve(__dirname, '../routes/assetRoutes.js'), 'utf8');
 
@@ -50,6 +51,73 @@ test('generic asset list intersects caller filters and summary with the resolved
     Asset.findAll = originals.findAll;
     require('../models').Department.findByPk = originals.findByPk;
     Assignment.findAll = originals.assignmentFindAll;
+  }
+});
+
+test('Teaching Assistant asset list and summary remain restricted to the assigned department', async () => {
+  const originals = {
+    findAndCountAll: Asset.findAndCountAll,
+    findAll: Asset.findAll,
+    departmentFindByPk: require('../models').Department.findByPk,
+    assignmentFindAll: Assignment.findAll,
+  };
+  let listOptions;
+  let summaryOptions;
+  Asset.findAndCountAll = async (options) => { listOptions = options; return { count: 0, rows: [] }; };
+  Asset.findAll = async (options) => { summaryOptions = options; return []; };
+  require('../models').Department.findByPk = async () => ({ id: 22, name: 'Another department', collegeId: 3 });
+  Assignment.findAll = async () => [];
+  try {
+    const response = makeResponse();
+    await getAllAssets(scopedRequest({
+      user: { id: 17, role: 'teaching_assistant', departmentId: 4, collegeId: 2 },
+      organizationScope: { departmentId: 4, collegeId: 2, department: { id: 4, name: 'Teaching Department' } },
+      query: { department: 'Another department', department_id: '22', college_id: '3' },
+    }), response);
+    assert.equal(response.statusCode, 200);
+    assert.equal(listOptions.where.departmentId, 4);
+    assert.equal(listOptions.where.collegeId, 2);
+    assert.equal(summaryOptions.where.departmentId, 4);
+    assert.equal(summaryOptions.where.collegeId, 2);
+  } finally {
+    Asset.findAndCountAll = originals.findAndCountAll;
+    Asset.findAll = originals.findAll;
+    require('../models').Department.findByPk = originals.departmentFindByPk;
+    Assignment.findAll = originals.assignmentFindAll;
+  }
+});
+
+test('Teaching Assistant detail route verifies the requested asset belongs to its department', async () => {
+  const detailRoute = assetRoutes.stack.find((layer) => layer.route?.path === '/:id' && layer.route.methods.get)?.route;
+  assert.ok(detailRoute);
+  const scopeMiddleware = detailRoute.stack.find((layer) => layer.handle.name === 'resolveTeachingAssistantDepartmentScope')?.handle;
+  const assetMiddleware = detailRoute.stack.find((layer) => layer.handle.name === 'verifyTeachingAssistantAsset')?.handle;
+  assert.equal(typeof scopeMiddleware, 'function');
+  assert.equal(typeof assetMiddleware, 'function');
+
+  const models = require('../models');
+  const originalDepartmentFindOne = models.Department.findOne;
+  const originalAssetFindOne = Asset.findOne;
+  let assetWhere;
+  models.Department.findOne = async () => ({ id: 4, name: 'Teaching Department', collegeId: 2 });
+  Asset.findOne = async (options) => { assetWhere = options.where; return null; };
+  try {
+    const req = { user: { role: 'teaching_assistant', departmentId: 4 }, params: { id: '99' }, query: {} };
+    const response = makeResponse();
+    let scopeAdvanced = false;
+    await scopeMiddleware(req, response, () => { scopeAdvanced = true; });
+    assert.equal(scopeAdvanced, true);
+    assert.deepEqual(req.organizationScope, {
+      department: { id: 4, name: 'Teaching Department', collegeId: 2 },
+      departmentId: 4,
+      collegeId: 2,
+    });
+    await assetMiddleware(req, response, () => assert.fail('out-of-scope asset must not continue'));
+    assert.deepEqual(assetWhere, { id: '99', departmentId: 4, collegeId: 2 });
+    assert.equal(response.statusCode, 403);
+  } finally {
+    models.Department.findOne = originalDepartmentFindOne;
+    Asset.findOne = originalAssetFindOne;
   }
 });
 
@@ -112,7 +180,8 @@ test('generic inventory list constrains joined assets to the resolved College', 
 test('scoped asset ID routes resolve College and verify ownership before dispatch', () => {
   assert.match(routeSource, /const resolveScopedCollegeAssetScope = .*resolveCollegeScope/);
   assert.match(routeSource, /const verifyScopedCollegeAsset = async/);
-  assert.match(routeSource, /router\.get\('\/'.*resolveScopedCollegeAssetScope, getAllAssets/);
+  assert.match(routeSource, /router\.get\('\/'.*resolveScopedCollegeAssetScope, resolveTeachingAssistantDepartmentScope, getAllAssets/);
+  assert.match(routeSource, /requireAnyPermission\('assets\.view', 'ict\.assets\.view', 'college\.assets\.view'\)/);
   assert.match(routeSource, /router\.post\('\/'.*requireRole\('admin'\)/);
   assert.match(routeSource, /router\.put\('\/:id'.*requireRole\('admin'\)/);
   assert.match(routeSource, /router\.post\('\/:id\/restore'.*resolveScopedCollegeAssetScope, verifyScopedCollegeAsset/);

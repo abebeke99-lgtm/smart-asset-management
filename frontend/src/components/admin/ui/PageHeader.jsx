@@ -2,13 +2,13 @@ import React from 'react';
 import { ChevronRight, House } from 'lucide-react';
 import { Link, useInRouterContext } from 'react-router-dom';
 
-const SafeLink = React.forwardRef(({ to, ...props }, ref) => {
+const SafeLink = React.forwardRef(({ to, children, ...props }, ref) => {
   const inRouter = useInRouterContext();
   if (!inRouter) {
     const href = typeof to === 'string' ? to : to?.pathname || '/';
-    return <a ref={ref} href={href} {...props} />;
+    return <a ref={ref} href={href} {...props}>{children}</a>;
   }
-  return <Link ref={ref} to={to} {...props} />;
+  return <Link ref={ref} to={to} {...props}>{children}</Link>;
 });
 
 export default function PageHeader({ eyebrow, title, subtitle, actions, breadcrumb = [] }) {

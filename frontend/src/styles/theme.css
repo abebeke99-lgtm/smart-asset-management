@@ -6,81 +6,81 @@
    resolves back to this file. Never hard-code a hex in a
    component or in a component-scoped stylesheet.
 
-   Brand ramp (fixed — do not change):
-     sky   #0EA5D9   navy  #111827
-     blue  #2563EB   gold  #F4C542
-     page  #F3F6F9   card  #FFFFFF
+   University identity:
+     primary blue #0057B8   deep blue #003B7A
+     navy #071F3D           gold #F4C542
+     page #F4F8FC           surface #FFFFFF
    ========================================================== */
 
 :root {
   color-scheme: light;
 
   /* ---------- Brand ramp ---------- */
-  --color-brand-sky: #0EA5D9;
-  --color-brand-sky-dark: #0284C7;
-  --color-brand-navy: #111827;
-  --color-brand-blue: #2563EB;
-  --color-brand-blue-dark: #1D4ED8;
+  --color-brand-sky: #0284C7;
+  --color-brand-sky-dark: #003B7A;
+  --color-brand-navy: #071F3D;
+  --color-brand-blue: #0057B8;
+  --color-brand-blue-dark: #003B7A;
   --color-brand-gold: #F4C542;
-  --color-brand-page: #F3F6F9;
+  --color-brand-gold-light: #FFF4CC;
+  --color-brand-page: #F4F8FC;
   --color-brand-card: #FFFFFF;
 
   /* ---------- Header ---------- */
-  --color-header: #429ED0;
-  --color-header-hover: #3289B9;
-  --color-header-border: rgba(17, 24, 39, 0.18);
-  --color-header-text: #111827;
-  --color-header-text-strong: #111827;
-  --color-header-text-muted: #172B3D;
-  --color-header-icon-hover: rgba(17, 24, 39, 0.1);
-  --color-header-focus: #111827;
-  --color-header-badge: #F59E0B;
-   --color-header-control-border: rgba(17, 24, 39, 0.28);
+  --color-header: #0066CC;
+  --color-header-gradient: linear-gradient(110deg, #003B7A 0%, #0066CC 100%);
+  --color-header-hover: #003B7A;
+  --color-header-border: rgba(255, 255, 255, 0.2);
+  --color-header-text: #FFFFFF;
+  --color-header-text-strong: #FFFFFF;
+  --color-header-text-muted: #E5EEF8;
+  --color-header-icon-hover: rgba(255, 255, 255, 0.14);
+  --color-header-focus: #F4C542;
+  --color-header-badge: #F4C542;
+  --color-header-control-border: rgba(255, 255, 255, 0.42);
 
   /* ---------- Sidebar ---------- */
-  --color-sidebar: var(--color-brand-navy);
-  --color-sidebar-hover: #1F2937;
-  --color-sidebar-active: #1F2937;
-  --color-sidebar-text: #D1D5DB;
+  --color-sidebar: #071F3D;
+  --color-sidebar-hover: #0D3B70;
+  --color-sidebar-active: #0057B8;
+  --color-sidebar-text: #E5EEF8;
+  --color-sidebar-icon: #B8CCE3;
   --color-sidebar-text-active: #FFFFFF;
-  --color-sidebar-label: #9CA3AF;
-  --color-sidebar-divider: #374151;
+  --color-sidebar-label: #B8CCE3;
+  --color-sidebar-divider: rgba(184, 204, 227, 0.22);
   --color-sidebar-accent: var(--color-brand-gold);
 
   /* ---------- Primary action ---------- */
   --color-primary: var(--color-brand-blue);
   --color-primary-hover: var(--color-brand-blue-dark);
-  --color-primary-light: #DBEAFE;
-  --color-primary-text: #1D4ED8;
+  --color-primary-light: #E8F1FB;
+  --color-primary-text: #003B7A;
 
   /* ---------- Surfaces ---------- */
   --color-background: var(--color-brand-page);
   --color-surface: var(--color-brand-card);
-  --color-surface-muted: #F9FAFB;
-  --color-border: #E5E7EB;
+  --color-surface-muted: #F4F8FC;
+  --color-border: #D9E4F0;
 
   /* ---------- Text ----------
-     --color-text-muted is for text sitting on a WHITE card (#FFFFFF, 4.83:1).
-     Anything rendered on the page canvas (#F3F6F9) or a muted surface
-     (#F9FAFB) must use --color-text-secondary-on-page instead: #6B7280 drops
-     to 4.46:1 on the page background, #4B5563 holds at 6.97:1. */
-  --color-text-primary: #111827;
-  --color-text-secondary: #475569;
-  --color-text-muted: #6B7280;
-  --color-text-secondary-on-page: #4B5563;
+     Secondary text stays readable on both white cards and the light page canvas. */
+  --color-text-primary: #102A43;
+  --color-text-secondary: #64748B;
+  --color-text-muted: #64748B;
+  --color-text-secondary-on-page: #64748B;
 
   /* ---------- Status (fill / accent) ---------- */
   --color-success: #16A34A;
   --color-success-light: #DCFCE7;
   --color-success-text: #166534;
   --color-warning: #F59E0B;
-  --color-warning-light: #FEF3C7;
+  --color-warning-light: #FFF4CC;
   --color-warning-text: #92400E;
    --color-warning-icon: #B45309;
   --color-danger: #DC2626;
   --color-danger-light: #FEE2E2;
   --color-danger-text: #991B1B;
-  --color-info: #0EA5D9;
+  --color-info: #0284C7;
   --color-info-light: #E0F2FE;
   --color-info-text: #075985;
   --color-neutral: #6B7280;
@@ -90,11 +90,11 @@
 
    /* ---------- Global search ---------- */
    --color-search-field: #FFFFFF;
-   --color-search-border: #0C4A6E;
+   --color-search-border: #D9E4F0;
    --color-search-icon: #4B5563;
    --color-search-text: #111827;
    --color-search-hover: #111827;
-   --color-search-focus: #111827;
+   --color-search-focus: #0057B8;
    --color-search-shortcut-bg: #F3F4F6;
    --color-search-shortcut-text: #374151;
    --color-search-shortcut-border: #E5E7EB;
@@ -103,9 +103,9 @@
    --color-search-group: #4B5563;
    --color-search-divider: #E5E7EB;
    --color-search-item-hover: #F3F6F9;
-   --color-search-selected-bg: #DBEAFE;
-   --color-search-selected-border: #2563EB;
-   --color-search-highlight: #1D4ED8;
+   --color-search-selected-bg: #E8F1FB;
+   --color-search-selected-border: #0057B8;
+   --color-search-highlight: #003B7A;
    --color-search-badge-bg: #F3F4F6;
    --color-search-badge-text: #374151;
    --color-search-skeleton: #E5E7EB;
@@ -117,25 +117,26 @@
   --color-accent: var(--color-brand-gold);
 
   /* ---------- Footer ---------- */
-   --color-footer-background: #111827;
-   --color-footer-border: rgba(255, 255, 255, 0.18);
-   --color-footer-text: #F8FAFC;
-   --color-footer-link: #93C5FD;
+   --color-footer-background: #071F3D;
+   --color-footer-border: rgba(184, 204, 227, 0.22);
+   --color-footer-text: #E5EEF8;
+   --color-footer-link: #B8CCE3;
 
   /* ---------- Tables / charts ---------- */
-  --color-table-header: #F3F6F9;
-  --color-table-hover: #F9FAFB;
-  --color-chart-grid: #E5E7EB;
+  --color-table-header: #F4F8FC;
+  --color-table-hover: #E8F1FB;
+  --color-chart-grid: #D9E4F0;
   /* Six-colour categorical ramp, led by the primary blue.
      Every slot clears 3:1 against a white card (WCAG 1.4.11). The warning and
      info slots use their 600-weight steps because the 500-weight fills
      (#F59E0B = 2.15:1, #0EA5D9 = 2.84:1) do not. */
-  --color-chart-1: #2563EB;
-  --color-chart-2: #D97706;
-  --color-chart-3: #6B7280;
+  --color-chart-1: #0057B8;
+  --color-chart-2: #F59E0B;
+  --color-chart-3: #64748B;
   --color-chart-4: #16A34A;
-  --color-chart-5: #0E7490;
+  --color-chart-5: #0284C7;
   --color-chart-6: #DC2626;
+  --color-chart-7: #7C3AED;
 
   /* ---------- Spacing ---------- */
   --spacing-xs: 4px;
@@ -152,15 +153,15 @@
    --radius-search-dropdown: 12px;
 
   /* ---------- Elevation ---------- */
-  --shadow-sm: 0 1px 3px rgba(17, 24, 39, 0.08);
-  --shadow-md: 0 4px 12px rgba(17, 24, 39, 0.08);
-  --shadow-lg: 0 12px 30px rgba(17, 24, 39, 0.12);
-  --shadow-dashboard-card: 0 2px 8px rgba(17, 24, 39, 0.04);
-  --shadow-dashboard-card-hover: 0 8px 24px rgba(17, 24, 39, 0.08);
-  --shadow-dashboard-primary: 0 4px 12px rgba(37, 99, 235, 0.3);
-   --shadow-header: 0 1px 3px rgba(2, 132, 199, 0.32);
-   --shadow-header-menu: 0 10px 24px rgba(17, 24, 39, 0.15);
-  --focus-ring: rgba(37, 99, 235, 0.35);
+  --shadow-sm: 0 1px 3px rgba(7, 31, 61, 0.08);
+  --shadow-md: 0 4px 12px rgba(7, 31, 61, 0.08);
+  --shadow-lg: 0 12px 30px rgba(7, 31, 61, 0.12);
+  --shadow-dashboard-card: 0 2px 8px rgba(7, 31, 61, 0.04);
+  --shadow-dashboard-card-hover: 0 8px 24px rgba(7, 31, 61, 0.08);
+  --shadow-dashboard-primary: 0 4px 12px rgba(0, 87, 184, 0.2);
+  --shadow-header: 0 1px 4px rgba(7, 31, 61, 0.16);
+  --shadow-header-menu: 0 10px 24px rgba(7, 31, 61, 0.15);
+  --focus-ring: rgba(0, 87, 184, 0.35);
   --transition: 160ms ease;
 
   /* ==========================================================
@@ -186,7 +187,7 @@
   --danger-soft: var(--color-danger-light);
   --info: var(--color-info);
 
-  --header-background: var(--color-header);
+  --header-background: var(--color-header-gradient);
   --sidebar-background: var(--color-sidebar);
   --sidebar-hover: var(--color-sidebar-hover);
   --sidebar-active: var(--color-sidebar-active);
@@ -194,8 +195,8 @@
   --primary-blue-hover: var(--color-primary-hover);
   --color-secondary: var(--color-text-secondary);
   --color-secondary-hover: #334155;
-  --header-gradient-start: #0F172A;
-  --header-gradient-end: #1D4ED8;
+  --header-gradient-start: #003B7A;
+  --header-gradient-end: #0066CC;
 
   --dashboard-header: var(--color-header);
   --dashboard-sidebar: var(--color-sidebar);

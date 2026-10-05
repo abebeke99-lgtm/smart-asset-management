@@ -32,6 +32,7 @@ const normalizeRoleValue = (role) => {
     'dept_head': 'department_head',
     'department-head': 'department_head',
     'department': 'department_head',
+    college: 'college_manager',
     'college manager': 'college_manager',
     'college-manager': 'college_manager',
     college_manager: 'college_manager',
@@ -162,7 +163,7 @@ export const AuthProvider = ({ children }) => {
           : err.status === 401
             ? 'Invalid email or password.'
             : err.status === 403
-              ? 'This account is disabled.'
+              ? err.message || 'Account is deactivated.'
               : err.message || 'Unable to connect to server. Please try again.'
       };
     }

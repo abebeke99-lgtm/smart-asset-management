@@ -2,9 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const models = require('../src/models');
 const passport = require('../src/config/passport');
-const { requireAuth, requirePermission, requireRole } = require('../src/middlewares/auth');
+const { requireAuth, requirePermission, requireAnyPermission, requireRole } = require('../src/middlewares/auth');
 const { getCurrentUserProfile } = require('../src/controllers/userController');
-const { getConfiguredRolePermissions } = require('../src/services/rolePermissionService');
+const { getConfiguredRolePermissions, getRolePermissionMatrix } = require('../src/services/rolePermissionService');
+const { PERMISSIONS } = require('../src/constants/rolePermissions');
 
 const response = () => ({
   statusCode: 200,
@@ -99,6 +100,26 @@ test('admin-only API role guards reject staff with HTTP 403', () => {
   assert.equal(res.statusCode, 403);
 });
 
+test('shared asset routes accept the role-specific view permission for ICT users', () => {
+  const req = { user: { role: 'ict_officer', permissions: ['ict.assets.view'] } };
+  let nextCalled = false;
+  const res = response();
+  requireAnyPermission('assets.view', 'ict.assets.view', 'college.assets.view')(req, res, () => {
+    nextCalled = true;
+  });
+  assert.equal(nextCalled, true);
+});
+
+test('shared asset routes reject users without any of the required view permissions', () => {
+  const res = response();
+  requireAnyPermission('assets.view', 'ict.assets.view', 'college.assets.view')(
+    { user: { role: 'teaching_assistant', permissions: ['assets.create'] } },
+    res,
+    () => assert.fail('asset view permission must be required'),
+  );
+  assert.equal(res.statusCode, 403);
+});
+
 test('default role permissions are least-privilege when no custom matrix is saved', async () => {
   const originalConfigFindByPk = models.Config.findByPk;
   models.Config.findByPk = async () => null;
@@ -106,9 +127,47 @@ test('default role permissions are least-privilege when no custom matrix is save
   try {
     const staffPermissions = await getConfiguredRolePermissions('staff');
     const studentPermissions = await getConfiguredRolePermissions('student');
+    const teachingAssistantPermissions = await getConfiguredRolePermissions('teaching_assistant');
     assert.deepEqual(staffPermissions, ['assets.view']);
     assert.deepEqual(studentPermissions, ['assets.view']);
+    assert.deepEqual(teachingAssistantPermissions, ['assets.view']);
     assert.equal(staffPermissions.includes('*'), false);
+  } finally {
+    models.Config.findByPk = originalConfigFindByPk;
+  }
+});
+
+test('permission resolution fails closed when the saved matrix cannot be read', async () => {
+  const originalConfigFindByPk = models.Config.findByPk;
+  models.Config.findByPk = async () => {
+    throw new Error('database unavailable');
+  };
+
+  try {
+    await assert.rejects(getConfiguredRolePermissions('staff'), /database unavailable/);
+  } finally {
+    models.Config.findByPk = originalConfigFindByPk;
+  }
+});
+
+test('permission resolution rejects a malformed saved matrix instead of substituting defaults', async () => {
+  const originalConfigFindByPk = models.Config.findByPk;
+  models.Config.findByPk = async () => ({ value: '{invalid' });
+
+  try {
+    await assert.rejects(getConfiguredRolePermissions('staff'), /not valid JSON/);
+  } finally {
+    models.Config.findByPk = originalConfigFindByPk;
+  }
+});
+
+test('administrator matrix always exposes the full permission catalog', async () => {
+  const originalConfigFindByPk = models.Config.findByPk;
+  models.Config.findByPk = async () => ({ value: JSON.stringify({ admin: ['assets.view'] }) });
+
+  try {
+    const matrix = await getRolePermissionMatrix();
+    assert.deepEqual(matrix.admin, PERMISSIONS);
   } finally {
     models.Config.findByPk = originalConfigFindByPk;
   }

@@ -1,4 +1,5 @@
 const { DataTypes } = require('sequelize');
+const crypto = require('node:crypto');
 const { sequelize } = require('../config/database');
 
 const Asset = sequelize.define('Asset', {
@@ -11,7 +12,8 @@ const Asset = sequelize.define('Asset', {
   serialNumber: { type: DataTypes.STRING(255), defaultValue: '' },
   assetCode: { type: DataTypes.STRING(255), defaultValue: '' },
   digitalId: { type: DataTypes.STRING(100), allowNull: true, unique: true, field: 'digital_id' },
-  rfidTag: { type: DataTypes.STRING(255), allowNull: true, defaultValue: null },
+  qrCode: { type: DataTypes.STRING(100), allowNull: false, unique: true, field: 'qr_code' },
+  rfidTag: { type: DataTypes.STRING(255), allowNull: true, defaultValue: null, unique: true },
   status: { type: DataTypes.STRING(100), defaultValue: 'available' },
   condition: { type: DataTypes.STRING(100), defaultValue: 'Good' },
   department: { type: DataTypes.STRING(255), defaultValue: '' },
@@ -41,6 +43,32 @@ const Asset = sequelize.define('Asset', {
   tableName: 'assets',
   timestamps: true,
   indexes: [{ fields: ['digital_id'] }, { fields: ['status'] }, { fields: ['serial_number'] }, { fields: ['campus_id'] }, { fields: ['building_id'] }, { fields: ['room_id'] }],
+  hooks: {
+    beforeValidate(asset) {
+      const qrChanged = asset.changed('qrCode');
+      const legacyQrChanged = asset.changed('digitalId');
+      if (qrChanged) {
+        const value = asset.qrCode || asset.digitalId || `QR-${crypto.randomUUID().replace(/-/g, '').toUpperCase()}`;
+        asset.qrCode = value;
+        asset.digitalId = value;
+      } else if (legacyQrChanged) {
+        const value = asset.digitalId || asset.qrCode || `QR-${crypto.randomUUID().replace(/-/g, '').toUpperCase()}`;
+        asset.digitalId = value;
+        asset.qrCode = value;
+      } else if (asset.isNewRecord && !asset.qrCode && !asset.digitalId) {
+        const generated = `QR-${crypto.randomUUID().replace(/-/g, '').toUpperCase()}`;
+        asset.qrCode = generated;
+        asset.digitalId = generated;
+      } else if (asset.isNewRecord && !asset.qrCode) {
+        asset.qrCode = asset.digitalId;
+      } else if (asset.isNewRecord && !asset.digitalId) {
+        asset.digitalId = asset.qrCode;
+      }
+      if (typeof asset.qrCode === 'string') asset.qrCode = asset.qrCode.trim().toUpperCase() || null;
+      if (typeof asset.digitalId === 'string') asset.digitalId = asset.digitalId.trim().toUpperCase() || null;
+      if (typeof asset.rfidTag === 'string') asset.rfidTag = asset.rfidTag.trim().toUpperCase() || null;
+    },
+  },
   paranoid: true,
 });
 

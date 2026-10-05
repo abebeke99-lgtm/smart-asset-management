@@ -12,6 +12,7 @@ const backupService = require('../services/backupService');
 const { getDashboardAnalytics } = require('../services/dashboardService');
 const { getJwtSecret } = require('../config/jwt');
 const { createAuditLog } = require('../services/auditLogService');
+const { ROLE_NAMES } = require('../constants/rolePermissions');
 
 const router = express.Router();
 const requireAdmin = [requireAuth, requireRole('admin')];
@@ -207,7 +208,7 @@ router.post('/users', ...requireAdmin, async (req, res, next) => {
     const fullName = String(req.body.fullName || req.body.full_name || '').trim();
     const phone = String(req.body.phone || '').trim();
     const role = String(req.body.role || 'staff').trim().toLowerCase();
-    const allowedRoles = ['admin', 'ict_officer', 'store_manager', 'college', 'finance', 'maintenance', 'department_head', 'student', 'staff'];
+    const allowedRoles = ROLE_NAMES;
     const exists = await User.findOne({ where: { username } });
     if (exists) return res.status(409).json({ success: false, message: 'Username already exists' });
     if (!username || !fullName) return res.status(400).json({ success: false, message: 'Username and full name are required' });
@@ -227,7 +228,7 @@ router.put('/users/:id', ...requireAdmin, async (req, res, next) => {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     const previousValue = normalizeUser(user);
-    const allowedRoles = ['admin', 'ict_officer', 'store_manager', 'college', 'finance', 'maintenance', 'department_head', 'student', 'staff'];
+    const allowedRoles = ROLE_NAMES;
     const nextRole = String(req.body.role || user.role || 'staff').trim().toLowerCase();
     if (!allowedRoles.includes(nextRole)) return res.status(422).json({ success: false, message: 'Invalid user role' });
     const nextEmail = String(req.body.email || user.email || '').trim();

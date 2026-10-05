@@ -25,16 +25,17 @@ test('college_manager is accepted as a valid college manager role', () => {
   assert.equal(req.user.role, 'college_manager', 'college_manager should remain canonical');
 });
 
-test('college role is denied college_manager-only authorization', () => {
+test('legacy college role is accepted by college_manager-only authorization', () => {
   const req = { user: { role: 'college', active: true, permissions: ['college.dashboard.view'] } };
   const res = makeResponse();
   let nextCalled = false;
 
+  requireRole('college_manager')(req, res, () => {
+    nextCalled = true;
+  });
 
-    const result = requireRole('college_manager')(req, res, () => assert.fail('college must not pass the college_manager guard'));
-
-    assert.equal(result?.code, 403);
-    assert.equal(req.user.role, 'college', 'college should retain its own role identity');
+  assert.equal(nextCalled, true);
+  assert.equal(req.user.role, 'college_manager');
 });
 
 test('requirePermission blocks requests when the required permission is missing', () => {

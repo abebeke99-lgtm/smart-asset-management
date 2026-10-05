@@ -2,9 +2,12 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Building2, CheckCircle2, ClipboardList, Edit3, FileText, Mail, MapPin, Package, Phone, RefreshCw, Save, UserRound, Users, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import apiClient from '../../services/apiClient';
+import { useLanguage } from '../../contexts/UiContext';
+import { translateMessage } from '../../i18n/messages';
 
 const DeptProfile = () => {
   const { user } = useAuth();
+  const { language } = useLanguage();
   const [department, setDepartment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -62,7 +65,7 @@ const DeptProfile = () => {
           </button>
         )}
       </header>
-      {loading && <ProfileLoadingState />}
+      {loading && <ProfileLoadingState message={translateMessage(language, 'departmentLoading.profile')} />}
       {!loading && error && <ProfileErrorState onRetry={loadProfile} />}
       {!loading && !error && !department && <div className="department-profile-state">Department profile information is not available.</div>}
       {!loading && !error && department && (
@@ -113,7 +116,7 @@ const DetailGrid = ({ department, collegeName, headName, locationName }) => <div
 
 const DetailItem = ({ icon: Icon, label, value }) => <div className="department-profile-detail"><Icon size={17} aria-hidden="true" /><div><dt>{label}</dt><dd>{value}</dd></div></div>;
 const SummaryItem = ({ icon: Icon, label, value }) => <div className="department-profile-summary-item"><Icon size={18} aria-hidden="true" /><strong>{Number(value || 0)}</strong><span>{label}</span></div>;
-const ProfileLoadingState = () => <div className="department-profile-loading" aria-live="polite"><span className="department-profile-spinner"><RefreshCw size={20} aria-hidden="true" /></span>Loading department profile...</div>;
+const ProfileLoadingState = ({ message }) => <div className="department-profile-loading" aria-live="polite"><span className="department-profile-spinner"><RefreshCw size={20} aria-hidden="true" /></span>{message}</div>;
 const ProfileErrorState = ({ onRetry }) => <div className="department-profile-state department-profile-state--error" role="alert"><p>Unable to load department profile.</p><button type="button" className="department-profile-button" onClick={onRetry}><RefreshCw size={16} aria-hidden="true" /> Retry</button></div>;
 
 const ProfileForm = ({ department, saving, onCancel, onSave }) => {

@@ -6,6 +6,7 @@ const RFIDLog = sequelize.define('RFIDLog', {
   assetId: { type: DataTypes.INTEGER, allowNull: false },
   tag: { type: DataTypes.STRING(255), allowNull: false },
   readerId: { type: DataTypes.STRING(80), allowNull: true, field: 'reader_id' },
+  scannedBy: { type: DataTypes.INTEGER, allowNull: true, field: 'scanned_by' },
   action: { type: DataTypes.STRING(100), defaultValue: 'scan' },
   location: { type: DataTypes.STRING(255), defaultValue: '' },
   notes: { type: DataTypes.TEXT, defaultValue: '' },

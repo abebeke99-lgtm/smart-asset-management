@@ -273,6 +273,148 @@ describe('ICT Officer sidebar specification', () => {
   });
 });
 
+describe('Department Head sidebar specification', () => {
+  const appSource = fs.readFileSync(path.resolve(__dirname, 'App.jsx'), 'utf8');
+  const sidebarCss = fs.readFileSync(path.resolve(__dirname, 'App.css'), 'utf8');
+  const expectedItems = [
+    ['/department-head', 'Dashboard'],
+    ['/department-head/profile', 'Department Profile'],
+    ['/department-head/staff', 'Staff'],
+    ['/department-head/locations', 'Locations'],
+    ['/department-head/laboratories', 'Laboratories'],
+    ['/department-head/assets', 'Assets'],
+    ['/department-head/inventory', 'Inventory'],
+    ['/department-head/requests', 'Asset Requests'],
+    ['/department-head/approvals', 'Approval Queue'],
+    ['/department-head/assignments', 'Assignments'],
+    ['/department-head/transfers', 'Transfers'],
+    ['/department-head/returns', 'Returns'],
+    ['/department-head/verification', 'Verification'],
+    ['/department-head/maintenance-requests', 'Service Requests'],
+    ['/department-head/maintenance', 'Maintenance'],
+    ['/department-head/history', 'History'],
+    ['/department-head/tickets', 'Tickets'],
+    ['/department-head/tickets/escalated', 'Escalated Tickets'],
+    ['/department-head/tracking', 'Tracking'],
+    ['/department-head/asset-history', 'Asset History'],
+    ['/department-head/reports', 'Reports'],
+    ['/department-head/analytics', 'Analytics'],
+    ['/department-head/notifications', 'Notifications'],
+  ];
+  const itemSource = appSource.match(/const departmentHeadItems = \[([\s\S]*?)\];/)?.[1] || '';
+  const sidebarItems = [...itemSource.matchAll(/\{ path: '([^']+)', label: '([^']+)'/g)]
+    .map(([, route, label]) => [route, label]);
+
+  it('contains exactly the approved 23 items once, in the approved order and categories', () => {
+    expect(sidebarItems).toEqual(expectedItems);
+    expect(new Set(sidebarItems.map(([route]) => route)).size).toBe(23);
+    expect(new Set(sidebarItems.map(([, label]) => label)).size).toBe(23);
+
+    const sectionSource = appSource.match(/const departmentManagerSections = \[([\s\S]*?)\];/)?.[1] || '';
+    expect([...sectionSource.matchAll(/\{ label: '([^']+)'/g)].map(([, label]) => label)).toEqual([
+      'MAIN',
+      'DEPARTMENT MANAGEMENT',
+      'ASSET MANAGEMENT',
+      'OPERATIONS',
+      'REPORTS & ANALYTICS',
+    ]);
+    expect(sectionSource).toContain('departmentHeadItems.slice(0, 1)');
+    expect(sectionSource).toContain('departmentHeadItems.slice(1, 5)');
+    expect(sectionSource).toContain('departmentHeadItems.slice(5, 13)');
+    expect(sectionSource).toContain('departmentHeadItems.slice(13, 20)');
+    expect(sectionSource).toContain('departmentHeadItems.slice(20)');
+    expect(appSource).toContain("sidebarRole === 'department_head' && departmentManagerSections.map");
+    expect(appSource).toMatch(/sidebarRole === 'department_head'\s*\?\s*departmentHeadItems/);
+  });
+
+  it('keeps active-route matching and the approved visual/responsive styling scoped to Department Head', () => {
+    expect(appSource).toContain(".find((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))?.path");
+    expect(appSource).toContain("sidebarRole === 'department_head' ? ' department-head-sidebar' : ''");
+    expect(sidebarCss).toMatch(/\.department-head-sidebar,\s*body\.dark \.department-head-sidebar/);
+    expect(sidebarCss).toContain('background: #111827 !important;');
+    expect(sidebarCss).toContain('color: #E5E7EB;');
+    expect(sidebarCss).toContain('color: #94A3B8;');
+    expect(sidebarCss).toContain('background: #1E3A5F;');
+    expect(sidebarCss).toContain('background: #2563EB;');
+    expect(sidebarCss).toContain('background: #F4C542;');
+    expect(sidebarCss).toContain('.authenticated-shell > .admin-sidebar.department-head-sidebar');
+  });
+});
+
+describe('College Manager sidebar specification', () => {
+  const appSource = fs.readFileSync(path.resolve(__dirname, 'App.jsx'), 'utf8');
+  const collegeSections = [
+    { name: 'collegeOverviewItems', heading: 'MAIN', items: [['/college', 'Dashboard']] },
+    {
+      name: 'collegeManagementItems',
+      heading: 'COLLEGE MANAGEMENT',
+      items: [
+        ['/college/profile', 'College Profile'],
+        ['/college/staff', 'College Staff'],
+        ['/college/locations', 'Locations'],
+        ['/college/departments', 'Departments'],
+      ],
+    },
+    {
+      name: 'collegeAssetItems',
+      heading: 'ASSET MANAGEMENT',
+      items: [
+        ['/college/assets', 'All College Assets'],
+        ['/college/inventory', 'Inventory'],
+        ['/college/requests', 'Asset Requests'],
+        ['/college/approvals', 'Approvals'],
+        ['/college/assignments', 'Assignments'],
+        ['/college/transfers', 'Transfers'],
+        ['/college/returns', 'Returns'],
+      ],
+    },
+    {
+      name: 'collegeOperationsItems',
+      heading: 'OPERATIONS',
+      items: [
+        ['/college/maintenance', 'Maintenance Oversight'],
+        ['/college/rfid', 'RFID / QR Tracking'],
+        ['/college/verification', 'Asset Verification'],
+      ],
+    },
+    {
+      name: 'collegeAnalyticsItems',
+      heading: 'REPORTS & ANALYTICS',
+      items: [
+        ['/college/reports', 'College Reports'],
+        ['/college/analytics/assets', 'College Analytics'],
+        ['/college/notifications', 'Notifications'],
+      ],
+    },
+  ];
+
+  it('renders only the 18 approved items under the five approved sections', () => {
+    const actualSections = collegeSections.map(({ name, heading }) => {
+      const sectionSource = appSource.match(new RegExp(`const ${name} = \\[([\\s\\S]*?)\\];`))?.[1] || '';
+      const items = [...sectionSource.matchAll(/\{ path: '([^']+)', label: '([^']+)'/g)]
+        .map(([, route, label]) => [route, label]);
+      return { heading, items };
+    });
+    expect(actualSections).toEqual(collegeSections.map(({ heading, items }) => ({ heading, items })));
+    expect(actualSections.flatMap(({ items }) => items)).toHaveLength(18);
+    for (const { heading } of collegeSections) {
+      expect(appSource).toContain(`translateCollegeNavigation('${heading}')`);
+    }
+    expect(appSource).not.toContain("translateCollegeNavigation('SYSTEM')");
+    expect(appSource).not.toContain("translateCollegeNavigation('COLLEGE MANAGER')");
+  });
+
+  it('links each approved item to a registered College route', () => {
+    const collegeRouteTree = appSource.split('<Route path="/college"')[1]?.split('<Route path="/department-head"')[0] || '';
+    expect(collegeRouteTree).toContain('<Route index element={<CollegeManagerPages section="dashboard" />} />');
+    for (const [route] of collegeSections.flatMap(({ items }) => items)) {
+      if (route === '/college') continue;
+      expect(collegeRouteTree).toContain(`<Route path="${route.slice('/college/'.length)}"`);
+    }
+    expect(appSource).toContain('to={item.path}');
+  });
+});
+
 describe('Maintenance coordinator route wiring', () => {
   const appSource = fs.readFileSync(path.resolve(__dirname, 'App.jsx'), 'utf8');
   const maintenanceRoutes = [

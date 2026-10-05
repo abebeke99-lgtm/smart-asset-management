@@ -9,6 +9,7 @@ const { isValidEmail, isValidUsername } = require('../utils/validators');
 const { getJwtSecret } = require('../config/jwt');
 const { getRequestContext, getClientIp } = require('../middlewares/requestContext');
 const { getConfiguredRolePermissions } = require('../services/rolePermissionService');
+const { isAccountActive } = require('../utils/accountStatus');
 
 const LOGIN_ALIASES = {
   admin: ['admin'],
@@ -178,9 +179,10 @@ const login = async (req, res) => {
       return res.status(429).json({ success: false, message: 'Account temporarily locked. Please try again later.' });
     }
 
-    if (!user.active) {
+    if (!isAccountActive(user.active)) {
+      console.warn(`Login rejected for inactive account userId=${user.id}`);
       await recordAuthEvent({ userId: user.id, action: 'LOGIN_FAILED', result: 'Failure', req });
-      return res.status(403).json({ success: false, message: 'This account is disabled.' });
+      return res.status(403).json({ success: false, message: 'Account is deactivated.' });
     }
 
     const valid = await bcrypt.compare(password, user.password);

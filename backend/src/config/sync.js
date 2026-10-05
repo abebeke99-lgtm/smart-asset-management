@@ -164,11 +164,18 @@ async function ensureUserRoleEnum() {
     'store_manager',
     'maintenance',
     'infrastructure',
+    'teaching_assistant',
     'staff',
     'student',
   ];
 
-  const currentValues = String(table.role.values || '').split(',').map((value) => value.replace(/^'|'$/g, '').trim()).filter(Boolean);
+  const enumDefinition = String(table.role.values || table.role.type || '');
+  const enumValues = Array.isArray(table.role.values)
+    ? table.role.values
+    : (enumDefinition.match(/enum\s*\((.*)\)/i)?.[1]?.match(/'(?:[^']|'')*'/g) || []);
+  const currentValues = enumValues
+    .map((value) => String(value).replace(/^'|'$/g, '').replace(/''/g, "'").trim())
+    .filter(Boolean);
   if (currentValues.length >= roleValues.length && roleValues.every((value) => currentValues.includes(value))) {
     return;
   }
@@ -546,4 +553,4 @@ async function syncDatabase() {
   }
 }
 
-module.exports = { syncDatabase, repairDuplicateIndexes, createMissingTables, ensurePasswordRecoveryIndexes };
+module.exports = { syncDatabase, repairDuplicateIndexes, createMissingTables, ensurePasswordRecoveryIndexes, ensureUserRoleEnum };

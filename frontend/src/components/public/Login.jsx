@@ -4,6 +4,7 @@ import axios from 'axios';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
+import { translateMessage } from '../../i18n/messages';
 import { apiBase } from '../../utils/api';
 import { Activity, ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 
@@ -17,12 +18,17 @@ const Login = () => {
   const [backendStatus, setBackendStatus] = useState('checking');
 
   const { login } = useAuth();
-  const { language } = useLanguage();
+  const { language, setLanguage } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const redirectParam = new URLSearchParams(location.search).get('redirect');
 
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
+  const t = Object.fromEntries(
+    Object.entries(loginMessageKeys).map(([key, messageKey]) => [
+      key,
+      translateMessage(language, `auth.${messageKey}`)
+    ])
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -44,18 +50,19 @@ const Login = () => {
     e.preventDefault();
     if (loading) return;
     setError(null);
-    if (!username.trim()) { setError('Username or email is required.'); return; }
-    if (!password) { setError('Password is required.'); return; }
+    if (!username.trim()) { setError(t.usernameRequired); return; }
+    if (!password) { setError(t.passwordRequired); return; }
     setLoading(true);
     try {
       const result = await login(username.trim(), password);
       if (!result?.success) {
-        setError(result?.error || 'Invalid username or password.');
+        setError(t.invalidCredentials);
         return;
       }
       const roleRoutes = {
         admin: '/admin',
         ict_officer: '/ict',
+        teaching_assistant: '/teaching-assistant/dashboard',
         college: '/college',
         college_manager: '/college',
         department_head: '/department-head',
@@ -72,6 +79,7 @@ const Login = () => {
       const allowedRedirectPrefixes = {
         admin: '/admin',
         ict_officer: '/ict',
+        teaching_assistant: '/teaching-assistant',
         college: '/college',
         college_manager: '/college',
         department_head: '/department-head',
@@ -92,7 +100,7 @@ const Login = () => {
         : fallbackDestination;
       navigate(destination, { replace: true });
     } catch (err) {
-      setError('Unable to connect to the server. Please try again.');
+      setError(t.connectionError);
     } finally {
       setLoading(false);
     }
@@ -256,6 +264,10 @@ const Login = () => {
       `}</style>
       <main className="login-page">
         <section className="login-panel">
+          <div className="login-language-switch" role="group" aria-label={t.switchLanguage}>
+            <button type="button" className="dashboard-language-button" onClick={() => setLanguage('en')} aria-label="English" aria-pressed={language === 'en'}>EN</button>
+            <button type="button" className="dashboard-language-button" onClick={() => setLanguage('am')} aria-label="አማርኛ" aria-pressed={language === 'am'}>AM</button>
+          </div>
           <main className="login-card">
             <img className="login-logo" src="/assets/mekdela-amba-university-logo.png" alt="Mekdela Amba University logo" />
             <div className="login-heading"><h2>{t.title}</h2><p>{t.subtitle}</p></div>
@@ -276,50 +288,30 @@ const Login = () => {
   );
 };
 
-const englishTranslations = {
-  title: 'Welcome Back',
-  subtitle: 'Sign in to access inventory and assets',
-  usernameLabel: 'Username or Email',
-  passwordLabel: 'Password',
-  usernameRequired: 'Email or username is required.',
-  passwordRequired: 'Password is required.',
-  signingIn: 'Signing in...',
-  systemStatus: 'System',
+const loginMessageKeys = {
+  title: 'welcomeBack',
+  subtitle: 'loginSubtitle',
+  usernameLabel: 'usernameOrEmail',
+  passwordLabel: 'password',
+  usernameRequired: 'usernameRequired',
+  passwordRequired: 'passwordRequired',
+  signingIn: 'signingIn',
+  systemStatus: 'system',
   checking: 'checking',
   online: 'online',
   offline: 'offline',
-  showPassword: 'Show password',
-  hidePassword: 'Hide password',
-  usernamePlaceholder: 'Username or Email',
-  passwordPlaceholder: 'Password',
-  signIn: 'Sign In',
-  forgotPassword: 'Forgot Password?',
-  noAccount: "Don't have an account?",
-  signUp: 'Sign Up',
-  backToHomepage: '← Back to Homepage',
-};
-
-const amharicTranslations = {
-  title: 'እንኳን ደህና መመለሱ',
-  subtitle: 'ወደ ስርዓቱ ለመግባት መለያዎን ያስገቡ',
-  usernameLabel: 'የተጠቃሚ ስም ወይም ኢሜይል',
-  passwordLabel: 'የይለፍ ቃል',
-  usernameRequired: 'ኢሜይል ወይም የተጠቃሚ ስም ያስፈልጋል።',
-  passwordRequired: 'የይለፍ ቃል ያስፈልጋል።',
-  signingIn: 'በመግባት ላይ...',
-  systemStatus: 'ስርዓት',
-  checking: 'በመፈተሽ ላይ',
-  online: 'ከመስመር ላይ',
-  offline: 'ከመስመር ውጭ',
-  showPassword: 'የይለፍ ቃል አሳይ',
-  hidePassword: 'የይለፍ ቃል ደብቅ',
-  usernamePlaceholder: 'የተጠቃሚ ስም',
-  passwordPlaceholder: 'የይለፍ ቃል',
-  signIn: 'ግባ',
-  forgotPassword: 'የይለፍ ቃል ረሱ?',
-  noAccount: 'መለያ የለዎትም?',
-  signUp: 'ይመዝገቡ',
-  backToHomepage: '← ወደ መነሻ ገጽ ተመለስ',
+  showPassword: 'showPassword',
+  hidePassword: 'hidePassword',
+  usernamePlaceholder: 'usernameOrEmail',
+  passwordPlaceholder: 'password',
+  signIn: 'signIn',
+  forgotPassword: 'forgotPassword',
+  noAccount: 'noAccount',
+  signUp: 'signUp',
+  backToHomepage: 'backToHomepage',
+  invalidCredentials: 'invalidCredentials',
+  connectionError: 'connectionError',
+  switchLanguage: 'switchLanguage',
 };
 
 export default Login;

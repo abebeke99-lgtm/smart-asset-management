@@ -11,7 +11,7 @@ import './styles/admin/index.css';
 import './components/ict/ICTModuleThemes.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, Folder, GitBranch, House, Info, Languages, Layers, LayoutDashboard, LifeBuoy, LockKeyhole, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, Phone, Radio, Search, Settings, ShieldCheck, Sparkles, Sun, UserCircle, Users, Wrench, X } from 'lucide-react';
+import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, Folder, GitBranch, House, Info, Languages, Layers, LayoutDashboard, LifeBuoy, LockKeyhole, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, Phone, QrCode, Radio, Search, Settings, ShieldCheck, Sparkles, Sun, TrendingUp, Undo2, UserCircle, UserRound, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
@@ -25,7 +25,7 @@ import ScopedWorkflowPage from './components/shared/ScopedWorkflowPage';
 // ==========================================
 
 import { UIProvider, useLanguage, useTheme } from './contexts/UiContext';
-import { getShellTranslations, translateMessage } from './i18n/messages';
+import { getShellTranslations, translateMessage, translateNavigationLabel } from './i18n/messages';
 
 // ==========================================
 // IMPORT CONTEXTS
@@ -102,6 +102,7 @@ import DeptUtilization from './components/department/DeptUtilization';
 import DeptVerification from './components/department/DeptVerification';
 import DeptNotifications from './components/department/DeptNotifications';
 import DeptAssetHistory from './components/department/DeptAssetHistory';
+import TeachingAssistantAssets from './components/department/TeachingAssistantAssets';
 
 import FinanceDashboard from './components/finance/FinanceDashboard';
 import FinancePurchaseRequests from './components/finance/FinancePurchaseRequests';
@@ -243,17 +244,18 @@ const stripLeadingDecoration = (value) => String(value == null ? '' : value).rep
 
 export const getDashboardRoute = (role) => {
   const roleMap = {
-    admin: '/admin',
-    ict_officer: '/ict',
-    college_manager: '/college',
-    college: '/college',
-    department_head: '/department',
-    finance: '/finance',
-    store_manager: '/store',
-    maintenance: '/maintenance',
-    infrastructure: '/infrastructure',
-    staff: '/department',
-    student: '/student'
+    admin: '/admin/dashboard',
+    ict_officer: '/ict/dashboard',
+    college_manager: '/college-manager/dashboard',
+    college: '/college/dashboard',
+    department_head: '/department-head/dashboard',
+    teaching_assistant: '/teaching-assistant/dashboard',
+    finance: '/finance/dashboard',
+    store_manager: '/store/dashboard',
+    maintenance: '/maintenance/dashboard',
+    infrastructure: '/infrastructure/dashboard',
+    staff: '/staff/dashboard',
+    student: '/student/dashboard'
   };
   return roleMap[normalizeRole(role)] || '/home';
 };
@@ -396,8 +398,19 @@ class ChunkErrorBoundary extends React.Component {
 
 const UNIVERSITY_LOGO = '/assets/mekdela-amba-university-logo.png';
 
+const normalizeAppPath = (path = '') => {
+  const raw = String(path ?? '').trim();
+  if (!raw) return '/';
+
+  const withoutHash = raw.split('#')[0];
+  const withoutQuery = withoutHash.split('?')[0];
+  const normalized = withoutQuery.replace(/\/+$/, '') || '/';
+
+  return normalized === '' ? '/' : normalized;
+};
+
 export const isPublicRoute = (path = '') => {
-  const normalized = String(path || '/').trim();
+  const normalized = normalizeAppPath(path);
   if (!normalized || normalized === '/') return true;
   if (normalized === '/home') return true;
   if (['/about', '/services', '/contact', '/contac', '/help', '/register', '/forgot-password'].includes(normalized)) return true;
@@ -405,7 +418,7 @@ export const isPublicRoute = (path = '') => {
   return false;
 };
 
-export const shouldUseStandaloneLoginLayout = (path = '') => String(path || '').trim() === '/login';
+export const shouldUseStandaloneLoginLayout = (path = '') => normalizeAppPath(path) === '/login';
 
 export const AppFooter = (props) => {
   const { pathname } = useLocation();
@@ -413,23 +426,23 @@ export const AppFooter = (props) => {
 };
 
 export const isDashboardRoute = (path = '') => {
-  const normalized = String(path || '').trim();
-  return normalized === '/dashboard' || /^\/dashboard(?:\/.*)?$/.test(normalized);
+  const normalized = normalizeAppPath(path);
+  return (
+    normalized === '/dashboard'
+    || /^\/dashboard(?:\/.*)?$/.test(normalized)
+    || /^\/(?:admin|ict|college-manager|college|department-head|department|finance|store|maintenance|infrastructure|staff|student)(?:\/.*)?$/.test(normalized)
+  );
 };
 
 export const shouldHideSidebarForPath = (path = '') => {
-  const normalized = String(path || '').trim();
+  const normalized = normalizeAppPath(path);
   return /\/assets\/create(?:\/|$)/.test(normalized);
 };
 
 export const shouldShowDashboardSidebar = (path = '') => {
-  const normalized = String(path || '').trim();
+  const normalized = normalizeAppPath(path);
   if (!normalized || isPublicRoute(normalized) || shouldUseStandaloneLoginLayout(normalized)) return false;
-  return (
-    normalized === '/dashboard'
-    || /^\/dashboard(?:\/.*)?$/.test(normalized)
-    || /^\/(admin|ict|college|department|department-head|finance|store|maintenance|infrastructure)(?:\/.*)?$/.test(normalized)
-  );
+  return isDashboardRoute(normalized);
 };
 
 export const shouldShowDashboardHeader = (path = '') => !isPublicRoute(path) && !shouldUseStandaloneLoginLayout(path);
@@ -2338,13 +2351,6 @@ const adminSidebarSections = [
     ]
   },
   {
-    id: 'inventory',
-    heading: 'INVENTORY',
-    items: [
-      { to: '/admin/inventory/quarantine', label: 'Quarantine', icon: ShieldCheck },
-    ]
-  },
-  {
     id: 'organization',
     heading: 'ORGANIZATION',
     items: [
@@ -2449,8 +2455,9 @@ const AdminRecovery = () => {
 };
 
 const AdminFooter = () => (
-  <footer style={{ borderTop: '1px solid #e2e8f0', background: '#fff', color: '#475569', padding: '12px 20px', fontSize: 12 }}>
-    © 2026 Smart Asset Management
+  <footer className="dashboard-footer">
+    <span aria-hidden="true">◆</span>
+    <span>© {new Date().getFullYear()} Mekdela Amba University · Asset Management System</span>
   </footer>
 );
 
@@ -2470,6 +2477,7 @@ const MenuToggleButton = ({ isOpen, onToggle, toggleRef, controls = 'application
 
 const AdminHeader = ({ userName, roleLabel, unreadCount, onLogout, adminTheme, setAdminTheme }) => {
   const { language, setLanguage } = useLanguage();
+  const t = getShellTranslations(language);
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -2510,9 +2518,9 @@ const AdminHeader = ({ userName, roleLabel, unreadCount, onLogout, adminTheme, s
           <Bell size={18} aria-hidden="true" />
           {unreadCount > 0 && <span className="dashboard-notification-count">{unreadCount > 99 ? '99+' : unreadCount}</span>}
         </button>
-        <div className="dashboard-language-switch" role="group" aria-label="Language">
-          <button type="button" className="dashboard-language-button" onClick={() => setLanguage('en')} aria-pressed={language === 'en'} aria-label="English">EN</button>
-          <button type="button" className="dashboard-language-button" onClick={() => setLanguage('am')} aria-pressed={language === 'am'} aria-label="Amharic">AM</button>
+        <div className="dashboard-language-switch" role="group" aria-label={t.switchLanguage}>
+          <button type="button" className="dashboard-language-button" onClick={() => setLanguage('en')} aria-pressed={language === 'en'} aria-label={t.languageEnglish}>EN</button>
+          <button type="button" className="dashboard-language-button" onClick={() => setLanguage('am')} aria-pressed={language === 'am'} aria-label={t.languageAmharic}>AM</button>
         </div>
         <div className="admin-profile-menu">
           <button type="button" className="dashboard-profile-button" onClick={() => setMenuOpen((current) => !current)} aria-expanded={menuOpen} aria-haspopup="menu" aria-label={`Account menu for ${userName}`}>
@@ -2591,11 +2599,8 @@ function AppContent() {
   }, [closeSidebar, isSidebarOpen]);
 
   const t = getShellTranslations(language);
-  const collegeNavigationCopy = language === 'am' ? {
-    'COLLEGE MANAGER': 'የኮሌጅ አስተዳዳሪ', OVERVIEW: 'አጠቃላይ እይታ', 'COLLEGE MANAGEMENT': 'የኮሌጅ አስተዳደር', 'ASSET MANAGEMENT': 'የንብረት አስተዳደር', OPERATIONS: 'ስራዎች', 'REPORTS & ANALYTICS': 'ሪፖርቶች እና ትንታኔዎች', SYSTEM: 'ስርዓት',
-    Dashboard: 'ዳሽቦርድ', 'College Profile': 'የኮሌጅ መገለጫ', 'College Staff': 'የኮሌጅ ሰራተኞች', Locations: 'ቦታዎች', Departments: 'ዲፓርትመንቶች', 'All College Assets': 'ሁሉም የኮሌጅ ንብረቶች', Inventory: 'ኢንቬንቶሪ', 'Asset Requests': 'የንብረት ጥያቄዎች', Approvals: 'ማጽደቆች', Assignments: 'ምደባዎች', Transfers: 'ዝውውሮች', Returns: 'መመለሻዎች', 'Maintenance Oversight': 'የጥገና ክትትል', 'RFID / QR Tracking': 'RFID / QR ክትትል', 'Asset Verification': 'የንብረት ማረጋገጫ', 'College Reports': 'የኮሌጅ ሪፖርቶች', 'College Analytics': 'የኮሌጅ ትንታኔዎች', Notifications: 'ማስታወቂያዎች', 'College Manager': 'የኮሌጅ አስተዳዳሪ', Online: 'በመስመር ላይ'
-  } : {};
-  const translateCollegeNavigation = (value) => language === 'am' ? collegeNavigationCopy[value] || value : value;
+  const translateLabel = (value) => translateNavigationLabel(language, value);
+  const translateCollegeNavigation = (value) => translateNavigationLabel(language, value);
 
   const getRoleDisplay = (role) => {
     const normalizedRole = normalizeRole(role);
@@ -2809,51 +2814,6 @@ function AppContent() {
 
   const handleLogoError = () => setLogoError(true);
 
-  // Shell colours for the light/dark toggle. These mirror the CSS custom
-  // properties in src/styles/theme.css — keep both in sync.
-  const themeStyles = {
-    light: {
-      headerBg: '#0EA5D9',
-      headerText: '#FFFFFF',
-      footerBg: '#FFFFFF',
-      footerText: '#6B7280',
-      mainBg: '#F3F6F9',
-      mainText: '#111827',
-      cardBg: '#FFFFFF',
-      cardBorder: '#E5E7EB',
-      cardShadow: 'none',
-      sidebarBg: '#111827',
-      sidebarHover: '#1F2937',
-      sidebarActive: '#1F2937',
-      accent: '#F4C542',
-      accentLight: '#FEF3C7',
-      subText: '#6B7280',
-      danger: '#DC2626',
-      success: '#16A34A'
-    },
-    dark: {
-      headerBg: '#0EA5D9',
-      headerText: '#FFFFFF',
-      footerBg: '#FFFFFF',
-      footerText: '#6B7280',
-      mainBg: '#0F172A',
-      mainText: '#F1F5F9',
-      cardBg: '#1E293B',
-      cardBorder: '#334155',
-      cardShadow: 'none',
-      sidebarBg: '#111827',
-      sidebarHover: '#1F2937',
-      sidebarActive: '#1F2937',
-      accent: '#F4C542',
-      accentLight: '#FEF3C7',
-      subText: '#94A3B8',
-      danger: '#F87171',
-      success: '#4ADE80'
-    }
-  };
-
-  const currentTheme = themeStyles[theme];
-
   // ==========================================
   // HEADER COMPONENT
   // ==========================================
@@ -2900,13 +2860,13 @@ function AppContent() {
     const LanguageToggle = ({ variant }) => (
       <div
         role="group"
-        aria-label={t.language}
+        aria-label={t.switchLanguage}
         className={`public-language-toggle${variant ? ` ${variant}` : ''}`}
       >
         <Languages size={16} strokeWidth={2} aria-hidden="true" />
-        <button type="button" onClick={() => setLanguage('en')} aria-pressed={language === 'en'} aria-label="English">Eng</button>
-        <span aria-hidden="true">/</span>
-        <button type="button" onClick={() => setLanguage('am')} aria-pressed={language === 'am'} aria-label="አማርኛ">አማ</button>
+        <button type="button" onClick={() => setLanguage('en')} aria-pressed={language === 'en'} aria-label={t.languageEnglish}>EN</button>
+        <span aria-hidden="true">|</span>
+        <button type="button" onClick={() => setLanguage('am')} aria-pressed={language === 'am'} aria-label={t.languageAmharic}>AM</button>
       </div>
     );
 
@@ -2979,7 +2939,7 @@ function AppContent() {
     return (
       <div className={`public-layout${isHomeRoute ? ' home-route' : ''}`}>
         <PublicHeader />
-        <main className="public-main" style={{ backgroundColor: currentTheme.mainBg }}>
+        <main className="public-main">
           {children}
         </main>
         <AppFooter
@@ -3035,12 +2995,12 @@ function AppContent() {
             {unreadNotificationCount > 0 && <span className="dashboard-notification-count">{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</span>}
           </button>
 
-          <div className="dashboard-language-switch" role="group" aria-label={t.language}>
+          <div className="dashboard-language-switch" role="group" aria-label={t.switchLanguage}>
             <button
               type="button"
               className="dashboard-language-button"
               onClick={() => setLanguage('en')}
-              aria-label="English"
+              aria-label={t.languageEnglish}
               aria-pressed={language === 'en'}
               style={{ borderRadius: '7px 0 0 7px' }}
             >
@@ -3050,7 +3010,7 @@ function AppContent() {
               type="button"
               className="dashboard-language-button"
               onClick={() => setLanguage('am')}
-              aria-label="Amharic"
+              aria-label={t.languageAmharic}
               aria-pressed={language === 'am'}
               style={{ borderLeft: 0, borderRadius: '0 7px 7px 0' }}
             >
@@ -3093,7 +3053,7 @@ function AppContent() {
   const dashboardHeaderVisible = shouldShowDashboardHeader(location.pathname);
 
   const AuthenticatedLayout = ({ children }) => (
-    <div className="App" style={{ backgroundColor: currentTheme.mainBg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div className="App">
       <DashboardLayout
         className="role-dashboard-layout"
         bodyClassName={`authenticated-shell${isStoreManager ? ' store-manager-body' : ''}`}
@@ -3104,41 +3064,37 @@ function AppContent() {
           <aside
             ref={sidebarRef}
             id="application-navigation-panel"
-            className={`admin-sidebar${isStoreManager ? ' store-manager-sidebar' : ''}${sidebarRole === 'ict_officer' ? ' ict-sidebar' : ''}${isSidebarOpen ? ' is-mobile-open' : ''}`}
+            className={`admin-sidebar${isStoreManager ? ' store-manager-sidebar' : ''}${sidebarRole === 'ict_officer' ? ' ict-sidebar' : ''}${showCollegeNavigation ? ' college-manager-sidebar' : ''}${sidebarRole === 'department_head' ? ' department-head-sidebar' : ''}${isSidebarOpen ? ' is-mobile-open' : ''}`}
           >
             <nav className="admin-sidebar-nav" aria-label="Application navigation" onClick={(event) => {
               if (event.target.closest?.('a')) closeSidebar();
             }}>
-              {showCollegeNavigation && <div className="sidebar-subsection-label">{translateCollegeNavigation('COLLEGE MANAGER')}</div>}
               {showCollegeNavigation && (
                 <>
-                  <div className="sidebar-subsection-label">{translateCollegeNavigation('OVERVIEW')}</div>
-                  {collegeOverviewItems.map((item) => renderSidebarLink(item, true, true))}
+                  <div className="sidebar-subsection-label">{translateCollegeNavigation('MAIN')}</div>
+                  {collegeOverviewItems.map((item) => renderSidebarLink(item))}
                   <div className="sidebar-subsection-label">{translateCollegeNavigation('COLLEGE MANAGEMENT')}</div>
-                  {collegeManagementItems.map((item) => renderSidebarLink(item, true, true))}
+                  {collegeManagementItems.map((item) => renderSidebarLink(item))}
                   <div className="sidebar-subsection-label">{translateCollegeNavigation('ASSET MANAGEMENT')}</div>
-                  {collegeAssetItems.map((item) => renderSidebarLink(item, true, true))}
+                  {collegeAssetItems.map((item) => renderSidebarLink(item))}
                   <div className="sidebar-subsection-label">{translateCollegeNavigation('OPERATIONS')}</div>
-                  {collegeOperationsItems.map((item) => renderSidebarLink(item, true, true))}
+                  {collegeOperationsItems.map((item) => renderSidebarLink(item))}
                   <div className="sidebar-subsection-label">{translateCollegeNavigation('REPORTS & ANALYTICS')}</div>
-                  {collegeAnalyticsItems.map((item) => renderSidebarLink(item, true, true))}
-                  <div className="sidebar-subsection-label">{translateCollegeNavigation('SYSTEM')}</div>
-                  {collegeSystemItems.map((item) => renderSidebarLink(item, true, true))}
+                  {collegeAnalyticsItems.map((item) => renderSidebarLink(item))}
                 </>
               )}
-              {showDepartmentsNavigation && renderCollapsibleSection(
-                sidebarRole === 'department_head' ? 'DEPARTMENT MANAGER' : 'DEPARTMENT HEAD',
+              {sidebarRole === 'department_head' && departmentManagerSections.map((section) => (
+                <React.Fragment key={section.label}>
+                  <div className="sidebar-subsection-label">{translateLabel(section.label)}</div>
+                  {section.items.map((item) => renderSidebarLink(item))}
+                </React.Fragment>
+              ))}
+              {showDepartmentsNavigation && sidebarRole !== 'department_head' && renderCollapsibleSection(
+                'DEPARTMENT HEAD',
                 departmentsNavOpen,
                 setDepartmentsNavOpen,
-                isDepartmentDean || sidebarRole === 'department_head'
-                  ? sidebarRole === 'department_head'
-                    ? departmentManagerSections.map((section) => (
-                      <React.Fragment key={section.label}>
-                        <div className="sidebar-subsection-label">{section.label}</div>
-                        {section.items.map((item) => renderSidebarLink(item, true))}
-                      </React.Fragment>
-                    ))
-                    : <><div className="sidebar-subsection-label">Overview</div>{departmentDeanItems.map((item) => renderSidebarLink(item, true))}</>
+                isDepartmentDean
+                  ? <><div className="sidebar-subsection-label">Overview</div>{departmentDeanItems.map((item) => renderSidebarLink(item, true))}</>
                   : isDepartmentStaff
                     ? <><div className="sidebar-subsection-label">Department Assets</div>{departmentStaffItems.map((item) => renderSidebarLink(item, true))}</>
                     : <><div className="sidebar-subsection-label">Department Workspace</div>{renderSidebarLink({ path: '/department', label: 'Dashboard', icon: LayoutDashboard }, true)}</>,
@@ -3151,7 +3107,7 @@ function AppContent() {
                     if (!visibleItems.length) return null;
                     return (
                       <React.Fragment key={sectionKey}>
-                        <div className="sidebar-section-label">{financeSectionLabels[sectionKey]}</div>
+                        <div className="sidebar-section-label">{translateLabel(financeSectionLabels[sectionKey])}</div>
                         {visibleItems.map((item) => renderSidebarLink(item))}
                       </React.Fragment>
                     );
@@ -3165,7 +3121,7 @@ function AppContent() {
                     if (!visibleItems.length) return null;
                     return (
                       <React.Fragment key={sectionName}>
-                        <div className="sidebar-section-label">{sectionName}</div>
+                        <div className="sidebar-section-label">{translateLabel(sectionName)}</div>
                         {visibleItems.map((item) => renderSidebarLink(item))}
                       </React.Fragment>
                     );
@@ -3179,7 +3135,7 @@ function AppContent() {
                     if (!visibleItems.length) return null;
                     return (
                       <React.Fragment key={sectionName}>
-                        <div className="sidebar-section-label">{sectionName}</div>
+                        <div className="sidebar-section-label">{translateLabel(sectionName)}</div>
                         {visibleItems.map((item) => renderSidebarLink(item))}
                       </React.Fragment>
                     );
@@ -3193,7 +3149,7 @@ function AppContent() {
                     if (!visibleItems.length) return null;
                     return (
                       <React.Fragment key={sectionName}>
-                        <div className="sidebar-section-label">{sectionName}</div>
+                        <div className="sidebar-section-label">{translateLabel(sectionName)}</div>
                         {visibleItems.map((item) => renderSidebarLink(item))}
                       </React.Fragment>
                     );
@@ -3207,7 +3163,7 @@ function AppContent() {
                     if (!visibleItems.length) return null;
                     return (
                       <React.Fragment key={sectionName}>
-                        <div className="sidebar-section-label">{sectionName}</div>
+                        <div className="sidebar-section-label">{translateLabel(sectionName)}</div>
                         {visibleItems.map((item) => renderSidebarLink(item))}
                       </React.Fragment>
                     );
@@ -3218,7 +3174,7 @@ function AppContent() {
                 const previousItem = sidebarItems[index - 1];
                 return (
                   <React.Fragment key={item.path}>
-                    {sidebarRole === 'admin' && item.group !== previousItem?.group && <div className="sidebar-section-label">{item.group}</div>}
+                    {sidebarRole === 'admin' && item.group !== previousItem?.group && <div className="sidebar-section-label">{translateLabel(item.group)}</div>}
                     {renderSidebarLink(item)}
                   </React.Fragment>
                 );
@@ -3238,6 +3194,7 @@ function AppContent() {
           {children}
         </main>
       </DashboardLayout>
+      <AdminFooter />
       <ToastContainer position="top-right" autoClose={3000} />
       {pendingPublicPath && (
         <div className="public-navigation-modal" role="dialog" aria-modal="true" aria-labelledby="public-navigation-title">
@@ -3341,27 +3298,28 @@ function AppContent() {
         { path: '/ict/notifications', label: 'Notifications', section: 'SYSTEM' }
       ],
       'college_manager': [
-        { path: '/college', label: 'Dashboard' },
-        { path: '/college/profile', label: 'College Profile' },
-        { path: '/college/staff', label: 'College Staff' },
-        { path: '/college/locations', label: 'Locations' },
-        { path: '/college/departments', label: 'Departments' },
-        { path: '/college/assets', label: 'All College Assets' },
-        { path: '/college/inventory', label: 'Inventory' },
-        { path: '/college/requests', label: 'Asset Requests' },
-        { path: '/college/approvals', label: 'Approvals' },
-        { path: '/college/assignments', label: 'Assignments' },
-        { path: '/college/transfers', label: 'Transfers' },
-        { path: '/college/returns', label: 'Returns' },
-        { path: '/college/maintenance', label: 'Maintenance Oversight' },
-        { path: '/college/rfid', label: 'RFID / QR Tracking' },
-        { path: '/college/verification', label: 'Asset Verification' },
-        { path: '/college/reports', label: 'College Reports' },
-        { path: '/college/analytics/assets', label: 'College Analytics' },
-        { path: '/college/notifications', label: 'Notifications' }
+        { path: '/college', label: 'Dashboard', icon: LayoutDashboard },
+        { path: '/college/profile', label: 'College Profile', icon: UserCircle },
+        { path: '/college/staff', label: 'College Staff', icon: Users },
+        { path: '/college/locations', label: 'Locations', icon: MapPin },
+        { path: '/college/departments', label: 'Departments', icon: Building2 },
+        { path: '/college/assets', label: 'All College Assets', icon: Package },
+        { path: '/college/inventory', label: 'Inventory', icon: ClipboardList },
+        { path: '/college/requests', label: 'Asset Requests', icon: FileText },
+        { path: '/college/approvals', label: 'Approvals', icon: ClipboardCheck },
+        { path: '/college/assignments', label: 'Assignments', icon: UserRound },
+        { path: '/college/transfers', label: 'Transfers', icon: ArrowLeftRight },
+        { path: '/college/returns', label: 'Returns', icon: Undo2 },
+        { path: '/college/maintenance', label: 'Maintenance Oversight', icon: Wrench },
+        { path: '/college/rfid', label: 'RFID / QR Tracking', icon: QrCode },
+        { path: '/college/verification', label: 'Asset Verification', icon: Check },
+        { path: '/college/reports', label: 'College Reports', icon: BarChart3 },
+        { path: '/college/analytics/assets', label: 'College Analytics', icon: TrendingUp },
+        { path: '/college/notifications', label: 'Notifications', icon: Bell }
       ],
       'staff': [],
       'student': [{ path: '/student', label: 'Dashboard', icon: LayoutDashboard }],
+      'teaching_assistant': [{ path: '/teaching-assistant/dashboard', label: 'Department assets', icon: Package }],
       'finance': [
         { path: '/finance', label: '📊 ' + t.dashboard, section: 'Overview' },
         { path: '/finance/purchase-requests', label: '📝 Purchase Requests', section: 'PROCUREMENT' },
@@ -3462,12 +3420,12 @@ function AppContent() {
   const sidebarItems = getSidebarItems(sidebarRole);
   const dashboardPageTitle = sidebarItems
     .filter((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))
-    .sort((left, right) => right.path.length - left.path.length)[0]?.label || 'Dashboard';
+    .sort((left, right) => right.path.length - left.path.length)[0]?.label || t.dashboard;
   const responsibility = String(user?.departmentRole || user?.responsibility || user?.position || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
   const isDepartmentStaff = sidebarRole === 'staff' || responsibility === 'department staff';
   const isDepartmentDean = responsibility === 'department dean' || responsibility === 'dean';
-  const showCollegeNavigation = sidebarRole === 'college_manager' && !isDepartmentStaff && !isDepartmentDean;
-  const showDepartmentsNavigation = sidebarRole === 'department_head' || isDepartmentStaff || isDepartmentDean;
+  const showCollegeNavigation = sidebarRole === 'college_manager';
+  const showDepartmentsNavigation = sidebarRole !== 'college_manager' && (sidebarRole === 'department_head' || isDepartmentStaff || isDepartmentDean);
   const financeSectionLabels = {
     'Overview': 'OVERVIEW',
     'PROCUREMENT': 'PROCUREMENT',
@@ -3480,7 +3438,7 @@ function AppContent() {
     { path: '/college', label: 'Dashboard', icon: LayoutDashboard, group: 'Overview' }
   ];
   const collegeManagementItems = [
-    { path: '/college/profile', label: 'College Profile', icon: Building2, group: 'College Management' },
+    { path: '/college/profile', label: 'College Profile', icon: UserCircle, group: 'College Management' },
     { path: '/college/staff', label: 'College Staff', icon: Users, group: 'College Management' },
     { path: '/college/locations', label: 'Locations', icon: MapPin, group: 'College Management' },
     { path: '/college/departments', label: 'Departments', icon: Building2, group: 'College Management' }
@@ -3488,23 +3446,46 @@ function AppContent() {
   const collegeAssetItems = [
     { path: '/college/assets', label: 'All College Assets', icon: Package, group: 'Asset Management' },
     { path: '/college/inventory', label: 'Inventory', icon: ClipboardList, group: 'Asset Management' },
-    { path: '/college/requests', label: 'Asset Requests', icon: ClipboardList, group: 'Asset Management' },
+    { path: '/college/requests', label: 'Asset Requests', icon: FileText, group: 'Asset Management' },
     { path: '/college/approvals', label: 'Approvals', icon: ClipboardCheck, group: 'Asset Management' },
-    { path: '/college/assignments', label: 'Assignments', icon: Users, group: 'Asset Management' },
+    { path: '/college/assignments', label: 'Assignments', icon: UserRound, group: 'Asset Management' },
     { path: '/college/transfers', label: 'Transfers', icon: ArrowLeftRight, group: 'Asset Management' },
-    { path: '/college/returns', label: 'Returns', icon: ArrowLeftRight, group: 'Asset Management' }
+    { path: '/college/returns', label: 'Returns', icon: Undo2, group: 'Asset Management' }
   ];
   const collegeOperationsItems = [
     { path: '/college/maintenance', label: 'Maintenance Oversight', icon: Wrench, group: 'Operations' },
-    { path: '/college/rfid', label: 'RFID / QR Tracking', icon: Radio, group: 'Operations' },
-    { path: '/college/verification', label: 'Asset Verification', icon: Radio, group: 'Operations' }
+    { path: '/college/rfid', label: 'RFID / QR Tracking', icon: QrCode, group: 'Operations' },
+    { path: '/college/verification', label: 'Asset Verification', icon: Check, group: 'Operations' }
   ];
   const collegeAnalyticsItems = [
     { path: '/college/reports', label: 'College Reports', icon: BarChart3, group: 'Reports & Analytics' },
-    { path: '/college/analytics/assets', label: 'College Analytics', icon: BarChart3, group: 'Reports & Analytics' }
+    { path: '/college/analytics/assets', label: 'College Analytics', icon: TrendingUp, group: 'Reports & Analytics' },
+    { path: '/college/notifications', label: 'Notifications', icon: Bell, group: 'Reports & Analytics' }
   ];
-  const collegeSystemItems = [
-    { path: '/college/notifications', label: 'Notifications', icon: Bell, group: 'System' }
+  const departmentHeadItems = [
+    { path: '/department-head', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/department-head/profile', label: 'Department Profile', icon: UserCircle },
+    { path: '/department-head/staff', label: 'Staff', icon: Users },
+    { path: '/department-head/locations', label: 'Locations', icon: MapPin },
+    { path: '/department-head/laboratories', label: 'Laboratories', icon: Building2 },
+    { path: '/department-head/assets', label: 'Assets', icon: Package },
+    { path: '/department-head/inventory', label: 'Inventory', icon: Layers },
+    { path: '/department-head/requests', label: 'Asset Requests', icon: ClipboardList },
+    { path: '/department-head/approvals', label: 'Approval Queue', icon: ClipboardCheck },
+    { path: '/department-head/assignments', label: 'Assignments', icon: UserRound },
+    { path: '/department-head/transfers', label: 'Transfers', icon: ArrowLeftRight },
+    { path: '/department-head/returns', label: 'Returns', icon: Undo2 },
+    { path: '/department-head/verification', label: 'Verification', icon: Check },
+    { path: '/department-head/maintenance-requests', label: 'Service Requests', icon: LifeBuoy },
+    { path: '/department-head/maintenance', label: 'Maintenance', icon: Wrench },
+    { path: '/department-head/history', label: 'History', icon: Archive },
+    { path: '/department-head/tickets', label: 'Tickets', icon: CircleHelp },
+    { path: '/department-head/tickets/escalated', label: 'Escalated Tickets', icon: ShieldCheck },
+    { path: '/department-head/tracking', label: 'Tracking', icon: Radio },
+    { path: '/department-head/asset-history', label: 'Asset History', icon: FileText },
+    { path: '/department-head/reports', label: 'Reports', icon: BarChart3 },
+    { path: '/department-head/analytics', label: 'Analytics', icon: TrendingUp },
+    { path: '/department-head/notifications', label: 'Notifications', icon: Bell }
   ];
   const departmentDeanItems = [
     { path: '/department', label: 'Overview Dashboard', icon: LayoutDashboard },
@@ -3543,14 +3524,15 @@ function AppContent() {
     { path: '/department-head/history', label: 'Asset History', icon: ClipboardCheck }
   ];
   const departmentManagerSections = [
-    { label: 'OVERVIEW', items: departmentDeanItems.slice(0, 1) },
-    { label: 'DEPARTMENT MANAGEMENT', items: departmentDeanItems.slice(1, 4) },
-    { label: 'ASSET MANAGEMENT', items: departmentDeanItems.slice(4, 10) },
-    { label: 'OPERATIONS', items: departmentDeanItems.slice(10, 13) },
-    { label: 'REPORTS & ANALYTICS', items: departmentDeanItems.slice(13, 15) },
-    { label: 'SYSTEM', items: departmentDeanItems.slice(15) }
+    { label: 'MAIN', items: departmentHeadItems.slice(0, 1) },
+    { label: 'DEPARTMENT MANAGEMENT', items: departmentHeadItems.slice(1, 5) },
+    { label: 'ASSET MANAGEMENT', items: departmentHeadItems.slice(5, 13) },
+    { label: 'OPERATIONS', items: departmentHeadItems.slice(13, 20) },
+    { label: 'REPORTS & ANALYTICS', items: departmentHeadItems.slice(20) }
   ];
-  const navigationItems = [...sidebarItems, ...(isDepartmentDean ? departmentDeanItems : isDepartmentStaff ? departmentStaffItems : [])];
+  const navigationItems = sidebarRole === 'department_head'
+    ? departmentHeadItems
+    : [...sidebarItems, ...(isDepartmentDean ? departmentDeanItems : isDepartmentStaff ? departmentStaffItems : [])];
   const currentActiveSidebar = [...navigationItems]
     .sort((left, right) => right.path.length - left.path.length)
     .find((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))?.path
@@ -3576,16 +3558,17 @@ function AppContent() {
     return FileText;
   };
 
-  const renderSidebarLink = (item, nested = false, collegeNavigation = false) => {
+  const renderSidebarLink = (item, nested = false) => {
     const isActive = item.path === currentActiveSidebar;
     const Icon = getNavigationIcon(item);
-    const itemLabel = collegeNavigation ? translateCollegeNavigation(item.label) : item.label;
+    const itemLabel = translateLabel(item.label);
     return (
       <Link
         key={item.path}
         to={item.path}
         className={`admin-nav-link${isActive ? ' is-active' : ''}`}
         aria-current={isActive ? 'page' : undefined}
+        title={stripLeadingDecoration(itemLabel)}
         style={nested ? { paddingLeft: '34px', fontSize: '0.86rem' } : undefined}
       >
         <Icon size={17} strokeWidth={1.9} aria-hidden="true" />
@@ -3603,7 +3586,7 @@ function AppContent() {
         onClick={() => setOpen((current) => !current)}
       >
         {open ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
-        <span>{label}</span>
+        <span>{translateLabel(label)}</span>
       </button>
       <div className={`sidebar-section-children${open ? ' is-expanded' : ''}`} aria-hidden={!open}>
         {open && children}
@@ -3799,6 +3782,10 @@ function AppContent() {
             <Route path="notifications" element={<DeptNotifications />} />
             <Route path="history" element={<DeptAssetHistory />} />
             <Route path="history/:id" element={<DeptAssetHistory />} />
+          </Route>
+
+          <Route path="/teaching-assistant" element={<ProtectedRoute allowedRoles={['teaching_assistant']}><RoleLayout /></ProtectedRoute>}>
+            <Route path="dashboard" element={<TeachingAssistantAssets />} />
           </Route>
 
           {/* FINANCE ROUTES - Fixed with RoleLayout */}

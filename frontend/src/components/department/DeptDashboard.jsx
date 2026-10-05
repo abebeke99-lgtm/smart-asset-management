@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/apiClient';
 import { Activity, AlertTriangle, ClipboardList, CircleCheck, DollarSign, LayoutDashboard, LoaderCircle, Package, RefreshCw, Users, Wrench, Zap } from 'lucide-react';
 import { CHART_PALETTE, CHART_TEXT, NOTIFICATION_TONES } from '../../utils/chartPalette';
+import { translateMessage } from '../../i18n/messages';
 import './DeptDashboard.css';
 
 ChartJS.register(
@@ -59,7 +60,7 @@ recentActivities: [],
 const [showAlerts, setShowAlerts] = useState(true);
 
   const isDark = theme === 'dark';
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
+  const t = { ...(language === 'en' ? englishTranslations : amharicTranslations), loading: translateMessage(language, 'departmentLoading.dashboard') };
 
   useEffect(() => {
     fetchDashboardData();

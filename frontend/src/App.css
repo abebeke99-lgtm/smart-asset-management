@@ -179,7 +179,7 @@ body {
   height: var(--header-height);
   padding: 0 22px;
   color: var(--color-header-text);
-  background: var(--color-header);
+  background: var(--color-header-gradient);
   border-bottom: 1px solid var(--color-header-border);
   box-shadow: var(--shadow-header);
 }
@@ -298,9 +298,9 @@ body {
 }
 
 .dashboard-language-button[aria-pressed="true"] {
-  color: var(--color-header-text);
-  background: var(--color-header-icon-hover);
-  border-color: var(--color-header-control-border);
+  color: var(--color-brand-navy);
+  background: var(--color-brand-gold);
+  border-color: var(--color-brand-gold);
 }
 
 .dashboard-profile {
@@ -360,10 +360,6 @@ body {
 }
 
 .dashboard-profile-menu {
-  --color-surface: var(--color-brand-card);
-  --color-text-primary: var(--color-brand-navy);
-  --color-border: #E5E7EB;
-  --color-surface-muted: #F9FAFB;
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
@@ -467,17 +463,17 @@ body {
 }
 
 .public-site-header {
-  --public-header-text: #111827;
-  --public-header-muted: #172B3D;
-  --public-header-primary: #111827;
-  --public-header-action: #2563eb;
-  --public-header-border: rgba(17, 24, 39, 0.18);
+  --public-header-text: var(--color-header-text);
+  --public-header-muted: var(--color-header-text-muted);
+  --public-header-primary: var(--color-brand-gold);
+  --public-header-action: var(--color-brand-gold);
+  --public-header-border: var(--color-header-border);
   position: sticky !important;
   top: 0;
   z-index: 50;
   min-height: 76px;
   padding: 0 clamp(18px, 4vw, 56px) !important;
-  background: var(--color-header) !important;
+  background: var(--color-header-gradient) !important;
   color: var(--public-header-text) !important;
   border-bottom: 1px solid var(--public-header-border) !important;
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12) !important;
@@ -489,12 +485,12 @@ body {
 }
 
 .home-public-header {
-  --public-header-text: #111827;
-  --public-header-muted: #172B3D;
-  --public-header-primary: #111827;
-  --public-header-action: #2563eb;
-  --public-header-border: rgba(17, 24, 39, 0.18);
-  background: var(--color-header) !important;
+  --public-header-text: var(--color-header-text);
+  --public-header-muted: var(--color-header-text-muted);
+  --public-header-primary: var(--color-brand-gold);
+  --public-header-action: var(--color-brand-gold);
+  --public-header-border: var(--color-header-border);
+  background: var(--color-header-gradient) !important;
 }
 
 .public-site-header a {
@@ -645,7 +641,7 @@ body {
 .public-language-toggle button:focus-visible,
 .public-theme-toggle:focus-visible,
 .public-login-button:focus-visible {
-  outline: 3px solid #1d4ed8;
+  outline: 3px solid var(--color-brand-gold);
   outline-offset: 2px;
   border-radius: 8px;
 }
@@ -746,7 +742,7 @@ body {
   border: 1px solid var(--public-header-action) !important;
   border-radius: 8px !important;
   background: var(--public-header-action) !important;
-  color: #ffffff !important;
+  color: var(--color-brand-navy) !important;
   box-shadow: none;
   font-size: 0.86rem !important;
   font-weight: 800;
@@ -756,8 +752,8 @@ body {
 }
 
 .public-site-header .public-login-button:hover {
-  border-color: #1d4ed8 !important;
-  background: #1d4ed8 !important;
+  border-color: var(--color-brand-gold-light) !important;
+  background: var(--color-brand-gold-light) !important;
 }
 
 .public-site-header .app-header-actions > button {
@@ -767,14 +763,14 @@ body {
   min-width: 38px;
   min-height: 38px;
   padding: 0 9px !important;
-  border: 1px solid rgba(23, 43, 61, 0.2) !important;
+  border: 1px solid var(--color-header-control-border) !important;
   border-radius: 9px !important;
-  background: rgba(255, 255, 255, 0.84) !important;
-  color: #172B3D !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: var(--color-header-text) !important;
 }
 
 .public-site-header .app-header-actions > button:hover {
-  background: #ffffff !important;
+  background: var(--color-header-icon-hover) !important;
 }
 
 .public-site-header .app-header-actions > button:first-of-type {
@@ -785,7 +781,7 @@ body {
 
 .public-site-header .app-header-actions > div:not(.app-header-user) {
   min-width: 128px;
-  color: #172B3D !important;
+  color: var(--color-header-text) !important;
 }
 
 .public-site-header .app-header-actions > div:not(.app-header-user) span:first-child {
@@ -794,7 +790,7 @@ body {
 }
 
 .public-site-header .app-header-actions > div:not(.app-header-user) span:last-child {
-  color: #172B3D !important;
+  color: var(--color-header-text) !important;
   font-size: 0.85rem !important;
 }
 
@@ -802,13 +798,9 @@ body {
   Footer
   ========================================== */
 .public-site-footer {
-  --color-footer-text: #F8FAFC;
-  --color-footer-link: #93C5FD;
   --color-text-primary: var(--color-footer-text);
   --color-text-muted: var(--color-footer-text);
   --color-text-secondary: var(--color-footer-text);
-  --color-surface: #FFFFFF;
-  --color-surface-muted: #F9FAFB;
   margin-top: auto;
   padding: 2rem 1.25rem 1rem;
   background: var(--color-footer-background);
@@ -1061,15 +1053,9 @@ body {
 }
 
 body.dark .public-site-footer {
-  --color-footer-background: #111827;
-  --color-footer-border: rgba(255, 255, 255, 0.18);
-  --color-footer-text: #F8FAFC;
-  --color-footer-link: #93C5FD;
-  --color-text-primary: #F8FAFC;
-  --color-text-muted: #F8FAFC;
-  --color-text-secondary: #F8FAFC;
-  --color-surface: #FFFFFF;
-  --color-surface-muted: #F9FAFB;
+  --color-text-primary: var(--color-footer-text);
+  --color-text-muted: var(--color-footer-text);
+  --color-text-secondary: var(--color-footer-text);
   border-top-color: var(--color-footer-border);
 }
 
@@ -1296,8 +1282,7 @@ body.dark .site-footer {
 
 /* ==========================================
    Sidebar Styles
-   Background #111827, menu text/icons #D1D5DB,
-   hover #1F2937, active #1F2937 + 4px gold rail.
+   University navy, pale blue text/icons, blue active state + gold rail.
    ========================================== */
 
 .admin-sidebar {
@@ -1478,27 +1463,15 @@ body.dark .admin-nav-link.is-active {
 }
 
 .authenticated-shell > .admin-sidebar {
-  --color-sidebar: linear-gradient(180deg, #0066FF 0%, #007BFF 50%, #0052CC 100%);
-  --color-sidebar-hover: rgba(255, 255, 255, 0.12);
-  --color-sidebar-active: rgba(255, 255, 255, 0.18);
-  --color-sidebar-text: #FFFFFF;
-  --color-sidebar-text-active: #FFFFFF;
-  --color-sidebar-label: #FFFFFF;
-  --color-sidebar-divider: rgba(255, 255, 255, 0.18);
-  --color-sidebar-accent: #BFE0FF;
-  box-shadow: 4px 0 15px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-md);
 }
 
-.authenticated-shell > .admin-sidebar .admin-nav-link.is-active::before {
-  display: none;
+.authenticated-shell > .admin-sidebar .admin-nav-link:not(.is-active) > svg {
+  color: var(--color-sidebar-icon);
 }
 
 .authenticated-shell > .admin-sidebar.ict-sidebar {
-  --color-sidebar: linear-gradient(180deg, #465df4 0%, #3e5ce9 48%, #3246c9 100%);
-  --color-sidebar-hover: rgba(255, 255, 255, 0.12);
-  --color-sidebar-active: rgba(255, 255, 255, 0.2);
-  --color-sidebar-label: rgba(255, 255, 255, 0.82);
-  border-top: 10px solid #32b7d0;
+  border-top: 0;
 }
 
 .ict-sidebar .sidebar-section-label {
@@ -3934,15 +3907,26 @@ body.dark .spinner {
 }
 
 .authenticated-shell > .admin-sidebar {
-  --color-sidebar: linear-gradient(180deg, #0066FF 0%, #007BFF 50%, #0052CC 100%);
-  --color-sidebar-hover: rgba(255, 255, 255, 0.12);
-  --color-sidebar-active: rgba(255, 255, 255, 0.18);
-  --color-sidebar-text: #FFFFFF;
-  --color-sidebar-text-active: #FFFFFF;
-  --color-sidebar-label: rgba(255, 255, 255, 0.78);
-  --color-sidebar-divider: rgba(255, 255, 255, 0.18);
-  --color-sidebar-accent: #BFE0FF;
-  box-shadow: 4px 0 15px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-md);
+}
+
+.dashboard-footer {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--color-footer-border);
+  background: var(--color-footer-background);
+  color: var(--color-footer-text);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.dashboard-footer > span:first-child {
+  color: var(--color-brand-gold);
+  font-size: 0.58rem;
 }
 
 .dashboard-header-search {
@@ -3952,6 +3936,40 @@ body.dark .spinner {
 .dashboard-language-switch {
   display: inline-flex;
   flex: 0 0 auto;
+}
+
+.login-language-switch {
+  display: inline-flex;
+  align-self: flex-end;
+  gap: 0;
+  margin: 0 0 12px;
+  padding: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  background: var(--color-surface);
+}
+
+.login-language-switch .dashboard-language-button {
+  min-width: 42px;
+  color: var(--color-text-primary);
+  border-color: transparent;
+  border-radius: 6px;
+}
+
+.login-language-switch .dashboard-language-button[aria-pressed="true"] {
+  color: var(--color-brand-navy);
+  background: var(--color-brand-gold);
+  border-color: var(--color-brand-gold);
+}
+
+.login-language-switch .dashboard-language-button:hover:not([aria-pressed="true"]) {
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.login-language-switch .dashboard-language-button:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .dashboard-profile-avatar {
@@ -4211,5 +4229,171 @@ body.dark .spinner {
 @media (prefers-reduced-motion: reduce) {
   .dashboard-layout-body.authenticated-shell > .admin-sidebar {
     transition: none;
+  }
+}
+
+.college-manager-sidebar,
+body.dark .college-manager-sidebar {
+  background: #111827 !important;
+  border-right-color: rgba(148, 163, 184, 0.2) !important;
+}
+
+.college-manager-sidebar .admin-sidebar-nav {
+  padding: 12px 10px 20px;
+}
+
+.college-manager-sidebar .sidebar-subsection-label {
+  padding: 14px 10px 6px;
+  color: #94A3B8;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+}
+
+.college-manager-sidebar .admin-nav-link,
+body.dark .college-manager-sidebar .admin-nav-link {
+  min-height: 42px;
+  border-radius: 9px;
+  color: #E5E7EB;
+}
+
+.college-manager-sidebar .admin-nav-link:hover,
+body.dark .college-manager-sidebar .admin-nav-link:hover {
+  color: #FFFFFF;
+  background: #1E3A5F;
+}
+
+.college-manager-sidebar .admin-nav-link.is-active,
+body.dark .college-manager-sidebar .admin-nav-link.is-active {
+  color: #FFFFFF;
+  background: #2563EB;
+}
+
+.college-manager-sidebar .admin-nav-link.is-active::before {
+  width: 4px;
+  background: #F4C542;
+}
+
+.college-manager-sidebar .admin-nav-link:not(.is-active) > svg,
+body.dark .college-manager-sidebar .admin-nav-link:not(.is-active) > svg {
+  color: #CBD5E1;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .authenticated-shell > .admin-sidebar.college-manager-sidebar {
+    inset: var(--header-height) auto 0 0;
+    width: 220px !important;
+    height: calc(100vh - var(--header-height));
+    max-height: none;
+    transform: none;
+    transition: none;
+  }
+
+  .authenticated-shell > .admin-sidebar.college-manager-sidebar.is-mobile-open {
+    transform: none;
+  }
+
+  .authenticated-shell > .admin-main-content,
+  .dashboard-layout-body.authenticated-shell > .dashboard-mobile-page-heading {
+    width: calc(100% - 220px);
+    margin-left: 220px;
+  }
+
+  .dashboard-layout-body.authenticated-shell > .dashboard-mobile-page-heading .dashboard-menu-toggle {
+    display: none;
+  }
+
+  .college-manager-sidebar .sidebar-subsection-label {
+    padding: 12px 8px 5px;
+    font-size: 9px;
+  }
+
+  .college-manager-sidebar .admin-nav-link {
+    gap: 9px;
+    padding: 8px 9px;
+    font-size: 12px;
+  }
+}
+
+.department-head-sidebar,
+body.dark .department-head-sidebar {
+  background: #111827 !important;
+  border-right-color: rgba(148, 163, 184, 0.2) !important;
+}
+
+.department-head-sidebar .admin-sidebar-nav {
+  padding: 12px 10px 20px;
+}
+
+.department-head-sidebar .sidebar-subsection-label {
+  padding: 14px 10px 6px;
+  color: #94A3B8;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+}
+
+.department-head-sidebar .admin-nav-link,
+body.dark .department-head-sidebar .admin-nav-link {
+  min-height: 42px;
+  border-radius: 9px;
+  color: #E5E7EB;
+}
+
+.department-head-sidebar .admin-nav-link:hover,
+body.dark .department-head-sidebar .admin-nav-link:hover {
+  color: #FFFFFF;
+  background: #1E3A5F;
+}
+
+.department-head-sidebar .admin-nav-link.is-active,
+body.dark .department-head-sidebar .admin-nav-link.is-active {
+  color: #FFFFFF;
+  background: #2563EB;
+}
+
+.department-head-sidebar .admin-nav-link.is-active::before {
+  width: 4px;
+  background: #F4C542;
+}
+
+.department-head-sidebar .admin-nav-link:not(.is-active) > svg,
+body.dark .department-head-sidebar .admin-nav-link:not(.is-active) > svg {
+  color: #CBD5E1;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .authenticated-shell > .admin-sidebar.department-head-sidebar {
+    inset: var(--header-height) auto 0 0;
+    width: 220px !important;
+    height: calc(100vh - var(--header-height));
+    max-height: none;
+    transform: none;
+    transition: none;
+  }
+
+  .authenticated-shell > .admin-sidebar.department-head-sidebar.is-mobile-open {
+    transform: none;
+  }
+
+  .authenticated-shell > .admin-main-content,
+  .dashboard-layout-body.authenticated-shell > .dashboard-mobile-page-heading {
+    width: calc(100% - 220px);
+    margin-left: 220px;
+  }
+
+  .dashboard-layout-body.authenticated-shell > .dashboard-mobile-page-heading .dashboard-menu-toggle {
+    display: none;
+  }
+
+  .department-head-sidebar .sidebar-subsection-label {
+    padding: 12px 8px 5px;
+    font-size: 9px;
+  }
+
+  .department-head-sidebar .admin-nav-link {
+    gap: 9px;
+    padding: 8px 9px;
+    font-size: 12px;
   }
 }

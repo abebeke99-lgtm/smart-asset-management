@@ -46,6 +46,12 @@ For real password reset email delivery, configure `EMAIL_HOST`, `EMAIL_PORT`, `E
 
 Create local credentials through the configured seed or registration flow. Do not commit passwords.
 
+## Roles and permissions
+
+The administrator Roles & Permissions page uses the existing `configs.role_permissions` record; it does not create separate roles or permission tables. Permission changes require an authenticated administrator, are validated against the backend permission catalog, and are audited in the same database transaction as the matrix update. College and department asset access remains constrained by backend organization-scope checks.
+
+The supported role list includes Teaching Assistant with read-only asset access limited to the account's active department. On the next backend startup, the existing idempotent schema sync adds `teaching_assistant` to `users.role` if it is not already present; back up the database before deploying schema changes.
+
 ## Features
 
 - Role-based login
@@ -53,6 +59,17 @@ Create local credentials through the configured seed or registration flow. Do no
 - Asset management APIs
 - RFID and maintenance tracking
 - Reports and notifications skeleton
+
+## Administrator RFID & QR tracking
+
+Before deploying the administrator tracking page against an existing database, back up the current MySQL database and run the additive migration against that same database:
+
+```powershell
+cd backend
+node src/scripts/migrations/adminRfidTracking.js
+```
+
+The migration backfills `assets.qr_code` from the legacy `digital_id`, generates unique QR values for remaining NULL/blank QR fields, makes QR values required and unique, normalizes blank RFID values to NULL and adds a unique nullable RFID index. It also adds `rfid_logs.scanned_by`. It stops if case-normalized duplicate QR or RFID values are found; resolve those records before retrying. Run this migration before starting the updated backend. The `/api/admin/rfid` endpoints require a JWT-authenticated administrator. Camera scanning requires HTTPS or localhost.
 
 ## Notes
 

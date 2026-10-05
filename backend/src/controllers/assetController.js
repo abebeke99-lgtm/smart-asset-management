@@ -61,7 +61,15 @@ const getAllAssets = async (req, res) => {
     const collegeId = isCollegeScopedRole(req.user?.role) ? getCollegeScopeId(req) : null;
     if (isCollegeScopedRole(req.user?.role) && !collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
     if (collegeId) where.collegeId = collegeId;
-    const department = query.department;
+    const teachingAssistantDepartmentId = req.user?.role === 'teaching_assistant'
+      ? Number(req.organizationScope?.departmentId)
+      : null;
+    if (req.user?.role === 'teaching_assistant' && (!Number.isSafeInteger(teachingAssistantDepartmentId) || teachingAssistantDepartmentId < 1)) {
+      return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+    }
+    const department = req.user?.role === 'teaching_assistant'
+      ? req.organizationScope.department.name
+      : query.department;
     if (department) where.department = department;
     if (query.status) where.status = { [Op.in]: [query.status, String(query.status).toLowerCase(), String(query.status).replace(/[_ ]/g, '-').toLowerCase()] };
     if (query.category) where.category = query.category;
@@ -104,6 +112,10 @@ const getAllAssets = async (req, res) => {
       if (!validMaintenanceStatuses.includes(normalizedMaintenanceStatus)) return res.status(400).json({ success: false, message: 'Unsupported maintenance_status' });
       const matchingMaintenance = await Maintenance.findAll({ where: { status: normalizedMaintenanceStatus }, attributes: ['assetId'] });
       where.id = { [Op.in]: matchingMaintenance.map((item) => item.assetId) };
+    }
+    if (teachingAssistantDepartmentId) {
+      where.departmentId = teachingAssistantDepartmentId;
+      if (req.organizationScope.collegeId) where.collegeId = req.organizationScope.collegeId;
     }
     const includeDeleted = ['true', '1'].includes(String(query.deleted || query.include_deleted || '').toLowerCase());
     if (includeDeleted) where.deletedAt = { [Op.not]: null };
@@ -156,7 +168,14 @@ const getAllAssets = async (req, res) => {
       limit,
       offset: (page - 1) * limit,
     });
-    const summaryRows = await Asset.findAll({ attributes: ['status'], raw: true, ...(collegeId ? { where: { collegeId } } : {}) });
+    const summaryWhere = {
+      ...(collegeId ? { collegeId } : {}),
+      ...(teachingAssistantDepartmentId ? { departmentId: teachingAssistantDepartmentId } : {}),
+      ...(teachingAssistantDepartmentId && req.organizationScope.collegeId
+        ? { collegeId: req.organizationScope.collegeId }
+        : {}),
+    };
+    const summaryRows = await Asset.findAll({ attributes: ['status'], raw: true, ...(Object.keys(summaryWhere).length ? { where: summaryWhere } : {}) });
     const summary = summaryRows.reduce((counts, asset) => {
       const status = String(asset.status || '').toLowerCase().replace(/[_ ]/g, '-');
       const key = status === 'in-use' || status === 'assigned' ? 'assigned' : status === 'under-maintenance' ? 'maintenance' : status === 'lost' || status === 'missing' ? 'missing' : status === 'disposed' || status === 'retired' ? 'retired' : status;

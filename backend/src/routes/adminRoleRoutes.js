@@ -1,25 +1,15 @@
 const express = require('express');
-const { Config, User, AuditLog } = require('../models');
+const { Config, User, sequelize } = require('../models');
 const { requireAuth, requireRole, requirePermission } = require('../middlewares/auth');
 const { createAuditLog } = require('../services/auditLogService');
 const { getRolePermissionMatrix } = require('../services/rolePermissionService');
+const { PERMISSIONS, ROLE_NAMES } = require('../constants/rolePermissions');
 
 const router = express.Router();
 const requireAdmin = [requireAuth, requireRole('admin')];
 const requireAdminPermission = (permission) => [...requireAdmin, requirePermission(permission)];
-const CORE_ROLES = ['admin', 'ict_officer', 'college', 'college_manager', 'department_head', 'finance', 'store_manager', 'maintenance', 'infrastructure', 'staff', 'student'];
+const CORE_ROLES = ROLE_NAMES;
 const ROLE_STATUS_VALUES = ['active', 'inactive'];
-const PERMISSIONS = [
-  'users.view', 'users.create', 'users.update', 'users.delete', 'users.activate', 'users.deactivate', 'users.lock', 'users.unlock',
-  'roles.view', 'roles.manage', 'permissions.view', 'permissions.manage',
-  'assets.view', 'assets.create', 'assets.update', 'assets.delete', 'assets.assign', 'assets.transfer', 'assets.return', 'assets.dispose',
-  'inventory.view', 'inventory.stock_in', 'inventory.stock_out', 'inventory.stock_movement',
-  'colleges.view', 'colleges.manage', 'departments.view', 'departments.manage', 'locations.view', 'locations.manage',
-  'notifications.view', 'notifications.manage', 'reports.view', 'reports.generate', 'reports.export', 'reports.print',
-  'audit.view', 'audit.export',
-  'settings.view', 'settings.manage', 'system.monitor', 'backup.manage', 'backup.restore',
-  'financial.view', 'maintenance.view', 'maintenance.request.create', 'maintenance.technician.assign', 'maintenance.update', 'maintenance.complete', 'rfid.view',
-];
 const PERMISSION_ALIASES = {
   ...Object.fromEntries(PERMISSIONS.flatMap((permission) => {
     const [module, action] = permission.split('.');
@@ -68,6 +58,7 @@ const defaultRoleDescriptions = {
   store_manager: 'Inventory, receiving, issue, and stock control',
   maintenance: 'Maintenance coordination and technical service management',
   infrastructure: 'Infrastructure and building asset management',
+  teaching_assistant: 'Limited teaching and learning asset visibility',
   staff: 'Standard staff access for routine operational tasks',
   student: 'Student access for learning and limited asset visibility',
 };
@@ -171,12 +162,7 @@ const listRoleRecords = async () => {
 
 const ensureRoleGovernancePermissions = (role, permissions) => {
   const normalized = [...new Set(permissions.map(normalizePermission))];
-  if (role === 'admin') {
-    const required = ['roles.manage', 'permissions.manage', 'settings.manage'];
-    for (const permission of required) {
-      if (!normalized.includes(permission)) normalized.push(permission);
-    }
-  }
+  if (role === 'admin') return [...PERMISSIONS];
   return normalized;
 };
 
@@ -229,7 +215,7 @@ router.get('/permissions', ...requireAdminPermission('permissions.view'), async 
       key: name,
       label: name,
       module: name.split('.')[0],
-      action: name.split('.')[1] || '',
+      action: name.split('.').at(-1) || '',
       status: 'active',
     }));
     return res.json({ success: true, data: permissions, permissions, total: permissions.length });
@@ -395,9 +381,13 @@ router.put('/roles/:role/permissions', ...requireAdminPermission('permissions.ma
       return res.status(404).json({ success: false, message: 'Role not found.' });
     }
 
+    if (!Array.isArray(req.body.permissions) || req.body.permissions.some((permission) => typeof permission !== 'string')) {
+      return res.status(400).json({ success: false, message: 'Permissions must be an array of permission names.' });
+    }
+
     const previous = await readMatrix();
-    const requestedPermissions = Array.isArray(req.body.permissions) ? req.body.permissions : [];
-    const permissions = ensureRoleGovernancePermissions(role, [...new Set(requestedPermissions.map(String).map(normalizePermission))]);
+    const requestedPermissions = req.body.permissions;
+    const permissions = ensureRoleGovernancePermissions(role, [...new Set(requestedPermissions.map(normalizePermission))]);
     const invalid = permissions.filter((permission) => !PERMISSIONS.includes(permission));
     if (invalid.length) {
       return res.status(400).json({ success: false, message: 'Unknown permissions supplied.', errors: invalid });
@@ -408,12 +398,28 @@ router.put('/roles/:role/permissions', ...requireAdminPermission('permissions.ma
     }
 
     const next = { ...previous, [role]: permissions };
-    const [record] = await Config.findOrCreate({ where: { key: 'role_permissions' }, defaults: { key: 'role_permissions', value: JSON.stringify(next) } });
-    if (record.value !== JSON.stringify(next)) {
-      await record.update({ value: JSON.stringify(next) });
-    }
+    await sequelize.transaction(async (transaction) => {
+      const [record] = await Config.findOrCreate({
+        where: { key: 'role_permissions' },
+        defaults: { key: 'role_permissions', value: JSON.stringify(next) },
+        transaction,
+      });
+      if (record.value !== JSON.stringify(next)) {
+        await record.update({ value: JSON.stringify(next) }, { transaction });
+      }
 
-    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CHANGE_PERMISSION', entity: `role:${role}`, entityId: role, oldValue: previous[role] || [], newValue: permissions, details: { role, legacyAction: 'ROLE_PERMISSIONS_UPDATED' } });
+      await createAuditLog({
+        userId: req.user.id,
+        role: req.user.role,
+        action: 'CHANGE_PERMISSION',
+        entity: `role:${role}`,
+        entityId: role,
+        oldValue: previous[role] || [],
+        newValue: permissions,
+        details: { role, legacyAction: 'ROLE_PERMISSIONS_UPDATED' },
+        transaction,
+      });
+    });
 
     return res.json({ success: true, data: { role, permissions }, permissions });
   } catch (error) { next(error); }

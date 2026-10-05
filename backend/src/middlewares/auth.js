@@ -1,5 +1,6 @@
 const passport = require('../config/passport');
 const { DEFAULT_ROLE_PERMISSIONS, getConfiguredRolePermissions } = require('../services/rolePermissionService');
+const { isAccountActive } = require('../utils/accountStatus');
 
 const ROLE_PERMISSIONS = DEFAULT_ROLE_PERMISSIONS;
 
@@ -7,7 +8,7 @@ const normalizeRoleValue = (role) => {
   if (!role) return '';
   const value = String(role).trim().toLowerCase();
   if (['department head', 'dept_head', 'department-head', 'department'].includes(value)) return 'department_head';
-  if (['college manager', 'college-manager', 'college_manager'].includes(value)) return 'college_manager';
+  if (['college', 'college manager', 'college-manager', 'college_manager'].includes(value)) return 'college_manager';
   if (['infrastructure director', 'infrastructure directorate', 'infrastructure_directorate', 'infrastructure-directorate', 'infra'].includes(value)) return 'infrastructure';
   return value;
 };
@@ -49,7 +50,7 @@ const requireAuth = (req, res, next) => {
       if (configuredPermissions !== null) req.user.rolePermissions = configuredPermissions;
       req.user.permissions = resolveUserPermissions(req.user);
 
-      if (req.user.active === false || req.user.active === 0 || req.user.status === 'disabled' || req.user.status === 'suspended' || req.user.status === 'blocked') {
+      if (!isAccountActive(req.user.active) || ['disabled', 'suspended', 'blocked'].includes(String(req.user.status || '').toLowerCase())) {
         return res.status(403).json({ success: false, message: 'This account is not active.' });
       }
 
@@ -65,7 +66,7 @@ const requireActiveAccount = (req, res, next) => {
     return res.status(401).json({ success: false, message: 'Authentication required' });
   }
 
-  const isActive = req.user.active !== false && req.user.active !== 0 && !['disabled', 'suspended', 'blocked'].includes(String(req.user.status || '').toLowerCase());
+  const isActive = isAccountActive(req.user.active) && !['disabled', 'suspended', 'blocked'].includes(String(req.user.status || '').toLowerCase());
   if (!isActive) {
     return res.status(403).json({ success: false, message: 'This account is not active.' });
   }
@@ -106,4 +107,18 @@ const requirePermission = (...permissions) => (req, res, next) => {
   return next();
 };
 
-module.exports = { requireAuth, requireActiveAccount, requireRole, requirePermission, normalizeRoleValue, normalizePermissionValue, resolveUserPermissions };
+const requireAnyPermission = (...permissions) => (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: 'Authentication required' });
+  }
+
+  const permissionSet = new Set(resolveUserPermissions(req.user).map(normalizePermissionValue));
+  const requiredPermissions = permissions.map(normalizePermissionValue).filter(Boolean);
+  if (!requiredPermissions.some((permission) => permissionSet.has(permission) || permissionSet.has('*'))) {
+    return res.status(403).json({ success: false, message: 'You do not have permission to perform this action.' });
+  }
+
+  return next();
+};
+
+module.exports = { requireAuth, requireActiveAccount, requireRole, requirePermission, requireAnyPermission, normalizeRoleValue, normalizePermissionValue, resolveUserPermissions };

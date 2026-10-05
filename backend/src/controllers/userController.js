@@ -7,8 +7,9 @@ const { findCollegeScopeForUser } = require('../middlewares/organizationScope');
 const { saveProfilePhoto, validateProfilePhoto, buildPublicFileUrl } = require('../utils/uploadUtils');
 const { createAuditLog } = require('../services/auditLogService');
 const { getConfiguredRolePermissions } = require('../services/rolePermissionService');
+const { ROLE_NAMES } = require('../constants/rolePermissions');
 
-const roles = ['admin', 'ict_officer', 'college', 'college_manager', 'department_head', 'finance', 'store_manager', 'maintenance', 'infrastructure', 'staff', 'student'];
+const roles = ROLE_NAMES;
 const normalizeLookupValue = (value) => String(value ?? '').trim().toLowerCase();
 
 const findDuplicateUser = async ({ username = '', email = '', excludeUserId = null } = {}) => {

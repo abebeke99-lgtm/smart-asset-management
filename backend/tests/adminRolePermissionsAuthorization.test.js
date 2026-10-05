@@ -6,6 +6,7 @@ const passport = require("../src/config/passport");
 const models = require("../src/models");
 const { requireAuth, requireRole, requirePermission } = require("../src/middlewares/auth");
 const adminRoleRoutes = require("../src/routes/adminRoleRoutes");
+const { PERMISSIONS, DEFAULT_ROLE_PERMISSIONS } = require("../src/constants/rolePermissions");
 
 const runMiddleware = (middleware, req) => new Promise((resolve, reject) => {
   const res = {
@@ -52,6 +53,30 @@ test("role list API rejects missing authentication with a JSON 401", async () =>
   }
 });
 
+test("authentication handles MySQL TINYINT active values without weakening access", async () => {
+  const originalAuthenticate = passport.authenticate;
+  const originalFindByPk = models.Config.findByPk;
+  let activeValue = "0";
+  passport.authenticate = (_strategy, _options, callback) => (req, res, next) => callback(null, {
+    id: 42,
+    role: "admin",
+    active: activeValue,
+  });
+  models.Config.findByPk = async () => null;
+
+  try {
+    const deactivated = await runMiddleware(requireAuth, { headers: {} });
+    assert.equal(deactivated.status, 403);
+
+    activeValue = 1;
+    const active = await runMiddleware(requireAuth, { headers: {} });
+    assert.equal(active.next, true);
+  } finally {
+    passport.authenticate = originalAuthenticate;
+    models.Config.findByPk = originalFindByPk;
+  }
+});
+
 test("role and permission APIs reject authenticated non-administrators with 403", async () => {
   const originalAuthenticate = passport.authenticate;
   const originalFindByPk = models.Config.findByPk;
@@ -92,4 +117,76 @@ test("permission changes require the dedicated permission-management capability"
   assert.match(routeSource, /router\.put\('\/roles\/:role\/permissions', \.\.\.requireAdminPermission\('permissions\.manage'\)/);
   assert.match(routeSource, /router\.get\('\/roles', \.\.\.requireAdminPermission\('roles\.view'\)/);
   assert.match(routeSource, /router\.get\('\/permissions', \.\.\.requireAdminPermission\('permissions\.view'\)/);
+});
+
+test("permission catalog includes every permission required by active routes", () => {
+  for (const permission of [
+    "assets.transfer.approve",
+    "college.approvals.approve",
+    "college.documents.manage",
+    "college.verification.manage",
+  ]) {
+    assert.ok(PERMISSIONS.includes(permission), `${permission} must be editable in the role matrix`);
+  }
+  assert.ok(DEFAULT_ROLE_PERMISSIONS.college_manager.includes("assets.transfer.approve"));
+  assert.deepEqual(DEFAULT_ROLE_PERMISSIONS.teaching_assistant, ["assets.view"]);
+  assert.ok(!DEFAULT_ROLE_PERMISSIONS.teaching_assistant.includes("assets.delete"));
+});
+
+test("permission updates persist configuration and audit together in a transaction", async () => {
+  const route = getRoute("put", "/roles/:role/permissions");
+  assert.ok(route);
+  const handler = route.stack[3].handle;
+  const originalFindByPk = models.Config.findByPk;
+  const originalFindOrCreate = models.Config.findOrCreate;
+  const originalTransaction = models.sequelize.transaction;
+  const originalAuditCreate = models.AuditLog.create;
+  let savedValue;
+  let auditRecord;
+  let transactionArgument;
+  const transaction = { id: "test-transaction" };
+
+  models.Config.findByPk = async (key) => key === "role_permissions"
+    ? { value: JSON.stringify({ staff: ["assets.view"] }) }
+    : null;
+  models.Config.findOrCreate = async ({ transaction: suppliedTransaction }) => {
+    transactionArgument = suppliedTransaction;
+    return [{
+      value: JSON.stringify({ staff: ["assets.view"] }),
+      async update(values, options) {
+        savedValue = values.value;
+        transactionArgument = options.transaction;
+      },
+    }];
+  };
+  models.sequelize.transaction = async (callback) => callback(transaction);
+  models.AuditLog.create = async (record, options) => {
+    auditRecord = { record, transaction: options.transaction };
+    return record;
+  };
+
+  const res = {
+    statusCode: 200,
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+  };
+  try {
+    await handler({
+      params: { role: "staff" },
+      body: { permissions: ["assets.view", "reports.view"] },
+      user: { id: 42, role: "admin" },
+    }, res, (error) => { if (error) throw error; });
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(JSON.parse(savedValue).staff, ["assets.view", "reports.view"]);
+    assert.equal(transactionArgument, transaction);
+    assert.equal(auditRecord.transaction, transaction);
+    assert.equal(auditRecord.record.action, "CHANGE_PERMISSION");
+    assert.deepEqual(JSON.parse(auditRecord.record.details).old_value, ["assets.view"]);
+    assert.deepEqual(JSON.parse(auditRecord.record.details).new_value, ["assets.view", "reports.view"]);
+  } finally {
+    models.Config.findByPk = originalFindByPk;
+    models.Config.findOrCreate = originalFindOrCreate;
+    models.sequelize.transaction = originalTransaction;
+    models.AuditLog.create = originalAuditCreate;
+  }
 });

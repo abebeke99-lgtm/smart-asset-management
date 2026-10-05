@@ -167,7 +167,13 @@ test('Store issue form data routes retain College scope middleware', () => {
   const users = userRoutes.stack.find((layer) => layer.route && layer.route.path === '/' && layer.route.methods.get);
   const departments = departmentRoutes.stack.find((layer) => layer.route && layer.route.path === '/' && layer.route.methods.get);
   assert.match(users.route.stack[2].handle.toString(), /store_manager/);
-  assert.match(departments.route.stack[1].handle.toString(), /store_manager/);
+  const departmentRoleGuard = departments.route.stack[1].handle;
+  let storeManagerAllowed = false;
+  departmentRoleGuard({ user: { role: 'store_manager' } }, {
+    status(code) { this.statusCode = code; return this; },
+    json() { return this; },
+  }, () => { storeManagerAllowed = true; });
+  assert.equal(storeManagerAllowed, true, 'Store Managers must pass the department read role guard');
 });
 
 test('Store return endpoints enforce Store Manager role and College scope', () => {

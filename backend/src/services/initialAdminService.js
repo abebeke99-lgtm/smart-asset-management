@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const { isAccountActive } = require('../utils/accountStatus');
 
 const ADMIN_USERNAME = 'admin';
 const ADMIN_EMAIL = 'admin@bekelei.com';
@@ -22,7 +23,7 @@ const validateInitialAdminPassword = (password) => {
 };
 
 const verifyExistingAdmin = (user) => {
-  const active = user.active === true || user.active === 1;
+  const active = isAccountActive(user.active);
   const adminRole = String(user.role || '').toLowerCase() === 'admin';
   const validPasswordHash = typeof user.password === 'string' && BCRYPT_HASH_PATTERN.test(user.password);
 

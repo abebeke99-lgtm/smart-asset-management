@@ -18,7 +18,7 @@ const {
   createAssetCustody,
   endCustody,
 } = require('../controllers/assetExtendedController');
-const { requireAuth, requireRole } = require('../middlewares/auth');
+const { requireAuth, requireRole, requireAnyPermission } = require('../middlewares/auth');
 const { resolveDepartmentScope, resolveCollegeScope, isCollegeScopedRole, getCollegeScopeId } = require('../middlewares/organizationScope');
 const { sequelize, Asset, Assignment, Inventory, InventoryTransaction, Maintenance, Transfer, RFIDLog, AuditLog, User, Department } = require('../models');
 const { Op } = require('sequelize');
@@ -49,8 +49,43 @@ const verifyDepartmentHeadAsset = async (req, res, next) => {
 	if (!asset) return res.status(403).json({ success: false, message: 'Asset is outside your department scope' });
 	return next();
 };
+const resolveTeachingAssistantDepartmentScope = async (req, res, next) => {
+	if (req.user.role !== 'teaching_assistant') return next();
+	const departmentId = Number(req.user.departmentId ?? req.user.department_id);
+	if (!Number.isSafeInteger(departmentId) || departmentId < 1) {
+		return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+	}
+	try {
+		const department = await Department.findOne({
+			where: { id: departmentId, status: 'active' },
+			attributes: ['id', 'name', 'collegeId'],
+		});
+		if (!department) return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+		req.organizationScope = { department, departmentId: department.id, collegeId: department.collegeId };
+		return next();
+	} catch (error) {
+		return next(error);
+	}
+};
+const verifyTeachingAssistantAsset = async (req, res, next) => {
+	if (req.user.role !== 'teaching_assistant') return next();
+	try {
+		const asset = await Asset.findOne({
+			where: {
+				id: req.params.id,
+				departmentId: req.organizationScope.departmentId,
+				...(req.organizationScope.collegeId ? { collegeId: req.organizationScope.collegeId } : {}),
+			},
+			attributes: ['id'],
+		});
+		if (!asset) return res.status(403).json({ success: false, message: 'Asset is outside your department scope' });
+		return next();
+	} catch (error) {
+		return next(error);
+	}
+};
 
-router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager'), resolveScopedCollegeAssetScope, getAllAssets);
+router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager', 'teaching_assistant'), requireAnyPermission('assets.view', 'ict.assets.view', 'college.assets.view'), resolveScopedCollegeAssetScope, resolveTeachingAssistantDepartmentScope, getAllAssets);
 router.get('/lookup/:assetId', ...requireAdmin, trackingController.lookupByAssetCode);
 router.get('/next-id', requireAuth, requireRole(...assetManagerRoles), getNextAssetId);
 router.get('/next-digital-id', requireAuth, requireRole(...assetManagerRoles), generateDigitalId);
@@ -167,7 +202,7 @@ router.delete('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer', 'sto
 		res.json({ success: true, asset: asset.toJSON() });
 	} catch (error) { next(error); }
 });
-router.get('/:id', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager', 'department_head'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, getAssetById);
+router.get('/:id', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager', 'department_head', 'teaching_assistant'), requireAnyPermission('assets.view', 'ict.assets.view', 'college.assets.view'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, resolveTeachingAssistantDepartmentScope, verifyTeachingAssistantAsset, getAssetById);
 router.get('/:id/location', ...requireAdmin, trackingController.getLocation);
 router.get('/:id/assignments', ...requireAdmin, trackingController.getAssignments);
 router.get('/:id/transfers', ...requireAdmin, trackingController.getTransfers);

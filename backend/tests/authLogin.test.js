@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 
 const { resolveLoginAliases, normalizeLoginIdentity, generateToken } = require('../src/controllers/authController');
 const { resolveDemoPassword } = require('../src/config/seed');
+const { isAccountActive } = require('../src/utils/accountStatus');
 const { findCollegeScopeForUser } = require('../src/middlewares/organizationScope');
 const { normalizeOrganizationSettings, resolveOrganizationSettings } = require('../src/routes/adminSettingsRoutes');
 
@@ -42,6 +43,25 @@ test('resolves legacy login aliases while preserving the department_head role', 
   assert.deepEqual(resolveLoginAliases('department'), ['department', 'department_head', 'dept_head', 'department head']);
   assert.deepEqual(resolveLoginAliases('store manager'), ['store manager', 'store_manager', 'store-manager']);
   assert.deepEqual(resolveLoginAliases('ICT Officer'), ['ict officer', 'ict_officer', 'ict-officer', 'ict']);
+});
+
+test('interprets MySQL active values consistently', () => {
+  assert.equal(isAccountActive(true), true);
+  assert.equal(isAccountActive(1), true);
+  assert.equal(isAccountActive('1'), true);
+  assert.equal(isAccountActive('true'), true);
+  assert.equal(isAccountActive(false), false);
+  assert.equal(isAccountActive(0), false);
+  assert.equal(isAccountActive('0'), false);
+  assert.equal(isAccountActive(null), false);
+});
+
+test('inactive login returns a diagnostic 403 and logs only the user id', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../src/controllers/authController.js'), 'utf8');
+  assert.match(source, /if \(!isAccountActive\(user\.active\)\)/);
+  assert.match(source, /console\.warn\(`Login rejected for inactive account userId=\$\{user\.id\}`\)/);
+  assert.match(source, /status\(403\)\.json\(\{ success: false, message: 'Account is deactivated\.' \}\)/);
+  assert.doesNotMatch(source, /Login rejected for inactive account.*password/i);
 });
 
 test('always uses a MySQL database in development even when no MySQL config is provided', async () => {
