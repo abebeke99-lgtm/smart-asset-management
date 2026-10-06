@@ -1,5 +1,6 @@
 require('dotenv').config();
 const bcrypt = require('bcryptjs');
+const { Op } = require('sequelize');
 const User = require('../models/User');
 const Asset = require('../models/Asset');
 const Assignment = require('../models/Assignment');
@@ -217,6 +218,13 @@ async function ensureDemoUser(userData, { userModel = User, collegeModel = Colle
   const normalizedUserData = normalizeDemoUserSeed(userData);
   const existingUser = await userModel.findOne({ where: { username: normalizedUserData.username } });
 
+  if (normalizedUserData.username === 'department_head') {
+    const conflictingAlias = await userModel.findOne({ where: { username: 'department' } });
+    if (conflictingAlias && (!existingUser || conflictingAlias.id !== existingUser.id)) {
+      await conflictingAlias.destroy();
+    }
+  }
+
   if (existingUser) {
     const updates = {};
     const emailOwner = normalizedUserData.email
@@ -245,9 +253,15 @@ async function ensureDemoUser(userData, { userModel = User, collegeModel = Colle
       updates.status = normalizedUserData.active ? 'active' : 'inactive';
     }
 
-    const passwordMissing = !existingUser.password || !String(existingUser.password).trim();
-    if (normalizedUserData.password && passwordMissing) {
+    const passwordNeedsRefresh = normalizedUserData.password && (
+      !existingUser.password ||
+      !String(existingUser.password).trim() ||
+      !(await bcrypt.compare(normalizedUserData.password, existingUser.password))
+    );
+    if (passwordNeedsRefresh) {
       updates.password = await bcrypt.hash(normalizedUserData.password, 10);
+      updates.failedLoginAttempts = 0;
+      updates.lockoutUntil = null;
     }
 
     if (Object.keys(updates).length > 0) {
@@ -337,17 +351,61 @@ function buildSampleAssetRow(index, collegeId, departmentId, locationId) {
   return asset;
 }
 
+const getCandidateUniqueValues = (valueSet = {}) => {
+  const conditions = [];
+  for (const [key, value] of Object.entries(valueSet)) {
+    if (value === undefined || value === null || value === '') continue;
+    if (typeof value === 'object' && !(value instanceof Date)) continue;
+    conditions.push({ [key]: value });
+  }
+  return conditions;
+};
+
+const findMatchingRecord = async (model, where) => {
+  if (!model || typeof model.findOne !== 'function') return null;
+  if (where && typeof where === 'object' && where[Op.or]) {
+    for (const condition of where[Op.or]) {
+      const existing = await model.findOne({ where: condition });
+      if (existing) return existing;
+    }
+    return null;
+  }
+  return model.findOne({ where });
+};
+
+const findDuplicateCandidate = async (model, where = {}, defaults = {}) => {
+  const uniqueCandidates = getCandidateUniqueValues({ ...where, ...defaults });
+  if (!uniqueCandidates.length) return null;
+  return findMatchingRecord(model, { [Op.or]: uniqueCandidates });
+};
+
+const isDuplicateConstraintError = (error) => error?.name === 'SequelizeUniqueConstraintError' || error?.parent?.code === 'ER_DUP_ENTRY';
+
 const findOrCreateRecord = async (model, where, defaults = {}) => {
+  const existingRecord = await findMatchingRecord(model, where) || await findDuplicateCandidate(model, where, defaults);
+  if (existingRecord) return [existingRecord, false];
+
   if (typeof model?.findOrCreate === 'function') {
-    return model.findOrCreate({ where, defaults });
+    try {
+      return await model.findOrCreate({ where, defaults });
+    } catch (error) {
+      if (!isDuplicateConstraintError(error)) throw error;
+      const existing = await findMatchingRecord(model, where) || await findDuplicateCandidate(model, where, defaults);
+      if (existing) return [existing, false];
+      throw error;
+    }
   }
 
-  const existing = typeof model?.findOne === 'function' ? await model.findOne({ where }) : null;
-  if (existing) return [existing, false];
-
   if (typeof model?.create === 'function') {
-    const created = await model.create({ ...defaults, ...where });
-    return [created, true];
+    try {
+      const created = await model.create({ ...defaults, ...where });
+      return [created, true];
+    } catch (error) {
+      if (!isDuplicateConstraintError(error)) throw error;
+      const existing = await findMatchingRecord(model, where) || await findDuplicateCandidate(model, where, defaults);
+      if (existing) return [existing, false];
+      throw error;
+    }
   }
 
   return [{ ...where, ...defaults }, true];
@@ -404,7 +462,14 @@ async function seedOperationalData(options = {}) {
     const department = departments[index % departments.length];
     const location = locations[index % locations.length];
     const row = buildSampleAssetRow(index, department.collegeId || collegeIds[index % collegeIds.length], department.id, location.id);
-    const [asset, created] = await findOrCreateRecord(models.assetModel, { digitalId: row.digitalId }, row);
+    const [asset, created] = await findOrCreateRecord(models.assetModel, {
+      [Op.or]: [
+        { digitalId: row.digitalId },
+        { assetCode: row.assetCode },
+        { rfidTag: row.rfidTag },
+        { serialNumber: row.serialNumber },
+      ],
+    }, row);
     if (!created && asset.digitalId !== row.digitalId) {
       await asset.update(row);
     }
@@ -494,13 +559,24 @@ async function seedDatabase(options = {}) {
   const counts = { created: 0, existing: 0 };
 
   for (const userData of DEMO_USERS) {
-    const result = await ensureDemoUser({ ...userData, password }, models);
+    const userPassword = userData.username === 'admin' && process.env.INITIAL_ADMIN_PASSWORD
+      ? process.env.INITIAL_ADMIN_PASSWORD
+      : password;
+    const result = await ensureDemoUser({ ...userData, password: userPassword }, models);
     counts[result.created ? 'created' : 'existing'] += 1;
   }
 
   if (options.seedOperationalData !== false && (process.env.SEED_DEMO_DATA !== 'false' || process.env.NODE_ENV === 'development')) {
-    const operationalData = await seedOperationalData(models);
-    console.log(`[seed] Operational data seeded: ${operationalData.assets} assets, ${operationalData.assignments} assignments, ${operationalData.maintenances} maintenance records, ${operationalData.notifications} notifications.`);
+    try {
+      const operationalData = await seedOperationalData(models);
+      console.log(`[seed] Operational data seeded: ${operationalData.assets} assets, ${operationalData.assignments} assignments, ${operationalData.maintenances} maintenance records, ${operationalData.notifications} notifications.`);
+    } catch (error) {
+      if (isDuplicateConstraintError(error)) {
+        console.warn('[seed] Operational data already exists; continuing with startup without crashing.');
+      } else {
+        throw error;
+      }
+    }
   }
 
   return counts;

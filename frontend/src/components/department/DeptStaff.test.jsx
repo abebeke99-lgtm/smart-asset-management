@@ -173,6 +173,7 @@ describe('Department Head staff', () => {
     render(<DeptStaff />);
 
     expect(await screen.findByRole('heading', { name: /የዲፓርትመንት ሰራተኞች/ })).toBeInTheDocument();
+    await screen.findByText(member.fullName);
     expect(screen.getByText('የሰራተኛ መለያ ቁጥር')).toBeInTheDocument();
     expect(screen.getByText('ላቦራቶሪ/ቢሮ')).toBeInTheDocument();
   });

@@ -29,6 +29,13 @@ const STATUS_LABELS = {
   escalated: 'Escalated',
 };
 
+const isDepartmentHead = (req) => String(req.user?.role || '').toLowerCase() === 'department_head';
+const departmentScopeId = (req) => {
+  const value = req.organizationScope?.departmentId ?? req.user?.departmentId ?? req.user?.department_id;
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+};
+
 const ROUTING_BY_CATEGORY = [
   { pattern: 'network', subscribe: /(network|router|switch|firewall|wireless|access point)/i, route: 'ictd' },
   { pattern: 'ict', subscribe: /(computer|laptop|ict|server|monitor|printer|scanner|projector|workstation|desktop|processor|cpu)/i, route: 'ictd' },
@@ -121,6 +128,16 @@ const verifyTicketLimit = async (reportedBy, departmentId, transaction) => {
 const createServiceRequest = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
+    const scopedDepartmentId = isDepartmentHead(req) ? departmentScopeId(req) : null;
+    if (isDepartmentHead(req) && !scopedDepartmentId) {
+      await transaction.rollback();
+      return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+    }
+    const requestedDepartmentId = req.body.departmentId ?? req.body.department_id;
+    if (scopedDepartmentId && requestedDepartmentId != null && Number(requestedDepartmentId) !== scopedDepartmentId) {
+      await transaction.rollback();
+      return res.status(403).json({ success: false, message: 'Cannot create a service request for another department' });
+    }
     const title = String(req.body.title || '').trim();
     const description = String(req.body.description || req.body.problem || '').trim();
     const justification = String(req.body.justification || req.body.justification_text || '').trim();
@@ -136,10 +153,14 @@ const createServiceRequest = async (req, res, next) => {
     if (assetId) {
       asset = await Asset.findByPk(assetId, { transaction });
       if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
+      if (scopedDepartmentId && Number(asset.departmentId ?? asset.department_id) !== scopedDepartmentId) {
+        await transaction.rollback();
+        return res.status(403).json({ success: false, message: 'Cannot create a service request for an asset outside your department' });
+      }
     }
     const reportedBy = req.user.id;
-    const departmentId = req.user.departmentId || req.user.department_id || req.body.departmentId || req.body.department_id || null;
-    const collegeId = req.body.collegeId || req.body.college_id || req.user.collegeId || null;
+    const departmentId = scopedDepartmentId || req.user.departmentId || req.user.department_id || req.body.departmentId || req.body.department_id || null;
+    const collegeId = scopedDepartmentId ? (req.organizationScope?.collegeId ?? req.user.collegeId ?? null) : (req.body.collegeId || req.body.college_id || req.user.collegeId || null);
     await verifyTicketLimit(reportedBy, departmentId, transaction);
 
     const routedTo = routeRequest(requestType, req.body.category || '', asset?.category || '');
@@ -194,11 +215,16 @@ const listServiceRequests = async (req, res, next) => {
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 20));
     const where = {};
+    if (isDepartmentHead(req)) {
+      const scopeId = departmentScopeId(req);
+      if (!scopeId) return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+      where.departmentId = scopeId;
+    }
     if (req.query.status) where.status = String(req.query.status).toLowerCase();
     if (req.query.routed_to || req.query.routedTo) where.routedTo = req.query.routed_to || req.query.routedTo;
     if (req.query.request_type || req.query.requestType) where.requestType = req.query.request_type || req.query.requestType;
     if (req.query.asset_id || req.query.assetId) where.assetId = req.query.asset_id || req.query.assetId;
-    if (req.query.department_id || req.query.departmentId) where.departmentId = req.query.department_id || req.query.departmentId;
+    if (!isDepartmentHead(req) && (req.query.department_id || req.query.departmentId)) where.departmentId = req.query.department_id || req.query.departmentId;
     if (req.query.priority) where.priority = String(req.query.priority).toLowerCase();
     if (req.query.assigned_to || req.query.assignedTo) where.assignedTo = req.query.assigned_to || req.query.assignedTo;
     if (req.query.my === 'true') where.reportedBy = req.user.id;
@@ -226,7 +252,13 @@ const listServiceRequests = async (req, res, next) => {
 
 const getServiceRequest = async (req, res, next) => {
   try {
-    const item = await ServiceRequest.findByPk(req.params.id, { include: defaultInclude() });
+    const where = { id: req.params.id };
+    if (isDepartmentHead(req)) {
+      const scopeId = departmentScopeId(req);
+      if (!scopeId) return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+      where.departmentId = scopeId;
+    }
+    const item = await ServiceRequest.findOne({ where, include: defaultInclude() });
     if (!item) return res.status(404).json({ success: false, message: 'Service request not found' });
     const feedback = await Feedback.findOne({ where: { requestId: item.id } });
     res.json({ success: true, data: serializeRequest(item), request: serializeRequest(item), feedback });
@@ -237,7 +269,13 @@ const transitionStatus = async (req, res, next, applyToBody) => {
   const transaction = await sequelize.transaction();
   try {
     if (applyToBody) applyToBody(req.body);
-    const item = await ServiceRequest.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
+    const where = { id: req.params.id };
+    if (isDepartmentHead(req)) {
+      const scopeId = departmentScopeId(req);
+      if (!scopeId) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' }); }
+      where.departmentId = scopeId;
+    }
+    const item = await ServiceRequest.findOne({ where, transaction, lock: transaction.LOCK.UPDATE });
     if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Service request not found' }); }
     const status = String(req.body.status || '').toLowerCase();
     if (!VALID_STATUSES.includes(status)) { await transaction.rollback(); return res.status(400).json({ success: false, message: `Invalid status. Allowed: ${VALID_STATUSES.join(', ')}` }); }
@@ -362,6 +400,11 @@ const createFeedback = async (req, res, next) => {
   try {
     const item = await ServiceRequest.findByPk(req.params.id);
     if (!item) return res.status(404).json({ success: false, message: 'Service request not found' });
+    if (isDepartmentHead(req)) {
+      const scopeId = departmentScopeId(req);
+      if (!scopeId) return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+      if (Number(item.departmentId) !== scopeId) return res.status(404).json({ success: false, message: 'Service request not found' });
+    }
     if (item.status !== 'completed') return res.status(409).json({ success: false, message: 'Feedback is only available after the request is completed' });
     if (item.reportedBy !== req.user.id && !['admin', 'college', 'department_head'].includes(req.user.role)) {
       return res.status(403).json({ success: false, message: 'Only the requester can provide feedback' });
@@ -423,4 +466,5 @@ module.exports = {
   serializeRequest,
   defaultInclude,
   verifyTicketLimit,
+  departmentScopeId,
 };

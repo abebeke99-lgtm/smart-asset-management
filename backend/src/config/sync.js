@@ -189,6 +189,8 @@ async function ensureUserRoleEnum() {
 
 async function syncDatabase() {
   try {
+    const tablesBeforeSync = await sequelize.getQueryInterface().showAllTables();
+    const isNewEmptyDatabase = tablesBeforeSync.length === 0;
     const ensureColumn = async (tableName, columnName, definition) => {
       const table = await sequelize.getQueryInterface().describeTable(tableName);
       if (table[columnName]) return false;
@@ -568,6 +570,15 @@ async function syncDatabase() {
     for (const name of ROLE_NAMES) {
       const displayName = name.split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
       await Role.findOrCreate({ where: { name }, defaults: { displayName } });
+    }
+    if (isNewEmptyDatabase) {
+      const { applyDepartmentHeadForeignKeys } = require('../scripts/migrations/departmentHeadForeignKeys');
+      const relationships = await applyDepartmentHeadForeignKeys({ apply: true });
+      const unresolved = relationships.filter((item) => !['ADDED', 'PRESENT'].includes(item.state));
+      if (unresolved.length) {
+        throw new Error(`Department Head foreign-key setup requires review: ${unresolved.map((item) => `${item.child}.${item.childColumn}:${item.state}`).join(', ')}`);
+      }
+      console.log(`Installed ${relationships.filter((item) => item.state === 'ADDED').length} Department Head integrity constraints on the new database.`);
     }
     console.log('Database synced successfully.');
     return true;

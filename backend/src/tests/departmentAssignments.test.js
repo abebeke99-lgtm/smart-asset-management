@@ -190,7 +190,7 @@ test('department-head creation rejects an asset or recipient outside its resolve
     [models.sequelize, 'transaction', async () => transaction],
     [models.Inventory, 'findOne', async () => inventory],
     [models.Asset, 'findByPk', async () => foreignAsset],
-    [models.User, 'findByPk', async () => ({ id: 81, active: true, departmentId: 7, collegeId: 3 })],
+    [models.User, 'findByPk', async () => ({ id: 81, active: true, status: 'active', departmentId: 7, collegeId: 3 })],
     [models.Department, 'findByPk', async () => ({ id: 7, name: 'Authorized Department', collegeId: 3, status: 'active' })],
     [models.Room, 'findByPk', async () => null],
   ];
@@ -199,6 +199,53 @@ test('department-head creation rejects an asset or recipient outside its resolve
     await handler(request(assignmentBody()), response, (error) => { throw error; });
     assert.equal(response.statusCode, 403);
     assert.match(response.body.message, /outside your department scope/i);
+    assert.equal(transaction.finished, 'rollback');
+  });
+});
+
+test('Department Head transfer rejects a recipient without a matching department', async () => {
+  const handler = getHandler(getRoute(assignmentRoutes, 'post', '/:id/transfer'));
+  const transaction = { LOCK: { UPDATE: 'UPDATE' }, finished: null, async rollback() { this.finished = 'rollback'; }, async commit() { this.finished = 'commit'; } };
+  const assignment = { id: 90, assetId: 45, departmentId: 7, status: 'active', notes: '{}', toJSON() { return { ...this }; } };
+  const asset = { id: 45, departmentId: 7, collegeId: 3 };
+  const recipient = { id: 82, active: true, status: 'active', departmentId: null, collegeId: 3 };
+  const stubs = [
+    [models.sequelize, 'transaction', async () => transaction],
+    [models.Assignment, 'findByPk', async () => assignment],
+    [models.Asset, 'findByPk', async () => asset],
+    [models.User, 'findByPk', async () => recipient],
+    [models.Department, 'findByPk', async () => ({ id: 7, collegeId: 3, status: 'active' })],
+  ];
+  await withModelStubs(stubs, async () => {
+    const response = makeResponse();
+    const req = request({ assigned_to_type: 'user', assigned_to_id: 82 });
+    req.params.id = '90';
+    await handler(req, response, (error) => { throw error; });
+    assert.equal(response.statusCode, 403);
+    assert.match(response.body.message, /outside your department/i);
+    assert.equal(transaction.finished, 'rollback');
+  });
+});
+
+test('Department Head transfer rejects a laboratory in another department', async () => {
+  const handler = getHandler(getRoute(assignmentRoutes, 'post', '/:id/transfer'));
+  const transaction = { LOCK: { UPDATE: 'UPDATE' }, finished: null, async rollback() { this.finished = 'rollback'; }, async commit() { this.finished = 'commit'; } };
+  const assignment = { id: 90, assetId: 45, departmentId: 7, status: 'active', notes: '{}', toJSON() { return { ...this }; } };
+  const asset = { id: 45, departmentId: 7, collegeId: 3 };
+  const stubs = [
+    [models.sequelize, 'transaction', async () => transaction],
+    [models.Assignment, 'findByPk', async () => assignment],
+    [models.Asset, 'findByPk', async () => asset],
+    [models.Department, 'findByPk', async () => ({ id: 7, collegeId: 3, status: 'active' })],
+    [models.Room, 'findByPk', async () => ({ id: 18, departmentId: 8, roomType: 'laboratory', status: 'active', roomName: 'Foreign lab' })],
+  ];
+  await withModelStubs(stubs, async () => {
+    const response = makeResponse();
+    const req = request({ assigned_to_type: 'laboratory', assigned_to_id: 18 });
+    req.params.id = '90';
+    await handler(req, response, (error) => { throw error; });
+    assert.equal(response.statusCode, 403);
+    assert.match(response.body.message, /laboratory is outside your department/i);
     assert.equal(transaction.finished, 'rollback');
   });
 });

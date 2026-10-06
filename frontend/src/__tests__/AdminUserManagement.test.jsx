@@ -30,7 +30,9 @@ const respondToApiRequests = () => {
   apiClient.request.mockImplementation(({ url, method }) => {
     if (method === 'POST') return Promise.resolve({ data: { success: true } });
     if (url.endsWith('/activity')) return Promise.resolve({ data: { logs: [{ id: 7, action: 'CREATE_USER', entity: 'user:7', userId: 1, createdAt: '2026-10-02T12:00:00.000Z' }] } });
-    if (url === '/api/users') return Promise.resolve({ data: { users: usersResponse } });
+    if (url.startsWith('/api/users?')) return Promise.resolve({ data: { users: usersResponse, pagination: { total: usersResponse.length, pages: 1 } } });
+    if (url === '/api/users/stats') return Promise.resolve({ data: { data: { total: usersResponse.length, active: usersResponse.length, inactive: 0, suspended: 0 } } });
+    if (url === '/api/roles') return Promise.resolve({ data: { roles: roleNames.map((name) => ({ name, displayName: name })) } });
     if (url === '/api/colleges') return Promise.resolve({ data: { colleges: [] } });
     return Promise.resolve({ data: { departments: [] } });
   });
@@ -115,7 +117,7 @@ test('keeps reset-password and activity workflows connected to their existing en
   usersResponse = [{ id: 17, fullName: 'Existing User', email: 'existing@example.edu', role: 'staff', active: true }];
   render(<Users />);
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Reset Password' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Reset password for Existing User' }));
   fireEvent.change(screen.getByLabelText('Temporary Password *'), { target: { value: 'ChangeMe#42' } });
   fireEvent.change(screen.getByLabelText('Confirm Temporary Password *'), { target: { value: 'ChangeMe#42' } });
   fireEvent.submit(document.querySelector('form'));
@@ -123,11 +125,11 @@ test('keeps reset-password and activity workflows connected to their existing en
   await waitFor(() => expect(apiClient.request).toHaveBeenCalledWith(expect.objectContaining({
     url: '/api/users/17/reset-password',
     method: 'POST',
-    data: { password: 'ChangeMe#42' },
+    data: { password: 'ChangeMe#42', confirmPassword: 'ChangeMe#42' },
   })));
   await waitFor(() => expect(screen.queryByLabelText('Temporary Password *')).not.toBeInTheDocument());
 
-  fireEvent.click(screen.getByRole('button', { name: 'Activity' }));
+  fireEvent.click(screen.getByRole('button', { name: 'View activity for Existing User' }));
   expect(await screen.findByText('CREATE_USER')).toBeInTheDocument();
   expect(apiClient.request).toHaveBeenCalledWith(expect.objectContaining({
     url: '/api/users/17/activity',

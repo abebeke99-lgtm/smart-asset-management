@@ -47,7 +47,7 @@ test('legacy college role receives college_manager permissions', async () => {
   assert.deepEqual(permissions, await getConfiguredRolePermissions('college_manager'));
 });
 
-test('stale stored permission matrices keep the department-head defaults', async () => {
+test('explicit department-head permission matrices revoke permissions outside the saved list', async () => {
   const originalFindByPk = Config.findByPk;
   Config.findByPk = async (key) => {
     if (key !== 'role_permissions') return originalFindByPk.call(Config, key);
@@ -56,10 +56,7 @@ test('stale stored permission matrices keep the department-head defaults', async
 
   try {
     const permissions = await getConfiguredRolePermissions('department_head');
-    assert.ok(permissions.includes('department.profile.view'));
-    assert.ok(permissions.includes('department.profile.update'));
-    assert.ok(permissions.includes('department_head.history.view'));
-    assert.ok(permissions.includes('department_head.approvals.review'));
+    assert.deepEqual(permissions, ['assets.view', 'assets.assign', 'users.view', 'reports.view']);
   } finally {
     Config.findByPk = originalFindByPk;
   }

@@ -8,11 +8,13 @@ const { createAuditLog } = require('../services/auditLogService');
 
 const router = express.Router();
 const canManageAssignments = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'department_head')];
-const requireDepartmentPermission = (permission) => (req, res, next) => (
-  req.user?.role === 'department_head'
-    ? requirePermission(permission)(req, res, next)
-    : next()
-);
+const requireDepartmentPermission = (permission) => {
+  return function requireDepartmentPermission(req, res, next) {
+    return req.user?.role === 'department_head'
+      ? requirePermission(permission)(req, res, next)
+      : next();
+  };
+};
 const resolveAssignmentOrganizationScope = (req, res, next) => ['ict_officer', 'store_manager', 'college_manager'].includes(req.user.role)
   ? resolveCollegeScope(req, res, next)
   : req.user.role === 'department_head'
@@ -357,7 +359,7 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
       await transaction.rollback();
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
-    if (assignedToType === 'user' && !assignee.active) {
+    if (assignedToType === 'user' && (!assignee.active || assignee.status !== 'active')) {
       await transaction.rollback();
       return res.status(409).json({ success: false, message: 'Cannot assign an asset to an inactive user.' });
     }
@@ -691,7 +693,7 @@ router.post('/:id/transfer', ...canManageAssignments, resolveAssignmentOrganizat
     const laboratory = assignedToType === 'laboratory'
       ? await Room.findByPk(laboratoryId, { transaction, lock: transaction.LOCK.UPDATE })
       : null;
-    if (assignedToType === 'user' && (!assignee || !assignee.active)) {
+    if (assignedToType === 'user' && (!assignee || !assignee.active || assignee.status !== 'active')) {
       await transaction.rollback();
       return res.status(409).json({ success: false, message: 'Select an active user to receive this asset.' });
     }
@@ -702,6 +704,29 @@ router.post('/:id/transfer', ...canManageAssignments, resolveAssignmentOrganizat
     if (assignedToType === 'laboratory' && (!laboratory || laboratory.status !== 'active' || !String(laboratory.roomType || '').toLowerCase().includes('lab') || !department)) {
       await transaction.rollback();
       return res.status(404).json({ success: false, message: 'Select a valid active laboratory and its department.' });
+    }
+    if (req.user.role === 'department_head') {
+      const departmentScopeId = getDepartmentScopeId(req);
+      if (!departmentScopeId) {
+        await transaction.rollback();
+        return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+      }
+      if (assignedToType === 'user' && Number(assignee?.departmentId) !== departmentScopeId) {
+        await transaction.rollback();
+        return res.status(403).json({ success: false, message: 'Recipient is outside your department scope.' });
+      }
+      if (assignedToType === 'department' && Number(department?.id) !== departmentScopeId) {
+        await transaction.rollback();
+        return res.status(403).json({ success: false, message: 'Recipient department is outside your department scope.' });
+      }
+      if (assignedToType === 'laboratory' && Number(laboratory?.departmentId) !== departmentScopeId) {
+        await transaction.rollback();
+        return res.status(403).json({ success: false, message: 'Laboratory is outside your department scope.' });
+      }
+      if (departmentId !== departmentScopeId) {
+        await transaction.rollback();
+        return res.status(403).json({ success: false, message: 'Recipient department is outside your department scope.' });
+      }
     }
     if (assignedToType === 'user' && departmentId && assignee.departmentId && Number(assignee.departmentId) !== departmentId) {
       await transaction.rollback();

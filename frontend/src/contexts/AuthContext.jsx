@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
-import { apiClient, getApiErrorMessage } from '../utils/api';
+import { apiClient, getApiErrorMessage, isCurrentAuthRequest } from '../utils/api';
 import { sanitizeAuthToken } from '../utils/auth';
 
 let diagnosticsInstalled = false;
@@ -144,7 +144,7 @@ export const AuthProvider = ({ children }) => {
           throw networkError;
         }
         if (error.response) {
-          if (error.response.status === 401) {
+          if (error.response.status === 401 && isCurrentAuthRequest(error)) {
             onUnauthorized();
           }
           const status = error.response.status ? ` (${error.response.status})` : '';
@@ -222,14 +222,17 @@ export const AuthProvider = ({ children }) => {
       try {
         axios.defaults.headers.common.Authorization = `Bearer ${token}`;
         const response = await api.get('/api/users/profile');
+        if (localStorage.getItem('token') !== token) return;
         const currentUser = response.data?.data || response.data?.user;
         if (!currentUser) throw new Error('Invalid session response');
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(normalizeUser(currentUser)));
         if (mounted) setUser(normalizeUser(currentUser));
       } catch (error) {
-        clearStoredAuth();
-        if (mounted) setUser(null);
+        if (localStorage.getItem('token') === token) {
+          clearStoredAuth();
+          if (mounted) setUser(null);
+        }
       } finally {
         if (mounted) setLoading(false);
       }

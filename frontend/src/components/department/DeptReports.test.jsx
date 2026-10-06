@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { MemoryRouter } from 'react-router-dom';
 import apiClient from '../../services/apiClient';
 import { toast } from 'react-toastify';
 import { autoTable } from 'jspdf-autotable';
@@ -90,7 +91,7 @@ describe('Department Head inventory report view', () => {
       },
     });
 
-    render(<React.StrictMode><DeptReports inventoryMode /></React.StrictMode>);
+    render(<MemoryRouter><React.StrictMode><DeptReports inventoryMode /></React.StrictMode></MemoryRouter>);
 
     expect(screen.getByRole('status')).toHaveTextContent('Loading...');
     expect(await screen.findByRole('heading', { name: 'Department Inventory' })).toBeInTheDocument();
@@ -125,7 +126,7 @@ describe('Department Head inventory report view', () => {
       },
     });
 
-    render(<DeptReports inventoryMode />);
+    render(<MemoryRouter><DeptReports inventoryMode /></MemoryRouter>);
 
     expect(await screen.findByText('No assets found for this department.')).toBeInTheDocument();
     expect(screen.getByText('No category data available for this department.')).toBeInTheDocument();
@@ -159,7 +160,7 @@ describe('Department Head inventory report view', () => {
       },
     });
 
-    render(<DeptReports inventoryMode />);
+    render(<MemoryRouter><DeptReports inventoryMode /></MemoryRouter>);
 
     await screen.findByText('Engineering Laptop');
     fireEvent.click(screen.getByRole('button', { name: /export to pdf/i }));
@@ -177,7 +178,7 @@ describe('Department Head inventory report view', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
     apiClient.get.mockRejectedValue({ response: { status: 403 } });
 
-    render(<DeptReports inventoryMode />);
+    render(<MemoryRouter><DeptReports inventoryMode /></MemoryRouter>);
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('You do not have permission to view this department data.');

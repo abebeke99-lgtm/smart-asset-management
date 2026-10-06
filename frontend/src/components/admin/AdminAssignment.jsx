@@ -91,6 +91,12 @@ export const buildAssignmentSummary = (rows = []) => {
   return summary;
 };
 
+export const getVisiblePageNumbers = (currentPage, totalPages, maxVisible = 5) => {
+  const pageCount = Math.min(totalPages, maxVisible);
+  const firstPage = Math.max(1, Math.min(currentPage - 2, totalPages - pageCount + 1));
+  return Array.from({ length: pageCount }, (_, index) => firstPage + index);
+};
+
 const AdminAssignment = () => {
   const { language, theme } = useLanguage();
   const { user } = useAuth();
@@ -1542,8 +1548,7 @@ const AdminAssignment = () => {
                 <div style={styles.muted}>{t.showing} {startItem}–{endItem} {t.of} {totalRecords}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1} style={styles.pageButton(false, currentPage === 1)}>{t.previous}</button>
-                  {Array.from({ length: Math.min(totalPages, 5) }, (_, index) => {
-                    const page = Math.min(Math.max(1, currentPage - 2 + index), totalPages);
+                  {getVisiblePageNumbers(currentPage, totalPages).map((page) => {
                     return (
                       <button key={page} type="button" onClick={() => setCurrentPage(page)} style={styles.pageButton(page === currentPage, false)}>
                         {page}

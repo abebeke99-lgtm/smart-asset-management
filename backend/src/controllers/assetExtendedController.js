@@ -21,6 +21,7 @@ const {
 } = require('../models');
 const { createAuditLog } = require('../services/auditLogService');
 const { saveAssetDocument } = require('../services/assetDocumentStorage');
+const { getAssetReferenceCounts } = require('../services/assetReferenceService');
 const { isCollegeScopedRole, getCollegeScopeId } = require('../middlewares/organizationScope');
 
 const VALID_CONDITIONS = ['Good', 'Fair', 'Poor', 'Damaged'];
@@ -279,9 +280,14 @@ const restoreAsset = async (req, res, next) => {
 const permanentDeleteAsset = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
-    const asset = await findAssetInScope(req, req.params.id, { paranoid: false, transaction });
+    const asset = await findAssetInScope(req, req.params.id, { paranoid: false, transaction, lock: transaction.LOCK.UPDATE });
     if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
     if (!asset.deletedAt) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Use authorized removal flow for non-deleted assets' }); }
+    const references = await getAssetReferenceCounts(asset.id, transaction);
+    if (references.length) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'Asset cannot be permanently deleted while linked history or records still reference it. Keep the asset in its recovered or soft-deleted state.' });
+    }
     const previousValue = asset.toJSON();
     await AssetDocument.destroy({ where: { assetId: asset.id }, transaction });
     await AssetGrant.destroy({ where: { assetId: asset.id }, transaction });

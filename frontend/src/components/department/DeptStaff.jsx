@@ -86,7 +86,7 @@ const DeptStaff = () => {
       setPositions(Array.isArray(payload.filters?.positions) ? payload.filters.positions : []);
       setPagination(payload.pagination || { page, pages: 1, total: 0 });
     } catch (requestError) {
-      const message = getApiErrorMessage(requestError, t.loadError);
+      const message = getApiErrorMessage(requestError, t.loadError) || requestError?.message || t.loadError;
       setError(message);
       setStaff([]);
       toast.error(message);
@@ -136,7 +136,7 @@ const DeptStaff = () => {
         [t.status]: t.statusValues[getStaffStatus(member)] || t.statusValues.inactive,
       }));
       const worksheet = XLSX.utils.json_to_sheet(rows);
-      const workbook = XLSX.utils.book_new();
+      const workbook = XLSX.utils.book_new() || {};
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Department Staff');
       XLSX.writeFile(workbook, 'department-staff.xlsx');
       toast.success(t.exportSuccess);

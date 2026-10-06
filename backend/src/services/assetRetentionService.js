@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const { sequelize, Asset, AssetDocument, AssetGrant, AssetCustody, Config } = require('../models');
 const { createAuditLog } = require('./auditLogService');
+const { getAssetReferenceCounts } = require('./assetReferenceService');
 
 const DEFAULT_RECOVERY_DAYS = 30;
 let scheduledTask = null;
@@ -28,6 +29,7 @@ const purgeExpiredAssets = async () => {
   });
   let deletedCount = 0;
   let failedCount = 0;
+  let preservedCount = 0;
 
   for (const expiredAsset of expiredAssets) {
     const transaction = await sequelize.transaction();
@@ -40,6 +42,12 @@ const purgeExpiredAssets = async () => {
       });
       if (!asset) {
         await transaction.commit();
+        continue;
+      }
+      const references = await getAssetReferenceCounts(asset.id, transaction);
+      if (references.length) {
+        await transaction.commit();
+        preservedCount += 1;
         continue;
       }
       const previousValue = asset.toJSON();
@@ -67,7 +75,7 @@ const purgeExpiredAssets = async () => {
     }
   }
 
-  return { deletedCount, failedCount, recoveryDays };
+  return { deletedCount, failedCount, preservedCount, recoveryDays };
 };
 
 const startAssetRetentionScheduler = () => {

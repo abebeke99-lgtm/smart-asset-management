@@ -84,6 +84,19 @@ const resolveLoginAliases = (value = '') => {
   return [...aliases].filter(Boolean);
 };
 
+const rankLoginMatch = (user, identity, candidateNames = []) => {
+  const normalizedIdentity = String(identity || '').trim().toLowerCase();
+  const username = String(user?.username || '').trim().toLowerCase();
+  const email = String(user?.email || '').trim().toLowerCase();
+  const candidates = new Set(candidateNames.map((value) => String(value || '').trim().toLowerCase()));
+
+  if (username === normalizedIdentity) return 0;
+  if (email === normalizedIdentity) return 1;
+  if (candidates.has(username)) return 2;
+  if (candidates.has(email)) return 3;
+  return 4;
+};
+
 const DEFAULT_SECURITY_SETTINGS = { password_min_length: 8, password_require_uppercase: true, password_require_lowercase: true, password_require_numbers: true, password_require_special: true, session_timeout: 60, max_login_attempts: 5, account_lockout_duration: 30, jwt_expiry: 7 };
 
 const getSecuritySettings = async () => {
@@ -160,14 +173,15 @@ const login = async (req, res) => {
 
     const identity = username.trim();
     const candidateNames = resolveLoginAliases(identity);
-    const user = await User.findOne({
+    const matches = await User.findAll({
       where: {
-        [require('sequelize').Op.or]: [
-          { username: candidateNames },
-          { email: candidateNames }
+        [Op.or]: [
+          { username: { [Op.in]: candidateNames } },
+          { email: { [Op.in]: candidateNames } }
         ]
       }
     });
+    const user = matches.sort((left, right) => rankLoginMatch(left, identity, candidateNames) - rankLoginMatch(right, identity, candidateNames))[0] || null;
 
     if (!user) {
       await recordAuthEvent({ action: 'LOGIN_FAILED', result: 'Failure', req });

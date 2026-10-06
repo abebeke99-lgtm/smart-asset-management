@@ -383,7 +383,7 @@ export default function Users() {
     if (!form.roleId) nextErrors.roleId = "Role is required.";
     if (!editingUser && !form.password) nextErrors.password = "Password is required.";
     if ((form.password || form.confirmPassword) && form.password.length < 8) nextErrors.password = "Password must be at least 8 characters.";
-    if ((form.password || form.confirmPassword) && form.password !== form.confirmPassword) nextErrors.confirmPassword = "Passwords must match.";
+    if ((form.password || form.confirmPassword) && form.password !== form.confirmPassword) nextErrors.confirmPassword = "Password and Confirm Password must match.";
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) nextErrors.email = "Enter a valid email address.";
     const phoneDigits = form.phone.replace(/\D/g, "");
     if (form.phone.trim() && (!/^\+?[\d\s().-]+$/.test(form.phone.trim()) || phoneDigits.length < 7 || phoneDigits.length > 15)) nextErrors.phone = "Enter a valid phone number.";

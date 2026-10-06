@@ -58,6 +58,19 @@ export const getApiErrorMessage = (error, fallback = 'Unable to connect to the s
   return fallback;
 };
 
+export const isCurrentAuthRequest = (error) => {
+  const headers = error?.config?.headers;
+  const authorization = headers?.get?.('Authorization')
+    || headers?.Authorization
+    || headers?.authorization;
+  const requestToken = typeof authorization === 'string'
+    ? authorization.replace(/^Bearer\s+/i, '').trim()
+    : '';
+  const currentToken = localStorage.getItem('token') || localStorage.getItem('authToken');
+
+  return Boolean(requestToken && currentToken && requestToken === currentToken);
+};
+
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token') || localStorage.getItem('authToken');
@@ -95,7 +108,7 @@ apiClient.interceptors.response.use(
       });
     }
 
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && isCurrentAuthRequest(error)) {
       localStorage.removeItem('token');
       localStorage.removeItem('authToken');
       localStorage.removeItem('user');

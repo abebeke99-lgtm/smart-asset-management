@@ -12,6 +12,7 @@ test('admin-created user stores a bcrypt password and can log in normally', asyn
   const originalFindAll = models.User.findAll;
   const originalCreate = models.User.create;
   const originalAuditCreate = models.AuditLog.create;
+  const originalActivityCreate = models.UserActivityLog.create;
   const originalConfigFindByPk = models.Config.findByPk;
   const previousJwtSecret = process.env.JWT_SECRET;
   const password = 'ManageMe#42';
@@ -38,6 +39,7 @@ test('admin-created user stores a bcrypt password and can log in normally', asyn
     return createdUser;
   };
   models.AuditLog.create = async () => ({ id: 1 });
+  models.UserActivityLog.create = async () => ({ id: 1 });
   models.Config.findByPk = async (key) => key === 'role_permissions'
     ? { value: JSON.stringify({ staff: ['assets.view'] }) }
     : null;
@@ -82,6 +84,7 @@ test('admin-created user stores a bcrypt password and can log in normally', asyn
     assert.equal(Object.hasOwn(createResponse.payload.data, 'password'), false);
     assert.equal(Object.hasOwn(createResponse.payload.data, 'passwordHash'), false);
 
+    models.User.findAll = async () => [createdUser];
     const loginResponse = makeResponse();
     await authController.login({
       body: { username: createdUser.username, password },
@@ -100,6 +103,7 @@ test('admin-created user stores a bcrypt password and can log in normally', asyn
     models.User.findAll = originalFindAll;
     models.User.create = originalCreate;
     models.AuditLog.create = originalAuditCreate;
+    models.UserActivityLog.create = originalActivityCreate;
     models.Config.findByPk = originalConfigFindByPk;
     if (previousJwtSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previousJwtSecret;
@@ -144,12 +148,12 @@ test('admin user creation requires an explicit username and role', async () => {
   });
 
   const missingUsername = makeResponse();
-  await userController.createUser({ body: { role: 'staff', password: 'ManageMe#42', confirmPassword: 'ManageMe#42' } }, missingUsername);
+  await userController.createUser({ body: { fullName: 'New Staff', role: 'staff', password: 'ManageMe#42', confirmPassword: 'ManageMe#42' } }, missingUsername);
   assert.equal(missingUsername.statusCode, 400);
   assert.equal(missingUsername.payload.message, 'Username is required');
 
   const missingRole = makeResponse();
-  await userController.createUser({ body: { username: 'new.staff', password: 'ManageMe#42', confirmPassword: 'ManageMe#42' } }, missingRole);
+  await userController.createUser({ body: { fullName: 'New Staff', username: 'new.staff', password: 'ManageMe#42', confirmPassword: 'ManageMe#42' } }, missingRole);
   assert.equal(missingRole.statusCode, 400);
   assert.equal(missingRole.payload.message, 'Role is required');
 });
@@ -196,6 +200,7 @@ test('admin user creation rejects duplicate username and email regardless of cas
     await userController.createUser({
       user: { id: 1, role: 'admin' },
       body: {
+        fullName: 'Existing User',
         username: 'Existing.User',
         email: 'EXISTING.USER@example.edu',
         role: 'staff',

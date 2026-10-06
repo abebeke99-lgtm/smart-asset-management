@@ -6,7 +6,7 @@ const { Op } = require('sequelize');
 const { Asset, Assignment, Inventory, sequelize } = require('../models');
 const { getAllAssets, getAssetById, updateAsset, createAsset } = require('../controllers/assetController');
 const { getInventory } = require('../controllers/inventoryController');
-const { restoreAsset, lookupByQr } = require('../controllers/assetExtendedController');
+const { restoreAsset, lookupByQr, permanentDeleteAsset } = require('../controllers/assetExtendedController');
 const assetRoutes = require('../routes/assetRoutes');
 
 const routeSource = fs.readFileSync(path.resolve(__dirname, '../routes/assetRoutes.js'), 'utf8');
@@ -396,6 +396,8 @@ test('expired asset recovery purge uses configured days and keeps a system audit
     grantDestroy: models.AssetGrant.destroy,
     custodyDestroy: models.AssetCustody.destroy,
     auditCreate: models.AuditLog.create,
+    referenceCounts: [...new Set(Object.values(Asset.associations).filter((association) => ['HasMany', 'HasOne'].includes(association.associationType)).map((association) => association.target))]
+      .map((model) => [model, model.count]),
   };
   let listOptions;
   let auditRecord;
@@ -420,6 +422,7 @@ test('expired asset recovery purge uses configured days and keeps a system audit
   models.AssetGrant.destroy = async () => 1;
   models.AssetCustody.destroy = async () => 1;
   models.AuditLog.create = async (record) => { auditRecord = record; return record; };
+  for (const [model] of originals.referenceCounts) model.count = async () => 0;
   try {
     assert.equal(await getRecoveryDays(), 45);
     const result = await purgeExpiredAssets();
@@ -441,5 +444,59 @@ test('expired asset recovery purge uses configured days and keeps a system audit
     models.AssetGrant.destroy = originals.grantDestroy;
     models.AssetCustody.destroy = originals.custodyDestroy;
     models.AuditLog.create = originals.auditCreate;
+    for (const [model, count] of originals.referenceCounts) model.count = count;
+  }
+});
+
+test('asset recovery purge preserves an expired asset while historical records reference it', async () => {
+  const models = require('../models');
+  const { purgeExpiredAssets } = require('../services/assetRetentionService');
+  const targets = [...new Set(Object.values(Asset.associations).filter((association) => ['HasMany', 'HasOne'].includes(association.associationType)).map((association) => association.target))];
+  const originalCounts = targets.map((model) => [model, model.count]);
+  const originals = { config: models.Config.findByPk, assets: Asset.findAll, asset: Asset.findOne, transaction: sequelize.transaction };
+  let destroyed = false;
+  const transaction = { LOCK: { UPDATE: 'UPDATE' }, finished: null, async commit() { this.finished = 'commit'; }, async rollback() { this.finished = 'rollback'; } };
+  models.Config.findByPk = async () => ({ value: JSON.stringify({ recoveryDays: 30 }) });
+  Asset.findAll = async () => [{ id: 9 }];
+  Asset.findOne = async () => ({ id: 9, deletedAt: new Date(Date.now() - 40 * 86400000), toJSON() { return { id: this.id }; }, async destroy() { destroyed = true; } });
+  sequelize.transaction = async () => transaction;
+  for (const model of targets) model.count = async () => (model === models.Assignment ? 1 : 0);
+  try {
+    const result = await purgeExpiredAssets();
+    assert.equal(result.deletedCount, 0);
+    assert.equal(result.failedCount, 0);
+    assert.equal(result.preservedCount, 1);
+    assert.equal(destroyed, false);
+    assert.equal(transaction.finished, 'commit');
+  } finally {
+    models.Config.findByPk = originals.config;
+    Asset.findAll = originals.assets;
+    Asset.findOne = originals.asset;
+    sequelize.transaction = originals.transaction;
+    for (const [model, count] of originalCounts) model.count = count;
+  }
+});
+
+test('permanent asset deletion is blocked when an assignment keeps historical reference', async () => {
+  const models = require('../models');
+  const targets = [...new Set(Object.values(Asset.associations).filter((association) => ['HasMany', 'HasOne'].includes(association.associationType)).map((association) => association.target))];
+  const originalCounts = targets.map((model) => [model, model.count]);
+  const originals = { transaction: sequelize.transaction, findOne: Asset.findOne };
+  let destroyed = false;
+  const transaction = { LOCK: { UPDATE: 'UPDATE' }, finished: null, async commit() { this.finished = 'commit'; }, async rollback() { this.finished = 'rollback'; } };
+  sequelize.transaction = async () => transaction;
+  Asset.findOne = async () => ({ id: 9, deletedAt: new Date(Date.now() - 40 * 86400000), toJSON() { return { id: this.id }; }, async destroy() { destroyed = true; } });
+  for (const model of targets) model.count = async () => (model === models.Assignment ? 1 : 0);
+  try {
+    const response = makeResponse();
+    await permanentDeleteAsset(scopedRequest({ user: { id: 1, role: 'admin' }, params: { id: '9' } }), response, (error) => { throw error; });
+    assert.equal(response.statusCode, 409);
+    assert.match(response.body.message, /linked history/i);
+    assert.equal(destroyed, false);
+    assert.equal(transaction.finished, 'rollback');
+  } finally {
+    sequelize.transaction = originals.transaction;
+    Asset.findOne = originals.findOne;
+    for (const [model, count] of originalCounts) model.count = count;
   }
 });

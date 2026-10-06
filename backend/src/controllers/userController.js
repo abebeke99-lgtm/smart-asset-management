@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const { findCollegeScopeForUser } = require('../middlewares/organizationScope');
 const { saveProfilePhoto, validateProfilePhoto, buildPublicFileUrl } = require('../utils/uploadUtils');
 const { createAuditLog } = require('../services/auditLogService');
+const { getUserReferenceCounts } = require('../services/userReferenceService');
 const { getConfiguredRolePermissions } = require('../services/rolePermissionService');
 const { ROLE_NAMES, normalizeRoleForStorage } = require('../constants/rolePermissions');
 
@@ -357,6 +358,10 @@ const deleteUser = async (req, res) => {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     if (user.id === req.user.id) return res.status(400).json({ success: false, message: 'Administrators cannot delete their own account' });
+    const references = await getUserReferenceCounts(user.id);
+    if (references.length > 0) {
+      return res.status(409).json({ success: false, message: 'This user is linked to existing records and cannot be deleted' });
+    }
     await recordUserActivity(req, user.id, `User account deleted by administrator ${req.user.username}`);
     await user.destroy();
     await AuditLog.create({ userId: req.user.id, action: 'DELETE_USER', entity: `user:${user.id}`, details: JSON.stringify({ userId: user.id, username: user.username }) });

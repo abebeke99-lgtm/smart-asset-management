@@ -5,9 +5,9 @@ const cors = require('cors');
 const helmet = require('helmet');
 const passport = require('./config/passport');
 const { sequelize, testConnection } = require('./config/database');
-require('./models');
+const { User } = require('./models');
 const { syncDatabase } = require('./config/sync');
-const { seedDatabase } = require('./config/seed');
+const { seedDatabase, DEMO_USERS } = require('./config/seed');
 const { initializeInitialAdmin } = require('./services/initialAdminService');
 const { ensureUploadDirectories } = require('./utils/uploadUtils');
 
@@ -130,7 +130,9 @@ app.use(cors({
       return;
     }
 
-    callback(new Error(`Origin ${origin} is not allowed by CORS`));
+    const error = new Error(`Origin ${origin} is not allowed by CORS`);
+    error.status = 403;
+    callback(error);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -212,6 +214,29 @@ app.use((err, req, res, next) => {
   });
 });
 
+async function autoSeedLocalDemoUsers() {
+  if (process.env.NODE_ENV === 'production') {
+    return false;
+  }
+
+  if (process.env.SEED_DEMO_DATA === 'true') {
+    return true;
+  }
+
+  try {
+    const missingDemoUsers = await Promise.all(
+      DEMO_USERS.map(async ({ username }) => {
+        const record = await User.findOne({ where: { username } });
+        return !record;
+      })
+    );
+    return missingDemoUsers.some(Boolean);
+  } catch (error) {
+    console.warn('Unable to determine local demo seed state; skipping automatic demo seeding.', error.message);
+    return false;
+  }
+}
+
 async function initializeDatabase() {
   const retryDelays = [5000, 10000, 20000, 30000, 60000];
   for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
@@ -234,7 +259,7 @@ async function initializeDatabase() {
         }
       }
       if (process.env.NODE_ENV !== 'production') {
-        if (process.env.SEED_DEMO_DATA === 'true') {
+        if (process.env.SEED_DEMO_DATA === 'true' || await autoSeedLocalDemoUsers()) {
           await seedDatabase();
         }
       }

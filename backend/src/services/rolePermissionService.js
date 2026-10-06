@@ -7,11 +7,6 @@ const normalizeRoleName = (role) => {
   return normalized.replace(/[\s-]+/g, '_');
 };
 
-const mergeRolePermissions = (defaultPermissions = [], configuredPermissions = []) => [...new Set([
-  ...defaultPermissions.map(String),
-  ...configuredPermissions.map(String),
-].filter(Boolean))];
-
 const getRolePermissionMatrix = async () => {
   const record = await Config.findByPk('role_permissions');
   if (!record?.value) return { ...DEFAULT_ROLE_PERMISSIONS, admin: [...PERMISSIONS] };
@@ -29,7 +24,9 @@ const getRolePermissionMatrix = async () => {
   const mergedMatrix = { ...DEFAULT_ROLE_PERMISSIONS };
   for (const [role, permissions] of Object.entries(matrix)) {
     if (!Array.isArray(permissions)) continue;
-    mergedMatrix[role] = mergeRolePermissions(DEFAULT_ROLE_PERMISSIONS[role] || [], permissions);
+    // An explicitly saved role list is authoritative. Unioning it with defaults
+    // makes removed permissions impossible to revoke.
+    mergedMatrix[role] = [...new Set(permissions.map(String).filter(Boolean))];
   }
 
   mergedMatrix.admin = [...PERMISSIONS];
