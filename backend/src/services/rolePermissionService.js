@@ -7,9 +7,14 @@ const normalizeRoleName = (role) => {
   return normalized.replace(/[\s-]+/g, '_');
 };
 
+const mergeRolePermissions = (defaultPermissions = [], configuredPermissions = []) => [...new Set([
+  ...defaultPermissions.map(String),
+  ...configuredPermissions.map(String),
+].filter(Boolean))];
+
 const getRolePermissionMatrix = async () => {
   const record = await Config.findByPk('role_permissions');
-  if (!record?.value) return { ...DEFAULT_ROLE_PERMISSIONS };
+  if (!record?.value) return { ...DEFAULT_ROLE_PERMISSIONS, admin: [...PERMISSIONS] };
 
   let matrix;
   try {
@@ -20,7 +25,15 @@ const getRolePermissionMatrix = async () => {
   if (!matrix || typeof matrix !== 'object' || Array.isArray(matrix)) {
     throw new TypeError('Stored role permission matrix must be an object.');
   }
-  return { ...DEFAULT_ROLE_PERMISSIONS, ...matrix, admin: [...PERMISSIONS] };
+
+  const mergedMatrix = { ...DEFAULT_ROLE_PERMISSIONS };
+  for (const [role, permissions] of Object.entries(matrix)) {
+    if (!Array.isArray(permissions)) continue;
+    mergedMatrix[role] = mergeRolePermissions(DEFAULT_ROLE_PERMISSIONS[role] || [], permissions);
+  }
+
+  mergedMatrix.admin = [...PERMISSIONS];
+  return mergedMatrix;
 };
 
 const getConfiguredRolePermissions = async (role) => {

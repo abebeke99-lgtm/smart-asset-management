@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { Config } = require('../models');
 const { normalizeRoleValue, requireRole } = require('../middlewares/auth');
 const { getConfiguredRolePermissions } = require('../services/rolePermissionService');
 
@@ -44,4 +45,22 @@ test('legacy college role is accepted and normalized to college_manager', () => 
 test('legacy college role receives college_manager permissions', async () => {
   const permissions = await getConfiguredRolePermissions('college');
   assert.deepEqual(permissions, await getConfiguredRolePermissions('college_manager'));
+});
+
+test('stale stored permission matrices keep the department-head defaults', async () => {
+  const originalFindByPk = Config.findByPk;
+  Config.findByPk = async (key) => {
+    if (key !== 'role_permissions') return originalFindByPk.call(Config, key);
+    return { value: JSON.stringify({ department_head: ['assets.view', 'assets.assign', 'users.view', 'reports.view'] }) };
+  };
+
+  try {
+    const permissions = await getConfiguredRolePermissions('department_head');
+    assert.ok(permissions.includes('department.profile.view'));
+    assert.ok(permissions.includes('department.profile.update'));
+    assert.ok(permissions.includes('department_head.history.view'));
+    assert.ok(permissions.includes('department_head.approvals.review'));
+  } finally {
+    Config.findByPk = originalFindByPk;
+  }
 });

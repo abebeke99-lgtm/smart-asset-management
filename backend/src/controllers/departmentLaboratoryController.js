@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const {
   Asset,
+  Assignment,
   Building,
   Department,
   Maintenance,
@@ -30,7 +31,7 @@ const departmentIdFor = (req) => {
 const laboratoryWhere = (departmentId, id) => ({
   ...(id ? { id } : {}),
   departmentId,
-  roomType: { [Op.in]: ['laboratory', 'LABORATORY', 'Laboratory', 'lab', 'LAB', 'Lab'] },
+  roomType: { [Op.like]: '%lab%' },
 });
 
 const roomIncludes = (departmentId) => [
@@ -64,23 +65,46 @@ const serializeLaboratory = (record, assets) => {
     name: room.roomName,
     building: room.Building?.buildingName || null,
     buildingCode: room.Building?.buildingCode || null,
-    room: room.roomName,
+    room: room.roomCode || null,
     roomCode: room.roomCode,
-    capacity: room.capacity,
+    capacity: room.capacity === null || room.capacity === undefined
+      ? null
+      : (Number.isFinite(Number(room.capacity)) && Number(room.capacity) >= 0 ? Number(room.capacity) : null),
     responsibleStaff: displayName(room.ResponsibleStaff),
     department: room.DepartmentRecord?.name || null,
     departmentId: room.DepartmentRecord?.id || room.departmentId,
     assetCount: assets.length,
-    condition: room.condition || 'Unknown',
-    status: laboratoryStatuses.has(status) ? status.replace(/\b\w/g, (letter) => letter.toUpperCase()) : (room.status || 'Inactive'),
+    condition: room.condition || null,
+    status: laboratoryStatuses.has(status) ? status.replace(/\b\w/g, (letter) => letter.toUpperCase()) : (room.status || null),
   };
 };
+
+const summarizeLaboratories = (laboratories) => laboratories.reduce((counts, laboratory) => {
+  counts.total += 1;
+  const status = normalized(laboratory.status);
+  if (status === 'active') counts.active += 1;
+  if (status === 'temporarily closed') counts.temporarilyClosed += 1;
+  if (status === 'under maintenance') counts.underMaintenance += 1;
+  if (status === 'restricted') counts.restricted += 1;
+  if (status === 'inactive') counts.inactive += 1;
+  counts.assets += laboratory.assetCount;
+  return counts;
+}, { total: 0, active: 0, temporarilyClosed: 0, underMaintenance: 0, restricted: 0, inactive: 0, assets: 0 });
 
 const loadRoomAssets = (departmentId, roomIds) => {
   if (!roomIds.length) return Promise.resolve([]);
   return Asset.findAll({
-    where: { departmentId, roomId: { [Op.in]: roomIds } },
-    attributes: ['id', 'name', 'assetCode', 'category', 'status', 'condition', 'location', 'roomId', 'createdAt'],
+    where: {
+      departmentId,
+      [Op.or]: [
+        { roomId: { [Op.in]: roomIds } },
+        ...roomIds.flatMap((roomId) => [
+          { 'specifications.laboratoryId': roomId },
+          { 'specifications.laboratoryId': String(roomId) },
+        ]),
+      ],
+    },
+    attributes: ['id', 'name', 'assetCode', 'category', 'status', 'condition', 'location', 'roomId', 'specifications', 'createdAt'],
     order: [['name', 'ASC']],
   });
 };
@@ -104,16 +128,11 @@ const listLaboratories = async (req, res, next) => {
     const assetsByRoom = new Map(rooms.map((room) => [Number(room.id), []]));
     assets.forEach((record) => {
       const asset = plain(record);
-      assetsByRoom.get(Number(asset.roomId))?.push(asset);
+      const assetRoomId = asset.specifications?.laboratoryId ?? asset.roomId;
+      assetsByRoom.get(Number(assetRoomId))?.push(asset);
     });
     const data = rooms.map((room) => serializeLaboratory(room, assetsByRoom.get(Number(room.id)) || []));
-    const summary = data.reduce((counts, laboratory) => {
-      counts.total += 1;
-      if (normalized(laboratory.status) === 'active') counts.active += 1;
-      if (normalized(laboratory.status) === 'inactive') counts.inactive += 1;
-      counts.assets += laboratory.assetCount;
-      return counts;
-    }, { total: 0, active: 0, inactive: 0, assets: 0 });
+    const summary = summarizeLaboratories(data);
     return res.json({
       success: true,
       department: department ? { id: department.id, name: department.name, code: department.code } : null,
@@ -144,7 +163,19 @@ const getLaboratoryDashboard = async (req, res, next) => {
     const laboratory = plain(roomRecord);
     const inventory = (await loadRoomAssets(departmentId, [laboratoryId])).map(plain);
     const assetIds = inventory.map((asset) => asset.id);
-    const [requests, maintenanceRecords, transferRecords] = await Promise.all([
+    const [assignments, requests, maintenanceRecords, transferRecords] = await Promise.all([
+      assetIds.length
+        ? Assignment.findAll({
+          where: { status: 'active', assetId: { [Op.in]: assetIds } },
+          attributes: ['assetId'],
+          include: [{
+            model: User,
+            attributes: ['id', 'fullName', 'username'],
+            where: { departmentId },
+            required: false,
+          }],
+        })
+        : Promise.resolve([]),
       assetIds.length
         ? ServiceRequest.findAll({
           where: { assetId: { [Op.in]: assetIds } },
@@ -161,16 +192,26 @@ const getLaboratoryDashboard = async (req, res, next) => {
           limit: 6,
         })
         : Promise.resolve([]),
-      Transfer.findAll({
+      assetIds.length ? Transfer.findAll({
         where: {
+          assetId: { [Op.in]: assetIds },
           [Op.or]: [{ sourceRoomId: laboratoryId }, { destinationRoomId: laboratoryId }],
         },
         attributes: ['id', 'transferNumber', 'assetId', 'sourceDepartment', 'destinationDepartment', 'transferDate', 'status', 'sourceRoomId', 'destinationRoomId'],
         include: [{ model: Asset, attributes: ['id', 'name', 'assetCode'], required: false }],
         order: [['transferDate', 'DESC']],
         limit: 6,
-      }),
+      }) : Promise.resolve([]),
     ]);
+    const assignmentByAssetId = new Map(assignments.map((record) => {
+      const assignment = plain(record);
+      const user = plain(assignment.User);
+      return [Number(assignment.assetId), user ? (user.fullName || user.username || null) : null];
+    }));
+    const inventoryWithAssignees = inventory.map((asset) => ({
+      ...asset,
+      assignedUser: assignmentByAssetId.get(Number(asset.id)) || null,
+    }));
     const classes = inventory.map(assetFunction);
     const requestsPlain = requests.map(plain);
     const maintenance = maintenanceRecords.map(plain);
@@ -186,7 +227,7 @@ const getLaboratoryDashboard = async (req, res, next) => {
         assetsUnderMaintenance: classes.filter((value) => value === 'maintenance').length,
         openServiceRequests: requestsPlain.filter(openRequest).length,
       },
-      inventory,
+      inventory: inventoryWithAssignees,
       recentMaintenance: maintenance.map((record) => ({
         id: record.id,
         title: record.title,
