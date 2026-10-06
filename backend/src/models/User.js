@@ -20,6 +20,7 @@ const User = sequelize.define('User', {
   password: {
     type: DataTypes.STRING(255),
     allowNull: false,
+    field: 'password_hash',
   },
   fullName: {
     type: DataTypes.STRING(255),
@@ -57,6 +58,11 @@ const User = sequelize.define('User', {
     type: DataTypes.BOOLEAN,
     defaultValue: true,
   },
+  status: {
+    type: DataTypes.ENUM('active', 'inactive', 'suspended'),
+    allowNull: false,
+    defaultValue: 'active',
+  },
   failedLoginAttempts: {
     type: DataTypes.INTEGER,
     allowNull: false,
@@ -83,7 +89,7 @@ const User = sequelize.define('User', {
   lastLoginAt: {
     type: DataTypes.DATE,
     allowNull: true,
-    field: 'last_login_at',
+    field: 'last_login',
   },
   resetTokenHash: {
     type: DataTypes.STRING(128),

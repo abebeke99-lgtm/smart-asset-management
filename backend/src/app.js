@@ -53,6 +53,7 @@ const searchRoutes = require('./routes/searchRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const backupService = require('./services/backupService');
 const { startAssetRetentionScheduler } = require('./services/assetRetentionService');
+const { startServiceRequestEscalationScheduler } = require('./services/serviceRequestEscalationService');
 const { requestMetricsMiddleware } = require('./middlewares/requestMetrics');
 const { requestContextMiddleware } = require('./middlewares/requestContext');
 const { requireAuth, requireRole } = require('./middlewares/auth');
@@ -151,6 +152,7 @@ app.use('/api/uploads', uploadRoutes);
 app.use('/uploads', express.static(uploadRoot, { index: false, dotfiles: 'ignore' }));
 app.use('/api/users', userRoutes);
 app.use('/api/admin/users', requireAuth, requireRole('admin'), userRoutes);
+app.use('/api', require('./routes/userManagementOptionsRoutes'));
 app.use('/api/assets', assetRoutes);
 app.use('/api/ict/software-licenses', softwareLicenseRoutes);
 app.use('/api/ict', ictAssetRoutes);
@@ -238,6 +240,7 @@ async function initializeDatabase() {
       }
       backupService.startAutomaticBackupScheduler();
       startAssetRetentionScheduler();
+      startServiceRequestEscalationScheduler();
       console.log('Database initialization completed.');
       break;
     }

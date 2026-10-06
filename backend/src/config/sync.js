@@ -191,7 +191,9 @@ async function syncDatabase() {
   try {
     const ensureColumn = async (tableName, columnName, definition) => {
       const table = await sequelize.getQueryInterface().describeTable(tableName);
-      if (!table[columnName]) await sequelize.getQueryInterface().addColumn(tableName, columnName, definition);
+      if (table[columnName]) return false;
+      await sequelize.getQueryInterface().addColumn(tableName, columnName, definition);
+      return true;
     };
 
     // Repair pollution from past sync passes before anything else runs.
@@ -200,6 +202,8 @@ async function syncDatabase() {
     // Create only missing tables; existing tables are left untouched by sync.
     await createMissingTables();
     const queryInterface = sequelize.getQueryInterface();
+    await ensureColumn('asset_returns', 'return_date', { type: require('sequelize').DataTypes.DATEONLY, allowNull: true });
+    await ensureColumn('asset_returns', 'evidence_url', { type: require('sequelize').DataTypes.STRING(1000), allowNull: true });
     const assignmentColumns = await queryInterface.describeTable('assignments');
     if (assignmentColumns.assigned_to && assignmentColumns.assigned_to.allowNull === false) {
       await queryInterface.changeColumn('assignments', 'assigned_to', {
@@ -539,11 +543,31 @@ async function syncDatabase() {
         defaultValue: 0,
       });
     }
-    if (!userColumns.last_login_at) {
-      await sequelize.getQueryInterface().addColumn('users', 'last_login_at', {
+    if (!userColumns.last_login && userColumns.last_login_at) {
+      await sequelize.getQueryInterface().renameColumn('users', 'last_login_at', 'last_login');
+    } else if (!userColumns.last_login && !userColumns.last_login_at) {
+      await sequelize.getQueryInterface().addColumn('users', 'last_login', {
         type: require('sequelize').DataTypes.DATE,
         allowNull: true,
       });
+    }
+    const currentUserColumns = await queryInterface.describeTable('users');
+    if (!currentUserColumns.password_hash && currentUserColumns.password) {
+      await queryInterface.renameColumn('users', 'password', 'password_hash');
+    }
+    const statusCreated = await ensureColumn('users', 'status', {
+      type: require('sequelize').DataTypes.ENUM('active', 'inactive', 'suspended'),
+      allowNull: false,
+      defaultValue: 'active',
+    });
+    if (statusCreated) {
+      await sequelize.query("UPDATE users SET status = CASE WHEN active = 1 THEN 'active' ELSE 'inactive' END");
+    }
+    const { Role } = require('../models');
+    const { ROLE_NAMES } = require('../constants/rolePermissions');
+    for (const name of ROLE_NAMES) {
+      const displayName = name.split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+      await Role.findOrCreate({ where: { name }, defaults: { displayName } });
     }
     console.log('Database synced successfully.');
     return true;

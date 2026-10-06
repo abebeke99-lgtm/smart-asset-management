@@ -1,5 +1,7 @@
 const { sequelize } = require('../config/database');
 const User = require('./User');
+const Role = require('./Role');
+const UserActivityLog = require('./UserActivityLog');
 const PasswordRecovery = require('./PasswordRecovery');
 const College = require('./College');
 const Asset = require('./Asset');
@@ -32,6 +34,8 @@ const RFIDLog = require('./RFIDLog');
 const Inventory = require('./Inventory');
 const InventoryTransaction = require('./InventoryTransaction');
 const Approval = require('./Approval');
+const DepartmentAssetRequest = require('./DepartmentAssetRequest');
+const DepartmentAssetRequestHistory = require('./DepartmentAssetRequestHistory');
 const FinancialRecord = require('./FinancialRecord');
 const DepreciationRecord = require('./DepreciationRecord');
 const CapitalizationRecord = require('./CapitalizationRecord');
@@ -42,6 +46,7 @@ const SystemAlert = require('./SystemAlert');
 const MfaSetting = require('./MfaSetting');
 const VerificationSession = require('./VerificationSession');
 const VerificationItem = require('./VerificationItem');
+const DepartmentAssetVerification = require('./DepartmentAssetVerification');
 const AssetMovement = require('./AssetMovement');
 const AssetReturn = require('./AssetReturn');
 const DisposalRequest = require('./DisposalRequest');
@@ -101,6 +106,7 @@ Asset.hasMany(AssetReturn, { foreignKey: 'assetId' });
 AssetReturn.belongsTo(Asset, { foreignKey: 'assetId' });
 User.hasMany(AssetReturn, { foreignKey: 'requestedBy', as: 'RequestedReturns' });
 AssetReturn.belongsTo(User, { foreignKey: 'requestedBy', as: 'Requester' });
+AssetReturn.belongsTo(User, { foreignKey: 'sourceUserId', as: 'ReturningPerson' });
 Transfer.hasMany(AssetMovement, { foreignKey: 'referenceId', constraints: false, scope: { referenceType: 'transfer' } });
 Department.hasMany(User, { foreignKey: 'departmentId' });
 User.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
@@ -116,6 +122,7 @@ User.hasMany(Transfer, { foreignKey: 'approvedBy', as: 'ApprovedTransfers' });
 User.hasMany(Transfer, { foreignKey: 'requestedBy', as: 'RequestedTransfers' });
 Transfer.belongsTo(User, { foreignKey: 'requestedBy', as: 'Requester' });
 Transfer.belongsTo(User, { foreignKey: 'approvedBy', as: 'Approver' });
+Transfer.belongsTo(User, { foreignKey: 'dispatchedBy', as: 'Dispatcher' });
 Transfer.belongsTo(User, { foreignKey: 'receivedBy', as: 'Receiver' });
 Asset.hasOne(Inventory, { foreignKey: 'assetId' });
 Inventory.belongsTo(Asset, { foreignKey: 'assetId' });
@@ -137,6 +144,16 @@ User.hasMany(Approval, { foreignKey: 'requestedBy', as: 'RequestedApprovals' });
 Approval.belongsTo(User, { foreignKey: 'requestedBy', as: 'Requester' });
 User.hasMany(Approval, { foreignKey: 'reviewedBy', as: 'ReviewedApprovals' });
 Approval.belongsTo(User, { foreignKey: 'reviewedBy', as: 'Reviewer' });
+Department.hasMany(DepartmentAssetRequest, { foreignKey: 'departmentId' });
+DepartmentAssetRequest.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
+Asset.hasMany(DepartmentAssetRequest, { foreignKey: 'assetId' });
+DepartmentAssetRequest.belongsTo(Asset, { foreignKey: 'assetId', as: 'AssetRecord' });
+User.hasMany(DepartmentAssetRequest, { foreignKey: 'requestedBy', as: 'DepartmentAssetRequests' });
+DepartmentAssetRequest.belongsTo(User, { foreignKey: 'requestedBy', as: 'Requester' });
+DepartmentAssetRequest.hasMany(DepartmentAssetRequestHistory, { foreignKey: 'requestId', as: 'History', onDelete: 'CASCADE' });
+DepartmentAssetRequestHistory.belongsTo(DepartmentAssetRequest, { foreignKey: 'requestId' });
+User.hasMany(DepartmentAssetRequestHistory, { foreignKey: 'changedBy', as: 'DepartmentAssetRequestChanges' });
+DepartmentAssetRequestHistory.belongsTo(User, { foreignKey: 'changedBy', as: 'ChangedBy' });
 Asset.hasMany(FinancialRecord, { foreignKey: 'assetId' });
 FinancialRecord.belongsTo(Asset, { foreignKey: 'assetId' });
 Asset.hasMany(DisposalFinancialRecord, { foreignKey: 'assetId' });
@@ -324,6 +341,8 @@ Asset.hasMany(RFIDLog, { foreignKey: 'assetId' });
 RFIDLog.belongsTo(Asset, { foreignKey: 'assetId' });
 User.hasMany(AuditLog, { foreignKey: 'userId' });
 AuditLog.belongsTo(User, { foreignKey: 'userId' });
+User.hasMany(UserActivityLog, { foreignKey: 'userId' });
+UserActivityLog.belongsTo(User, { foreignKey: 'userId' });
 User.hasMany(Notification, { foreignKey: 'userId', as: 'Notifications' });
 Notification.belongsTo(User, { foreignKey: 'userId', as: 'Recipient' });
 Notification.hasMany(NotificationDelivery, { foreignKey: 'notificationId' });
@@ -342,6 +361,12 @@ VerificationSession.hasMany(VerificationItem, { foreignKey: 'sessionId' });
 VerificationItem.belongsTo(VerificationSession, { foreignKey: 'sessionId' });
 Asset.hasMany(VerificationItem, { foreignKey: 'assetId' });
 VerificationItem.belongsTo(Asset, { foreignKey: 'assetId' });
+Department.hasMany(DepartmentAssetVerification, { foreignKey: 'departmentId' });
+DepartmentAssetVerification.belongsTo(Department, { foreignKey: 'departmentId' });
+Asset.hasMany(DepartmentAssetVerification, { foreignKey: 'assetId' });
+DepartmentAssetVerification.belongsTo(Asset, { foreignKey: 'assetId' });
+User.hasMany(DepartmentAssetVerification, { foreignKey: 'verifiedBy', as: 'DepartmentAssetVerifications' });
+DepartmentAssetVerification.belongsTo(User, { foreignKey: 'verifiedBy', as: 'Verifier' });
 
 // Location Hierarchy Relationships
 Campus.hasMany(Building, { foreignKey: 'campusId' });
@@ -354,6 +379,8 @@ Building.hasMany(Room, { foreignKey: 'buildingId' });
 Room.belongsTo(Building, { foreignKey: 'buildingId' });
 Department.hasMany(Room, { foreignKey: 'departmentId' });
 Room.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
+User.hasMany(Room, { foreignKey: 'responsibleStaffId', as: 'ResponsibleLaboratories' });
+Room.belongsTo(User, { foreignKey: 'responsibleStaffId', as: 'ResponsibleStaff' });
 Asset.belongsTo(Campus, { foreignKey: 'campusId', as: 'CampusRecord' });
 Asset.belongsTo(Building, { foreignKey: 'buildingId', as: 'BuildingRecord' });
 Asset.belongsTo(Room, { foreignKey: 'roomId', as: 'RoomRecord' });
@@ -392,6 +419,8 @@ User.hasMany(ServiceRequest, { foreignKey: 'reportedBy', as: 'ReportedServiceReq
 ServiceRequest.belongsTo(User, { foreignKey: 'reportedBy', as: 'Reporter' });
 User.hasMany(ServiceRequest, { foreignKey: 'assignedTo', as: 'AssignedServiceRequests' });
 ServiceRequest.belongsTo(User, { foreignKey: 'assignedTo', as: 'Assignee' });
+ServiceRequest.belongsTo(User, { foreignKey: 'resolvedBy', as: 'ResolvedBy' });
+ServiceRequest.belongsTo(User, { foreignKey: 'closedBy', as: 'ClosedBy' });
 Asset.hasMany(ServiceRequest, { foreignKey: 'assetId' });
 ServiceRequest.belongsTo(Asset, { foreignKey: 'assetId' });
 ServiceRequest.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
@@ -450,6 +479,8 @@ IncidentAttachment.belongsTo(User, { foreignKey: 'uploadedBy', as: 'Uploader' })
 module.exports = {
   sequelize,
   User,
+  Role,
+  UserActivityLog,
   PasswordRecovery,
   College,
   Asset,
@@ -484,6 +515,8 @@ module.exports = {
   Inventory,
   InventoryTransaction,
   Approval,
+  DepartmentAssetRequest,
+  DepartmentAssetRequestHistory,
   FinancialRecord,
   DisposalFinancialRecord,
   Config,
@@ -492,6 +525,7 @@ module.exports = {
   MfaSetting,
   VerificationSession,
   VerificationItem,
+  DepartmentAssetVerification,
   AssetMovement,
   AssetReturn,
   DisposalRequest,
