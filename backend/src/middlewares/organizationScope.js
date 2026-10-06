@@ -133,7 +133,10 @@ const ensureDepartmentScopeForUser = async (user) => {
     return null;
   }
 
-  const departmentName = String(user.department || user.department_name || 'Engineering').trim() || 'Engineering';
+  const departmentName = String(user.department || user.department_name || '').trim();
+  if (!departmentName) {
+    return null;
+  }
   let department = await findDepartmentFromName(departmentName);
   if (department) {
     return department;
@@ -191,8 +194,34 @@ const resolveDepartmentScope = async (req, res, next) => {
   return next();
 };
 
+const resolveConfiguredDepartmentScope = async (req, res, next) => {
+  if (normalizeRoleValue(req.user?.role) !== 'department_head') return next();
+
+  const departmentId = Number(req.user?.departmentId ?? req.user?.department_id);
+  if (!Number.isSafeInteger(departmentId) || departmentId < 1) {
+    return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+  }
+
+  try {
+    const department = await Department.findByPk(departmentId, { attributes: ['id', 'collegeId'] });
+    if (!department) {
+      return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+    }
+
+    req.organizationScope = {
+      ...(req.organizationScope || {}),
+      department,
+      departmentId: department.id,
+      collegeId: department.collegeId,
+    };
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const departmentIdsForCollege = (collegeId) => ({ collegeId: Number(collegeId) });
 const scopeByCollege = (collegeId) => ({ collegeId: Number(collegeId) });
 const scopeByDepartment = (departmentId) => ({ departmentId: Number(departmentId) });
 
-module.exports = { requireCollegeManager, requireDepartmentHead, resolveCollegeScope, resolveDepartmentScope, departmentIdsForCollege, scopeByCollege, scopeByDepartment, findCollegeScopeForUser, isCollegeScopedRole, getCollegeScopeId, Op };
+module.exports = { requireCollegeManager, requireDepartmentHead, resolveCollegeScope, resolveDepartmentScope, resolveConfiguredDepartmentScope, departmentIdsForCollege, scopeByCollege, scopeByDepartment, findCollegeScopeForUser, isCollegeScopedRole, getCollegeScopeId, Op };

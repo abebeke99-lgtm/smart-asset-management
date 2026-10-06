@@ -9,15 +9,6 @@ A full-stack asset management system with role-based dashboards.
 
 ## Run the application
 
-```bash
-npm start
-```
-
-From the project root, `npm start` automatically starts both services:
-
-- Frontend: `http://localhost:3000`
-- Backend: `http://localhost:5000`
-
 Install dependencies first if needed:
 
 ```bash
@@ -25,7 +16,50 @@ npm install --prefix backend
 npm install --prefix frontend
 ```
 
-For development with backend file watching, use `npm run dev` from the project root.
+Configure `backend/.env` from `backend/.env.example` with the local MySQL database and a development JWT secret. Create the configured database in MySQL/phpMyAdmin. For a fresh database, start the backend once (`npm --prefix backend start`) and stop it after it completes the initial Sequelize schema sync; the project creates its base `users`, `colleges`, and `departments` tables on startup. Then import `backend/database/migrations/20261006_user_management.sql` in phpMyAdmin. The migration is repeatable. It upgrades the existing `users` table (including its password and last-login column names), and adds role and user activity tables while seeding the role catalog and sample colleges/departments. Existing college and department tables are reused.
+
+To seed the demo `admin` and `ict_officer` accounts, set `USER_MANAGEMENT_SEED_PASSWORD` to a private value of at least 8 characters in `backend/.env`, then run:
+
+```powershell
+npm --prefix backend run seed:user-management
+```
+
+Open two terminals from the project root and run the backend and frontend separately:
+
+```powershell
+npm --prefix backend run dev
+```
+
+```powershell
+npm --prefix frontend start
+```
+
+The app is available at `http://localhost:3000`; the API is at `http://localhost:5000`. The root `npm start` command starts the backend only.
+
+User-management API endpoints are under `/api/users` and require an authenticated administrator for management actions. The list supports `search`, `status`, `role`, `collegeId`, `page`, and `limit`. Roles are available at `/api/roles`, college departments at `/api/colleges/:id/departments`, and activity is retained in `user_activity_logs`.
+
+### University user management verification checklist
+
+- Sign in as an administrator; verify the Total, Active, Inactive, and Suspended cards and confirm search, role/status filters, pagination, and Refresh update the API-backed list.
+- Create a user with valid details; check required-field messages, duplicate username/email errors, password visibility and confirmation, and the college-dependent department list.
+- View a user, edit their profile and optionally change their password, reset a password, and open Activity; confirm successful actions toast and refresh the list/statistics.
+- Activate, deactivate, and suspend test accounts; verify a deactivated/suspended user cannot sign in and administrators cannot deactivate or delete their own account.
+- Delete a test user with no linked records; confirm deletion. Try a user referenced by existing records and verify the API explains why deletion is blocked.
+- Log in successfully as a test account and verify its Last Login value and successful-login activity entry update.
+
+### Department Head reports
+
+The Engineering Department Head reports use `/api/department/reports` and derive the department scope from the authenticated user's `department_id`. The controller selects only columns present in the existing user/approval tables and returns asset `totals`, `byCategory`, `byLocation`, and `assets` alongside the existing report payload.
+
+To populate the Engineering report with repeatable sample assets, assignments, maintenance, and an approval, import `backend/database/migrations/20261006_department_reports_seed.sql` into the configured MySQL database in phpMyAdmin. It uses existing Engineering department users and does not create or modify login credentials.
+
+### Department report verification checklist
+
+- Sign in as a `department_head` whose department is Engineering, then open `/department-head/inventory`; verify stats, charts, and rows load without errors and contain only Engineering assets.
+- Switch through Assets, Maintenance, Staff, and Approvals; verify each report displays records or a clear empty state.
+- Change each date/category/employee/location/asset-status filter, click Clear Filters, then Refresh; confirm results and asset totals/charts track the selected filters.
+- Export the filtered active tab to Excel and PDF, and use Print; verify each action completes with the current department and filtered rows.
+- Temporarily remove the user's department assignment and verify the report API returns a clear 403 department-scope error; restore the assignment afterward.
 
 ## Deploy backend to Render
 
@@ -44,7 +78,7 @@ For real password reset email delivery, configure `EMAIL_HOST`, `EMAIL_PORT`, `E
 
 ## Local login
 
-Create local credentials through the configured seed or registration flow. Do not commit passwords.
+The user-management seed creates the `admin` and `ict_officer` usernames using the configured `USER_MANAGEMENT_SEED_PASSWORD`. Create other local credentials through the configured seed or registration flow. Do not commit passwords.
 
 ## Roles and permissions
 

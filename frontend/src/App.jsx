@@ -18,6 +18,7 @@ import CollegeManagerPages from './components/college/CollegeManagerPages';
 import CollegeDepartments from './pages/college/CollegeDepartments';
 import DepartmentDetails from './components/college/DepartmentDetails';
 import DepartmentMaintenance from './components/department/DepartmentMaintenance';
+import DepartmentReturns from './components/department/DepartmentReturns';
 import ScopedWorkflowPage from './components/shared/ScopedWorkflowPage';
 
 // ==========================================
@@ -95,13 +96,22 @@ import DeptDashboard from './components/department/DeptDashboard';
 import DeptProfile from './components/department/DeptProfile';
 import DeptStaff from './components/department/DeptStaff';
 import DeptLocations from './components/department/DeptLocations';
+import DeptLaboratories from './components/department/DeptLaboratories';
 import DeptAssets from './components/department/DeptAssets';
+import DeptAssignments from './components/department/DeptAssignments';
+import DeptInventory from './components/department/DeptInventory';
 import DeptReports from './components/department/DeptReports';
 import DeptApprovals from './components/department/DeptApprovals';
+import ApprovalQueue from './components/department/ApprovalQueue';
+import DeptAssetRequests from './components/department/DeptAssetRequests';
 import DeptUtilization from './components/department/DeptUtilization';
 import DeptVerification from './components/department/DeptVerification';
+import DeptTracking from './components/department/DeptTracking';
 import DeptNotifications from './components/department/DeptNotifications';
 import DeptAssetHistory from './components/department/DeptAssetHistory';
+import DepartmentActivityHistory from './components/department/DepartmentActivityHistory';
+import DepartmentAssetHistory from './components/department/DepartmentAssetHistory';
+import DeptTickets from './components/department/DeptTickets';
 import TeachingAssistantAssets from './components/department/TeachingAssistantAssets';
 
 import FinanceDashboard from './components/finance/FinanceDashboard';
@@ -263,7 +273,7 @@ export const getDashboardRoute = (role) => {
     maintenance: '/maintenance/dashboard',
     infrastructure: '/infrastructure/dashboard',
     staff: '/staff/dashboard',
-    student: '/student/dashboard'
+    student: '/student/dashboard',
   };
   return roleMap[normalizeRole(role)] || '/home';
 };
@@ -324,14 +334,7 @@ const LegacyDepartmentWorkspaceRedirect = () => {
   return <Navigate to={`${canonicalPath}${location.search}${location.hash}`} replace />;
 };
 
-const DepartmentDeanRoute = () => {
-  const { user } = useAuth();
-  const role = normalizeRole(user?.role || user?.roles);
-  const responsibility = String(user?.departmentRole || user?.responsibility || user?.position || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
-  return role === 'department_head' || responsibility === 'department dean' || responsibility === 'dean'
-    ? <DeptApprovals />
-    : <Navigate to="/department" replace />;
-};
+const DepartmentDeanRoute = () => <ApprovalQueue />;
 
 // ==========================================
 // CHUNK ERROR HANDLING - Recovers from chunk loading failures
@@ -3744,28 +3747,39 @@ function AppContent() {
 
           <Route path="/department-head" element={<ProtectedRoute allowedRoles={['department_head']}><RoleLayout /></ProtectedRoute>}>
             <Route index element={<DeptDashboard />} />
+            <Route path="dashboard" element={<DeptDashboard />} />
             <Route path="profile" element={<DeptProfile />} />
             <Route path="staff" element={<DeptStaff />} />
             <Route path="locations" element={<DeptLocations />} />
+            <Route path="laboratories" element={<DeptLaboratories />} />
+            <Route path="laboratories/:id" element={<DeptLaboratories />} />
             <Route path="assets" element={<DeptAssets />} />
-            <Route path="inventory" element={<DeptReports />} />
-            <Route path="requests" element={<DeptApprovals />} />
-            <Route path="approvals" element={<DepartmentDeanRoute />} />
-            <Route path="assignments" element={<DeptAssets />} />
+            <Route path="inventory" element={<DeptReports inventoryMode />} />
+            <Route path="requests" element={<DeptAssetRequests />} />
+            <Route path="asset-requests" element={<DeptApprovals />} />
+            <Route path="approvals" element={<ApprovalQueue />} />
+            <Route path="approval-queue" element={<DepartmentDeanRoute />} />
+            <Route path="assignments" element={<ProtectedRoute allowedPermissions={['assets.view']}><DeptAssignments /></ProtectedRoute>} />
             <Route path="transfers" element={<ScopedWorkflowPage type="transfers" />} />
-            <Route path="returns" element={<ScopedWorkflowPage type="returns" />} />
+            <Route path="returns" element={<DepartmentReturns />} />
             <Route path="maintenance" element={<DepartmentMaintenance />} />
             <Route path="maintenance-requests" element={<DepartmentMaintenance />} />
+            <Route path="service-requests" element={<DepartmentMaintenance />} />
+            <Route path="tickets" element={<ProtectedRoute allowedPermissions={['department_head.tickets.view']}><DeptTickets /></ProtectedRoute>} />
+            <Route path="tickets/escalated" element={<ProtectedRoute allowedPermissions={['department_head.tickets.view']}><DeptTickets escalatedOnly /></ProtectedRoute>} />
+            <Route path="escalated-tickets" element={<ProtectedRoute allowedPermissions={['department_head.tickets.view']}><DeptTickets escalatedOnly /></ProtectedRoute>} />
             <Route path="movement" element={<Navigate to="/department-head/history" replace />} />
             <Route path="utilization" element={<DeptUtilization />} />
             <Route path="verification" element={<DeptVerification />} />
+            <Route path="tracking" element={<ProtectedRoute allowedPermissions={['assets.view']}><DeptTracking /></ProtectedRoute>} />
             <Route path="reports" element={<DeptReports />} />
             <Route path="reports/assets" element={<DeptReports />} />
             <Route path="reports/maintenance" element={<DeptReports />} />
-            <Route path="reports/inventory" element={<DeptReports />} />
+            <Route path="reports/inventory" element={<DeptReports inventoryMode />} />
             <Route path="analytics" element={<DeptUtilization />} />
             <Route path="notifications" element={<DeptNotifications />} />
-            <Route path="history" element={<DeptAssetHistory />} />
+            <Route path="history" element={<DepartmentActivityHistory />} />
+            <Route path="asset-history" element={<ProtectedRoute allowedPermissions={['department_head.history.view']}><DepartmentAssetHistory /></ProtectedRoute>} />
             <Route path="history/:id" element={<DeptAssetHistory />} />
           </Route>
 
@@ -3775,12 +3789,12 @@ function AppContent() {
             <Route path="staff" element={<DeptStaff />} />
             <Route path="locations" element={<DeptLocations />} />
             <Route path="assets" element={<DeptAssets />} />
-            <Route path="inventory" element={<DeptReports />} />
-            <Route path="requests" element={<DeptApprovals />} />
-            <Route path="approvals" element={<DepartmentDeanRoute />} />
+            <Route path="inventory" element={<DeptInventory />} />
+            <Route path="requests" element={<DeptAssetRequests />} />
+            <Route path="approvals" element={<ApprovalQueue />} />
             <Route path="assignments" element={<DeptAssets />} />
             <Route path="transfers" element={<ScopedWorkflowPage type="transfers" />} />
-            <Route path="returns" element={<ScopedWorkflowPage type="returns" />} />
+            <Route path="returns" element={<DepartmentReturns />} />
             <Route path="maintenance" element={<DepartmentMaintenance />} />
             <Route path="maintenance-requests" element={<DepartmentMaintenance />} />
             <Route path="movement" element={<Navigate to="/department/history" replace />} />
@@ -3788,7 +3802,7 @@ function AppContent() {
             <Route path="verification" element={<DeptVerification />} />
             <Route path="reports" element={<DeptReports />} />
             <Route path="notifications" element={<DeptNotifications />} />
-            <Route path="history" element={<DeptAssetHistory />} />
+            <Route path="history" element={<DepartmentActivityHistory />} />
             <Route path="history/:id" element={<DeptAssetHistory />} />
           </Route>
 

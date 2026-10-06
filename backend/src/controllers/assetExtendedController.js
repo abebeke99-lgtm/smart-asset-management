@@ -155,8 +155,19 @@ const lookupByQr = async (req, res, next) => {
   try {
     const identifier = String(req.params.identifier || req.query.identifier || '').trim();
     if (!identifier) return res.status(400).json({ success: false, message: 'Identifier is required' });
+    const departmentId = req.user?.role === 'department_head'
+      ? Number(req.organizationScope?.departmentId)
+      : null;
+    if (req.user?.role === 'department_head'
+      && (!Number.isSafeInteger(departmentId) || departmentId < 1)) {
+      return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+    }
     const scope = collegeAssetScope(req);
     if (!scope) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+    if (departmentId) {
+      scope.departmentId = departmentId;
+      if (req.organizationScope.collegeId) scope.collegeId = req.organizationScope.collegeId;
+    }
     const asset = await Asset.findOne({
       where: {
         ...scope,
@@ -173,7 +184,7 @@ const lookupByQr = async (req, res, next) => {
       include: [
         { model: Campus, as: 'CampusRecord', attributes: ['id', 'campusName', 'campusCode'] },
         { model: Building, as: 'BuildingRecord', attributes: ['id', 'buildingName', 'buildingCode'] },
-        { model: Room, as: 'RoomRecord', attributes: ['id', 'roomName', 'roomCode'] },
+        { model: Room, as: 'RoomRecord', attributes: ['id', 'roomName', 'roomCode', 'roomType'] },
       ],
     });
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found for identifier' });

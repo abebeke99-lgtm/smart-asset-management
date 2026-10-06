@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
@@ -11,11 +11,14 @@ import {
   ArrowUpDown,
   Building2,
   CheckCircle2,
+  ClipboardCheck,
   Download,
   Eye,
+  FileText,
   History,
   MapPin,
   Package2,
+  QrCode,
   Search,
   ShieldCheck,
   Sparkles,
@@ -37,8 +40,11 @@ const DeptAssets = () => {
   const [filterCategory, setFilterCategory] = useState('');
   const [filterCondition, setFilterCondition] = useState('');
   const [filterLocation, setFilterLocation] = useState('');
+  const [filterLaboratory, setFilterLaboratory] = useState('');
   const [filterEmployee, setFilterEmployee] = useState('');
   const [filterMaintenance, setFilterMaintenance] = useState('');
+  const [qrIdentifier, setQrIdentifier] = useState('');
+  const [qrError, setQrError] = useState('');
 
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -47,13 +53,20 @@ const DeptAssets = () => {
   const [actionData, setActionData] = useState({});
   const [assignmentHistory, setAssignmentHistory] = useState([]);
   const [maintenanceHistory, setMaintenanceHistory] = useState([]);
+  const [assetHistory, setAssetHistory] = useState([]);
+  const [assetDocuments, setAssetDocuments] = useState([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [downloadingDocumentId, setDownloadingDocumentId] = useState(null);
 
   const isDark = theme === 'dark';
   const t = language === 'en' ? englishTranslations : amharicTranslations;
   const isAssignmentView = location.pathname.includes('/assignments');
-  const historyBasePath = location.pathname.startsWith('/college') ? '/college/history' : '/department/history';
+  const historyBasePath = location.pathname.startsWith('/college') ? '/college/history' : '/department-head/history';
+  const verificationPath = location.pathname.startsWith('/college') ? '/college/verification' : '/department-head/verification';
+  const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
+  const canExport = permissions.includes('reports.export') || permissions.includes('assets.export') || permissions.includes('college.assets.export');
 
-  const normalizeAssignmentRows = (rows = []) => rows.map((assignment) => ({
+  const normalizeAssignmentRows = useCallback((rows = []) => rows.map((assignment) => ({
     ...assignment,
     id: assignment.id,
     asset_tag: assignment.asset_tag || assignment.assetTag || assignment.asset_code || assignment.assetCode || `AST-${assignment.id || ''}`,
@@ -69,25 +82,35 @@ const DeptAssets = () => {
     maintenance_status: assignment.maintenance_status || assignment.asset?.maintenance_status || 'None',
     serial_number: assignment.serial_number || assignment.asset?.serial_number || assignment.Asset?.serial_number || '',
     last_maintenance_date: assignment.last_maintenance_date || assignment.asset?.last_maintenance_date || assignment.Asset?.last_maintenance_date || '',
-  }));
+  })), []);
 
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const statusParam = params.get('status');
-    if (statusParam) {
-      setFilterStatus(statusParam);
+  const fetchDepartmentAssets = useCallback(async () => {
+    setLoading(true);
+    try {
+      const assetRows = await getAllAssets(axios);
+      setAssets(assetRows.map((asset) => ({
+        ...asset,
+        asset_tag: asset.asset_tag || asset.assetCode || asset.asset_code || '',
+        category_name: asset.category_name || asset.category || '',
+        serial_number: asset.serial_number || asset.serialNumber || '',
+        department_name: asset.department_name || asset.department || '',
+        assignment_date: asset.assignment_date || asset.assigned_date || asset.assignedDate || '',
+        laboratory_name: asset.laboratory_name || asset.laboratoryName || '',
+        maintenance_status: asset.maintenance_status || asset.maintenanceStatus || 'None',
+      })));
+    } catch (error) {
+      console.error('Department assets fetch error:', error);
+      toast.error(t.fetchError || 'Failed to load assets');
+      setAssets([]);
+    } finally {
+      setLoading(false);
     }
-  }, [location.search]);
+  }, [t.fetchError]);
 
-  useEffect(() => {
-    fetchAssets();
-  }, [search, filterStatus, filterCategory, filterCondition, filterLocation, filterEmployee, filterMaintenance]);
-
-  const fetchAssets = async () => {
+  const fetchAssignmentAssets = useCallback(async () => {
     setLoading(true);
     try {
       const params = {
-        department: user?.department || user?.department_name || undefined,
         search: search || undefined,
         status: filterStatus || undefined,
         category: filterCategory || undefined,
@@ -96,39 +119,53 @@ const DeptAssets = () => {
         assigned_to: filterEmployee || undefined,
         maintenance_status: filterMaintenance || undefined,
       };
-
-      if (isAssignmentView) {
-        const response = await axios.get('/api/assignments', { params: { ...params, page: 1 } });
-        const rows = response.data?.assignments || response.data?.data || [];
-        setAssets(normalizeAssignmentRows(rows));
-        setLoading(false);
-        return;
-      }
-
-      const { assigned_to: assignedToName, ...assetParams } = params;
-      const assetRows = await getAllAssets(axios, assetParams);
-      setAssets(assignedToName
-        ? assetRows.filter((asset) => String(asset.assigned_to_name || 'Unassigned') === String(assignedToName))
-        : assetRows);
+      const response = await axios.get('/api/assignments', { params: { ...params, page: 1 } });
+      const rows = response.data?.assignments || response.data?.data || [];
+      setAssets(normalizeAssignmentRows(rows));
     } catch (error) {
-      console.error('Department assets fetch error:', error);
-      toast.error(t.fetchError || 'Failed to load assets');
+      console.error('Department assignments fetch error:', error);
+      toast.error(t.fetchError || 'Failed to load assignments');
       setAssets([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }, [filterCategory, filterCondition, filterEmployee, filterLocation, filterMaintenance, filterStatus, normalizeAssignmentRows, search, t.fetchError]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const statusParam = params.get('status');
+    if (statusParam) setFilterStatus(statusParam);
+  }, [location.search]);
+
+  useEffect(() => {
+    if (!isAssignmentView) fetchDepartmentAssets();
+  }, [fetchDepartmentAssets, isAssignmentView, user?.departmentId]);
+
+  useEffect(() => {
+    if (isAssignmentView) fetchAssignmentAssets();
+  }, [fetchAssignmentAssets, isAssignmentView]);
 
   const getStatusColor = (status) => {
     const colors = {
-      'In-Use': '#48bb78',
-      Available: '#4299e1',
-      'Under-Maintenance': '#ed8936',
-      'In-Repair': '#fc8181',
+      Active: '#48bb78',
+      Damaged: '#fc8181',
+      'Under Maintenance': '#ed8936',
+      Replaced: '#805ad5',
+      Expired: '#fc8181',
       Disposed: '#a0aec0',
-      Lost: '#fc8181',
-      Reserved: '#805ad5',
     };
     return colors[status] || '#a0aec0';
+  };
+
+  const displayStatus = (status) => {
+    const normalized = String(status || '').toLowerCase().replace(/[_ ]+/g, '-');
+    if (['active', 'available', 'in-use', 'assigned'].includes(normalized)) return 'Active';
+    if (normalized === 'under-maintenance' || normalized === 'maintenance') return 'Under Maintenance';
+    if (normalized === 'damaged') return 'Damaged';
+    if (normalized === 'replaced') return 'Replaced';
+    if (normalized === 'expired') return 'Expired';
+    if (normalized === 'disposed' || normalized === 'retired') return 'Disposed';
+    return status || 'Unknown';
   };
 
   const getConditionColor = (condition) => {
@@ -161,30 +198,134 @@ const DeptAssets = () => {
     return { total, inUse, available, maintenance, damaged };
   }, [assets]);
 
-  const quickFilters = [
+  const filteredAssets = useMemo(() => {
+    const normalizeStatus = (status) => String(status || '').toLowerCase().replace(/[_ ]+/g, '-');
+    const matchesStatus = (asset) => {
+      if (!filterStatus) return true;
+      const status = normalizeStatus(asset.status);
+      switch (normalizeStatus(filterStatus)) {
+        case 'active': return ['active', 'available', 'in-use', 'assigned'].includes(status);
+        case 'damaged': return status === 'damaged' || String(asset.condition || '').toLowerCase() === 'damaged';
+        case 'under-maintenance': return status === 'under-maintenance' || status === 'maintenance';
+        default: return status === normalizeStatus(filterStatus);
+      }
+    };
+    const query = search.trim().toLowerCase();
+    return assets.filter((asset) => {
+      const fields = [
+        asset.name, asset.asset_tag, asset.assetCode, asset.serial_number, asset.qrCode,
+        asset.digitalId, asset.department_name, asset.location, asset.assigned_to_name,
+        asset.laboratory_name,
+      ];
+      return matchesStatus(asset)
+        && (!filterCategory || String(asset.category_name || '').toLowerCase() === filterCategory.toLowerCase())
+        && (!filterCondition || String(asset.condition || '').toLowerCase() === filterCondition.toLowerCase())
+        && (!filterLocation || String(asset.location || '') === filterLocation)
+        && (!filterLaboratory || String(asset.laboratory_name || '') === filterLaboratory)
+        && (!filterEmployee || String(asset.assigned_to_name || 'Unassigned') === filterEmployee)
+        && (!filterMaintenance || String(asset.maintenance_status || 'None') === filterMaintenance)
+        && (!query || fields.some((field) => String(field || '').toLowerCase().includes(query)));
+    });
+  }, [assets, filterStatus, filterCategory, filterCondition, filterLocation, filterLaboratory, filterEmployee, filterMaintenance, search]);
+
+  const assetQuickFilters = [
+    { value: '', label: t.allStatus, icon: Package2 },
+    { value: 'Active', label: 'Active', icon: CheckCircle2 },
+    { value: 'Damaged', label: t.damaged, icon: AlertTriangle },
+    { value: 'Under Maintenance', label: t.underMaintenance, icon: Wrench },
+    { value: 'Replaced', label: 'Replaced', icon: ArrowUpDown },
+    { value: 'Expired', label: 'Expired', icon: AlertTriangle },
+    { value: 'Disposed', label: t.disposed, icon: X },
+  ];
+  const assignmentQuickFilters = [
     { value: '', label: t.allStatus, icon: Package2 },
     { value: 'Available', label: t.available, icon: CheckCircle2 },
     { value: 'In-Use', label: t.inUse, icon: UserRound },
     { value: 'Under-Maintenance', label: t.underMaintenance, icon: Wrench },
     { value: 'In-Repair', label: t.inRepair, icon: AlertTriangle },
   ];
+  const quickFilters = isAssignmentView ? assignmentQuickFilters : assetQuickFilters;
 
   const handleAssetClick = async (asset) => {
     setSelectedAsset(asset);
     setShowDetailModal(true);
-
+    setDetailLoading(true);
+    setAssetHistory([]);
+    setAssetDocuments([]);
     try {
-      const response = await axios.get(`/api/assignments/history/${asset.id}`);
-      setAssignmentHistory(response.data.history || []);
+      const [detailResponse, historyResponse, documentResponse] = await Promise.all([
+        axios.get(`/api/assets/${asset.id}`),
+        axios.get(`/api/assets/${asset.id}/history`),
+        axios.get(`/api/assets/${asset.id}/documents`),
+      ]);
+      const detail = detailResponse.data?.asset || detailResponse.data?.data;
+      if (!detail) throw new Error('The asset detail API returned an invalid response.');
+      const history = Array.isArray(historyResponse.data?.history) ? historyResponse.data.history : [];
+      const documents = documentResponse.data?.documents || documentResponse.data?.data;
+      if (!Array.isArray(documents)) throw new Error('The asset documents API returned an invalid response.');
+      setSelectedAsset({
+        ...asset,
+        ...detail,
+        asset_tag: detail.asset_tag || detail.assetCode || detail.asset_code || asset.asset_tag,
+        category_name: detail.category_name || detail.category || asset.category_name,
+        serial_number: detail.serial_number || detail.serialNumber || asset.serial_number,
+        department_name: detail.department_name || detail.department || asset.department_name,
+        assignment_date: detail.assignment_date || detail.assigned_date || asset.assignment_date,
+        laboratory_name: detail.laboratory_name
+          || detail.laboratoryName
+          || asset.laboratory_name
+          || asset.laboratoryName
+          || (String(detail.RoomRecord?.roomType || '').toLowerCase().includes('lab') ? detail.RoomRecord.roomName : ''),
+      });
+      setAssetHistory(history);
+      setAssignmentHistory(history.filter((item) => ['assigned', 'returned', 'reassigned'].includes(String(item.type || '').toLowerCase())));
+      setMaintenanceHistory(history.filter((item) => String(item.type || '').toLowerCase() === 'maintained'));
+      setAssetDocuments(documents);
     } catch (error) {
-      setAssignmentHistory([]);
+      toast.error(error.response?.data?.message || 'Unable to load authorized asset details.');
+    } finally {
+      setDetailLoading(false);
     }
+  };
 
+  const identifyAssetByQr = async (event) => {
+    event.preventDefault();
+    const identifier = qrIdentifier.trim();
+    if (!identifier) return;
+    setQrError('');
     try {
-      const response = await axios.get('/api/maintenance', { params: { asset_id: asset.id } });
-      setMaintenanceHistory(response.data.history || response.data.requests || response.data.data || []);
+      const response = await axios.get(`/api/assets/scan/${encodeURIComponent(identifier)}`);
+      const asset = response.data?.data || response.data?.asset;
+      if (!asset?.id) throw new Error('The QR lookup did not return a valid asset.');
+      await handleAssetClick({
+        ...asset,
+        asset_tag: asset.asset_tag || asset.assetCode || asset.asset_code || '',
+        category_name: asset.category_name || asset.category || '',
+        serial_number: asset.serial_number || asset.serialNumber || '',
+        department_name: asset.department_name || asset.department || '',
+      });
+      setQrIdentifier('');
     } catch (error) {
-      setMaintenanceHistory([]);
+      setQrError(error.response?.status === 404
+        ? 'No asset with that QR identifier is available in your department.'
+        : error.response?.data?.message || 'Unable to identify this QR code.');
+    }
+  };
+
+  const downloadAssetDocument = async (document) => {
+    setDownloadingDocumentId(document.id);
+    try {
+      const response = await axios.get(`/api/assets/${selectedAsset.id}/documents/${document.id}/file`, { responseType: 'blob' });
+      const objectUrl = URL.createObjectURL(response.data);
+      const link = window.document.createElement('a');
+      link.href = objectUrl;
+      link.download = document.originalName || document.original_name || `${document.documentType || 'asset-document'}`;
+      link.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Unable to download this asset document.');
+    } finally {
+      setDownloadingDocumentId(null);
     }
   };
 
@@ -228,21 +369,27 @@ const DeptAssets = () => {
       }
       toast.success(t.actionSuccess || 'Action completed successfully');
       setShowActionModal(false);
-      fetchAssets();
+      if (isAssignmentView) await fetchAssignmentAssets();
+      else await fetchDepartmentAssets();
     } catch (error) {
       toast.error(t.actionError || 'Failed to perform action');
     }
   };
 
   const exportToExcel = () => {
-    const data = assets.map((a) => ({
+    if (!canExport) {
+      toast.error('You do not have permission to export department assets.');
+      return;
+    }
+    const data = filteredAssets.map((a) => ({
       'Asset Tag': a.asset_tag || '',
       Name: a.name || '',
       Category: a.category_name || '',
       'Serial Number': a.serial_number || '',
-      Status: a.status || '',
+      Status: displayStatus(a.status),
       Condition: a.condition || '',
       Location: a.location || '',
+      Laboratory: a.laboratory_name || '',
       'Assigned To': a.assigned_to_name || '',
       'Assignment Date': a.assignment_date ? new Date(a.assignment_date).toLocaleDateString() : '',
       'Maintenance Status': a.maintenance_status || 'None',
@@ -258,7 +405,16 @@ const DeptAssets = () => {
   };
 
   const uniqueCategories = useMemo(
-    () => [...new Set(assets.map((a) => a.category_name).filter(Boolean))],
+    () => [...new Set([
+      'Computing',
+      'Laboratory Equipment',
+      'Agriculture Equipment',
+      'Furniture',
+      'ICT Equipment',
+      'Electrical',
+      'Other',
+      ...assets.map((a) => a.category_name),
+    ].filter(Boolean))],
     [assets],
   );
   const uniqueLocations = useMemo(
@@ -267,6 +423,10 @@ const DeptAssets = () => {
   );
   const uniqueEmployees = useMemo(
     () => [...new Set(assets.map((a) => a.assigned_to_name).filter(Boolean))],
+    [assets],
+  );
+  const uniqueLaboratories = useMemo(
+    () => [...new Set(assets.map((a) => a.laboratory_name).filter(Boolean))],
     [assets],
   );
 
@@ -618,9 +778,16 @@ const DeptAssets = () => {
     setFilterCategory('');
     setFilterCondition('');
     setFilterLocation('');
+    setFilterLaboratory('');
     setFilterEmployee('');
     setFilterMaintenance('');
   };
+
+  const exportButton = canExport && (
+    <button style={styles.exportButton} onClick={exportToExcel}>
+      <Download size={16} /> {t.exportExcel}
+    </button>
+  );
 
   if (loading) {
     return (
@@ -753,15 +920,11 @@ const DeptAssets = () => {
             <p style={styles.subtitle}>
               {isAssignmentView ? 'Department assignment records for' : t.departmentAssets} <strong>{user?.department || 'Department'}</strong>
               <span style={{ marginLeft: '12px', fontSize: '0.85rem', color: isDark ? '#a7bad4' : '#5a6f8d' }}>
-                {assets.length} {isAssignmentView ? 'records' : t.totalAssets}
+                {filteredAssets.length} {isAssignmentView ? 'records' : t.totalAssets}
               </span>
             </p>
           </div>
-          <div style={styles.headerActions}>
-            <button style={styles.exportButton} onClick={exportToExcel}>
-              <Download size={16} /> {t.exportExcel}
-            </button>
-          </div>
+          <div style={styles.headerActions}>{exportButton}</div>
         </div>
 
         <div className="overview-grid">
@@ -778,6 +941,22 @@ const DeptAssets = () => {
           ))}
         </div>
 
+        {!isAssignmentView && (
+          <form onSubmit={identifyAssetByQr} style={{ ...styles.controls, marginBottom: 0 }}>
+            <QrCode size={18} aria-hidden="true" />
+            <input
+              type="search"
+              aria-label="QR identifier"
+              style={styles.input}
+              placeholder="Identify by QR code or asset tag"
+              value={qrIdentifier}
+              onChange={(event) => setQrIdentifier(event.target.value)}
+            />
+            <button type="submit" style={styles.buttonPrimary}><QrCode size={15} /> Identify asset</button>
+            {qrError && <span role="alert" style={{ color: '#dc2626', flexBasis: '100%' }}>{qrError}</span>}
+          </form>
+        )}
+
         <div style={styles.controls}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '220px', flex: '1 1 260px' }}>
             <div style={{ color: isDark ? '#a7bad4' : '#5a6f8d', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -792,14 +971,14 @@ const DeptAssets = () => {
             />
           </div>
 
-          <select style={styles.select} value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+          <select aria-label="Category filter" style={styles.select} value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
             <option value="">{t.allCategories}</option>
             {uniqueCategories.map((cat) => (
               <option key={cat} value={cat}>{cat}</option>
             ))}
           </select>
 
-          <select style={styles.select} value={filterCondition} onChange={(e) => setFilterCondition(e.target.value)}>
+          <select aria-label="Condition filter" style={styles.select} value={filterCondition} onChange={(e) => setFilterCondition(e.target.value)}>
             <option value="">{t.allConditions}</option>
             <option value="Good">{t.good}</option>
             <option value="Fair">{t.fair}</option>
@@ -807,15 +986,25 @@ const DeptAssets = () => {
             <option value="Damaged">{t.damaged}</option>
           </select>
 
-          <select style={styles.select} value={filterLocation} onChange={(e) => setFilterLocation(e.target.value)}>
+          <select aria-label="Location filter" style={styles.select} value={filterLocation} onChange={(e) => setFilterLocation(e.target.value)}>
             <option value="">{t.allLocations}</option>
             {uniqueLocations.map((loc) => (
               <option key={loc} value={loc}>{loc}</option>
             ))}
           </select>
 
-          <select style={styles.select} value={filterEmployee} onChange={(e) => setFilterEmployee(e.target.value)}>
+          {!isAssignmentView && (
+            <select aria-label="Laboratory filter" style={styles.select} value={filterLaboratory} onChange={(e) => setFilterLaboratory(e.target.value)}>
+              <option value="">All Laboratories</option>
+              {uniqueLaboratories.map((laboratory) => (
+                <option key={laboratory} value={laboratory}>{laboratory}</option>
+              ))}
+            </select>
+          )}
+
+          <select aria-label="Assignment filter" style={styles.select} value={filterEmployee} onChange={(e) => setFilterEmployee(e.target.value)}>
             <option value="">{t.allEmployees}</option>
+            <option value="Unassigned">Unassigned</option>
             {uniqueEmployees.map((emp) => (
               <option key={emp} value={emp}>{emp}</option>
             ))}
@@ -867,14 +1056,14 @@ const DeptAssets = () => {
               </tr>
             </thead>
             <tbody>
-              {assets.length === 0 ? (
+              {filteredAssets.length === 0 ? (
                 <tr>
                   <td colSpan="10" style={{ ...styles.td, textAlign: 'center', padding: '30px' }}>
                     {t.noAssets}
                   </td>
                 </tr>
               ) : (
-                assets.map((asset) => (
+                filteredAssets.map((asset) => (
                   <tr
                     key={asset.id}
                     style={styles.clickableRow}
@@ -890,7 +1079,7 @@ const DeptAssets = () => {
                     <td style={styles.td}>{asset.name}</td>
                     <td style={styles.td}>{asset.category_name || '-'}</td>
                     <td style={styles.td}>
-                      <span style={styles.statusBadge(asset.status)}>{asset.status}</span>
+                      <span style={styles.statusBadge(displayStatus(asset.status))}>{displayStatus(asset.status)}</span>
                     </td>
                     <td style={styles.td}>
                       <span style={styles.conditionBadge(asset.condition)}>{asset.condition || 'Unknown'}</span>
@@ -963,13 +1152,14 @@ const DeptAssets = () => {
                   {selectedAsset.category_name} • {selectedAsset.department_name}
                 </div>
               </div>
-              <button style={styles.modalClose} onClick={() => setShowDetailModal(false)}><X size={18} /></button>
+              <button type="button" aria-label="Close asset details" style={styles.modalClose} onClick={() => setShowDetailModal(false)}><X size={18} /></button>
             </div>
 
+            {detailLoading && <p role="status">Loading authorized asset details...</p>}
             <div style={styles.detailGrid}>
               <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>{t.status}</div>
-                <div style={styles.detailValue}><span style={styles.statusBadge(selectedAsset.status)}>{selectedAsset.status}</span></div>
+                <div style={styles.detailValue}><span style={styles.statusBadge(displayStatus(selectedAsset.status))}>{displayStatus(selectedAsset.status)}</span></div>
               </div>
               <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>{t.condition}</div>
@@ -980,8 +1170,16 @@ const DeptAssets = () => {
                 <div style={styles.detailValue}>{selectedAsset.location || '-'}</div>
               </div>
               <div style={styles.detailItem}>
+                <div style={styles.detailLabel}>Laboratory</div>
+                <div style={styles.detailValue}>{selectedAsset.laboratory_name || selectedAsset.laboratoryName || '-'}</div>
+              </div>
+              <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>{t.serialNumber}</div>
                 <div style={styles.detailValue}>{selectedAsset.serial_number || '-'}</div>
+              </div>
+              <div style={styles.detailItem}>
+                <div style={styles.detailLabel}>QR identifier</div>
+                <div style={styles.detailValue}>{selectedAsset.qrCode || selectedAsset.digitalId || selectedAsset.digital_id || '-'}</div>
               </div>
               <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>{t.assignedTo}</div>
@@ -1010,6 +1208,10 @@ const DeptAssets = () => {
                   </span>
                 </div>
               </div>
+              <div style={styles.detailItem}>
+                <div style={styles.detailLabel}>Warranty expiry</div>
+                <div style={styles.detailValue}>{selectedAsset.warranty_expiry || selectedAsset.warrantyExpiry ? new Date(selectedAsset.warranty_expiry || selectedAsset.warrantyExpiry).toLocaleDateString() : 'Not recorded'}</div>
+              </div>
             </div>
 
             <div style={styles.actionButtons}>
@@ -1018,6 +1220,28 @@ const DeptAssets = () => {
               <button style={styles.actionButton('#fc8181')} onClick={() => handleAction('report_damaged', selectedAsset)}><AlertTriangle size={15} /> {t.reportDamaged}</button>
               <button style={styles.actionButton('#805ad5')} onClick={() => handleAction('request_asset', selectedAsset)}><MapPin size={15} /> {t.requestAsset}</button>
               <button style={styles.actionButton('#2b6cb0')} onClick={() => navigate(`${historyBasePath}/${selectedAsset.id}`)}><History size={15} /> Full history</button>
+              <button style={styles.actionButton('#0f766e')} onClick={() => navigate(verificationPath)}><ClipboardCheck size={15} /> Physical verification</button>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <h4 style={{ color: isDark ? '#eaf3ff' : '#12263f', marginBottom: '8px' }}>Warranty and manual documents</h4>
+              {assetDocuments.length === 0 ? (
+                <div style={{ color: isDark ? '#9bb5d5' : '#5a6f8d', padding: '8px 0' }}>No warranty or manual documents available.</div>
+              ) : assetDocuments.map((document) => (
+                <div key={document.id} style={{ ...styles.historyItem, justifyContent: 'flex-start' }}>
+                  <FileText size={16} />
+                  <span>{document.originalName || document.original_name || document.documentType || 'Asset document'}</span>
+                  <span style={{ color: isDark ? '#9bb5d5' : '#5a6f8d' }}>{document.documentType || document.document_type || 'document'}</span>
+                  <button
+                    type="button"
+                    style={styles.buttonSecondary}
+                    disabled={downloadingDocumentId === document.id}
+                    onClick={() => downloadAssetDocument(document)}
+                  >
+                    {downloadingDocumentId === document.id ? 'Downloading...' : 'Download'}
+                  </button>
+                </div>
+              ))}
             </div>
 
             <div style={{ marginBottom: '16px' }}>
@@ -1028,10 +1252,10 @@ const DeptAssets = () => {
                 ) : assignmentHistory.map((item, index) => (
                   <div key={index} style={styles.historyItem}>
                     <div>
-                      <span style={{ fontWeight: 700 }}>{item.employee || item.user || 'Unknown'}</span>
+                      <span style={{ fontWeight: 700 }}>{item.employee || item.user || item.description || 'Unknown'}</span>
                       <span style={{ color: isDark ? '#9bb5d5' : '#5a6f8d', marginLeft: '8px' }}>{item.action || 'Updated'}</span>
                     </div>
-                    <div style={{ color: isDark ? '#9bb5d5' : '#5a6f8d' }}>{new Date(item.date).toLocaleDateString()}</div>
+                    <div style={{ color: isDark ? '#9bb5d5' : '#5a6f8d' }}>{item.date ? new Date(item.date).toLocaleDateString() : '-'}</div>
                   </div>
                 ))}
               </div>
@@ -1045,13 +1269,32 @@ const DeptAssets = () => {
                 ) : maintenanceHistory.map((item, index) => (
                   <div key={index} style={styles.historyItem}>
                     <div>
-                      <span style={{ fontWeight: 700 }}>{item.type || 'Maintenance'}</span>
-                      <span style={{ ...styles.statusBadge(item.status), background: `${getMaintenanceStatusColor(item.status)}22`, color: getMaintenanceStatusColor(item.status), marginLeft: '8px' }}>{item.status}</span>
+                      <span style={{ fontWeight: 700 }}>{item.action || item.title || 'Maintenance'}</span>
+                      <span style={{ ...styles.statusBadge(item.status || item.newValue), background: `${getMaintenanceStatusColor(item.status || item.newValue)}22`, color: getMaintenanceStatusColor(item.status || item.newValue), marginLeft: '8px' }}>{item.status || item.newValue || ''}</span>
                     </div>
-                    <div style={{ color: isDark ? '#9bb5d5' : '#5a6f8d' }}>{new Date(item.date).toLocaleDateString()}</div>
+                    <div style={{ color: isDark ? '#9bb5d5' : '#5a6f8d' }}>{item.date ? new Date(item.date).toLocaleDateString() : '-'}</div>
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div>
+              <h4 style={{ color: isDark ? '#eaf3ff' : '#12263f', marginBottom: '8px' }}>Asset history</h4>
+              {assetHistory.length === 0 ? (
+                <div style={{ color: isDark ? '#9bb5d5' : '#5a6f8d', padding: '8px 0' }}>No history records found.</div>
+              ) : (
+                <div style={styles.historyList}>
+                  {assetHistory.map((item, index) => (
+                    <div key={`${item.date || item.type}-${index}`} style={styles.historyItem}>
+                      <div>
+                        <span style={{ fontWeight: 700 }}>{item.action || item.type || 'Asset updated'}</span>
+                        <span style={{ color: isDark ? '#9bb5d5' : '#5a6f8d', marginLeft: '8px' }}>{item.description || ''}</span>
+                      </div>
+                      <div style={{ color: isDark ? '#9bb5d5' : '#5a6f8d' }}>{item.date ? new Date(item.date).toLocaleDateString() : '-'}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

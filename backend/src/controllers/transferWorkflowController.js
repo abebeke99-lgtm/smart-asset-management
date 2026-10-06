@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { Op } = require('sequelize');
 const { sequelize, Transfer, Asset, Assignment, Department, User, AssetMovement, AuditLog, Notification } = require('../models');
 const { createAuditLog } = require('../services/auditLogService');
+const { createDepartmentEventNotification } = require('../services/notificationService');
 
 const ACTIVE = ['Requested', 'Approved', 'Ready', 'In Transit', 'Pending', 'In Progress'];
 const transitions = {
@@ -20,6 +21,7 @@ const notifyTransferUsers = async ({ transfer, userIds, senderId, status, transa
     recipientId: userId,
     senderId,
     assetId: transfer.assetId,
+    scope: 'USER',
     eventKey: `asset_transfer:${transfer.id}:${status}:${userId}`,
     title: `Asset transfer ${String(status).toLowerCase()}`,
     message: `${transfer.transferNumber || `Transfer ${transfer.id}`} is now ${String(status).toLowerCase()}.`,
@@ -34,6 +36,23 @@ const notifyTransferUsers = async ({ transfer, userIds, senderId, status, transa
     status: 'sent',
     sentAt: new Date(),
   })), { transaction });
+};
+const notifyDepartmentHeads = async (transfer, status, senderId) => {
+  const departmentIds = [...new Set([transfer.sourceDepartmentId, transfer.destinationDepartmentId].map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))];
+  for (const departmentId of departmentIds) {
+    await createDepartmentEventNotification({
+      event: 'department_asset_transferred',
+      eventKey: `department_asset_transferred:${transfer.id}:${status}:${departmentId}`,
+      departmentId,
+      senderId,
+      entityType: 'transfer',
+      entityId: transfer.id,
+      assetId: transfer.assetId,
+      type: 'transfer',
+      title: `Asset transfer ${String(status).toLowerCase()}`,
+      message: `${transfer.transferNumber || `Transfer ${transfer.id}`} is now ${String(status).toLowerCase()}.`,
+    });
+  }
 };
 const scopeWhere = (req) => {
   if (!req.organizationScope) return {};
@@ -52,6 +71,8 @@ const normalize = (item) => {
   const asset = item.Asset || {};
   const requester = item.Requester || item.Creator || {};
   const approver = item.Approver || {};
+  const dispatcher = item.Dispatcher || {};
+  const receiver = item.Receiver || {};
   return {
     ...data,
     transfer_number: item.transferNumber,
@@ -65,6 +86,8 @@ const normalize = (item) => {
     asset_location: asset.location,
     requested_by_name: requester.fullName || requester.username || '',
     approved_by_name: approver.fullName || approver.username || '',
+    dispatched_by_name: dispatcher.fullName || dispatcher.username || '',
+    received_by_name: receiver.fullName || receiver.username || '',
   };
 };
 
@@ -73,6 +96,8 @@ const transferInclude = [
   { model: User, attributes: ['id', 'username', 'fullName'], as: 'Requester' },
   { model: User, attributes: ['id', 'username', 'fullName'], as: 'Creator' },
   { model: User, attributes: ['id', 'username', 'fullName'], as: 'Approver' },
+  { model: User, attributes: ['id', 'username', 'fullName'], as: 'Dispatcher' },
+  { model: User, attributes: ['id', 'username', 'fullName'], as: 'Receiver' },
 ];
 
 const listTransfers = async (req, res, next) => {
@@ -105,8 +130,10 @@ const getTransfer = async (req, res, next) => {
 const createTransfer = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
-    const { asset_id: assetId, destination_department_id: destinationDepartmentId, destination_location: destinationLocation, reason } = req.body;
-    if (!assetId || !destinationDepartmentId || !String(destinationLocation || '').trim() || !String(reason || '').trim()) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Asset, destination department, destination location, and reason are required' }); }
+    const assetId = Number(req.body.asset_id);
+    const destinationDepartmentId = Number(req.body.destination_department_id);
+    const { destination_location: destinationLocation, reason } = req.body;
+    if (!Number.isSafeInteger(assetId) || assetId < 1 || !Number.isSafeInteger(destinationDepartmentId) || destinationDepartmentId < 1 || !String(destinationLocation || '').trim() || !String(reason || '').trim()) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Asset, destination department, destination location, and reason are required' }); }
     const assetWhere = req.organizationScope.departmentId
       ? { id: assetId, departmentId: req.organizationScope.departmentId, ...(req.organizationScope.collegeId ? { collegeId: req.organizationScope.collegeId } : {}) }
       : { id: assetId, collegeId: req.organizationScope.collegeId };
@@ -154,6 +181,7 @@ const createTransfer = async (req, res, next) => {
     const adminUsers = await User.findAll({ where: { role: 'admin', active: true }, attributes: ['id'], transaction });
     await notifyTransferUsers({ transfer: row, userIds: adminUsers.map((user) => user.id), senderId: req.user.id, status: row.status, transaction });
     await transaction.commit();
+    try { await notifyDepartmentHeads(row, row.status, req.user.id); } catch (notificationError) { console.error('Department transfer notification failed:', notificationError.message); }
     res.status(201).json({ success: true, message: 'Transfer request created', data: normalize(row) });
   } catch (error) { await transaction.rollback(); next(error); }
 };
@@ -164,6 +192,7 @@ const changeTransfer = (target, roles) => async (req, res, next) => {
     const row = await Transfer.findOne({ where: { id: req.params.id, ...scopeWhere(req) }, transaction, lock: transaction.LOCK.UPDATE });
     if (!row) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Transfer not found in your scope' }); }
     if (!roles.includes(req.user.role)) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Transfer action is not authorized' }); }
+    if (target === 'Received' && req.user.role === 'department_head' && Number(req.organizationScope?.departmentId) !== Number(row.destinationDepartmentId)) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Only the destination department can confirm receipt' }); }
     if (!transitions[row.status]?.includes(target)) { await transaction.rollback(); return res.status(409).json({ success: false, message: `Invalid transfer transition from ${row.status} to ${target}` }); }
     if (target === 'Approved' && row.requestedBy === req.user.id) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'A requester cannot approve their own transfer' }); }
     if (['Rejected', 'Cancelled'].includes(target) && !String(req.body.reason || '').trim()) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'A reason is required' }); }
@@ -221,8 +250,9 @@ const changeTransfer = (target, roles) => async (req, res, next) => {
     });
     await notifyTransferUsers({ transfer: row, userIds: [row.requestedBy], senderId: req.user.id, status: target, transaction });
     await transaction.commit();
+    try { await notifyDepartmentHeads(row, target, req.user.id); } catch (notificationError) { console.error('Department transfer notification failed:', notificationError.message); }
     res.json({ success: true, message: 'Transfer status updated', data: normalize(row) });
   } catch (error) { await transaction.rollback(); next(error); }
 };
 
-module.exports = { listTransfers, getTransfer, createTransfer, approveTransfer: changeTransfer('Approved', ['college', 'admin']), rejectTransfer: changeTransfer('Rejected', ['college', 'admin']), cancelTransfer: changeTransfer('Cancelled', ['department_head', 'college', 'admin']), readyTransfer: changeTransfer('Ready', ['store_manager']), dispatchTransfer: changeTransfer('In Transit', ['store_manager']), receiveTransfer: changeTransfer('Received', ['store_manager']) };
+module.exports = { listTransfers, getTransfer, createTransfer, approveTransfer: changeTransfer('Approved', ['college', 'college_manager', 'admin']), rejectTransfer: changeTransfer('Rejected', ['college', 'college_manager', 'admin']), cancelTransfer: changeTransfer('Cancelled', ['department_head', 'college', 'college_manager', 'admin']), readyTransfer: changeTransfer('Ready', ['store_manager']), dispatchTransfer: changeTransfer('In Transit', ['store_manager']), receiveTransfer: changeTransfer('Received', ['department_head', 'store_manager']) };

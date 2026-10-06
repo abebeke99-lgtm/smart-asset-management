@@ -3531,6 +3531,12 @@ body.dark .spinner {
 .department-profile-state--error { flex-direction: column; color: #991b1b; background: #fff8f8; border-color: #fecaca; }
 .department-profile-state--error p { margin: 0; }
 .department-profile-spinner { display: inline-flex; color: #0284c7; animation: department-profile-spin 1s linear infinite; }
+.department-profile-skeleton { display: grid; width: min(440px, 100%); gap: 9px; margin-top: 14px; }
+.department-profile-loading { flex-direction: column; }
+.department-profile-skeleton span { display: block; height: 10px; border-radius: 999px; background: #e2e8f0; }
+.department-profile-skeleton span:nth-child(2) { width: 82%; }
+.department-profile-skeleton span:nth-child(3) { width: 64%; }
+.department-profile-detail:last-child { grid-column: 1 / -1; }
 .department-profile-notice { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; padding: 11px 14px; border: 1px solid; border-radius: 8px; font-size: 13px; font-weight: 700; }
 .department-profile-notice--success { color: #166534; border-color: #bbf7d0; background: #f0fdf4; }
 .department-profile-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding-top: 18px; border-top: 1px solid #e2e8f0; }
@@ -3542,7 +3548,7 @@ body.dark .spinner {
 .department-profile-form-error { grid-column: 1 / -1; margin: 0; color: #b91c1c; font-size: 13px; }
 @keyframes department-profile-spin { to { transform: rotate(360deg); } }
 @media (max-width: 800px) { .department-profile-layout { grid-template-columns: 1fr; } }
-@media (max-width: 560px) { .department-profile-page { padding: 18px 14px; } .department-profile-header { flex-direction: column; gap: 16px; } .department-profile-header .department-profile-button { width: 100%; } .department-profile-details, .department-profile-form { grid-template-columns: 1fr; } .department-profile-form label:last-of-type, .department-profile-form-actions, .department-profile-form-error { grid-column: auto; } .department-profile-form-actions { justify-content: stretch; } .department-profile-form-actions .department-profile-button { flex: 1; } }
+@media (max-width: 560px) { .department-profile-page { padding: 18px 14px; } .department-profile-header { flex-direction: column; gap: 16px; } .department-profile-header .department-profile-button { width: 100%; } .department-profile-details, .department-profile-form { grid-template-columns: 1fr; } .department-profile-detail:last-child, .department-profile-form label:last-of-type, .department-profile-form-actions, .department-profile-form-error { grid-column: auto; } .department-profile-form-actions { justify-content: stretch; } .department-profile-form-actions .department-profile-button { flex: 1; } }
 
 /* Shared dashboard frame: full-width header above a fixed sidebar and page content. */
 .dashboard-layout {

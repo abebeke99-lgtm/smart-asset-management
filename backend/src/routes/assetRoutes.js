@@ -49,6 +49,13 @@ const verifyDepartmentHeadAsset = async (req, res, next) => {
 	if (!asset) return res.status(403).json({ success: false, message: 'Asset is outside your department scope' });
 	return next();
 };
+const trackingReadAccess = [
+	requireAuth,
+	requireRole('admin', 'department_head'),
+	requireAnyPermission('assets.view'),
+	resolveDepartmentHeadAssetScope,
+	verifyDepartmentHeadAsset,
+];
 const resolveTeachingAssistantDepartmentScope = async (req, res, next) => {
 	if (req.user.role !== 'teaching_assistant') return next();
 	const departmentId = Number(req.user.departmentId ?? req.user.department_id);
@@ -85,24 +92,24 @@ const verifyTeachingAssistantAsset = async (req, res, next) => {
 	}
 };
 
-router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager', 'teaching_assistant'), requireAnyPermission('assets.view', 'ict.assets.view', 'college.assets.view'), resolveScopedCollegeAssetScope, resolveTeachingAssistantDepartmentScope, getAllAssets);
+router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager', 'department_head', 'teaching_assistant'), requireAnyPermission('assets.view', 'ict.assets.view', 'college.assets.view'), resolveScopedCollegeAssetScope, resolveDepartmentHeadAssetScope, resolveTeachingAssistantDepartmentScope, getAllAssets);
 router.get('/lookup/:assetId', ...requireAdmin, trackingController.lookupByAssetCode);
 router.get('/next-id', requireAuth, requireRole(...assetManagerRoles), getNextAssetId);
 router.get('/next-digital-id', requireAuth, requireRole(...assetManagerRoles), generateDigitalId);
-router.get('/scan/:identifier', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager'), resolveScopedCollegeAssetScope, lookupByQr);
+router.get('/scan/:identifier', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager', 'department_head'), requireAnyPermission('assets.view', 'ict.assets.view', 'college.assets.view'), resolveScopedCollegeAssetScope, resolveDepartmentHeadAssetScope, lookupByQr);
 router.get('/deleted', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, listDeletedAssets);
 router.get('/import/template', requireAuth, assetImportTemplate);
 router.post('/import', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), bulkImportAssets);
 router.get('/check-id/:value', requireAuth, requireRole(...assetManagerRoles), checkAssetField('assetCode'));
 router.get('/check-serial/:value', requireAuth, requireRole(...assetManagerRoles), checkAssetField('serialNumber'));
 router.get('/check-rfid/:value', requireAuth, requireRole(...assetManagerRoles), checkAssetField('rfidTag'));
-router.get('/:id/history', requireAuth, requireRole('admin', 'ict_officer', 'college', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, getAssetHistory);
+router.get('/:id/history', requireAuth, requireRole('admin', 'ict_officer', 'college', 'store_manager', 'department_head'), requireAnyPermission('assets.view', 'ict.assets.view', 'college.assets.view'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, getAssetHistory);
 router.post('/:id/restore', requireAuth, requireRole('admin'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, restoreAsset);
 router.delete('/:id/permanent', requireAuth, requireRole('admin'), permanentDeleteAsset);
-router.get('/:id/documents', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, listAssetDocuments);
+router.get('/:id/documents', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager', 'department_head'), requireAnyPermission('assets.view', 'ict.assets.view', 'college.assets.view'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, listAssetDocuments);
 router.post('/:id/documents', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, uploadAssetDocument);
 router.delete('/:id/documents/:documentId', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, deleteAssetDocument);
-router.get('/:id/documents/:documentId/file', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, downloadAssetDocument);
+router.get('/:id/documents/:documentId/file', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager', 'department_head'), requireAnyPermission('assets.view', 'ict.assets.view', 'college.assets.view'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, downloadAssetDocument);
 router.get('/:id/grants', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, listAssetGrants);
 router.post('/:id/grants', requireAuth, requireRole('admin', 'ict_officer'), createAssetGrant);
 router.get('/:id/custody', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, listCustody);
@@ -203,10 +210,10 @@ router.delete('/:id/rfid', requireAuth, requireRole('admin', 'ict_officer', 'sto
 	} catch (error) { next(error); }
 });
 router.get('/:id', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college_manager', 'department_head', 'teaching_assistant'), requireAnyPermission('assets.view', 'ict.assets.view', 'college.assets.view'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, resolveDepartmentHeadAssetScope, verifyDepartmentHeadAsset, resolveTeachingAssistantDepartmentScope, verifyTeachingAssistantAsset, getAssetById);
-router.get('/:id/location', ...requireAdmin, trackingController.getLocation);
-router.get('/:id/assignments', ...requireAdmin, trackingController.getAssignments);
-router.get('/:id/transfers', ...requireAdmin, trackingController.getTransfers);
-router.get('/:id/maintenance', ...requireAdmin, trackingController.getMaintenance);
+router.get('/:id/location', ...trackingReadAccess, trackingController.getLocation);
+router.get('/:id/assignments', ...trackingReadAccess, trackingController.getAssignments);
+router.get('/:id/transfers', ...trackingReadAccess, trackingController.getTransfers);
+router.get('/:id/maintenance', ...trackingReadAccess, trackingController.getMaintenance);
 router.post('/', requireAuth, requireRole('admin'), resolveScopedCollegeAssetScope, createAsset);
 router.put('/:id', requireAuth, requireRole('admin'), resolveScopedCollegeAssetScope, verifyScopedCollegeAsset, updateAsset);
 router.delete('/:id', requireAuth, requireRole('admin'), deleteAsset);

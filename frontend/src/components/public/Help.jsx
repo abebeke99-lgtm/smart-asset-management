@@ -80,8 +80,7 @@ const Help = () => {
 
       <header className="help-header">
         <div className="help-shell">
-          <h1>Mekdela Amba University</h1>
-          <p className="help-system">University Asset Management System</p>
+         
           <h2>{text('Help & Support', 'እገዛና ድጋፍ')}</h2>
         </div>
       </header>
@@ -100,15 +99,7 @@ const Help = () => {
 
         <p className="help-intro">{text('Practical guidance for signing in and using the asset workflows available to your role.', 'ለመግባትና ለሚናዎ የተፈቀዱ የንብረት ሂደቶችን ለመጠቀም ተግባራዊ መመሪያ።')}</p>
 
-        <section className="help-section" aria-labelledby="help-quick-actions">
-          <h3 id="help-quick-actions">{text('Quick Actions', 'ፈጣን እርምጃዎች')}</h3>
-          <nav className="help-action-links" aria-label={text('Quick Actions', 'ፈጣን እርምጃዎች')}>
-            <a href="/login">{text('Login', 'ግባ')}</a>
-            <a href="/forgot-password">{text('Forgot Password', 'የይለፍ ቃል ረሳሁ')}</a>
-            <a href="/contact">{text('Contact Support', 'የድጋፍ አገልግሎት')}</a>
-          </nav>
-        </section>
-
+        
         <section className="help-section" aria-labelledby="help-topics">
           <h3 id="help-topics">{text('Help Topics', 'የእገዛ ርዕሶች')}</h3>
           <article className="help-topic">
@@ -124,11 +115,7 @@ const Help = () => {
           </article>
         </section>
 
-        <section className="help-section" aria-labelledby="help-password-reset">
-          <h3 id="help-password-reset">{text('Password Reset', 'የይለፍ ቃል መቀየር')}</h3>
-          <p>{text('Use password recovery to request a reset code or link for the email or phone number registered to your account.', 'በመለያዎ የተመዘገበውን ኢሜይል ወይም ስልክ ተጠቅመው የይለፍ ቃል መመለሻ ኮድ ወይም አገናኝ ይጠይቁ።')}</p>
-          <a className="help-inline-link" href="/forgot-password">{text('Open password recovery', 'የይለፍ ቃል መመለሻን ክፈት')}</a>
-        </section>
+       
 
         <section className="help-section" aria-labelledby="help-faq-heading">
           <h3 id="help-faq-heading">{text('Frequently Asked Questions', 'ተደጋጋሚ ጥያቄዎች')}</h3>
@@ -169,13 +156,7 @@ const Help = () => {
           </div>
         </section>
 
-        <section className="help-section" aria-labelledby="help-more">
-          <h3 id="help-more">{text('Need More Help?', 'ተጨማሪ እገዛ ይፈልጋሉ?')}</h3>
-          <nav className="help-action-links" aria-label={text('More help', 'ተጨማሪ እገዛ')}>
-            <a href="/contact">{text('View Contact Information', 'የድጋፍ መረጃን ይመልከቱ')}</a>
-            <a href="/">{text('Back to Home', 'ወደ መነሻ ገጽ')}</a>
-          </nav>
-        </section>
+        
       </div>
     </main>
   );

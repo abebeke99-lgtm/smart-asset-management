@@ -54,13 +54,23 @@ const getInventory = async (req, res, next) => {
     const pageSize = Math.min(100, Math.max(1, Number.parseInt(req.query.pageSize || req.query.limit, 10) || 20));
     const where = {};
     const scopedRole = isCollegeScopedRole(req.user?.role);
+    const departmentHeadScope = req.user?.role === 'department_head' && (req.organizationScope?.departmentId ?? req.user?.departmentId ?? req.user?.department_id);
     const collegeId = scopedRole ? getCollegeScopeId(req) : null;
+    const departmentId = departmentHeadScope ? Number(req.organizationScope?.departmentId ?? req.user?.departmentId ?? req.user?.department_id) : null;
     if (scopedRole && !collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
-    const assetWhere = scopedRole
-      ? { collegeId }
-      : req.user?.role === 'ict_officer' && req.organizationScope?.collegeId
-        ? { collegeId: Number(req.organizationScope.collegeId) }
-        : {};
+    if (departmentHeadScope && (!Number.isSafeInteger(departmentId) || departmentId < 1)) {
+      return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+    }
+    const assetWhere = departmentHeadScope
+      ? { departmentId, collegeId: req.organizationScope?.collegeId || req.user?.collegeId || req.user?.college_id || undefined }
+      : scopedRole
+        ? { collegeId }
+        : req.user?.role === 'ict_officer' && req.organizationScope?.collegeId
+          ? { collegeId: Number(req.organizationScope.collegeId) }
+          : {};
+    if (departmentHeadScope) {
+      where.departmentId = departmentId;
+    }
     const search = String(req.query.search || '').trim();
     const stockLevel = String(req.query.stockLevel || '').toLowerCase();
     if (req.query.location) where.location = String(req.query.location);

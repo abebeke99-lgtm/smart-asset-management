@@ -10,11 +10,21 @@ const allowedChannels = new Set(['in_app', 'email', 'sms']);
 const defaultEventRules = {
   assignment_created: { enabled: true, inApp: true, email: false, recipientRule: 'Assigned User', priority: 'normal' },
   assignment_returned: { enabled: true, inApp: true, email: false, recipientRule: 'Assigned User', priority: 'normal' },
+  department_request_submitted: { enabled: true, inApp: true, email: false, recipientRule: 'Department Heads', priority: 'normal' },
+  department_request_approved: { enabled: true, inApp: true, email: false, recipientRule: 'Requester', priority: 'normal' },
+  department_request_rejected: { enabled: true, inApp: true, email: false, recipientRule: 'Requester', priority: 'high' },
+  department_request_changes_requested: { enabled: true, inApp: true, email: false, recipientRule: 'Requester', priority: 'normal' },
+  department_asset_assigned: { enabled: true, inApp: true, email: false, recipientRule: 'Department Heads', priority: 'normal' },
+  department_asset_transferred: { enabled: true, inApp: true, email: false, recipientRule: 'Source and Destination Department Heads', priority: 'normal' },
+  department_asset_returned: { enabled: true, inApp: true, email: false, recipientRule: 'Department Heads', priority: 'normal' },
+  department_maintenance_updated: { enabled: true, inApp: true, email: false, recipientRule: 'Department Heads', priority: 'normal' },
+  department_technician_assigned: { enabled: true, inApp: true, email: false, recipientRule: 'Department Heads', priority: 'normal' },
   maintenance_created: { enabled: true, inApp: true, email: false, recipientRule: 'Maintenance Staff', priority: 'normal' },
   maintenance_status_changed: { enabled: true, inApp: true, email: false, recipientRule: 'Requestor and Maintenance Staff', priority: 'normal' },
   maintenance_completed: { enabled: true, inApp: true, email: false, recipientRule: 'Requestor and Maintenance Staff', priority: 'normal' },
   maintenance_test_sent_to_qc: { enabled: true, inApp: true, email: false, recipientRule: 'Quality Control Reviewers', priority: 'high' },
   maintenance_qc_decision: { enabled: true, inApp: true, email: false, recipientRule: 'Requestor and Maintenance Staff', priority: 'high' },
+  service_request_escalated: { enabled: true, inApp: true, email: false, recipientRule: 'Department Head, College Manager, and Assigned Owner', priority: 'high' },
   finance_purchase_request_submitted: { enabled: true, inApp: true, email: false, recipientRule: 'Finance', priority: 'normal' },
   finance_invoice_registered: { enabled: true, inApp: true, email: false, recipientRule: 'Finance', priority: 'normal' },
   finance_payment_submitted: { enabled: true, inApp: true, email: false, recipientRule: 'Finance', priority: 'high' },
@@ -28,31 +38,28 @@ const normalizeNotificationScope = (value) => {
 };
 
 const buildNotificationVisibilityWhere = (user = {}) => {
-  const clauses = [{ userId: user.id }, { recipientId: user.id }, { scope: 'GLOBAL' }];
+  const clauses = [];
+  if (user.id != null) clauses.push({ userId: user.id }, { recipientId: user.id });
+  clauses.push({ scope: 'GLOBAL' });
   const role = user.role ? String(user.role).trim().toLowerCase() : '';
   const collegeId = Number(user.collegeId ?? user.college_id ?? 0);
   const departmentId = Number(user.departmentId ?? user.department_id ?? 0);
   const organizationId = Number(user.organizationId ?? user.organization_id ?? 0);
 
   if (organizationId) {
-    clauses.push({ organizationId }, { scope: 'ORGANIZATION', organizationId });
+    clauses.push({ scope: 'ORGANIZATION', organizationId });
   }
   if (collegeId) {
-    clauses.push({ collegeId }, { scope: 'COLLEGE', collegeId });
+    clauses.push({ scope: 'COLLEGE', collegeId });
   }
   if (departmentId) {
-    clauses.push({ departmentId }, { scope: 'DEPARTMENT', departmentId });
+    clauses.push({ scope: 'DEPARTMENT', departmentId });
   }
   if (role) {
-    clauses.push({ role }, { scope: 'ROLE', role });
+    clauses.push({ scope: 'ROLE', role });
   }
 
-  return { [Op.or]: clauses.filter((clause) => {
-    if (clause && clause.scope === 'GLOBAL') return true;
-    if (clause && 'userId' in clause && clause.userId === undefined) return false;
-    if (clause && 'recipientId' in clause && clause.recipientId === undefined) return false;
-    return true;
-  }) };
+  return { [Op.or]: clauses };
 };
 
 const normalizeChannels = (channels) => {
@@ -90,10 +97,19 @@ const buildNotification = (payload, senderId, recipient, status) => ({
   senderId,
   userId: recipient.id,
   recipientId: recipient.id,
+  scope: normalizeNotificationScope(payload.scope || 'USER'),
   collegeId: recipient.collegeId || null,
   departmentId: recipient.departmentId || null,
+  organizationId: recipient.organizationId || null,
   assetId: payload.assetId || payload.asset_id || null,
   eventKey: payload.eventKey || payload.event_key || null,
+  category: payload.category || null,
+  entityType: payload.entityType || payload.entity_type || null,
+  entityId: payload.entityId || payload.entity_id || null,
+  actionUrl: payload.actionUrl || payload.action_url || null,
+  metadata: payload.metadata || null,
+  read: false,
+  readAt: null,
   scheduledAt: payload.scheduledAt || payload.scheduled_at || null,
   expiresAt: payload.expiresAt || payload.expires_at || null,
   sentAt: status === 'sent' ? new Date() : null,
@@ -135,6 +151,24 @@ const createEventNotification = async (payload = {}) => {
 const createFinanceNotification = async (payload = {}) => {
   const recipients = await resolveRecipients({ recipientType: 'role', roles: ['finance', 'admin'] });
   return createEventNotification({ ...payload, userIds: recipients.map((recipient) => recipient.id) });
+};
+
+const getDepartmentHeadRecipients = async (departmentId) => User.findAll({
+  where: { departmentId, role: 'department_head', active: true },
+  attributes: ['id', 'departmentId', 'collegeId', 'organizationId'],
+});
+
+const createDepartmentEventNotification = async (payload = {}) => {
+  const departmentId = Number(payload.departmentId || payload.department_id);
+  if (!Number.isSafeInteger(departmentId) || departmentId < 1) {
+    throw Object.assign(new Error('A valid department is required for a department notification'), { statusCode: 400 });
+  }
+  const recipients = await getDepartmentHeadRecipients(departmentId);
+  const userIds = recipients
+    .map((recipient) => Number(recipient.id))
+    .filter((id) => Number.isSafeInteger(id) && id > 0 && id !== Number(payload.senderId));
+  if (!userIds.length) return { skipped: true, reason: 'no_recipients' };
+  return createEventNotification({ ...payload, departmentId, userIds });
 };
 
 const deliver = async (notification, recipient, channels, transaction) => {
@@ -200,6 +234,9 @@ module.exports = {
   createBulkNotification,
   createEventNotification,
   createFinanceNotification,
+  createDepartmentEventNotification,
+  getDepartmentHeadRecipients,
+  buildNotification,
   deliver,
   getNotificationSettings,
   defaultEventRules,

@@ -211,9 +211,12 @@ router.put('/notifications/:id/read', ...notificationAccess, async (req, res, ne
 router.patch('/notifications/read-all', ...notificationAccess, async (req, res, next) => {
   try {
     const visibilityClause = buildNotificationVisibilityWhere(req.user || {});
-    await Notification.update({ read: true, readAt: new Date() }, { where: { [Op.and]: [visibilityClause, { read: false }] } });
+    const [updatedCount] = await Notification.update(
+      { read: true, readAt: new Date() },
+      { where: { [Op.and]: [visibilityClause, { read: false }] } },
+    );
     const unreadCount = await Notification.count({ where: { [Op.and]: [visibilityClause, { read: false }] } });
-    res.json({ success: true, unreadCount, updatedCount: unreadCount });
+    res.json({ success: true, unreadCount, updatedCount });
   } catch (error) {
     next(error);
   }

@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { getAllUsers, getUserById, createUser, updateUser, deleteUser, getCurrentUserProfile, updateProfile, updateCurrentUserProfilePhoto, removeCurrentUserProfilePhoto, setUserSecurityState, resetUserPassword, forcePasswordChange, terminateUserSession } = require('../controllers/userController');
+const { getAllUsers, getUserStats, getRoles, getUserById, createUser, updateUser, updateUserStatus, getUserActivity, deleteUser, getCurrentUserProfile, updateProfile, updateCurrentUserProfilePhoto, removeCurrentUserProfilePhoto, setUserSecurityState, resetUserPassword, forcePasswordChange, terminateUserSession } = require('../controllers/userController');
 const { AuditLog, User } = require('../models');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const { validateProfilePhoto } = require('../utils/uploadUtils');
@@ -26,38 +26,8 @@ const profilePhotoUpload = multer({
 });
 
 router.get('/', requireAuth, requireRole('admin', 'college', 'store_manager', 'ict_officer', 'maintenance'), getAllUsers);
-router.get('/stats', requireAuth, requireRole('admin'), async (req, res, next) => {
-  try {
-    const [totalUsers, activeUsers, inactiveUsers, adminUsers] = await Promise.all([
-      User.count(),
-      User.count({ where: { active: true } }),
-      User.count({ where: { active: false } }),
-      User.count({ where: { role: 'admin' } }),
-    ]);
-    const roleCounts = await User.findAll({
-      attributes: ['role', [User.sequelize.fn('COUNT', User.sequelize.col('id')), 'count']],
-      group: ['role'],
-      raw: true,
-    });
-    const normalizedRoleCounts = Object.fromEntries(roleCounts.map((row) => [row.role, Number(row.count || 0)]));
-    return res.json({
-      success: true,
-      data: {
-        total: totalUsers,
-        totalUsers,
-        active: activeUsers,
-        activeUsers,
-        inactive: inactiveUsers,
-        inactiveUsers,
-        admins: adminUsers,
-        adminCount: adminUsers,
-        roleCounts: normalizedRoleCounts,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+router.get('/stats', requireAuth, requireRole('admin'), getUserStats);
+router.get('/roles', requireAuth, requireRole('admin'), getRoles);
 router.get('/technicians', requireAuth, requireRole('admin', 'maintenance', 'ict_officer'), getAllUsers);
 router.get('/profile', requireAuth, getCurrentUserProfile);
 router.put('/profile', requireAuth, updateProfile);
@@ -66,6 +36,8 @@ router.delete('/profile/photo', requireAuth, removeCurrentUserProfilePhoto);
 router.post('/:id/lock', requireAuth, requireRole('admin'), (req, res, next) => setUserSecurityState(req, res, 'lock').catch(next));
 router.post('/:id/unlock', requireAuth, requireRole('admin'), (req, res, next) => setUserSecurityState(req, res, 'unlock').catch(next));
 router.post('/:id/reset-password', requireAuth, requireRole('admin'), (req, res, next) => resetUserPassword(req, res).catch(next));
+router.patch('/:id/status', requireAuth, requireRole('admin'), (req, res, next) => updateUserStatus(req, res).catch(next));
+router.get('/:id/activity', requireAuth, requireRole('admin'), getUserActivity);
 router.post('/:id/force-password-change', requireAuth, requireRole('admin'), (req, res, next) => forcePasswordChange(req, res).catch(next));
 router.post('/:id/terminate-session', requireAuth, requireRole('admin'), (req, res, next) => terminateUserSession(req, res).catch(next));
 router.get('/activity', requireAuth, requireRole('admin'), async (req, res, next) => {
@@ -78,20 +50,6 @@ router.get('/activity', requireAuth, requireRole('admin'), async (req, res, next
 			limit: 500,
 		});
 		res.json({ success: true, data: logs, activities: logs });
-	} catch (error) {
-		next(error);
-	}
-});
-router.get('/:id/activity', requireAuth, requireRole('admin'), async (req, res, next) => {
-	try {
-		const where = req.params.id === 'all' ? {} : { userId: req.params.id };
-		const logs = await AuditLog.findAll({
-			where,
-			include: [{ model: User, attributes: ['username', 'fullName', 'role'] }],
-			order: [['createdAt', 'DESC']],
-			limit: 500,
-		});
-		res.json({ success: true, logs });
 	} catch (error) {
 		next(error);
 	}

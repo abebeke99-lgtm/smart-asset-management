@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
 import apiClient from '../../services/apiClient';
@@ -6,8 +7,8 @@ import { toast } from 'react-toastify';
 import { BarChart3, FileSpreadsheet, FileText, Printer, RefreshCw, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-import { Bar, Line, Doughnut, Pie } from 'react-chartjs-2';
+import { autoTable } from 'jspdf-autotable';
+import { Bar, Doughnut, Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement, PointElement, LineElement, Filler } from 'chart.js';
 
 ChartJS.register(
@@ -23,12 +24,17 @@ ChartJS.register(
   Filler
 );
 
-const DeptReports = () => {
+const DeptReports = ({ inventoryMode = false }) => {
   const { user } = useAuth();
   const { language, theme } = useLanguage();
+  const location = useLocation();
   const printRef = useRef();
+  const isInventoryView = inventoryMode || location.pathname.endsWith('/inventory') || location.pathname.includes('/reports/inventory');
   
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const inFlightRequestKeys = useRef(new Set());
+  const latestRequestKey = useRef(null);
   const [activeTab, setActiveTab] = useState('assets');
   const [reportData, setReportData] = useState({
     assets: [],
@@ -57,65 +63,140 @@ const DeptReports = () => {
 
   const isDark = theme === 'dark';
   const t = language === 'en' ? englishTranslations : amharicTranslations;
+  const pageTitle = isInventoryView ? t.inventory : t.reports;
 
   const fetchReports = useCallback(async () => {
+    const requestKey = JSON.stringify({
+      inventoryMode: isInventoryView,
+      dateFrom: filters.dateFrom,
+      dateTo: filters.dateTo,
+      category: filters.category,
+      employee: filters.employee,
+      location: filters.location,
+      assetStatus: filters.assetStatus,
+      requestStatus: filters.requestStatus,
+      maintenanceStatus: filters.maintenanceStatus,
+    });
+    latestRequestKey.current = requestKey;
+    if (inFlightRequestKeys.current.has(requestKey)) return;
+    inFlightRequestKeys.current.add(requestKey);
     setLoading(true);
+    setLoadError('');
     try {
       const requestParams = { limit: 100, dateFrom: filters.dateFrom || undefined, dateTo: filters.dateTo || undefined };
+      const assetsParams = {
+        ...requestParams,
+        reportType: 'assets',
+        category: filters.category || undefined,
+        employee: filters.employee || undefined,
+        location: filters.location || undefined,
+        status: filters.assetStatus || undefined,
+      };
+      if (isInventoryView) {
+        const assetsRes = await apiClient.get('/department/reports', { params: assetsParams });
+        const assets = assetsRes.data?.assets || assetsRes.data?.data;
+        if (!Array.isArray(assets)) {
+          throw new Error('The department inventory response did not contain an asset list.');
+        }
+        if (latestRequestKey.current === requestKey) {
+          setReportData({ assets, maintenance: [], staff: [], approvals: [] });
+          calculateSummary(assets, [], [], [], assetsRes.data?.totals || assetsRes.data?.summary);
+        }
+        return;
+      }
+
       const [assetsRes, maintRes, staffRes, approvalsRes] = await Promise.all([
-        apiClient.get('/department/reports', { params: { ...requestParams, reportType: 'assets', category: filters.category || undefined, employee: filters.employee || undefined, location: filters.location || undefined, status: filters.assetStatus || undefined } }),
-        apiClient.get('/department/reports', { params: { ...requestParams, reportType: 'maintenance', status: filters.maintenanceStatus || filters.requestStatus || undefined } }),
+        apiClient.get('/department/reports', { params: assetsParams }),
+        apiClient.get('/department/reports', { params: { ...requestParams, reportType: 'maintenance', status: filters.maintenanceStatus || undefined } }),
         apiClient.get('/department/reports', { params: { limit: 100, reportType: 'staff', search: filters.employee || undefined } }),
         apiClient.get('/department/reports', { params: { ...requestParams, reportType: 'approvals', status: filters.requestStatus || undefined } })
       ]);
 
-      const assets = assetsRes.data?.data || [];
-      const maintenance = maintRes.data?.data || [];
-      const staff = staffRes.data?.data || [];
-      const approvals = approvalsRes.data?.data || [];
+      const assets = assetsRes.data?.assets || assetsRes.data?.data;
+      const maintenance = maintRes.data?.data;
+      const staff = staffRes.data?.data;
+      const approvals = approvalsRes.data?.data;
+      if (![assets, maintenance, staff, approvals].every(Array.isArray)) {
+        throw new Error('The department reports response did not contain the expected report lists.');
+      }
 
-      setReportData({ 
-        assets, 
-        maintenance,
-        staff,
-        approvals 
-      });
-
-      calculateSummary(assets, maintenance, staff, approvals);
-    } catch (error) {
-      toast.error(t.fetchError || 'Failed to load report data');
-      setReportData({ 
-        assets: [], 
-        maintenance: [], 
-        staff: [],
-        approvals: [] 
-      });
-      calculateSummary([], [], [], []);
+      if (latestRequestKey.current === requestKey) {
+        setReportData({ assets, maintenance, staff, approvals });
+        calculateSummary(assets, maintenance, staff, approvals, assetsRes.data?.totals || assetsRes.data?.summary);
+      }
+    } catch (requestError) {
+      if (latestRequestKey.current === requestKey) {
+        const status = requestError.response?.status;
+        const isNetworkError = !requestError.response && (
+          requestError.code === 'ERR_NETWORK'
+          || requestError.code === 'ECONNABORTED'
+          || requestError.message === 'Network Error'
+        );
+        const message = status === 401
+          ? 'Authentication required. Please sign in again.'
+          : status === 403
+            ? 'You do not have permission to view this department data.'
+            : status === 404
+              ? 'The department inventory resource was not found.'
+              : status === 409
+                ? requestError.response?.data?.message || 'The department inventory request conflicts with the current data.'
+                : status === 422
+                  ? requestError.response?.data?.message || 'The department inventory request is invalid.'
+                  : status >= 500
+                    ? requestError.response?.data?.message || 'Unable to load department inventory data because of a server or database error.'
+                    : isNetworkError
+                      ? 'Unable to connect to the server. Check the backend connection and try again.'
+                      : requestError.response?.data?.message || requestError.message || t.fetchError;
+        setLoadError(message);
+        toast.error(message, { toastId: 'department-reports-load-error', position: 'bottom-right' });
+        console.error('Department reports request failed:', {
+          url: requestError.config?.url || '/api/department/reports',
+          status: status || 0,
+          message,
+        });
+      }
+    } finally {
+      inFlightRequestKeys.current.delete(requestKey);
+      if (latestRequestKey.current === requestKey) setLoading(false);
     }
-    setLoading(false);
-  }, [filters.dateFrom, filters.dateTo, filters.category, filters.employee, filters.location, filters.assetStatus, filters.requestStatus, filters.maintenanceStatus, t]);
+  }, [filters.dateFrom, filters.dateTo, filters.category, filters.employee, filters.location, filters.assetStatus, filters.requestStatus, filters.maintenanceStatus, isInventoryView, t]);
+
+  useEffect(() => {
+    if (location.pathname.includes('/reports/maintenance')) {
+      setActiveTab('maintenance');
+      return;
+    }
+    if (location.pathname.includes('/reports/assets')) {
+      setActiveTab('assets');
+      return;
+    }
+    if (isInventoryView || location.pathname.includes('/reports/inventory') || location.pathname.endsWith('/inventory')) {
+      setActiveTab('assets');
+    }
+  }, [location.pathname, isInventoryView]);
 
   useEffect(() => {
     fetchReports();
   }, [fetchReports]);
 
-  const calculateSummary = (assets, maintenance, staff, approvals) => {
-    const totalAssets = assets.length;
-    const inUse = assets.filter(a => a.status === 'In-Use' || a.status === 'Assigned').length;
-    const available = assets.filter(a => a.status === 'Available').length;
-    const underMaintenance = assets.filter(a => a.status === 'Under-Maintenance' || a.status === 'In-Repair').length;
-    const disposed = assets.filter(a => a.status === 'Disposed').length;
-    const totalValue = assets.reduce((sum, a) => sum + (a.current_value || 0), 0);
+  const calculateSummary = (assets, maintenance, staff, approvals, assetTotals = {}) => {
+    const normalizeStatus = (value) => String(value || '').trim().toLowerCase().replace(/[_\s]+/g, '-');
+    const totalAssets = Number(assetTotals.totalAssets ?? assets.length);
+    const inUse = Number(assetTotals.inUse ?? assets.filter(a => ['in-use', 'assigned', 'issued'].includes(normalizeStatus(a.status))).length);
+    const available = Number(assetTotals.available ?? assets.filter(a => ['available', 'ready', 'idle'].includes(normalizeStatus(a.status))).length);
+    const underMaintenance = Number(assetTotals.underMaintenance ?? assets.filter(a => ['under-maintenance', 'in-maintenance', 'maintenance', 'in-repair'].includes(normalizeStatus(a.status))).length);
+    const disposed = Number(assetTotals.disposed ?? assets.filter(a => ['disposed', 'retired'].includes(normalizeStatus(a.status))).length);
+    const totalValue = Number(assetTotals.totalValue ?? assets.reduce((sum, a) => sum + Number(a.current_value || 0), 0));
     const totalPurchaseCost = assets.reduce((sum, a) => sum + (a.purchase_cost || 0), 0);
     const depreciation = totalPurchaseCost - totalValue;
 
-    const byCategory = assets.reduce((acc, a) => {
+    const byCategory = assetTotals.byCategory || assets.reduce((acc, a) => {
       const cat = a.category_name || 'Other';
       acc[cat] = (acc[cat] || 0) + 1;
       return acc;
     }, {});
 
-    const byLocation = assets.reduce((acc, a) => {
+    const byLocation = assetTotals.byLocation || assets.reduce((acc, a) => {
       const loc = a.location || 'Unknown';
       acc[loc] = (acc[loc] || 0) + 1;
       return acc;
@@ -128,17 +209,17 @@ const DeptReports = () => {
       return acc;
     }, {});
 
-    const pendingMaintenance = maintenance.filter(m => m.status === 'Pending').length;
-    const inProgressMaintenance = maintenance.filter(m => m.status === 'In-Progress').length;
-    const completedMaintenance = maintenance.filter(m => m.status === 'Completed').length;
-    const totalMaintenanceCost = maintenance.reduce((sum, m) => sum + (m.actual_cost || 0), 0);
+    const pendingMaintenance = maintenance.filter(m => normalizeStatus(m.status) === 'pending').length;
+    const inProgressMaintenance = maintenance.filter(m => ['in-progress', 'in progress'].includes(normalizeStatus(m.status))).length;
+    const completedMaintenance = maintenance.filter(m => normalizeStatus(m.status) === 'completed').length;
+    const totalMaintenanceCost = maintenance.reduce((sum, m) => sum + Number(m.actual_cost || 0), 0);
 
     const staffWithAssets = staff.filter(s => s.assigned_assets > 0).length;
     const staffWithoutAssets = staff.length - staffWithAssets;
 
-    const pendingApprovals = approvals.filter(a => a.status === 'Pending').length;
-    const approvedApprovals = approvals.filter(a => a.status === 'Approved').length;
-    const rejectedApprovals = approvals.filter(a => a.status === 'Rejected').length;
+    const pendingApprovals = approvals.filter(a => normalizeStatus(a.status) === 'pending').length;
+    const approvedApprovals = approvals.filter(a => normalizeStatus(a.status) === 'approved').length;
+    const rejectedApprovals = approvals.filter(a => normalizeStatus(a.status) === 'rejected').length;
 
     setSummary({
       assets: {
@@ -153,7 +234,7 @@ const DeptReports = () => {
         byCategory,
         byLocation,
         byEmployee,
-        utilizationRate: totalAssets > 0 ? (inUse / totalAssets) * 100 : 0
+        utilizationRate: Number(assetTotals.utilizationRate ?? (totalAssets > 0 ? (inUse / totalAssets) * 100 : 0))
       },
       maintenance: {
         totalMaintenance: maintenance.length,
@@ -230,7 +311,15 @@ const DeptReports = () => {
       result = result.filter(a => a.location === filters.location);
     }
     if (filters.assetStatus) {
-      result = result.filter(a => a.status === filters.assetStatus);
+      const statusAliases = {
+        'In-Use': ['in-use', 'assigned', 'issued'],
+        Available: ['available', 'ready', 'idle'],
+        'Under-Maintenance': ['under-maintenance', 'in-maintenance', 'maintenance', 'in-repair'],
+        'In-Repair': ['in-repair', 'under-maintenance', 'in-maintenance'],
+        Disposed: ['disposed', 'retired'],
+      };
+      result = result.filter(a => (statusAliases[filters.assetStatus] || [filters.assetStatus.toLowerCase()])
+        .includes(String(a.status || '').toLowerCase().replace(/[_\s]+/g, '-')));
     }
     
     return result;
@@ -238,6 +327,7 @@ const DeptReports = () => {
 
   const getFilteredMaintenance = useMemo(() => {
     let result = reportData.maintenance;
+    const normalizeStatus = (value) => String(value || '').trim().toLowerCase().replace(/[_\s]+/g, '-');
     
     if (filters.dateFrom) {
       result = result.filter(m => new Date(m.created_at) >= new Date(filters.dateFrom));
@@ -248,12 +338,8 @@ const DeptReports = () => {
       result = result.filter(m => new Date(m.created_at) <= endDate);
     }
     if (filters.maintenanceStatus) {
-      result = result.filter(m => m.status === filters.maintenanceStatus);
+      result = result.filter(m => normalizeStatus(m.status) === normalizeStatus(filters.maintenanceStatus));
     }
-    if (filters.requestStatus) {
-      result = result.filter(m => m.status === filters.requestStatus);
-    }
-    
     return result;
   }, [reportData.maintenance, filters]);
 
@@ -272,7 +358,7 @@ const DeptReports = () => {
     
     doc.setFontSize(18);
     doc.setTextColor(isDark ? '#c8dcf5' : '#1a365d');
-    doc.text(`${t.reports} - ${user?.department || 'Department'}`, 14, 20);
+    doc.text(`${pageTitle} - ${user?.department || 'Department'}`, 14, 20);
     doc.setFontSize(10);
     doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
     doc.text(`Report Type: ${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}`, 14, 34);
@@ -289,7 +375,7 @@ const DeptReports = () => {
         a.status || '',
         a.location || '',
         a.assigned_to_name || '-',
-        a.current_value ? `$${a.current_value.toLocaleString()}` : '$0'
+        a.current_value ? `$${Number(a.current_value).toLocaleString()}` : '$0'
       ]);
     } else if (activeTab === 'maintenance') {
       headers = [t.requestId, t.title, t.asset, t.status, t.priority, t.type, t.created];
@@ -322,7 +408,7 @@ const DeptReports = () => {
     }
 
     if (tableData.length > 0) {
-      doc.autoTable({
+      autoTable(doc, {
         head: [headers],
         body: tableData,
         startY: 42,
@@ -332,8 +418,8 @@ const DeptReports = () => {
       });
     }
 
-    doc.save(`department_report_${user?.department}_${activeTab}.pdf`);
-    toast.success(t.exportSuccess || 'PDF exported successfully');
+    doc.save(`department_${isInventoryView ? 'inventory' : 'report'}_${user?.department}_${activeTab}.pdf`);
+    toast.success(t.exportSuccess || 'PDF exported successfully', { position: 'bottom-right' });
   };
 
   const exportToExcel = () => {
@@ -392,8 +478,8 @@ const DeptReports = () => {
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, activeTab.charAt(0).toUpperCase() + activeTab.slice(1));
-    XLSX.writeFile(wb, `department_report_${user?.department}_${activeTab}.xlsx`);
-    toast.success(t.exportSuccess || 'Excel exported successfully');
+    XLSX.writeFile(wb, `department_${isInventoryView ? 'inventory' : 'report'}_${user?.department}_${activeTab}.xlsx`);
+    toast.success(t.exportSuccess || 'Excel exported successfully', { position: 'bottom-right' });
   };
 
   const handlePrint = () => {
@@ -626,7 +712,7 @@ const DeptReports = () => {
     },
     chartsRow: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 350px), 1fr))',
       gap: '20px',
       marginBottom: '24px'
     },
@@ -699,7 +785,7 @@ const DeptReports = () => {
     { id: 'maintenance', label: t.maintenance || 'Maintenance' },
     { id: 'staff', label: t.staff || 'Staff' },
     { id: 'approvals', label: t.approvals || 'Approvals' }
-  ];
+  ].filter((tab) => !isInventoryView || tab.id === 'assets');
 
   // Get unique filter options
   const uniqueCategories = useMemo(() => 
@@ -715,12 +801,35 @@ const DeptReports = () => {
     [reportData.assets]
   );
 
-  if (loading) {
+  if (loading || loadError) {
     return (
-      <div style={styles.container}>
-        <div style={styles.emptyState}>
-          <RefreshCw size={28} aria-hidden="true" style={{ marginBottom: '12px' }} />
-          <div>{t.loading}</div>
+      <div style={styles.container} ref={printRef}>
+        <div style={styles.header}>
+          <div>
+            <h1 style={styles.title}><BarChart3 size={28} aria-hidden="true" /> {pageTitle}</h1>
+            <p style={styles.subtitle}>
+              {isInventoryView ? t.inventoryFor : t.reportsFor} <strong>{user?.department || 'Department'}</strong>
+            </p>
+          </div>
+        </div>
+        <div
+          role={loadError ? 'alert' : 'status'}
+          aria-live="polite"
+          style={{ ...styles.chartCard, marginBottom: '16px', padding: '16px' }}
+        >
+          {loading ? (
+            <>
+              <RefreshCw size={16} aria-hidden="true" style={{ verticalAlign: 'middle', marginRight: '8px' }} />
+              {t.loading}
+            </>
+          ) : (
+            <>
+              <strong>{loadError}</strong>
+              <button type="button" style={{ ...styles.refreshButton, marginLeft: '12px' }} onClick={fetchReports}>
+                <RefreshCw size={15} aria-hidden="true" /> {t.retry || 'Retry'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
@@ -731,9 +840,9 @@ const DeptReports = () => {
       {/* Header */}
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}><BarChart3 size={28} aria-hidden="true" /> {t.reports}</h1>
+          <h1 style={styles.title}><BarChart3 size={28} aria-hidden="true" /> {pageTitle}</h1>
           <p style={styles.subtitle}>
-            {t.reportsFor} <strong>{user?.department || 'Department'}</strong>
+            {isInventoryView ? t.inventoryFor : t.reportsFor} <strong>{user?.department || 'Department'}</strong>
           </p>
         </div>
         <div style={styles.headerActions}>
@@ -913,35 +1022,39 @@ const DeptReports = () => {
             <div style={styles.chartCard}>
               <h3 style={styles.chartTitle}>{t.assetsByCategory}</h3>
               <div style={{ height: '250px' }}>
-                <Doughnut 
-                  data={{
-                    labels: Object.keys(summary.assets.byCategory || {}),
-                    datasets: [{
-                      data: Object.values(summary.assets.byCategory || {}),
-                      backgroundColor: ['#63b3ed', '#68d391', '#f6ad55', '#fc8181', '#b794f4', '#81e6d9'],
-                      borderColor: isDark ? '#1e2d45' : '#ffffff',
-                      borderWidth: 2
-                    }]
-                  }}
-                  options={chartOptions}
-                />
+                {Object.keys(summary.assets.byCategory || {}).length ? (
+                  <Doughnut
+                    data={{
+                      labels: Object.keys(summary.assets.byCategory || {}),
+                      datasets: [{
+                        data: Object.values(summary.assets.byCategory || {}),
+                        backgroundColor: ['#63b3ed', '#68d391', '#f6ad55', '#fc8181', '#b794f4', '#81e6d9'],
+                        borderColor: isDark ? '#1e2d45' : '#ffffff',
+                        borderWidth: 2
+                      }]
+                    }}
+                    options={chartOptions}
+                  />
+                ) : <div style={styles.emptyState}>{t.noCategoryData}</div>}
               </div>
             </div>
             <div style={styles.chartCard}>
               <h3 style={styles.chartTitle}>{t.assetsByLocation}</h3>
               <div style={{ height: '250px' }}>
-                <Pie 
-                  data={{
-                    labels: Object.keys(summary.assets.byLocation || {}),
-                    datasets: [{
-                      data: Object.values(summary.assets.byLocation || {}),
-                      backgroundColor: ['#48bb78', '#4299e1', '#ed8936', '#fc8181', '#805ad5'],
-                      borderColor: isDark ? '#1e2d45' : '#ffffff',
-                      borderWidth: 2
-                    }]
-                  }}
-                  options={chartOptions}
-                />
+                {Object.keys(summary.assets.byLocation || {}).length ? (
+                  <Pie
+                    data={{
+                      labels: Object.keys(summary.assets.byLocation || {}),
+                      datasets: [{
+                        data: Object.values(summary.assets.byLocation || {}),
+                        backgroundColor: ['#48bb78', '#4299e1', '#ed8936', '#fc8181', '#805ad5'],
+                        borderColor: isDark ? '#1e2d45' : '#ffffff',
+                        borderWidth: 2
+                      }]
+                    }}
+                    options={chartOptions}
+                  />
+                ) : <div style={styles.emptyState}>{t.noLocationData}</div>}
               </div>
             </div>
           </div>
@@ -984,7 +1097,7 @@ const DeptReports = () => {
                         </td>
                         <td style={styles.td}>{asset.location || '-'}</td>
                         <td style={styles.td}>{asset.assigned_to_name || '-'}</td>
-                        <td style={styles.td}>${(asset.current_value || 0).toLocaleString()}</td>
+                        <td style={styles.td}>${Number(asset.current_value || 0).toLocaleString()}</td>
                       </tr>
                     ))
                   )}
@@ -1297,7 +1410,9 @@ const DeptReports = () => {
 // Translations
 const englishTranslations = {
   reports: 'Department Reports',
+  inventory: 'Department Inventory',
   reportsFor: 'Reports for',
+  inventoryFor: 'Inventory for',
   exportExcel: 'Export to Excel',
   exportPDF: 'Export to PDF',
   print: 'Print',
@@ -1312,7 +1427,9 @@ const englishTranslations = {
   totalValue: 'Total Value',
   maintenanceCost: 'Maintenance Cost',
   assetSummary: 'Asset Summary',
-  noAssets: 'No assets found',
+  noAssets: 'No assets found for this department.',
+  noCategoryData: 'No category data available for this department.',
+  noLocationData: 'No location data available for this department.',
   showingFirst: 'Showing first',
   of: 'of',
   assetTag: 'Asset Tag',
@@ -1324,6 +1441,7 @@ const englishTranslations = {
   value: 'Value',
   totalMaintenance: 'Total Maintenance',
   fetchError: 'Failed to load data',
+  retry: 'Retry',
   exportSuccess: 'Exported successfully',
   assets: 'Assets',
   maintenance: 'Maintenance',
@@ -1375,7 +1493,9 @@ const englishTranslations = {
 
 const amharicTranslations = {
   reports: 'የክፍል ሪፖርቶች',
+  inventory: 'የክፍል ንብረት ክምችት',
   reportsFor: 'ሪፖርቶች ለ',
+  inventoryFor: 'ክምችት ለ',
   exportExcel: 'ወደ Excel ላክ',
   exportPDF: 'ወደ PDF ላክ',
   print: 'አትም',
@@ -1390,7 +1510,9 @@ const amharicTranslations = {
   totalValue: 'ጠቅላላ ዋጋ',
   maintenanceCost: 'የጥገና ዋጋ',
   assetSummary: 'የንብረት ማጠቃለያ',
-  noAssets: 'ምንም ንብረቶች አልተገኙም',
+  noAssets: 'ለዚህ ክፍል ምንም ንብረት አልተገኘም።',
+  noCategoryData: 'ለዚህ ክፍል የምድብ መረጃ የለም።',
+  noLocationData: 'ለዚህ ክፍል የቦታ መረጃ የለም።',
   showingFirst: 'የመጀመሪያዎቹን',
   of: 'ከ',
   assetTag: 'የንብረት መለያ',
@@ -1402,6 +1524,7 @@ const amharicTranslations = {
   value: 'ዋጋ',
   totalMaintenance: 'ጠቅላላ ጥገና',
   fetchError: 'ውሂብ ማግኘት አልተቻለም',
+  retry: 'እንደገና ይሞክሩ',
   exportSuccess: 'በተሳካ ሁኔታ ተላከ',
   assets: 'ንብረቶች',
   maintenance: 'ጥገና',

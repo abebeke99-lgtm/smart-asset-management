@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { Op } = require('sequelize');
-const { sequelize, User, PasswordRecovery, AuditLog, Config } = require('../models');
+const { sequelize, User, PasswordRecovery, AuditLog, UserActivityLog, Config } = require('../models');
 const { normalizePhoneNumber, sendOtpSms, isSmsConfigured } = require('../services/smsService');
 const { validateEmailConfiguration, sendPasswordResetEmail, sendOtpEmail } = require('../services/emailService');
 const { isValidEmail, isValidUsername } = require('../utils/validators');
@@ -179,7 +179,7 @@ const login = async (req, res) => {
       return res.status(429).json({ success: false, message: 'Account temporarily locked. Please try again later.' });
     }
 
-    if (!isAccountActive(user.active)) {
+    if (!isAccountActive(user.active) || ['inactive', 'suspended'].includes(String(user.status || '').toLowerCase())) {
       console.warn(`Login rejected for inactive account userId=${user.id}`);
       await recordAuthEvent({ userId: user.id, action: 'LOGIN_FAILED', result: 'Failure', req });
       return res.status(403).json({ success: false, message: 'Account is deactivated.' });
@@ -195,6 +195,12 @@ const login = async (req, res) => {
     }
 
     await user.update({ failedLoginAttempts: 0, lockoutUntil: null, lastLoginAt: new Date() });
+    await UserActivityLog.create({
+      userId: user.id,
+      action: 'Successful login',
+      ip: req.ip || req.socket?.remoteAddress || null,
+      createdAt: new Date(),
+    });
 
     const safeUser = {
       id: user.id,

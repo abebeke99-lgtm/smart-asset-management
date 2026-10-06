@@ -16,6 +16,7 @@ college.get('/department-head/transfers', ...requireDepartmentHead, resolveDepar
 college.post('/department-head/transfers', ...requireDepartmentHead, resolveDepartmentScope, requirePermission('assets.transfer'), workflow.createTransfer);
 college.get('/department-head/transfers/:id', ...requireDepartmentHead, resolveDepartmentScope, requirePermission('assets.view'), workflow.getTransfer);
 college.post('/department-head/transfers/:id/cancel', ...requireDepartmentHead, resolveDepartmentScope, requirePermission('assets.transfer'), workflow.cancelTransfer);
+college.post('/department-head/transfers/:id/receive', ...requireDepartmentHead, resolveDepartmentScope, requirePermission('assets.transfer'), workflow.receiveTransfer);
 college.get('/store/transfers', requireAuth, requireRole('store_manager'), resolveCollegeScope, workflow.listTransfers);
 college.post('/store/transfers/:id/ready', requireAuth, requireRole('store_manager'), resolveCollegeScope, workflow.readyTransfer);
 college.post('/store/transfers/:id/dispatch', requireAuth, requireRole('store_manager'), resolveCollegeScope, workflow.dispatchTransfer);

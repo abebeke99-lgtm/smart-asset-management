@@ -240,7 +240,10 @@ async function ensureDemoUser(userData, { userModel = User, collegeModel = Colle
     if (normalizedUserData.role && existingUser.role !== normalizedUserData.role) updates.role = normalizedUserData.role;
     if (normalizedUserData.department && existingUser.department !== normalizedUserData.department) updates.department = normalizedUserData.department;
     if (normalizedUserData.phone && existingUser.phone !== normalizedUserData.phone) updates.phone = normalizedUserData.phone;
-    if (existingUser.active !== normalizedUserData.active) updates.active = normalizedUserData.active;
+    if (existingUser.active !== normalizedUserData.active) {
+      updates.active = normalizedUserData.active;
+      updates.status = normalizedUserData.active ? 'active' : 'inactive';
+    }
 
     const passwordMissing = !existingUser.password || !String(existingUser.password).trim();
     if (normalizedUserData.password && passwordMissing) {

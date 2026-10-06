@@ -1,0 +1,473 @@
+.department-inventory-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+.department-inventory-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.department-inventory-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #475569;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.department-inventory-header h1 {
+  margin: 0.4rem 0 0.4rem;
+  font-size: clamp(1.8rem, 2vw, 2.5rem);
+  color: #0f172a;
+}
+
+.department-inventory-header p {
+  margin: 0;
+  color: #64748b;
+}
+
+.department-inventory-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.department-inventory-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.department-inventory-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.department-inventory-button.primary {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.department-inventory-button.subtle {
+  background: #f8fafc;
+}
+
+.department-inventory-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.is-spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.department-inventory-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.summary-tile {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem 1.1rem;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.summary-tile > svg {
+  width: 18px;
+  height: 18px;
+  padding: 0.45rem;
+  border-radius: 12px;
+  color: #ffffff;
+}
+
+.summary-tile div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.summary-tile span {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.summary-tile strong {
+  font-size: 1.6rem;
+  color: #0f172a;
+}
+
+.summary-tile.blue > svg { background: #2563eb; }
+.summary-tile.green > svg { background: #16a34a; }
+.summary-tile.purple > svg { background: #7c3aed; }
+.summary-tile.amber > svg { background: #f59e0b; }
+.summary-tile.red > svg { background: #ef4444; }
+
+.department-inventory-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: min(100%, 320px);
+  background: #fff;
+  border: 1px solid #dbe3ee;
+  border-radius: 12px;
+  padding: 0.8rem 0.9rem;
+  color: #475569;
+}
+
+.search-field input {
+  border: none;
+  outline: none;
+  width: 100%;
+  font: inherit;
+  background: transparent;
+  color: #0f172a;
+}
+
+.toolbar-selects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.toolbar-selects select {
+  min-width: 140px;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  background: #fff;
+  color: #0f172a;
+}
+
+.department-inventory-error {
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fff1f2;
+  color: #b91c1c;
+  padding: 0.9rem 1rem;
+  font-weight: 600;
+}
+
+.department-inventory-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 2rem 1rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 16px;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.department-inventory-table-wrap {
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.department-inventory-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.department-inventory-table th,
+.department-inventory-table td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.9rem 1rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.department-inventory-table th {
+  background: #f8fafc;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+.item-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.item-name {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.item-meta {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.stock-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.stock-cell strong {
+  font-size: 1.1rem;
+  color: #0f172a;
+}
+
+.stock-cell span {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.mini-pill {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.mini-pill.warning {
+  background: #fff7ed;
+  color: #b45309;
+}
+
+.mini-pill.danger {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.location-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #334155;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 105px;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.status-badge.ok {
+  background: #ecfdf5;
+  color: #166534;
+}
+
+.status-badge.warning {
+  background: #fff7ed;
+  color: #b45309;
+}
+
+.status-badge.out {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.status-badge.assigned {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.status-badge.unassigned {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.detail-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: transparent;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  padding: 0.55rem 0.8rem;
+  color: #0f172a;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.department-inventory-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 0.5rem;
+  color: #475569;
+}
+
+.department-inventory-pagination button {
+  border: 1px solid #dbe3ee;
+  background: #fff;
+  color: #0f172a;
+  border-radius: 10px;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.department-inventory-pagination button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.department-inventory-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  z-index: 30;
+}
+
+.department-inventory-modal {
+  width: min(760px, 100%);
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
+  padding: 1.5rem;
+}
+
+.department-inventory-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.department-inventory-modal-header h2 {
+  margin: 0.2rem 0 0;
+  color: #0f172a;
+}
+
+.section-label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: #f1f5f9;
+  color: #0f172a;
+  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+}
+
+.modal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.modal-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.modal-grid span {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.modal-grid strong {
+  font-size: 0.96rem;
+  color: #0f172a;
+}
+
+.full-span {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .department-inventory-page {
+    padding: 1rem;
+  }
+
+  .department-inventory-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar-selects {
+    width: 100%;
+  }
+
+  .toolbar-selects select {
+    flex: 1 1 150px;
+  }
+
+  .department-inventory-table-wrap {
+    border-radius: 12px;
+  }
+}

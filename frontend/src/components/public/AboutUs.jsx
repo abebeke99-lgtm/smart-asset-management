@@ -3,10 +3,9 @@ import { useLanguage, useTheme } from '../../contexts/UiContext';
 
 const pageContent = {
   en: {
-    title: 'Mekdela Amba University',
-    introduction: 'Mekdela Amba University is a higher education institution dedicated to quality education, research, innovation, and community development.',
+   
     aboutTitle: 'About Us',
-    aboutText: 'Mekdela Amba University is committed to creating a strong academic environment where students, academic staff, researchers, and the wider community can learn, collaborate, and contribute to sustainable development.',
+    
     visionTitle: 'Vision',
     visionText: 'To become a center of excellence in education, research, innovation, and community engagement, contributing meaningfully to national development.',
     missionTitle: 'Mission',

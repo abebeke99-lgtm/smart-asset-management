@@ -30,6 +30,8 @@ const normalizeTransfer = (entry) => {
   const transferReason = item.transferReason || item.transfer_reason || item.reason || item.notes || item.remarks || '';
   const requestedBy = item.requestedByName || item.requested_by_name || item.requestedBy || item.requested_by || item.Creator?.fullName || item.Creator?.username || 'Unknown';
   const approvedBy = item.approvedByName || item.approved_by_name || item.approvedBy || item.approved_by || item.Approver?.fullName || item.Approver?.username || '';
+  const dispatchedBy = item.dispatchedByName || item.dispatched_by_name || item.dispatchedBy || item.dispatched_by || item.Dispatcher?.fullName || item.Dispatcher?.username || '';
+  const receivedBy = item.receivedByName || item.received_by_name || item.receivedBy || item.received_by || item.Receiver?.fullName || item.Receiver?.username || '';
 
   return {
     ...item,
@@ -45,6 +47,8 @@ const normalizeTransfer = (entry) => {
     transferReason,
     requestedBy,
     approvedBy,
+    dispatchedBy,
+    receivedBy,
     transferDate: item.transferDate || item.transfer_date || item.date || item.createdAt || item.created_at || '',
     status: item.status || item.transferStatus || item.transfer_status || '',
   };
@@ -52,6 +56,7 @@ const normalizeTransfer = (entry) => {
 
 const getTransferListEndpoint = (scope, userRole) => {
   if (scope === 'college') return '/api/college/transfers';
+  if (scope === 'department' && userRole === 'department_head') return '/api/department-head/transfers';
   if (scope === 'department') return '/api/department/transfers';
   if (userRole === 'department_head') return '/api/department/transfers';
   return '/api/transfers';
@@ -286,7 +291,7 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
 
     setSaving(true); setError(''); setSuccessMessage('');
     try {
-      await apiClient.post('/api/department/transfers', {
+      await apiClient.post(getTransferListEndpoint(scope, role), {
         asset_id: Number(form.assetId),
         destination_department_id: Number(form.destinationDepartmentId),
         destination_location: String(form.newLocation).trim(),
@@ -313,7 +318,7 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
     const id = transfer?.id;
     if (!id) return;
 
-    const actionLabel = action === 'approve' ? 'Approve' : action === 'reject' ? 'Reject' : action === 'cancel' ? 'Cancel' : 'Complete';
+    const actionLabel = action === 'approve' ? 'Approve' : action === 'reject' ? 'Reject' : action === 'cancel' ? 'Cancel' : 'Confirm receipt';
     const label = translate(actionLabel);
     const confirmation = scope === 'college' && language === 'am' ? `${label} የ${transfer.assetName || 'የተመረጠውን ንብረት'} ዝውውር?` : `${label} transfer for ${transfer.assetName || 'the selected asset'}?`;
     const confirmed = window.confirm(confirmation);
@@ -332,6 +337,10 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
       if (action === 'cancel') {
         if (role !== 'department_head') throw new Error('Cancellation is only supported for department heads.');
         await apiClient.post(`/api/department/transfers/${id}/cancel`, { reason: 'Cancelled by department head.' });
+      }
+
+      if (action === 'receive') {
+        await apiClient.post(`/api/department-head/transfers/${id}/receive`, { notes: 'Receipt confirmed by destination department.' });
       }
 
       setSuccessMessage(scope === 'college' && language === 'am' ? `${label} በተሳካ ሁኔታ ተጠናቋል።` : `${label} action completed successfully.`);
@@ -509,6 +518,9 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
                       {scope === 'department' && role === 'department_head' && ['Requested', 'Approved'].includes(row.status) && (
                         <button type="button" onClick={() => handleAction(row, 'cancel')} disabled={processingId === row.id}>Cancel</button>
                       )}
+                      {scope === 'department' && role === 'department_head' && row.status === 'In Transit' && Number(row.destinationDepartmentId ?? row.destination_department_id) === Number(user?.departmentId ?? user?.department_id) && (
+                        <button type="button" onClick={() => handleAction(row, 'receive')} disabled={processingId === row.id}>Confirm receipt</button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -537,6 +549,8 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
               <div><strong>{translate('To Location')}</strong><div>{selectedTransfer.toLocation || '—'}</div></div>
               <div><strong>{translate('Requested By')}</strong><div>{selectedTransfer.requestedBy || '—'}</div></div>
               <div><strong>{translate('Approved By')}</strong><div>{selectedTransfer.approvedBy || '—'}</div></div>
+              <div><strong>Dispatched By</strong><div>{selectedTransfer.dispatchedBy || '—'}</div></div>
+              <div><strong>Received By</strong><div>{selectedTransfer.receivedBy || '—'}</div></div>
               <div><strong>{translate('Transfer Date')}</strong><div>{selectedTransfer.transferDate ? new Date(selectedTransfer.transferDate).toLocaleDateString(language === 'am' && scope === 'college' ? 'am-ET' : undefined) : '—'}</div></div>
               <div><strong>{translate('Status')}</strong><div>{translate(selectedTransfer.status || '—')}</div></div>
               <div style={{ gridColumn: '1 / -1' }}><strong>{translate('Reason')}</strong><div>{selectedTransfer.transferReason || '—'}</div></div>
@@ -546,6 +560,7 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
               <div><strong>{translate('Dispatched At')}</strong><div>{selectedTransfer.dispatchedAt ? new Date(selectedTransfer.dispatchedAt).toLocaleString() : '—'}</div></div>
               <div><strong>{translate('Received At')}</strong><div>{selectedTransfer.receivedAt ? new Date(selectedTransfer.receivedAt).toLocaleString() : '—'}</div></div>
               <div style={{ gridColumn: '1 / -1' }}><strong>{translate('Transfer history')}</strong><div>{(selectedTransfer.history || []).map((historyItem) => <div key={historyItem.id}>{historyItem.transfer_number || historyItem.id}: {translate(historyItem.status)} ({historyItem.sourceDepartment || historyItem.source_department || '—'} {translate('to')} {historyItem.destinationDepartment || historyItem.destination_department || '—'})</div>)}</div></div>
+              <div style={{ gridColumn: '1 / -1' }}><strong>Chain of custody</strong><div>{(selectedTransfer.audit || []).map((event, index) => <div key={`${event.id || event.action}-${index}`}>{event.action || 'Transfer event'} — {event.createdAt ? new Date(event.createdAt).toLocaleString() : '—'}</div>)}</div></div>
             </div>
           </div>
         </div>

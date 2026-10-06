@@ -3,7 +3,7 @@ const router = express.Router();
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const { Department, User, Asset, Room, AuditLog, College, Location } = require('../models');
 const { Op } = require('sequelize');
-const { resolveCollegeScope } = require('../middlewares/organizationScope');
+const { resolveCollegeScope, resolveConfiguredDepartmentScope } = require('../middlewares/organizationScope');
 const { createAuditLog } = require('../services/auditLogService');
 
 const requireAdmin = [requireAuth, requireRole('admin')];
@@ -59,7 +59,7 @@ const serializeDepartment = (department, counts = {}) => ({
 });
 
 // Get department statistics from the same scoped, relationship-backed data.
-router.get('/stats', ...departmentReadAccess, async (req, res, next) => {
+router.get('/stats', ...departmentReadAccess, resolveConfiguredDepartmentScope, async (req, res, next) => {
   try {
     const where = buildWhere(req);
     const departments = await Department.findAll({ where, attributes: ['id', 'headId', 'locationId', 'status'] });
@@ -90,7 +90,7 @@ router.get('/stats', ...departmentReadAccess, async (req, res, next) => {
 });
 
 // Get all departments
-router.get('/', ...departmentReadAccess, (req, res, next) => ['store_manager', 'college', 'college_manager'].includes(req.user.role) ? resolveCollegeScope(req, res, next) : next(), async (req, res, next) => {
+router.get('/', ...departmentReadAccess, resolveConfiguredDepartmentScope, (req, res, next) => ['store_manager', 'college', 'college_manager'].includes(req.user.role) ? resolveCollegeScope(req, res, next) : next(), async (req, res, next) => {
   try {
     const { search = '', page = '1', limit = '25' } = req.query;
     const currentPage = Math.max(1, Number.parseInt(page, 10) || 1);
@@ -124,8 +124,11 @@ router.get('/', ...departmentReadAccess, (req, res, next) => ['store_manager', '
 });
 
 // Get single department
-router.get('/:id', ...departmentReadAccess, async (req, res, next) => {
+router.get('/:id', ...departmentReadAccess, resolveConfiguredDepartmentScope, async (req, res, next) => {
   try {
+    if (req.user.role === 'department_head' && Number(req.params.id) !== Number(req.organizationScope.departmentId)) {
+      return res.status(403).json({ success: false, message: 'Department profile is outside your authorized scope' });
+    }
     const dept = await Department.findOne({ where: { id: req.params.id, ...buildScope(req) }, include: departmentIncludes });
     if (!dept) return res.status(404).json({ success: false, message: 'Department not found' });
     

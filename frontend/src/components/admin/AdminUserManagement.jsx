@@ -1,23 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Activity, Eye, EyeOff, KeyRound, Pencil, Power, Trash2 } from "lucide-react";
+import { toast } from "react-toastify";
 import apiClient, { getApiErrorMessage } from "../../services/apiClient";
 
 const USERS_API = "/api/users";
 const COLLEGES_API = "/api/colleges";
-const DEPARTMENTS_API = "/api/departments";
-const ROLE_OPTIONS = [
-  "admin",
-  "ict_officer",
-  "college",
-  "college_manager",
-  "department_head",
-  "finance",
-  "store_manager",
-  "maintenance",
-  "infrastructure",
-  "staff",
-  "student",
-];
 
 const EMPTY_FORM = {
   name: "",
@@ -106,7 +93,9 @@ function normalizeUser(item, index) {
     roleName:
       item?.roleName ??
       item?.role?.name ??
-      item?.role ??
+      (typeof item?.role === "string"
+        ? item.role.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+        : "") ??
       "",
 
     collegeId:
@@ -116,6 +105,8 @@ function normalizeUser(item, index) {
 
     collegeName:
       item?.collegeName ??
+      item?.College?.collegeName ??
+      item?.college?.collegeName ??
       item?.college?.name ??
       "",
 
@@ -126,14 +117,13 @@ function normalizeUser(item, index) {
 
     departmentName:
       item?.departmentName ??
+      item?.DepartmentRecord?.name ??
       item?.department?.name ??
       "",
 
     status:
       item?.status ??
-      (item?.isActive === false
-        ? "Inactive"
-        : "Active"),
+      (item?.active === false || item?.isActive === false ? "inactive" : "active"),
 
     createdAt:
       item?.createdAt ??
@@ -143,6 +133,7 @@ function normalizeUser(item, index) {
     lastLogin:
       item?.lastLogin ??
       item?.lastLoginAt ??
+      item?.last_login ??
       null,
 
     raw: item,
@@ -163,6 +154,7 @@ function normalizeOption(item, index) {
       item?.name ??
       item?.collegeName ??
       item?.departmentName ??
+      item?.displayName ??
       "",
   };
 }
@@ -177,6 +169,12 @@ function formatDate(value) {
   }
 
   return date.toLocaleDateString();
+}
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
 }
 
 function statusClass(status) {
@@ -208,6 +206,11 @@ export default function Users() {
   const [roles, setRoles] = useState([]);
   const [colleges, setColleges] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0, suspended: 0 });
+  const [page, setPage] = useState(1);
+  const [pageCount, setPageCount] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -228,6 +231,7 @@ export default function Users() {
     useState(null);
 
   const [form, setForm] = useState(EMPTY_FORM);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [resettingUser, setResettingUser] = useState(null);
@@ -241,40 +245,37 @@ export default function Users() {
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState("");
 
-  const loadData = async () => {
+  const loadData = useCallback(async (requestedPage = page) => {
     setLoading(true);
     setError("");
 
     try {
-      const [
-        usersResponse,
-        collegesResponse,
-        departmentsResponse,
-      ] = await Promise.all([
-        apiRequest(USERS_API),
-        apiRequest(COLLEGES_API),
-        apiRequest(DEPARTMENTS_API),
+      const params = new URLSearchParams({
+        page: String(requestedPage),
+        limit: "10",
+      });
+      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+      if (statusFilter !== "All") params.set("status", statusFilter.toLowerCase());
+      if (roleFilter !== "All") params.set("role", roleFilter);
+      const [usersResponse, statsResponse, collegesResponse, rolesResponse] = await Promise.all([
+        apiRequest(`${USERS_API}?${params.toString()}`),
+        apiRequest(`${USERS_API}/stats`),
+        apiRequest(`${COLLEGES_API}?limit=100`),
+        apiRequest("/api/roles"),
       ]);
 
-      setUsers(
-        extractArray(usersResponse, [
-          "users",
-        ]).map(normalizeUser)
-      );
-
-      setRoles(ROLE_OPTIONS.map((name) => ({ id: name, name })));
-
-      setColleges(
-        extractArray(collegesResponse, [
-          "colleges",
-        ]).map(normalizeOption)
-      );
-
-      setDepartments(
-        extractArray(departmentsResponse, [
-          "departments",
-        ]).map(normalizeOption)
-      );
+      const userRows = extractArray(usersResponse, ["users"]).map(normalizeUser);
+      setUsers(userRows);
+      setStats(statsResponse?.data || { total: 0, active: 0, inactive: 0, suspended: 0 });
+      setTotalUsers(Number(usersResponse?.pagination?.total ?? usersResponse?.total ?? userRows.length));
+      const pages = Math.max(1, Number(usersResponse?.pagination?.pages || 1));
+      setPageCount(pages);
+      if (requestedPage > pages) setPage(pages);
+      setRoles(extractArray(rolesResponse, ["roles"]).map((item, index) => ({
+        id: item?.name ?? item?.role ?? `role-${index}`,
+        name: item?.displayName ?? item?.name ?? item?.role ?? "",
+      })));
+      setColleges(extractArray(collegesResponse, ["colleges"]).map(normalizeOption));
     } catch (err) {
       setError(
         err.message ||
@@ -283,81 +284,42 @@ export default function Users() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [debouncedSearch, page, roleFilter, statusFilter]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    const timeout = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(timeout);
+  }, [search]);
 
-  const activeUsers = users.filter(
-    (user) =>
-      String(user.status).toLowerCase() ===
-      "active"
-  ).length;
+  useEffect(() => {
+    loadData(page);
+  }, [loadData, page]);
 
-  const inactiveUsers = users.filter(
-    (user) =>
-      String(user.status).toLowerCase() ===
-      "inactive"
-  ).length;
+  useEffect(() => {
+    if (!showForm || !form.collegeId) {
+      setDepartments([]);
+      return undefined;
+    }
+    let cancelled = false;
+    apiRequest(`${COLLEGES_API}/${encodeURIComponent(form.collegeId)}/departments`)
+      .then((response) => {
+        if (!cancelled) setDepartments(extractArray(response, ["departments"]).map(normalizeOption));
+      })
+      .catch((requestError) => {
+        if (!cancelled) {
+          setDepartments([]);
+          setFieldErrors((previous) => ({ ...previous, departmentId: requestError.message || "Unable to load departments." }));
+        }
+      });
+    return () => { cancelled = true; };
+  }, [showForm, form.collegeId]);
 
-  const suspendedUsers = users.filter(
-    (user) =>
-      String(user.status).toLowerCase() ===
-      "suspended"
-  ).length;
-
-  const filteredUsers = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    return users.filter((user) => {
-      const matchesSearch =
-        !query ||
-        user.name
-          .toLowerCase()
-          .includes(query) ||
-        user.email
-          .toLowerCase()
-          .includes(query) ||
-        user.phone
-          .toLowerCase()
-          .includes(query) ||
-        user.roleName
-          .toLowerCase()
-          .includes(query) ||
-        user.collegeName
-          .toLowerCase()
-          .includes(query) ||
-        user.departmentName
-          .toLowerCase()
-          .includes(query);
-
-      const matchesStatus =
-        statusFilter === "All" ||
-        String(user.status).toLowerCase() ===
-          statusFilter.toLowerCase();
-
-      const matchesRole =
-        roleFilter === "All" ||
-        String(user.roleId) ===
-          String(roleFilter);
-
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesRole
-      );
-    });
-  }, [
-    users,
-    search,
-    statusFilter,
-    roleFilter,
-  ]);
+  const filteredUsers = useMemo(() => users, [users]);
 
   const openCreateForm = () => {
     setEditingUser(null);
     setForm(EMPTY_FORM);
+    setFieldErrors({});
     setShowPassword(false);
     setShowConfirmPassword(false);
     setError("");
@@ -366,6 +328,7 @@ export default function Users() {
 
   const openEditForm = (user) => {
     setEditingUser(user);
+    setFieldErrors({});
 
     setForm({
       name: user.name || "",
@@ -386,14 +349,15 @@ export default function Users() {
     setShowForm(true);
   };
 
-  const closeForm = () => {
-    if (saving) return;
+  const closeForm = (force = false) => {
+    if (saving && !force) return;
 
     setShowForm(false);
     setEditingUser(null);
     setForm(EMPTY_FORM);
     setShowPassword(false);
     setShowConfirmPassword(false);
+    setFieldErrors({});
   };
 
   const updateForm = (event) => {
@@ -402,34 +366,30 @@ export default function Users() {
     setForm((previous) => ({
       ...previous,
       [name]: value,
+      ...(name === "collegeId" ? { departmentId: "" } : {}),
+    }));
+    setFieldErrors((previous) => ({
+      ...previous,
+      [name]: "",
+      ...(name === "collegeId" ? { departmentId: "" } : {}),
     }));
   };
 
   const saveUser = async (event) => {
     event.preventDefault();
-
-    if (!form.name.trim()) {
-      setError("User name is required.");
-      return;
-    }
-
-    if (!form.username.trim()) {
-      setError("Username is required.");
-      return;
-    }
-
-    if (!form.roleId) {
-      setError("Please select a role.");
-      return;
-    }
-
-    if (!editingUser && !form.password) {
-      setError("Password is required.");
-      return;
-    }
-
-    if (!editingUser && form.password !== form.confirmPassword) {
-      setError("Password and Confirm Password must match.");
+    const nextErrors = {};
+    if (!form.name.trim()) nextErrors.name = "Full name is required.";
+    if (!form.username.trim()) nextErrors.username = "Username is required.";
+    if (!form.roleId) nextErrors.roleId = "Role is required.";
+    if (!editingUser && !form.password) nextErrors.password = "Password is required.";
+    if ((form.password || form.confirmPassword) && form.password.length < 8) nextErrors.password = "Password must be at least 8 characters.";
+    if ((form.password || form.confirmPassword) && form.password !== form.confirmPassword) nextErrors.confirmPassword = "Passwords must match.";
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) nextErrors.email = "Enter a valid email address.";
+    const phoneDigits = form.phone.replace(/\D/g, "");
+    if (form.phone.trim() && (!/^\+?[\d\s().-]+$/.test(form.phone.trim()) || phoneDigits.length < 7 || phoneDigits.length > 15)) nextErrors.phone = "Enter a valid phone number.";
+    if (Object.values(nextErrors).some(Boolean)) {
+      setFieldErrors(nextErrors);
+      toast.error("Please correct the highlighted fields.");
       return;
     }
 
@@ -438,18 +398,17 @@ export default function Users() {
 
     try {
       const payload = {
-        name: form.name.trim(),
+        fullName: form.name.trim(),
         username: form.username.trim(),
         email: form.email.trim() || null,
         phone: form.phone.trim(),
         role: form.roleId,
         collegeId: form.collegeId || null,
-        departmentId:
-          form.departmentId || null,
-        status: form.status,
+        departmentId: form.departmentId || null,
+        status: form.status.toLowerCase(),
       };
 
-      if (!editingUser) {
+      if (form.password) {
         payload.password = form.password;
         payload.confirmPassword = form.confirmPassword;
       }
@@ -471,13 +430,14 @@ export default function Users() {
         });
       }
 
-      closeForm();
+      closeForm(true);
+      toast.success(editingUser ? "User updated successfully." : "User created successfully.");
       await loadData();
     } catch (err) {
-      setError(
-        err.message ||
-          "Unable to save user."
-      );
+      const message = err.message || "Unable to save user.";
+      const key = /username/i.test(message) ? "username" : /email/i.test(message) ? "email" : /phone/i.test(message) ? "phone" : /role/i.test(message) ? "roleId" : "";
+      if (key) setFieldErrors({ [key]: message });
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -487,13 +447,10 @@ export default function Users() {
     const current =
       String(user.status).toLowerCase();
 
-    const nextStatus =
-      current === "active"
-        ? "Inactive"
-        : "Active";
+    const nextStatus = current === "active" ? "inactive" : "active";
 
     const confirmed = window.confirm(
-      `${nextStatus === "Active" ? "Activate" : "Deactivate"} ${user.name}?`
+      `${nextStatus === "active" ? "Activate" : "Deactivate"} ${user.name}?`
     );
 
     if (!confirmed) return;
@@ -502,24 +459,15 @@ export default function Users() {
     setError("");
 
     try {
-      await apiRequest(
-        `${USERS_API}/${encodeURIComponent(
-          user.id
-        )}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            status: nextStatus,
-          }),
-        }
-      );
+      await apiRequest(`${USERS_API}/${encodeURIComponent(user.id)}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: nextStatus }),
+      });
 
       await loadData();
+      toast.success(`User ${nextStatus} successfully.`);
     } catch (err) {
-      setError(
-        err.message ||
-          "Unable to update user status."
-      );
+      toast.error(err.message || "Unable to update user status.");
     } finally {
       setSaving(false);
     }
@@ -534,8 +482,8 @@ export default function Users() {
     setResetError("");
   };
 
-  const closeResetPassword = () => {
-    if (saving) return;
+  const closeResetPassword = (force = false) => {
+    if (saving && !force) return;
     setResettingUser(null);
     setTemporaryPassword("");
     setConfirmTemporaryPassword("");
@@ -549,8 +497,8 @@ export default function Users() {
       setResetError("Temporary password is required.");
       return;
     }
-    if (temporaryPassword.length < 8 || temporaryPassword.length > 16) {
-      setResetError("Temporary password must be 8 to 16 characters.");
+    if (temporaryPassword.length < 8) {
+      setResetError("Temporary password must be at least 8 characters.");
       return;
     }
     if (temporaryPassword !== confirmTemporaryPassword) {
@@ -563,11 +511,14 @@ export default function Users() {
     try {
       await apiRequest(
         `${USERS_API}/${encodeURIComponent(resettingUser.id)}/reset-password`,
-        { method: "POST", body: JSON.stringify({ password: temporaryPassword }) }
+        { method: "POST", body: JSON.stringify({ password: temporaryPassword, confirmPassword: confirmTemporaryPassword }) }
       );
-      closeResetPassword();
+      closeResetPassword(true);
+      toast.success("Password reset successfully.");
+      await loadData();
     } catch (err) {
       setResetError(err.message || "Unable to reset user password.");
+      toast.error(err.message || "Unable to reset user password.");
     } finally {
       setSaving(false);
     }
@@ -583,6 +534,7 @@ export default function Users() {
       setActivityLogs(extractArray(response, ["logs"]));
     } catch (err) {
       setActivityError(err.message || "Unable to load user activity.");
+      toast.error(err.message || "Unable to load user activity.");
     } finally {
       setActivityLoading(false);
     }
@@ -617,11 +569,9 @@ export default function Users() {
       }
 
       await loadData();
+      toast.success("User deleted successfully.");
     } catch (err) {
-      setError(
-        err.message ||
-          "Unable to delete user."
-      );
+      toast.error(err.message || "Unable to delete user.");
     } finally {
       setSaving(false);
     }
@@ -835,8 +785,19 @@ export default function Users() {
 
         .actions {
           display: flex;
-          flex-wrap: wrap;
-          gap: 6px;
+          align-items: center;
+          justify-content: center;
+          flex-wrap: nowrap;
+          gap: 4px;
+        }
+
+        .actions .action-button {
+          display: grid;
+          flex: 0 0 30px;
+          width: 30px;
+          height: 30px;
+          padding: 0;
+          place-items: center;
         }
 
         .action-button {
@@ -887,6 +848,46 @@ export default function Users() {
           background: #fef2f2;
           color: #991b1b;
           font-size: 14px;
+        }
+
+        .field-error {
+          margin-top: 5px;
+          color: #b91c1c;
+          font-size: 12px;
+        }
+
+        .form-input.invalid {
+          border-color: #dc2626;
+        }
+
+        .pagination {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px 16px;
+          border-top: 1px solid #e2e8f0;
+          color: #64748b;
+          font-size: 13px;
+        }
+
+        .pagination-controls {
+          display: flex;
+          gap: 8px;
+        }
+
+        .pagination-button {
+          padding: 7px 11px;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          background: white;
+          color: #334155;
+          cursor: pointer;
+        }
+
+        .pagination-button:disabled {
+          opacity: .5;
+          cursor: not-allowed;
         }
 
         .loading-state,
@@ -1083,6 +1084,11 @@ export default function Users() {
             align-items: stretch;
           }
 
+          .pagination {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+
           .search-input {
             min-width: 0;
           }
@@ -1134,7 +1140,7 @@ export default function Users() {
               Total Users
             </div>
             <div className="summary-value">
-              {users.length}
+              {stats.total}
             </div>
           </div>
 
@@ -1143,7 +1149,7 @@ export default function Users() {
               Active Users
             </div>
             <div className="summary-value">
-              {activeUsers}
+              {stats.active}
             </div>
           </div>
 
@@ -1152,7 +1158,7 @@ export default function Users() {
               Inactive Users
             </div>
             <div className="summary-value">
-              {inactiveUsers}
+              {stats.inactive}
             </div>
           </div>
 
@@ -1161,7 +1167,7 @@ export default function Users() {
               Suspended Users
             </div>
             <div className="summary-value">
-              {suspendedUsers}
+              {stats.suspended}
             </div>
           </div>
         </div>
@@ -1172,17 +1178,19 @@ export default function Users() {
             className="search-input"
             placeholder="Search name, email, phone, role, college..."
             value={search}
-            onChange={(event) =>
-              setSearch(event.target.value)
-            }
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
           />
 
           <select
             className="filter-select"
             value={statusFilter}
-            onChange={(event) =>
-              setStatusFilter(event.target.value)
-            }
+            onChange={(event) => {
+              setStatusFilter(event.target.value);
+              setPage(1);
+            }}
           >
             <option value="All">
               All Statuses
@@ -1201,9 +1209,10 @@ export default function Users() {
           <select
             className="filter-select"
             value={roleFilter}
-            onChange={(event) =>
-              setRoleFilter(event.target.value)
-            }
+            onChange={(event) => {
+              setRoleFilter(event.target.value);
+              setPage(1);
+            }}
           >
             <option value="All">
               All Roles
@@ -1222,7 +1231,7 @@ export default function Users() {
           <button
             type="button"
             className="refresh-button"
-            onClick={loadData}
+            onClick={() => loadData(page)}
             disabled={loading}
           >
             {loading
@@ -1313,12 +1322,12 @@ export default function Users() {
                             user.status
                           )}`}
                         >
-                          {user.status}
+                          {String(user.status).charAt(0).toUpperCase() + String(user.status).slice(1)}
                         </span>
                       </td>
 
                       <td>
-                        {formatDate(
+                        {formatDateTime(
                           user.lastLogin
                         )}
                       </td>
@@ -1331,82 +1340,12 @@ export default function Users() {
 
                       <td>
                         <div className="actions">
-                          <button
-                            type="button"
-                            className="action-button view"
-                            onClick={() =>
-                              setSelectedUser(
-                                user
-                              )
-                            }
-                          >
-                            View
-                          </button>
-
-                          <button
-                            type="button"
-                            className="action-button edit"
-                            onClick={() => openResetPassword(user)}
-                            disabled={saving}
-                          >
-                            Reset Password
-                          </button>
-
-                          <button
-                            type="button"
-                            className="action-button view"
-                            onClick={() => viewUserActivity(user)}
-                          >
-                            Activity
-                          </button>
-
-                          <button
-                            type="button"
-                            className="action-button edit"
-                            onClick={() =>
-                              openEditForm(
-                                user
-                              )
-                            }
-                          >
-                            Edit
-                          </button>
-
-                          <button
-                            type="button"
-                            className={`action-button ${
-                              String(
-                                user.status
-                              ).toLowerCase() ===
-                              "active"
-                                ? "deactivate"
-                                : "activate"
-                            }`}
-                            onClick={() =>
-                              toggleUserStatus(
-                                user
-                              )
-                            }
-                            disabled={saving}
-                          >
-                            {String(
-                              user.status
-                            ).toLowerCase() ===
-                            "active"
-                              ? "Deactivate"
-                              : "Activate"}
-                          </button>
-
-                          <button
-                            type="button"
-                            className="action-button delete"
-                            onClick={() =>
-                              deleteUser(user)
-                            }
-                            disabled={saving}
-                          >
-                            Delete
-                          </button>
+                          <button type="button" className="action-button view" onClick={() => setSelectedUser(user)} title="View user" aria-label={`View ${user.name}`}><Eye size={15} /></button>
+                          <button type="button" className="action-button edit" onClick={() => openEditForm(user)} title="Edit user" aria-label={`Edit ${user.name}`}><Pencil size={15} /></button>
+                          <button type="button" className="action-button edit" onClick={() => openResetPassword(user)} disabled={saving} title="Reset password" aria-label={`Reset password for ${user.name}`}><KeyRound size={15} /></button>
+                          <button type="button" className="action-button view" onClick={() => viewUserActivity(user)} title="View activity" aria-label={`View activity for ${user.name}`}><Activity size={15} /></button>
+                          <button type="button" className={`action-button ${String(user.status).toLowerCase() === "active" ? "deactivate" : "activate"}`} onClick={() => toggleUserStatus(user)} disabled={saving} title={String(user.status).toLowerCase() === "active" ? "Deactivate user" : "Activate user"} aria-label={`${String(user.status).toLowerCase() === "active" ? "Deactivate" : "Activate"} ${user.name}`}><Power size={15} /></button>
+                          <button type="button" className="action-button delete" onClick={() => deleteUser(user)} disabled={saving} title="Delete user" aria-label={`Delete ${user.name}`}><Trash2 size={15} /></button>
                         </div>
                       </td>
                     </tr>
@@ -1424,8 +1363,14 @@ export default function Users() {
             fontSize: 13,
           }}
         >
-          Showing {filteredUsers.length} of{" "}
-          {users.length} users
+          Showing {totalUsers ? (page - 1) * 10 + 1 : 0}–{Math.min(page * 10, totalUsers)} of {totalUsers} users
+        </div>
+        <div className="pagination">
+          <span>Page {page} of {pageCount}</span>
+          <div className="pagination-controls">
+            <button type="button" className="pagination-button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1 || loading}>Previous</button>
+            <button type="button" className="pagination-button" onClick={() => setPage((current) => Math.min(pageCount, current + 1))} disabled={page >= pageCount || loading}>Next</button>
+          </div>
         </div>
       </div>
 
@@ -1475,12 +1420,14 @@ export default function Users() {
                   <input
                     type="text"
                     name="name"
-                    className="form-input"
+                    className={`form-input ${fieldErrors.name ? "invalid" : ""}`}
                     value={form.name}
                     onChange={updateForm}
                     placeholder="Enter full name"
-                    required
+                    aria-invalid={Boolean(fieldErrors.name)}
+                    aria-required="true"
                   />
+                  {fieldErrors.name && <div className="field-error">{fieldErrors.name}</div>}
                 </div>
 
                 <div className="form-group">
@@ -1491,12 +1438,14 @@ export default function Users() {
                     id="new-user-username"
                     type="text"
                     name="username"
-                    className="form-input"
+                    className={`form-input ${fieldErrors.username ? "invalid" : ""}`}
                     value={form.username}
                     onChange={updateForm}
                     autoComplete="username"
-                    required
+                    aria-invalid={Boolean(fieldErrors.username)}
+                    aria-required="true"
                   />
+                  {fieldErrors.username && <div className="field-error">{fieldErrors.username}</div>}
                 </div>
 
                 <div className="form-group">
@@ -1505,34 +1454,35 @@ export default function Users() {
                   </label>
 
                   <input
-                    type="email"
+                    type="text"
+                    inputMode="email"
                     name="email"
-                    className="form-input"
+                    className={`form-input ${fieldErrors.email ? "invalid" : ""}`}
                     value={form.email}
                     onChange={updateForm}
                     placeholder="user@university.edu"
+                    aria-invalid={Boolean(fieldErrors.email)}
                   />
+                  {fieldErrors.email && <div className="field-error">{fieldErrors.email}</div>}
                 </div>
               </div>
 
-              {!editingUser && (
-                <div className="form-row">
+              <div className="form-row">
                   <div className="form-group">
                     <label className="form-label" htmlFor="new-user-password">
-                      Password <span className="required">*</span>
+                      Password {!editingUser && <span className="required">*</span>}
                     </label>
                     <div className="password-field">
                       <input
                         id="new-user-password"
                         type={showPassword ? "text" : "password"}
                         name="password"
-                        className="form-input"
+                        className={`form-input ${fieldErrors.password ? "invalid" : ""}`}
                         value={form.password}
                         onChange={updateForm}
                         autoComplete="new-password"
-                        minLength={8}
-                        maxLength={16}
-                        required
+                        aria-invalid={Boolean(fieldErrors.password)}
+                        aria-required={!editingUser}
                       />
                       <button
                         type="button"
@@ -1543,24 +1493,24 @@ export default function Users() {
                         {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
                     </div>
+                    {fieldErrors.password && <div className="field-error">{fieldErrors.password}</div>}
                   </div>
 
                   <div className="form-group">
                     <label className="form-label" htmlFor="new-user-confirm-password">
-                      Confirm Password <span className="required">*</span>
+                      Confirm Password {!editingUser && <span className="required">*</span>}
                     </label>
                     <div className="password-field">
                       <input
                         id="new-user-confirm-password"
                         type={showConfirmPassword ? "text" : "password"}
                         name="confirmPassword"
-                        className="form-input"
+                        className={`form-input ${fieldErrors.confirmPassword ? "invalid" : ""}`}
                         value={form.confirmPassword}
                         onChange={updateForm}
                         autoComplete="new-password"
-                        minLength={8}
-                        maxLength={16}
-                        required
+                        aria-invalid={Boolean(fieldErrors.confirmPassword)}
+                        aria-required={!editingUser}
                       />
                       <button
                         type="button"
@@ -1571,9 +1521,9 @@ export default function Users() {
                         {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
                     </div>
+                    {fieldErrors.confirmPassword && <div className="field-error">{fieldErrors.confirmPassword}</div>}
                   </div>
                 </div>
-              )}
 
               <div className="form-row">
                 <div className="form-group">
@@ -1584,11 +1534,13 @@ export default function Users() {
                   <input
                     type="text"
                     name="phone"
-                    className="form-input"
+                    className={`form-input ${fieldErrors.phone ? "invalid" : ""}`}
                     value={form.phone}
                     onChange={updateForm}
                     placeholder="Phone number"
+                    aria-invalid={Boolean(fieldErrors.phone)}
                   />
+                  {fieldErrors.phone && <div className="field-error">{fieldErrors.phone}</div>}
                 </div>
 
                 <div className="form-group">
@@ -1601,10 +1553,11 @@ export default function Users() {
 
                   <select
                     name="roleId"
-                    className="form-input"
+                    className={`form-input ${fieldErrors.roleId ? "invalid" : ""}`}
                     value={form.roleId}
                     onChange={updateForm}
-                    required
+                    aria-invalid={Boolean(fieldErrors.roleId)}
+                    aria-required="true"
                   >
                     <option value="">
                       Select role
@@ -1619,6 +1572,7 @@ export default function Users() {
                       </option>
                     ))}
                   </select>
+                  {fieldErrors.roleId && <div className="field-error">{fieldErrors.roleId}</div>}
                 </div>
               </div>
 
@@ -1663,6 +1617,7 @@ export default function Users() {
                       form.departmentId
                     }
                     onChange={updateForm}
+                    disabled={!form.collegeId}
                   >
                     <option value="">
                       Select department
@@ -1679,6 +1634,7 @@ export default function Users() {
                       )
                     )}
                   </select>
+                  {fieldErrors.departmentId && <div className="field-error">{fieldErrors.departmentId}</div>}
                 </div>
               </div>
 
@@ -1847,7 +1803,7 @@ export default function Users() {
                 </div>
 
                 <div className="detail-value">
-                  {formatDate(
+                  {formatDateTime(
                     selectedUser.lastLogin
                   )}
                 </div>
@@ -1917,9 +1873,7 @@ export default function Users() {
                       value={temporaryPassword}
                       onChange={(event) => setTemporaryPassword(event.target.value)}
                       autoComplete="new-password"
-                      minLength={8}
-                      maxLength={16}
-                      required
+                      aria-required="true"
                     />
                     <button
                       type="button"
@@ -1942,9 +1896,7 @@ export default function Users() {
                       value={confirmTemporaryPassword}
                       onChange={(event) => setConfirmTemporaryPassword(event.target.value)}
                       autoComplete="new-password"
-                      minLength={8}
-                      maxLength={16}
-                      required
+                      aria-required="true"
                     />
                     <button
                       type="button"
@@ -1997,14 +1949,13 @@ export default function Users() {
               <div className="table-wrapper">
                 <table className="users-table">
                   <thead>
-                    <tr><th>Action</th><th>Entity</th><th>Actor</th><th>Timestamp</th></tr>
+                    <tr><th>Action</th><th>IP Address</th><th>Timestamp</th></tr>
                   </thead>
                   <tbody>
                     {activityLogs.map((log, index) => (
                       <tr key={log.id || `${log.action}-${log.createdAt}-${index}`}>
                         <td>{log.action || "—"}</td>
-                        <td>{log.entity || log.entityId || "—"}</td>
-                        <td>{log.User?.fullName || log.User?.username || log.userId || "System"}</td>
+                        <td>{log.ip || "—"}</td>
                         <td>{log.createdAt ? new Date(log.createdAt).toLocaleString() : "—"}</td>
                       </tr>
                     ))}

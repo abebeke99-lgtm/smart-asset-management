@@ -1,6 +1,6 @@
 const { Op, Sequelize } = require('sequelize');
 const { sequelize, Maintenance, MaintenanceRepair, MaintenanceHistory, MaintenanceWorkOrder, PreventiveMaintenance, MaintenanceInspection, MaintenanceCost, Asset, User, Assignment, AuditLog, Inventory, InventoryTransaction, Department, Supplier } = require('../models');
-const { createEventNotification } = require('../services/notificationService');
+const { createDepartmentEventNotification, createEventNotification } = require('../services/notificationService');
 const { createAuditLog } = require('../services/auditLogService');
 
 const managerRoles = ['admin', 'maintenance', 'ict_officer', 'store_manager', 'infrastructure'];
@@ -1668,6 +1668,32 @@ const updateMaintenance = async (req, res, next) => {
     });
     if (updates.status && updates.status !== previousStatus) {
       try { await createEventNotification({ event: 'maintenance_status_changed', eventKey: `maintenance_status_changed:${item.id}:${updates.status}`, entityId: item.id, userIds: [item.requestedBy, item.assignedTo].filter(Boolean), senderId: req.user.id, assetId: item.assetId, type: 'maintenance', title: `Maintenance ${displayStatus(updates.status)}`, message: `Maintenance request ${item.id} is now ${displayStatus(updates.status)}.` }); } catch (notificationError) { console.error('Maintenance status notification failed:', notificationError.message); }
+    }
+    const technicianChanged = Number(updates.assignedTo || 0) !== Number(previousValue.assignedTo || 0);
+    if ((updates.status && updates.status !== previousStatus) || technicianChanged) {
+      try {
+        const asset = await Asset.findByPk(item.assetId, { attributes: ['id', 'name', 'assetCode', 'departmentId'] });
+        if (asset?.departmentId) {
+          const event = technicianChanged && updates.assignedTo
+            ? 'department_technician_assigned'
+            : 'department_maintenance_updated';
+          await createDepartmentEventNotification({
+            event,
+            eventKey: `${event}:${item.id}:${item.updatedAt?.getTime?.() || Date.now()}`,
+            departmentId: asset.departmentId,
+            senderId: req.user.id,
+            entityType: 'maintenance',
+            entityId: item.id,
+            assetId: asset.id,
+            actionUrl: '/department-head/maintenance',
+            type: 'maintenance',
+            title: technicianChanged && updates.assignedTo ? 'Technician assigned' : 'Maintenance updated',
+            message: `${asset.name || asset.assetCode} maintenance request ${item.id} was updated${updates.status && updates.status !== previousStatus ? ` to ${displayStatus(updates.status)}` : ''}.`,
+          });
+        }
+      } catch (notificationError) {
+        console.error('Department maintenance notification failed:', notificationError.message);
+      }
     }
     res.json({ success: true, data: normalize(item) });
   } catch (error) { next(error); }

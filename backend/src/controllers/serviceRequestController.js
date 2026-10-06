@@ -11,12 +11,13 @@ const {
   User,
   Department,
   College,
+  SupportTicketComment,
 } = require('../models');
 const { createBulkNotification } = require('../services/notificationService');
+const { getEscalationHours, runServiceRequestEscalation } = require('../services/serviceRequestEscalationService');
 
 const ALLOWED_ATTACHMENT_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
-const ESCALATION_HOURS = 72;
 const MAX_OPEN_OLD_TICKETS = 10;
 const VALID_STATUSES = ['submitted', 'scheduled', 'in-progress', 'completed', 'cancelled', 'escalated'];
 const STATUS_LABELS = {
@@ -103,13 +104,14 @@ const defaultInclude = () => [
   { model: RequestStatusHistory, order: [['createdAt', 'DESC']], limit: 50 },
 ];
 
-const verifyTicketLimit = async (reportedBy, departmentId) => {
-  const cutoff = new Date(Date.now() - ESCALATION_HOURS * 60 * 60 * 1000);
-  const whereClause = { status: { [Op.in]: ['submitted', 'scheduled', 'in-progress'] }, acknowledgedAt: null, createdAt: { [Op.lt]: cutoff } };
+const verifyTicketLimit = async (reportedBy, departmentId, transaction) => {
+  const escalationHours = await getEscalationHours();
+  const cutoff = new Date(Date.now() - escalationHours * 60 * 60 * 1000);
+  const whereClause = { status: { [Op.in]: ['submitted', 'scheduled', 'in-progress', 'escalated'] }, acknowledgedAt: null, createdAt: { [Op.lt]: cutoff } };
   if (departmentId) whereClause.departmentId = departmentId;
-  const openOld = await ServiceRequest.count({ where: whereClause });
+  const openOld = await ServiceRequest.count({ where: whereClause, transaction });
   if (openOld > MAX_OPEN_OLD_TICKETS) {
-    const error = new Error(`New service requests are temporarily blocked. This laboratory has ${openOld} unacknowledged tickets older than ${ESCALATION_HOURS} hours. Please resolve or acknowledge existing tickets first.`);
+    const error = new Error(`New service requests are temporarily blocked. This department has ${openOld} unacknowledged tickets older than ${escalationHours} hours. Please resolve or acknowledge existing tickets first.`);
     error.statusCode = 409;
     throw error;
   }
@@ -136,9 +138,9 @@ const createServiceRequest = async (req, res, next) => {
       if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
     }
     const reportedBy = req.user.id;
-    const departmentId = req.body.departmentId || req.body.department_id || req.user.departmentId || null;
+    const departmentId = req.user.departmentId || req.user.department_id || req.body.departmentId || req.body.department_id || null;
     const collegeId = req.body.collegeId || req.body.college_id || req.user.collegeId || null;
-    await verifyTicketLimit(reportedBy, departmentId);
+    await verifyTicketLimit(reportedBy, departmentId, transaction);
 
     const routedTo = routeRequest(requestType, req.body.category || '', asset?.category || '');
     const request = await ServiceRequest.create({
@@ -333,39 +335,15 @@ const assignTicket = async (req, res, next) => {
 
 const escalateTickets = async (req, res, next) => {
   try {
-    const cutoff = new Date(Date.now() - ESCALATION_HOURS * 60 * 60 * 1000);
-    const overdue = await ServiceRequest.findAll({
-      where: { acknowledgedAt: null, status: { [Op.in]: ['submitted'] }, createdAt: { [Op.lt]: cutoff } },
+    const result = await runServiceRequestEscalation();
+    const escalated = result.escalated;
+    return res.json({
+      success: true,
+      escalated: escalated.map((item) => serializeRequest(item)),
+      escalatedCount: escalated.length,
+      notificationFailures: result.notificationFailures,
+      message: escalated.length ? `${escalated.length} ticket(s) escalated` : 'No unacknowledged tickets exceeded the escalation window',
     });
-    const deans = await User.findAll({ where: { role: { [Op.in]: ['college', 'department_head'] }, active: true }, attributes: ['id'] });
-    const escalated = [];
-    for (const item of overdue) {
-      if (item.escalated) continue;
-      const deanId = deans.find((dean) => !item.departmentId || dean.id)?.id || null;
-      item.escalated = true;
-      item.escalatedAt = new Date();
-      item.escalatedTo = deanId;
-      item.escalationReason = `Automatic escalation: not acknowledged within ${ESCALATION_HOURS} hours`;
-      await item.save();
-      await RequestStatusHistory.create({ requestId: item.id, previousStatus: item.status, newStatus: 'escalated', changedBy: null, comment: `Auto-escalated to Dean after ${ESCALATION_HOURS} hours without acknowledgement` });
-      escalated.push(item);
-    }
-    if (escalated.length) {
-      try {
-        await createBulkNotification({
-          recipientType: 'role',
-          roles: ['college', 'department_head', 'admin'],
-          title: 'Service requests escalated',
-          message: `${escalated.length} service request(s) were not acknowledged within ${ESCALATION_HOURS} hours and were escalated to the Dean.`,
-          type: 'maintenance',
-          priority: 'high',
-          channel: 'in_app',
-        }, req.user.id);
-      } catch (notificationError) {
-        console.error('Escalation notification failed:', notificationError.message);
-      }
-    }
-    res.json({ success: true, escalated: escalated.map((item) => serializeRequest(item)), escalatedCount: escalated.length, message: escalated.length ? `${escalated.length} ticket(s) escalated` : 'No unacknowledged tickets exceeded the escalation window' });
   } catch (error) { next(error); }
 };
 
@@ -407,17 +385,22 @@ const listTechnicianCandidates = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
-const getRoutingOptions = async (req, res) => {
+const getRoutingOptions = async (req, res, next) => {
+  try {
+    const escalationHours = await getEscalationHours();
   res.json({
     success: true,
     data: {
       default_route: DEFAULT_ROUTE,
       routes: ROUTE_LABELS,
       rules: ROUTING_BY_CATEGORY.map((rule) => ({ pattern: rule.pattern, keywords: String(rule.subscribe).match(/\(([^)]+)\)/)?.[1] || '', route: rule.route })),
-      escalation_hours: ESCALATION_HOURS,
+      escalation_hours: escalationHours,
       max_open_old_tickets: MAX_OPEN_OLD_TICKETS,
     },
   });
+  } catch (error) {
+    next(error);
+  }
 };
 
 module.exports = {
@@ -439,4 +422,5 @@ module.exports = {
   routeRequest,
   serializeRequest,
   defaultInclude,
+  verifyTicketLimit,
 };

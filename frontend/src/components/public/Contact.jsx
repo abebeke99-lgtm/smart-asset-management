@@ -42,13 +42,9 @@ const Contact = () => {
 
   const content = language === 'en' ? {
     title: 'Contact',
-    university: 'Mekdela Amba University',
-    system: 'University Asset Management System',
-    supportingText: 'For questions or technical support related to the University Asset Management System, contact the system administration team.',
     infoHeading: 'Contact Information',
-    institution: 'University',
-    institutionValue: 'Mekdela Amba University',
-    systemValue: 'University Asset Management System',
+
+  
     formHeading: 'Send a Message',
     formIntro: 'Send a message to the system administration team.',
     name: 'Name',

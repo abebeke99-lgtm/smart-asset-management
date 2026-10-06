@@ -11,8 +11,10 @@ const Room = sequelize.define('Room', {
   roomType: { type: DataTypes.STRING(100), defaultValue: 'laboratory' },
   floor: { type: DataTypes.INTEGER, allowNull: true },
   capacity: { type: DataTypes.INTEGER, allowNull: true },
+  responsibleStaffId: { type: DataTypes.INTEGER, allowNull: true, field: 'responsible_staff_id' },
+  condition: { type: DataTypes.STRING(100), allowNull: false, defaultValue: 'Good' },
   description: { type: DataTypes.TEXT, defaultValue: '' },
-  status: { type: DataTypes.ENUM('active', 'inactive'), defaultValue: 'active' },
+  status: { type: DataTypes.STRING(50), allowNull: false, defaultValue: 'Active' },
 }, {
   tableName: 'rooms',
   timestamps: true,

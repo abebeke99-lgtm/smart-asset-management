@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Op } = require('sequelize');
-const { User, Department, AuditLog } = require('../models');
+const { User, Department, College, AuditLog, Role, UserActivityLog } = require('../models');
 const bcrypt = require('bcryptjs');
 const { findCollegeScopeForUser } = require('../middlewares/organizationScope');
 const { saveProfilePhoto, validateProfilePhoto, buildPublicFileUrl } = require('../utils/uploadUtils');
@@ -11,6 +11,11 @@ const { ROLE_NAMES, normalizeRoleForStorage } = require('../constants/rolePermis
 
 const roles = ROLE_NAMES;
 const normalizeLookupValue = (value) => String(value ?? '').trim().toLowerCase();
+const isValidPhone = (value) => {
+  const phone = String(value || '').trim();
+  const digits = phone.replace(/\D/g, '');
+  return !phone || (/^\+?[\d\s().-]+$/.test(phone) && digits.length >= 7 && digits.length <= 15);
+};
 
 const findDuplicateUser = async ({ username = '', email = '', excludeUserId = null } = {}) => {
   const normalizedUsername = normalizeLookupValue(username);
@@ -42,19 +47,66 @@ const safeUser = (user) => {
 };
 
 const validateUserInput = async (input, { requirePassword = false } = {}) => {
+  if (input.fullName !== undefined && !String(input.fullName || '').trim()) return 'Full name is required';
   if (!input.username || !String(input.username).trim()) return 'Username is required';
   if (requirePassword) {
     const pwd = typeof input.password === 'string' ? input.password : '';
     if (!pwd || pwd.length < 8) return 'Password must be at least 8 characters';
-    if (pwd.length > 16) return 'Password must be at most 16 characters';
   }
   if (input.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(input.email))) return 'Invalid email address';
   if (input.role && !roles.includes(input.role)) return 'Invalid user role';
+  if (!isValidPhone(input.phone)) return 'Invalid phone number';
   if (input.department) {
     const department = await Department.findOne({ where: { name: input.department } });
     if (!department) return 'Department not found';
   }
   return null;
+};
+
+const recordUserActivity = (req, userId, action) => UserActivityLog.create({
+  userId,
+  action,
+  ip: req.ip || req.socket?.remoteAddress || null,
+  createdAt: new Date(),
+});
+
+const userIncludes = [
+  { model: College, attributes: ['id', 'collegeCode', 'collegeName'], required: false },
+  { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name', 'code'], required: false },
+];
+
+const getUserStats = async (_req, res, next) => {
+  try {
+    const [counts, rolesByCount] = await Promise.all([User.findAll({
+      attributes: ['status', [User.sequelize.fn('COUNT', User.sequelize.col('id')), 'count']],
+      group: ['status'],
+      raw: true,
+    }), User.findAll({
+      attributes: ['role', [User.sequelize.fn('COUNT', User.sequelize.col('id')), 'count']],
+      group: ['role'],
+      raw: true,
+    })]);
+    const byStatus = Object.fromEntries(counts.map(({ status, count }) => [status, Number(count)]));
+    const total = Object.values(byStatus).reduce((sum, count) => sum + count, 0);
+    const roleCounts = Object.fromEntries(rolesByCount.map(({ role, count }) => [role, Number(count)]));
+    return res.json({
+      success: true,
+      data: {
+        total,
+        totalUsers: total,
+        active: byStatus.active || 0,
+        activeUsers: byStatus.active || 0,
+        inactive: byStatus.inactive || 0,
+        inactiveUsers: byStatus.inactive || 0,
+        suspended: byStatus.suspended || 0,
+        admins: roleCounts.admin || 0,
+        adminCount: roleCounts.admin || 0,
+        roleCounts,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
 };
 
 const getAllUsers = async (req, res) => {
@@ -73,20 +125,62 @@ const getAllUsers = async (req, res) => {
       where.collegeId = collegeId;
     }
     else if (req.query.department) where.department = req.query.department;
-    if (req.query.role) where.role = req.query.role;
-    if (req.query.active !== undefined) where.active = req.query.active === 'true';
+    if (req.query.role && req.query.role !== 'All') where.role = normalizeRoleForStorage(req.query.role);
+    const status = String(req.query.status || '').trim().toLowerCase();
+    if (status && !['all', 'active', 'inactive', 'suspended'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Status must be active, inactive, or suspended' });
+    }
+    if (['active', 'inactive', 'suspended'].includes(status)) where.status = status;
+    else if (req.query.active !== undefined) where.active = req.query.active === 'true';
+    const collegeId = String(req.query.collegeId || '').trim();
+    if (collegeId) {
+      if (!/^\d+$/.test(collegeId)) return res.status(400).json({ success: false, message: 'College ID must be a positive integer' });
+      if (req.user.role !== 'admin' && where.collegeId && Number(where.collegeId) !== Number(collegeId)) {
+        return res.status(403).json({ success: false, message: 'College access denied' });
+      }
+      if (req.user.role === 'admin' || !where.collegeId) where.collegeId = Number(collegeId);
+    }
     if (req.query.search) {
       const search = `%${String(req.query.search).trim()}%`;
-      where[Op.or] = [{ username: { [Op.like]: search } }, { fullName: { [Op.like]: search } }, { email: { [Op.like]: search } }, { phone: { [Op.like]: search } }];
+      where[Op.or] = [
+        { username: { [Op.like]: search } },
+        { fullName: { [Op.like]: search } },
+        { email: { [Op.like]: search } },
+        { phone: { [Op.like]: search } },
+        { role: { [Op.like]: search } },
+        { '$College.collegeName$': { [Op.like]: search } },
+      ];
     }
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 20));
-    const { count, rows: users } = await User.findAndCountAll({ where, attributes: { exclude: ['password'] }, order: [['id', 'ASC']], limit, offset: (page - 1) * limit });
-    const safeUsers = users.map(safeUser);
+    const { count, rows: users } = await User.findAndCountAll({
+      where,
+      include: userIncludes,
+      attributes: { exclude: ['password'] },
+      order: [['id', 'ASC']],
+      limit,
+      offset: (page - 1) * limit,
+      distinct: true,
+    });
+    const safeUsers = users.map((user) => {
+      const data = safeUser(user);
+      data.collegeName = user.College?.collegeName || '';
+      data.departmentName = user.DepartmentRecord?.name || '';
+      return data;
+    });
     res.json({ success: true, message: 'Users retrieved successfully', data: safeUsers, users: safeUsers, total: count, roles, pagination: { page, limit, total: count, pages: Math.ceil(count / limit) } });
   } catch (error) {
     console.error('User list request failed:', error);
     res.status(500).json({ success: false, message: 'Unable to load users.' });
+  }
+};
+
+const getRoles = async (_req, res, next) => {
+  try {
+    const roleRows = await Role.findAll({ where: { active: true }, order: [['displayName', 'ASC']] });
+    return res.json({ success: true, data: roleRows, roles: roleRows });
+  } catch (error) {
+    return next(error);
   }
 };
 
@@ -117,11 +211,21 @@ const createUser = async (req, res) => {
     const email = String(input.email || '').trim();
     const role = normalizeRoleForStorage(input.role || input.roleId);
     if (!role) return res.status(400).json({ success: false, message: 'Role is required' });
+    if (!roles.includes(role)) return res.status(400).json({ success: false, message: 'Invalid user role' });
     const departmentRecord = input.departmentId ? await Department.findByPk(input.departmentId) : null;
     if (input.departmentId && !departmentRecord) return res.status(400).json({ success: false, message: 'Department not found' });
+    if (departmentRecord && input.collegeId && Number(departmentRecord.collegeId) !== Number(input.collegeId)) {
+      return res.status(400).json({ success: false, message: 'Selected department does not belong to the selected college' });
+    }
+    if (input.collegeId && !(await College.findByPk(input.collegeId))) return res.status(400).json({ success: false, message: 'College not found' });
     const department = departmentRecord?.name || input.department || '';
-    const active = input.active ?? is_active ?? (input.status ? ['active', 'enabled'].includes(String(input.status).toLowerCase()) : true);
-    const validationError = await validateUserInput({ ...input, username, email, role, department }, { requirePassword: true });
+    const status = String(input.status || 'active').toLowerCase();
+    if (!['active', 'inactive', 'suspended'].includes(status)) return res.status(400).json({ success: false, message: 'Status must be active, inactive, or suspended' });
+    if (typeof body.confirmPassword !== 'string' || body.password !== body.confirmPassword) {
+      return res.status(400).json({ success: false, message: 'Password and Confirm Password must match' });
+    }
+    const fullName = String(body.fullName || body.name || full_name || '').trim();
+    const validationError = await validateUserInput({ ...input, fullName, username, email, role, department, phone: body.phone ?? phone_number ?? '' }, { requirePassword: true });
     if (validationError) return res.status(400).json({ success: false, message: validationError });
     const existing = await findDuplicateUser({ username, email });
     if (existing) return res.status(409).json({ success: false, message: 'Username or email is already in use' });
@@ -132,15 +236,18 @@ const createUser = async (req, res) => {
       department,
       collegeId: input.collegeId || null,
       departmentId: input.departmentId || null,
-      fullName: body.fullName || body.name || full_name || username,
-      phone: body.phone || phone_number || '',
-      active,
+      fullName,
+      phone: String(body.phone ?? phone_number ?? '').trim(),
+      active: status === 'active',
+      status,
       password: await bcrypt.hash(input.password, 10),
     });
     await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CREATE_USER', entity: `user:${user.id}`, entityId: user.id, newValue: safeUser(user), details: { username: user.username } });
+    await recordUserActivity(req, user.id, `User account created by administrator ${req.user.username}`);
     res.status(201).json({ success: true, data: safeUser(user) });
   } catch (error) {
-    console.error('User creation failed.');
+    if (error.name === 'SequelizeUniqueConstraintError') return res.status(409).json({ success: false, message: 'Username or email is already in use' });
+    console.error('User creation failed:', error);
     res.status(500).json({ success: false, message: 'Unable to create user.' });
   }
 };
@@ -153,24 +260,43 @@ const updateUser = async (req, res) => {
     const { full_name, phone_number, is_active, ...input } = body;
     const requestedRole = input.role || input.roleId;
     const role = requestedRole ? normalizeRoleForStorage(requestedRole) : requestedRole;
+    if (requestedRole && !roles.includes(role)) return res.status(400).json({ success: false, message: 'Invalid user role' });
     const departmentRecord = input.departmentId ? await Department.findByPk(input.departmentId) : null;
     if (input.departmentId && !departmentRecord) return res.status(400).json({ success: false, message: 'Department not found' });
+    if (departmentRecord && (input.collegeId ?? user.collegeId) && Number(departmentRecord.collegeId) !== Number(input.collegeId ?? user.collegeId)) {
+      return res.status(400).json({ success: false, message: 'Selected department does not belong to the selected college' });
+    }
+    if (input.collegeId && !(await College.findByPk(input.collegeId))) return res.status(400).json({ success: false, message: 'College not found' });
     const department = departmentRecord?.name || input.department;
-    const validationError = await validateUserInput({ ...input, role, department, username: input.username || user.username }, { requirePassword: false });
+    const fullName = input.fullName ?? input.name ?? full_name;
+    if (Object.prototype.hasOwnProperty.call(input, 'username') && !String(input.username || '').trim()) {
+      return res.status(400).json({ success: false, message: 'Username is required' });
+    }
+    const validationError = await validateUserInput({ ...input, fullName, role, department, username: input.username || user.username }, { requirePassword: false });
     if (validationError) return res.status(400).json({ success: false, message: validationError });
+    const nextStatus = input.status === undefined ? undefined : String(input.status).toLowerCase();
+    if (nextStatus !== undefined && !['active', 'inactive', 'suspended'].includes(nextStatus)) {
+      return res.status(400).json({ success: false, message: 'Status must be active, inactive, or suspended' });
+    }
+    const requestedActive = input.active ?? is_active;
+    if ((input.status !== undefined && nextStatus !== 'active') || (requestedActive !== undefined && !requestedActive)) {
+      if (user.id === req.user.id) return res.status(400).json({ success: false, message: 'Administrators cannot deactivate or suspend their own account' });
+    }
+    if (input.password && input.password !== input.confirmPassword) {
+      return res.status(400).json({ success: false, message: 'Password and Confirm Password must match' });
+    }
     const updates = {
       ...(input.username ? { username: input.username } : {}),
       ...(input.email !== undefined ? { email: input.email || null } : {}),
       ...(role ? { role } : {}),
       ...(input.departmentId !== undefined ? { departmentId: input.departmentId || null, department: department || '' } : input.department !== undefined ? { department: input.department || '' } : {}),
       ...(input.collegeId !== undefined ? { collegeId: input.collegeId || null } : {}),
-      ...(input.fullName || input.name || full_name ? { fullName: input.fullName || input.name || full_name } : {}),
+      ...(fullName !== undefined ? { fullName: String(fullName).trim() } : {}),
       ...(input.phone !== undefined || phone_number !== undefined ? { phone: input.phone ?? phone_number ?? '' } : {}),
-      ...(input.active !== undefined || is_active !== undefined || input.status !== undefined ? { active: input.active ?? is_active ?? ['active', 'enabled'].includes(String(input.status).toLowerCase()) } : {})
+      ...(nextStatus !== undefined ? { status: nextStatus, active: nextStatus === 'active' } : input.active !== undefined || is_active !== undefined ? { active: input.active ?? is_active, status: (input.active ?? is_active) ? 'active' : 'inactive' } : {})
     };
     if (input.password) {
       if (String(input.password).length < 8) return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
-   if (String(input.password).length > 16) return res.status(400).json({ success: false, message: 'Password must be at most 16 characters' });
       updates.password = await bcrypt.hash(input.password, 10);
     }
     if (updates.username !== user.username || updates.email !== user.email) {
@@ -181,10 +307,48 @@ const updateUser = async (req, res) => {
     await user.update(updates);
     const roleChanged = before.role !== user.role;
     await createAuditLog({ userId: req.user.id, role: req.user.role, action: roleChanged ? 'CHANGE_ROLE' : 'UPDATE_USER', entity: `user:${user.id}`, entityId: user.id, oldValue: before, newValue: safeUser(user), details: { operation: updates.active !== undefined && updates.active !== before.active ? (updates.active ? 'activate' : 'deactivate') : 'update' } });
+    await recordUserActivity(req, user.id, `User account updated by administrator ${req.user.username}`);
     res.json({ success: true, message: 'User updated successfully', data: safeUser(user) });
   } catch (error) {
+    if (error.name === 'SequelizeUniqueConstraintError') return res.status(409).json({ success: false, message: 'Username or email is already in use' });
     console.error('User update failed:', error);
     res.status(500).json({ success: false, message: 'Unable to update user.' });
+  }
+};
+
+const updateUserStatus = async (req, res) => {
+  const status = String(req.body?.status || '').toLowerCase();
+  if (!['active', 'inactive', 'suspended'].includes(status)) {
+    return res.status(400).json({ success: false, message: 'Status must be active, inactive, or suspended' });
+  }
+  const user = await User.findByPk(req.params.id);
+  if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+  if (user.id === req.user.id && status !== 'active') {
+    return res.status(400).json({ success: false, message: 'Administrators cannot deactivate or suspend their own account' });
+  }
+  await user.update({ status, active: status === 'active' });
+  await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_USER_STATUS', entity: `user:${user.id}`, entityId: user.id, details: { status } });
+  await recordUserActivity(req, user.id, `Account status changed to ${status} by administrator ${req.user.username}`);
+  return res.json({ success: true, message: `User ${status} successfully`, data: safeUser(user) });
+};
+
+const getUserActivity = async (req, res, next) => {
+  try {
+    const userId = Number(req.params.id);
+    if (!Number.isSafeInteger(userId) || userId < 1) return res.status(400).json({ success: false, message: 'User ID must be a positive integer' });
+    const user = await User.findByPk(userId, { attributes: ['id'] });
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 25));
+    const { count, rows } = await UserActivityLog.findAndCountAll({
+      where: { userId },
+      order: [['createdAt', 'DESC']],
+      limit,
+      offset: (page - 1) * limit,
+    });
+    return res.json({ success: true, data: rows, logs: rows, pagination: { page, limit, total: count, pages: Math.ceil(count / limit) } });
+  } catch (error) {
+    return next(error);
   }
 };
 
@@ -192,10 +356,13 @@ const deleteUser = async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (user.id === req.user.id) return res.status(400).json({ success: false, message: 'Administrators cannot delete their own account' });
+    await recordUserActivity(req, user.id, `User account deleted by administrator ${req.user.username}`);
     await user.destroy();
     await AuditLog.create({ userId: req.user.id, action: 'DELETE_USER', entity: `user:${user.id}`, details: JSON.stringify({ userId: user.id, username: user.username }) });
     res.json({ success: true, message: 'User deleted' });
   } catch (error) {
+    if (error.name === 'SequelizeForeignKeyConstraintError') return res.status(409).json({ success: false, message: 'This user is linked to existing records and cannot be deleted' });
     console.error('User deletion failed:', error);
     res.status(500).json({ success: false, message: 'Unable to delete user.' });
   }
@@ -330,9 +497,10 @@ const resetUserPassword = async (req, res) => {
   if (!user) return res.status(404).json({ success: false, message: 'User not found' });
   const temporaryPassword = String(req.body.password || '').trim();
   if (temporaryPassword && temporaryPassword.length < 8) return res.status(400).json({ success: false, message: 'Temporary password must be at least 8 characters' });
-    if (temporaryPassword && temporaryPassword.length > 16) return res.status(400).json({ success: false, message: 'Temporary password must be at most 16 characters' });
+  if (req.body.confirmPassword && temporaryPassword !== req.body.confirmPassword) return res.status(400).json({ success: false, message: 'Password and Confirm Password must match' });
   await user.update({ password: await bcrypt.hash(temporaryPassword || require('crypto').randomBytes(18).toString('base64url'), 10), forcePasswordChange: true, sessionVersion: (user.sessionVersion || 0) + 1 });
   await AuditLog.create({ userId: req.user.id, action: 'RESET_USER_PASSWORD', entity: `user:${user.id}`, details: JSON.stringify({ userId: user.id, forcePasswordChange: true }) });
+  await recordUserActivity(req, user.id, `Password reset by administrator ${req.user.username}`);
   return res.json({ success: true, message: 'Password reset successfully; the user must change it at next login' });
 };
 
@@ -352,4 +520,4 @@ const terminateUserSession = async (req, res) => {
   return res.json({ success: true, message: 'User sessions terminated' });
 };
 
-module.exports = { getAllUsers, getUserById, createUser, updateUser, deleteUser, getCurrentUserProfile, updateProfile, updateCurrentUserProfilePhoto, removeCurrentUserProfilePhoto, setUserSecurityState, resetUserPassword, forcePasswordChange, terminateUserSession };
+module.exports = { getAllUsers, getUserStats, getRoles, getUserById, createUser, updateUser, updateUserStatus, getUserActivity, deleteUser, getCurrentUserProfile, updateProfile, updateCurrentUserProfilePhoto, removeCurrentUserProfilePhoto, setUserSecurityState, resetUserPassword, forcePasswordChange, terminateUserSession, recordUserActivity };

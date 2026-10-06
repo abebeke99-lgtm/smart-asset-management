@@ -13,9 +13,7 @@ jest.mock('axios', () => ({
 const assetId = 12;
 const requestUrls = [
   `/api/assets/${assetId}`,
-  `/api/assets/${assetId}/assignments`,
-  `/api/assets/${assetId}/maintenance`,
-  `/api/rfid/history/${assetId}`,
+  `/api/assets/${assetId}/history`,
 ];
 const successResponses = {
   [`/api/assets/${assetId}`]: {
@@ -28,39 +26,17 @@ const successResponses = {
       },
     },
   },
-  [`/api/assets/${assetId}/assignments`]: {
+  [`/api/assets/${assetId}/history`]: {
     data: {
       history: [
         {
-          id: 201,
-          status: 'active',
-          createdAt: '2025-01-02T00:00:00.000Z',
-          notes: 'Engineering assignment',
+          type: 'assigned',
+          action: 'Asset Assigned',
+          date: '2025-01-02T00:00:00.000Z',
+          description: 'Engineering assignment',
         },
-      ],
-    },
-  },
-  [`/api/assets/${assetId}/maintenance`]: {
-    data: {
-      history: [
-        {
-          id: 301,
-          status: 'completed',
-          updatedAt: '2025-01-03T00:00:00.000Z',
-          problem: 'Battery replacement',
-        },
-      ],
-    },
-  },
-  [`/api/rfid/history/${assetId}`]: {
-    data: {
-      logs: [
-        {
-          id: 401,
-          timestamp: '2025-01-04T00:00:00.000Z',
-          event: 'Scanned at Room B2',
-          location: 'Room B2',
-        },
+        { type: 'maintained', action: 'Maintenance', date: '2025-01-03T00:00:00.000Z', description: 'Battery replacement' },
+        { type: 'rfid', action: 'RFID Scan', date: '2025-01-04T00:00:00.000Z', description: 'Scanned at Room B2' },
       ],
     },
   },
@@ -89,7 +65,7 @@ describe('DeptAssetHistory', () => {
     axios.get.mockImplementation((url) => Promise.resolve(successResponses[url] || { data: {} }));
   });
 
-  it('shows the loading state and renders the asset history from all four endpoints', async () => {
+  it('shows the loading state and renders history from the department-scoped history API', async () => {
     const pending = Object.fromEntries(requestUrls.map((url) => [url, createDeferred()]));
     axios.get.mockImplementation((url) => pending[url].promise);
 
@@ -102,10 +78,10 @@ describe('DeptAssetHistory', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: /asset history/i })).toBeInTheDocument());
     expect(screen.getByText('Laptop-01')).toBeInTheDocument();
-    expect(screen.getByText('Assigned')).toBeInTheDocument();
-    expect(screen.getByText('Maintenance: completed')).toBeInTheDocument();
-    expect(screen.getByText('RFID Scanned')).toBeInTheDocument();
-    expect(screen.getByText('Room B2')).toBeInTheDocument();
+    expect(screen.getByText('Asset Assigned')).toBeInTheDocument();
+    expect(screen.getByText('Maintenance')).toBeInTheDocument();
+    expect(screen.getByText('RFID Scan')).toBeInTheDocument();
+    expect(screen.getByText('Scanned at Room B2')).toBeInTheDocument();
     requestUrls.forEach((url) => expect(axios.get).toHaveBeenCalledWith(url));
   });
 

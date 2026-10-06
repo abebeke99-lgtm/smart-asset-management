@@ -15,6 +15,8 @@ module.exports = sequelize.define('AssetReturn', {
   reason: { type: DataTypes.STRING(100), allowNull: false },
   condition: { type: DataTypes.STRING(50), defaultValue: 'Good' },
   notes: { type: DataTypes.TEXT, defaultValue: '' },
+  returnDate: { type: DataTypes.DATEONLY, allowNull: true, field: 'return_date' },
+  evidenceUrl: { type: DataTypes.STRING(1000), allowNull: true, field: 'evidence_url' },
   inspectionNotes: { type: DataTypes.TEXT, defaultValue: '', field: 'inspection_notes' },
   status: { type: DataTypes.STRING(50), defaultValue: 'Requested' },
   outcome: { type: DataTypes.STRING(50), allowNull: true },

@@ -84,7 +84,28 @@
 .confirm-icon { color: #dc2626; }
 .detail-status-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 20px 0; }
 .detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.detail-field { min-width: 0; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9; }
+.detail-section { margin-top: 20px; padding-top: 20px; border-top: 2px solid #e2e8f0; }
+.detail-section h3 { margin: 0 0 14px; display: flex; align-items: center; gap: 8px; color: #1e293b; font-size: 14px; font-weight: 700; }
+.cost-summary { display: grid; gap: 8px; padding: 12px; background: #f8fafc; border-radius: 6px; }
+.cost-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+.cost-item:last-child { border-bottom: 0; }
+.cost-item span { color: #64748b; }
+.cost-item strong { color: #1e293b; font-weight: 700; }
+.cost-item:first-child { border-bottom: 2px solid #2563eb; padding-bottom: 10px; }
+.cost-item:first-child strong { color: #2563eb; font-size: 15px; }
+.cost-details-table { width: 100%; margin-top: 12px; border-collapse: collapse; font-size: 12px; }
+.cost-details-table th { padding: 10px 8px; background: #f1f5f9; color: #64748b; font-weight: 700; text-align: left; border-bottom: 1px solid #cbd5e1; }
+.cost-details-table td { padding: 10px 8px; border-bottom: 1px solid #f1f5f9; }
+.cost-details-table td strong { color: #1e293b; }
+.cost-details-table td small { color: #64748b; }
+.history-timeline { display: grid; gap: 12px; }
+.history-entry { display: grid; grid-template-columns: 100px 1fr; gap: 12px; padding: 12px; background: #f8fafc; border-left: 3px solid #2563eb; border-radius: 4px; }
+.history-date { color: #64748b; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.history-action, .history-description { font-size: 13px; }
+.history-action strong { color: #1e293b; }
+.history-description { color: #64748b; line-height: 1.4; }
+.tone-danger .summary-icon { color: #dc2626; background: #fef2f2; }
+.status-overdue { color: #dc2626; background: #fef2f2; }
 .detail-field span { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; color: #64748b; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .detail-field strong, .detail-field p { margin: 0; color: #1e293b; font-size: 14px; overflow-wrap: anywhere; }
 .detail-field p { line-height: 1.55; }

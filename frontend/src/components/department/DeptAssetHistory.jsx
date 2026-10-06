@@ -4,7 +4,7 @@ import axios from 'axios';
 
 const value = (item) => {
   if (item === null || item === undefined || item === '') return '-';
-  if (typeof item === 'object') return item.name || item.code || item.fullName || item.username || '-';
+  if (typeof item === 'object') return item.name || item.code || item.fullName || item.username || JSON.stringify(item);
   return String(item);
 };
 
@@ -27,18 +27,11 @@ const DeptAssetHistory = () => {
     setState({ loading: true, error: '' });
     Promise.all([
       axios.get(`/api/assets/${id}`),
-      axios.get(`/api/assets/${id}/assignments`),
-      axios.get(`/api/assets/${id}/maintenance`),
-      axios.get(`/api/rfid/history/${id}`)
-    ]).then(([assetResponse, assignmentsResponse, maintenanceResponse, rfidResponse]) => {
+      axios.get(`/api/assets/${id}/history`)
+    ]).then(([assetResponse, historyResponse]) => {
       if (!mounted) return;
-      const assetData = assetResponse.data?.asset || {};
-      const records = [
-        { action: 'Created', date: assetData.createdAt || assetData.created_at, description: 'Asset registered' },
-        ...(assignmentsResponse.data?.history || []).map(item => ({ action: item.status === 'returned' ? 'Returned' : 'Assigned', date: item.createdAt || item.created_at, description: item.notes || item.remarks })),
-        ...(maintenanceResponse.data?.history || []).map(item => ({ action: `Maintenance: ${item.status || 'Updated'}`, date: item.updatedAt || item.updated_at || item.createdAt, description: item.problem || item.description })),
-        ...(rfidResponse.data?.logs || []).map(item => ({ action: 'RFID Scanned', date: item.timestamp || item.createdAt, description: item.event || item.type, location: item.location || item.reader_location }))
-      ].filter(item => item.date).sort((a, b) => new Date(b.date) - new Date(a.date));
+      const assetData = assetResponse.data?.asset || assetResponse.data?.data || {};
+      const records = Array.isArray(historyResponse.data?.history) ? historyResponse.data.history : [];
       setAsset(assetData);
       setEvents(records);
       setState({ loading: false, error: '' });
@@ -54,7 +47,7 @@ const DeptAssetHistory = () => {
     <p><strong>{value(asset?.name)}</strong> · {value(asset?.assetCode || asset?.asset_id || id)}</p>
     {events.length === 0 ? <p>No history records found.</p> : <table style={{ width: '100%', borderCollapse: 'collapse' }}>
       <thead><tr><th>Date/Time</th><th>Action</th><th>Performed By</th><th>Previous Value</th><th>New Value</th><th>Location</th><th>Description</th></tr></thead>
-      <tbody>{events.map((event, index) => <tr key={`${event.date}-${index}`}><td>{new Date(event.date).toLocaleString()}</td><td>{event.action}</td><td>-</td><td>-</td><td>-</td><td>{value(event.location)}</td><td>{value(event.description)}</td></tr>)}</tbody>
+      <tbody>{events.map((event, index) => <tr key={`${event.date}-${event.type || index}`}><td>{event.date ? new Date(event.date).toLocaleString() : '-'}</td><td>{value(event.action)}</td><td>{value(event.performedBy)}</td><td>{value(event.previousValue)}</td><td>{value(event.newValue)}</td><td>{value(event.location)}</td><td>{value(event.description)}</td></tr>)}</tbody>
     </table>}
   </section>;
 };

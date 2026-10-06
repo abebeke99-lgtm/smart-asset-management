@@ -17,9 +17,9 @@ import {
 const servicesByLanguage = {
   en: {
     title: 'Services',
-    home: 'Home',
+  
     systemTitle: 'University Asset Management System',
-    introduction: 'Digital services for registering, tracking, assigning, maintaining, verifying, and reporting university assets.',
+  
     learnMore: 'Learn More',
     services: [
       {

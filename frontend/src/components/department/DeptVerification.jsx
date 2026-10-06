@@ -1,36 +1,49 @@
-import React, { useEffect, useState } from 'react';
-import { CheckCircle2, ClipboardCheck, Eye, LoaderCircle, Plus, RefreshCw, Send, ShieldCheck, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ClipboardCheck, LoaderCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import apiClient from '../../services/apiClient';
 import { useLanguage } from '../../contexts/UiContext';
 
-const states = ['verified', 'missing', 'wrong_location', 'damaged', 'unidentified', 'needs_review'];
-const label = (value) => String(value || '').replace(/[_-]/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+const conditionOptions = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged', 'Unknown'];
+const localDate = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
 
 const DeptVerification = () => {
   const { language } = useLanguage();
   const isAmharic = language === 'am';
   const copy = (english, amharic) => isAmharic ? amharic : english;
-  const [sessions, setSessions] = useState([]);
   const [assets, setAssets] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [form, setForm] = useState({ name: '', assetId: '', state: 'verified', notes: '' });
+  const [history, setHistory] = useState([]);
+  const [form, setForm] = useState({
+    assetId: '',
+    qrCode: '',
+    actualLocation: '',
+    actualCondition: '',
+    verificationDate: localDate(),
+    exceptions: '',
+  });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const selectedAsset = useMemo(
+    () => assets.find((asset) => String(asset.id) === form.assetId),
+    [assets, form.assetId],
+  );
 
   const load = async () => {
     setLoading(true);
     setError('');
     try {
-      const [sessionResponse, assetResponse] = await Promise.all([
-        apiClient.get('/department/verification'),
+      const [assetResponse, historyResponse] = await Promise.all([
         apiClient.get('/department/assets', { params: { page: 1, limit: 100 } }),
+        apiClient.get('/department/verification/history', { params: { page: 1, limit: 100 } }),
       ]);
-      setSessions(Array.isArray(sessionResponse.data?.data) ? sessionResponse.data.data : []);
       setAssets(Array.isArray(assetResponse.data?.data) ? assetResponse.data.data : []);
+      setHistory(Array.isArray(historyResponse.data?.data) ? historyResponse.data.data : []);
     } catch (requestError) {
-      setSessions([]);
-      setAssets([]);
       setError(requestError.response?.data?.message || copy('Unable to load verification data.', 'የማረጋገጫ መረጃ መጫን አልተቻለም።'));
     } finally {
       setLoading(false);
@@ -39,63 +52,48 @@ const DeptVerification = () => {
 
   useEffect(() => { load(); }, []);
 
-  const createSession = async (event) => {
+  const updateAsset = (event) => {
+    const assetId = event.target.value;
+    const asset = assets.find((candidate) => String(candidate.id) === assetId);
+    setForm((current) => ({
+      ...current,
+      assetId,
+      qrCode: '',
+      actualLocation: current.actualLocation || asset?.location || '',
+      actualCondition: current.actualCondition || asset?.condition || '',
+    }));
+  };
+
+  const recordVerification = async (event) => {
     event.preventDefault();
-    if (!form.name.trim() || busy) return;
+    if (busy) return;
     setBusy(true);
     setError('');
+    setSuccess('');
     try {
-      const response = await apiClient.post('/department/verification', { name: form.name.trim() });
-      const session = response.data?.data;
-      setForm((current) => ({ ...current, name: '' }));
-      await load();
-      if (session?.id) openSession(session.id);
+      const payload = {
+        actual_location: form.actualLocation.trim(),
+        actual_condition: form.actualCondition,
+        verification_date: form.verificationDate,
+        exceptions: form.exceptions.trim(),
+      };
+      if (form.qrCode.trim()) payload.qr_code = form.qrCode.trim();
+      else payload.asset_id = Number(form.assetId);
+      await apiClient.post('/department/verification/records', payload);
+      setSuccess(copy('Verification recorded. A history entry was saved.', 'ማረጋገጫው ተመዝግቧል።'));
+      setForm((current) => ({
+        ...current,
+        assetId: '',
+        qrCode: '',
+        actualLocation: '',
+        actualCondition: '',
+        verificationDate: localDate(),
+        exceptions: '',
+      }));
+      const response = await apiClient.get('/department/verification/history', { params: { page: 1, limit: 100 } });
+      setHistory(Array.isArray(response.data?.data) ? response.data.data : []);
     } catch (requestError) {
-      setError(requestError.response?.data?.message || copy('Unable to create verification session.', 'የማረጋገጫ ክፍለ ጊዜ መፍጠር አልተቻለም።'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const openSession = async (id) => {
-    setBusy(true);
-    setError('');
-    try {
-      const response = await apiClient.get(`/department/verification/${id}`);
-      setSelected(response.data?.data || null);
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || copy('Unable to load session details.', 'የክፍለ ጊዜ ዝርዝር መጫን አልተቻለም።'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const addItem = async (event) => {
-    event.preventDefault();
-    if (!selected || !form.assetId || busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      await apiClient.post(`/department/verification/${selected.id}/items`, { asset_id: Number(form.assetId), state: form.state, notes: form.notes.trim() });
-      setForm((current) => ({ ...current, assetId: '', notes: '' }));
-      await openSession(selected.id);
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || copy('Unable to record verification item.', 'የማረጋገጫ እቃ መመዝገብ አልተቻለም።'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const changeStatus = async (action) => {
-    if (!selected || busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      await apiClient.post(`/department/verification/${selected.id}/${action}`);
-      await load();
-      await openSession(selected.id);
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || copy('Unable to update verification session.', 'የማረጋገጫ ክፍለ ጊዜ ማዘመን አልተቻለም።'));
+      setError(requestError.response?.data?.message || copy('Unable to record physical verification.', 'የአካል ማረጋገጫውን መመዝገብ አልተቻለም።'));
     } finally {
       setBusy(false);
     }
@@ -103,13 +101,98 @@ const DeptVerification = () => {
 
   return <section className="department-verification-page" style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
     <header style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
-      <div><p><ShieldCheck size={15} aria-hidden="true" /> {copy('Department operations', 'የክፍል ስራዎች')}</p><h1>{copy('Asset Verification', 'የንብረት ማረጋገጫ')}</h1><p>{copy('Verify assets using real records in your authorized department.', 'በተፈቀደው የክፍል መረጃ ንብረቶችን ያረጋግጡ።')}</p></div>
-      <button type="button" onClick={load} disabled={loading}><RefreshCw size={16} /> {copy('Refresh', 'አድስ')}</button>
+      <div>
+        <p><ShieldCheck size={15} aria-hidden="true" /> {copy('Department operations', 'የክፍል ስራዎች')}</p>
+        <h1>{copy('Physical Asset Verification', 'የንብረት አካላዊ ማረጋገጫ')}</h1>
+        <p>{copy('Verify the asset in person. Each check is permanently recorded for your department.', 'ንብረቱን በአካል ያረጋግጡ። እያንዳንዱ ማረጋገጫ ለክፍልዎ ይመዘገባል።')}</p>
+      </div>
+      <button type="button" onClick={load} disabled={loading}>
+        <RefreshCw size={16} /> {copy('Refresh', 'አድስ')}
+      </button>
     </header>
-    {error && <div role="alert" style={{ padding: 12, marginBottom: 16, border: '1px solid #fecaca', color: '#991b1b' }}>{error}<button type="button" onClick={load}>{copy('Retry', 'እንደገና ሞክር')}</button></div>}
-    <form onSubmit={createSession} style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder={copy('New verification session name', 'የአዲስ ማረጋገጫ ክፍለ ጊዜ ስም')} required /><button type="submit" disabled={busy}><Plus size={16} /> {copy('Start session', 'ክፍለ ጊዜ ጀምር')}</button></form>
-    {loading ? <div aria-busy="true"><LoaderCircle /> {copy('Loading verification data...', 'የማረጋገጫ መረጃ በመጫን ላይ...')}</div> : sessions.length === 0 ? <div><ClipboardCheck size={28} /><p>{copy('No verification sessions found.', 'ምንም የማረጋገጫ ክፍለ ጊዜ አልተገኘም።')}</p></div> : <div style={{ display: 'grid', gap: 12 }}>{sessions.map((session) => <article key={session.id} style={{ border: '1px solid #dbe3ec', padding: 16 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}><div><strong>#{session.id} {session.name}</strong><div>{label(session.status)} · {new Date(session.createdAt).toLocaleString()}</div></div><button type="button" onClick={() => openSession(session.id)}><Eye size={16} /> {copy('View', 'ይመልከቱ')}</button></div></article>)}</div>}
-    {selected && <div role="dialog" aria-modal="true" style={{ marginTop: 24, padding: 20, border: '2px solid #2563eb' }}><header style={{ display: 'flex', justifyContent: 'space-between' }}><h2>#{selected.id} {selected.name}</h2><button type="button" onClick={() => setSelected(null)} aria-label={copy('Close', 'ዝጋ')}><X /></button></header><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>{['in_progress', 'submitted'].includes(selected.status) && <button type="button" onClick={() => changeStatus('submit')} disabled={busy}><Send size={15} /> {copy('Submit', 'አስገባ')}</button>}{selected.status === 'submitted' && <button type="button" onClick={() => changeStatus('finalize')} disabled={busy}><CheckCircle2 size={15} /> {copy('Finalize', 'አጠናቅ')}</button>}</div><form onSubmit={addItem} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><select value={form.assetId} onChange={(event) => setForm({ ...form, assetId: event.target.value })} required><option value="">{copy('Select department asset', 'የክፍል ንብረት ይምረጡ')}</option>{assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.assetCode} · {asset.name}</option>)}</select><select value={form.state} onChange={(event) => setForm({ ...form, state: event.target.value })}>{states.map((state) => <option key={state} value={state}>{label(state)}</option>)}</select><input value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder={copy('Notes', 'ማስታወሻ')} /><button type="submit" disabled={busy}><ClipboardCheck size={15} /> {copy('Record item', 'እቃ መዝግብ')}</button></form><ul>{(selected.VerificationItems || []).map((item) => <li key={item.id}>{item.Asset?.assetCode || item.assetId}: {label(item.state)} {item.notes ? `· ${item.notes}` : ''}</li>)}</ul></div>}
+
+    {error && <div role="alert" style={{ padding: 12, marginBottom: 16, border: '1px solid #fecaca', color: '#991b1b' }}>{error}</div>}
+    {success && <div role="status" style={{ padding: 12, marginBottom: 16, border: '1px solid #bbf7d0', color: '#166534' }}>{success}</div>}
+
+    <form onSubmit={recordVerification} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, padding: 20, border: '1px solid #dbe3ec', borderRadius: 8, marginBottom: 28 }}>
+      <label>
+        {copy('Identify asset', 'ንብረቱን ይለዩ')}
+        <select value={form.assetId} onChange={updateAsset} disabled={loading || Boolean(form.qrCode)} required={!form.qrCode}>
+          <option value="">{copy('Select a department asset', 'የክፍል ንብረት ይምረጡ')}</option>
+          {assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.assetCode || `#${asset.id}`} · {asset.name}</option>)}
+        </select>
+      </label>
+      <label>
+        {copy('Scan or enter QR code', 'QR ኮድ ይቃኙ ወይም ያስገቡ')}
+        <input
+          value={form.qrCode}
+          onChange={(event) => setForm((current) => ({ ...current, qrCode: event.target.value, assetId: '' }))}
+          placeholder="QR-..."
+          autoComplete="off"
+          disabled={loading}
+          required={!form.assetId}
+        />
+      </label>
+
+      {selectedAsset && <div style={{ gridColumn: '1 / -1', padding: 12, background: '#f8fafc', borderRadius: 6 }}>
+        <strong>{selectedAsset.assetCode || `#${selectedAsset.id}`} · {selectedAsset.name}</strong>
+        <div>{copy('Expected location', 'የሚጠበቀው ቦታ')}: {selectedAsset.location || copy('Not specified', 'አልተገለጸም')}</div>
+      </div>}
+
+      <label>
+        {copy('Actual location', 'ትክክለኛ ቦታ')}
+        <input value={form.actualLocation} onChange={(event) => setForm((current) => ({ ...current, actualLocation: event.target.value }))} required maxLength={255} />
+      </label>
+      <label>
+        {copy('Observed condition', 'የታየው ሁኔታ')}
+        <select value={form.actualCondition} onChange={(event) => setForm((current) => ({ ...current, actualCondition: event.target.value }))} required>
+          <option value="">{copy('Select condition', 'ሁኔታ ይምረጡ')}</option>
+          {conditionOptions.map((condition) => <option key={condition} value={condition}>{condition}</option>)}
+        </select>
+      </label>
+      <label>
+        {copy('Verification date', 'የማረጋገጫ ቀን')}
+        <input type="date" value={form.verificationDate} onChange={(event) => setForm((current) => ({ ...current, verificationDate: event.target.value }))} required />
+      </label>
+      <label style={{ gridColumn: '1 / -1' }}>
+        {copy('Exceptions or notes', 'ልዩነቶች ወይም ማስታወሻ')}
+        <textarea value={form.exceptions} onChange={(event) => setForm((current) => ({ ...current, exceptions: event.target.value }))} maxLength={2000} rows={3} />
+      </label>
+      <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <small>{copy('Verified by is taken from your signed-in account.', 'ያረጋገጠው ሰው ከገቡበት መለያ ይወሰዳል።')}</small>
+        <button type="submit" disabled={busy || loading || (!form.assetId && !form.qrCode.trim())}>
+          {busy ? <LoaderCircle size={16} /> : <ClipboardCheck size={16} />} {copy('Record verification', 'ማረጋገጫ መዝግብ')}
+        </button>
+      </div>
+    </form>
+
+    <section aria-labelledby="verification-history-heading">
+      <h2 id="verification-history-heading">{copy('Verification history', 'የማረጋገጫ ታሪክ')}</h2>
+      {loading ? <div aria-busy="true"><LoaderCircle /> {copy('Loading history...', 'ታሪክ በመጫን ላይ...')}</div> : history.length === 0 ? (
+        <p>{copy('No physical verifications have been recorded for this department.', 'ለዚህ ክፍል የአካል ማረጋገጫ አልተመዘገበም።')}</p>
+      ) : <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+          <thead><tr>{[
+            copy('Asset', 'ንብረት'),
+            copy('Expected location', 'የሚጠበቀው ቦታ'),
+            copy('Actual location', 'ትክክለኛ ቦታ'),
+            copy('Condition', 'ሁኔታ'),
+            copy('Date', 'ቀን'),
+            copy('Verified by', 'ያረጋገጠው'),
+            copy('Exceptions', 'ልዩነቶች'),
+          ].map((heading) => <th key={heading} scope="col" style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid #cbd5e1' }}>{heading}</th>)}</tr></thead>
+          <tbody>{history.map((entry) => <tr key={entry.id}>
+            <td style={{ padding: 10, borderBottom: '1px solid #e2e8f0' }}>{entry.assetCode || `#${entry.assetId}`} · {entry.assetName || entry.Asset?.name || ''}{entry.scannedQrCode && <small style={{ display: 'block' }}>QR: {entry.scannedQrCode}</small>}</td>
+            <td style={{ padding: 10, borderBottom: '1px solid #e2e8f0' }}>{entry.expectedLocation || '—'}</td>
+            <td style={{ padding: 10, borderBottom: '1px solid #e2e8f0' }}>{entry.actualLocation}</td>
+            <td style={{ padding: 10, borderBottom: '1px solid #e2e8f0' }}>{entry.actualCondition}{entry.actualCondition?.toLowerCase() !== entry.expectedCondition?.toLowerCase() && <small style={{ display: 'block' }}>{copy('Expected', 'የሚጠበቀው')}: {entry.expectedCondition}</small>}</td>
+            <td style={{ padding: 10, borderBottom: '1px solid #e2e8f0' }}>{entry.verificationDate}</td>
+            <td style={{ padding: 10, borderBottom: '1px solid #e2e8f0' }}>{entry.Verifier?.fullName || entry.Verifier?.username || entry.verifiedBy}</td>
+            <td style={{ padding: 10, borderBottom: '1px solid #e2e8f0', whiteSpace: 'pre-wrap' }}>{entry.exceptions || '—'}</td>
+          </tr>)}</tbody>
+        </table>
+      </div>}
+    </section>
   </section>;
 };
 

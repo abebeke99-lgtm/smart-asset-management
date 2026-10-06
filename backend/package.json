@@ -11,6 +11,7 @@
     "dev": "nodemon src/app.js",
     "seed:demo": "node src/scripts/seedDemoAccounts.js",
     "reset:demo-passwords": "node src/scripts/resetDemoPasswords.js",
+    "seed:user-management": "node src/scripts/seedUserManagement.js",
     "test": "node scripts/runTests.js"
   },
   "dependencies": {

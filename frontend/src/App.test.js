@@ -327,6 +327,19 @@ describe('Department Head sidebar specification', () => {
     expect(appSource).toMatch(/sidebarRole === 'department_head'\s*\?\s*departmentHeadItems/);
   });
 
+  it('maps Department Head inventory to the inventory view and keeps reports separate', () => {
+    expect(appSource).toContain('<Route path="dashboard" element={<DeptDashboard />} />');
+    expect(appSource).toContain('<Route path="inventory" element={<DeptReports inventoryMode />} />');
+    expect(appSource).toContain('<Route path="reports" element={<DeptReports />} />');
+    expect(appSource).toContain('<Route path="notifications" element={<DeptNotifications />} />');
+  });
+
+  it('keeps legacy Department Head request and service URLs mapped to their existing scoped pages', () => {
+    expect(appSource).toContain('<Route path="asset-requests" element={<DeptApprovals />} />');
+    expect(appSource).toContain('<Route path="approval-queue" element={<DepartmentDeanRoute />} />');
+    expect(appSource).toContain('<Route path="service-requests" element={<DepartmentMaintenance />} />');
+  });
+
   it('keeps active-route matching and the approved visual/responsive styling scoped to Department Head', () => {
     expect(appSource).toContain(".find((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))?.path");
     expect(appSource).toContain("sidebarRole === 'department_head' ? ' department-head-sidebar' : ''");

@@ -61,6 +61,20 @@ const getAllAssets = async (req, res) => {
     const collegeId = isCollegeScopedRole(req.user?.role) ? getCollegeScopeId(req) : null;
     if (isCollegeScopedRole(req.user?.role) && !collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
     if (collegeId) where.collegeId = collegeId;
+    const departmentHeadDepartmentId = req.user?.role === 'department_head'
+      ? Number(req.organizationScope?.departmentId)
+      : null;
+    if (req.user?.role === 'department_head'
+      && (!Number.isSafeInteger(departmentHeadDepartmentId) || departmentHeadDepartmentId < 1)) {
+      return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+    }
+    if (departmentHeadDepartmentId) {
+      if (query.department_id && Number(query.department_id) !== departmentHeadDepartmentId) {
+        return res.status(403).json({ success: false, message: 'Department is outside your organization scope' });
+      }
+      where.departmentId = departmentHeadDepartmentId;
+      if (req.organizationScope.collegeId) where.collegeId = req.organizationScope.collegeId;
+    }
     const teachingAssistantDepartmentId = req.user?.role === 'teaching_assistant'
       ? Number(req.organizationScope?.departmentId)
       : null;
@@ -170,6 +184,10 @@ const getAllAssets = async (req, res) => {
     });
     const summaryWhere = {
       ...(collegeId ? { collegeId } : {}),
+      ...(departmentHeadDepartmentId ? { departmentId: departmentHeadDepartmentId } : {}),
+      ...(departmentHeadDepartmentId && req.organizationScope.collegeId
+        ? { collegeId: req.organizationScope.collegeId }
+        : {}),
       ...(teachingAssistantDepartmentId ? { departmentId: teachingAssistantDepartmentId } : {}),
       ...(teachingAssistantDepartmentId && req.organizationScope.collegeId
         ? { collegeId: req.organizationScope.collegeId }
@@ -190,13 +208,18 @@ const getAllAssets = async (req, res) => {
         { model: Room, as: 'AssignedLaboratory', attributes: ['id', 'roomName'], required: false },
       ],
     });
-    const laboratoryIds = rows.map((asset) => Number(asset.specifications?.laboratoryId)).filter(Number.isInteger);
-    const laboratories = laboratoryIds.length ? await Room.findAll({ where: { id: { [Op.in]: laboratoryIds } }, attributes: ['id', 'roomName'] }) : [];
-    const laboratoryNames = new Map(laboratories.map((laboratory) => [Number(laboratory.id), laboratory.roomName]));
+    const laboratoryIds = rows.map((asset) => Number(asset.specifications?.laboratoryId || asset.roomId)).filter(Number.isInteger);
+    const laboratories = laboratoryIds.length ? await Room.findAll({
+      where: { id: { [Op.in]: laboratoryIds } },
+      attributes: ['id', 'roomName', 'roomType'],
+    }) : [];
+    const laboratoryNames = new Map(laboratories
+      .filter((laboratory) => String(laboratory.roomType || '').toLowerCase().includes('lab'))
+      .map((laboratory) => [Number(laboratory.id), laboratory.roomName]));
     const serialized = rows.map(asset => serializeAsset(
       asset,
       assignments.find(assignment => assignment.assetId === asset.id),
-      laboratoryNames.get(Number(asset.specifications?.laboratoryId)) || null,
+      laboratoryNames.get(Number(asset.specifications?.laboratoryId || asset.roomId)) || null,
     ));
     res.json({ success: true, data: serialized, assets: serialized, total: count, summary: { total: summaryRows.length, ...summary }, pagination: { page, limit, total: count, pages: Math.ceil(count / limit) } });
   } catch (error) {
