@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowRightLeft, BarChart3, Building2, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Eye, Filter, LoaderCircle, Package, RefreshCw, Search, ShieldCheck, TrendingUp, Users, Wrench } from 'lucide-react';
+import { Building2, ChevronLeft, ChevronRight, ClipboardList, Eye, Filter, LoaderCircle, Package, RefreshCw, Search, ShieldCheck, Users, Wrench } from 'lucide-react';
 import apiClient from '../../services/apiClient';
 import './CollegeDepartmentPerformance.css';
 

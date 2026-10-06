@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Building2, ChevronRight, Eye, MapPin, Package, Plus, RefreshCw, Search, X } from 'lucide-react';
+import { Building2, ChevronRight, MapPin, Package, Plus, RefreshCw, Search, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/apiClient';
 import './CollegeLocations.css';

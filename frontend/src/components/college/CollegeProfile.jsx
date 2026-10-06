@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Building2, CalendarDays, Check, Edit3, Mail, MapPin, Phone, Save, ShieldCheck, UserCircle, X } from 'lucide-react';
+import { Building2, CalendarDays, Check, Edit3, MapPin, Phone, Save, ShieldCheck, UserCircle, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/apiClient';
 import './CollegeProfile.css';

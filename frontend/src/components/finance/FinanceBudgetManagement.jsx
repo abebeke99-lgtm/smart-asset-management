@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import {
   ArrowLeft,
   BarChart3,
-  Calendar,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -14,7 +13,6 @@ import {
   FileText,
   Filter,
   Loader2,
-  MoreVertical,
   Plus,
   RefreshCw,
   Search,
@@ -24,7 +22,6 @@ import {
   Wallet,
   TrendingUp,
   TrendingDown,
-  Building2,
 } from "lucide-react";
 import api from "../../services/api";
 
@@ -361,14 +358,6 @@ export default function FinanceBudgetManagement() {
   const departments = useMemo(() => {
     const values = budgets
       .map((item) => item.departmentName)
-      .filter(Boolean);
-
-    return [...new Set(values)];
-  }, [budgets]);
-
-  const categories = useMemo(() => {
-    const values = budgets
-      .map((item) => item.budgetCategory)
       .filter(Boolean);
 
     return [...new Set(values)];

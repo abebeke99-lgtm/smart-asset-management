@@ -10,7 +10,6 @@ import {
   Clock3,
   Filter,
   RefreshCw,
-  Search,
   ShieldCheck,
   Stethoscope,
   UserCog,
@@ -103,11 +102,6 @@ const AdminMaintenance = () => {
     return date.toLocaleDateString();
   };
 
-  const numberValue = (value) => {
-    const number = Number(value);
-    return Number.isFinite(number) ? number : 0;
-  };
-
   const normalizeStatusValue = (value) => {
     const raw = String(value || 'Pending').trim();
 
@@ -171,23 +165,6 @@ const AdminMaintenance = () => {
     };
 
     return colors[normalized] || '#a0aec0';
-  };
-
-  const getStatusIcon = (status) => {
-    const normalized = normalizeStatusValue(status);
-
-    const icons = {
-      Pending: 'pending',
-      Approved: 'approved',
-      Assigned: 'assigned',
-      'In Progress': 'progress',
-      Completed: 'completed',
-      Cancelled: 'cancelled',
-      Rejected: 'rejected',
-      'Waiting for Parts': 'waiting'
-    };
-
-    return icons[normalized] || 'default';
   };
 
   // ============================================================

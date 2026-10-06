@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 const API_URL = "/api/enam";
+const EMPTY_STATISTICS = {};
 
 const getToken = () =>
   localStorage.getItem("token") ||
@@ -384,7 +385,7 @@ export default function EnamIntegration() {
   };
 
   const statistics =
-    data?.statistics || {};
+    data?.statistics || EMPTY_STATISTICS;
 
   const logs = data?.logs || [];
   const mappings = data?.mappings || [];

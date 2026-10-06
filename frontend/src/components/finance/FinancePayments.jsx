@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Plus, Search, RefreshCw, CheckCircle, XCircle, Clock, CreditCard, Landmark, FileText, CircleDollarSign, ArrowLeftRight, Filter, Eye, Wallet } from "lucide-react";
+import { Plus, Search, RefreshCw, CheckCircle, XCircle, Clock, CreditCard, FileText, CircleDollarSign, ArrowLeftRight, Filter, Eye, Wallet } from "lucide-react";
 import api from "../../services/api";
 
 const PAYMENT_METHOD_LABELS = {
@@ -442,4 +442,3 @@ export default function FinancePayments() {
     </div>
   );
 }
-

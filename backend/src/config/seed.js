@@ -215,6 +215,7 @@ const applyUserUpdates = async (existingUser, updates, userModel) => {
 };
 
 async function ensureDemoUser(userData, { userModel = User, collegeModel = College, departmentModel = Department } = {}) {
+  const refreshPassword = userData.refreshPassword === true;
   const normalizedUserData = normalizeDemoUserSeed(userData);
   const existingUser = await userModel.findOne({ where: { username: normalizedUserData.username } });
 
@@ -256,7 +257,7 @@ async function ensureDemoUser(userData, { userModel = User, collegeModel = Colle
     const passwordNeedsRefresh = normalizedUserData.password && (
       !existingUser.password ||
       !String(existingUser.password).trim() ||
-      !(await bcrypt.compare(normalizedUserData.password, existingUser.password))
+      (refreshPassword && !(await bcrypt.compare(normalizedUserData.password, existingUser.password)))
     );
     if (passwordNeedsRefresh) {
       updates.password = await bcrypt.hash(normalizedUserData.password, 10);
@@ -557,12 +558,17 @@ async function seedDatabase(options = {}) {
     locationModel: options.locationModel || Location,
   };
   const counts = { created: 0, existing: 0 };
+  const initialAdminPassword = options.password === undefined ? process.env.INITIAL_ADMIN_PASSWORD : null;
 
   for (const userData of DEMO_USERS) {
-    const userPassword = userData.username === 'admin' && process.env.INITIAL_ADMIN_PASSWORD
-      ? process.env.INITIAL_ADMIN_PASSWORD
+    const userPassword = userData.username === 'admin' && initialAdminPassword
+      ? initialAdminPassword
       : password;
-    const result = await ensureDemoUser({ ...userData, password: userPassword }, models);
+    const result = await ensureDemoUser({
+      ...userData,
+      password: userPassword,
+      refreshPassword: userData.username === 'admin' && Boolean(initialAdminPassword),
+    }, models);
     counts[result.created ? 'created' : 'existing'] += 1;
   }
 

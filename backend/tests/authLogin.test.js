@@ -59,7 +59,7 @@ test('interprets MySQL active values consistently', () => {
 
 test('inactive login returns a diagnostic 403 and logs only the user id', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/controllers/authController.js'), 'utf8');
-  assert.match(source, /if \(!isAccountActive\(user\.active\)\)/);
+  assert.match(source, /if \(!isAccountActive\(user\.active\)\s*\|\|/);
   assert.match(source, /console\.warn\(`Login rejected for inactive account userId=\$\{user\.id\}`\)/);
   assert.match(source, /status\(403\)\.json\(\{ success: false, message: 'Account is deactivated\.' \}\)/);
   assert.doesNotMatch(source, /Login rejected for inactive account.*password/i);

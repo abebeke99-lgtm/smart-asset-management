@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertCircle,
@@ -417,13 +417,6 @@ function buildQuery(filters) {
   );
 
   return params.toString();
-}
-
-function escapeCsv(value) {
-  return `"${String(value ?? "").replace(
-    /"/g,
-    '""'
-  )}"`;
 }
 
 function statusClass(status) {

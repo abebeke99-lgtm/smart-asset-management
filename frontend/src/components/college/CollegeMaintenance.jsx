@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Eye, FileText, RefreshCw, Search, X, Wrench, AlertTriangle } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Eye, FileText, RefreshCw, Search, X, Wrench } from 'lucide-react';
 import apiClient from '../../services/apiClient';
 import './CollegeMaintenance.css';
 

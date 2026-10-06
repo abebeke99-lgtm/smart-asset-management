@@ -11,9 +11,9 @@
 | Department Head baseline backend | PASS | 89 passed |
 | Department Head baseline frontend | PASS | 79 passed |
 | Post-fix integrity regression suites | PASS | 32 passed, 0 failed: transfer scope, asset retention/permanent-delete protection, service request scope, user deletion integrity |
-| Full backend | UNVERIFIED | Latest rerun could not start Node test child processes (`spawn EPERM`) in the Windows sandbox. Earlier baseline: 486 passed, 14 failed, 9 skipped of 509; test DB at `127.0.0.1:3307` was unavailable then. |
-| Full frontend | FAIL | 258 passed, 6 failed across 55 suites; four failing suites are public Help, Contact, AboutUs and Services copy/link expectations. |
-| Production build | PASS with warnings | Build succeeded; ESLint and large bundle warnings remain. |
+| Full backend | PASS | Latest full run on the isolated `smart_asset_backend_test_20261006` schema: 514 tests, 505 passed, 0 failed, 9 skipped. |
+| Full frontend | FAIL | Latest CI-mode run: 55 suites, 52 passed and 3 failed; 264 tests, 259 passed and 5 failed. Failures are in public Help, AboutUs and Services tests. |
+| Production build | PASS with warnings | Latest production build succeeded; existing ESLint and large bundle warnings remain. |
 
 ## Environment and database audit
 
@@ -51,13 +51,26 @@ Changed code includes `backend/src/routes/assignmentRoutes.js`, `backend/src/con
 | 11 | Create/update/deactivate/delete user end-to-end | Frontend/API/DB | UI→API→DB state agrees at every step | No approved login/session; not run | UNVERIFIED | Requires isolated E2E fixture and account |
 | 12 | Dashboard/report SQL/API count parity | Frontend/API/DB | Counts agree | No authenticated representative session/data | UNVERIFIED | Must compare API output with SQL on isolated fixtures |
 | 13 | UI forms/search/filter/loading/error/mobile | Frontend | All controls/validation/responsive behavior work | Focused frontend baseline passes; no responsive browser run | PARTIAL | Browser visual QA remains |
-| 14 | Full backend regression | Backend | All tests pass | Rerun blocked by sandbox `spawn EPERM`; older baseline had failures | UNVERIFIED | Run in environment allowing Node test subprocesses |
-| 15 | Full frontend regression | Frontend | All tests pass | 258/264 pass; 6 failures across four public-page suites | FAIL | Existing rendered copy/link expectations disagree; outside Department Head scope |
-| 16 | Production build | Frontend | Build completes | Succeeded with lint/bundle warnings | PASS WITH WARNINGS | Clean warnings/bundle size separately |
+| 14 | Full backend regression | Backend | All tests pass | Latest isolated-schema run: 505 passed, 0 failed, 9 skipped (514 total) | PASS | Test database only; shared DB unchanged |
+| 15 | Full frontend regression | Frontend | All tests pass | Latest CI-mode run: 52/55 suites pass; 259/264 tests pass, 5 fail in Help, AboutUs and Services | FAIL | Public-page copy/heading/link expectations remain unresolved and are outside Department Head module scope |
+| 16 | Production build | Frontend | Build completes | Latest build succeeded with ESLint and bundle-size warnings | PASS WITH WARNINGS | Clean warnings/bundle size separately |
 
 ## Final totals and remaining work
 
 - Post-fix integrity regression run: **32 passed, 0 failed**.
-- Full frontend: **258 passed, 6 failed**. Previous full backend baseline: **486 passed, 14 failed, 9 skipped**; newest run blocked before execution by `spawn EPERM`.
+- Latest full backend: **505 passed, 0 failed, 9 skipped** (514 total) on the isolated test schema. Earlier `spawn EPERM` was resolved by invoking Node's test runner directly and sequentially.
+- Latest full frontend: **259 passed, 5 failed** (264 total; 52/55 suites passed). The remaining failures are in public Help (3), AboutUs (1), and Services (1) tests. They are not Department Head workflows.
 - Shared DB was only read. Isolated schema received the FK migration. Unknown historical assignment references remain unchanged and need source-record/business review before any repair.
-- Do not treat the module as production-ready until orphan records are reviewed, shared-database migration is planned, full backend tests run in a supported environment, and approved-credential HTTP/browser E2E and responsive checks pass.
+- Do not treat the module as production-ready until orphan records are reviewed, shared-database migration is planned, frontend failures are resolved, and approved-credential HTTP/browser E2E and responsive checks pass.
+
+## Latest verification update
+
+- The complete backend regression suite now runs successfully against `smart_asset_backend_test_20261006`: **514 tests, 505 passed, 0 failed, 9 skipped**. The separate test schema is isolated from `smart_asset_db`; no application/shared-schema data was changed.
+- The complete frontend regression was rerun in CI mode to avoid changed-file filtering: **55 suites, 52 passed, 3 failed; 264 tests, 259 passed, 5 failed**. The failures are 3 Help-page tests, 1 AboutUs test, and 1 Services test, all around public-page headings/copy/links and outside the Department Head module.
+- The frontend production build succeeds with warnings. No production-readiness claim is made based on build success alone.
+- The shared-database foreign-key migration remains a read-only dry run: of 45 Department Head relationships, 9 are already present, 31 are ready, and 5 are blocked by orphan references. Do not apply the blocked constraints.
+- The orphan snapshot remains **152 rows**: 150 missing asset references and 2 assignment rows referencing missing users. Every row remains **UNKNOWN — REQUIRES REVIEW**. No orphan was repaired, deleted, or recreated.
+- Cleanup is **PENDING BUSINESS/DATA OWNER APPROVAL**. Preserve the assignment and transfer history. Before any cleanup, the data owner must identify authoritative source records, approve a row-by-row disposition and retention treatment, and authorize a backed-up, reviewed migration with a rollback plan.
+- Approved Department Head QA credentials remain unavailable. Authenticated HTTP/E2E, responsive browser QA, and SQL/API parity therefore remain unverified. No credentials were invented or used against the shared database.
+
+**Current verdict: NOT PRODUCTION READY.** The remaining blockers are unresolved shared-database orphans and blocked foreign keys, failed full frontend public-page tests, and unverified authenticated/browser/parity gates.

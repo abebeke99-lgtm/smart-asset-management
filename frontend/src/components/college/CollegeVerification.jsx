@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ClipboardCheck, RefreshCw, Search, ShieldCheck, XCircle } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import apiClient from '../../services/apiClient';
 
 const stateLabelMap = {
@@ -42,7 +42,7 @@ const CollegeVerification = () => {
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1, pages: 1 });
   const [filters, setFilters] = useState({ departments: [], statuses: [], locations: [], assetStatuses: [] });
   const [query, setQuery] = useState({ search: '', departmentId: '', status: '', assetStatus: '', location: '' });
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting] = useState(false);
 
   const loadVerification = async (showLoader = true) => {
     try {

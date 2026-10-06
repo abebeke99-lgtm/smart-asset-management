@@ -35,7 +35,7 @@ const AMHARIC_COPY = {
   'Asset Code': 'የንብረት ኮድ', 'Asset Name': 'የንብረት ስም', Category: 'ምድብ', Department: 'ዲፓርትመንት', Location: 'ቦታ', Status: 'ሁኔታ', Condition: 'አቋም', 'Assigned To': 'የተመደበለት', 'Purchase Date': 'የግዢ ቀን', 'Asset Value': 'የንብረት ዋጋ', 'Last Updated': 'የመጨረሻ ማሻሻያ', Count: 'ብዛት', Percentage: 'መቶኛ', 'Staff Count': 'የሰራተኞች ብዛት', 'Total Assets': 'ጠቅላላ ንብረቶች', Assigned: 'የተመደቡ', Available: 'ያሉ', 'Under Maintenance': 'በጥገና ላይ', Damaged: 'የተጎዱ', Missing: 'የጠፉ', 'Assignment ID': 'የምደባ መለያ', Asset: 'ንብረት', 'Assignment Date': 'የምደባ ቀን', 'Transfer ID': 'የዝውውር መለያ', From: 'ከ', To: 'ወደ', 'Requested By': 'የጠየቀው', 'Transfer Date': 'የዝውውር ቀን', 'Completed Date': 'የተጠናቀቀበት ቀን', 'Return ID': 'የመመለሻ መለያ', 'Returned By': 'የመለሰው', 'Return Date': 'የመመለሻ ቀን', 'Maintenance ID': 'የጥገና መለያ', Type: 'አይነት', Priority: 'ቅድሚያ', 'Reported Date': 'የተመዘገበበት ቀን', 'Verification Session': 'የማረጋገጫ ክፍለ ጊዜ', 'Verification Status': 'የማረጋገጫ ሁኔታ', 'Verified By': 'ያረጋገጠው', 'Verification Date': 'የማረጋገጫ ቀን', 'Request ID': 'የጥያቄ መለያ', 'Request Date': 'የጥያቄ ቀን', Requester: 'ጠያቂ', 'Requested Item': 'የተጠየቀው እቃ', Quantity: 'ብዛት', Date: 'ቀን', 'Movement Type': 'የእንቅስቃሴ አይነት', User: 'ተጠቃሚ', Reference: 'ማጣቀሻ', Item: 'እቃ',
   'Failed to load report data.': 'የሪፖርት መረጃን መጫን አልተቻለም።', 'Report selector': 'የሪፖርት መምረጫ', Refresh: 'አድስ', 'Search report data': 'የሪፖርት መረጃ ይፈልጉ', 'Search reports': 'ሪፖርቶችን ይፈልጉ', 'All departments': 'ሁሉም ዲፓርትመንቶች', 'All categories': 'ሁሉም ምድቦች', 'All statuses': 'ሁሉም ሁኔታዎች', 'Clear Filters': 'ማጣሪያዎችን አጽዳ',
   'Active Assets': 'ንቁ ንብረቶች', 'Assigned Assets': 'የተመደቡ ንብረቶች', 'Available Assets': 'ያሉ ንብረቶች', 'Total Assignments': 'ጠቅላላ ምደባዎች', 'Total Transfers': 'ጠቅላላ ዝውውሮች', 'Total Returns': 'ጠቅላላ መመለሻዎች', 'Maintenance Records': 'የጥገና መዝገቦች', 'Pending Requests': 'በመጠባበቅ ላይ ያሉ ጥያቄዎች', 'Verified Assets': 'የተረጋገጡ ንብረቶች', 'Movement Records': 'የእንቅስቃሴ መዝገቦች', 'Report chart': 'የሪፖርት ገበታ', Report: 'ሪፖርት', 'No chart data available for this report.': 'ለዚህ ሪፖርት የገበታ መረጃ የለም።', 'No records': 'መዝገቦች የሉም', Export: 'ወደ ውጭ ላክ', 'Export report': 'ሪፖርቱን ወደ ውጭ ላክ', 'Loading report data...': 'የሪፖርት መረጃን በመጫን ላይ...', Retry: 'እንደገና ሞክር', 'No report data found for the selected filters.': 'ለተመረጡት ማጣሪያዎች የሪፖርት መረጃ አልተገኘም።', Previous: 'ቀዳሚ', Next: 'ቀጣይ', Page: 'ገጽ', of: 'ከ', 'Showing records': 'መዝገቦችን በማሳየት ላይ', 'From date': 'ከቀን', 'To date': 'እስከ ቀን',
-  Active: 'ንቁ', Pending: 'በመጠባበቅ ላይ', Approved: 'ጸድቋል', Rejected: 'ውድቅ ተደርጓል', Completed: 'ተጠናቋል', Verified: 'ተረጋግጧል', 'In Maintenance': 'በጥገና ላይ', Available: 'ያለ'
+  Active: 'ንቁ', Pending: 'በመጠባበቅ ላይ', Approved: 'ጸድቋል', Rejected: 'ውድቅ ተደርጓል', Completed: 'ተጠናቋል', Verified: 'ተረጋግጧል', 'In Maintenance': 'በጥገና ላይ'
 };
 
 const CollegeReports = () => {
@@ -43,7 +43,7 @@ const CollegeReports = () => {
   const translate = (value) => language === 'am' ? AMHARIC_COPY[value] || AMHARIC_COPY[String(value).toLowerCase()] || value : value;
   const [reportType, setReportType] = useState('inventory');
   const [loading, setLoading] = useState(true);
-  const [tableLoading, setTableLoading] = useState(false);
+  const [, setTableLoading] = useState(false);
   const [error, setError] = useState('');
   const [filters, setFilters] = useState({ departmentId: '', categoryId: '', status: '', dateFrom: '', dateTo: '', search: '' });
   const [page, setPage] = useState(1);

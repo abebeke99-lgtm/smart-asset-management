@@ -136,13 +136,14 @@ test('initial admin creation stores one active admin with a bcrypt hash and is i
     },
     async create(values) {
       createCalls += 1;
-      const user = { id: createCalls, ...values };
+      const user = { id: createCalls, ...values, update: async function update(nextValues) { Object.assign(this, nextValues); } };
       users.push(user);
       return user;
     },
   };
 
   const previousPassword = process.env.INITIAL_ADMIN_PASSWORD;
+  const updatedPassword = makeTestPassword();
   process.env.INITIAL_ADMIN_PASSWORD = testPassword;
   let first;
   let second;
@@ -150,7 +151,7 @@ test('initial admin creation stores one active admin with a bcrypt hash and is i
   try {
     first = await initializeInitialAdmin({ userModel });
     firstHash = users[0].password;
-    process.env.INITIAL_ADMIN_PASSWORD = makeTestPassword();
+    process.env.INITIAL_ADMIN_PASSWORD = updatedPassword;
     second = await initializeInitialAdmin({ userModel });
   } finally {
     if (previousPassword === undefined) delete process.env.INITIAL_ADMIN_PASSWORD;
@@ -158,14 +159,48 @@ test('initial admin creation stores one active admin with a bcrypt hash and is i
   }
 
   assert.deepEqual(first, { created: true, userId: 1 });
-  assert.deepEqual(second, { created: false, userId: 1 });
+  assert.deepEqual(second, { created: false, userId: 1, passwordUpdated: true });
   assert.equal(createCalls, 1);
   assert.equal(users.length, 1);
   assert.match(firstHash, /^\$2[aby]\$/);
-  assert.equal(users[0].password, firstHash);
-  assert.equal(await bcrypt.compare(testPassword, firstHash), true);
+  assert.notEqual(users[0].password, firstHash);
+  assert.equal(await bcrypt.compare(updatedPassword, users[0].password), true);
   assert.equal(users[0].active, true);
   assert.equal(users[0].role, 'admin');
+});
+
+test('existing admin is repaired to the configured initial password when it does not match', async () => {
+  const configuredPassword = makeTestPassword();
+  const oldPassword = makeTestPassword();
+  const existingAdmin = {
+    id: 99,
+    username: 'admin',
+    role: 'admin',
+    active: true,
+    password: await bcrypt.hash(oldPassword, 10),
+    async update(values) {
+      Object.assign(existingAdmin, values);
+    },
+  };
+
+  const previousPassword = process.env.INITIAL_ADMIN_PASSWORD;
+  process.env.INITIAL_ADMIN_PASSWORD = configuredPassword;
+  try {
+    const result = await initializeInitialAdmin({
+      userModel: {
+        async findOne() {
+          return existingAdmin;
+        },
+      },
+    });
+
+    assert.deepEqual(result, { created: false, userId: 99, passwordUpdated: true });
+    assert.equal(await bcrypt.compare(configuredPassword, existingAdmin.password), true);
+    assert.equal(await bcrypt.compare(oldPassword, existingAdmin.password), false);
+  } finally {
+    if (previousPassword === undefined) delete process.env.INITIAL_ADMIN_PASSWORD;
+    else process.env.INITIAL_ADMIN_PASSWORD = previousPassword;
+  }
 });
 
 test('existing inactive or malformed-hash admin is rejected without mutation or duplication', async () => {

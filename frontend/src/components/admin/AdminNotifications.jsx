@@ -10,7 +10,6 @@ import {
   Filter,
   RefreshCw,
   Search,
-  ShieldAlert,
   Trash2,
   X,
 } from 'lucide-react';
@@ -534,4 +533,3 @@ const InfoRow = ({ label, value }) => (
 );
 
 export default AdminNotifications;
-

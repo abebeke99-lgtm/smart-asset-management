@@ -19,8 +19,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Receipt,
-  Building2,
-  CalendarDays,
   Printer,
   CreditCard,
   ArrowLeft,

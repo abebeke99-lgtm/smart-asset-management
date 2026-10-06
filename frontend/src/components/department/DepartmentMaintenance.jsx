@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Building2, CalendarDays, CheckCircle2, CircleX, Clock3, Eye, FileText, Flag, LifeBuoy, LoaderCircle, MapPin, Package, Plus, RefreshCw, Search, SlidersHorizontal, UserRound, Wrench, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { apiClient } from '../../utils/api';
@@ -50,7 +50,7 @@ const DepartmentMaintenance = () => {
   const serviceRoles = ['admin', 'maintenance', 'ict_officer', 'infrastructure'];
   const canAssignServiceRequests = serviceRoles.includes(role);
 
-  const loadRecords = async () => {
+  const loadRecords = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -69,9 +69,9 @@ const DepartmentMaintenance = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters.priority, filters.search, filters.status]);
 
-  const loadServiceRequests = async () => {
+  const loadServiceRequests = useCallback(async () => {
     setServiceLoading(true);
     setServiceError('');
     try {
@@ -94,7 +94,7 @@ const DepartmentMaintenance = () => {
     } finally {
       setServiceLoading(false);
     }
-  };
+  }, [canAssignServiceRequests, filters.priority, filters.search, filters.status]);
 
   useEffect(() => {
     if (isServiceRequestRoute) {
@@ -102,7 +102,7 @@ const DepartmentMaintenance = () => {
       return;
     }
     loadRecords();
-  }, [filters.search, filters.status, filters.priority, isServiceRequestRoute]);
+  }, [filters.search, filters.status, filters.priority, isServiceRequestRoute, loadRecords, loadServiceRequests]);
 
   const visibleRecords = useMemo(() => records, [records]);
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
 
@@ -9,7 +10,7 @@ const Help = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [openFaqId, setOpenFaqId] = useState(null);
   const isEnglish = language === 'en';
-  const text = (english, amharic) => isEnglish ? english : amharic;
+  const text = (english, amharic) => (isEnglish ? english : amharic);
 
   const questions = [
     [text('How do I register an asset?', 'ንብረት እንዴት እመዘግባለሁ?'), text('Open the asset registration workflow available to your role and enter the required asset information.', 'በሚናዎ የሚገኘውን የንብረት መመዝገቢያ ሂደት ይክፈቱና የሚያስፈልገውን መረጃ ያስገቡ።')],
@@ -69,18 +70,18 @@ const Help = () => {
         .help-faq-question:focus-visible { position: relative; z-index: 1; outline: 3px solid var(--help-highlight); outline-offset: -3px; }
         .help-faq-question span:first-child { min-width: 0; overflow-wrap: anywhere; }
         .help-faq-toggle { flex: 0 0 28px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: rgba(217,164,65,0.14); color: var(--help-brand); font-size: 1.35rem; line-height: 1; }
-        .help-faq-answer { display: grid; grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows 180ms ease, visibility 180ms ease; }
-        .help-faq-answer.is-open { grid-template-rows: 1fr; visibility: visible; }
+        .help-faq-answer { display: none; }
+        .help-faq-answer.is-open { display: block; }
         .help-faq-answer-inner { min-height: 0; overflow: hidden; }
         .help-faq-answer p { margin: 0; padding: 0 18px 18px; color: var(--help-text-soft); line-height: 1.65; overflow-wrap: anywhere; }
         .help-empty { margin: 24px 0 0; color: var(--help-text-soft); }
         @media (max-width: 640px) { .help-shell { width: calc(100% - 24px); } .help-header { padding: 28px 0 24px; } .help-header h1 { font-size: 1.75rem; } .help-header h2 { font-size: 1.45rem; } .help-search { align-items: stretch; flex-direction: column; } .help-search button { width: 100%; } }
-        @media (prefers-reduced-motion: reduce) { .help-faq-answer { transition: none; } }
       `}</style>
 
       <header className="help-header">
         <div className="help-shell">
-         
+          <h1>{text('Mekdela Amba University', 'መቅደላ አምባ ዩኒቨርሲቲ')}</h1>
+          <p className="help-system">{text('University Asset Management System', 'የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት')}</p>
           <h2>{text('Help & Support', 'እገዛና ድጋፍ')}</h2>
         </div>
       </header>
@@ -99,53 +100,66 @@ const Help = () => {
 
         <p className="help-intro">{text('Practical guidance for signing in and using the asset workflows available to your role.', 'ለመግባትና ለሚናዎ የተፈቀዱ የንብረት ሂደቶችን ለመጠቀም ተግባራዊ መመሪያ።')}</p>
 
-        
+        <section className="help-section" aria-labelledby="help-quick-actions">
+          <h3 id="help-quick-actions">{text('Quick Actions', 'ፈጣን እርምጃዎች')}</h3>
+          <div className="help-action-links">
+            <Link to="/login">{text('Login', 'ግባ')}</Link>
+            <Link to="/forgot-password">{text('Forgot Password', 'የይለፍ ቃል ረሳሁ')}</Link>
+            <Link to="/contact">{text('Contact Support', 'ድጋፍን ያግኙ')}</Link>
+          </div>
+        </section>
+
         <section className="help-section" aria-labelledby="help-topics">
           <h3 id="help-topics">{text('Help Topics', 'የእገዛ ርዕሶች')}</h3>
           <article className="help-topic">
-            <h4>Asset Workflows</h4>
+            <h4>{text('Asset Workflows', 'የንብረት ሂደቶች')}</h4>
             <ul>
-              <li>Asset assignment</li>
-              <li>Asset transfer</li>
-              <li>Asset verification</li>
-              <li>Maintenance requests</li>
-              <li>Asset returns</li>
-              <li>Asset disposal</li>
+              <li>{text('Asset assignment', 'የንብረት ምደባ')}</li>
+              <li>{text('Asset transfer', 'የንብረት ዝውውር')}</li>
+              <li>{text('Asset verification', 'የንብረት ማረጋገጫ')}</li>
+              <li>{text('Maintenance requests', 'የጥገና ጥያቄዎች')}</li>
+              <li>{text('Asset returns', 'የንብረት መመለሻ')}</li>
+              <li>{text('Asset disposal', 'የንብረት ማስወገድ')}</li>
             </ul>
           </article>
         </section>
 
-       
+        <section className="help-section" aria-labelledby="help-password-reset">
+          <h3 id="help-password-reset">{text('Password Reset', 'የይለፍ ቃል ዳግም ማስጀመር')}</h3>
+          <div className="help-action-links">
+            <Link to="/forgot-password">{text('Open password recovery', 'የይለፍ ቃል ማግኛን ይክፈቱ')}</Link>
+          </div>
+        </section>
 
         <section className="help-section" aria-labelledby="help-faq-heading">
           <h3 id="help-faq-heading">{text('Frequently Asked Questions', 'ተደጋጋሚ ጥያቄዎች')}</h3>
-        {filteredQuestions.length > 0 ? (
-          <section className="help-faq-list" aria-label={text('Frequently Asked Questions', 'ተደጋጋሚ ጥያቄዎች')}>
-            {filteredQuestions.map(([question, answer], index) => {
-              const id = `help-faq-answer-${index}`;
-              const isOpen = openFaqId === id;
-              return (
-                <article key={question} className="help-faq-card">
-                  <button
-                    type="button"
-                    className="help-faq-question"
-                    aria-expanded={isOpen}
-                    aria-controls={id}
-                    onClick={() => setOpenFaqId(isOpen ? null : id)}
-                  >
-                    <span>{question}</span>
-                    <span className="help-faq-toggle" aria-hidden="true">{isOpen ? '−' : '+'}</span>
-                  </button>
-                  <div id={id} className={`help-faq-answer${isOpen ? ' is-open' : ''}`} aria-hidden={!isOpen}>
-                    <div className="help-faq-answer-inner"><p>{answer}</p></div>
-                  </div>
-                </article>
-              );
-            })}
-          </section>
-        ) : (
-          <p className="help-empty" role="status">{text('No matching results found.', 'ተዛማጅ ውጤት አልተገኘም።')}</p>
-        )}
+          {filteredQuestions.length > 0 ? (
+            <section className="help-faq-list" aria-label={text('Frequently Asked Questions', 'ተደጋጋሚ ጥያቄዎች')}>
+              {filteredQuestions.map(([question, answer], index) => {
+                const id = `help-faq-answer-${index}`;
+                const isOpen = openFaqId === id;
+                return (
+                  <article key={question} className="help-faq-card">
+                    <button
+                      type="button"
+                      className="help-faq-question"
+                      aria-expanded={isOpen}
+                      aria-controls={id}
+                      onClick={() => setOpenFaqId(isOpen ? null : id)}
+                    >
+                      <span>{question}</span>
+                      <span className="help-faq-toggle" aria-hidden="true">{isOpen ? '−' : '+'}</span>
+                    </button>
+                    <div id={id} className={`help-faq-answer${isOpen ? ' is-open' : ''}`} aria-hidden={!isOpen}>
+                      <div className="help-faq-answer-inner"><p>{answer}</p></div>
+                    </div>
+                  </article>
+                );
+              })}
+            </section>
+          ) : (
+            <p className="help-empty" role="status">{text('No matching results found.', 'ተዛማጅ ውጤት አልተገኘም።')}</p>
+          )}
         </section>
 
         <section className="help-section" aria-labelledby="help-roles">
@@ -156,7 +170,13 @@ const Help = () => {
           </div>
         </section>
 
-        
+        <section className="help-section" aria-labelledby="help-more-support">
+          <h3 id="help-more-support">{text('Need More Help?', 'ተጨማሪ እገዛ ያስፈልጋል?')}</h3>
+          <div className="help-action-links">
+            <Link to="/contact">{text('View Contact Information', 'የግንኙነት መረጃን ይመልከቱ')}</Link>
+            <Link to="/">{text('Back to Home', 'ወደ መነሻ ገጽ')}</Link>
+          </div>
+        </section>
       </div>
     </main>
   );

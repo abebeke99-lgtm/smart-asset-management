@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ClipboardCheck, LoaderCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import apiClient from '../../services/apiClient';
 import { useLanguage } from '../../contexts/UiContext';
@@ -12,7 +12,7 @@ const localDate = () => {
 const DeptVerification = () => {
   const { language } = useLanguage();
   const isAmharic = language === 'am';
-  const copy = (english, amharic) => isAmharic ? amharic : english;
+  const copy = useCallback((english, amharic) => isAmharic ? amharic : english, [isAmharic]);
   const [assets, setAssets] = useState([]);
   const [history, setHistory] = useState([]);
   const [form, setForm] = useState({
@@ -33,7 +33,7 @@ const DeptVerification = () => {
     [assets, form.assetId],
   );
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -48,9 +48,9 @@ const DeptVerification = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [copy]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const updateAsset = (event) => {
     const assetId = event.target.value;

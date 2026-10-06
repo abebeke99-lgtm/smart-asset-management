@@ -16,10 +16,15 @@ test('app startup completes database initialization before listening', () => {
 
 test('health endpoint checks database connectivity without querying users', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
+  const healthHandlerStart = source.indexOf('const healthHandler =');
+  const healthHandlerEnd = source.indexOf("app.get('/health', healthHandler)", healthHandlerStart);
+  const healthHandler = source.slice(healthHandlerStart, healthHandlerEnd);
+  assert.ok(healthHandlerStart >= 0);
+  assert.ok(healthHandlerEnd > healthHandlerStart);
   assert.match(source, /await sequelize\.query\('SELECT 1'\)/);
   assert.match(source, /res\.status\(200\)\.json\(\{ status: 'ok', database: 'connected' \}\)/);
   assert.match(source, /res\.status\(503\)\.json\(\{ status: 'error', database: 'unavailable' \}\)/);
-  assert.doesNotMatch(source, /healthHandler[\s\S]*?User\.find/);
+  assert.doesNotMatch(healthHandler, /User\.find/);
   assert.match(source, /app\.get\('\/health', healthHandler\)/);
 });
 

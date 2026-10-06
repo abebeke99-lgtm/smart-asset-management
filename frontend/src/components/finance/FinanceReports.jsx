@@ -41,7 +41,7 @@ const FinanceReports = () => {
   const [loading, setLoading] = useState(true);
   const [assets, setAssets] = useState([]);
   const [maintenanceRequests, setMaintenanceRequests] = useState([]);
-  const [disposedAssets, setDisposedAssets] = useState([]);
+  const [, setDisposedAssets] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
   
   // Filter states

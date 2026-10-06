@@ -16,7 +16,6 @@ import {
   Trash2,
   FileText,
 } from "lucide-react";
-import { apiClient } from "../../utils/api";
 
 export default function DisposalFinancialRecords() {
   const [records, setRecords] = useState([]);

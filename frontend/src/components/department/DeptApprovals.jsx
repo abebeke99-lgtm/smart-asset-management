@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Archive, Check, CheckCircle2, ClipboardCheck, Download, Eye, FileText, Loader2, PackageCheck, RefreshCw, ShieldAlert, Wrench, X, XCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
@@ -37,11 +37,7 @@ const DeptApprovals = () => {
   const isDark = theme === 'dark';
   const t = language === 'en' ? englishTranslations : amharicTranslations;
 
-  useEffect(() => {
-    fetchRequests();
-  }, [filterType, filterPriority]);
-
-  const fetchRequests = async () => {
+  const fetchRequests = useCallback(async () => {
     setLoading(true);
     try {
       const response = await axios.get('/api/department/approvals', { params: { limit: 200 } });
@@ -66,7 +62,11 @@ const DeptApprovals = () => {
       calculateStats([]);
     }
     setLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchRequests();
+  }, [fetchRequests, filterType, filterPriority]);
 
   const calculateStats = (data) => {
     const pending = data.filter(r => r.status === 'Pending').length;

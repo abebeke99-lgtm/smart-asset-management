@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowRightLeft, BarChart3, Building2, CheckCircle2, Download, Filter, LoaderCircle, Package, RefreshCw, Search, ShieldCheck, Users, Wrench, XCircle } from 'lucide-react';
+import { AlertTriangle, BarChart3, Building2, CheckCircle2, Download, Filter, LoaderCircle, Package, RefreshCw, Search, ShieldCheck, Users, Wrench, XCircle } from 'lucide-react';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import {
   ArcElement,
@@ -26,8 +26,6 @@ const formatDate = (value) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('en-ET', { year: 'numeric', month: 'short', day: 'numeric' });
 };
-
-const emptySeries = [];
 
 const CollegeAssetAnalytics = () => {
   const [loading, setLoading] = useState(true);

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import apiClient, { getApiErrorMessage } from "../../services/apiClient";
 
+const EMPTY_SERVICES = [];
+
 const normalizeData = (payload) => {
   const data =
     payload?.data ||
@@ -241,7 +243,7 @@ export default function SystemMonitoring() {
   const server = monitoring?.server || {};
   const database = monitoring?.database || {};
   const api = monitoring?.api || {};
-  const services = monitoring?.services || [];
+  const services = monitoring?.services || EMPTY_SERVICES;
   const activity = monitoring?.activity || [];
 
   const healthyServices = useMemo(

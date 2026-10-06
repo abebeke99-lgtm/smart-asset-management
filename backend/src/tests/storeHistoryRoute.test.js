@@ -173,7 +173,10 @@ test('Store issue form data routes retain College scope middleware', () => {
     assignmentRoutes.stack.find((layer) => layer.route && layer.route.path === '/' && layer.route.methods.post),
   ]) {
     assert.ok(route);
-    assert.match(route.route.stack[2].handle.name, /resolveAssignmentOrganizationScope/);
+    const permissionIndex = route.route.stack.findIndex((layer) => layer.handle.name === 'requireDepartmentPermission');
+    const scopeIndex = route.route.stack.findIndex((layer) => layer.handle.name === 'resolveAssignmentOrganizationScope');
+    assert.ok(permissionIndex >= 0, 'assignment routes must enforce Department Head permissions');
+    assert.ok(scopeIndex > permissionIndex, 'assignment routes must resolve organization scope after role permissions');
   }
 
   const users = userRoutes.stack.find((layer) => layer.route && layer.route.path === '/' && layer.route.methods.get);

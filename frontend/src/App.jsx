@@ -11,7 +11,7 @@ import './styles/admin/index.css';
 import './components/ict/ICTModuleThemes.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, Folder, GitBranch, House, Info, Languages, Layers, LayoutDashboard, LifeBuoy, LockKeyhole, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, Phone, QrCode, Radio, Search, Settings, ShieldCheck, Sparkles, Sun, TrendingUp, Undo2, UserCircle, UserRound, Users, Wrench, X } from 'lucide-react';
+import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, Folder, GitBranch, House, Info, Languages, Layers, LayoutDashboard, LifeBuoy, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, QrCode, Radio, Search, Settings, ShieldCheck, Sun, TrendingUp, Undo2, UserCircle, UserRound, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeManagerPages from './components/college/CollegeManagerPages';
@@ -26,7 +26,7 @@ import ScopedWorkflowPage from './components/shared/ScopedWorkflowPage';
 // ==========================================
 
 import { UIProvider, useLanguage, useTheme } from './contexts/UiContext';
-import { getShellTranslations, translateMessage, translateNavigationLabel } from './i18n/messages';
+import { getShellTranslations, translateNavigationLabel } from './i18n/messages';
 
 // ==========================================
 // IMPORT CONTEXTS
@@ -34,7 +34,6 @@ import { getShellTranslations, translateMessage, translateNavigationLabel } from
 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
-import { getDepartmentLabel } from './utils/department';
 import { apiClient, getApiErrorMessage } from './utils/api';
 import Footer from './components/common/Footer';
 import StoreTracking from './components/store/StoreTracking';
@@ -54,18 +53,15 @@ import AssetDetails from './components/shared/AssetDetails';
 import AdminUserManagement from './components/admin/AdminUserManagement';
 import AdminReports from './components/admin/AdminReports';
 import AdminSettings from './components/admin/AdminSettings';
-import AdminNotificationDetails from './components/admin/AdminNotificationDetails';
 import AdminNotifications from './components/admin/AdminNotifications';
 import AdminBackup from './components/admin/AdminBackup';
 import AdminRolesPermissions from './components/admin/AdminRolesPermissions';
 import AdminDepartmentManagement from './components/admin/AdminDepartmentManagement';
 import AdminAnalyticsCenter from './components/admin/AdminAnalyticsCenter';
 import AdminAssetAnalytics from './components/admin/AdminAssetAnalytics';
-import AdminAuditLogs from './components/admin/AdminAuditLogs';
 import AdminChemicalQuarantine from './components/admin/AdminChemicalQuarantine';
 import SystemMonitoring from './components/admin/SystemMonitoring';
 import AdminCollegeManagement from './components/admin/AdminCollegeManagement';
-import AdminCollegeDetails from './components/admin/AdminCollegeDetails';
 import EnamIntegration from './components/admin/EnamIntegration';
 
 import ICTDashboard from './components/ict/ICTDashboard';
@@ -275,6 +271,8 @@ export const getDashboardRoute = (role) => {
     staff: '/staff/dashboard',
     student: '/student/dashboard',
   };
+
+  const publicPaths = ['/home', '/about', '/services', '/contact', '/contac', '/help', '/register', '/forgot-password', '/reset-password'];
   return roleMap[normalizeRole(role)] || '/home';
 };
 
@@ -493,30 +491,6 @@ const normalizeListResponse = (payload) => {
   if (Array.isArray(payload.locations)) return payload.locations;
   if (Array.isArray(payload.disposals)) return payload.disposals;
   return [];
-};
-
-const getAssetCategoryFallback = (assets = []) => {
-  const buckets = {};
-  assets.forEach((asset) => {
-    const name = String(asset?.category || asset?.category_name || 'Uncategorized').trim() || 'Uncategorized';
-    if (!buckets[name]) {
-      buckets[name] = { id: Date.now() + Math.random(), name, description: `${name} asset category`, assetCount: 0 };
-    }
-    buckets[name].assetCount += 1;
-  });
-  return Object.values(buckets).sort((left, right) => left.name.localeCompare(right.name));
-};
-
-const getAssetLocationFallback = (assets = []) => {
-  const buckets = {};
-  assets.forEach((asset) => {
-    const name = String(asset?.location || asset?.site || 'Unassigned').trim() || 'Unassigned';
-    if (!buckets[name]) {
-      buckets[name] = { id: Date.now() + Math.random(), name, description: `${name} asset location`, assetCount: 0 };
-    }
-    buckets[name].assetCount += 1;
-  });
-  return Object.values(buckets).sort((left, right) => left.name.localeCompare(right.name));
 };
 
 const CategoryIcon = ({ icon, size = 14 }) => {
@@ -2275,19 +2249,7 @@ const AdminAssetDocuments = () => {
 
 const RoleLayout = () => {
   const { theme } = useTheme();
-  const location = useLocation();
   const isDark = theme === 'dark';
-
-  const formatSegment = (segment = '') => {
-    const cleaned = String(segment || '').trim();
-    if (!cleaned) return 'Home';
-
-    return cleaned
-      .split(/[-_ /]+/)
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ');
-  };
 
   return (
     <div style={{
@@ -2613,20 +2575,6 @@ function AppContent() {
   const translateLabel = (value) => translateNavigationLabel(language, value);
   const translateCollegeNavigation = (value) => translateNavigationLabel(language, value);
 
-  const getRoleDisplay = (role) => {
-    const normalizedRole = normalizeRole(role);
-    const roleMap = {
-      admin: { emoji: '👑', label: 'Admin' },
-      ict_officer: { emoji: '💻', label: 'ICT Officer' },
-      college_manager: { emoji: '🏫', label: 'College Manager' },
-      store_manager: { emoji: '🏪', label: 'Store Manager' },
-      finance: { emoji: '💰', label: 'Finance' },
-      maintenance: { emoji: '🔧', label: 'Maintenance' },
-      infrastructure: { emoji: '🏗️', label: 'Infrastructure' }
-    };
-    return roleMap[normalizedRole] || { emoji: '👤', label: normalizedRole ? normalizedRole.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()) : 'User' };
-  };
-
   useEffect(() => {
     document.body.className = theme;
   }, [theme]);
@@ -2694,7 +2642,7 @@ function AppContent() {
       active = false;
       window.clearInterval(interval);
     };
-  }, [user?.id, user?.role, location.pathname]);
+  }, [user, user?.id, user?.role, location.pathname]);
 
   useEffect(() => {
     const handleDocumentClick = (event) => {
@@ -2787,7 +2735,6 @@ function AppContent() {
   };
 
   const dashboardRoute = getDashboardRoute(user?.role);
-  const publicPaths = ['/home', '/about', '/services', '/contact', '/contac', '/help', '/register', '/forgot-password', '/reset-password'];
   const requestPublicNavigation = (path, event) => {
     if (user) {
       event?.preventDefault();

@@ -3,9 +3,10 @@ import { useLanguage, useTheme } from '../../contexts/UiContext';
 
 const pageContent = {
   en: {
-   
+    title: 'Mekdela Amba University',
+    introduction: 'Mekdela Amba University is a higher education institution committed to quality teaching, research, innovation, and community development.',
     aboutTitle: 'About Us',
-    
+    aboutText: 'Mekdela Amba University provides an academic environment where students, faculty, researchers, and partners can learn, collaborate, and contribute to sustainable development.',
     visionTitle: 'Vision',
     visionText: 'To become a center of excellence in education, research, innovation, and community engagement, contributing meaningfully to national development.',
     missionTitle: 'Mission',

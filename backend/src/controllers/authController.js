@@ -173,15 +173,22 @@ const login = async (req, res) => {
 
     const identity = username.trim();
     const candidateNames = resolveLoginAliases(identity);
-    const matches = await User.findAll({
+    let user = await User.findOne({
       where: {
-        [Op.or]: [
-          { username: { [Op.in]: candidateNames } },
-          { email: { [Op.in]: candidateNames } }
-        ]
-      }
+        [Op.or]: [{ username: identity }, { email: identity }],
+      },
     });
-    const user = matches.sort((left, right) => rankLoginMatch(left, identity, candidateNames) - rankLoginMatch(right, identity, candidateNames))[0] || null;
+    if (!user && candidateNames.some((candidate) => candidate !== identity.toLowerCase())) {
+      const matches = await User.findAll({
+        where: {
+          [Op.or]: [
+            { username: { [Op.in]: candidateNames } },
+            { email: { [Op.in]: candidateNames } }
+          ]
+        }
+      });
+      user = matches.sort((left, right) => rankLoginMatch(left, identity, candidateNames) - rankLoginMatch(right, identity, candidateNames))[0] || null;
+    }
 
     if (!user) {
       await recordAuthEvent({ action: 'LOGIN_FAILED', result: 'Failure', req });

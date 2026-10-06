@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowRightLeft,
@@ -108,7 +108,7 @@ const Assignments = () => {
     return [];
   };
 
-  const loadAssignments = async (showRefresh = false) => {
+  const loadAssignments = useCallback(async (showRefresh = false) => {
     try {
       if (showRefresh) {
         setRefreshing(true);
@@ -146,7 +146,7 @@ const Assignments = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadAssignments();
@@ -156,7 +156,7 @@ const Assignments = () => {
     }, 60000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [loadAssignments]);
 
   const statuses = useMemo(() => {
     const values = assignments

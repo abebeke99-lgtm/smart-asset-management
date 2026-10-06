@@ -43,8 +43,14 @@ test('legacy college role is accepted and normalized to college_manager', () => 
 });
 
 test('legacy college role receives college_manager permissions', async () => {
-  const permissions = await getConfiguredRolePermissions('college');
-  assert.deepEqual(permissions, await getConfiguredRolePermissions('college_manager'));
+  const originalFindByPk = Config.findByPk;
+  Config.findByPk = async () => null;
+  try {
+    const permissions = await getConfiguredRolePermissions('college');
+    assert.deepEqual(permissions, await getConfiguredRolePermissions('college_manager'));
+  } finally {
+    Config.findByPk = originalFindByPk;
+  }
 });
 
 test('explicit department-head permission matrices revoke permissions outside the saved list', async () => {

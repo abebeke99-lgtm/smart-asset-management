@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { Op } = require('sequelize');
-const { ServiceRequest } = require('../models');
+const { ServiceRequest, SupportTicketComment } = require('../models');
 const controller = require('../controllers/departmentTicketController');
 const departmentWorkspaceRoutes = require('../routes/departmentWorkspaceRoutes');
 
@@ -57,6 +57,7 @@ test('ticket list rejects absent department scope and invalid filters', async (t
 
 test('ticket details are limited to the resolved department and return monitoring fields', async (t) => {
   const original = ServiceRequest.findOne;
+  const originalComments = SupportTicketComment.findAll;
   let query;
   const ticket = {
     Assignee: { fullName: 'Alem Bekele' },
@@ -78,7 +79,11 @@ test('ticket details are limited to the resolved department and return monitorin
     }),
   };
   ServiceRequest.findOne = async (options) => { query = options; return ticket; };
-  t.after(() => { ServiceRequest.findOne = original; });
+  SupportTicketComment.findAll = async () => [];
+  t.after(() => {
+    ServiceRequest.findOne = original;
+    SupportTicketComment.findAll = originalComments;
+  });
 
   const response = makeResponse();
   await controller.getTicket({ organizationScope: { departmentId: 12 }, params: { id: '4' } }, response, (error) => { throw error; });

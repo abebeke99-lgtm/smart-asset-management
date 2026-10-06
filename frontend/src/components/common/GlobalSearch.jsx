@@ -34,6 +34,7 @@ const rolePaths = {
   infrastructure: { infrastructure: '/infrastructure/assets', buildings: '/infrastructure/buildings', maintenance: '/infrastructure/work-orders' },
   finance: { assets: '/finance/valuation', invoices: '/finance/invoices', payments: '/finance/payments', budgets: '/finance/budgets' },
 };
+const EMPTY_DESTINATIONS = {};
 
 const localeText = {
   en: {
@@ -92,7 +93,7 @@ export default function GlobalSearch({ role, language = 'en' }) {
   const copy = localeText[language === 'am' ? 'am' : 'en'];
   const placeholderKey = rolePlaceholders[role] || 'administrator';
   const placeholder = copy.placeholder[placeholderKey];
-  const destinations = rolePaths[role] || {};
+  const destinations = rolePaths[role] || EMPTY_DESTINATIONS;
   const availableGroups = useMemo(() => groups.filter(({ key }) => Object.hasOwn(destinations, key)), [destinations]);
   const flattened = useMemo(() => availableGroups.flatMap((group) => (
     Array.isArray(results[group.key]) ? results[group.key].map((item) => ({ ...item, group: group.key })) : []
