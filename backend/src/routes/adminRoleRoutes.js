@@ -58,7 +58,6 @@ const defaultRoleDescriptions = {
   store_manager: 'Inventory, receiving, issue, and stock control',
   maintenance: 'Maintenance coordination and technical service management',
   infrastructure: 'Infrastructure and building asset management',
-  teaching_assistant: 'Limited teaching and learning asset visibility',
   staff: 'Standard staff access for routine operational tasks',
   student: 'Student access for learning and limited asset visibility',
 };

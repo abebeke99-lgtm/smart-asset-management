@@ -304,6 +304,25 @@ describe('ForgotPassword', () => {
     expect(await screen.findByRole('heading', { name: 'Password Reset Successfully' })).toBeInTheDocument();
   });
 
+  it.each([
+    ['0912345678', '+251912345678'],
+    ['+251 9 1234 5678', '+251912345678'],
+    ['00251 09 1234 5678', '+251912345678'],
+    ['0712345678', '+251712345678'],
+  ])('accepts Ethiopian mobile format %s', async (phoneNumber, normalizedPhone) => {
+    apiClient.post.mockResolvedValue({ data: { success: true, message: 'Code sent.' } });
+
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /Mobile Phone/ }));
+    fireEvent.change(screen.getByLabelText('Mobile phone number'), { target: { value: phoneNumber } });
+    fireEvent.click(screen.getByRole('button', { name: /Send Verification Code/ }));
+
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith(
+      '/api/auth/forgot-password/request',
+      { phoneNumber: normalizedPhone },
+    ));
+  });
+
   it('rejects a phone number that is not a valid Ethiopian mobile number', async () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /Mobile Phone/ }));

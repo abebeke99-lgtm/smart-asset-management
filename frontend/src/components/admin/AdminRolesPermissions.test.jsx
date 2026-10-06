@@ -119,11 +119,10 @@ describe("Admin Roles & Permissions", () => {
     );
   });
 
-  it("includes configured finance and Teaching Assistant roles", async () => {
+  it("includes configured finance roles", async () => {
     const supportedRoles = [
       ...roles,
       { id: "finance", label: "Finance", permissions: ["financial.view"], permissionCount: 1 },
-      { id: "teaching_assistant", label: "Teaching Assistant", permissions: ["assets.view"], permissionCount: 1 },
     ];
     apiClient.get.mockImplementation((url) => {
       if (url === "/api/admin/roles") return Promise.resolve({ data: { success: true, data: supportedRoles } });
@@ -136,7 +135,6 @@ describe("Admin Roles & Permissions", () => {
     render(<AdminRolesPermissions />);
 
     expect(await screen.findByRole("button", { name: /Finance/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Teaching Assistant/ })).toBeInTheDocument();
   });
 
   it("shows the full Administrator permission selection as read-only", async () => {

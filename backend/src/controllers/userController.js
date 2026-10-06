@@ -1,14 +1,16 @@
 const fs = require('fs');
 const path = require('path');
 const { Op } = require('sequelize');
-const { User, Department, College, AuditLog, Role, UserActivityLog } = require('../models');
+const { sequelize, User, Department, College, AuditLog, Role, UserActivityLog } = require('../models');
 const bcrypt = require('bcryptjs');
 const { findCollegeScopeForUser } = require('../middlewares/organizationScope');
 const { saveProfilePhoto, validateProfilePhoto, buildPublicFileUrl } = require('../utils/uploadUtils');
 const { createAuditLog } = require('../services/auditLogService');
 const { getUserReferenceCounts } = require('../services/userReferenceService');
 const { getConfiguredRolePermissions } = require('../services/rolePermissionService');
+const { getSecuritySettings, validatePassword } = require('../services/passwordPolicyService');
 const { ROLE_NAMES, normalizeRoleForStorage } = require('../constants/rolePermissions');
+const { isValidUsername } = require('../utils/validators');
 
 const roles = ROLE_NAMES;
 const normalizeLookupValue = (value) => String(value ?? '').trim().toLowerCase();
@@ -18,7 +20,7 @@ const isValidPhone = (value) => {
   return !phone || (/^\+?[\d\s().-]+$/.test(phone) && digits.length >= 7 && digits.length <= 15);
 };
 
-const findDuplicateUser = async ({ username = '', email = '', excludeUserId = null } = {}) => {
+const findDuplicateUser = async ({ username = '', email = '', excludeUserId = null, transaction } = {}) => {
   const normalizedUsername = normalizeLookupValue(username);
   const normalizedEmail = normalizeLookupValue(email);
   if (!normalizedUsername && !normalizedEmail) return null;
@@ -31,7 +33,7 @@ const findDuplicateUser = async ({ username = '', email = '', excludeUserId = nu
   };
   if (excludeUserId) where.id = { [Op.ne]: excludeUserId };
 
-  const matches = await User.findAll({ where });
+  const matches = await User.findAll({ where, ...(transaction ? { transaction } : {}) });
   return matches.find((candidate) => {
     const candidateUsername = normalizeLookupValue(candidate.username);
     const candidateEmail = normalizeLookupValue(candidate.email ?? '');
@@ -64,12 +66,12 @@ const validateUserInput = async (input, { requirePassword = false } = {}) => {
   return null;
 };
 
-const recordUserActivity = (req, userId, action) => UserActivityLog.create({
+const recordUserActivity = (req, userId, action, transaction) => UserActivityLog.create({
   userId,
   action,
   ip: req.ip || req.socket?.remoteAddress || null,
   createdAt: new Date(),
-});
+}, transaction ? { transaction } : undefined);
 
 const userIncludes = [
   { model: College, attributes: ['id', 'collegeCode', 'collegeName'], required: false },
@@ -149,7 +151,7 @@ const getAllUsers = async (req, res) => {
         { email: { [Op.like]: search } },
         { phone: { [Op.like]: search } },
         { role: { [Op.like]: search } },
-        { '$College.collegeName$': { [Op.like]: search } },
+        User.sequelize.where(User.sequelize.col('College.college_name'), { [Op.like]: search }),
       ];
     }
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
@@ -207,48 +209,124 @@ const createUser = async (req, res) => {
     if (typeof body.password !== 'string' || !body.password) return res.status(400).json({ success: false, message: 'Password is required' });
     if (typeof body.confirmPassword !== 'string' || !body.confirmPassword) return res.status(400).json({ success: false, message: 'Confirm Password is required' });
     if (body.password !== body.confirmPassword) return res.status(400).json({ success: false, message: 'Password and Confirm Password must match' });
-    const { full_name, phone_number, is_active, ...input } = body;
-    const username = String(input.username || '').trim();
-    const email = String(input.email || '').trim();
-    const role = normalizeRoleForStorage(input.role || input.roleId);
+    const username = String(body.username || '').trim();
+    const email = String(body.email || '').trim();
+    const role = normalizeRoleForStorage(body.role || body.roleId);
     if (!role) return res.status(400).json({ success: false, message: 'Role is required' });
     if (!roles.includes(role)) return res.status(400).json({ success: false, message: 'Invalid user role' });
-    const departmentRecord = input.departmentId ? await Department.findByPk(input.departmentId) : null;
-    if (input.departmentId && !departmentRecord) return res.status(400).json({ success: false, message: 'Department not found' });
-    if (departmentRecord && input.collegeId && Number(departmentRecord.collegeId) !== Number(input.collegeId)) {
-      return res.status(400).json({ success: false, message: 'Selected department does not belong to the selected college' });
-    }
-    if (input.collegeId && !(await College.findByPk(input.collegeId))) return res.status(400).json({ success: false, message: 'College not found' });
-    const department = departmentRecord?.name || input.department || '';
-    const status = String(input.status || 'active').toLowerCase();
+    if (!username) return res.status(400).json({ success: false, message: 'Username is required' });
+    if (!isValidUsername(username)) return res.status(400).json({ success: false, message: 'Username must be at least 3 characters' });
+    const fullName = String(body.fullName || body.name || body.full_name || '').trim();
+    if (!fullName) return res.status(400).json({ success: false, message: 'Full name is required' });
+    if (username.length > 100) return res.status(400).json({ success: false, message: 'Username must be 100 characters or fewer' });
+    if (fullName.length > 255) return res.status(400).json({ success: false, message: 'Full name must be 255 characters or fewer' });
+    if (email.length > 255) return res.status(400).json({ success: false, message: 'Email must be 255 characters or fewer' });
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ success: false, message: 'Invalid email address' });
+
+    const parseOptionalId = (value, label) => {
+      if (value === undefined || value === null || value === '') return { id: null, error: null };
+      const idString = String(value).trim();
+      if (!/^[1-9]\d*$/.test(idString) || !Number.isSafeInteger(Number(idString))) {
+        return { id: null, error: `${label} ID must be a positive integer` };
+      }
+      return { id: Number(idString), error: null };
+    };
+    const collegeResult = parseOptionalId(body.collegeId, 'College');
+    if (collegeResult.error) return res.status(400).json({ success: false, message: collegeResult.error });
+    const departmentResult = parseOptionalId(body.departmentId, 'Department');
+    if (departmentResult.error) return res.status(400).json({ success: false, message: departmentResult.error });
+
+    const status = String(body.status || 'active').toLowerCase();
     if (!['active', 'inactive', 'suspended'].includes(status)) return res.status(400).json({ success: false, message: 'Status must be active, inactive, or suspended' });
-    if (typeof body.confirmPassword !== 'string' || body.password !== body.confirmPassword) {
-      return res.status(400).json({ success: false, message: 'Password and Confirm Password must match' });
-    }
-    const fullName = String(body.fullName || body.name || full_name || '').trim();
-    const validationError = await validateUserInput({ ...input, fullName, username, email, role, department, phone: body.phone ?? phone_number ?? '' }, { requirePassword: true });
+    const phone = String(body.phone ?? body.phone_number ?? '').trim();
+    const validationError = await validateUserInput({ fullName, username, email, role, phone });
     if (validationError) return res.status(400).json({ success: false, message: validationError });
-    const existing = await findDuplicateUser({ username, email });
-    if (existing) return res.status(409).json({ success: false, message: 'Username or email is already in use' });
-    const user = await User.create({
-      username,
-      email: email || null,
-      role: role || 'staff',
-      department,
-      collegeId: input.collegeId || null,
-      departmentId: input.departmentId || null,
-      fullName,
-      phone: String(body.phone ?? phone_number ?? '').trim(),
-      active: status === 'active',
-      status,
-      password: await bcrypt.hash(input.password, 10),
+
+    const passwordError = validatePassword(body.password, await getSecuritySettings());
+    if (passwordError) return res.status(400).json({ success: false, message: passwordError });
+
+    const user = await sequelize.transaction(async (transaction) => {
+      const roleRecord = await Role.findOne({ where: { name: role, active: true }, transaction });
+      if (!roleRecord) {
+        const error = new Error('Invalid or inactive user role');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const collegeId = collegeResult.id;
+      const departmentId = departmentResult.id;
+      const college = collegeId ? await College.findByPk(collegeId, { transaction }) : null;
+      if (collegeId && !college) {
+        const error = new Error('College not found');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const departmentRecord = departmentId
+        ? await Department.findByPk(departmentId, { transaction })
+        : null;
+      if (departmentId && !departmentRecord) {
+        const error = new Error('Department not found');
+        error.statusCode = 400;
+        throw error;
+      }
+      if (departmentRecord?.collegeId && collegeId && Number(departmentRecord.collegeId) !== collegeId) {
+        const error = new Error('Selected department does not belong to the selected college');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const resolvedCollegeId = collegeId ?? (departmentRecord?.collegeId ? Number(departmentRecord.collegeId) : null);
+      if (resolvedCollegeId && !college && !await College.findByPk(resolvedCollegeId, { transaction })) {
+        const error = new Error('Department college not found');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const existing = await findDuplicateUser({ username, email, transaction });
+      if (existing) {
+        const error = new Error('Username or email is already in use');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const createdUser = await User.create({
+        username,
+        email: email || null,
+        role,
+        department: departmentRecord?.name || '',
+        collegeId: resolvedCollegeId,
+        departmentId,
+        fullName,
+        phone,
+        active: status === 'active',
+        status,
+        password: await bcrypt.hash(body.password, 10),
+      }, { transaction });
+
+      const createdUserData = safeUser(createdUser);
+      await createAuditLog({
+        userId: req.user.id,
+        role: req.user.role,
+        action: 'CREATE_USER',
+        entity: `user:${createdUser.id}`,
+        entityId: createdUser.id,
+        newValue: createdUserData,
+        details: { username: createdUser.username },
+        transaction,
+      });
+      await recordUserActivity(req, createdUser.id, `User account created by administrator ${req.user.username}`, transaction);
+      return createdUser;
     });
-    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CREATE_USER', entity: `user:${user.id}`, entityId: user.id, newValue: safeUser(user), details: { username: user.username } });
-    await recordUserActivity(req, user.id, `User account created by administrator ${req.user.username}`);
+
     res.status(201).json({ success: true, data: safeUser(user) });
   } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
     if (error.name === 'SequelizeUniqueConstraintError') return res.status(409).json({ success: false, message: 'Username or email is already in use' });
-    console.error('User creation failed:', error);
+    if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeForeignKeyConstraintError') {
+      return res.status(400).json({ success: false, message: 'User details are invalid' });
+    }
+    console.error('User creation failed:', { name: error.name, code: error.code || error.parent?.code || 'UNKNOWN' });
     res.status(500).json({ success: false, message: 'Unable to create user.' });
   }
 };

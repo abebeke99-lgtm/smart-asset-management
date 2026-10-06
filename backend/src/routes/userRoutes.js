@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { getAllUsers, getUserStats, getRoles, getUserById, createUser, updateUser, updateUserStatus, getUserActivity, deleteUser, getCurrentUserProfile, updateProfile, updateCurrentUserProfilePhoto, removeCurrentUserProfilePhoto, setUserSecurityState, resetUserPassword, forcePasswordChange, terminateUserSession } = require('../controllers/userController');
 const { AuditLog, User } = require('../models');
-const { requireAuth, requireRole } = require('../middlewares/auth');
+const { requireAuth, requireRole, requirePermission } = require('../middlewares/auth');
 const { validateProfilePhoto } = require('../utils/uploadUtils');
 
 const router = express.Router();
@@ -55,7 +55,7 @@ router.get('/activity', requireAuth, requireRole('admin'), async (req, res, next
 	}
 });
 router.get('/:id', requireAuth, requireRole('admin', 'college', 'store_manager', 'ict_officer', 'maintenance'), getUserById);
-router.post('/', requireAuth, requireRole('admin'), createUser);
+router.post('/', requireAuth, requireRole('admin'), requirePermission('users.create'), createUser);
 router.put('/:id', requireAuth, requireRole('admin'), updateUser);
 router.delete('/:id', requireAuth, requireRole('admin'), deleteUser);
 

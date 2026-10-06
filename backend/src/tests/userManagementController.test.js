@@ -86,7 +86,7 @@ test('user list applies status, role, college, search and pagination filters', a
   assert.equal(query.where.collegeId, 4);
   assert.equal(query.limit, 5);
   assert.equal(query.offset, 5);
-  assert.ok(query.where[Op.or].some((condition) => condition['$College.collegeName$']));
+  assert.ok(query.where[Op.or].some((condition) => condition.attribute?.col === 'College.college_name'));
   assert.equal(res.payload.pagination.page, 2);
   assert.equal(res.payload.pagination.total, 0);
 });

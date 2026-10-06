@@ -43,14 +43,48 @@ const ROLE_NAMES = [
   'store_manager',
   'maintenance',
   'infrastructure',
-  'teaching_assistant',
   'staff',
   'student',
 ];
 
 const normalizeRoleForStorage = (role) => {
   const normalized = String(role || '').trim().toLowerCase();
-  return normalized === 'dept_head' ? 'department_head' : normalized;
+  const aliases = {
+    admin: 'admin',
+    administrator: 'admin',
+    'ict officer': 'ict_officer',
+    'ict-officer': 'ict_officer',
+    ict_officer: 'ict_officer',
+    ict: 'ict_officer',
+    college: 'college_manager',
+    'college manager': 'college_manager',
+    'college-manager': 'college_manager',
+    college_manager: 'college_manager',
+    'department head': 'department_head',
+    'department-head': 'department_head',
+    department_head: 'department_head',
+    department: 'department_head',
+    dept_head: 'department_head',
+    'dept-head': 'department_head',
+    finance: 'finance',
+    'finance officer': 'finance',
+    'store manager': 'store_manager',
+    'store-manager': 'store_manager',
+    store_manager: 'store_manager',
+    maintenance: 'maintenance',
+    maint: 'maintenance',
+    infrastructure: 'infrastructure',
+    'infrastructure director': 'infrastructure',
+    'infrastructure-director': 'infrastructure',
+    'infrastructure directorate': 'infrastructure',
+    'infrastructure-directorate': 'infrastructure',
+    infrastructure_directorate: 'infrastructure',
+    infra: 'infrastructure',
+    staff: 'staff',
+    student: 'student',
+  };
+
+  return aliases[normalized] || normalized.replace(/[\s-]+/g, '_');
 };
 
 const DEFAULT_ROLE_PERMISSIONS = {
@@ -63,7 +97,6 @@ const DEFAULT_ROLE_PERMISSIONS = {
   store_manager: ['assets.view', 'assets.create', 'assets.update', 'assets.assign', 'assets.transfer', 'inventory.view', 'inventory.stock_in', 'inventory.stock_out', 'inventory.stock_movement', 'rfid.view', 'reports.view'],
   maintenance: ['assets.view', 'maintenance.view', 'maintenance.request.create', 'maintenance.technician.assign', 'maintenance.update', 'maintenance.complete', 'reports.view'],
   infrastructure: ['assets.view', 'reports.view'],
-  teaching_assistant: ['assets.view'],
   staff: ['assets.view'],
   student: ['assets.view'],
 };

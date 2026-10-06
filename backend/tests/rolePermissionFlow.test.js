@@ -113,7 +113,7 @@ test('shared asset routes accept the role-specific view permission for ICT users
 test('shared asset routes reject users without any of the required view permissions', () => {
   const res = response();
   requireAnyPermission('assets.view', 'ict.assets.view', 'college.assets.view')(
-    { user: { role: 'teaching_assistant', permissions: ['assets.create'] } },
+    { user: { role: 'staff', permissions: ['assets.create'] } },
     res,
     () => assert.fail('asset view permission must be required'),
   );
@@ -127,10 +127,8 @@ test('default role permissions are least-privilege when no custom matrix is save
   try {
     const staffPermissions = await getConfiguredRolePermissions('staff');
     const studentPermissions = await getConfiguredRolePermissions('student');
-    const teachingAssistantPermissions = await getConfiguredRolePermissions('teaching_assistant');
     assert.deepEqual(staffPermissions, ['assets.view']);
     assert.deepEqual(studentPermissions, ['assets.view']);
-    assert.deepEqual(teachingAssistantPermissions, ['assets.view']);
     assert.equal(staffPermissions.includes('*'), false);
   } finally {
     models.Config.findByPk = originalConfigFindByPk;

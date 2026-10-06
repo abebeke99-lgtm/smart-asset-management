@@ -104,7 +104,7 @@ test('admin user create/update handlers validate role and email', () => {
   const source = read('../routes/adminSupportRoutes.js');
   const userControllerSource = read('../controllers/userController.js');
   assert.match(source, /const allowedRoles = ROLE_NAMES;/);
-  assert.match(userControllerSource, /normalizeRoleForStorage\(input\.role \|\| input\.roleId\)/);
+  assert.match(userControllerSource, /normalizeRoleForStorage\(body\.role \|\| body\.roleId\)/);
   assert.match(userControllerSource, /const requestedRole = input\.role \|\| input\.roleId;/);
   assert.deepEqual(
     ['admin', 'store_manager', 'maintenance', 'department_head', 'college_manager', 'infrastructure', 'ict_officer']

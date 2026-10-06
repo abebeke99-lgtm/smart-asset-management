@@ -32,16 +32,16 @@ const isValidEmail = (value) => {
 };
 
 const normalizePhoneNumber = (value) => {
-  const raw = String(value || '').replace(/[^\d+]/g, '');
+  let raw = String(value || '').trim().replace(/[\s().-]/g, '');
   if (!raw) return null;
-  if (/^\+2519\d{8}$/.test(raw)) return raw;
-  if (/^\+2517\d{8}$/.test(raw)) return raw;
-  if (/^2519\d{8}$/.test(raw)) return `+251${raw.slice(3)}`;
-  if (/^2517\d{8}$/.test(raw)) return `+251${raw.slice(3)}`;
-  if (/^09\d{8}$/.test(raw)) return `+251${raw.slice(1)}`;
-  if (/^07\d{8}$/.test(raw)) return `+251${raw.slice(1)}`;
-  if (/^9\d{8}$/.test(raw)) return `+251${raw}`;
-  if (/^7\d{8}$/.test(raw)) return `+251${raw}`;
+
+  if (raw.startsWith('00')) raw = `+${raw.slice(2)}`;
+  if (!/^\+?\d+$/.test(raw)) return null;
+
+  const international = raw.replace(/^\+/, '');
+  const ethiopianMobile = international.match(/^(?:251)?0?([97]\d{8})$/);
+  if (ethiopianMobile) return `+251${ethiopianMobile[1]}`;
+
   return null;
 };
 

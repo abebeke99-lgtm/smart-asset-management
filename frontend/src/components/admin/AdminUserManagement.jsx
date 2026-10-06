@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, Eye, EyeOff, KeyRound, Pencil, Power, Trash2 } from "lucide-react";
 import { toast } from "react-toastify";
 import apiClient, { getApiErrorMessage } from "../../services/apiClient";
@@ -214,6 +214,8 @@ export default function Users() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [departmentsLoading, setDepartmentsLoading] = useState(false);
+  const saveInProgress = useRef(false);
 
   const [error, setError] = useState("");
 
@@ -298,9 +300,11 @@ export default function Users() {
   useEffect(() => {
     if (!showForm || !form.collegeId) {
       setDepartments([]);
+      setDepartmentsLoading(false);
       return undefined;
     }
     let cancelled = false;
+    setDepartmentsLoading(true);
     apiRequest(`${COLLEGES_API}/${encodeURIComponent(form.collegeId)}/departments`)
       .then((response) => {
         if (!cancelled) setDepartments(extractArray(response, ["departments"]).map(normalizeOption));
@@ -310,6 +314,9 @@ export default function Users() {
           setDepartments([]);
           setFieldErrors((previous) => ({ ...previous, departmentId: requestError.message || "Unable to load departments." }));
         }
+      })
+      .finally(() => {
+        if (!cancelled) setDepartmentsLoading(false);
       });
     return () => { cancelled = true; };
   }, [showForm, form.collegeId]);
@@ -377,14 +384,24 @@ export default function Users() {
 
   const saveUser = async (event) => {
     event.preventDefault();
+    if (saveInProgress.current) return;
     const nextErrors = {};
     if (!form.name.trim()) nextErrors.name = "Full name is required.";
     if (!form.username.trim()) nextErrors.username = "Username is required.";
+    else if (form.username.trim().length < 3) nextErrors.username = "Username must be at least 3 characters.";
+    else if (form.username.trim().length > 100) nextErrors.username = "Username must be 100 characters or fewer.";
     if (!form.roleId) nextErrors.roleId = "Role is required.";
     if (!editingUser && !form.password) nextErrors.password = "Password is required.";
-    if ((form.password || form.confirmPassword) && form.password.length < 8) nextErrors.password = "Password must be at least 8 characters.";
+    if (form.password || form.confirmPassword) {
+      if (form.password.length < 8) nextErrors.password = "Password must be at least 8 characters.";
+      else if (!/[A-Z]/.test(form.password)) nextErrors.password = "Password must contain an uppercase letter.";
+      else if (!/[a-z]/.test(form.password)) nextErrors.password = "Password must contain a lowercase letter.";
+      else if (!/\d/.test(form.password)) nextErrors.password = "Password must contain a number.";
+      else if (!/[^A-Za-z0-9]/.test(form.password)) nextErrors.password = "Password must contain a special character.";
+    }
     if ((form.password || form.confirmPassword) && form.password !== form.confirmPassword) nextErrors.confirmPassword = "Password and Confirm Password must match.";
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) nextErrors.email = "Enter a valid email address.";
+    if (form.email && form.email.length > 255) nextErrors.email = "Email must be 255 characters or fewer.";
+    else if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) nextErrors.email = "Enter a valid email address.";
     const phoneDigits = form.phone.replace(/\D/g, "");
     if (form.phone.trim() && (!/^\+?[\d\s().-]+$/.test(form.phone.trim()) || phoneDigits.length < 7 || phoneDigits.length > 15)) nextErrors.phone = "Enter a valid phone number.";
     if (Object.values(nextErrors).some(Boolean)) {
@@ -393,6 +410,7 @@ export default function Users() {
       return;
     }
 
+    saveInProgress.current = true;
     setSaving(true);
     setError("");
 
@@ -439,6 +457,7 @@ export default function Users() {
       if (key) setFieldErrors({ [key]: message });
       toast.error(message);
     } finally {
+      saveInProgress.current = false;
       setSaving(false);
     }
   };
@@ -1407,10 +1426,15 @@ export default function Users() {
             <form
               className="form"
               onSubmit={saveUser}
+              noValidate
             >
+              {loading && <div role="status">Loading roles and colleges...</div>}
+              {!loading && roles.length === 0 && (
+                <div className="error-box" role="alert">{error || "Role options are unavailable. Please refresh and try again."}</div>
+              )}
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">
+                  <label className="form-label" htmlFor="new-user-full-name">
                     Full Name{" "}
                     <span className="required">
                       *
@@ -1418,12 +1442,15 @@ export default function Users() {
                   </label>
 
                   <input
+                    id="new-user-full-name"
                     type="text"
                     name="name"
                     className={`form-input ${fieldErrors.name ? "invalid" : ""}`}
                     value={form.name}
                     onChange={updateForm}
                     placeholder="Enter full name"
+                    autoComplete="name"
+                    required
                     aria-invalid={Boolean(fieldErrors.name)}
                     aria-required="true"
                   />
@@ -1442,6 +1469,8 @@ export default function Users() {
                     value={form.username}
                     onChange={updateForm}
                     autoComplete="username"
+                    required
+                    minLength={3}
                     aria-invalid={Boolean(fieldErrors.username)}
                     aria-required="true"
                   />
@@ -1449,18 +1478,20 @@ export default function Users() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">
+                  <label className="form-label" htmlFor="new-user-email">
                     Email
                   </label>
 
                   <input
-                    type="text"
+                    id="new-user-email"
+                    type="email"
                     inputMode="email"
                     name="email"
                     className={`form-input ${fieldErrors.email ? "invalid" : ""}`}
                     value={form.email}
                     onChange={updateForm}
                     placeholder="user@university.edu"
+                    autoComplete="email"
                     aria-invalid={Boolean(fieldErrors.email)}
                   />
                   {fieldErrors.email && <div className="field-error">{fieldErrors.email}</div>}
@@ -1481,6 +1512,8 @@ export default function Users() {
                         value={form.password}
                         onChange={updateForm}
                         autoComplete="new-password"
+                        required={!editingUser}
+                        minLength={editingUser ? undefined : 8}
                         aria-invalid={Boolean(fieldErrors.password)}
                         aria-required={!editingUser}
                       />
@@ -1509,6 +1542,7 @@ export default function Users() {
                         value={form.confirmPassword}
                         onChange={updateForm}
                         autoComplete="new-password"
+                        required={!editingUser}
                         aria-invalid={Boolean(fieldErrors.confirmPassword)}
                         aria-required={!editingUser}
                       />
@@ -1527,12 +1561,13 @@ export default function Users() {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">
+                  <label className="form-label" htmlFor="new-user-phone">
                     Phone
                   </label>
 
                   <input
-                    type="text"
+                    id="new-user-phone"
+                    type="tel"
                     name="phone"
                     className={`form-input ${fieldErrors.phone ? "invalid" : ""}`}
                     value={form.phone}
@@ -1544,7 +1579,7 @@ export default function Users() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">
+                  <label className="form-label" htmlFor="new-user-role">
                     Role{" "}
                     <span className="required">
                       *
@@ -1552,12 +1587,15 @@ export default function Users() {
                   </label>
 
                   <select
+                    id="new-user-role"
                     name="roleId"
                     className={`form-input ${fieldErrors.roleId ? "invalid" : ""}`}
                     value={form.roleId}
                     onChange={updateForm}
+                    disabled={loading}
                     aria-invalid={Boolean(fieldErrors.roleId)}
                     aria-required="true"
+                    required
                   >
                     <option value="">
                       Select role
@@ -1578,15 +1616,17 @@ export default function Users() {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">
+                  <label className="form-label" htmlFor="new-user-college">
                     College
                   </label>
 
                   <select
+                    id="new-user-college"
                     name="collegeId"
                     className="form-input"
                     value={form.collegeId}
                     onChange={updateForm}
+                    disabled={loading}
                   >
                     <option value="">
                       Select college
@@ -1606,21 +1646,22 @@ export default function Users() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">
+                  <label className="form-label" htmlFor="new-user-department">
                     Department
                   </label>
 
                   <select
+                    id="new-user-department"
                     name="departmentId"
                     className="form-input"
                     value={
                       form.departmentId
                     }
                     onChange={updateForm}
-                    disabled={!form.collegeId}
+                    disabled={!form.collegeId || departmentsLoading}
                   >
                     <option value="">
-                      Select department
+                      {departmentsLoading ? "Loading departments..." : "Select department"}
                     </option>
 
                     {departments.map(
@@ -1635,15 +1676,17 @@ export default function Users() {
                     )}
                   </select>
                   {fieldErrors.departmentId && <div className="field-error">{fieldErrors.departmentId}</div>}
+                  {departmentsLoading && <div role="status">Loading departments...</div>}
                 </div>
               </div>
 
               <div className="form-group">
-                <label className="form-label">
+                <label className="form-label" htmlFor="new-user-status">
                   Account Status
                 </label>
 
                 <select
+                  id="new-user-status"
                   name="status"
                   className="form-input"
                   value={form.status}
@@ -1676,7 +1719,7 @@ export default function Users() {
                 <button
                   type="submit"
                   className="primary-button"
-                  disabled={saving}
+                  disabled={saving || loading || departmentsLoading || roles.length === 0}
                 >
                   {saving
                     ? "Saving..."

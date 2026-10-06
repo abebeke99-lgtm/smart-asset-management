@@ -129,8 +129,6 @@ test("permission catalog includes every permission required by active routes", (
     assert.ok(PERMISSIONS.includes(permission), `${permission} must be editable in the role matrix`);
   }
   assert.ok(DEFAULT_ROLE_PERMISSIONS.college_manager.includes("assets.transfer.approve"));
-  assert.deepEqual(DEFAULT_ROLE_PERMISSIONS.teaching_assistant, ["assets.view"]);
-  assert.ok(!DEFAULT_ROLE_PERMISSIONS.teaching_assistant.includes("assets.delete"));
 });
 
 test("permission updates persist configuration and audit together in a transaction", async () => {

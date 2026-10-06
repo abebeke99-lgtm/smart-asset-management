@@ -65,7 +65,6 @@ VALUES
   ('store_manager', 'Store Manager', 1, NOW(), NOW()),
   ('maintenance', 'Maintenance', 1, NOW(), NOW()),
   ('infrastructure', 'Infrastructure', 1, NOW(), NOW()),
-  ('teaching_assistant', 'Teaching Assistant', 1, NOW(), NOW()),
   ('staff', 'Staff', 1, NOW(), NOW()),
   ('student', 'Student', 1, NOW(), NOW())
 ON DUPLICATE KEY UPDATE display_name = VALUES(display_name), active = 1, updated_at = NOW();

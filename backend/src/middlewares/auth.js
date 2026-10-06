@@ -7,10 +7,34 @@ const ROLE_PERMISSIONS = DEFAULT_ROLE_PERMISSIONS;
 const normalizeRoleValue = (role) => {
   if (!role) return '';
   const value = String(role).trim().toLowerCase();
-  if (['department head', 'dept_head', 'department-head', 'department'].includes(value)) return 'department_head';
-  if (['college', 'college manager', 'college-manager', 'college_manager'].includes(value)) return 'college_manager';
-  if (['infrastructure director', 'infrastructure directorate', 'infrastructure_directorate', 'infrastructure-directorate', 'infra'].includes(value)) return 'infrastructure';
-  return value;
+  const aliases = {
+    admin: 'admin',
+    administrator: 'admin',
+    'department head': 'department_head',
+    dept_head: 'department_head',
+    'department-head': 'department_head',
+    department_head: 'department_head',
+    department: 'department_head',
+    college: 'college_manager',
+    'college manager': 'college_manager',
+    'college-manager': 'college_manager',
+    college_manager: 'college_manager',
+    'infrastructure director': 'infrastructure',
+    'infrastructure directorate': 'infrastructure',
+    infrastructure_directorate: 'infrastructure',
+    'infrastructure-directorate': 'infrastructure',
+    infra: 'infrastructure',
+    'ict officer': 'ict_officer',
+    'ict-officer': 'ict_officer',
+    ict_officer: 'ict_officer',
+    'finance officer': 'finance',
+    'store manager': 'store_manager',
+    'store-manager': 'store_manager',
+    store_manager: 'store_manager',
+    maintenance: 'maintenance',
+    maint: 'maintenance',
+  };
+  return aliases[value] || value.replace(/[\s-]+/g, '_');
 };
 
 const normalizePermissionValue = (permission) => String(permission || '')

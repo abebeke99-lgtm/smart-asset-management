@@ -18,7 +18,6 @@ describe('normalizeRole', () => {
       store_manager: getDashboardRoute('store_manager'),
       maintenance: getDashboardRoute('maintenance'),
       infrastructure: getDashboardRoute('infrastructure'),
-      teaching_assistant: getDashboardRoute('teaching_assistant'),
       staff: getDashboardRoute('staff'),
       student: getDashboardRoute('student'),
     }).toEqual({
@@ -31,7 +30,6 @@ describe('normalizeRole', () => {
       store_manager: '/store/dashboard',
       maintenance: '/maintenance/dashboard',
       infrastructure: '/infrastructure/dashboard',
-      teaching_assistant: '/teaching-assistant/dashboard',
       staff: '/staff/dashboard',
       student: '/student/dashboard',
     });

@@ -3,8 +3,39 @@ const { PERMISSIONS, DEFAULT_ROLE_PERMISSIONS } = require('../constants/rolePerm
 
 const normalizeRoleName = (role) => {
   const normalized = String(role || '').trim().toLowerCase();
-  if (['college', 'college manager', 'college-manager'].includes(normalized)) return 'college_manager';
-  return normalized.replace(/[\s-]+/g, '_');
+  const aliases = {
+    admin: 'admin',
+    administrator: 'admin',
+    college: 'college_manager',
+    'college manager': 'college_manager',
+    'college-manager': 'college_manager',
+    college_manager: 'college_manager',
+    'department head': 'department_head',
+    'department-head': 'department_head',
+    department_head: 'department_head',
+    department: 'department_head',
+    dept_head: 'department_head',
+    'dept-head': 'department_head',
+    'ict officer': 'ict_officer',
+    'ict-officer': 'ict_officer',
+    ict_officer: 'ict_officer',
+    'infrastructure director': 'infrastructure',
+    'infrastructure-director': 'infrastructure',
+    'infrastructure directorate': 'infrastructure',
+    'infrastructure-directorate': 'infrastructure',
+    infrastructure_directorate: 'infrastructure',
+    infra: 'infrastructure',
+    'finance officer': 'finance',
+    'store manager': 'store_manager',
+    'store-manager': 'store_manager',
+    store_manager: 'store_manager',
+    maintenance: 'maintenance',
+    maint: 'maintenance',
+    staff: 'staff',
+    student: 'student',
+  };
+
+  return aliases[normalized] || normalized.replace(/[\s-]+/g, '_');
 };
 
 const getRolePermissionMatrix = async () => {

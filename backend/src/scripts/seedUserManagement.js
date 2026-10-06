@@ -16,7 +16,6 @@ const labels = {
   store_manager: 'Store Manager',
   maintenance: 'Maintenance',
   infrastructure: 'Infrastructure',
-  teaching_assistant: 'Teaching Assistant',
   staff: 'Staff',
   student: 'Student',
 };

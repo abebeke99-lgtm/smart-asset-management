@@ -110,7 +110,6 @@ import DeptAssetHistory from './components/department/DeptAssetHistory';
 import DepartmentActivityHistory from './components/department/DepartmentActivityHistory';
 import DepartmentAssetHistory from './components/department/DepartmentAssetHistory';
 import DeptTickets from './components/department/DeptTickets';
-import TeachingAssistantAssets from './components/department/TeachingAssistantAssets';
 
 import FinanceDashboard from './components/finance/FinanceDashboard';
 import FinancePurchaseRequests from './components/finance/FinancePurchaseRequests';
@@ -265,7 +264,6 @@ export const getDashboardRoute = (role) => {
     college_manager: '/college-manager/dashboard',
     college: '/college/dashboard',
     department_head: '/department-head/dashboard',
-    teaching_assistant: '/teaching-assistant/dashboard',
     finance: '/finance/dashboard',
     store_manager: '/store/dashboard',
     maintenance: '/maintenance/dashboard',
@@ -335,7 +333,11 @@ const LegacyDepartmentWorkspaceRedirect = () => {
   return <Navigate to={`${canonicalPath}${location.search}${location.hash}`} replace />;
 };
 
-const DepartmentDeanRoute = () => <ApprovalQueue />;
+const DepartmentDeanRoute = () => (
+  <ProtectedRoute allowedRoles={['department_head']} allowedPermissions={['department_head.approvals.review']}>
+    <ApprovalQueue />
+  </ProtectedRoute>
+);
 
 // ==========================================
 // CHUNK ERROR HANDLING - Recovers from chunk loading failures
@@ -3280,7 +3282,6 @@ function AppContent() {
       ],
       'staff': [],
       'student': [{ path: '/student', label: 'Dashboard', icon: LayoutDashboard }],
-      'teaching_assistant': [{ path: '/teaching-assistant/dashboard', label: 'Department assets', icon: Package }],
       'finance': [
         { path: '/finance', label: '📊 ' + t.dashboard, section: 'Overview' },
         { path: '/finance/purchase-requests', label: '📝 Purchase Requests', section: 'PROCUREMENT' },
@@ -3754,10 +3755,6 @@ function AppContent() {
             <Route path="notifications" element={<DeptNotifications />} />
             <Route path="history" element={<DepartmentActivityHistory />} />
             <Route path="history/:id" element={<DeptAssetHistory />} />
-          </Route>
-
-          <Route path="/teaching-assistant" element={<ProtectedRoute allowedRoles={['teaching_assistant']}><RoleLayout /></ProtectedRoute>}>
-            <Route path="dashboard" element={<TeachingAssistantAssets />} />
           </Route>
 
           {/* FINANCE ROUTES - Fixed with RoleLayout */}

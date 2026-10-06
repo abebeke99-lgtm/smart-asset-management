@@ -84,7 +84,7 @@ The user-management seed creates the `admin` and `ict_officer` usernames using t
 
 The administrator Roles & Permissions page uses the existing `configs.role_permissions` record; it does not create separate roles or permission tables. Permission changes require an authenticated administrator, are validated against the backend permission catalog, and are audited in the same database transaction as the matrix update. College and department asset access remains constrained by backend organization-scope checks.
 
-The supported role list includes Teaching Assistant with read-only asset access limited to the account's active department. On the next backend startup, the existing idempotent schema sync adds `teaching_assistant` to `users.role` if it is not already present; back up the database before deploying schema changes.
+The supported role list covers administrator, college, department, finance, store, maintenance, infrastructure, staff, and student access paths. The backend schema sync keeps the canonical role enum aligned with the active role catalog during startup.
 
 ## Features
 

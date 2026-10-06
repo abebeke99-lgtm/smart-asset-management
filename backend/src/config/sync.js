@@ -164,7 +164,6 @@ async function ensureUserRoleEnum() {
     'store_manager',
     'maintenance',
     'infrastructure',
-    'teaching_assistant',
     'staff',
     'student',
   ];

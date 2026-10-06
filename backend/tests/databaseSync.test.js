@@ -11,7 +11,7 @@ test('role enum synchronization skips ALTER when the canonical roles already exi
 
   queryInterface.describeTable = async () => ({
     role: {
-      type: "ENUM('admin','ict_officer','college','college_manager','department_head','finance','store_manager','maintenance','infrastructure','teaching_assistant','staff','student')",
+      type: "ENUM('admin','ict_officer','college','college_manager','department_head','finance','store_manager','maintenance','infrastructure','staff','student')",
     },
   });
   sequelize.query = async (sql) => {
@@ -21,30 +21,6 @@ test('role enum synchronization skips ALTER when the canonical roles already exi
   try {
     await ensureUserRoleEnum();
     assert.equal(alterQueries, 0);
-  } finally {
-    queryInterface.describeTable = originalDescribeTable;
-    sequelize.query = originalQuery;
-  }
-});
-
-test('role enum synchronization adds Teaching Assistant when the existing enum lacks it', { concurrency: false }, async () => {
-  const queryInterface = sequelize.getQueryInterface();
-  const originalDescribeTable = queryInterface.describeTable;
-  const originalQuery = sequelize.query;
-  let alterStatement = '';
-
-  queryInterface.describeTable = async () => ({
-    role: {
-      type: "ENUM('admin','ict_officer','college','college_manager','department_head','finance','store_manager','maintenance','infrastructure','staff','student')",
-    },
-  });
-  sequelize.query = async (sql) => {
-    if (/ALTER TABLE users/i.test(sql)) alterStatement = sql;
-  };
-
-  try {
-    await ensureUserRoleEnum();
-    assert.match(alterStatement, /'teaching_assistant'/);
   } finally {
     queryInterface.describeTable = originalDescribeTable;
     sequelize.query = originalQuery;
