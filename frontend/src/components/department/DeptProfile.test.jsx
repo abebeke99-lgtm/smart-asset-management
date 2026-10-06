@@ -125,6 +125,26 @@ describe('Department Head profile', () => {
     expect(screen.queryByText('Engineering College')).not.toBeInTheDocument();
   });
 
+  it('shows localized authentication, validation, and server failures', async () => {
+    useLanguage.mockReturnValue({ language: 'am' });
+    apiClient.get.mockRejectedValue({ response: { status: 401 } });
+
+    const { rerender } = render(<DeptProfile />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('ማረጋገጫ ያስፈልጋል። እንደገና ይግቡ።');
+
+    apiClient.get.mockRejectedValue({ response: { status: 500 } });
+    rerender(<DeptProfile key="server-error" />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('የዲፓርትመንት መገለጫን መጫን አልተቻለም።');
+  });
+
+  it('renders a distinct empty state when the service has no profile payload', async () => {
+    apiClient.get.mockResolvedValue({ data: { success: true, data: null } });
+
+    render(<DeptProfile />);
+
+    expect(await screen.findByText('Department profile information is not available.')).toHaveAttribute('role', 'status');
+  });
+
   it('allows editing only when the department head has the update permission', async () => {
     useAuth.mockReturnValue({ user: { id: 10, role: 'department_head', departmentId: 3, permissions: ['department.profile.update'] } });
 
@@ -154,8 +174,24 @@ describe('Department Head profile', () => {
     expect(apiClient.put).toHaveBeenCalledWith('/department-head/profile', expect.objectContaining({
       email: 'engineering@example.test',
     }));
+    expect(Object.keys(apiClient.put.mock.calls[0][1]).sort()).toEqual(['description', 'email', 'office', 'phone']);
     expect(apiClient.get).toHaveBeenCalledTimes(2);
     expect(screen.getByText('engineering@example.test')).toBeInTheDocument();
+  });
+
+  it('shows a localized save validation error and leaves the editable profile open', async () => {
+    useAuth.mockReturnValue({ user: { id: 10, role: 'department_head', departmentId: 3, permissions: ['department.profile.update'] } });
+    useLanguage.mockReturnValue({ language: 'am' });
+    apiClient.put.mockRejectedValue({ response: { status: 422, data: { message: 'Department email is invalid.' } } });
+
+    render(<DeptProfile />);
+    fireEvent.click(await screen.findByRole('button', { name: 'መገለጫ አርትዕ' }));
+    fireEvent.change(screen.getByLabelText('ኢሜይል'), { target: { value: 'valid@example.test' } });
+    fireEvent.click(screen.getByRole('button', { name: 'ለውጦችን አስቀምጥ' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('እባክዎ የተጠቆሙትን መስኮች ያስተካክሉ።');
+    expect(screen.getByLabelText('ኢሜይል')).toBeInTheDocument();
+    expect(screen.queryByText('Department email is invalid.')).not.toBeInTheDocument();
   });
 
   it('uses the Amharic catalog for profile fields and status', async () => {

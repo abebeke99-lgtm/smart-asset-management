@@ -38,6 +38,7 @@ export const messages = {
       nameRequired: 'Department name is required.',
       emailInvalid: 'Enter a valid email address.',
       phoneInvalid: 'Enter a valid phone number.',
+      descriptionTooLong: 'Description must be 2000 characters or fewer.',
     },
     departmentLoading: {
       common: 'Loading...',
@@ -468,6 +469,7 @@ export const messages = {
       nameRequired: 'የዲፓርትመንቱ ስም ያስፈልጋል።',
       emailInvalid: 'ትክክለኛ የኢሜይል አድራሻ ያስገቡ።',
       phoneInvalid: 'ትክክለኛ ስልክ ቁጥር ያስገቡ።',
+      descriptionTooLong: 'መግለጫው ከ2000 ቁምፊዎች መብለጥ የለበትም።',
     },
     departmentLoading: {
       common: 'በመጫን ላይ...',

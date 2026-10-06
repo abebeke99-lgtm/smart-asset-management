@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { Asset, Building, Department, Location, Room } = require('../models');
+const { Asset, Building, Campus, Department, Location, Room } = require('../models');
 const { requireDepartmentHead, resolveDepartmentScope } = require('../middlewares/organizationScope');
 const departmentWorkspaceRoutes = require('../routes/departmentWorkspaceRoutes');
 const { listDepartmentLocations } = require('../controllers/departmentController');
@@ -77,10 +77,14 @@ test('department locations query authorized department rooms and assets only', a
 
   assert.equal(roomQuery.where.departmentId, 3);
   assert.equal(assetQuery.where.departmentId, 3);
-  assert.deepEqual(roomQuery.include[0], { model: Building, attributes: ['id', 'buildingName', 'buildingCode'], required: false });
+  assert.deepEqual(roomQuery.include, [
+    { model: Building, attributes: ['id', 'buildingName', 'buildingCode'], required: false },
+    { model: Campus, attributes: ['id', 'campusName', 'campusCode'], required: false },
+  ]);
   assert.equal(globalLocationLookupCount, 0);
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.payload.filters.types, ['department_location', 'laboratory']);
+  assert.deepEqual(res.payload.filters.campuses, []);
   assert.deepEqual(res.payload.summary, { total: 2, active: 2, inactive: 0, locationsWithAssets: 2 });
   assert.equal(res.payload.data.length, 1);
   assert.equal(res.payload.data[0].id, 11);

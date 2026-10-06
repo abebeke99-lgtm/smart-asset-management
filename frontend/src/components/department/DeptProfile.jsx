@@ -5,16 +5,16 @@ import apiClient from '../../services/apiClient';
 import { useLanguage } from '../../contexts/UiContext';
 import { translateMessage } from '../../i18n/messages';
 
-const getProfileErrorMessage = (error, t) => {
+const getProfileErrorMessage = (error, t, fallbackKey = 'loadError') => {
   const status = error.response?.status;
   if (status === 401) return t('authenticationRequired');
   if (status === 403) return t('unauthorized');
   if (status === 404) return t('notFound');
-  if (status === 422) return error.response?.data?.message || t('validationError');
-  if (status >= 500) return t('loadError');
+  if (status === 422) return t('validationError');
+  if (status >= 500) return t(fallbackKey);
   if (!error.response && ['ERR_NETWORK', 'ECONNABORTED'].includes(error.code)) return t('networkError');
   if (!error.response && error.message === 'Network Error') return t('networkError');
-  return error.response?.data?.message || t('loadError');
+  return error.response?.data?.message || t(fallbackKey);
 };
 
 const getDisplayValue = (value, missingLabel) => {
@@ -42,6 +42,7 @@ const DeptProfile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [saveError, setSaveError] = useState('');
 
   const hasDepartmentProfileUpdatePermission = Array.isArray(user?.permissions)
     && user.permissions.some((permission) => String(permission).trim().toLowerCase() === 'department.profile.update');
@@ -79,7 +80,13 @@ const DeptProfile = () => {
     const request = apiClient.get('/department-head/profile')
       .then((response) => {
         const profile = response.data?.data;
-        if (!profile || Number(profile.id) !== departmentId) {
+        if (profile === null || profile === undefined) {
+          setDepartment(null);
+          setSaveMessage('');
+          loadedProfileDepartmentId.current = departmentId;
+          return null;
+        }
+        if (Number(profile.id) !== departmentId) {
           setDepartment(null);
           setError(translate('notFound'));
           return null;
@@ -95,6 +102,14 @@ const DeptProfile = () => {
         return withSummary;
       })
       .catch((requestError) => {
+        if (process.env.NODE_ENV === 'development') {
+          const responseMessage = requestError.response?.data?.message;
+          console.error('Department profile request failed', {
+            status: requestError.response?.status || 0,
+            url: '/api/department-head/profile',
+            message: typeof responseMessage === 'string' ? responseMessage.slice(0, 300) : undefined,
+          });
+        }
         loadedProfileDepartmentId.current = null;
         setDepartment(null);
         setError(getProfileErrorMessage(requestError, translate));
@@ -143,10 +158,11 @@ const DeptProfile = () => {
       </header>
       {loading && <ProfileLoadingState message={translateMessage(language, 'departmentLoading.profile')} />}
       {!loading && error && <ProfileErrorState message={error} retryLabel={t('retry')} onRetry={() => loadProfile(true)} />}
-      {!loading && !error && !department && <div className="department-profile-state">{t('unavailable')}</div>}
+      {!loading && !error && !department && <div className="department-profile-state" role="status">{t('unavailable')}</div>}
       {!loading && !error && department && (
         <>
           {saveMessage && <div className="department-profile-notice department-profile-notice--success" role="status"><CheckCircle2 size={17} aria-hidden="true" />{saveMessage}</div>}
+          {saveError && <div className="department-profile-state department-profile-state--error" role="alert">{saveError}</div>}
           <div className="department-profile-layout">
             <article className="department-profile-card department-profile-card--identity">
               <div className="department-profile-card-heading">
@@ -162,6 +178,7 @@ const DeptProfile = () => {
                   onSave={async (values) => {
                     setSaving(true);
                     setSaveMessage('');
+                    setSaveError('');
                     try {
                       await apiClient.put('/department-head/profile', values);
                       const updatedProfile = await loadProfile(true);
@@ -170,7 +187,7 @@ const DeptProfile = () => {
                         setSaveMessage(t('updated'));
                       }
                     } catch (saveError) {
-                      setSaveMessage(saveError.response?.data?.message || t('saveError'));
+                      setSaveError(getProfileErrorMessage(saveError, t, 'saveError'));
                     } finally {
                       setSaving(false);
                     }
@@ -245,11 +262,11 @@ const ProfileForm = ({ department, saving, t, onCancel, onSave }) => {
     const office = values.office.trim();
     const description = values.description.trim();
 
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (email.length > 255 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
       setValidationError(t('emailInvalid'));
       return;
     }
-    if (phone && !/^[+()\d\s.-]{7,50}$/.test(phone)) {
+    if (phone && (!/^[+()\d\s.-]{7,50}$/.test(phone) || phone.replace(/\D/g, '').length < 7)) {
       setValidationError(t('phoneInvalid'));
       return;
     }
@@ -264,10 +281,10 @@ const ProfileForm = ({ department, saving, t, onCancel, onSave }) => {
 
   return <form className="department-profile-form" onSubmit={submit}>
     {validationError && <p className="department-profile-form-error" role="alert">{validationError}</p>}
-    <label>{t('contact')}<input name="phone" value={values.phone} onChange={update} /></label>
-    <label>{t('email')}<input name="email" value={values.email} onChange={update} /></label>
-    <label>{t('office')}<input name="office" value={values.office} onChange={update} /></label>
-    <label>{t('description')}<textarea name="description" value={values.description} onChange={update} rows="4" /></label>
+    <label>{t('contact')}<input name="phone" type="tel" maxLength="50" value={values.phone} onChange={update} /></label>
+    <label>{t('email')}<input name="email" type="email" maxLength="255" value={values.email} onChange={update} /></label>
+    <label>{t('office')}<input name="office" maxLength="255" value={values.office} onChange={update} /></label>
+    <label>{t('description')}<textarea name="description" value={values.description} onChange={update} maxLength="2000" rows="4" /></label>
     <div className="department-profile-form-actions"><button type="button" className="department-profile-button" onClick={onCancel} disabled={saving}><X size={16} aria-hidden="true" /> {t('cancel')}</button><button type="submit" className="department-profile-button department-profile-button--primary" disabled={saving}><Save size={16} aria-hidden="true" />{saving ? t('saving') : t('save')}</button></div>
   </form>;
 };

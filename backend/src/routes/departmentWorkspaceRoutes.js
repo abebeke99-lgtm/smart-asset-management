@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const { requirePermission } = require('../middlewares/auth');
 const { requireDepartmentHead, resolveDepartmentScope } = require('../middlewares/organizationScope');
-const { getDepartmentDashboard, listDepartmentAssets, listDepartmentStaff, listDepartmentLocations, getDepartmentReports, getDepartmentProfile, updateDepartmentProfile } = require('../controllers/departmentController');
+const { getDepartmentDashboard, listDepartmentAssets, listDepartmentStaff, listDepartmentLocations, listDepartmentLocationAssets, getDepartmentReports, getDepartmentProfile, updateDepartmentProfile } = require('../controllers/departmentController');
 const { listRequests, getRequest, createRequest } = require('../controllers/workspaceRequestController');
 const verification = require('../controllers/verificationController');
 const physicalVerification = require('../controllers/departmentVerificationController');
@@ -26,6 +26,7 @@ router.get('/locations', (req, res, next) => {
   if (String(req.query.export || '').toLowerCase() !== 'true') return next();
   return requirePermission('reports.export')(req, res, next);
 }, listDepartmentLocations);
+router.get('/locations/:recordType/:locationId/assets', listDepartmentLocationAssets);
 router.get('/laboratories', laboratories.listLaboratories);
 router.get('/laboratories/:id', laboratories.getLaboratoryDashboard);
 router.get('/reports', getDepartmentReports);

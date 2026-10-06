@@ -1,11 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { Op } = require('sequelize');
-const { Asset, User, Department } = require('../models');
-const { resolveConfiguredDepartmentScope } = require('../middlewares/organizationScope');
+const { Asset, User, Department, Location } = require('../models');
+const { requireDepartmentHead, resolveDepartmentScope, resolveConfiguredDepartmentScope } = require('../middlewares/organizationScope');
 const departmentRoutes = require('../routes/departmentRoutes');
-const { getDepartmentProfile } = require('../controllers/departmentController');
+const { getDepartmentProfile, updateDepartmentProfile } = require('../controllers/departmentController');
 const { listDepartmentStaff } = require('../controllers/departmentController');
+const departmentWorkspaceRoutes = require('../routes/departmentWorkspaceRoutes');
 
 const makeResponse = () => ({
   statusCode: 200,
@@ -118,6 +119,137 @@ test('department head profile reads reject missing and nonexistent department sc
   assert.equal(databaseLookups, 1);
 });
 
+test('department profile controller only trusts the resolved authenticated department scope', async (t) => {
+  const originalFindByPk = Department.findByPk;
+  let lookups = 0;
+  Department.findByPk = async () => {
+    lookups += 1;
+    return null;
+  };
+  t.after(() => { Department.findByPk = originalFindByPk; });
+
+  const res = makeResponse();
+  await getDepartmentProfile({
+    user: { role: 'department_head', departmentId: 999 },
+    params: { departmentId: 3 },
+    query: { departmentId: 3 },
+  }, res, (error) => { throw error; });
+
+  assert.equal(res.statusCode, 403);
+  assert.equal(lookups, 0);
+});
+
+test('department profile update rejects protected fields and invalid editable values', async (t) => {
+  const originalFindByPk = Department.findByPk;
+  const department = { id: 3, update: async () => assert.fail('Invalid changes must not be persisted') };
+  Department.findByPk = async () => department;
+  t.after(() => { Department.findByPk = originalFindByPk; });
+
+  for (const body of [
+    { departmentId: 99 },
+    { name: 'Changed Name' },
+    { status: 'inactive' },
+    { email: 'not-an-email' },
+    { email: 'x'.repeat(250) + '@example.test' },
+    { phone: '555' },
+    { phone: '.......' },
+    { description: 'x'.repeat(2001) },
+    { office: { id: 9 } },
+    {},
+  ]) {
+    const res = makeResponse();
+    await updateDepartmentProfile({ organizationScope: { departmentId: 3 }, body }, res, (error) => { throw error; });
+    assert.equal(res.statusCode, 422, `Expected 422 for ${JSON.stringify(body).slice(0, 80)}`);
+  }
+});
+
+test('department profile update reports missing profiles and backend failures accurately', async (t) => {
+  const originalFindByPk = Department.findByPk;
+  const originalError = console.error;
+  let logCount = 0;
+  console.error = () => { logCount += 1; };
+  t.after(() => {
+    Department.findByPk = originalFindByPk;
+    console.error = originalError;
+  });
+
+  Department.findByPk = async () => null;
+  const notFoundResponse = makeResponse();
+  await updateDepartmentProfile({ organizationScope: { departmentId: 3 }, body: { phone: '55512345' } }, notFoundResponse, (error) => { throw error; });
+  assert.equal(notFoundResponse.statusCode, 404);
+
+  Department.findByPk = async () => { throw new Error('database unavailable'); };
+  const serverErrorResponse = makeResponse();
+  await updateDepartmentProfile({ organizationScope: { departmentId: 3 }, body: { phone: '55512345' } }, serverErrorResponse, (error) => { throw error; });
+  assert.equal(serverErrorResponse.statusCode, 500);
+  assert.equal(logCount, 1);
+});
+
+test('department profile update persists only editable fields and returns the same profile shape', async (t) => {
+  const originals = {
+    departmentFindByPk: Department.findByPk,
+    userCount: User.count,
+    assetCount: Asset.count,
+    locationFindOne: Location.findOne,
+    locationFindByPk: Location.findByPk,
+  };
+  const persistedUpdates = [];
+  const department = {
+    id: 3,
+    name: 'Engineering',
+    code: 'ENG',
+    description: 'Old description',
+    headId: 10,
+    collegeId: 1,
+    locationId: 2,
+    phone: '55512345',
+    email: 'engineering@example.test',
+    status: 'active',
+    College: { id: 1, collegeName: 'Engineering College' },
+    Head: { id: 10, fullName: 'Department Head' },
+    LocationRecord: { id: 2, name: 'Main Office' },
+    update: async (updates) => {
+      persistedUpdates.push(updates);
+      Object.assign(department, updates);
+      if (updates.locationId !== undefined) {
+        department.LocationRecord = updates.locationId === 2 ? { id: 2, name: 'Main Office' } : null;
+      }
+    },
+  };
+  Department.findByPk = async () => department;
+  User.count = async () => 7;
+  Asset.count = async () => 12;
+  Location.findOne = async () => ({ id: 2 });
+  Location.findByPk = async () => ({ id: 2 });
+  t.after(() => {
+    Department.findByPk = originals.departmentFindByPk;
+    User.count = originals.userCount;
+    Asset.count = originals.assetCount;
+    Location.findOne = originals.locationFindOne;
+    Location.findByPk = originals.locationFindByPk;
+  });
+
+  const res = makeResponse();
+  await updateDepartmentProfile({
+    organizationScope: { departmentId: 3 },
+    body: { phone: '+1 (555) 123-4567', email: 'new@example.test', office: 'Main Office', description: 'Updated' },
+  }, res, (error) => { throw error; });
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(persistedUpdates, [{
+    phone: '+1 (555) 123-4567',
+    email: 'new@example.test',
+    locationId: 2,
+    description: 'Updated',
+  }]);
+  assert.equal(res.payload.data.id, 3);
+  assert.equal(res.payload.data.name, 'Engineering');
+  assert.equal(res.payload.data.status, 'active');
+  assert.equal(res.payload.data.office, 'Main Office');
+  assert.deepEqual(res.payload.data.summary, { totalStaff: 7, totalAssets: 12 });
+  assert.deepEqual(res.payload.summary, res.payload.data.summary);
+});
+
 test('the existing department list and detail endpoints enforce configured department scope', () => {
   const scopedGetRoutes = departmentRoutes.stack
     .filter((layer) => layer.route?.methods.get && ['/', '/stats', '/:id'].includes(layer.route.path))
@@ -126,6 +258,17 @@ test('the existing department list and detail endpoints enforce configured depar
   assert.equal(scopedGetRoutes.length, 3);
   for (const route of scopedGetRoutes) {
     assert.ok(route.stack.some((layer) => layer.handle === resolveConfiguredDepartmentScope));
+  }
+});
+
+test('department profile endpoints require department-head authentication, scope, and permissions', () => {
+  for (const method of ['get', 'put']) {
+    const route = departmentWorkspaceRoutes.stack.find((layer) => layer.route?.path === '/profile' && layer.route.methods[method])?.route;
+    assert.ok(route, `Expected profile ${method.toUpperCase()} route`);
+    assert.equal(route.stack.length, 2, `Expected profile ${method.toUpperCase()} permission middleware and controller`);
+  }
+  for (const middleware of [...requireDepartmentHead, resolveDepartmentScope]) {
+    assert.ok(departmentWorkspaceRoutes.stack.some((layer) => layer.handle === middleware));
   }
 });
 

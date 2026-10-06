@@ -27,14 +27,18 @@ const DeptLocations = () => {
   const { language } = useLanguage();
   const [locations, setLocations] = useState([]);
   const [locationTypes, setLocationTypes] = useState([]);
+  const [campuses, setCampuses] = useState([]);
   const [summary, setSummary] = useState({ total: 0, active: 0, inactive: 0, locationsWithAssets: 0 });
   const [department, setDepartment] = useState(null);
   const [college, setCollege] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
-  const [filters, setFilters] = useState({ search: '', status: 'all', type: 'all' });
+  const [filters, setFilters] = useState({ search: '', status: 'all', type: 'all', campus: 'all' });
   const [searchInput, setSearchInput] = useState('');
   const [page, setPage] = useState(1);
   const [selectedLocation, setSelectedLocation] = useState(null);
+  const [selectedLocationAssets, setSelectedLocationAssets] = useState(null);
+  const [locationAssetsLoading, setLocationAssetsLoading] = useState(false);
+  const [locationAssetsError, setLocationAssetsError] = useState('');
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
@@ -58,6 +62,7 @@ const DeptLocations = () => {
       setLocations(Array.isArray(payload.data) ? payload.data : []);
       setSummary(payload.summary || { total: 0, active: 0, inactive: 0, locationsWithAssets: 0 });
       setLocationTypes(Array.isArray(payload.filters?.types) ? payload.filters.types : []);
+      setCampuses(Array.isArray(payload.filters?.campuses) ? payload.filters.campuses : []);
       setDepartment(payload.department || null);
       setCollege(payload.college || null);
       setPagination(payload.pagination || { page: requestedPage, pages: 1, total: 0 });
@@ -149,8 +154,22 @@ const DeptLocations = () => {
 
   const clearFilters = () => {
     setSearchInput('');
-    setFilters({ search: '', status: 'all', type: 'all' });
+    setFilters({ search: '', status: 'all', type: 'all', campus: 'all' });
     setPage(1);
+  };
+
+  const viewLocationAssets = async (location) => {
+    setSelectedLocationAssets({ location, assets: [] });
+    setLocationAssetsLoading(true);
+    setLocationAssetsError('');
+    try {
+      const response = await apiClient.get(`/department-head/locations/${encodeURIComponent(location.recordType)}/${encodeURIComponent(location.id)}/assets`);
+      setSelectedLocationAssets({ location, assets: Array.isArray(response.data?.data) ? response.data.data : [] });
+    } catch (requestError) {
+      setLocationAssetsError(getApiErrorMessage(requestError, t.assetsLoadError) || t.assetsLoadError);
+    } finally {
+      setLocationAssetsLoading(false);
+    }
   };
 
   return (
@@ -204,7 +223,15 @@ const DeptLocations = () => {
             {locationTypes.map((type) => <option key={type} value={type}>{formatType(type)}</option>)}
           </select>
         </label>
-        <button className="department-location-button department-location-clear" type="button" onClick={clearFilters} disabled={!searchInput && filters.status === 'all' && filters.type === 'all'}>
+        {campuses.length > 0 && <label className="department-location-filter">
+          <MapPin size={17} aria-hidden="true" />
+          <span className="sr-only">{t.filterCampus}</span>
+          <select value={filters.campus} onChange={(event) => updateFilter('campus', event.target.value)}>
+            <option value="all">{t.allCampuses}</option>
+            {campuses.map((campus) => <option key={campus} value={campus}>{campus}</option>)}
+          </select>
+        </label>}
+        <button className="department-location-button department-location-clear" type="button" onClick={clearFilters} disabled={!searchInput && filters.status === 'all' && filters.type === 'all' && filters.campus === 'all'}>
           <X size={16} aria-hidden="true" /> {t.clearFilters}
         </button>
         {!loading && !error && <span className="department-location-count">{pagination.total} {t.locations}</span>}
@@ -228,6 +255,8 @@ const DeptLocations = () => {
                 <p>{display(location.description)}</p>
                 <div className="department-location-card-facts">
                   <Fact label={t.building} value={display(location.building)} />
+                  <Fact label={t.campus} value={display(location.campus)} />
+                  <Fact label={t.floor} value={display(location.floor)} />
                   <Fact label={t.room} value={display(location.room)} />
                   <Fact label={t.locationType} value={formatType(location.type)} />
                   <Fact label={t.department} value={display(location.department || department?.name)} />
@@ -235,7 +264,10 @@ const DeptLocations = () => {
                 </div>
                 <div className="department-location-card-footer">
                   <span><Package size={16} aria-hidden="true" /> {Number(location.assetCount || 0)} {t.assets}</span>
-                  <button className="department-location-view" type="button" onClick={() => setSelectedLocation(location)}><Eye size={16} aria-hidden="true" /> {t.view}</button>
+                  <div className="department-location-card-actions">
+                    <button className="department-location-view" type="button" onClick={() => setSelectedLocation(location)}><Eye size={16} aria-hidden="true" /> {t.view}</button>
+                    <button className="department-location-view" type="button" onClick={() => viewLocationAssets(location)}><Package size={16} aria-hidden="true" /> {t.viewAssets}</button>
+                  </div>
                 </div>
               </div>
             </article>
@@ -263,6 +295,8 @@ const DeptLocations = () => {
             <div className="department-location-details">
               <Fact label={t.locationId} value={display(selectedLocation.id)} />
               <Fact label={t.building} value={display(selectedLocation.building)} />
+              <Fact label={t.campus} value={display(selectedLocation.campus)} />
+              <Fact label={t.floor} value={display(selectedLocation.floor)} />
               <Fact label={t.room} value={display(selectedLocation.room)} />
               <Fact label={t.locationType} value={formatType(selectedLocation.type)} />
               <Fact label={t.department} value={display(selectedLocation.department || department?.name)} />
@@ -272,6 +306,23 @@ const DeptLocations = () => {
               <Fact label={t.locationCode} value={display(selectedLocation.code)} />
               <Fact label={t.college} value={display(college?.name)} />
               <Fact className="department-location-description" label={t.description} value={display(selectedLocation.description)} />
+            </div>
+          </section>
+        </div>
+      )}
+
+      {selectedLocationAssets && (
+        <div className="department-location-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedLocationAssets(null); }}>
+          <section className="department-location-modal department-location-assets-modal" role="dialog" aria-modal="true" aria-labelledby="department-location-assets-title">
+            <header>
+              <div><span className="department-location-modal-label">{t.assetsAtLocation}</span><h2 id="department-location-assets-title">{display(selectedLocationAssets.location.name)}</h2></div>
+              <button className="department-location-icon-button" type="button" onClick={() => setSelectedLocationAssets(null)} aria-label={t.close} title={t.close}><X size={19} aria-hidden="true" /></button>
+            </header>
+            <div className="department-location-assets-content">
+              {locationAssetsLoading && <div className="department-location-state" role="status"><RefreshCw size={22} className="department-location-spin" aria-hidden="true" /><p>{t.loadingAssets}</p></div>}
+              {!locationAssetsLoading && locationAssetsError && <div className="department-location-state department-location-error" role="alert"><p>{locationAssetsError}</p></div>}
+              {!locationAssetsLoading && !locationAssetsError && selectedLocationAssets.assets.length === 0 && <div className="department-location-state"><Package size={24} aria-hidden="true" /><p>{t.noAssetsAtLocation}</p></div>}
+              {!locationAssetsLoading && !locationAssetsError && selectedLocationAssets.assets.length > 0 && <div className="department-location-assets-table-wrap"><table className="department-location-assets-table"><thead><tr><th>{t.assetId}</th><th>{t.assetTag}</th><th>{t.assetName}</th><th>{t.category}</th><th>{t.condition}</th><th>{t.status}</th></tr></thead><tbody>{selectedLocationAssets.assets.map((asset) => <tr key={asset.id}><td>{display(asset.id)}</td><td>{display(asset.assetCode)}</td><td>{display(asset.name)}</td><td>{display(asset.category)}</td><td>{display(asset.condition)}</td><td>{display(asset.status)}</td></tr>)}</tbody></table></div>}
             </div>
           </section>
         </div>
@@ -297,8 +348,10 @@ const englishTranslations = {
   searchPlaceholder: 'Search building, room, type, staff, code, or status',
   filterStatus: 'Filter by status',
   filterType: 'Filter by location type',
+  filterCampus: 'Filter by campus',
   allStatuses: 'All statuses',
   allTypes: 'All types',
+  allCampuses: 'All campuses',
   clearFilters: 'Clear filters',
   refresh: 'Refresh',
   loading: 'Loading department locations...',
@@ -309,6 +362,8 @@ const englishTranslations = {
   locationId: 'Location ID',
   locationCode: 'Location code',
   building: 'Building',
+  campus: 'Campus',
+  floor: 'Floor',
   room: 'Room',
   locationType: 'Location type',
   department: 'Department',
@@ -321,6 +376,16 @@ const englishTranslations = {
   college: 'College',
   notAvailable: 'Not available',
   view: 'View',
+  viewAssets: 'View assets',
+  assetsAtLocation: 'Assets at location',
+  loadingAssets: 'Loading location assets...',
+  assetsLoadError: 'Unable to load location assets.',
+  noAssetsAtLocation: 'No assets are assigned to this location.',
+  assetId: 'Asset ID',
+  assetTag: 'Asset tag',
+  assetName: 'Asset name',
+  category: 'Category',
+  condition: 'Condition',
   details: 'Location details',
   close: 'Close location details',
   pagination: 'Location pagination',
@@ -332,7 +397,7 @@ const englishTranslations = {
   exporting: 'Exporting...',
   exportSuccess: 'Department locations exported successfully.',
   exportError: 'Unable to export department locations.',
-  locationTypes: { laboratory: 'Laboratory', office: 'Office', room: 'Room', department_location: 'Department location' },
+  locationTypes: { campus: 'Campus', building: 'Building', floor: 'Floor', room: 'Room', laboratory: 'Laboratory', office: 'Office', storage_area: 'Storage Area', other: 'Other', department_location: 'Department location' },
 };
 
 const amharicTranslations = {
@@ -348,8 +413,10 @@ const amharicTranslations = {
   searchPlaceholder: 'ሕንፃ፣ ክፍል፣ ዓይነት፣ ሰራተኛ፣ ኮድ ወይም ሁኔታ ፈልግ',
   filterStatus: 'በሁኔታ አጣራ',
   filterType: 'በቦታ ዓይነት አጣራ',
+  filterCampus: 'በካምፓስ አጣራ',
   allStatuses: 'ሁሉም ሁኔታዎች',
   allTypes: 'ሁሉም ዓይነቶች',
+  allCampuses: 'ሁሉም ካምፓሶች',
   clearFilters: 'ማጣሪያዎችን አጽዳ',
   refresh: 'አድስ',
   loading: 'የዲፓርትመንት ቦታዎችን በመጫን ላይ...',
@@ -360,6 +427,8 @@ const amharicTranslations = {
   locationId: 'የቦታ መለያ',
   locationCode: 'የቦታ ኮድ',
   building: 'ሕንፃ',
+  campus: 'ካምፓስ',
+  floor: 'ፎቅ',
   room: 'ክፍል',
   locationType: 'የቦታ ዓይነት',
   department: 'ዲፓርትመንት',
@@ -372,6 +441,16 @@ const amharicTranslations = {
   college: 'ኮሌጅ',
   notAvailable: 'አልተገለጸም',
   view: 'ይመልከቱ',
+  viewAssets: 'ንብረቶችን ይመልከቱ',
+  assetsAtLocation: 'በቦታው ያሉ ንብረቶች',
+  loadingAssets: 'የቦታ ንብረቶችን በመጫን ላይ...',
+  assetsLoadError: 'የቦታ ንብረቶችን መጫን አልተቻለም።',
+  noAssetsAtLocation: 'በዚህ ቦታ የተመደቡ ንብረቶች የሉም።',
+  assetId: 'የንብረት መለያ',
+  assetTag: 'የንብረት መለያ',
+  assetName: 'የንብረት ስም',
+  category: 'ምድብ',
+  condition: 'ሁኔታ',
   details: 'የቦታ ዝርዝር',
   close: 'የቦታ ዝርዝርን ዝጋ',
   pagination: 'የቦታ ገጽ ቁጥጥር',
@@ -383,7 +462,7 @@ const amharicTranslations = {
   exporting: 'በመላክ ላይ...',
   exportSuccess: 'የዲፓርትመንት ቦታዎች መረጃ በተሳካ ሁኔታ ወደ ውጭ ተልኳል።',
   exportError: 'የዲፓርትመንት ቦታዎችን ወደ ውጭ መላክ አልተቻለም።',
-  locationTypes: { laboratory: 'ላቦራቶሪ', office: 'ቢሮ', room: 'ክፍል', department_location: 'የዲፓርትመንት ቦታ' },
+  locationTypes: { campus: 'ካምፓስ', building: 'ሕንፃ', floor: 'ፎቅ', room: 'ክፍል', laboratory: 'ላቦራቶሪ', office: 'ቢሮ', storage_area: 'የማከማቻ ቦታ', other: 'ሌላ', department_location: 'የዲፓርትመንት ቦታ' },
 };
 
 export default DeptLocations;

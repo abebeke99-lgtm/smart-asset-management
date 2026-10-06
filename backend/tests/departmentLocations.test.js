@@ -8,7 +8,7 @@ const routeSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/depar
 
 test('department locations use authenticated department scope and expose the location contract', () => {
   assert.match(routeSource, /router\.use\(\.\.\.requireDepartmentHead, resolveDepartmentScope\)/);
-  assert.match(controllerSource, /const \{ departmentId \} = req\.organizationScope/);
+  assert.match(controllerSource, /Number\(req\.organizationScope\?\.departmentId\)/);
   assert.match(controllerSource, /Asset\.findAll\(\{ where: \{ departmentId \}/);
   assert.match(controllerSource, /pagination: \{ page, limit, total/);
   assert.match(controllerSource, /summary = \{/);

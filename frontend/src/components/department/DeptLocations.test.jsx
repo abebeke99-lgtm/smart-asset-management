@@ -79,7 +79,7 @@ describe('Department Head locations', () => {
     expect(screen.getByText('Aster Lecturer')).toBeInTheDocument();
     expect(screen.getByText('8 assets')).toBeInTheDocument();
     expect(apiClient.get).toHaveBeenCalledWith('/department-head/locations', {
-      params: { search: '', status: 'all', type: 'all', page: 1, limit: 25 },
+      params: { search: '', status: 'all', type: 'all', campus: 'all', page: 1, limit: 25 },
     });
   });
 
@@ -89,12 +89,12 @@ describe('Department Head locations', () => {
     fireEvent.change(screen.getByLabelText('Filter by status'), { target: { value: 'active' } });
     fireEvent.change(screen.getByLabelText('Filter by location type'), { target: { value: 'laboratory' } });
     await waitFor(() => expect(apiClient.get).toHaveBeenLastCalledWith('/department-head/locations', {
-      params: { search: '', status: 'active', type: 'laboratory', page: 1, limit: 25 },
+      params: { search: '', status: 'active', type: 'laboratory', campus: 'all', page: 1, limit: 25 },
     }));
 
     fireEvent.change(screen.getByLabelText('Search department locations'), { target: { value: 'Physics' } });
     await waitFor(() => expect(apiClient.get).toHaveBeenLastCalledWith('/department-head/locations', {
-      params: { search: 'Physics', status: 'active', type: 'laboratory', page: 1, limit: 25 },
+      params: { search: 'Physics', status: 'active', type: 'laboratory', campus: 'all', page: 1, limit: 25 },
     }), { timeout: 1500 });
   });
 
@@ -112,6 +112,21 @@ describe('Department Head locations', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('loads assets only through the selected authorized location endpoint', async () => {
+    apiClient.get.mockImplementation((path) => {
+      if (path === '/department-head/locations/room/11/assets') {
+        return Promise.resolve({ data: { success: true, data: [{ id: 100, assetCode: 'AST-100', name: 'Microscope', category: 'Laboratory', condition: 'Good', status: 'available' }] } });
+      }
+      return Promise.resolve(response());
+    });
+    render(<DeptLocations />);
+    fireEvent.click(await screen.findByRole('button', { name: 'View assets' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Physics Lab' });
+    expect(dialog).toHaveTextContent('Microscope');
+    expect(apiClient.get).toHaveBeenCalledWith('/department-head/locations/room/11/assets');
+  });
+
   it('refreshes and retries after a request error', async () => {
     render(<DeptLocations />);
 
@@ -124,7 +139,7 @@ describe('Department Head locations', () => {
     expect(await screen.findByRole('heading', { name: 'Physics Lab' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await waitFor(() => expect(apiClient.get).toHaveBeenLastCalledWith('/department-head/locations', {
-      params: { search: '', status: 'all', type: 'all', page: 1, limit: 25 },
+      params: { search: '', status: 'all', type: 'all', campus: 'all', page: 1, limit: 25 },
     }));
   });
 
@@ -148,10 +163,10 @@ describe('Department Head locations', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Export' }));
     await waitFor(() => expect(XLSX.writeFile).toHaveBeenCalledWith(expect.anything(), 'department-locations.xlsx'));
     expect(apiClient.get).toHaveBeenCalledWith('/department-head/locations', {
-      params: { search: '', status: 'all', type: 'all', export: true, page: 1, limit: 100 },
+      params: { search: '', status: 'all', type: 'all', campus: 'all', export: true, page: 1, limit: 100 },
     });
     expect(apiClient.get).toHaveBeenCalledWith('/department-head/locations', {
-      params: { search: '', status: 'all', type: 'all', export: true, page: 2, limit: 100 },
+      params: { search: '', status: 'all', type: 'all', campus: 'all', export: true, page: 2, limit: 100 },
     });
     expect(XLSX.utils.json_to_sheet).toHaveBeenCalledWith(expect.arrayContaining([
       expect.objectContaining({ 'Location ID': 11, Building: 'Science Hall', Room: 'Physics Lab' }),

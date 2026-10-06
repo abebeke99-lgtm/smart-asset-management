@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Asset, User, Department, Location, College, Building, Approval, Assignment, Transfer, AssetReturn, Maintenance, VerificationSession, VerificationItem, ServiceRequest, AuditLog, AssetMovement, Room } = require('../models');
+const { Asset, User, Department, Location, College, Building, Campus, Approval, Assignment, Transfer, AssetReturn, Maintenance, VerificationSession, VerificationItem, ServiceRequest, AuditLog, AssetMovement, Room } = require('../models');
 
 const pageValues = (query) => {
   const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
@@ -86,35 +86,53 @@ const isPendingAcquisitionStatus = (status) => ['draft', 'submitted', 'pending',
 const userName = (user) => user && (user.fullName || user.username);
 const assetName = (asset) => asset && [asset.name, asset.assetCode].filter(Boolean).join(' - ');
 
+const departmentProfileValidationError = (message) => {
+  const error = new Error(message);
+  error.statusCode = 422;
+  return error;
+};
+
 const normalizeDepartmentProfileFields = async (payload = {}) => {
   const allowedKeys = new Set(['phone', 'email', 'office', 'locationId', 'description']);
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw departmentProfileValidationError('Unsupported department profile fields were supplied.');
+  }
   const unsupported = Object.keys(payload || {}).filter((key) => !allowedKeys.has(key));
   if (unsupported.length) {
-    throw new Error('Unsupported department profile fields were supplied.');
+    throw departmentProfileValidationError('Unsupported department profile fields were supplied.');
   }
 
   const updates = {};
 
   if (Object.prototype.hasOwnProperty.call(payload, 'phone')) {
+    if (payload.phone !== null && typeof payload.phone !== 'string') {
+      throw departmentProfileValidationError('Department contact is invalid.');
+    }
     const phone = String(payload.phone ?? '').trim();
-    if (phone && !/^[+()\d\s.-]{7,50}$/.test(phone)) {
-      throw new Error('Department contact is invalid.');
+    if (phone && (!/^[+()\d\s.-]{7,50}$/.test(phone) || phone.replace(/\D/g, '').length < 7)) {
+      throw departmentProfileValidationError('Department contact is invalid.');
     }
     updates.phone = phone;
   }
 
   if (Object.prototype.hasOwnProperty.call(payload, 'email')) {
+    if (payload.email !== null && typeof payload.email !== 'string') {
+      throw departmentProfileValidationError('Department email is invalid.');
+    }
     const email = String(payload.email ?? '').trim();
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      throw new Error('Department email is invalid.');
+    if (email.length > 255 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+      throw departmentProfileValidationError('Department email is invalid.');
     }
     updates.email = email;
   }
 
   if (Object.prototype.hasOwnProperty.call(payload, 'description')) {
+    if (payload.description !== null && typeof payload.description !== 'string') {
+      throw departmentProfileValidationError('Department description is invalid.');
+    }
     const description = String(payload.description ?? '').trim();
     if (description.length > 2000) {
-      throw new Error('Department description exceeds the allowed length.');
+      throw departmentProfileValidationError('Department description exceeds the allowed length.');
     }
     updates.description = description;
   }
@@ -124,12 +142,23 @@ const normalizeDepartmentProfileFields = async (payload = {}) => {
     if (rawLocationId === null || rawLocationId === undefined || rawLocationId === '') {
       updates.locationId = null;
     } else if (typeof rawLocationId === 'string' && /^\d+$/.test(rawLocationId.trim())) {
-      updates.locationId = Number(rawLocationId);
+      const locationId = Number(rawLocationId.trim());
+      if (!Number.isSafeInteger(locationId) || locationId < 1) {
+        throw departmentProfileValidationError('Office location is invalid.');
+      }
+      updates.locationId = locationId;
+    } else if (typeof rawLocationId === 'number' && Number.isSafeInteger(rawLocationId) && rawLocationId > 0) {
+      updates.locationId = rawLocationId;
+    } else if (typeof rawLocationId !== 'string') {
+      throw departmentProfileValidationError('Office location is invalid.');
     } else {
       const officeName = String(rawLocationId).trim();
+      if (officeName.length > 255) {
+        throw departmentProfileValidationError('Office location is invalid.');
+      }
       const location = await Location.findOne({ where: { name: officeName }, attributes: ['id'] });
       if (!location) {
-        throw new Error('Office location not found.');
+        throw departmentProfileValidationError('Office location not found.');
       }
       updates.locationId = location.id;
     }
@@ -138,9 +167,32 @@ const normalizeDepartmentProfileFields = async (payload = {}) => {
   return updates;
 };
 
+const serializeDepartmentProfile = (department, totalStaff, totalAssets) => ({
+  id: department.id,
+  name: department.name,
+  code: department.code,
+  description: department.description || '',
+  headId: department.headId,
+  collegeId: department.collegeId,
+  locationId: department.locationId,
+  phone: department.phone || '',
+  email: department.email || '',
+  status: department.status,
+  departmentId: department.id,
+  userCount: totalStaff,
+  assetCount: totalAssets,
+  college: department.College || null,
+  head: department.Head || null,
+  locationRecord: department.LocationRecord || null,
+  office: department.LocationRecord?.name || null,
+  summary: { totalStaff, totalAssets },
+  createdAt: department.createdAt,
+  updatedAt: department.updatedAt,
+});
+
 const getDepartmentProfile = async (req, res, next) => {
   try {
-    const departmentId = Number(req.organizationScope?.departmentId ?? req.user?.departmentId ?? req.user?.department_id);
+    const departmentId = Number(req.organizationScope?.departmentId);
     if (!Number.isSafeInteger(departmentId) || departmentId < 1) {
       return res.status(403).json({ success: false, message: 'Department scope is not configured for this account.' });
     }
@@ -162,31 +214,7 @@ const getDepartmentProfile = async (req, res, next) => {
       Asset.count({ where: { departmentId } }),
     ]);
 
-    const payload = {
-      id: department.id,
-      name: department.name,
-      code: department.code,
-      description: department.description || '',
-      headId: department.headId,
-      collegeId: department.collegeId,
-      locationId: department.locationId,
-      phone: department.phone || '',
-      email: department.email || '',
-      status: department.status,
-      departmentId: department.id,
-      userCount: totalStaff,
-      assetCount: totalAssets,
-      college: department.College || null,
-      head: department.Head || null,
-      locationRecord: department.LocationRecord || null,
-      office: department.LocationRecord?.name || null,
-      summary: {
-        totalStaff,
-        totalAssets,
-      },
-      createdAt: department.createdAt,
-      updatedAt: department.updatedAt,
-    };
+    const payload = serializeDepartmentProfile(department, totalStaff, totalAssets);
 
     return res.json({ success: true, data: payload, summary: payload.summary });
   } catch (error) {
@@ -196,7 +224,7 @@ const getDepartmentProfile = async (req, res, next) => {
 
 const updateDepartmentProfile = async (req, res, next) => {
   try {
-    const departmentId = Number(req.organizationScope?.departmentId ?? req.user?.departmentId ?? req.user?.department_id);
+    const departmentId = Number(req.organizationScope?.departmentId);
     if (!Number.isSafeInteger(departmentId) || departmentId < 1) {
       return res.status(403).json({ success: false, message: 'Department scope is not configured for this account.' });
     }
@@ -238,22 +266,17 @@ const updateDepartmentProfile = async (req, res, next) => {
       User.count({ where: { departmentId } }),
       Asset.count({ where: { departmentId } }),
     ]);
-    const profile = {
-      ...refreshed.toJSON(),
-      userCount: totalStaff,
-      assetCount: totalAssets,
-      office: refreshed.LocationRecord?.name || null,
-      summary: { totalStaff, totalAssets },
-    };
+    const profile = serializeDepartmentProfile(refreshed, totalStaff, totalAssets);
 
     return res.json({ success: true, message: 'Department profile updated successfully.', data: profile, summary: profile.summary });
   } catch (error) {
-    if (error.message === 'Unsupported department profile fields were supplied.' || error.message === 'Department contact is invalid.' || error.message === 'Department email is invalid.' || error.message === 'Office location not found.' || error.message === 'Department description exceeds the allowed length.' || error.message === 'No valid department profile fields were supplied for update.') {
+    if (error.statusCode === 422) {
       return res.status(422).json({ success: false, message: error.message });
     }
-    if (error.message === 'Department profile not found.' || error.message === 'Office location not found.') {
+    if (error.message === 'Department profile not found.') {
       return res.status(404).json({ success: false, message: error.message });
     }
+    console.error('Department profile update failed:', error);
     return res.status(500).json({ success: false, message: 'Unable to update department profile.' });
   }
 };
@@ -607,13 +630,14 @@ const listDepartmentStaff = async (req, res, next) => {
       const positionField = User.rawAttributes.position ? 'position' : 'role';
       where[positionField] = position;
     }
-    if (req.query.status === 'active') where.active = true;
-    if (req.query.status === 'active') where.status = 'active';
-    else if (req.query.status === 'inactive') where.active = false;
-    if (req.query.status === 'inactive') {
+    if (req.query.status === 'active') {
+      where.active = true;
+      where.status = 'active';
+    } else if (req.query.status === 'inactive') {
+      where.active = false;
       where[Op.and] = [
         ...(where[Op.and] || []),
-        { status: { [Op.ne]: 'active' } },
+        { [Op.or]: [{ active: false }, { status: { [Op.ne]: 'active' } }] },
       ];
     }
 
@@ -661,6 +685,7 @@ const listDepartmentLocations = async (req, res, next) => {
     const search = String(req.query.search || '').trim().toLowerCase();
     const status = String(req.query.status || '').trim().toLowerCase();
     const type = String(req.query.type || '').trim().toLowerCase();
+    const campus = String(req.query.campus || '').trim();
     const [department, rooms, assets] = await Promise.all([
       Department.findByPk(departmentId, {
         include: [
@@ -670,8 +695,11 @@ const listDepartmentLocations = async (req, res, next) => {
       }),
       Room.findAll({
         where: { departmentId },
-        attributes: ['id', 'buildingId', 'departmentId', 'roomCode', 'roomName', 'roomType', 'description', 'floor', 'status'],
-        include: [{ model: Building, attributes: ['id', 'buildingName', 'buildingCode'], required: false }],
+        attributes: ['id', 'buildingId', 'campusId', 'departmentId', 'roomCode', 'roomName', 'roomType', 'description', 'floor', 'status'],
+        include: [
+          { model: Building, attributes: ['id', 'buildingName', 'buildingCode'], required: false },
+          { model: Campus, attributes: ['id', 'campusName', 'campusCode'], required: false },
+        ],
         order: [['roomName', 'ASC']],
       }),
       Asset.findAll({ where: { departmentId }, attributes: ['id', 'location', 'roomId'], raw: true }),
@@ -701,6 +729,8 @@ const listDepartmentLocations = async (req, res, next) => {
         id: roomData.id,
         code: roomData.roomCode,
         name: roomData.roomName,
+        campus: roomData.Campus?.campusName || null,
+        campusCode: roomData.Campus?.campusCode || null,
         building: roomData.Building?.buildingName || null,
         buildingCode: roomData.Building?.buildingCode || null,
         room: roomData.roomName,
@@ -721,6 +751,8 @@ const listDepartmentLocations = async (req, res, next) => {
         id: locationData.id,
         code: locationData.code || null,
         name: locationData.name,
+        campus: null,
+        campusCode: null,
         building: null,
         buildingCode: null,
         room: null,
@@ -737,15 +769,17 @@ const listDepartmentLocations = async (req, res, next) => {
 
     allLocations.sort((left, right) => left.name.localeCompare(right.name));
     const types = [...new Set(allLocations.map((location) => String(location.type || '').trim()).filter(Boolean))].sort();
+    const campuses = [...new Set(allLocations.map((location) => String(location.campus || '').trim()).filter(Boolean))].sort();
     const filteredLocations = allLocations.filter((location) => {
       const matchesStatus = !status || status === 'all' || String(location.status || '').toLowerCase() === status;
       const matchesType = !type || type === 'all' || String(location.type || '').toLowerCase() === type;
+      const matchesCampus = !campus || campus === 'all' || location.campus === campus;
       const searchable = [
-        location.id, location.name, location.code, location.building, location.buildingCode,
+        location.id, location.name, location.code, location.campus, location.campusCode, location.building, location.buildingCode,
         location.room, location.type, location.department, location.responsibleStaff,
         location.description, location.status,
       ].map((value) => String(value || '').toLowerCase());
-      return matchesStatus && matchesType && (!search || searchable.some((value) => value.includes(search)));
+      return matchesStatus && matchesType && matchesCampus && (!search || searchable.some((value) => value.includes(search)));
     });
     const total = filteredLocations.length;
     const rows = filteredLocations.slice((page - 1) * limit, page * limit);
@@ -761,9 +795,50 @@ const listDepartmentLocations = async (req, res, next) => {
       department: { id: departmentData.id, name: departmentName, code: departmentData.code, collegeId: departmentData.collegeId },
       college: department?.College ? { id: department.College.id, name: department.College.collegeName, code: department.College.collegeCode } : null,
       summary,
-      filters: { types },
+      filters: { types, campuses },
       pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)), totalPages: Math.max(1, Math.ceil(total / limit)) },
     });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const listDepartmentLocationAssets = async (req, res, next) => {
+  try {
+    const departmentId = Number(req.organizationScope?.departmentId);
+    const locationId = Number(req.params.locationId);
+    const recordType = String(req.params.recordType || '').trim();
+    if (!Number.isSafeInteger(departmentId) || departmentId < 1) {
+      return res.status(403).json({ success: false, message: 'Department scope is not configured for this account.' });
+    }
+    if (!Number.isSafeInteger(locationId) || locationId < 1 || !['room', 'department_location'].includes(recordType)) {
+      return res.status(404).json({ success: false, message: 'Location not found.' });
+    }
+
+    let locationName;
+    let assetWhere = { departmentId };
+    if (recordType === 'room') {
+      const room = await Room.findOne({ where: { id: locationId, departmentId }, attributes: ['id', 'roomName'] });
+      if (!room) return res.status(404).json({ success: false, message: 'Location not found.' });
+      locationName = room.roomName;
+      assetWhere = { ...assetWhere, roomId: room.id };
+    } else {
+      const department = await Department.findByPk(departmentId, {
+        include: [{ model: Location, as: 'LocationRecord', attributes: ['id', 'name'], required: false }],
+      });
+      if (!department?.LocationRecord || Number(department.LocationRecord.id) !== locationId) {
+        return res.status(404).json({ success: false, message: 'Location not found.' });
+      }
+      locationName = department.LocationRecord.name;
+      assetWhere = { ...assetWhere, roomId: null, location: locationName };
+    }
+
+    const assets = await Asset.findAll({
+      where: assetWhere,
+      attributes: ['id', 'assetCode', 'name', 'category', 'condition', 'location', 'status'],
+      order: [['name', 'ASC']],
+    });
+    return res.json({ success: true, data: assets, location: { id: locationId, name: locationName, recordType } });
   } catch (error) {
     return next(error);
   }
@@ -950,4 +1025,4 @@ const getDepartmentReports = async (req, res, next) => {
   }
 };
 
-module.exports = { getDepartmentDashboard, getDepartmentProfile, updateDepartmentProfile, listDepartmentAssets, listDepartmentStaff, listDepartmentLocations, getDepartmentReports };
+module.exports = { getDepartmentDashboard, getDepartmentProfile, updateDepartmentProfile, listDepartmentAssets, listDepartmentStaff, listDepartmentLocations, listDepartmentLocationAssets, getDepartmentReports };
