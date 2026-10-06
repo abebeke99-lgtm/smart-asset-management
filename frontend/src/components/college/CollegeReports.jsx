@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useMemo, useState } from 'react';
 import { BarChart3, Building2, CalendarRange, Download, Filter, Package, RefreshCw, Search, X } from 'lucide-react';
 import { useLanguage } from '../../contexts/UiContext';

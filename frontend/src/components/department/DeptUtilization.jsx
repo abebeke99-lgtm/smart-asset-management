@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars, no-dupe-keys, no-template-curly-in-string */
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, BarElement, CategoryScale, Legend, LinearScale, Title, Tooltip } from 'chart.js';

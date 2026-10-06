@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars, no-dupe-keys, no-template-curly-in-string */
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';

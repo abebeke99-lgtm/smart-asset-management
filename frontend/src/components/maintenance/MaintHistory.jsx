@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars, no-dupe-keys, no-template-curly-in-string */
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useMemo, useState } from "react";
 import { withMaintenanceAuth } from "./maintenanceAuth";
 

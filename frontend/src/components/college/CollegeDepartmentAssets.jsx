@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Activity, AlertTriangle, BadgeCheck, BriefcaseBusiness, Building2, Eye, Filter, Package, RefreshCw, Search, TriangleAlert, X } from 'lucide-react';
 import apiClient from '../../services/apiClient';

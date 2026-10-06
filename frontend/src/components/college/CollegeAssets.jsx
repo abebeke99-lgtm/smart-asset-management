@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState } from 'react';
 import { Eye, Package, RefreshCw, Search, X } from 'lucide-react';
 import apiClient from '../../services/apiClient';

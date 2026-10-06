@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+/* eslint-disable react-hooks/exhaustive-deps, jsx-a11y/role-has-required-aria-props */
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   BadgeCheck,

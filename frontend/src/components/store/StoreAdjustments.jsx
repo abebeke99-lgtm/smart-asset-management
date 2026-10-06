@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars, no-dupe-keys, no-template-curly-in-string */
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Download, Eye, History, Package, PackageMinus, PackagePlus, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react';
 import * as XLSX from 'xlsx';

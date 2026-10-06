@@ -25,11 +25,15 @@ ChartJS.register(
 );
 
 const DeptReports = ({ inventoryMode = false }) => {
-  const { user } = useAuth();
+  const auth = useAuth();
+  const { user } = auth;
   const { language, theme } = useLanguage();
   const location = useLocation();
   const printRef = useRef();
   const isInventoryView = inventoryMode || location.pathname.endsWith('/inventory') || location.pathname.includes('/reports/inventory');
+  const canExport = typeof auth.hasPermission === 'function'
+    ? auth.hasPermission('reports.export')
+    : Array.isArray(user?.permissions) && user.permissions.includes('reports.export');
   
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -132,18 +136,21 @@ const DeptReports = ({ inventoryMode = false }) => {
           || requestError.code === 'ECONNABORTED'
           || requestError.message === 'Network Error'
         );
+        const reportResource = isInventoryView ? 'department inventory' : 'department reports';
         const message = status === 401
           ? 'Authentication required. Please sign in again.'
           : status === 403
-            ? 'You do not have permission to view this department data.'
+            ? (isInventoryView
+              ? 'You do not have permission to view this department data.'
+              : 'You do not have permission to view these department reports.')
             : status === 404
-              ? 'The department inventory resource was not found.'
+              ? `The ${reportResource} resource was not found.`
               : status === 409
-                ? requestError.response?.data?.message || 'The department inventory request conflicts with the current data.'
+                ? requestError.response?.data?.message || `The ${reportResource} request conflicts with the current data.`
                 : status === 422
-                  ? requestError.response?.data?.message || 'The department inventory request is invalid.'
+                  ? requestError.response?.data?.message || `The ${reportResource} request is invalid.`
                   : status >= 500
-                    ? requestError.response?.data?.message || 'Unable to load department inventory data because of a server or database error.'
+                    ? requestError.response?.data?.message || `Unable to load ${reportResource} data because of a server or database error.`
                     : isNetworkError
                       ? 'Unable to connect to the server. Check the backend connection and try again.'
                       : requestError.response?.data?.message || requestError.message || t.fetchError;
@@ -354,6 +361,11 @@ const DeptReports = ({ inventoryMode = false }) => {
   }, [reportData.staff, filters]);
 
   const exportToPDF = () => {
+    if (!canExport) {
+      toast.error('You do not have permission to export department reports.', { position: 'bottom-right' });
+      return;
+    }
+
     const doc = new jsPDF('landscape', 'mm', 'a4');
     
     doc.setFontSize(18);
@@ -423,6 +435,11 @@ const DeptReports = ({ inventoryMode = false }) => {
   };
 
   const exportToExcel = () => {
+    if (!canExport) {
+      toast.error('You do not have permission to export department reports.', { position: 'bottom-right' });
+      return;
+    }
+
     let data = [];
 
     if (activeTab === 'assets') {
@@ -849,12 +866,16 @@ const DeptReports = ({ inventoryMode = false }) => {
           <button style={styles.refreshButton} onClick={fetchReports} disabled={loading}>
             <RefreshCw size={16} aria-hidden="true" /> {t.refresh || 'Refresh'}
           </button>
-          <button style={styles.exportButton} onClick={exportToExcel} disabled={loading}>
-            <FileSpreadsheet size={16} aria-hidden="true" /> {t.exportExcel}
-          </button>
-          <button style={styles.pdfButton} onClick={exportToPDF} disabled={loading}>
-            <FileText size={16} aria-hidden="true" /> {t.exportPDF}
-          </button>
+          {canExport && (
+            <>
+              <button style={styles.exportButton} onClick={exportToExcel} disabled={loading}>
+                <FileSpreadsheet size={16} aria-hidden="true" /> {t.exportExcel}
+              </button>
+              <button style={styles.pdfButton} onClick={exportToPDF} disabled={loading}>
+                <FileText size={16} aria-hidden="true" /> {t.exportPDF}
+              </button>
+            </>
+          )}
           <button style={styles.printButton} onClick={handlePrint} disabled={loading}>
             <Printer size={16} aria-hidden="true" /> {t.print}
           </button>

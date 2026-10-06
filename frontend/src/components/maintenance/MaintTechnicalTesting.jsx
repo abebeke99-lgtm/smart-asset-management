@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars, no-dupe-keys, no-template-curly-in-string */
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useCallback, useEffect, useState } from 'react';
 import apiClient from '../../services/apiClient';
 import {

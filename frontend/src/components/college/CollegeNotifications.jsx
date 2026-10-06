@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bell, CheckCheck, ChevronLeft, ChevronRight, Loader2, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';

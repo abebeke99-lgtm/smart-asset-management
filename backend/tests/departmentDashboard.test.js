@@ -13,6 +13,7 @@ const {
   VerificationSession,
   ServiceRequest,
   Room,
+  Department,
 } = require('../src/models');
 const { getDepartmentDashboard } = require('../src/controllers/departmentController');
 const { resolveDepartmentScope } = require('../src/middlewares/organizationScope');
@@ -80,15 +81,57 @@ test('dashboard rejects a request without authenticated department scope', async
   assert.equal(response.payload.success, false);
 });
 
-test('department scope is not guessed when the authenticated account has no department', async () => {
+test('department scope is not guessed when the authenticated account has no department', async (t) => {
+  const originalFindOne = Department.findOne;
+  const originalCreate = Department.create;
+  const originalUserUpdate = User.update;
+  let databaseWrites = 0;
+  Department.findOne = async () => assert.fail('A missing department ID must not be resolved by a guessed name');
+  Department.create = async () => { databaseWrites += 1; throw new Error('Department creation must not run during authorization'); };
+  User.update = async () => { databaseWrites += 1; throw new Error('User scope updates must not run during authorization'); };
+  t.after(() => {
+    Department.findOne = originalFindOne;
+    Department.create = originalCreate;
+    User.update = originalUserUpdate;
+  });
+
   const response = makeResponse();
   let nextCalled = false;
   await resolveDepartmentScope({
-    user: { id: 99, role: 'department_head', department: '', departmentId: null },
+    user: { id: 99, role: 'department_head', department: 'Information Technology', departmentId: null },
   }, response, () => { nextCalled = true; });
   assert.equal(response.statusCode, 403);
   assert.equal(nextCalled, false);
   assert.match(response.payload.message, /Department scope is not configured/);
+  assert.equal(databaseWrites, 0);
+});
+
+test('nonexistent department IDs are denied without creating or assigning a department', async (t) => {
+  const originalFindOne = Department.findOne;
+  const originalCreate = Department.create;
+  const originalUserUpdate = User.update;
+  let databaseWrites = 0;
+  Department.findOne = async ({ where }) => {
+    assert.deepEqual(where, { id: 999, status: 'active' });
+    return null;
+  };
+  Department.create = async () => { databaseWrites += 1; throw new Error('Department creation must not run during authorization'); };
+  User.update = async () => { databaseWrites += 1; throw new Error('User scope updates must not run during authorization'); };
+  t.after(() => {
+    Department.findOne = originalFindOne;
+    Department.create = originalCreate;
+    User.update = originalUserUpdate;
+  });
+
+  const response = makeResponse();
+  let nextCalled = false;
+  await resolveDepartmentScope({
+    user: { id: 99, role: 'department_head', department: 'Information Technology', departmentId: 999 },
+  }, response, () => { nextCalled = true; });
+  assert.equal(response.statusCode, 403);
+  assert.equal(nextCalled, false);
+  assert.match(response.payload.message, /Department scope is not configured/);
+  assert.equal(databaseWrites, 0);
 });
 
 test('dashboard returns real department-scoped KPI and chart calculations without query limits', async () => {

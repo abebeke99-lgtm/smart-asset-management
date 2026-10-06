@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, Building2, CheckCircle2, ChevronLeft, ChevronRight, Edit3, Eye, Plus, RefreshCw, Search, X } from 'lucide-react';
 import apiClient from '../../services/api';

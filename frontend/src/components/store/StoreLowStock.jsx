@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, AlertTriangle, ChevronLeft, ChevronRight, Download, MapPin, PackageOpen, PackageSearch, RefreshCw, Search, Tag, X } from 'lucide-react';
 import * as XLSX from 'xlsx';

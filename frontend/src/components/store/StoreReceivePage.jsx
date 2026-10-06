@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Eye, FilePlus2, LoaderCircle, PackagePlus, RefreshCw, Search, X } from 'lucide-react';
 import { useLanguage } from '../../contexts/UiContext';

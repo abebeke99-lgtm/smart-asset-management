@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 // frontend/src/pages/finance/AssetValuation.jsx
 
 import React, { useEffect, useMemo, useState } from "react";

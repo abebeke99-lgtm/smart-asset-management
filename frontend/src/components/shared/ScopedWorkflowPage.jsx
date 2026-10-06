@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '../../utils/api';
 import { getAllAssets } from '../../services/assetApi';

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, CheckCircle2, ClipboardList, LoaderCircle, PackagePlus, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';

@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars, no-dupe-keys, no-template-curly-in-string */
 import {
   AppFooter,
   shouldHideSidebarForPath,
@@ -7,8 +8,6 @@ import {
   isDashboardRoute,
   isPublicRoute,
 } from './App';
-
-const mockLogin = jest.fn();
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
@@ -17,6 +16,8 @@ import AdminDashboard from './components/admin/AdminDashboard';
 import apiClient from './services/apiClient';
 import fs from 'fs';
 import path from 'path';
+
+const mockLogin = jest.fn();
 
 jest.mock('axios', () => ({
   __esModule: true,

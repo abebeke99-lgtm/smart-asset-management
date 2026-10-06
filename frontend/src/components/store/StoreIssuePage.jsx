@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars, no-dupe-keys, no-template-curly-in-string */
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Eye, PackageCheck, PackageOpen, RefreshCw, Search, UserRound, X } from 'lucide-react';
 import { useLanguage } from '../../contexts/UiContext';

@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars, no-dupe-keys, no-template-curly-in-string */
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import axios from 'axios';

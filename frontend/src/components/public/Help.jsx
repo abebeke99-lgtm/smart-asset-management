@@ -7,7 +7,6 @@ const Help = () => {
   const { language } = useLanguage();
   const { theme } = useTheme();
   const [query, setQuery] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
   const [openFaqId, setOpenFaqId] = useState(null);
   const isEnglish = language === 'en';
   const text = (english, amharic) => (isEnglish ? english : amharic);
@@ -24,14 +23,13 @@ const Help = () => {
     [text('How do I request asset disposal?', 'የንብረት ማስወገድ ጥያቄ እንዴት አቀርባለሁ?'), text('Use the disposal workflow available to your role if your account has permission to request or manage disposal.', 'መለያዎ ማስወገድን ለመጠየቅ ወይም ለማስተዳደር ፈቃድ ካለው በሚናዎ የሚገኘውን የማስወገድ ሂደት ይጠቀሙ።')]
   ];
 
-  const normalizedQuery = searchTerm.trim().toLocaleLowerCase();
+  const normalizedQuery = query.trim().toLocaleLowerCase();
   const filteredQuestions = questions.filter(([question, answer]) =>
     `${question} ${answer}`.toLocaleLowerCase().includes(normalizedQuery)
   );
 
   const handleSearch = (event) => {
     event.preventDefault();
-    setSearchTerm(query);
     setOpenFaqId(null);
   };
 
@@ -91,7 +89,10 @@ const Help = () => {
           <input
             type="search"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setOpenFaqId(null);
+            }}
             placeholder={text('Search questions', 'ጥያቄዎችን ይፈልጉ')}
             aria-label={text('Search questions', 'ጥያቄዎችን ይፈልጉ')}
           />

@@ -4,6 +4,8 @@
 
 **Final verdict: NOT PRODUCTION READY.** Department Head code regressions in scope were fixed and isolated tests pass. The shared database still has unknown orphaned assignment history requiring business review. Authenticated HTTP/browser E2E, responsive browser checks and end-to-end SQL/API parity were not verified because no approved Department Head credentials or browser session were available.
 
+**Important test-safety correction:** During the current session, the backend full suite was run once without `NODE_ENV=test`; this does not select the configured isolated test database and may have used the normal configured database. A read-only lookup found 291 audit rows matching the audit-context test fixture signature, but there was no pre-run count to attribute these rows to this run. No matching rows were deleted. Treat their provenance as unverified and review before any cleanup. The current session's explicit `NODE_ENV=test` run failed because the configured test database refused the connection.
+
 ## Test summary
 
 | Test scope | Result | Actual |
@@ -19,7 +21,7 @@
 
 - Frontend: React 18, React Router, CRACO (port 3000). Backend: Node.js 22, Express 4, Sequelize (port 5000). Database: MySQL via `mysql2`.
 - Backend DB config is in `backend/.env`; template `backend/.env.example`. Frontend API base is `REACT_APP_API_URL`; CRA proxy points at `http://localhost:5000`.
-- Shared local DB read-only connection to MySQL `localhost:3306` succeeded. Configured test DB `localhost:3307` refused connection. A separate `smart_asset_department_qa_20261006` schema was used for constraint testing. No shared DB rows/schema were modified.
+- At the time of the earlier audit snapshot, a shared local DB read-only connection to MySQL `localhost:3306` succeeded. The configured test DB `localhost:3307` refused connection. A separate `smart_asset_department_qa_20261006` schema was used for constraint testing. The test-safety correction above supersedes the prior statement that the shared DB was only read for the entire task.
 - 85 tables; model/table column comparison found no missing model columns. Shared DB had 33 FK constraints. Password values were checked in aggregate only: all 14 matched bcrypt `$2...` format. No hashes or credentials were exposed. No approved Department Head password was supplied; login was not attempted.
 - Shared DB counts: 7 departments, 14 users, 25 assets (one soft-deleted row retained physically), 0 rooms, 157 assignments, 0 department asset requests, 0 request histories, 0 department verifications, 2 verification sessions, 0 service requests and 0 request status histories. Laboratories are `rooms` with `room_type=laboratory`; no separate laboratories table.
 - FK dry-run checks 45 Department Head relations. Shared DB: 9 already present, 31 ready, and 5 blocked by orphan rows: `departments.head_id` (1), `assignments.asset_id` (150), `assignments.assigned_to` (2), `assignments.assigned_by` (2), `approvals.requested_by` (2). Dry-run did not alter schema. The 150 missing assets have no corresponding physical row; audit logs show only two unrelated soft-delete actions and no permanent-delete evidence. Two assignment records reference a missing user. All remain **UNKNOWN — REQUIRES REVIEW**; no asset/user was recreated or deleted. Detailed sanitized rows: `DEPARTMENT_HEAD_ASSIGNMENT_ORPHANS.csv`; read-only SQL: `backend/database/diagnostics/department_head_assignment_orphans.sql`.
@@ -74,3 +76,39 @@ Changed code includes `backend/src/routes/assignmentRoutes.js`, `backend/src/con
 - Approved Department Head QA credentials remain unavailable. Authenticated HTTP/E2E, responsive browser QA, and SQL/API parity therefore remain unverified. No credentials were invented or used against the shared database.
 
 **Current verdict: NOT PRODUCTION READY.** The remaining blockers are unresolved shared-database orphans and blocked foreign keys, failed full frontend public-page tests, and unverified authenticated/browser/parity gates.
+
+## Current session addendum (2026-10-06)
+
+This addendum supersedes earlier test totals where they differ. It records the additional verification performed for the supplied acceptance prompt. No authenticated QA is claimed. The default-mode backend test run may have written audit-context fixture rows as described above; no cleanup was attempted.
+
+### Changes made
+
+1. `backend/src/middlewares/organizationScope.js`: Department Head requests now fail closed if their authenticated account has no valid active `departmentId`. Request-time authorization no longer guesses a department from a text name, creates a department, or updates the user record.
+2. `backend/tests/departmentDashboard.test.js`: regression tests cover missing and nonexistent department IDs and assert authorization performs no writes.
+3. `frontend/src/components/department/DeptReports.jsx`: Excel/PDF export actions are hidden and guarded by `reports.export`; regular report errors now identify reports rather than inventory.
+4. `frontend/src/components/department/DeptReports.test.jsx`: report loading, export permission, error, inventory loading, and empty-state cases are covered.
+5. `frontend/src/App.jsx`: the public path list used by the app navigation effect is now module-scoped, fixing the observed `publicPaths is not defined` runtime exception.
+
+### Current validation results
+
+| Area | Status | Evidence | Remaining Risk |
+|---|---|---|---|
+| Department Head backend focused tests | PASS | `node --test --test-concurrency=1` over `backend/tests/department*.test.js` and `backend/src/tests/department*.test.js`: 76 passed, 0 failed | Unit tests do not substitute for authenticated live API checks |
+| Department Head reports tests | PASS | `CI=true npx craco test --runInBand --watchAll=false --runTestsByPath src/components/department/DeptReports.test.jsx`: 7 passed, 0 failed | No authenticated browser export run |
+| Full frontend suite | FAIL | `CI=true npm --prefix frontend test -- --watchAll=false`: 55 suites; 54 passed, 1 failed; 267 tests; 266 passed, 1 failed. The failure is `AdminRolesPermissions.test.jsx`, outside this module | Existing unrelated test failure remains |
+| Frontend production build | PASS WITH WARNINGS | `npm --prefix frontend run build` completed; output reports compiled with warnings and the build directory is ready | Existing ESLint/deprecation/bundle warnings remain |
+| Backend full suite, isolated test mode | FAIL / BLOCKED | `NODE_ENV=test npm test` in `backend`: 516 tests; 502 passed, 5 failed, 9 skipped. Database-dependent tests report connection refused at configured test DB `127.0.0.1:3307` | Full backend result is not a valid green isolated-database run |
+| Backend full suite, default mode | NOT COUNTED AS SAFE PASS | `npm test` completed 516 tests (507 passed, 0 failed, 9 skipped), but `NODE_ENV=test` was not set and the configured test DB was unavailable | This run may have used the normal configured database. A read-only lookup found 291 audit rows matching the audit-context test fixture signature; without a pre-run count, their creation cannot be attributed. No rows were deleted. Review before any cleanup |
+| Department Head FK audit | PASS (READ-ONLY) | `departmentHeadForeignKeys.js` dry-run: 45 relations; 9 present, 31 ready, 5 blocked by orphans | Do not apply blocked constraints; preserve unresolved history pending owner review |
+| Unauthenticated department API | PASS | `GET /api/department/dashboard` and `GET /api/department/reports?reportType=assets` returned HTTP 401 | Authenticated role/scope cases remain unverified over HTTP |
+| Browser runtime | PARTIAL | Direct dashboard navigation redirected to `/login`; reload produced no page errors | No approved Department Head session was available; module pages, networks, filters, exports, and responsive breakpoints were not tested |
+
+### Data-integrity and QA limitations
+
+- No users, assets, or departments were deleted, recreated, or repaired. The FK check was dry-run only. The default-mode backend test run may have added audit-context fixture rows; their provenance is unverified and they were left untouched.
+- Existing orphan findings remain: 150 assignment references to missing assets, 2 assignments referencing missing users, 1 department head reference to a missing user, and 2 approval requester references to missing users. These require owner review; this session did not inspect or alter individual records.
+- The application’s live configured test database at port 3307 was unavailable. Do not treat default-mode full backend tests as isolated verification. The fixture-signature audit rows are retained; no cleanup was attempted.
+- No approved Department Head QA credentials or authenticated browser session were supplied. Do not invent credentials or bypass authentication.
+- Dashboard/report SQL parity, authorized 200 responses, forbidden 403 cases via live API, mutations, duplicate requests, network-tab checks, and 1440/768/375px responsive browser checks remain unverified.
+
+**Current final decision: NOT PRODUCTION READY.** Authenticated QA, safe full-backend test execution, the unrelated failing frontend test, unresolved database orphans/foreign keys, and responsive/API parity verification remain blockers.

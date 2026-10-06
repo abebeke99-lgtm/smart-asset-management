@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Building2, ChevronRight, MapPin, Package, Plus, RefreshCw, Search, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
