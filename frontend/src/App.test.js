@@ -239,6 +239,16 @@ describe('Store Manager dashboard route wiring', () => {
   });
 });
 
+describe('Infrastructure dashboard route wiring', () => {
+  const appSource = fs.readFileSync(path.resolve(__dirname, 'App.jsx'), 'utf8');
+
+  it('registers the Infrastructure Dashboard at the role redirect path within Infrastructure RBAC', () => {
+    expect(getDashboardRoute('infrastructure')).toBe('/infrastructure/dashboard');
+    expect(appSource).toContain('<Route path="/infrastructure" element={<ProtectedRoute allowedRoles={[\'infrastructure\', \'admin\']}><InfrastructureLayout /></ProtectedRoute>}>');
+    expect(appSource).toContain('<Route path="dashboard" element={<InfrastructureDashboard />} />');
+  });
+});
+
 describe('ICT Officer sidebar specification', () => {
   const appSource = fs.readFileSync(path.resolve(__dirname, 'App.jsx'), 'utf8');
   const dashboardSource = fs.readFileSync(path.resolve(__dirname, 'components/ict/ICTDashboard.jsx'), 'utf8');

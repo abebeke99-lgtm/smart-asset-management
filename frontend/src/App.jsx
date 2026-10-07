@@ -3841,6 +3841,7 @@ function AppContent() {
           {/* INFRASTRUCTURE ROUTES */}
           <Route path="/infrastructure" element={<ProtectedRoute allowedRoles={['infrastructure', 'admin']}><InfrastructureLayout /></ProtectedRoute>}>
             <Route index element={<InfrastructureDashboard />} />
+            <Route path="dashboard" element={<InfrastructureDashboard />} />
             
             {/* Asset Management */}
             <Route path="assets" element={<InfrastructureAssets />} />

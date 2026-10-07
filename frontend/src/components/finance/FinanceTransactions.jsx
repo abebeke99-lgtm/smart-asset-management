@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars, no-dupe-keys, no-template-curly-in-string */
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowLeft,
@@ -11,6 +11,7 @@ import {
   ChevronRight,
   CreditCard,
   DollarSign,
+  Edit3,
   Eye,
   Filter,
   RefreshCw,
@@ -32,6 +33,7 @@ const emptyForm = {
   transactionNumber: "",
   transactionDate: "",
   transactionType: "Payment",
+  type: "debit",
   referenceType: "",
   referenceId: "",
   referenceNumber: "",
@@ -49,7 +51,7 @@ const emptyForm = {
   paymentMethod: "",
   bankName: "",
   bankReference: "",
-  status: "Posted",
+  status: "pending",
   notes: "",
 };
 
@@ -178,12 +180,8 @@ const normalizeTransaction = (item) => ({
     ""
   ),
 
-  transactionType: firstValue(
-    item.transactionType,
-    item.transaction_type,
-    item.type,
-    ""
-  ),
+  transactionType: firstValue(item.transactionType, item.transaction_type, ""),
+  type: firstValue(item.type, item.entryType, item.entry_type, "debit"),
 
   referenceType: firstValue(
     item.referenceType,
@@ -331,14 +329,10 @@ const formatMoney = (
   const amount = Number(value || 0);
 
   try {
-    return new Intl.NumberFormat(
-      "en-US",
-      {
-        style: "currency",
-        currency,
-        maximumFractionDigits: 2,
-      }
-    ).format(amount);
+    return `${currency} ${amount.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   } catch {
     return `${amount.toLocaleString()} ${currency}`;
   }
@@ -422,11 +416,14 @@ export default function FinanceTransactions() {
   const [status, setStatus] =
     useState("");
 
-  const [transactionType, setTransactionType] =
+  const [type, setType] =
     useState("");
 
   const [referenceType, setReferenceType] =
     useState("");
+
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const [page, setPage] =
     useState(1);
@@ -444,6 +441,14 @@ export default function FinanceTransactions() {
     totalPages: 1,
   });
 
+  const [summary, setSummary] = useState({
+    totalCount: 0,
+    postedCount: 0,
+    pendingCount: 0,
+    totalDebits: 0,
+    totalCredits: 0,
+  });
+
   const [showForm, setShowForm] =
     useState(false);
 
@@ -453,6 +458,7 @@ export default function FinanceTransactions() {
   const [showDelete, setShowDelete] =
     useState(false);
 
+  const [voidReason, setVoidReason] = useState("");
   const [
     editingTransaction,
     setEditingTransaction,
@@ -470,6 +476,8 @@ export default function FinanceTransactions() {
 
   const [form, setForm] =
     useState(emptyForm);
+
+  const searchInitialized = useRef(false);
 
   const loadTransactions =
     async () => {
@@ -491,15 +499,16 @@ export default function FinanceTransactions() {
           params.status = status;
         }
 
-        if (transactionType) {
-          params.transactionType =
-            transactionType;
+        if (type) {
+          params.type = type;
         }
 
         if (referenceType) {
           params.referenceType =
             referenceType;
         }
+        if (dateFrom) params.dateFrom = dateFrom;
+        if (dateTo) params.dateTo = dateTo;
 
         const response =
           await api.get(
@@ -513,6 +522,13 @@ export default function FinanceTransactions() {
           );
 
         setTransactions(rows);
+        setSummary(response?.data?.summary || {
+          totalCount: 0,
+          postedCount: 0,
+          pendingCount: 0,
+          totalDebits: 0,
+          totalCredits: 0,
+        });
 
         setPagination(
           extractPagination(
@@ -529,6 +545,13 @@ export default function FinanceTransactions() {
         );
 
         setTransactions([]);
+        setSummary({
+          totalCount: 0,
+          postedCount: 0,
+          pendingCount: 0,
+          totalDebits: 0,
+          totalCredits: 0,
+        });
 
         setError(
           err?.response?.data
@@ -547,11 +570,17 @@ export default function FinanceTransactions() {
     page,
     pageSize,
     status,
-    transactionType,
+    type,
     referenceType,
+    dateFrom,
+    dateTo,
   ]);
 
   useEffect(() => {
+    if (!searchInitialized.current) {
+      searchInitialized.current = true;
+      return undefined;
+    }
     const timer = setTimeout(
       () => {
         if (page !== 1) {
@@ -568,43 +597,10 @@ export default function FinanceTransactions() {
   }, [search]);
 
   const stats = useMemo(() => {
-    const posted =
-      transactions.filter(
-        (item) =>
-          String(
-            item.status || ""
-          ).toLowerCase() ===
-          "posted"
-      ).length;
-
-    const pending =
-      transactions.filter((item) =>
-        ["pending", "processing"].includes(
-          String(
-            item.status || ""
-          ).toLowerCase()
-        )
-      ).length;
-
-    const debitTotal =
-      transactions.reduce(
-        (sum, item) =>
-          sum +
-          Number(
-            item.debit || 0
-          ),
-        0
-      );
-
-    const creditTotal =
-      transactions.reduce(
-        (sum, item) =>
-          sum +
-          Number(
-            item.credit || 0
-          ),
-        0
-      );
+    const posted = Number(summary.postedCount || 0);
+    const pending = Number(summary.pendingCount || 0);
+    const debitTotal = Number(summary.totalDebits || 0);
+    const creditTotal = Number(summary.totalCredits || 0);
 
     const amountTotal =
       transactions.reduce(
@@ -623,7 +619,7 @@ export default function FinanceTransactions() {
       creditTotal,
       amountTotal,
     };
-  }, [transactions]);
+  }, [transactions, summary]);
 
   const openDetails = (
     transaction
@@ -648,23 +644,93 @@ export default function FinanceTransactions() {
     }));
   };
 
-  const handleSubmit = (
-    event
-  ) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    setError("Finance transactions are read-only.");
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    const payload = {
+      ...form,
+      type: form.type,
+      amount: Number(form.amount),
+      debit: form.type === "debit" ? Number(form.amount) : 0,
+      credit: form.type === "credit" ? Number(form.amount) : 0,
+      referenceId: form.referenceId || null,
+      supplierId: form.supplierId || null,
+      departmentId: form.departmentId || null,
+    };
+    try {
+      if (editingTransaction) {
+        await api.put(`/finance/transactions/${editingTransaction.id}`, payload);
+        setSuccess("Transaction updated successfully.");
+      } else {
+        await api.post("/finance/transactions", payload);
+        setSuccess("Transaction created successfully.");
+      }
+      setShowForm(false);
+      setEditingTransaction(null);
+      setForm(emptyForm);
+      await loadTransactions();
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.message || "Unable to save transaction.");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const deleteTransaction = () => {
-    setError("Finance transactions are read-only.");
+  const deleteTransaction = async () => {
+    if (!deleteTarget) return;
+    setProcessingId(deleteTarget.id);
+    setError("");
+    setSuccess("");
+    try {
+      await api.post(`/finance/transactions/${deleteTarget.id}/void`, { reason: voidReason });
+      setShowDelete(false);
+      setDeleteTarget(null);
+      setSuccess("Transaction voided successfully.");
+      await loadTransactions();
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.message || "Unable to void transaction.");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const openCreateForm = () => {
+    setEditingTransaction(null);
+    setForm({ ...emptyForm, transactionDate: new Date().toISOString().slice(0, 10) });
+    setShowForm(true);
+  };
+
+  const openEditForm = (transaction) => {
+    setEditingTransaction(transaction);
+    setForm({ ...emptyForm, ...transaction, type: transaction.type || transaction.entryType || "debit" });
+    setShowForm(true);
   };
 
   const clearFilters = () => {
     setSearch("");
     setStatus("");
-    setTransactionType("");
+    setType("");
     setReferenceType("");
+    setDateFrom("");
+    setDateTo("");
     setPage(1);
+  };
+
+  const postTransaction = async (transaction) => {
+    setProcessingId(transaction.id);
+    setError("");
+    setSuccess("");
+    try {
+      await api.post(`/finance/transactions/${transaction.id}/post`);
+      setSuccess("Transaction posted successfully.");
+      await loadTransactions();
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.message || "Unable to post transaction.");
+    } finally {
+      setProcessingId(null);
+    }
   };
 
   const printTransaction = (
@@ -1641,6 +1707,14 @@ export default function FinanceTransactions() {
 
           <div className="top-actions">
             <button
+              className="btn btn-primary"
+              type="button"
+              onClick={openCreateForm}
+            >
+              <Save size={16} />
+              Add Transaction
+            </button>
+            <button
               className="btn btn-secondary"
               onClick={
                 loadTransactions
@@ -1843,42 +1917,18 @@ export default function FinanceTransactions() {
                 All Statuses
               </option>
 
-              <option value="Draft">
-                Draft
-              </option>
-
-              <option value="Pending">
-                Pending
-              </option>
-
-              <option value="Posted">
-                Posted
-              </option>
-
-              <option value="Processing">
-                Processing
-              </option>
-
-              <option value="Completed">
-                Completed
-              </option>
-
-              <option value="Failed">
-                Failed
-              </option>
-
-              <option value="Cancelled">
-                Cancelled
-              </option>
+              <option value="pending">Pending</option>
+              <option value="posted">Posted</option>
+              <option value="voided">Voided</option>
             </select>
 
             <select
               className="select"
               value={
-                transactionType
+                type
               }
               onChange={(e) => {
-                setTransactionType(
+                setType(
                   e.target.value
                 );
                 setPage(1);
@@ -1888,37 +1938,8 @@ export default function FinanceTransactions() {
                 All Types
               </option>
 
-              <option value="Payment">
-                Payment
-              </option>
-
-              <option value="Receipt">
-                Receipt
-              </option>
-
-              <option value="Purchase">
-                Purchase
-              </option>
-
-              <option value="Sale">
-                Sale
-              </option>
-
-              <option value="Adjustment">
-                Adjustment
-              </option>
-
-              <option value="Transfer">
-                Transfer
-              </option>
-
-              <option value="Journal">
-                Journal
-              </option>
-
-              <option value="Other">
-                Other
-              </option>
+              <option value="debit">Debit</option>
+              <option value="credit">Credit</option>
             </select>
 
             <select
@@ -1937,34 +1958,52 @@ export default function FinanceTransactions() {
                 All References
               </option>
 
-              <option value="Invoice">
+              <option value="invoice">
                 Invoice
               </option>
 
-              <option value="Payment">
+              <option value="payment">
                 Payment
               </option>
 
-              <option value="Purchase Order">
+              <option value="purchase_order">
                 Purchase Order
               </option>
 
-              <option value="Purchase Request">
-                Purchase Request
-              </option>
-
-              <option value="Budget">
+              <option value="budget">
                 Budget
               </option>
 
-              <option value="Asset">
+              <option value="asset">
                 Asset
               </option>
 
-              <option value="Other">
+              <option value="other">
                 Other
               </option>
             </select>
+
+            <input
+              className="input"
+              type="date"
+              aria-label="Date from"
+              value={dateFrom}
+              onChange={(event) => {
+                setDateFrom(event.target.value);
+                setPage(1);
+              }}
+            />
+
+            <input
+              className="input"
+              type="date"
+              aria-label="Date to"
+              value={dateTo}
+              onChange={(event) => {
+                setDateTo(event.target.value);
+                setPage(1);
+              }}
+            />
 
             <button
               className="btn btn-secondary"
@@ -2270,6 +2309,39 @@ export default function FinanceTransactions() {
                                 />
                               </button>
 
+                              <button
+                                className="icon-btn"
+                                title="Edit"
+                                disabled={transaction.status !== "pending"}
+                                onClick={() => openEditForm(transaction)}
+                              >
+                                <Edit3 size={15} />
+                              </button>
+
+                              {transaction.status === "pending" && (
+                                <button
+                                  className="icon-btn"
+                                  title="Post"
+                                  onClick={() => postTransaction(transaction)}
+                                  disabled={processingId === transaction.id}
+                                >
+                                  <CheckCircle size={15} />
+                                </button>
+                              )}
+
+                              <button
+                                className="icon-btn"
+                                title="Void"
+                                onClick={() => {
+                                  setDeleteTarget(transaction);
+                                  setVoidReason("");
+                                  setShowDelete(true);
+                                }}
+                                disabled={transaction.status === "voided"}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+
                             </div>
                           </td>
 
@@ -2496,96 +2568,31 @@ export default function FinanceTransactions() {
 
                   <div className="field">
                     <label>
-                      Transaction Type
+                      Type / ዓይነት
                     </label>
 
                     <select
                       className="select"
-                      name="transactionType"
-                      value={
-                        form.transactionType
-                      }
+                      name="type"
+                      value={form.type}
                       onChange={
                         handleChange
                       }
                     >
-                      <option value="Payment">
-                        Payment
-                      </option>
-
-                      <option value="Receipt">
-                        Receipt
-                      </option>
-
-                      <option value="Purchase">
-                        Purchase
-                      </option>
-
-                      <option value="Sale">
-                        Sale
-                      </option>
-
-                      <option value="Adjustment">
-                        Adjustment
-                      </option>
-
-                      <option value="Transfer">
-                        Transfer
-                      </option>
-
-                      <option value="Journal">
-                        Journal
-                      </option>
-
-                      <option value="Other">
-                        Other
-                      </option>
+                      <option value="debit">Debit / ዴቢት</option>
+                      <option value="credit">Credit / ክሬዲት</option>
                     </select>
                   </div>
 
                   <div className="field">
-                    <label>
-                      Status
-                    </label>
-
-                    <select
-                      className="select"
-                      name="status"
-                      value={
-                        form.status
-                      }
-                      onChange={
-                        handleChange
-                      }
-                    >
-                      <option value="Draft">
-                        Draft
-                      </option>
-
-                      <option value="Pending">
-                        Pending
-                      </option>
-
-                      <option value="Posted">
-                        Posted
-                      </option>
-
-                      <option value="Processing">
-                        Processing
-                      </option>
-
-                      <option value="Completed">
-                        Completed
-                      </option>
-
-                      <option value="Failed">
-                        Failed
-                      </option>
-
-                      <option value="Cancelled">
-                        Cancelled
-                      </option>
-                    </select>
+                    <label>Category / ምድብ</label>
+                    <input
+                      className="input"
+                      name="category"
+                      value={form.category || ""}
+                      onChange={handleChange}
+                      placeholder="Account category"
+                    />
                   </div>
 
                   <div className="field">
@@ -2607,31 +2614,27 @@ export default function FinanceTransactions() {
                         Select reference
                       </option>
 
-                      <option value="Invoice">
+                      <option value="invoice">
                         Invoice
                       </option>
 
-                      <option value="Payment">
+                      <option value="payment">
                         Payment
                       </option>
 
-                      <option value="Purchase Order">
+                      <option value="purchase_order">
                         Purchase Order
                       </option>
 
-                      <option value="Purchase Request">
-                        Purchase Request
-                      </option>
-
-                      <option value="Budget">
+                      <option value="budget">
                         Budget
                       </option>
 
-                      <option value="Asset">
+                      <option value="asset">
                         Asset
                       </option>
 
-                      <option value="Other">
+                      <option value="other">
                         Other
                       </option>
                     </select>
@@ -2652,6 +2655,19 @@ export default function FinanceTransactions() {
                         handleChange
                       }
                       placeholder="INV-2026-0001"
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label>Reference ID / የማጣቀሻ መለያ</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min="1"
+                      name="referenceId"
+                      value={form.referenceId}
+                      onChange={handleChange}
+                      placeholder="Database ID"
                     />
                   </div>
 
@@ -2827,13 +2843,8 @@ export default function FinanceTransactions() {
                       type="number"
                       min="0"
                       step="0.01"
-                      name="debit"
-                      value={
-                        form.debit
-                      }
-                      onChange={
-                        handleChange
-                      }
+                      value={form.type === "debit" ? form.amount : "0.00"}
+                      readOnly
                       placeholder="0.00"
                     />
                   </div>
@@ -2848,13 +2859,8 @@ export default function FinanceTransactions() {
                       type="number"
                       min="0"
                       step="0.01"
-                      name="credit"
-                      value={
-                        form.credit
-                      }
-                      onChange={
-                        handleChange
-                      }
+                      value={form.type === "credit" ? form.amount : "0.00"}
+                      readOnly
                       placeholder="0.00"
                     />
                   </div>
@@ -3402,12 +3408,11 @@ export default function FinanceTransactions() {
 
                   <div>
                     <h2>
-                      Delete Transaction
+                      Void Transaction / ግብይቱን ሰርዝ
                     </h2>
 
                     <p>
-                      Confirm financial
-                      record deletion.
+                      Voided transactions are retained for audit.
                     </p>
                   </div>
 
@@ -3429,8 +3434,7 @@ export default function FinanceTransactions() {
               <div className="modal-body">
 
                 <div className="delete-warning">
-                  Are you sure you want
-                  to delete transaction{" "}
+                  Void transaction{" "}
                   <strong>
                     {
                       deleteTarget.transactionNumber ||
@@ -3438,11 +3442,17 @@ export default function FinanceTransactions() {
                     }
                   </strong>
                   ?
-                  <br />
-                  The backend will apply
-                  its configured financial
-                  data rules.
                 </div>
+                <label className="field">
+                  <span>Reason / ምክንያት</span>
+                  <textarea
+                    className="textarea"
+                    required
+                    value={voidReason}
+                    onChange={(event) => setVoidReason(event.target.value)}
+                    placeholder="Explain why this transaction is being voided"
+                  />
+                </label>
 
               </div>
 
@@ -3462,7 +3472,7 @@ export default function FinanceTransactions() {
                 <button
                   className="btn btn-danger"
                   onClick={deleteTransaction}
-                  disabled={processingId === deleteTarget.id}
+                  disabled={processingId === deleteTarget.id || !voidReason.trim()}
                 >
                   {processingId === deleteTarget.id ? (
                     <RefreshCw
@@ -3473,7 +3483,7 @@ export default function FinanceTransactions() {
                     <Trash2 size={15} />
                   )}
 
-                  Delete Transaction
+                  Void Transaction
                 </button>
 
               </div>
