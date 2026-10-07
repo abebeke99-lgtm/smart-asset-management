@@ -19,6 +19,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
 import apiClient from '../../services/apiClient';
 import { CHART_PALETTE, CHART_TEXT } from '../../utils/chartPalette';
+import DeptRecentActivitiesTable from './DeptRecentActivitiesTable';
 import './DeptDashboard.css';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -83,6 +84,19 @@ const translations = {
     entity: 'Entity',
     status: 'Status',
     dateTime: 'Date / Time',
+    searchActivities: 'Search activities',
+    filterByAction: 'Filter by action',
+    filterByStatus: 'Filter by status',
+    allActions: 'All actions',
+    allStatuses: 'All statuses',
+    sortBy: 'Sort by',
+    sortAscending: 'Ascending',
+    sortDescending: 'Descending',
+    noMatchingActivities: 'No activities match your search.',
+    previousPage: 'Previous page',
+    nextPage: 'Next page',
+    activityPage: 'Page',
+    of: 'of',
     statuses: {
       Active: 'Active',
       Damaged: 'Damaged',
@@ -159,6 +173,19 @@ const translations = {
     entity: 'ንብረት / አካል',
     status: 'ሁኔታ',
     dateTime: 'ቀን / ሰዓት',
+    searchActivities: 'እንቅስቃሴዎችን ይፈልጉ',
+    filterByAction: 'በተግባር ያጣሩ',
+    filterByStatus: 'በሁኔታ ያጣሩ',
+    allActions: 'ሁሉም ተግባሮች',
+    allStatuses: 'ሁሉም ሁኔታዎች',
+    sortBy: 'ደርድር በ',
+    sortAscending: 'ከትንሽ ወደ ትልቅ',
+    sortDescending: 'ከትልቅ ወደ ትንሽ',
+    noMatchingActivities: 'ከፍለጋዎ ጋር የሚዛመድ እንቅስቃሴ የለም።',
+    previousPage: 'ቀዳሚ ገጽ',
+    nextPage: 'ቀጣይ ገጽ',
+    activityPage: 'ገጽ',
+    of: 'ከ',
     statuses: {
       Active: 'ንቁ',
       Damaged: 'የተጎዳ',
@@ -306,7 +333,6 @@ const DeptDashboard = () => {
     ? t.errorNetwork
     : t[`error${errorKind}`] || t.error500;
   const canRetry = errorKind !== 401 && errorKind !== 403;
-
   if (loading && !dashboard && !errorKind) {
     return (
       <main className="dept-dashboard" aria-busy="true" aria-label={t.loading}>
@@ -338,7 +364,6 @@ const DeptDashboard = () => {
     );
   }
 
-  const activityDateLocale = language === 'am' ? 'am-ET' : 'en-US';
   const isEmptyDepartment = dashboard.totalAssets === 0 && dashboard.recentActivities.length === 0;
 
   return (
@@ -405,45 +430,11 @@ const DeptDashboard = () => {
         })}
       </section>
 
-      <section className="dept-dashboard__card dept-dashboard__activities">
-        <h2 className="dept-dashboard__card-title">{t.recentActivities}</h2>
-        {dashboard.recentActivities.length ? (
-          <div className="dept-dashboard__activity-scroll">
-            <table className="dept-dashboard__activity-table">
-              <thead>
-                <tr>
-                  <th scope="col">{t.user}</th>
-                  <th scope="col">{t.action}</th>
-                  <th scope="col">{t.entity}</th>
-                  <th scope="col">{t.status}</th>
-                  <th scope="col">{t.dateTime}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dashboard.recentActivities.map((activity) => (
-                  <tr key={activity.id}>
-                    <td data-label={t.user}>{activity.user}</td>
-                    <td data-label={t.action}>{t.actions[activity.action] || activity.action}</td>
-                    <td data-label={t.entity}>{activity.entity}</td>
-                    <td data-label={t.status}>
-                      {t.statuses[activity.status]
-                        || t.statuses[Object.keys(t.statuses).find((label) => label.toLowerCase() === activity.status.toLowerCase())]
-                        || activity.status}
-                    </td>
-                    <td data-label={t.dateTime}>
-                      <time dateTime={activity.date}>
-                        {new Date(activity.date).toLocaleString(activityDateLocale)}
-                      </time>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="dept-dashboard__empty">{t.noActivities}</p>
-        )}
-      </section>
+      <DeptRecentActivitiesTable
+        activities={dashboard.recentActivities}
+        language={language}
+        translations={t}
+      />
     </main>
   );
 };

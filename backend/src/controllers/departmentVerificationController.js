@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Asset, DepartmentAssetVerification, User } = require('../models');
+const { sequelize, Asset, DepartmentAssetVerification, User, AuditLog } = require('../models');
 
 const getDepartmentId = (req) => {
   const departmentId = Number(req.organizationScope?.departmentId);
@@ -45,6 +45,7 @@ const listVerifications = async (req, res, next) => {
 };
 
 const createVerification = async (req, res, next) => {
+  let transaction;
   try {
     const departmentId = getDepartmentId(req);
     if (!departmentId) {
@@ -99,8 +100,12 @@ const createVerification = async (req, res, next) => {
       exceptions.push(`Condition mismatch: expected "${expectedCondition}", found "${actualCondition}".`);
     }
     const notes = String(req.body.exceptions ?? '').trim();
+    if (notes.length > 2000) {
+      return res.status(400).json({ success: false, message: 'Verification notes must be 2000 characters or fewer.' });
+    }
     if (notes) exceptions.push(notes);
 
+    transaction = await sequelize.transaction();
     const verification = await DepartmentAssetVerification.create({
       departmentId,
       assetId: asset.id,
@@ -114,10 +119,31 @@ const createVerification = async (req, res, next) => {
       verifiedBy: req.user.id,
       scannedQrCode: hasQrCode ? qrCode : null,
       exceptions: exceptions.join('\n'),
-    });
+    }, { transaction });
+    await AuditLog.create({
+      userId: req.user.id,
+      action: 'DEPARTMENT_ASSET_VERIFIED',
+      entity: `asset:${asset.id}`,
+      details: JSON.stringify({
+        departmentId,
+        assetId: asset.id,
+        verificationId: verification.id,
+        discrepancy: exceptions.length > 0,
+        expectedLocation,
+        actualLocation,
+        expectedCondition,
+        actualCondition,
+      }),
+    }, { transaction });
+    await transaction.commit();
 
-    return res.status(201).json({ success: true, message: 'Physical verification recorded.', data: verification });
+    return res.status(201).json({
+      success: true,
+      message: 'Physical verification recorded.',
+      data: { ...(verification.toJSON ? verification.toJSON() : verification), discrepancy: exceptions.length > 0 },
+    });
   } catch (error) {
+    if (transaction && !transaction.finished) await transaction.rollback();
     return next(error);
   }
 };

@@ -15,7 +15,7 @@ const {
   Room,
   Department,
 } = require('../src/models');
-const { getDepartmentDashboard } = require('../src/controllers/departmentController');
+const { getDepartmentDashboard, getDepartmentDashboardSection } = require('../src/controllers/departmentController');
 const { resolveDepartmentScope } = require('../src/middlewares/organizationScope');
 
 const models = {
@@ -71,6 +71,14 @@ test('dashboard route requires an authenticated Department Head and resolves ser
   const source = fs.readFileSync(path.resolve(__dirname, '../src/routes/departmentWorkspaceRoutes.js'), 'utf8');
   assert.match(source, /router\.use\(\.\.\.requireDepartmentHead, resolveDepartmentScope\)/);
   assert.match(source, /router\.get\('\/dashboard', getDepartmentDashboard\)/);
+  [
+    'kpis',
+    'asset-status',
+    'asset-categories',
+    'service-status',
+    'request-status',
+    'recent-activities',
+  ].forEach((endpoint) => assert.ok(source.includes(`router.get('/dashboard/${endpoint}'`)));
 });
 
 test('dashboard rejects a request without authenticated department scope', async () => {
@@ -241,6 +249,50 @@ test('valid empty departments return empty chart/activity series instead of erro
   assert.deepEqual(response.payload.data.serviceRequestStatus, []);
   assert.deepEqual(response.payload.data.acquisitionRequestStatus, []);
   assert.deepEqual(response.payload.data.recentActivities, []);
+});
+
+test('dashboard section endpoints return only their requested, department-scoped data', async () => {
+  configureEmptyModels();
+  const departmentId = 19;
+  const sections = {
+    kpis: [
+      'totalAssets',
+      'activeAssets',
+      'damagedAssets',
+      'underMaintenance',
+      'availableAssets',
+      'assignedAssets',
+      'pendingAcquisitionRequests',
+      'pendingApprovals',
+      'openServiceRequests',
+      'overdueTickets',
+      'escalatedTickets',
+      'laboratories',
+      'pendingRequests',
+      'availableInventory',
+    ],
+    assetByStatus: 'assetByStatus',
+    assetByCategory: 'assetByCategory',
+    serviceRequestStatus: 'serviceRequestStatus',
+    acquisitionRequestStatus: 'acquisitionRequestStatus',
+    recentActivities: 'recentActivities',
+  };
+
+  for (const [section, expected] of Object.entries(sections)) {
+    const response = makeResponse();
+    await getDepartmentDashboardSection(section)({
+      organizationScope: { departmentId, department: { id: departmentId, name: 'Scoped department' } },
+    }, response, (error) => { throw error; });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.payload.success, true);
+    if (section === 'kpis') {
+      assert.deepEqual(Object.keys(response.payload.data), expected);
+      assert.ok(Object.values(response.payload.data).every((value) => value === 0));
+    } else {
+      assert.deepEqual(response.payload.data, []);
+    }
+  }
 });
 
 test('dashboard queries scope nested asset data to the authenticated department', async () => {

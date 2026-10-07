@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { Op } = require('sequelize');
-const { Asset, DepartmentAssetVerification, User } = require('../models');
+const { sequelize, Asset, DepartmentAssetVerification, User, AuditLog } = require('../models');
 const controller = require('../controllers/departmentVerificationController');
 
 const makeResponse = () => ({
@@ -37,7 +37,21 @@ const verifyBody = (overrides = {}) => ({
   ...overrides,
 });
 
+const mockAuditTransaction = (t) => {
+  const originals = { transaction: sequelize.transaction, auditCreate: AuditLog.create };
+  let auditRecord;
+  const transaction = { finished: false, commit: async function commit() { this.finished = 'commit'; }, rollback: async function rollback() { this.finished = 'rollback'; } };
+  sequelize.transaction = async () => transaction;
+  AuditLog.create = async (values, options) => { auditRecord = { values, options }; };
+  t.after(() => {
+    sequelize.transaction = originals.transaction;
+    AuditLog.create = originals.auditCreate;
+  });
+  return { transaction, getAudit: () => auditRecord };
+};
+
 test('normal physical verification records the expected asset, date, and authenticated verifier', async (t) => {
+  const audit = mockAuditTransaction(t);
   const originals = { findOne: Asset.findOne, create: DepartmentAssetVerification.create };
   let assetQuery;
   let created;
@@ -59,9 +73,14 @@ test('normal physical verification records the expected asset, date, and authent
   assert.equal(created.verificationDate, '2026-10-06');
   assert.equal(created.verifiedBy, 8);
   assert.equal(created.exceptions, '');
+  assert.equal(audit.transaction.finished, 'commit');
+  assert.equal(audit.getAudit().values.action, 'DEPARTMENT_ASSET_VERIFIED');
+  assert.equal(audit.getAudit().values.entity, 'asset:34');
+  assert.equal(audit.getAudit().options.transaction, audit.transaction);
 });
 
 test('location mismatch is persisted as an exception', async (t) => {
+  mockAuditTransaction(t);
   const original = DepartmentAssetVerification.create;
   let created;
   Asset.findOne = async () => asset;
@@ -80,6 +99,7 @@ test('location mismatch is persisted as an exception', async (t) => {
 });
 
 test('condition mismatch is persisted as an exception', async (t) => {
+  mockAuditTransaction(t);
   const originalFindOne = Asset.findOne;
   const originalCreate = DepartmentAssetVerification.create;
   let created;
@@ -100,6 +120,7 @@ test('condition mismatch is persisted as an exception', async (t) => {
 });
 
 test('QR verification resolves only an asset in the caller department and saves the scanned code', async (t) => {
+  mockAuditTransaction(t);
   const originalFindOne = Asset.findOne;
   const originalCreate = DepartmentAssetVerification.create;
   let query;

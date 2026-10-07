@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { ProtectedRoute } from '../App';
@@ -77,6 +77,56 @@ describe('ProtectedRoute auth flow', () => {
     expect(screen.getByText('Login page')).toBeInTheDocument();
   });
 
+  it('allows authenticated department heads and redirects unauthenticated dashboard requests', () => {
+    useAuth.mockReturnValue({ user: { role: 'department_head' }, loading: false });
+
+    const dashboard = render(
+      <MemoryRouter initialEntries={['/department-head/dashboard']}>
+        <Routes>
+          <Route path="/login" element={<div>Login page</div>} />
+          <Route
+            path="/department-head/dashboard"
+            element={<ProtectedRoute allowedRoles={['department_head']}><div>Department dashboard</div></ProtectedRoute>}
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Department dashboard')).toBeInTheDocument();
+    dashboard.unmount();
+
+    useAuth.mockReturnValue({ user: null, loading: false });
+    render(
+      <MemoryRouter initialEntries={['/department-head/dashboard']}>
+        <Routes>
+          <Route path="/login" element={<div>Login page</div>} />
+          <Route
+            path="/department-head/dashboard"
+            element={<ProtectedRoute allowedRoles={['department_head']}><div>Department dashboard</div></ProtectedRoute>}
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Login page')).toBeInTheDocument();
+  });
+
+  it('blocks authenticated users whose role is not department_head', () => {
+    useAuth.mockReturnValue({ user: { role: 'ict_officer' }, loading: false });
+
+    render(
+      <MemoryRouter initialEntries={['/department-head/dashboard']}>
+        <Routes>
+          <Route
+            path="/department-head/dashboard"
+            element={<ProtectedRoute allowedRoles={['department_head']}><div>Department dashboard</div></ProtectedRoute>}
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('You do not have permission to access this section.');
+    expect(screen.queryByText('Department dashboard')).not.toBeInTheDocument();
+  });
+
   it('shows access denied for an authenticated user with the wrong role', () => {
     useAuth.mockReturnValue({ user: { role: 'college' }, loading: false });
 
@@ -93,8 +143,8 @@ describe('ProtectedRoute auth flow', () => {
     expect(screen.queryByText('ICT Network')).not.toBeInTheDocument();
   });
 
-  it('blocks a college user from manually opening the college-manager dashboard URL', () => {
-    useAuth.mockReturnValue({ user: { role: 'college' }, loading: false });
+  it('blocks a department head from manually opening the college-manager dashboard URL', () => {
+    useAuth.mockReturnValue({ user: { role: 'department_head' }, loading: false });
 
     render(
       <MemoryRouter initialEntries={['/college-manager/dashboard']}>
@@ -128,7 +178,7 @@ describe('ProtectedRoute auth flow', () => {
     const file = new File(['hello'], 'avatar.png', { type: 'image/png' });
     fireEvent.change(input, { target: { files: [file] } });
 
-    await Promise.resolve();
+    await waitFor(() => expect(input).toBeEnabled());
 
     expect(apiClient.post).toHaveBeenCalledTimes(1);
     expect(apiClient.post.mock.calls[0][0]).toBe('/api/users/profile/photo');

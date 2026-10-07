@@ -128,6 +128,14 @@ describe('Public and dashboard route rules', () => {
   });
 
   it('keeps the shared admin shell header and removes the duplicate page title from the dashboard content', async () => {
+    apiClient.get.mockResolvedValueOnce({
+      data: {
+        data: {
+          statistics: {},
+          thresholds: {},
+        },
+      },
+    });
     render(<AdminDashboard />);
 
     await waitFor(() => expect(screen.getByText('Asset Overview')).toBeInTheDocument());

@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { normalizeDashboardThresholds } from "./AdminDashboard";
 import AdminDashboard from "./AdminDashboard";
 import apiClient from "../../services/apiClient";
@@ -74,7 +74,7 @@ describe("normalizeDashboardThresholds", () => {
       await screen.findByRole("link", { name: "Active Assets: 7" });
       expect(apiClient.get).toHaveBeenCalledTimes(1);
 
-      screen.getByRole("button", { name: "Amharic" }).click();
+      fireEvent.click(screen.getByRole("button", { name: "Amharic" }));
 
       expect(await screen.findByRole("link", { name: "ንቁ ንብረቶች: 7" })).toBeInTheDocument();
       expect(apiClient.get).toHaveBeenCalledTimes(1);

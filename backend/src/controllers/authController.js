@@ -15,12 +15,15 @@ const { isAccountActive } = require('../utils/accountStatus');
 const LOGIN_ALIASES = {
   admin: ['admin'],
   ict_officer: ['ict_officer', 'ict-officer', 'ict'],
-  college: ['college', 'college_manager', 'college manager', 'college-manager'],
+  college: ['college'],
+  college_manager: ['college_manager', 'college manager', 'college-manager'],
   department_head: ['department_head', 'dept_head', 'department head', 'department'],
   finance: ['finance'],
   store_manager: ['store_manager', 'store-manager'],
   maintenance: ['maintenance'],
   infrastructure: ['infrastructure', 'infrastructure_directorate', 'infra', 'infrastructure directorate'],
+  staff: ['staff', 'staff member', 'staff-member'],
+  student: ['student', 'student member', 'student-member'],
 };
 
 const normalizeAlias = (value = '') => String(value || '').trim().toLowerCase().replace(/[_\-\s]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -54,11 +57,21 @@ const normalizeLoginIdentity = (value = '') => {
 
   const raw = value.trim();
   const normalized = normalizeAlias(raw);
+  let matchedRole = '';
+  let matchedLength = -1;
 
   for (const [role, aliases] of Object.entries(LOGIN_ALIASES)) {
-    if (aliases.some((alias) => normalizeAlias(alias) === normalized)) {
-      return role;
+    for (const alias of aliases) {
+      const candidate = normalizeAlias(alias);
+      if (candidate === normalized && candidate.length > matchedLength) {
+        matchedRole = role;
+        matchedLength = candidate.length;
+      }
     }
+  }
+
+  if (matchedRole) {
+    return matchedRole;
   }
 
   return normalized.replace(/\s+/g, '_');

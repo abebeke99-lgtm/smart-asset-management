@@ -7,6 +7,7 @@ const {
   College,
   User,
   Config,
+  AuditLog,
 } = require('../models');
 const { createEventNotification } = require('./notificationService');
 
@@ -124,6 +125,18 @@ const runServiceRequestEscalation = async (now = new Date(), notify = createEven
           newStatus: 'escalated',
           changedBy: null,
           comment: `Automatically escalated after ${escalationHours} hours without acknowledgement`,
+        }, { transaction });
+        await AuditLog.create({
+          userId: null,
+          action: 'SERVICE_REQUEST_ESCALATED',
+          entity: `service_request:${ticket.id}`,
+          details: JSON.stringify({
+            requestCode: ticket.requestCode,
+            departmentId: ticket.departmentId,
+            escalationHours,
+            escalatedTo,
+            reason: `Not acknowledged within ${escalationHours} hours`,
+          }),
         }, { transaction });
         await transaction.commit();
 

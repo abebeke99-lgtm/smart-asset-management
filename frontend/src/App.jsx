@@ -58,6 +58,7 @@ import AdminSettings from './components/admin/AdminSettings';
 import AdminNotifications from './components/admin/AdminNotifications';
 import AdminBackup from './components/admin/AdminBackup';
 import AdminRolesPermissions from './components/admin/AdminRolesPermissions';
+import AdminAuditLogs from './components/admin/AdminAuditLogs';
 import AdminDepartmentManagement from './components/admin/AdminDepartmentManagement';
 import AdminAnalyticsCenter from './components/admin/AdminAnalyticsCenter';
 import AdminAssetAnalytics from './components/admin/AdminAssetAnalytics';
@@ -103,6 +104,7 @@ import DeptApprovals from './components/department/DeptApprovals';
 import ApprovalQueue from './components/department/ApprovalQueue';
 import DeptAssetRequests from './components/department/DeptAssetRequests';
 import DeptUtilization from './components/department/DeptUtilization';
+import DeptAnalytics from './components/department/DeptAnalytics';
 import DeptVerification from './components/department/DeptVerification';
 import DeptTracking from './components/department/DeptTracking';
 import DeptNotifications from './components/department/DeptNotifications';
@@ -222,7 +224,6 @@ export const normalizeRole = (role) => {
     administrator: 'admin',
     'ict officer': 'ict_officer',
     ict_officer: 'ict_officer',
-    college: 'college_manager',
     'college manager': 'college_manager',
     college_manager: 'college_manager',
     'college-manager': 'college_manager',
@@ -275,7 +276,7 @@ export const getDashboardRoute = (role) => {
   return roleMap[normalizeRole(role)] || '/home';
 };
 
-const publicPaths = ['/home', '/about', '/services', '/contact', '/contac', '/help', '/register', '/forgot-password', '/reset-password'];
+const publicPaths = ['/home', '/about', '/services', '/contact', '/contac', '/register', '/forgot-password', '/reset-password'];
 
 const AccessDenied = () => (
   <main role="alert" aria-labelledby="access-denied-title" style={{ padding: '48px 24px', textAlign: 'center' }}>
@@ -2354,6 +2355,7 @@ const adminSidebarSections = [
     items: [
       { to: '/admin/settings', label: 'Settings', icon: Settings },
       { to: '/admin/notifications', label: 'Notifications', icon: Bell },
+      { to: '/admin/audit-logs', label: 'Audit Logs', icon: FileText },
       { to: '/admin/backup', label: 'Backup', icon: DatabaseBackup },
       { to: '/admin/enam', label: 'ENAM Integration', icon: GitBranch },
       { to: '/admin/monitoring', label: 'System Monitoring', icon: BarChart3 },
@@ -2741,7 +2743,7 @@ function AppContent() {
 
   const dashboardRoute = getDashboardRoute(user?.role);
   const requestPublicNavigation = (path, event) => {
-    if (user) {
+    if (user && normalizeAppPath(path) !== '/help') {
       event?.preventDefault();
       setPendingPublicPath(path);
     }
@@ -3568,7 +3570,7 @@ function AppContent() {
           <Route path="/home" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
           <Route path="/about" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
           <Route path="/contact" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
-          <Route path="/help" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
+          <Route path="/help" element={<Help />} />
           <Route path="/login" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
 
           <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout /></ProtectedRoute>}>
@@ -3599,6 +3601,7 @@ function AppContent() {
 
             <Route path="users" element={<AdminUserManagement />} />
             <Route path="roles-permissions" element={<ProtectedRoute allowedRoles={['admin']} allowedPermissions={['roles.view']}><AdminRolesPermissions /></ProtectedRoute>} />
+            <Route path="audit-logs" element={<ProtectedRoute allowedRoles={['admin']} allowedPermissions={['audit.view']}><AdminAuditLogs /></ProtectedRoute>} />
             <Route path="colleges" element={<AdminCollegeManagement />} />
             <Route path="departments" element={<AdminDepartmentManagement />} />
             <Route path="locations" element={<AdminAssetLocations />} />
@@ -3727,7 +3730,7 @@ function AppContent() {
             <Route path="reports/assets" element={<DeptReports />} />
             <Route path="reports/maintenance" element={<DeptReports />} />
             <Route path="reports/inventory" element={<DeptReports inventoryMode />} />
-            <Route path="analytics" element={<DeptUtilization />} />
+            <Route path="analytics" element={<ProtectedRoute allowedPermissions={['department_head.analytics.view']}><DeptAnalytics /></ProtectedRoute>} />
             <Route path="notifications" element={<DeptNotifications />} />
             <Route path="history" element={<DepartmentActivityHistory />} />
             <Route path="asset-history" element={<ProtectedRoute allowedPermissions={['department_head.history.view']}><DepartmentAssetHistory /></ProtectedRoute>} />

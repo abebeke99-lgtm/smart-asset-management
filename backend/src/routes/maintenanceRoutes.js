@@ -14,6 +14,7 @@ const router = express.Router();
 
 const maintenanceReadAccess = [requireAuth, requireRole('admin', 'ict_officer', 'maintenance', 'college', 'store_manager')];
 router.get('/', ...maintenanceReadAccess, getAllMaintenance);
+router.get('/requests', ...maintenanceReadAccess, getAllMaintenance);
 router.get('/scheduled', ...maintenanceReadAccess, getAllMaintenance);
 router.get('/assets-under-maintenance', ...maintenanceReadAccess, require('../controllers/maintenanceController').getAssetsUnderMaintenance);
 router.get('/assets-under-maintenance/:id', ...maintenanceReadAccess, require('../controllers/maintenanceController').getAssetMaintenanceDetail);

@@ -186,6 +186,92 @@
   min-width: 0;
 }
 
+.dept-dashboard__activity-tools {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.dept-dashboard__activity-search {
+  display: grid;
+  gap: 6px;
+  min-width: min(100%, 260px);
+  color: var(--dashboard-muted-on-page);
+  font-size: 0.82rem;
+}
+
+.dept-dashboard__activity-search input,
+.dept-dashboard__activity-filter select {
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1px solid var(--dashboard-border);
+  border-radius: 8px;
+  color: var(--dashboard-navy);
+  background: var(--color-surface);
+  font: inherit;
+}
+
+.dept-dashboard__activity-filter {
+  display: grid;
+  gap: 6px;
+  min-width: min(100%, 160px);
+  color: var(--dashboard-muted-on-page);
+  font-size: 0.82rem;
+}
+
+.dept-dashboard__activity-sort-direction {
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1px solid var(--dashboard-border);
+  border-radius: 8px;
+  color: var(--dashboard-navy);
+  background: var(--color-surface);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dept-dashboard__activity-search input:focus-visible,
+.dept-dashboard__activity-filter select:focus-visible,
+.dept-dashboard__activity-pagination button:focus-visible,
+.dept-dashboard__activity-sort-direction:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.dept-dashboard__activity-pagination {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  color: var(--dashboard-muted-on-page);
+  font-size: 0.82rem;
+}
+
+.dept-dashboard__activity-pagination button {
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--dashboard-border);
+  border-radius: 7px;
+  color: var(--dashboard-navy);
+  background: var(--color-surface);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dept-dashboard__activity-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.dept-dashboard__activity-no-results {
+  margin: 12px 0 0;
+  color: var(--dashboard-muted-on-page);
+}
+
 .dept-dashboard__activity-table {
   width: 100%;
   border-collapse: collapse;

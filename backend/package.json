@@ -12,7 +12,9 @@
     "seed:demo": "node src/scripts/seedDemoAccounts.js",
     "reset:demo-passwords": "node src/scripts/resetDemoPasswords.js",
     "seed:user-management": "node src/scripts/seedUserManagement.js",
-    "test": "node --test --test-concurrency=1"
+    "test": "node --test --test-concurrency=1",
+    "test:jest": "jest --config ./jest.config.js --runInBand",
+    "test:dashboard": "jest --config ./jest.config.js --runInBand tests/departmentDashboard.api.jest.cjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -33,6 +35,8 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "jest": "^30.5.2",
+    "nodemon": "^3.0.1",
+    "supertest": "^7.3.1"
   }
 }

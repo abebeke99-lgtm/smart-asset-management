@@ -42,6 +42,18 @@ test('models are loaded before database synchronization is initialized', () => {
   assert.ok(source.indexOf("require('./models')") < source.indexOf("require('./config/sync')"));
 });
 
+test('admin user-management role options route is mounted under /api', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
+  assert.match(source, /const userManagementOptionsRoutes = require\('\.\/routes\/userManagementOptionsRoutes'\);/);
+  assert.match(source, /app\.use\('\/api', userManagementOptionsRoutes\);/);
+});
+
+test('administrator RFID tracking routes are mounted under their frontend API namespace', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
+  assert.match(source, /const adminRfidRoutes = require\('\.\/routes\/adminRfidRoutes'\);/);
+  assert.match(source, /app\.use\('\/api\/admin\/rfid', adminRfidRoutes\);/);
+});
+
 test('database schema sync runs in production and fails startup when initialization fails', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
   assert.match(source, /schemaReady = await syncDatabase\(\)/);

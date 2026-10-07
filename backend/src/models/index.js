@@ -423,6 +423,7 @@ ServiceRequest.belongsTo(User, { foreignKey: 'resolvedBy', as: 'ResolvedBy' });
 ServiceRequest.belongsTo(User, { foreignKey: 'closedBy', as: 'ClosedBy' });
 Asset.hasMany(ServiceRequest, { foreignKey: 'assetId' });
 ServiceRequest.belongsTo(Asset, { foreignKey: 'assetId' });
+ServiceRequest.belongsTo(Room, { foreignKey: 'laboratoryId', as: 'LaboratoryRecord' });
 ServiceRequest.belongsTo(Department, { foreignKey: 'departmentId', as: 'DepartmentRecord' });
 ServiceRequest.belongsTo(College, { foreignKey: 'collegeId', as: 'CollegeRecord' });
 ServiceRequest.hasOne(Feedback, { foreignKey: 'requestId', as: 'RequestFeedback' });

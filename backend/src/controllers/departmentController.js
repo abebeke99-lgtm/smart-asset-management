@@ -844,6 +844,52 @@ const listDepartmentLocationAssets = async (req, res, next) => {
   }
 };
 
+const dashboardKpiFields = [
+  'totalAssets',
+  'activeAssets',
+  'damagedAssets',
+  'underMaintenance',
+  'availableAssets',
+  'assignedAssets',
+  'pendingAcquisitionRequests',
+  'pendingApprovals',
+  'openServiceRequests',
+  'overdueTickets',
+  'escalatedTickets',
+  'laboratories',
+];
+
+const getDepartmentDashboardSection = (section) => async (req, res, next) => {
+  let statusCode = 200;
+  let dashboardResponse;
+  const response = {
+    status(code) {
+      statusCode = code;
+      return this;
+    },
+    json(payload) {
+      dashboardResponse = payload;
+      return this;
+    },
+  };
+
+  await getDepartmentDashboard(req, response, next);
+  if (!dashboardResponse) return;
+  if (statusCode !== 200 || !dashboardResponse.success) {
+    return res.status(statusCode).json(dashboardResponse);
+  }
+
+  const dashboard = dashboardResponse.data;
+  if (section === 'kpis') {
+    const data = Object.fromEntries(dashboardKpiFields.map((field) => [field, dashboard[field]]));
+    data.pendingRequests = dashboard.pendingAcquisitionRequests;
+    data.availableInventory = dashboard.availableAssets;
+    return res.json({ success: true, data });
+  }
+
+  return res.json({ success: true, data: dashboard[section] });
+};
+
 const getDepartmentReports = async (req, res, next) => {
   try {
     const departmentId = Number(req.organizationScope?.departmentId);
@@ -851,7 +897,7 @@ const getDepartmentReports = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
     }
     const departmentScope = { departmentId, ...(req.organizationScope.collegeId ? { collegeId: req.organizationScope.collegeId } : {}) };
-    const reportType = String(req.query.reportType || 'assets').trim().toLowerCase();
+    const reportType = String(req.params?.reportType || req.query.reportType || 'assets').trim().toLowerCase();
     const normalizedReportType = reportType === 'inventory' ? 'assets' : reportType;
     const supportedReports = ['assets', 'utilization', 'maintenance', 'staff', 'approvals', 'inventory'];
     if (!supportedReports.includes(reportType) && !supportedReports.includes(normalizedReportType)) {
@@ -1025,4 +1071,4 @@ const getDepartmentReports = async (req, res, next) => {
   }
 };
 
-module.exports = { getDepartmentDashboard, getDepartmentProfile, updateDepartmentProfile, listDepartmentAssets, listDepartmentStaff, listDepartmentLocations, listDepartmentLocationAssets, getDepartmentReports };
+module.exports = { getDepartmentDashboard, getDepartmentDashboardSection, getDepartmentProfile, updateDepartmentProfile, listDepartmentAssets, listDepartmentStaff, listDepartmentLocations, listDepartmentLocationAssets, getDepartmentReports };

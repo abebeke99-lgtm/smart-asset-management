@@ -28,6 +28,17 @@
     "test": "craco test --watch=false",
     "eject": "react-scripts eject"
   },
+  "jest": {
+    "collectCoverageFrom": [
+      "src/components/department/DeptDashboard.jsx",
+      "src/components/department/DeptRecentActivitiesTable.jsx"
+    ],
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ]
+  },
   "proxy": "http://localhost:5000",
   "eslintConfig": {
     "extends": [

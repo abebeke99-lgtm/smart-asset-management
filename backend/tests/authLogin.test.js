@@ -44,6 +44,9 @@ test('resolves legacy login aliases while preserving the department_head role', 
   assert.deepEqual(resolveLoginAliases('department'), ['department', 'department_head', 'dept_head', 'department head']);
   assert.deepEqual(resolveLoginAliases('store manager'), ['store manager', 'store_manager', 'store-manager']);
   assert.deepEqual(resolveLoginAliases('ICT Officer'), ['ict officer', 'ict_officer', 'ict-officer', 'ict']);
+  assert.deepEqual(resolveLoginAliases('college manager'), ['college manager', 'college_manager', 'college-manager']);
+  assert.deepEqual(resolveLoginAliases('staff'), ['staff', 'staff member', 'staff-member']);
+  assert.deepEqual(resolveLoginAliases('student'), ['student', 'student member', 'student-member']);
 });
 
 test('interprets MySQL active values consistently', () => {

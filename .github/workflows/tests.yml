@@ -1,0 +1,42 @@
+name: Test suite
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install backend dependencies
+        run: npm ci --prefix backend
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+
+      - name: Run backend regression tests
+        run: npm --prefix backend test
+
+      - name: Run dashboard API tests with coverage
+        run: npm --prefix backend run test:dashboard -- --coverage
+
+      - name: Run dashboard frontend tests with coverage
+        run: npm --prefix frontend test -- --runInBand --coverage --watchAll=false --runTestsByPath src/components/department/DeptDashboard.test.jsx src/__tests__/authFlow.test.js
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-coverage
+          path: |
+            backend/coverage
+            frontend/coverage
+          if-no-files-found: ignore

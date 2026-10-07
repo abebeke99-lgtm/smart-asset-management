@@ -51,6 +51,17 @@ User-management API endpoints are under `/api/users` and require an authenticate
 
 The Engineering Department Head reports use `/api/department/reports` and derive the department scope from the authenticated user's `department_id`. The controller selects only columns present in the existing user/approval tables and returns asset `totals`, `byCategory`, `byLocation`, and `assets` alongside the existing report payload.
 
+The Department Head dashboard is available at `/department-head/dashboard`. It displays department-scoped asset, approval, service-request, and laboratory KPIs with status/category charts and a searchable, filterable, sortable, paginated recent-activity table. Dashboard endpoints and response shapes are documented in [docs/DEPARTMENT_HEAD_API.md](./docs/DEPARTMENT_HEAD_API.md).
+
+Run the focused dashboard tests from the project root:
+
+```powershell
+npm run test:frontend:dashboard
+npm run test:backend:dashboard
+```
+
+The dashboard testing setup and coverage commands are documented in [docs/DEPARTMENT_HEAD_TESTING.md](./docs/DEPARTMENT_HEAD_TESTING.md). The frontend uses the repository's existing CRACO/Create React App setup and Chart.js components, and the dashboard is rendered inside the shared authenticated role layout.
+
 To populate the Engineering report with repeatable sample assets, assignments, maintenance, and an approval, import `backend/database/migrations/20261006_department_reports_seed.sql` into the configured MySQL database in phpMyAdmin. It uses existing Engineering department users and does not create or modify login credentials.
 
 ### Department report verification checklist

@@ -10,6 +10,7 @@ const {
   College,
   User,
   SupportTicketComment,
+  AuditLog,
 } = require('../models');
 const serviceRequestController = require('../controllers/serviceRequestController');
 const departmentTickets = require('../controllers/departmentTicketController');
@@ -45,6 +46,7 @@ test('unacknowledged tickets escalate at the actual 72-hour timestamp and notify
     departmentFind: Department.findByPk,
     collegeFind: College.findByPk,
     userFindAll: User.findAll,
+    auditCreate: AuditLog.create,
   };
   const now = new Date('2026-10-06T12:00:00.000Z');
   const cutoff = new Date(now.getTime() - 72 * 60 * 60 * 1000);
@@ -82,6 +84,7 @@ test('unacknowledged tickets escalate at the actual 72-hour timestamp and notify
     },
   ];
   let history;
+  let audit;
   let notification;
   let escalatedQuery;
   const transaction = {
@@ -110,6 +113,9 @@ test('unacknowledged tickets escalate at the actual 72-hour timestamp and notify
   Department.findByPk = async () => ({ headId: 50 });
   College.findByPk = async () => ({ managerId: 60 });
   User.findAll = async () => [{ id: 70 }];
+  AuditLog.create = async (values, options) => {
+    audit = { values, options };
+  };
   t.after(() => {
     sequelize.transaction = originals.transaction;
     Config.findByPk = originals.config;
@@ -119,6 +125,7 @@ test('unacknowledged tickets escalate at the actual 72-hour timestamp and notify
     Department.findByPk = originals.departmentFind;
     College.findByPk = originals.collegeFind;
     User.findAll = originals.userFindAll;
+    AuditLog.create = originals.auditCreate;
   });
 
   const result = await escalationService.runServiceRequestEscalation(now, async (payload) => {
@@ -136,30 +143,39 @@ test('unacknowledged tickets escalate at the actual 72-hour timestamp and notify
   assert.equal(tickets[0].escalatedTo, 50);
   assert.equal(history.newStatus, 'escalated');
   assert.match(history.comment, /72 hours/);
+  assert.equal(audit.values.action, 'SERVICE_REQUEST_ESCALATED');
+  assert.equal(audit.values.entity, 'service_request:41');
+  assert.equal(audit.options.transaction.finished, 'commit');
   assert.equal(notification.event, 'service_request_escalated');
   assert.deepEqual(notification.userIds.sort(), [30, 50, 60, 70]);
 });
 
-test('the >10 old unacknowledged ticket restriction uses the configured threshold and department', async (t) => {
-  const originals = { config: Config.findByPk, count: ServiceRequest.count };
+test('normal service requests are blocked above 10 departmental unacknowledged tickets, while critical requests remain available', async (t) => {
+  const originals = { departmentFind: Department.findByPk, count: ServiceRequest.count };
   let query;
-  Config.findByPk = async () => ({ value: JSON.stringify({ escalationHours: 72 }) });
+  let departmentLock;
+  const transaction = { LOCK: { UPDATE: 'UPDATE' } };
+  Department.findByPk = async (id, options) => { departmentLock = { id, options }; return { id }; };
   ServiceRequest.count = async (options) => {
     query = options;
-    return 10;
+    return 11;
   };
   t.after(() => {
-    Config.findByPk = originals.config;
+    Department.findByPk = originals.departmentFind;
     ServiceRequest.count = originals.count;
   });
 
-  await serviceRequestController.verifyTicketLimit(8, 12);
+  await assert.rejects(serviceRequestController.verifyTicketLimit(12, transaction, 'medium'), {
+    statusCode: 409,
+    message: /11 unacknowledged tickets/i,
+  });
   assert.equal(query.where.departmentId, 12);
   assert.ok(query.where.status[Op.in].includes('escalated'));
-  assert.equal(query.where.createdAt[Op.lt] instanceof Date, true);
+  assert.equal(query.where.acknowledgedAt, null);
+  assert.equal(departmentLock.id, 12);
+  assert.equal(departmentLock.options.lock, transaction.LOCK.UPDATE);
 
-  ServiceRequest.count = async () => 11;
-  await assert.rejects(serviceRequestController.verifyTicketLimit(8, 12), { statusCode: 409 });
+  assert.equal(await serviceRequestController.verifyTicketLimit(12, transaction, 'critical'), 11);
 });
 
 test('department escalated-ticket listing cannot be widened to another department', async (t) => {

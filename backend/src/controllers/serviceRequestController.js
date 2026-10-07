@@ -8,17 +8,19 @@ const {
   RequestStatusHistory,
   Feedback,
   Asset,
+  Room,
   User,
   Department,
   College,
   SupportTicketComment,
 } = require('../models');
 const { createBulkNotification } = require('../services/notificationService');
+const { createAuditLog } = require('../services/auditLogService');
 const { getEscalationHours, runServiceRequestEscalation } = require('../services/serviceRequestEscalationService');
 
 const ALLOWED_ATTACHMENT_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
-const MAX_OPEN_OLD_TICKETS = 10;
+const MAX_UNACKNOWLEDGED_TICKETS = 10;
 const VALID_STATUSES = ['submitted', 'scheduled', 'in-progress', 'completed', 'cancelled', 'escalated'];
 const STATUS_LABELS = {
   submitted: 'Submitted',
@@ -111,18 +113,29 @@ const defaultInclude = () => [
   { model: RequestStatusHistory, order: [['createdAt', 'DESC']], limit: 50 },
 ];
 
-const verifyTicketLimit = async (reportedBy, departmentId, transaction) => {
-  const escalationHours = await getEscalationHours();
-  const cutoff = new Date(Date.now() - escalationHours * 60 * 60 * 1000);
-  const whereClause = { status: { [Op.in]: ['submitted', 'scheduled', 'in-progress', 'escalated'] }, acknowledgedAt: null, createdAt: { [Op.lt]: cutoff } };
-  if (departmentId) whereClause.departmentId = departmentId;
-  const openOld = await ServiceRequest.count({ where: whereClause, transaction });
-  if (openOld > MAX_OPEN_OLD_TICKETS) {
-    const error = new Error(`New service requests are temporarily blocked. This department has ${openOld} unacknowledged tickets older than ${escalationHours} hours. Please resolve or acknowledge existing tickets first.`);
+const verifyTicketLimit = async (departmentId, transaction, priority = 'medium') => {
+  if (!departmentId) return 0;
+  if (transaction) {
+    await Department.findByPk(departmentId, {
+      attributes: ['id'],
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+  }
+  const unacknowledgedTickets = await ServiceRequest.count({
+    where: {
+      departmentId,
+      status: { [Op.in]: ['submitted', 'scheduled', 'in-progress', 'escalated'] },
+      acknowledgedAt: null,
+    },
+    transaction,
+  });
+  if (unacknowledgedTickets > MAX_UNACKNOWLEDGED_TICKETS && !['high', 'critical'].includes(priority)) {
+    const error = new Error(`New normal service requests are temporarily blocked. This department has ${unacknowledgedTickets} unacknowledged tickets. Please resolve or acknowledge existing tickets first.`);
     error.statusCode = 409;
     throw error;
   }
-  return openOld;
+  return unacknowledgedTickets;
 };
 
 const createServiceRequest = async (req, res, next) => {
@@ -149,6 +162,7 @@ const createServiceRequest = async (req, res, next) => {
     const priority = String(req.body.priority || 'medium').toLowerCase();
     if (!['low', 'medium', 'high', 'critical'].includes(priority)) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Invalid priority' }); }
     const assetId = req.body.assetId || req.body.asset_id || null;
+    const requestedLaboratoryId = req.body.laboratoryId ?? req.body.laboratory_id ?? null;
     let asset = null;
     if (assetId) {
       asset = await Asset.findByPk(assetId, { transaction });
@@ -158,10 +172,53 @@ const createServiceRequest = async (req, res, next) => {
         return res.status(403).json({ success: false, message: 'Cannot create a service request for an asset outside your department' });
       }
     }
-    const reportedBy = req.user.id;
+    const hasExplicitLaboratory = requestedLaboratoryId !== null && requestedLaboratoryId !== '';
+    let laboratoryId = !hasExplicitLaboratory
+      ? null
+      : Number(requestedLaboratoryId);
+    if (laboratoryId !== null && (!Number.isSafeInteger(laboratoryId) || laboratoryId < 1)) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'A valid laboratory is required' });
+    }
+    if (laboratoryId && scopedDepartmentId) {
+      const laboratory = await Room.findOne({
+        where: {
+          id: laboratoryId,
+          departmentId: scopedDepartmentId,
+          roomType: { [Op.like]: '%lab%' },
+        },
+        attributes: ['id'],
+        transaction,
+      });
+      if (!laboratory) {
+        await transaction.rollback();
+        return res.status(404).json({ success: false, message: 'Laboratory not found in your department' });
+      }
+    } else if (!hasExplicitLaboratory && scopedDepartmentId && asset) {
+      let specifications = asset.specifications;
+      if (typeof specifications === 'string') {
+        specifications = JSON.parse(specifications || '{}');
+      }
+      const candidateLaboratoryIds = [...new Set([
+        asset.roomId,
+        specifications?.laboratoryId,
+      ].map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))];
+      if (candidateLaboratoryIds.length) {
+        const assetLaboratory = await Room.findOne({
+          where: {
+            id: { [Op.in]: candidateLaboratoryIds },
+            departmentId: scopedDepartmentId,
+            roomType: { [Op.like]: '%lab%' },
+          },
+          attributes: ['id'],
+          transaction,
+        });
+        laboratoryId = assetLaboratory?.id || null;
+      }
+    }
     const departmentId = scopedDepartmentId || req.user.departmentId || req.user.department_id || req.body.departmentId || req.body.department_id || null;
     const collegeId = scopedDepartmentId ? (req.organizationScope?.collegeId ?? req.user.collegeId ?? null) : (req.body.collegeId || req.body.college_id || req.user.collegeId || null);
-    await verifyTicketLimit(reportedBy, departmentId, transaction);
+    await verifyTicketLimit(departmentId, transaction, priority);
 
     const routedTo = routeRequest(requestType, req.body.category || '', asset?.category || '');
     const request = await ServiceRequest.create({
@@ -172,6 +229,7 @@ const createServiceRequest = async (req, res, next) => {
       requestType,
       category: req.body.category || asset?.category || '',
       assetId: asset ? asset.id : null,
+      laboratoryId,
       priority,
       status: 'submitted',
       routedTo,
@@ -186,6 +244,15 @@ const createServiceRequest = async (req, res, next) => {
       const saved = saveAttachment(attachment);
       await RequestAttachment.create({ requestId: request.id, ...saved, attachmentType: attachment.attachmentType || attachment.attachment_type || 'photo', uploadedBy: req.user.id }, { transaction });
     }
+    await createAuditLog({
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'SERVICE_REQUEST_CREATED',
+      entity: `service_request:${request.id}`,
+      entityId: request.id,
+      newValue: { requestCode: request.requestCode, departmentId, laboratoryId, assetId: request.assetId, status: request.status },
+      transaction,
+    });
     await transaction.commit();
 
     const notifyRoles = ROUTE_NOTIFY_ROLES[routedTo] || ROUTE_NOTIFY_ROLES[DEFAULT_ROUTE];

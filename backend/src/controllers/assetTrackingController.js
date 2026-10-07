@@ -92,6 +92,29 @@ const getLocation = async (req, res) => {
   }
 };
 
+const verifyLocation = async (req, res, next) => {
+  try {
+    const asset = await findAsset({ id: req.params.id });
+    if (!asset) return res.status(404).json({ success: false, message: 'Asset not found.' });
+    const actualLocation = String(req.body.actualLocation || req.body.actual_location || '').trim();
+    if (!actualLocation || actualLocation.length > 255) {
+      return res.status(400).json({ success: false, message: 'A location of at most 255 characters is required.' });
+    }
+    const expectedLocation = String(asset.RoomRecord?.roomName || asset.location || '').trim();
+    return res.json({
+      success: true,
+      data: {
+        assetId: asset.id,
+        expectedLocation,
+        actualLocation,
+        matches: expectedLocation.toLowerCase() === actualLocation.toLowerCase(),
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const getAssignments = async (req, res) => {
   try {
     const asset = await Asset.findByPk(req.params.id);
@@ -122,6 +145,39 @@ const getAssignments = async (req, res) => {
     return res.json({ success: true, data: history });
   } catch {
     return handleFailure(res, 'Unable to load assignment history.');
+  }
+};
+
+const verifyAssignment = async (req, res, next) => {
+  try {
+    const asset = await Asset.findByPk(req.params.id);
+    if (!asset) return res.status(404).json({ success: false, message: 'Asset not found.' });
+    const assignment = await Assignment.findOne({
+      where: { assetId: asset.id, status: 'active', departmentId: req.organizationScope?.departmentId },
+      include: [{ model: User, attributes: ['id', 'fullName', 'username'], required: false }],
+      order: [['createdAt', 'DESC']],
+    });
+    if (!assignment) {
+      return res.json({ success: true, data: { assetId: asset.id, assigned: false, matches: req.body.assignedTo == null } });
+    }
+    const expectedAssignedTo = assignment.assignedTo == null ? null : Number(assignment.assignedTo);
+    const observedAssignedTo = req.body.assignedTo == null || req.body.assignedTo === '' ? null : Number(req.body.assignedTo);
+    if (observedAssignedTo !== null && (!Number.isSafeInteger(observedAssignedTo) || observedAssignedTo < 1)) {
+      return res.status(400).json({ success: false, message: 'assignedTo must be a positive integer.' });
+    }
+    return res.json({
+      success: true,
+      data: {
+        assetId: asset.id,
+        assigned: true,
+        expectedAssignedTo,
+        assignedToName: assignment.User?.fullName || assignment.User?.username || null,
+        observedAssignedTo,
+        matches: observedAssignedTo === null || observedAssignedTo === expectedAssignedTo,
+      },
+    });
+  } catch (error) {
+    return next(error);
   }
 };
 
@@ -173,4 +229,4 @@ const getMaintenance = async (req, res) => {
   }
 };
 
-module.exports = { lookupByCode, lookupByAssetCode, getLocation, getAssignments, getTransfers, getMaintenance };
+module.exports = { lookupByCode, lookupByAssetCode, getLocation, verifyLocation, getAssignments, verifyAssignment, getTransfers, getMaintenance };

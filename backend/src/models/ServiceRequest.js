@@ -10,6 +10,7 @@ const ServiceRequest = sequelize.define('ServiceRequest', {
   requestType: { type: DataTypes.STRING(50), allowNull: false, defaultValue: 'maintenance' },
   category: { type: DataTypes.STRING(100), defaultValue: '' },
   assetId: { type: DataTypes.INTEGER, allowNull: true, field: 'asset_id' },
+  laboratoryId: { type: DataTypes.INTEGER, allowNull: true, field: 'laboratory_id' },
   priority: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'medium' },
   status: { type: DataTypes.STRING(50), allowNull: false, defaultValue: 'submitted' },
   routedTo: { type: DataTypes.STRING(50), allowNull: true, field: 'routed_to' },
