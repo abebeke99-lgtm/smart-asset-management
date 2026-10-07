@@ -32,6 +32,8 @@ const departmentAssets = [
     asset_tag: 'AST-120',
     name: 'Engineering Laptop',
     category: 'Computing',
+    quantity: 2,
+    unit: 'units',
     status: 'available',
     condition: 'Good',
     location: 'Room 1',
@@ -39,7 +41,11 @@ const departmentAssets = [
     assigned_to_name: 'A. User',
     laboratoryName: 'Computer Lab',
     serialNumber: 'SER-120',
-    digitalId: 'QR-120',
+    digitalId: 'DIG-120',
+    qrCode: 'QR-120',
+    rfidTag: 'RFID-120',
+    purchaseDate: '2024-03-01T00:00:00.000Z',
+    warrantyExpiry: '2027-03-01T00:00:00.000Z',
     purchasePrice: 1000,
   },
   {
@@ -69,6 +75,10 @@ const CurrentPath = () => {
 };
 
 describe('Department Assets', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     axios.get.mockImplementation((url) => {
@@ -134,6 +144,12 @@ describe('Department Assets', () => {
     expect(screen.queryByRole('button', { name: 'Request Transfer' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Report Damaged' })).not.toBeInTheDocument();
     expect(await screen.findByText('QR-120')).toBeInTheDocument();
+    expect(screen.getByText('Asset ID').parentElement).toHaveTextContent('AST-120');
+    expect(screen.getByText('Digital ID').parentElement).toHaveTextContent('DIG-120');
+    expect(screen.getByText('RFID').parentElement).toHaveTextContent('RFID-120');
+    expect(screen.getByText('Quantity').parentElement).toHaveTextContent('2 units');
+    expect(screen.getByText('Purchase Date').parentElement).toHaveTextContent('3/1/2024');
+    expect(screen.getByText('Warranty').parentElement).toHaveTextContent('3/1/2027');
     expect(screen.getAllByText('Computer Lab')).toHaveLength(2);
     expect(await screen.findByText('device-manual.pdf')).toBeInTheDocument();
     expect(await screen.findAllByText('Asset Assigned')).toHaveLength(2);
@@ -173,10 +189,12 @@ describe('Department Assets', () => {
   });
 
   it('retries a failed asset list request instead of showing a false empty state', async () => {
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
     axios.get.mockRejectedValueOnce(new Error('Network unavailable'));
     renderAssets();
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Failed to load assets');
+    expect(errorLog).toHaveBeenCalledWith('Department assets fetch error:', expect.any(Error));
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('Engineering Laptop')).toBeInTheDocument();
   });

@@ -63,6 +63,10 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 test('loads server-side summary and paginated asset rows', async () => {
   renderPage();
   expect(await screen.findByText('Laptop')).toBeInTheDocument();
@@ -175,6 +179,7 @@ test('opens the camera, decodes a QR value, logs the scan, and loads its detail 
 });
 
 test('stops scanning and displays the not-found error when the camera reads an unknown QR', async () => {
+  const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
   const scanner = { start: jest.fn().mockResolvedValue(), stop: jest.fn().mockResolvedValue(), clear: jest.fn() };
   Html5Qrcode.mockImplementation(() => scanner);
   apiClient.get.mockImplementation((url) => {
@@ -189,6 +194,7 @@ test('stops scanning and displays the not-found error when the camera reads an u
   scanner.start.mock.calls[0][2]('UNKNOWN-QR');
   expect(await screen.findByRole('alert')).toHaveTextContent('Asset not found');
   expect(scanner.stop).toHaveBeenCalled();
+  expect(errorLog).toHaveBeenCalledWith('Admin RFID tracking lookup failed:', expect.objectContaining({ status: 404 }));
 });
 
 test('reports denied camera permission and provides an HTTPS requirement for remote insecure origins', async () => {
@@ -253,7 +259,7 @@ test('assigns tags and regenerates QR from the administrator detail panel', asyn
 
 test('debounces search and sends status and pagination parameters to the server', async () => {
   apiClient.get.mockImplementation((url, config) => {
-    if (url === '/api/admin/rfid/summary') return Promise.resolve({ data: { data: EMPTY_SUMMARY } });
+    if (url === '/api/admin/rfid/summary') return Promise.resolve({ data: { success: true, data: EMPTY_SUMMARY } });
     const requestedPage = config?.params?.page || 1;
     return Promise.resolve({ data: { data: { items: [asset], pagination: { page: requestedPage, limit: 20, total: 41, pages: 3 } } } });
   });
@@ -274,6 +280,7 @@ test('debounces search and sends status and pagination parameters to the server'
 });
 
 test('does not show zero summary counts when the summary request fails', async () => {
+  const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
   const getDefaultImplementation = apiClient.get.getMockImplementation();
   const pendingSummaries = [];
   apiClient.get.mockImplementation((url, config) => {
@@ -290,6 +297,9 @@ test('does not show zero summary counts when the summary request fails', async (
   });
   expect(await screen.findByText('Unable to load tracking summary.')).toBeInTheDocument();
   await waitFor(() => expect(screen.getAllByText('—')).toHaveLength(5));
+  expect(errorLog).toHaveBeenCalledWith('Admin RFID tracking summary request failed:', expect.objectContaining({
+    message: 'Database unavailable',
+  }));
 });
 
 test('retries a failed summary independently and keeps the asset table usable', async () => {

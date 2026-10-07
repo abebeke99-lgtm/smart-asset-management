@@ -45,6 +45,10 @@ jest.mock('jspdf-autotable', () => ({
   autoTable: jest.fn(),
 }));
 
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 jest.mock('react-chartjs-2', () => ({
   Bar: () => null,
   Doughnut: ({ data }) => <div data-testid="category-chart">{data.labels.join(', ')}</div>,
@@ -205,6 +209,7 @@ describe('DeptReports', () => {
   });
 
   it('shows a load error and retry action for regular report failures', async () => {
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
     apiClient.get.mockRejectedValue({ response: { status: 404 } });
 
     render(
@@ -217,6 +222,10 @@ describe('DeptReports', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('The department reports resource was not found.');
     });
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+    expect(errorLog).toHaveBeenCalledWith('Department reports request failed:', expect.objectContaining({
+      status: 404,
+      message: 'The department reports resource was not found.',
+    }));
   });
 
   it('loads inventory summary and assets from one department reports request', async () => {
@@ -297,7 +306,7 @@ describe('DeptReports', () => {
   });
 
   it('shows a permission error and retry instead of an empty inventory when forbidden', async () => {
-    jest.spyOn(console, 'error').mockImplementation(() => {});
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
     apiClient.get.mockRejectedValue({ response: { status: 403 } });
 
     render(
@@ -312,5 +321,6 @@ describe('DeptReports', () => {
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
     expect(screen.queryByText('No assets found for this department.')).not.toBeInTheDocument();
     expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(errorLog).toHaveBeenCalledWith('Department reports request failed:', expect.objectContaining({ status: 403 }));
   });
 });

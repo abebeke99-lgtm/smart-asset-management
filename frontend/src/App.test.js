@@ -7,6 +7,7 @@ import {
   shouldShowDashboardHeader,
   isDashboardRoute,
   isPublicRoute,
+  getDashboardRoute,
 } from './App';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -145,6 +146,7 @@ describe('Public and dashboard route rules', () => {
 
   it('shows an error state when the dashboard request never settles', async () => {
     jest.useFakeTimers();
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
     apiClient.get.mockReturnValueOnce(new Promise(() => {}));
 
     try {
@@ -158,8 +160,10 @@ describe('Public and dashboard route rules', () => {
       expect(screen.getByRole('heading', { name: 'Admin Dashboard' })).toBeInTheDocument();
       expect(screen.getByRole('alert')).toHaveTextContent('Dashboard data took too long to load. Please try again.');
       expect(screen.queryByLabelText('Loading administrator dashboard')).not.toBeInTheDocument();
+      expect(errorLog).toHaveBeenCalledWith('Dashboard loading error:', expect.objectContaining({ message: 'DASHBOARD_TIMEOUT' }));
     } finally {
       jest.useRealTimers();
+      errorLog.mockRestore();
     }
   });
 });
@@ -212,6 +216,26 @@ describe('Administrator route wiring', () => {
     expect(appSource).toContain('<Route path="/admin" element={<ProtectedRoute allowedRoles={[\'admin\']}><AdminLayout /></ProtectedRoute>}>' );
     expect(appSource).toContain('<Route path="analytics" element={<Navigate to="/admin/analytics/system" replace />} />');
     expect(appSource).not.toContain('<Route path="system-analytics" element={<AdminAnalyticsCenter system />} />');
+  });
+});
+
+describe('Finance dashboard route wiring', () => {
+  const appSource = fs.readFileSync(path.resolve(__dirname, 'App.jsx'), 'utf8');
+
+  it('registers the Finance Dashboard at the role redirect path inside Finance RBAC', () => {
+    expect(getDashboardRoute('finance')).toBe('/finance/dashboard');
+    expect(appSource).toContain('<Route path="/finance" element={<ProtectedRoute allowedRoles={[\'admin\', \'finance\']}><RoleLayout /></ProtectedRoute>}>');
+    expect(appSource).toContain('<Route path="dashboard" element={<FinanceDashboard />} />');
+  });
+});
+
+describe('Store Manager dashboard route wiring', () => {
+  const appSource = fs.readFileSync(path.resolve(__dirname, 'App.jsx'), 'utf8');
+
+  it('registers the Store Dashboard at the role redirect path inside Store Manager RBAC', () => {
+    expect(getDashboardRoute('store_manager')).toBe('/store/dashboard');
+    expect(appSource).toContain('<Route path="/store" element={<ProtectedRoute allowedRoles={[\'store_manager\']}><RoleLayout /></ProtectedRoute>}>');
+    expect(appSource).toContain('<Route path="dashboard" element={<StoreDashboard />} />');
   });
 });
 
@@ -299,7 +323,6 @@ describe('Department Head sidebar specification', () => {
     ['/department-head/transfers', 'Transfers'],
     ['/department-head/returns', 'Returns'],
     ['/department-head/verification', 'Verification'],
-    ['/department-head/maintenance-requests', 'Service Requests'],
     ['/department-head/maintenance', 'Maintenance'],
     ['/department-head/history', 'History'],
     ['/department-head/tickets', 'Tickets'],
@@ -313,10 +336,11 @@ describe('Department Head sidebar specification', () => {
   const sidebarItems = [...itemSource.matchAll(/\{ path: '([^']+)', label: '([^']+)'/g)]
     .map(([, route, label]) => [route, label]);
 
-  it('contains exactly the approved 22 items once, in the approved order and categories', () => {
+  it('contains exactly the approved 21 items once, in the approved order and categories', () => {
     expect(sidebarItems).toEqual(expectedItems);
-    expect(new Set(sidebarItems.map(([route]) => route)).size).toBe(22);
-    expect(new Set(sidebarItems.map(([, label]) => label)).size).toBe(22);
+    expect(new Set(sidebarItems.map(([route]) => route)).size).toBe(21);
+    expect(new Set(sidebarItems.map(([, label]) => label)).size).toBe(21);
+    expect(sidebarItems).not.toContainEqual(['/department-head/maintenance-requests', 'Service Requests']);
 
     const sectionSource = appSource.match(/const departmentManagerSections = \[([\s\S]*?)\];/)?.[1] || '';
     expect([...sectionSource.matchAll(/\{ label: '([^']+)'/g)].map(([, label]) => label)).toEqual([
@@ -329,8 +353,8 @@ describe('Department Head sidebar specification', () => {
     expect(sectionSource).toContain('departmentHeadItems.slice(0, 1)');
     expect(sectionSource).toContain('departmentHeadItems.slice(1, 5)');
     expect(sectionSource).toContain('departmentHeadItems.slice(5, 13)');
-    expect(sectionSource).toContain('departmentHeadItems.slice(13, 19)');
-    expect(sectionSource).toContain('departmentHeadItems.slice(19)');
+    expect(sectionSource).toContain('departmentHeadItems.slice(13, 18)');
+    expect(sectionSource).toContain('departmentHeadItems.slice(18)');
     expect(itemSource).not.toContain("label: 'Asset History'");
     expect(appSource).toContain("sidebarRole === 'department_head' && departmentManagerSections.map");
     expect(appSource).toMatch(/sidebarRole === 'department_head'\s*\?\s*departmentHeadItems/);

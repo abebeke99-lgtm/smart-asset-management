@@ -183,6 +183,7 @@ const ICTAssignments = lazy(() => import('./components/ict/ICTAssignments'));
 const ICTReports = lazy(() => import('./components/ict/ICTReports'));
 const DeptDashboard = lazy(() => import('./components/department/DeptDashboard'));
 const DeptAssets = lazy(() => import('./components/department/DeptAssets'));
+const DepartmentHeadAssets = lazy(() => import('./components/department/DepartmentHeadAssets'));
 const DeptAssignments = lazy(() => import('./components/department/DeptAssignments'));
 const DeptInventory = lazy(() => import('./components/department/DeptInventory'));
 const DeptReports = lazy(() => import('./components/department/DeptReports'));
@@ -3432,7 +3433,6 @@ function AppContent() {
     { path: '/department-head/transfers', label: 'Transfers', icon: ArrowLeftRight },
     { path: '/department-head/returns', label: 'Returns', icon: Undo2 },
     { path: '/department-head/verification', label: 'Verification', icon: Check },
-    { path: '/department-head/maintenance-requests', label: 'Service Requests', icon: LifeBuoy },
     { path: '/department-head/maintenance', label: 'Maintenance', icon: Wrench },
     { path: '/department-head/history', label: 'History', icon: Archive },
     { path: '/department-head/tickets', label: 'Tickets', icon: CircleHelp },
@@ -3481,8 +3481,8 @@ function AppContent() {
     { label: 'MAIN', items: departmentHeadItems.slice(0, 1) },
     { label: 'DEPARTMENT MANAGEMENT', items: departmentHeadItems.slice(1, 5) },
     { label: 'ASSET MANAGEMENT', items: departmentHeadItems.slice(5, 13) },
-    { label: 'OPERATIONS', items: departmentHeadItems.slice(13, 19) },
-    { label: 'REPORTS & ANALYTICS', items: departmentHeadItems.slice(19) }
+    { label: 'OPERATIONS', items: departmentHeadItems.slice(13, 18) },
+    { label: 'REPORTS & ANALYTICS', items: departmentHeadItems.slice(18) }
   ];
   const navigationItems = sidebarRole === 'department_head'
     ? departmentHeadItems
@@ -3697,7 +3697,7 @@ function AppContent() {
             <Route path="locations" element={<DeptLocations />} />
             <Route path="laboratories" element={<DeptLaboratories />} />
             <Route path="laboratories/:id" element={<DeptLaboratories />} />
-            <Route path="assets" element={<DeptAssets />} />
+            <Route path="assets" element={<DepartmentHeadAssets />} />
             <Route path="inventory" element={<DeptReports inventoryMode />} />
             <Route path="requests" element={<DeptAssetRequests />} />
             <Route path="asset-requests" element={<DeptApprovals />} />
@@ -3758,6 +3758,7 @@ function AppContent() {
           {/* FINANCE ROUTES - Fixed with RoleLayout */}
           <Route path="/finance" element={<ProtectedRoute allowedRoles={['admin', 'finance']}><RoleLayout /></ProtectedRoute>}>
             <Route index element={<FinanceDashboard />} />
+            <Route path="dashboard" element={<FinanceDashboard />} />
             <Route path="purchase-requests" element={<FinancePurchaseRequests />} />
             <Route path="purchase-orders" element={<FinancePurchaseOrders />} />
             <Route path="suppliers" element={<FinanceSuppliers />} />
@@ -3781,6 +3782,7 @@ function AppContent() {
           {/* STORE MANAGER ROUTES - Fixed with RoleLayout */}
           <Route path="/store" element={<ProtectedRoute allowedRoles={['store_manager']}><RoleLayout /></ProtectedRoute>}>
             <Route index element={<StoreDashboard />} />
+            <Route path="dashboard" element={<StoreDashboard />} />
             <Route path="inventory" element={<StoreInventory />} />
             <Route path="available-assets" element={<StoreAssets />} />
             <Route path="low-stock" element={<StoreLowStock />} />

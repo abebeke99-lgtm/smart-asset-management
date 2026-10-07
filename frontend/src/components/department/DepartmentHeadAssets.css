@@ -1,0 +1,96 @@
+.dha-page {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 24px;
+  color: #12263f;
+  background: #f3f7fb;
+}
+.dha-page-dark { color: #eaf3ff; background: #0d1a2e; }
+.dha-page-dark .dha-header p { color: #9bb5d5; }
+.dha-page-dark .dha-filters, .dha-page-dark .dha-table-wrap, .dha-page-dark .dha-table tbody tr { border-color: #2c4464; background: #14263d; }
+.dha-page-dark .dha-table th { background: #102038; color: #dfeeff; }
+.dha-page-dark .dha-table td, .dha-page-dark .dha-table th { border-color: #2c4464; }
+.dha-page-dark .dha-table tbody tr:hover, .dha-page-dark .dha-table tbody tr:focus { background: #1b3553; }
+.dha-page-dark .dha-filters input, .dha-page-dark .dha-filters select { border-color: #375a8d; background: #0f1d2f; color: #edf4ff; }
+.dha-page-dark .dha-header-actions > button, .dha-page-dark .dha-export-menu > button { border-color: #375a8d; background: #213b57; color: #edf4ff; }
+.dha-page-dark .dha-drawer, .dha-page-dark .dha-form-dialog, .dha-page-dark .dha-drawer button, .dha-page-dark .dha-form-dialog button { background: #14263d; color: #edf4ff; }
+.dha-page-dark .dha-drawer-header, .dha-page-dark .dha-detail-grid > div, .dha-page-dark .dha-edit-section { border-color: #2c4464; }
+.dha-page-dark .dha-detail-grid dt { color: #9bb5d5; }
+.dha-page-dark .dha-edit-form input, .dha-page-dark .dha-edit-form select, .dha-page-dark .dha-edit-form textarea, .dha-page-dark .dha-registration-form input, .dha-page-dark .dha-registration-form select, .dha-page-dark .dha-registration-form textarea { border-color: #375a8d; background: #0f1d2f; color: #edf4ff; }
+.dha-page *, .dha-page *::before, .dha-page *::after { box-sizing: border-box; }
+.dha-content { max-width: 1600px; margin: 0 auto; }
+.dha-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+.dha-header h1 { margin: 0 0 6px; font-size: clamp(1.5rem, 3vw, 2rem); }
+.dha-header p { margin: 0; color: #5a6f8d; }
+.dha-header-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.dha-page button, .dha-page input, .dha-page select, .dha-page textarea { font: inherit; }
+.dha-page button { cursor: pointer; }
+.dha-header-actions > button, .dha-export-menu > button, .dha-page button.primary {
+  min-height: 40px; padding: 8px 14px; border: 1px solid #d8e4f1; border-radius: 8px; background: #fff; color: #183757; font-weight: 700;
+}
+.dha-header-actions > button.primary, .dha-page button.primary { border-color: #2563eb; background: #2563eb; color: #fff; }
+.dha-filters { display: grid; grid-template-columns: minmax(240px, 2fr) repeat(4, minmax(150px, 1fr)); gap: 10px; padding: 14px; margin-bottom: 14px; border: 1px solid #e2eaf3; border-radius: 12px; background: #fff; }
+.dha-filters input, .dha-filters select, .dha-edit-form input, .dha-edit-form select, .dha-edit-form textarea, .dha-registration-form input, .dha-registration-form select, .dha-registration-form textarea { width: 100%; min-width: 0; min-height: 40px; padding: 8px 10px; border: 1px solid #d5e1ee; border-radius: 7px; background: #fff; color: #172b45; }
+.dha-table-wrap { overflow: auto; border: 1px solid #e2eaf3; border-radius: 12px; background: #fff; }
+.dha-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.dha-table th, .dha-table td { padding: 11px 10px; border-bottom: 1px solid #e8eef5; text-align: left; white-space: nowrap; }
+.dha-table th { position: sticky; top: 0; background: #f8fbff; color: #29425f; }
+.dha-table th button { padding: 0; border: 0; background: transparent; color: inherit; font-weight: 700; text-align: left; }
+.dha-table tbody tr { cursor: pointer; }
+.dha-table tbody tr:hover, .dha-table tbody tr:focus { background: #f3f8ff; outline: none; }
+.dha-badge { display: inline-block; padding: 4px 8px; border-radius: 99px; background: #e8eef7; color: #31445c; font-weight: 700; }
+.dha-badge-active, .dha-badge-available, .dha-badge-good { background: #d8f6e9; color: #087443; }
+.dha-badge-under-maintenance, .dha-badge-maintenance, .dha-badge-fair { background: #fff0d2; color: #9b5c00; }
+.dha-badge-damaged, .dha-badge-expired, .dha-badge-poor, .dha-badge-disposed { background: #fee2e2; color: #a32222; }
+.dha-warranty-soon { color: #a34900; font-weight: 800; }
+.dha-pagination { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding-top: 12px; }
+.dha-pagination button, .dha-drawer button, .dha-form-dialog button { min-height: 38px; padding: 7px 12px; border: 1px solid #d5e1ee; border-radius: 7px; background: #fff; color: #183757; font-weight: 700; }
+.dha-export-menu { position: relative; }
+.dha-export-menu [role="menu"] { position: absolute; z-index: 2; right: 0; display: grid; min-width: 160px; padding: 5px; border: 1px solid #d8e4f1; border-radius: 8px; background: #fff; box-shadow: 0 8px 20px #18375722; }
+.dha-export-menu [role="menuitem"] { border: 0; border-radius: 5px; padding: 9px; background: transparent; text-align: left; }
+.dha-export-menu [role="menuitem"]:hover { background: #eff6ff; }
+.dha-error { padding: 16px; border: 1px solid #fecaca; border-radius: 10px; background: #fff7f7; color: #a32222; }
+.dha-overlay { position: fixed; z-index: 1000; inset: 0; display: flex; justify-content: flex-end; background: #0f172a77; }
+.dha-drawer { display: flex; flex-direction: column; width: min(720px, 100%); height: 100%; background: #fff; box-shadow: -12px 0 32px #0f172a22; }
+.dha-drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 22px; border-bottom: 1px solid #e2eaf3; }
+.dha-drawer-header h2 { margin: 0; font-size: 1.25rem; }
+.dha-drawer-header button { min-width: 38px; font-size: 1.4rem; }
+.dha-drawer-content { overflow: auto; padding: 20px 22px; }
+.dha-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.dha-detail-grid > div { min-width: 0; padding: 10px; border: 1px solid #e2eaf3; border-radius: 8px; }
+.dha-detail-grid dt { color: #5a6f8d; font-size: 0.76rem; font-weight: 700; }
+.dha-detail-grid dd { overflow-wrap: anywhere; margin: 5px 0 0; font-weight: 600; }
+.dha-qr { display: flex; justify-content: center; padding: 16px; }
+.dha-detail-links { display: flex; gap: 16px; padding: 12px 0; }
+.dha-detail-links a { color: #1d4ed8; font-weight: 700; }
+.dha-edit-section { padding-top: 14px; border-top: 1px solid #e2eaf3; }
+.dha-edit-section h3 { font-size: 1rem; }
+.dha-edit-form, .dha-registration-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.dha-edit-form label, .dha-registration-form label { display: grid; gap: 6px; font-size: 0.86rem; font-weight: 700; }
+.dha-edit-form textarea, .dha-registration-form textarea { min-height: 85px; resize: vertical; }
+.dha-wide { grid-column: 1 / -1; }
+.dha-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.dha-form-dialog { width: min(760px, calc(100% - 28px)); max-height: calc(100vh - 28px); overflow: auto; margin: auto; border-radius: 12px; background: #fff; box-shadow: 0 20px 60px #0f172a44; }
+.dha-form-dialog .dha-registration-form { padding: 20px; }
+.dha-form-error { grid-column: 1 / -1; margin: 0; color: #a32222; }
+@media (max-width: 900px) { .dha-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } .dha-table { min-width: 1900px; } }
+@media (max-width: 640px) {
+  .dha-page { padding: 14px; }
+  .dha-header { display: grid; }
+  .dha-header-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dha-filters { grid-template-columns: 1fr 1fr; padding: 10px; }
+  .dha-filters input { grid-column: 1 / -1; }
+  .dha-table-wrap { overflow: visible; border: 0; background: transparent; }
+  .dha-table, .dha-table tbody { display: block; min-width: 0; }
+  .dha-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+  .dha-table tbody tr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin-bottom: 12px; padding: 12px; border: 1px solid #e2eaf3; border-radius: 10px; background: #fff; }
+  .dha-table td { display: grid; grid-template-columns: minmax(85px, .85fr) 1.2fr; gap: 6px; padding: 4px 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
+  .dha-table td::before { content: attr(data-label); color: #5a6f8d; font-size: .72rem; font-weight: 700; }
+  .dha-detail-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 440px) {
+  .dha-filters { grid-template-columns: 1fr; }
+  .dha-table tbody tr { grid-template-columns: 1fr; }
+  .dha-registration-form, .dha-edit-form { grid-template-columns: 1fr; }
+  .dha-wide { grid-column: auto; }
+}

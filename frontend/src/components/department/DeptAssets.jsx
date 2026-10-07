@@ -101,7 +101,7 @@ const DeptAssets = () => {
       const assetRows = await getAllAssets(axios);
       setAssets(assetRows.map((asset) => ({
         ...asset,
-        asset_tag: asset.asset_tag || asset.assetCode || asset.asset_code || '',
+        asset_tag: asset.asset_tag || asset.assetTag || asset.assetCode || asset.asset_code || '',
         category_name: asset.category_name || asset.category || '',
         serial_number: asset.serial_number || asset.serialNumber || '',
         department_name: asset.department_name || asset.department || '',
@@ -425,16 +425,23 @@ const DeptAssets = () => {
       return;
     }
     const data = filteredAssets.map((a) => ({
+      'Asset ID': a.asset_tag || a.assetTag || a.assetCode || a.asset_code || '',
+      'Digital ID': a.digitalId || a.digital_id || '',
       'Asset Tag': a.asset_tag || '',
       Name: a.name || '',
       Category: a.category_name || '',
       'Serial Number': a.serial_number || '',
+      Quantity: a.quantity ?? '',
       Status: displayStatus(a.status),
       Condition: a.condition || '',
       Location: a.location || '',
       Laboratory: a.laboratory_name || '',
       'Assigned To': a.assigned_to_name || '',
       'Assignment Date': a.assignment_date ? new Date(a.assignment_date).toLocaleDateString() : '',
+      'Purchase Date': a.purchaseDate || a.purchase_date || '',
+      Warranty: a.warrantyExpiry || a.warranty_expiry || '',
+      'QR Code': a.qrCode || a.qr_code || '',
+      RFID: a.rfidTag || a.rfid_tag || '',
       'Maintenance Status': a.maintenance_status || 'None',
       'Last Maintenance': a.last_maintenance_date ? new Date(a.last_maintenance_date).toLocaleDateString() : '',
       Value: a.current_value || 0,
@@ -1277,6 +1284,12 @@ const DeptAssets = () => {
             {detailLoading && <p role="status">Loading authorized asset details...</p>}
             <div style={styles.detailGrid}>
               <div style={styles.detailItem}>
+                <div style={styles.detailLabel}>Asset ID</div>
+                <div style={styles.detailValue}>
+                  {selectedAsset.asset_tag || selectedAsset.assetTag || selectedAsset.assetCode || selectedAsset.asset_code || 'Not recorded'}
+                </div>
+              </div>
+              <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>{t.status}</div>
                 <div style={styles.detailValue}><span style={styles.statusBadge(displayStatus(selectedAsset.status))}>{displayStatus(selectedAsset.status)}</span></div>
               </div>
@@ -1302,8 +1315,20 @@ const DeptAssets = () => {
                 <div style={styles.detailValue}>{selectedAsset.serial_number || '-'}</div>
               </div>
               <div style={styles.detailItem}>
-                <div style={styles.detailLabel}>QR identifier</div>
-                <div style={styles.detailValue}>{selectedAsset.qrCode || selectedAsset.digitalId || selectedAsset.digital_id || '-'}</div>
+                <div style={styles.detailLabel}>Quantity</div>
+                <div style={styles.detailValue}>{selectedAsset.quantity ?? 'Not recorded'} {selectedAsset.unit || ''}</div>
+              </div>
+              <div style={styles.detailItem}>
+                <div style={styles.detailLabel}>Digital ID</div>
+                <div style={styles.detailValue}>{selectedAsset.digitalId || selectedAsset.digital_id || 'Not recorded'}</div>
+              </div>
+              <div style={styles.detailItem}>
+                <div style={styles.detailLabel}>QR Code</div>
+                <div style={styles.detailValue}>{selectedAsset.qrCode || selectedAsset.qr_code || 'Not recorded'}</div>
+              </div>
+              <div style={styles.detailItem}>
+                <div style={styles.detailLabel}>RFID</div>
+                <div style={styles.detailValue}>{selectedAsset.rfidTag || selectedAsset.rfid_tag || 'Not recorded'}</div>
               </div>
               <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>{t.assignedTo}</div>
@@ -1321,7 +1346,7 @@ const DeptAssets = () => {
                 <div style={styles.detailValue}>{valueDisplay(selectedAsset)}</div>
               </div>
               <div style={styles.detailItem}>
-                <div style={styles.detailLabel}>Acquisition date</div>
+                <div style={styles.detailLabel}>Purchase Date</div>
                 <div style={styles.detailValue}>
                   {selectedAsset.purchaseDate || selectedAsset.purchase_date
                     ? new Date(selectedAsset.purchaseDate || selectedAsset.purchase_date).toLocaleDateString()
@@ -1345,7 +1370,7 @@ const DeptAssets = () => {
                 </div>
               </div>
               <div style={styles.detailItem}>
-                <div style={styles.detailLabel}>Warranty expiry</div>
+                <div style={styles.detailLabel}>Warranty</div>
                 <div style={styles.detailValue}>{selectedAsset.warranty_expiry || selectedAsset.warrantyExpiry ? new Date(selectedAsset.warranty_expiry || selectedAsset.warrantyExpiry).toLocaleDateString() : 'Not recorded'}</div>
               </div>
             </div>

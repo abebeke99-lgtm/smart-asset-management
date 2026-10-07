@@ -24,6 +24,7 @@ const FinanceDepreciation = () => {
   const { language, theme } = useLanguage();
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -55,6 +56,7 @@ const FinanceDepreciation = () => {
 
   const fetchAssets = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const response = await axios.get('/api/finance/depreciation');
       const assetData = response.data.rows || response.data.data || response.data.assets || [];
@@ -99,10 +101,13 @@ const FinanceDepreciation = () => {
       setAssets(normalized);
       return normalized;
     } catch (error) {
-      toast.error(error.response?.data?.message || t.fetchError || 'Failed to load assets');
+      const message = error.response?.data?.message || t.fetchError || 'Failed to load assets';
+      setLoadError(message);
+      toast.error(message);
       setAssets([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const generateDepreciationSchedule = async (asset) => {
@@ -732,6 +737,17 @@ const FinanceDepreciation = () => {
     );
   }
 
+  if (loadError) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.emptyState} role="alert">
+          <div>{loadError}</div>
+          <button type="button" onClick={fetchAssets}>{t.retry}</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
       {/* Header */}
@@ -1131,6 +1147,7 @@ const englishTranslations = {
   exportExcel: 'Export to Excel',
   closeFinancialYear: 'Close Financial Year',
   fetchError: 'Failed to load assets',
+  retry: 'Retry',
   exportSuccess: 'Data exported successfully',
   recalcSuccess: 'Depreciation recalculated',
   adjustmentSuccess: 'Depreciation adjusted successfully',
@@ -1197,6 +1214,7 @@ const amharicTranslations = {
   exportExcel: 'ወደ Excel ላክ',
   closeFinancialYear: 'የፋይናንስ ዓመት ዝጋ',
   fetchError: 'ንብረቶች መጫን አልተቻለም',
+  retry: 'እንደገና ሞክር',
   exportSuccess: 'ውሂብ በተሳካ ሁኔታ ተላከ',
   recalcSuccess: 'የእሴት መቀነስ እንደገና ተሰላ',
   adjustmentSuccess: 'የእሴት መቀነስ በተሳካ ሁኔታ ተስተካክሏል',

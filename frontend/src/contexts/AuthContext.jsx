@@ -125,7 +125,8 @@ export const AuthProvider = ({ children }) => {
             onUnauthorized();
           }
           const status = error.response.status ? ` (${error.response.status})` : '';
-          error.message = getApiErrorMessage(error, `Server error occurred${status}`);
+          const fallbackMessage = `Server error occurred${status}`;
+          error.message = getApiErrorMessage(error, fallbackMessage) || fallbackMessage;
           error.status = error.response.status;
           throw error;
         }

@@ -35,6 +35,10 @@ beforeEach(() => {
   getMaintenanceDashboard.mockResolvedValue(dashboardData);
 });
 
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 test('renders backend dashboard metrics through the maintenance API service', async () => {
   render(<MemoryRouter><MaintDashboard /></MemoryRouter>);
 
@@ -64,10 +68,12 @@ test('renders zero-valued metrics when the database has no maintenance records',
 });
 
 test('shows a connection error instead of presenting zero-valued metrics', async () => {
+  const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
   getMaintenanceDashboard.mockRejectedValue(new Error('database offline'));
 
   render(<MemoryRouter><MaintDashboard /></MemoryRouter>);
 
   expect(await screen.findByRole('alert')).toHaveTextContent('database offline');
   expect(screen.getByRole('button', { name: 'Try Again' })).toBeInTheDocument();
+  expect(errorLog).toHaveBeenCalledWith('Maintenance dashboard error:', expect.any(Error));
 });

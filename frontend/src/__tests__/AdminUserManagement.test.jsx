@@ -65,6 +65,10 @@ beforeEach(() => {
   respondToApiRequests();
 });
 
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 test('shows required passwords, exact role options, and independent visibility controls', async () => {
   await openCreateForm();
 
@@ -200,8 +204,13 @@ test('keeps reset-password and activity workflows connected to their existing en
 });
 
 test('shows the underlying error when a user-management request fails without an HTTP response', async () => {
+  const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
   apiClient.request.mockRejectedValueOnce(new Error('Connection was refused'));
   render(<Users />);
 
   expect(await screen.findByText('Connection was refused')).toBeInTheDocument();
+  expect(errorLog).toHaveBeenCalledWith('User management API request failed', expect.objectContaining({
+    status: 0,
+    code: '',
+  }));
 });

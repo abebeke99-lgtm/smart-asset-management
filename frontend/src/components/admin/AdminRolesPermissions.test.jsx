@@ -58,6 +58,10 @@ const setApiResponses = () => {
 };
 
 describe("Admin Roles & Permissions", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     setApiResponses();
@@ -110,6 +114,7 @@ describe("Admin Roles & Permissions", () => {
   });
 
   it("shows the required load error when roles or permissions cannot be loaded", async () => {
+    const errorLog = jest.spyOn(console, "error").mockImplementation(() => {});
     apiClient.get.mockRejectedValue(new Error("network error"));
 
     render(<AdminRolesPermissions />);
@@ -117,6 +122,7 @@ describe("Admin Roles & Permissions", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Unable to load roles and permissions. Please try again.",
     );
+    expect(errorLog).toHaveBeenCalledWith("Roles and permissions loading error:", expect.any(Error));
   });
 
   it("includes configured finance roles", async () => {

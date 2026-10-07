@@ -16,6 +16,10 @@ jest.mock("../admin/ui/PageHeader", () => ({
 }));
 
 describe("Teaching Assistant department assets", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -44,11 +48,16 @@ describe("Teaching Assistant department assets", () => {
   });
 
   it("shows an explicit error instead of an empty success state when loading fails", async () => {
+    const errorLog = jest.spyOn(console, "error").mockImplementation(() => {});
     apiClient.get.mockRejectedValue(new Error("request failed"));
 
     render(<TeachingAssistantAssets />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Unable to load department assets.");
     expect(screen.queryByText("No assets are assigned to your department.")).not.toBeInTheDocument();
+    expect(errorLog).toHaveBeenCalledWith("Teaching Assistant asset list request failed:", {
+      status: 0,
+      message: "request failed",
+    });
   });
 });

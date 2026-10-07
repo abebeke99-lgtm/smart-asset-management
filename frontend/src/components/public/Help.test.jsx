@@ -52,6 +52,15 @@ describe('Help page', () => {
     expect(screen.getByText('System administration and broad asset-management workflows according to assigned permissions.')).toBeInTheDocument();
   });
 
+  it('documents the Department Head authorized asset view and its details', () => {
+    render(<MemoryRouter><Help /></MemoryRouter>);
+
+    const question = screen.getByRole('button', { name: 'What can a Department Head see on Department Assets?' });
+    fireEvent.click(question);
+    expect(screen.getByText(/only assets authorized for their department/i)).toBeInTheDocument();
+    expect(screen.getByText(/Asset ID, Digital ID, name, category, serial number, quantity, status, condition, location, assigned user, purchase date, warranty, QR Code, RFID, and maintenance status/i)).toBeInTheDocument();
+  });
+
   it('documents local demo usernames and safe password reset guidance without exposing a password', () => {
     render(<MemoryRouter><Help /></MemoryRouter>);
 

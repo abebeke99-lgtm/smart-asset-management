@@ -22,9 +22,10 @@ jest.mock("../utils/api", () => ({
 }));
 
 const AuthorizationState = () => {
-  const { user, hasPermission } = useAuth();
+  const { user, hasPermission, loading } = useAuth();
   return (
     <div>
+      <span>{loading ? "Restoring session" : "Session restored"}</span>
       <span>{user ? `Signed in as ${user.role}` : "Signed out"}</span>
       <span>{hasPermission("users.view") ? "users.view granted" : "users.view denied"}</span>
     </div>
@@ -56,6 +57,7 @@ describe("AuthContext permission refresh", () => {
     );
 
     expect(await screen.findByText("Signed in as ict_officer")).toBeInTheDocument();
+    expect(await screen.findByText("Session restored")).toBeInTheDocument();
     expect(screen.getByText("users.view denied")).toBeInTheDocument();
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
     fireEvent.focus(window);
@@ -66,11 +68,15 @@ describe("AuthContext permission refresh", () => {
   });
 
   it("preserves the Axios response when formatting API errors", async () => {
+    apiClient.get.mockResolvedValue({
+      data: { data: { id: 7, role: "ict_officer", permissions: ["assets.view"] } },
+    });
     render(
       <AuthProvider>
         <AuthorizationState />
       </AuthProvider>,
     );
+    expect(await screen.findByText("Session restored")).toBeInTheDocument();
 
     const response = { status: 403, data: { message: "Missing department profile permission." } };
     const apiError = { response, config: { url: "/api/department-head/profile" }, message: "Request failed" };
