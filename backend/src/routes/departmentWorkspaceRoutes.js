@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const { requirePermission } = require('../middlewares/auth');
 const { requireDepartmentHead, resolveDepartmentScope } = require('../middlewares/organizationScope');
-const { getDepartmentDashboard, getDepartmentDashboardSection, listDepartmentAssets, listDepartmentStaff, listDepartmentLocations, listDepartmentLocationAssets, getDepartmentReports, getDepartmentProfile, updateDepartmentProfile } = require('../controllers/departmentController');
+const { getDepartmentDashboard, getDepartmentDashboardSection, listDepartmentStaff, listDepartmentLocations, listDepartmentLocationAssets, getDepartmentReports, getDepartmentProfile, updateDepartmentProfile } = require('../controllers/departmentController');
 const { listRequests, getRequest, createRequest } = require('../controllers/workspaceRequestController');
 const inventory = require('../controllers/inventoryController');
 const assetTracking = require('../controllers/assetTrackingController');
@@ -21,6 +21,7 @@ const assignmentRoutes = require('./assignmentRoutes');
 const { Asset } = require('../models');
 const analytics = require('../controllers/departmentAnalyticsController');
 const departmentNotifications = require('../controllers/departmentNotificationController');
+const departmentAssets = require('../controllers/departmentAssetController');
 const approvalAction = (decision) => (req, res, next) => {
   req.approvalDecision = decision;
   return assetRequests.decideApproval(req, res, next);
@@ -82,7 +83,13 @@ router.get('/dashboard/asset-categories', getDepartmentDashboardSection('assetBy
 router.get('/dashboard/service-status', getDepartmentDashboardSection('serviceRequestStatus'));
 router.get('/dashboard/request-status', getDepartmentDashboardSection('acquisitionRequestStatus'));
 router.get('/dashboard/recent-activities', getDepartmentDashboardSection('recentActivities'));
-router.get('/assets', listDepartmentAssets);
+router.get('/assets/export', departmentAssets.exportAssets);
+router.post('/assets/registration-requests', departmentAssets.createAssetRequest);
+router.post('/assets/requests', departmentAssets.createAssetRequest);
+router.get('/assets', departmentAssets.listAssets);
+router.get('/assets/:id', departmentAssets.getAsset);
+router.patch('/assets/:id', departmentAssets.updateAsset);
+router.put('/assets/:id', departmentAssets.updateAsset);
 router.get('/locations', (req, res, next) => {
   if (String(req.query.export || '').toLowerCase() !== 'true') return next();
   return requirePermission('reports.export')(req, res, next);

@@ -9,7 +9,7 @@ const Asset = sequelize.define('Asset', {
   subcategory: { type: DataTypes.STRING(255), defaultValue: '' },
   unit: { type: DataTypes.STRING(50), allowNull: false, defaultValue: 'unit' },
   description: { type: DataTypes.TEXT, defaultValue: '' },
-  serialNumber: { type: DataTypes.STRING(255), defaultValue: '' },
+  serialNumber: { type: DataTypes.STRING(255), defaultValue: null, unique: true },
   assetCode: { type: DataTypes.STRING(255), defaultValue: '' },
   digitalId: { type: DataTypes.STRING(100), allowNull: true, unique: true, field: 'digital_id' },
   qrCode: { type: DataTypes.STRING(100), allowNull: false, unique: true, field: 'qr_code' },
@@ -67,6 +67,7 @@ const Asset = sequelize.define('Asset', {
       if (typeof asset.qrCode === 'string') asset.qrCode = asset.qrCode.trim().toUpperCase() || null;
       if (typeof asset.digitalId === 'string') asset.digitalId = asset.digitalId.trim().toUpperCase() || null;
       if (typeof asset.rfidTag === 'string') asset.rfidTag = asset.rfidTag.trim().toUpperCase() || null;
+      if (typeof asset.serialNumber === 'string') asset.serialNumber = asset.serialNumber.trim() || null;
     },
   },
   paranoid: true,

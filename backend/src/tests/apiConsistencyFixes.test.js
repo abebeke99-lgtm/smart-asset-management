@@ -63,6 +63,30 @@ test('app registers a JSON 404 handler for unmatched /api routes before the erro
   assert.match(appSource, /status\(404\)\.json\(\{ success: false, message: 'API endpoint not found' \}\)/);
 });
 
+test('disposal financial records page uses finance-authorized API routes', () => {
+  const pageSource = fs.readFileSync(path.join(__dirname, '../../../frontend/src/components/finance/DisposalFinancialRecords.jsx'), 'utf8');
+  const requiredRoutes = [
+    ['/disposal-financial-records', 'get'],
+    ['/disposal-financial-records/candidates', 'get'],
+    ['/dashboard/filters', 'get'],
+    ['/disposal-financial-records', 'post'],
+    ['/disposal-financial-records/:id', 'put'],
+  ];
+
+  for (const [routePath, method] of requiredRoutes) {
+    const route = financeRoutes.stack.find((layer) =>
+      layer.route?.path === routePath && layer.route.methods[method],
+    );
+    assert.ok(route, `expected finance ${method.toUpperCase()} ${routePath}`);
+    assert.equal(route.route.stack[0].handle.name, 'requireAuth');
+  }
+
+  assert.match(pageSource, /request\('\/api\/finance\/disposal-financial-records'\)/);
+  assert.match(pageSource, /request\('\/api\/finance\/disposal-financial-records\/candidates'\)/);
+  assert.match(pageSource, /request\('\/api\/finance\/dashboard\/filters'\)/);
+  assert.doesNotMatch(pageSource, /request\('\/departments'\)/);
+});
+
 test('dead legacy admin router file has been removed from the project', () => {
   assert.equal(fs.existsSync(path.join(__dirname, '../routes/adminRoutes.js')), false, 'expected removal of the unmounted legacy adminRoutes.js');
 });

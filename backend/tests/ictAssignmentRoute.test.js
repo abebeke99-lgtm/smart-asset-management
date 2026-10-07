@@ -18,7 +18,7 @@ test('department-scoped assignment access includes department heads and filters 
   assert.match(source, /department_head/);
   assert.match(source, /req\.organizationScope\.?departmentId|req\.user\.departmentId|req\.user\.department_id/);
   assert.match(source, /const numericDepartmentId = Number\(departmentScope\)/);
-  assert.match(source, /andClauses\.push\(\{\s*['"]\$Asset\.departmentId\$['"]\s*:\s*departmentScope\s*\}\)/);
+  assert.match(source, /andClauses\.push\(sequelize\.where\(sequelize\.col\(['"]Asset\.department_id['"]\),\s*departmentScope\)\)/);
 });
 
 test('assignment audit records the authenticated actor as its user', () => {

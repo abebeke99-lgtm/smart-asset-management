@@ -37,6 +37,7 @@ const Approval = require('./Approval');
 const DepartmentAssetRequest = require('./DepartmentAssetRequest');
 const DepartmentAssetRequestHistory = require('./DepartmentAssetRequestHistory');
 const FinancialRecord = require('./FinancialRecord');
+const FinanceTransaction = require('./FinanceTransaction');
 const DepreciationRecord = require('./DepreciationRecord');
 const CapitalizationRecord = require('./CapitalizationRecord');
 const DisposalFinancialRecord = require('./DisposalFinancialRecord');
@@ -84,6 +85,8 @@ const Incident = require('./Incident');
 const IncidentComment = require('./IncidentComment');
 const IncidentHistory = require('./IncidentHistory');
 const IncidentAttachment = require('./IncidentAttachment');
+const AssetHistory = require('./AssetHistory');
+const AssetRegistrationRequest = require('./AssetRegistrationRequest');
 
 Asset.hasMany(Assignment, { foreignKey: 'assetId' });
 Assignment.belongsTo(Asset, { foreignKey: 'assetId' });
@@ -154,6 +157,18 @@ DepartmentAssetRequest.hasMany(DepartmentAssetRequestHistory, { foreignKey: 'req
 DepartmentAssetRequestHistory.belongsTo(DepartmentAssetRequest, { foreignKey: 'requestId' });
 User.hasMany(DepartmentAssetRequestHistory, { foreignKey: 'changedBy', as: 'DepartmentAssetRequestChanges' });
 DepartmentAssetRequestHistory.belongsTo(User, { foreignKey: 'changedBy', as: 'ChangedBy' });
+Asset.hasMany(AssetHistory, { foreignKey: 'assetId', as: 'History' });
+AssetHistory.belongsTo(Asset, { foreignKey: 'assetId' });
+Department.hasMany(AssetHistory, { foreignKey: 'departmentId' });
+AssetHistory.belongsTo(Department, { foreignKey: 'departmentId' });
+User.hasMany(AssetHistory, { foreignKey: 'changedBy', as: 'AssetHistoryChanges' });
+AssetHistory.belongsTo(User, { foreignKey: 'changedBy', as: 'ChangedBy' });
+Department.hasMany(AssetRegistrationRequest, { foreignKey: 'departmentId' });
+AssetRegistrationRequest.belongsTo(Department, { foreignKey: 'departmentId' });
+User.hasMany(AssetRegistrationRequest, { foreignKey: 'requestedBy' });
+AssetRegistrationRequest.belongsTo(User, { foreignKey: 'requestedBy' });
+Approval.hasOne(AssetRegistrationRequest, { foreignKey: 'approvalId' });
+AssetRegistrationRequest.belongsTo(Approval, { foreignKey: 'approvalId' });
 Asset.hasMany(FinancialRecord, { foreignKey: 'assetId' });
 FinancialRecord.belongsTo(Asset, { foreignKey: 'assetId' });
 Asset.hasMany(DisposalFinancialRecord, { foreignKey: 'assetId' });
@@ -168,6 +183,12 @@ Asset.hasOne(CapitalizationRecord, { foreignKey: 'assetId' });
 CapitalizationRecord.belongsTo(Asset, { foreignKey: 'assetId' });
 User.hasMany(FinancialRecord, { foreignKey: 'recordedBy' });
 FinancialRecord.belongsTo(User, { foreignKey: 'recordedBy' });
+User.hasMany(FinanceTransaction, { foreignKey: 'createdBy', as: 'CreatedFinanceTransactions', onDelete: 'RESTRICT', onUpdate: 'CASCADE' });
+FinanceTransaction.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator', onDelete: 'RESTRICT', onUpdate: 'CASCADE' });
+User.hasMany(FinanceTransaction, { foreignKey: 'updatedBy', as: 'UpdatedFinanceTransactions', onDelete: 'RESTRICT', onUpdate: 'CASCADE' });
+FinanceTransaction.belongsTo(User, { foreignKey: 'updatedBy', as: 'Updater', onDelete: 'RESTRICT', onUpdate: 'CASCADE' });
+User.hasMany(FinanceTransaction, { foreignKey: 'deletedBy', as: 'DeletedFinanceTransactions', onDelete: 'RESTRICT', onUpdate: 'CASCADE' });
+FinanceTransaction.belongsTo(User, { foreignKey: 'deletedBy', as: 'Deleter', onDelete: 'RESTRICT', onUpdate: 'CASCADE' });
 User.hasMany(DepreciationRecord, { foreignKey: 'recordedBy' });
 DepreciationRecord.belongsTo(User, { foreignKey: 'recordedBy' });
 User.hasMany(CapitalizationRecord, { foreignKey: 'createdBy' });
@@ -519,6 +540,7 @@ module.exports = {
   DepartmentAssetRequest,
   DepartmentAssetRequestHistory,
   FinancialRecord,
+  FinanceTransaction,
   DisposalFinancialRecord,
   Config,
   SettingsVersion,
@@ -564,4 +586,6 @@ module.exports = {
   IncidentComment,
   IncidentHistory,
   IncidentAttachment,
+  AssetHistory,
+  AssetRegistrationRequest,
 };

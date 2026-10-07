@@ -1,4 +1,4 @@
-const { Op } = require('sequelize');
+const { Op, col, fn, where } = require('sequelize');
 const fs = require('fs');
 const path = require('path');
 const {
@@ -173,13 +173,12 @@ const lookupByQr = async (req, res, next) => {
       where: {
         ...scope,
         [Op.and]: [{
-        [Op.or]: [
-          { digitalId: identifier },
-          { assetCode: identifier },
-          { serialNumber: identifier },
-          { rfidTag: identifier },
-          { id: Number.isInteger(Number(identifier)) ? Number(identifier) : -1 },
-        ],
+          [Op.or]: [
+            ...['digital_id', 'qr_code', 'asset_code', 'serial_number', 'rfid_tag'].map((field) => (
+              where(fn('UPPER', fn('TRIM', col(`Asset.${field}`))), identifier.toUpperCase())
+            )),
+            { id: Number.isInteger(Number(identifier)) ? Number(identifier) : -1 },
+          ],
         }],
       },
       include: [

@@ -209,7 +209,7 @@ test('Department Head detail route rejects assets outside the resolved departmen
   }
 });
 
-test('department QR/RFID lookup constrains matches to the authorized department', async () => {
+test('department QR/RFID lookup is case-insensitive and constrains matches to the authorized department', async () => {
   const originalFindOne = Asset.findOne;
   let lookupOptions;
   Asset.findOne = async (options) => { lookupOptions = options; return null; };
@@ -218,16 +218,28 @@ test('department QR/RFID lookup constrains matches to the authorized department'
     await lookupByQr({
       user: { id: 5, role: 'department_head', departmentId: 7 },
       organizationScope: { departmentId: 7, collegeId: 3 },
-      params: { identifier: 'RFID-OUTSIDE' },
+      params: { identifier: 'rfid-outside' },
       query: {},
     }, response, (error) => { throw error; });
 
     assert.equal(response.statusCode, 404);
     assert.equal(lookupOptions.where.departmentId, 7);
     assert.equal(lookupOptions.where.collegeId, 3);
-    const identifierFields = lookupOptions.where[Op.and][0][Op.or];
-    assert.ok(identifierFields.some((field) => field.rfidTag === 'RFID-OUTSIDE'));
-    assert.ok(identifierFields.some((field) => field.digitalId === 'RFID-OUTSIDE'));
+    const identifierClauses = lookupOptions.where[Op.and][0][Op.or];
+    const normalizedFields = identifierClauses
+      .filter((clause) => clause.attribute?.fn === 'UPPER')
+      .map((clause) => ({
+        column: clause.attribute.args[0].args[0].col,
+        value: clause.logic,
+      }));
+    assert.deepEqual(normalizedFields, [
+      { column: 'Asset.digital_id', value: 'RFID-OUTSIDE' },
+      { column: 'Asset.qr_code', value: 'RFID-OUTSIDE' },
+      { column: 'Asset.asset_code', value: 'RFID-OUTSIDE' },
+      { column: 'Asset.serial_number', value: 'RFID-OUTSIDE' },
+      { column: 'Asset.rfid_tag', value: 'RFID-OUTSIDE' },
+    ]);
+    assert.equal(identifierClauses.at(-1).id, -1);
   } finally {
     Asset.findOne = originalFindOne;
   }

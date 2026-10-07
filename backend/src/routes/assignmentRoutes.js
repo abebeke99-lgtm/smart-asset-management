@@ -124,6 +124,12 @@ router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'
     const departmentScope = getDepartmentScopeId(req);
 
     const andClauses = [];
+    if (req.user.role === 'department_head') {
+      if (!departmentScope) {
+        return res.status(403).json({ success: false, message: 'Department scope is not configured for this account.' });
+      }
+      andClauses.push(sequelize.where(sequelize.col('Asset.department_id'), departmentScope));
+    }
     const now = new Date();
     if (status === 'active') {
       andClauses.push({ status: 'active' });

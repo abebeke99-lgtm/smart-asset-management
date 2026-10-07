@@ -68,18 +68,42 @@ const list = async ({ query = {}, transaction } = {}) => {
   if (query.category) assetWhere.category = query.category;
   if (query.department) assetWhere.departmentId = Number(query.department);
   if (query.period) where.period = query.period;
-  const [assets, records] = await Promise.all([
-    Asset.findAll({ where: assetWhere, include: [{ model: Department, as: 'DepartmentRecord', attributes: ['name'], required: false }], order: [['id', 'DESC']], transaction }),
-    DepreciationRecord.findAll({ where, include: [{ model: User, attributes: ['username', 'fullName'] }], order: [['period', 'DESC'], ['id', 'DESC']], transaction }),
+  const assets = await Asset.findAll({
+    where: assetWhere,
+    include: [{ model: Department, as: 'DepartmentRecord', attributes: ['name'], required: false }],
+    order: [['id', 'DESC']],
+    transaction,
+  });
+  const assetIds = assets.map((asset) => asset.id);
+  const [configurations, records] = await Promise.all([
+    assetIds.length
+      ? FinancialRecord.findAll({
+        where: { assetId: { [Op.in]: assetIds } },
+        order: [['createdAt', 'DESC'], ['id', 'DESC']],
+        transaction,
+      })
+      : [],
+    DepreciationRecord.findAll({
+      where,
+      include: [{ model: User, attributes: ['username', 'fullName'] }],
+      order: [['period', 'DESC'], ['id', 'DESC']],
+      transaction,
+    }),
   ]);
+  const configurationByAsset = new Map();
+  configurations.forEach((configuration) => {
+    if (!configurationByAsset.has(configuration.assetId)) {
+      configurationByAsset.set(configuration.assetId, configuration);
+    }
+  });
   const latest = new Map();
   records.forEach((item) => { if (!latest.has(item.assetId)) latest.set(item.assetId, item); });
-  const rows = await Promise.all(assets.map(async (asset) => {
-    const config = await getConfiguration(asset.id, transaction);
+  const rows = assets.map((asset) => {
+    const config = configurationByAsset.get(asset.id);
     const current = latest.get(asset.id);
     const configured = validateConfiguration(asset, config);
     return { ...asset.toJSON(), asset_id: asset.id, asset_tag: asset.assetCode, department_name: asset.DepartmentRecord?.name || asset.department || '', acquisition_value: fromCents(configured.cost), residual_value: config ? fromCents(configured.residual) : null, useful_life: config?.usefulLife || null, depreciation_method: config?.depreciationMethod || null, depreciation_start_date: config?.depreciationStartDate || null, accumulated_depreciation: current ? Number(current.accumulatedDepreciation) : null, current_book_value: current ? Number(current.closingBookValue) : Number(asset.currentValue || 0), latestRecord: current ? current.toJSON() : null, status: current?.status || (configured.errors.length ? 'NOT_CONFIGURED' : 'CONFIGURED'), configurationErrors: configured.errors };
-  }));
+  });
   return { rows, records };
 };
 

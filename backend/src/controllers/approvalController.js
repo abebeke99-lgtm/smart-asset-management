@@ -1,4 +1,4 @@
-const { sequelize, Approval, Asset, Department, User, AuditLog } = require('../models');
+const { sequelize, Approval, Asset, Department, User, AuditLog, AssetRegistrationRequest } = require('../models');
 const { Op } = require('sequelize');
 const { createFinanceNotification, createBulkNotification } = require('../services/notificationService');
 const { getCollegeScopeId } = require('../middlewares/organizationScope');
@@ -108,6 +108,13 @@ const decideApproval = async (req, res, next) => {
     }
     const comment = String(req.body.comment || req.body.reason || '').trim();
     await record.update({ status, reviewedBy: req.user.id, comment: req.body.comment || req.body.reason || '' }, { transaction });
+    if (String(record.type || '').toLowerCase().includes('purchase')) {
+      const registrationStatus = status === 'approved' ? 'Approved' : status === 'rejected' ? 'Rejected' : 'Cancelled';
+      await AssetRegistrationRequest.update(
+        { status: registrationStatus },
+        { where: { approvalId: record.id }, transaction },
+      );
+    }
     await AuditLog.create({ userId: req.user.id, action: `REQUEST_${status.toUpperCase()}`, entity: `approval:${record.id}`, details: JSON.stringify({ requestId: record.id, beforeStatus: 'pending', afterStatus: status, comment }) }, { transaction });
     await transaction.commit();
     transactionFinished = true;
