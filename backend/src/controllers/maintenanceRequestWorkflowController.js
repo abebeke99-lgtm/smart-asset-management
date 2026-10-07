@@ -69,7 +69,7 @@ const getOversightList = async (req, res, next) => {
 		const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 25));
 		const search = String(req.query.search || '').trim();
 		const statusFilter = req.query.status ? String(req.query.status).toLowerCase() : null;
-		const assetScopeWhere = cleanWhere(req);
+		const assetScopeWhere = scopedAsset(req);
 
 		const maintenanceWhere = {};
 		if (statusFilter && ['pending', 'approved', 'assigned', 'in-progress', 'waiting-for-parts', 'testing', 'completed', 'rejected', 'cancelled'].includes(statusFilter)) {
@@ -117,7 +117,7 @@ const getOversightList = async (req, res, next) => {
 				},
 				{
 					model: MaintenanceHistory,
-					attributes: ['id', 'actionType', 'actionDescription', 'actionDate', 'performedBy'],
+					attributes: ['id', 'actionType', 'description', 'actionDate', 'userId'],
 					required: false,
 					order: [['actionDate', 'DESC']],
 					limit: 5,
@@ -171,7 +171,7 @@ const getOversightList = async (req, res, next) => {
 
 const getOversightDetail = async (req, res, next) => {
 	try {
-		const assetScopeWhere = cleanWhere(req);
+		const assetScopeWhere = scopedAsset(req);
 		const row = await Maintenance.findOne({
 			where: { id: req.params.id },
 			include: [
@@ -192,7 +192,7 @@ const getOversightDetail = async (req, res, next) => {
 				},
 				{
 					model: MaintenanceHistory,
-					attributes: ['id', 'actionType', 'actionDescription', 'actionDate', 'performedBy', 'previousStatus', 'newStatus'],
+					attributes: ['id', 'actionType', 'description', 'actionDate', 'userId', 'previousStatus', 'newStatus'],
 					order: [['actionDate', 'DESC']],
 					limit: 50,
 				},

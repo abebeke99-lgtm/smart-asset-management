@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import './ICTEquipment.css';
 
 const API_BASE_URL = (process.env.REACT_APP_API_URL || '').replace(/\/api\/?$/i, '').replace(/\/+$/, '');
 const EQUIPMENT_URL = `${API_BASE_URL}/api/ict/equipment`;
@@ -157,7 +158,7 @@ function SortButton({ label, field, sort, onSort }) {
     <button
       type="button"
       onClick={() => onSort(field)}
-      className="inline-flex items-center gap-1.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 transition hover:text-blue-700"
+      className="ict-equipment-sort inline-flex items-center gap-1.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 transition hover:text-blue-700"
       aria-label={`Sort by ${label}`}
     >
       {label}
@@ -189,10 +190,10 @@ function EquipmentDetails({ asset, loading, error, onClose }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="presentation">
+    <div className="ict-equipment-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4" role="presentation">
       <button type="button" className="absolute inset-0 cursor-default bg-slate-950/50 backdrop-blur-[2px]" aria-label="Close equipment details" onClick={onClose} />
-      <section role="dialog" aria-modal="true" aria-labelledby="equipment-details-title" className="relative max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-6">
+      <section role="dialog" aria-modal="true" aria-labelledby="equipment-details-title" className="ict-equipment-modal relative max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <header className="ict-equipment-modal-header flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700"><Monitor size={20} /></div>
             <div>
@@ -200,7 +201,7 @@ function EquipmentDetails({ asset, loading, error, onClose }) {
               <p className="text-sm text-slate-500">{asset?.name || (loading ? 'Loading equipment record' : '')}</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close details"><X size={19} /></button>
+          <button type="button" onClick={onClose} className="ict-equipment-modal-close rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close details"><X size={19} /></button>
         </header>
         <div className="max-h-[calc(90vh-73px)] overflow-y-auto p-5 sm:p-6">
           {loading && <div className="flex items-center justify-center gap-3 py-14 text-sm text-slate-500" role="status"><RefreshCw size={18} className="animate-spin text-blue-600" />Loading equipment details…</div>}
@@ -268,24 +269,24 @@ function EquipmentForm({ form, options, saving, error, loadingOptions, onChange,
   );
   const availableOptions = Boolean(options.campuses?.length);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-5" role="presentation">
+    <div className="ict-equipment-modal-backdrop fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-5" role="presentation">
       <button type="button" className="absolute inset-0 cursor-default bg-slate-950/50 backdrop-blur-[2px]" aria-label="Close equipment form" onClick={onClose} disabled={saving} />
-      <section role="dialog" aria-modal="true" aria-labelledby="equipment-form-title" className="relative my-auto max-h-[94vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-6">
+      <section role="dialog" aria-modal="true" aria-labelledby="equipment-form-title" className="ict-equipment-modal relative my-auto max-h-[94vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <header className="ict-equipment-modal-header flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-6">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-600">Central asset inventory</p>
             <h2 id="equipment-form-title" className="mt-1 text-lg font-semibold text-slate-900">{form.id ? 'Edit IT equipment' : 'Add IT equipment'}</h2>
           </div>
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50" aria-label="Close form"><X size={19} /></button>
+          <button type="button" onClick={onClose} disabled={saving} className="ict-equipment-modal-close rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50" aria-label="Close form"><X size={19} /></button>
         </header>
         <form onSubmit={onSubmit} className="flex max-h-[calc(94vh-73px)] flex-col">
           <div className="overflow-y-auto p-5 sm:p-6">
             {error && <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700" role="alert"><AlertCircle size={17} className="mt-0.5 shrink-0" /><span>{error}</span></div>}
             {loadingOptions && <div className="mb-4 flex items-center gap-2 text-sm text-slate-500" role="status"><RefreshCw size={16} className="animate-spin" />Loading campus and department options…</div>}
             {!loadingOptions && !availableOptions && (
-              <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="alert">
+              <div className="ict-equipment-campus-warning mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="alert">
                 <span>No active campus is linked to this college. Ask an administrator to add or activate a campus and link it to this college in Admin Locations/Colleges, then retry.</span>
-                <button type="button" onClick={onRetryOptions} className="shrink-0 font-semibold underline">Retry</button>
+                <button type="button" onClick={onRetryOptions} className="ict-equipment-retry shrink-0 font-semibold underline">Retry</button>
               </div>
             )}
             <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
@@ -306,9 +307,9 @@ function EquipmentForm({ form, options, saving, error, loadingOptions, onChange,
               <FormField label="Description" name="description" value={form.description} onChange={onChange} type="textarea" wide maxLength={10000} />
             </div>
           </div>
-          <footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50/80 px-5 py-4 sm:px-6">
-            <button type="button" onClick={onClose} disabled={saving} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
-            <button type="submit" disabled={saving || loadingOptions || !availableOptions} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+          <footer className="ict-equipment-modal-footer flex justify-end gap-2 border-t border-slate-200 bg-slate-50/80 px-5 py-4 sm:px-6">
+            <button type="button" onClick={onClose} disabled={saving} className="ict-equipment-secondary-button rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+            <button type="submit" disabled={saving || loadingOptions || !availableOptions} className="ict-equipment-primary-button inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
               {saving && <RefreshCw size={15} className="animate-spin" />}
               {saving ? 'Saving…' : form.id ? 'Save Changes' : 'Add IT Equipment'}
             </button>
@@ -533,9 +534,9 @@ export default function ICTEquipment() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 p-4 md:p-6 ict-module-theme ict-theme-equipment">
+    <main className="ict-equipment-page min-h-screen bg-slate-50 p-4 md:p-6 ict-module-theme ict-theme-equipment">
       <div className="mx-auto max-w-[1800px] space-y-6">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <header className="ict-equipment-page-header flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="mb-2 flex items-center gap-2 text-sm text-slate-500">
               <Building2 size={16} />
@@ -545,17 +546,17 @@ export default function ICTEquipment() {
             <p className="mt-1 max-w-2xl text-sm text-slate-500">Browse and inspect IT assets registered in the central asset inventory.</p>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setRefreshCount((count) => count + 1)} disabled={loading} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" onClick={() => setRefreshCount((count) => count + 1)} disabled={loading} className="ict-equipment-secondary-button inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />Refresh
             </button>
-            <button type="button" onClick={() => openForm()} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700">
+            <button type="button" onClick={() => openForm()} className="ict-equipment-primary-button inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700">
               <Plus size={16} />Add IT Equipment
             </button>
           </div>
         </header>
 
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <section className="ict-equipment-card overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="ict-equipment-toolbar flex flex-col gap-4 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="relative w-full lg:max-w-md">
               <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input type="search" value={filters.search} onChange={(event) => updateFilter('search', event.target.value)} placeholder="Search asset, serial, campus, department..." aria-label="Search IT equipment" className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100" />
@@ -576,7 +577,7 @@ export default function ICTEquipment() {
                 <option value="">All conditions</option>
                 {CONDITIONS.map((condition) => <option key={condition} value={condition}>{condition}</option>)}
               </select>
-              {hasActiveFilters && <button type="button" onClick={() => { setFilters({ search: '', category: '', status: '', condition: '' }); setPage(1); }} className="h-10 rounded-lg px-3 text-sm font-medium text-blue-700 hover:bg-blue-50">Clear filters</button>}
+              {hasActiveFilters && <button type="button" onClick={() => { setFilters({ search: '', category: '', status: '', condition: '' }); setPage(1); }} className="ict-equipment-text-button h-10 rounded-lg px-3 text-sm font-medium text-blue-700 hover:bg-blue-50">Clear filters</button>}
             </div>
           </div>
 
@@ -588,12 +589,12 @@ export default function ICTEquipment() {
           {error && (
             <div className="mx-4 mb-4 flex items-start justify-between gap-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700" role="alert">
               <div className="flex items-start gap-3"><AlertCircle size={18} className="mt-0.5 shrink-0" /><div><p className="font-semibold">Unable to load IT equipment. Please try again.</p><p className="mt-0.5">{error}</p></div></div>
-              <button type="button" onClick={() => setRefreshCount((count) => count + 1)} className="shrink-0 rounded-md px-2 py-1 font-semibold hover:bg-rose-100">Retry</button>
+              <button type="button" onClick={() => setRefreshCount((count) => count + 1)} className="ict-equipment-retry ict-equipment-error-retry shrink-0 rounded-md px-2 py-1 font-semibold hover:bg-rose-100">Retry</button>
             </div>
           )}
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1450px] border-collapse text-left">
+            <table className="ict-equipment-table w-full min-w-[1450px] border-collapse text-left">
               <thead className="border-y border-slate-200 bg-slate-50/80">
                 <tr>
                   <th className="px-4 py-3"><SortButton label="Asset ID" field="assetCode" sort={sort} onSort={updateSort} /></th>
@@ -637,11 +638,11 @@ export default function ICTEquipment() {
                   </tr>
                 ))}
                 {!loading && !error && equipment.length === 0 && (
-                  <tr><td colSpan="14" className="px-6 py-16 text-center">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><MapPin size={22} /></div>
+                  <tr><td colSpan="14" className="ict-equipment-empty-state px-6 py-16 text-center">
+                    <div className="ict-equipment-empty-icon mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><MapPin size={22} aria-hidden="true" /></div>
                     <h2 className="mt-4 text-sm font-semibold text-slate-800">{hasActiveFilters ? 'No matching equipment' : 'No IT equipment found'}</h2>
                     <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">{hasActiveFilters ? 'Adjust your search or filters and try again.' : 'No IT equipment records are currently available in the central asset inventory.'}</p>
-                    {hasActiveFilters && <button type="button" onClick={() => { setFilters({ search: '', category: '', status: '', condition: '' }); setPage(1); }} className="mt-4 text-sm font-semibold text-blue-700 hover:text-blue-800">Clear filters</button>}
+                    {hasActiveFilters && <button type="button" onClick={() => { setFilters({ search: '', category: '', status: '', condition: '' }); setPage(1); }} className="ict-equipment-text-button mt-4 text-sm font-semibold text-blue-700 hover:text-blue-800">Clear filters</button>}
                   </td></tr>
                 )}
               </tbody>
@@ -651,9 +652,9 @@ export default function ICTEquipment() {
           <footer className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-slate-500">{pagination.total ? `Showing ${((page - 1) * PAGE_SIZE) + 1}–${Math.min(page * PAGE_SIZE, pagination.total)} of ${pagination.total.toLocaleString()}` : 'No records'}</p>
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1 || loading} className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={16} />Previous</button>
+              <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1 || loading} className="ict-equipment-page-button inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={16} />Previous</button>
               <span className="min-w-[94px] text-center text-sm text-slate-500">Page {page} of {pagination.totalPages}</span>
-              <button type="button" onClick={() => setPage((current) => Math.min(pagination.totalPages, current + 1))} disabled={page >= pagination.totalPages || loading} className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Next<ChevronRight size={16} /></button>
+              <button type="button" onClick={() => setPage((current) => Math.min(pagination.totalPages, current + 1))} disabled={page >= pagination.totalPages || loading} className="ict-equipment-page-button inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Next<ChevronRight size={16} /></button>
             </div>
           </footer>
         </section>

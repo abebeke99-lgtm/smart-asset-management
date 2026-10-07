@@ -3446,7 +3446,6 @@ function AppContent() {
     { path: '/department-head/tickets', label: 'Tickets', icon: CircleHelp },
     { path: '/department-head/tickets/escalated', label: 'Escalated Tickets', icon: ShieldCheck },
     { path: '/department-head/tracking', label: 'Tracking', icon: Radio },
-    { path: '/department-head/asset-history', label: 'Asset History', icon: FileText },
     { path: '/department-head/reports', label: 'Reports', icon: BarChart3 },
     { path: '/department-head/analytics', label: 'Analytics', icon: TrendingUp },
     { path: '/department-head/notifications', label: 'Notifications', icon: Bell }
@@ -3491,8 +3490,8 @@ function AppContent() {
     { label: 'MAIN', items: departmentHeadItems.slice(0, 1) },
     { label: 'DEPARTMENT MANAGEMENT', items: departmentHeadItems.slice(1, 5) },
     { label: 'ASSET MANAGEMENT', items: departmentHeadItems.slice(5, 13) },
-    { label: 'OPERATIONS', items: departmentHeadItems.slice(13, 20) },
-    { label: 'REPORTS & ANALYTICS', items: departmentHeadItems.slice(20) }
+    { label: 'OPERATIONS', items: departmentHeadItems.slice(13, 19) },
+    { label: 'REPORTS & ANALYTICS', items: departmentHeadItems.slice(19) }
   ];
   const navigationItems = sidebarRole === 'department_head'
     ? departmentHeadItems
@@ -3730,7 +3729,7 @@ function AppContent() {
             <Route path="reports/assets" element={<DeptReports />} />
             <Route path="reports/maintenance" element={<DeptReports />} />
             <Route path="reports/inventory" element={<DeptReports inventoryMode />} />
-            <Route path="analytics" element={<ProtectedRoute allowedPermissions={['department_head.analytics.view']}><DeptAnalytics /></ProtectedRoute>} />
+            <Route path="analytics" element={<DeptAnalytics />} />
             <Route path="notifications" element={<DeptNotifications />} />
             <Route path="history" element={<DepartmentActivityHistory />} />
             <Route path="asset-history" element={<ProtectedRoute allowedPermissions={['department_head.history.view']}><DepartmentAssetHistory /></ProtectedRoute>} />

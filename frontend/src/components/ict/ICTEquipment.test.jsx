@@ -61,6 +61,8 @@ describe('ICTEquipment', () => {
     expect(screen.getByText('Main Campus')).toBeInTheDocument();
     expect(screen.getByText('Engineering College')).toBeInTheDocument();
     expect(screen.getByText('Technology Hall')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sort by Asset ID' })).toHaveClass('ict-equipment-sort');
+    expect(document.querySelector('.ict-equipment-table')).toBeInTheDocument();
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/ict/equipment?'),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
@@ -119,7 +121,7 @@ describe('ICTEquipment', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add IT Equipment' }));
 
     expect(await screen.findByText(/No active campus is linked to this college/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toHaveClass('ict-equipment-retry');
   });
 
   test('adds equipment through the API and reloads the database-backed list', async () => {

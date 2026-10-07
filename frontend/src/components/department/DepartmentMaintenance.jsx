@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Building2, CalendarDays, CheckCircle2, CircleX, Clock3, Eye, FileText, Flag, LifeBuoy, LoaderCircle, MapPin, Package, Plus, RefreshCw, Search, SlidersHorizontal, UserRound, Wrench, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { apiClient } from '../../utils/api';
@@ -21,7 +22,8 @@ const getAssetCode = (record) => getAsset(record).assetCode || '-';
 
 const DepartmentMaintenance = () => {
   const { user } = useAuth();
-  const isServiceRequestRoute = typeof window !== 'undefined' && /\/service-requests(?:\/|$)/.test(window.location.pathname);
+  const { pathname } = useLocation();
+  const isServiceRequestRoute = /\/(?:service-requests|maintenance-requests)(?:\/|$)/.test(pathname);
   const role = String(user?.role || '').toLowerCase();
   const [records, setRecords] = useState([]);
   const [assets, setAssets] = useState([]);
@@ -302,7 +304,7 @@ const DepartmentMaintenance = () => {
         </div>
 
         <div className="maintenance-table-wrap">
-          {serviceLoading ? <LoadingState /> : visibleRecords.length === 0 ? <EmptyState canCreate={canCreate} onCreate={() => setShowForm(true)} /> : <table className="maintenance-table"><thead><tr><th>Request</th><th>Category</th><th>Priority</th><th>Status</th><th>Technician</th><th>Created</th><th>Actions</th></tr></thead><tbody>{visibleRecords.map((record) => <tr key={record.id}><td><strong>{record.requestCode || `SR-${String(record.id).padStart(3, '0')}`}</strong><span>{record.title || record.description || '-'}</span></td><td><strong>{record.category || record.routed_to_label || 'Unassigned'}</strong><span>{record.routed_to_label || 'Not routed'}</span></td><td><span className={`priority-badge priority-${(record.priority || 'medium').toLowerCase()}`}>{displayPriority(record.priority)}</span></td><td><span className={`status-badge status-${(record.status || 'submitted').toLowerCase()}`}><StatusIcon status={(record.status || 'submitted').toLowerCase()} /> {displayStatus(record.status)}</span></td><td><strong>{record.assignee_name || record.Assignee?.fullName || 'Not assigned'}</strong><span>{record.assigned_to ? `Technician #${record.assigned_to}` : 'Awaiting assignment'}</span></td><td>{formatDate(record.created_at || record.createdAt)}</td><td><div className="row-actions"><button className="icon-button" type="button" onClick={() => openDetails(record)} title="View request details" aria-label={`View service request ${record.id}`}><Eye size={17} /></button></div></td></tr>)}</tbody></table>}
+          {serviceLoading ? <LoadingState /> : visibleRecords.length === 0 ? <EmptyState canCreate={false} onCreate={() => setShowForm(true)} /> : <table className="maintenance-table"><thead><tr><th>Request</th><th>Category</th><th>Priority</th><th>Status</th><th>Technician</th><th>Created</th><th>Actions</th></tr></thead><tbody>{visibleRecords.map((record) => <tr key={record.id}><td><strong>{record.requestCode || `SR-${String(record.id).padStart(3, '0')}`}</strong><span>{record.title || record.description || '-'}</span></td><td><strong>{record.category || record.routed_to_label || 'Unassigned'}</strong><span>{record.routed_to_label || 'Not routed'}</span></td><td><span className={`priority-badge priority-${(record.priority || 'medium').toLowerCase()}`}>{displayPriority(record.priority)}</span></td><td><span className={`status-badge status-${(record.status || 'submitted').toLowerCase()}`}><StatusIcon status={(record.status || 'submitted').toLowerCase()} /> {displayStatus(record.status)}</span></td><td><strong>{record.assignee_name || record.Assignee?.fullName || 'Not assigned'}</strong><span>{record.assigned_to ? `Technician #${record.assigned_to}` : 'Awaiting assignment'}</span></td><td>{formatDate(record.created_at || record.createdAt)}</td><td><div className="row-actions"><button className="icon-button" type="button" onClick={() => openDetails(record)} title="View request details" aria-label={`View service request ${record.id}`}><Eye size={17} /></button></div></td></tr>)}</tbody></table>}
         </div>
 
         {selected && (
@@ -427,7 +429,7 @@ const StatusIcon = ({ status }) => {
   return <Icon size={14} aria-hidden="true" />;
 };
 const LoadingState = () => <div className="maintenance-loading"><LoaderCircle className="spin" size={25} /><span>Loading maintenance records...</span></div>;
-const EmptyState = ({ canCreate, onCreate }) => <div className="maintenance-empty"><Wrench size={30} aria-hidden="true" /><h2>No maintenance records found</h2><p>Requests created for this department will appear here after they are saved.</p>{canCreate && <button className="maintenance-button primary" type="button" onClick={onCreate}><Plus size={16} /> Request maintenance</button>}</div>;
+const EmptyState = ({ canCreate, onCreate }) => <div className="maintenance-empty"><h2>No maintenance records found</h2><p>Requests created for this department will appear here after they are saved.</p>{canCreate && <button className="maintenance-button primary" type="button" onClick={onCreate}><Plus size={16} /> Request maintenance</button>}</div>;
 
 const AssetPreview = ({ asset }) => <div className="asset-preview full-width"><span><Package size={15} aria-hidden="true" /> Selected asset</span><strong>{asset?.name || '-'}</strong><small>{[asset?.assetCode, asset?.category, asset?.condition, asset?.status, asset?.location].filter(Boolean).join(' | ') || 'Asset information unavailable'}</small></div>;
 const DetailsDialog = ({ record, loading, canCancel, onCancel, onClose }) => { 

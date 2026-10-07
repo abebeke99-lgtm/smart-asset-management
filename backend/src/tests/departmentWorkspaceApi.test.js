@@ -78,6 +78,18 @@ test('department reports require Department Head auth and scope but not optional
   assert.ok(assetPermissionGateIndex >= 0, 'Expected the shared asset permission gate');
 });
 
+test('department analytics require Department Head auth and department scope, not optional analytics permissions', () => {
+  const dashboardIndex = router.stack.findIndex((layer) => layer.route?.path === '/dashboard' && layer.route.methods.get);
+  assert.ok(dashboardIndex >= 0, 'Expected the protected department dashboard route');
+
+  for (const path of ['/analytics', '/analytics/assets', '/analytics/inventory', '/analytics/approvals', '/analytics/service', '/analytics/ticket-aging']) {
+    const routeIndex = router.stack.findIndex((layer) => layer.route?.path === path && layer.route.methods.get);
+    assert.ok(routeIndex >= 0, `Expected ${path} route`);
+    assert.ok(routeIndex < dashboardIndex, `${path} must be registered before the shared asset permission gate`);
+    assert.equal(router.stack[routeIndex].route.stack.length, 1, `${path} must not require optional per-role analytics permissions`);
+  }
+});
+
 test('department maintenance routes require Department Head auth and scope but not optional permissions', () => {
   const dashboardIndex = router.stack.findIndex((layer) => layer.route?.path === '/dashboard' && layer.route.methods.get);
   assert.ok(dashboardIndex >= 0, 'Expected the protected department dashboard route');

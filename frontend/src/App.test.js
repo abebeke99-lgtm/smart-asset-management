@@ -305,7 +305,6 @@ describe('Department Head sidebar specification', () => {
     ['/department-head/tickets', 'Tickets'],
     ['/department-head/tickets/escalated', 'Escalated Tickets'],
     ['/department-head/tracking', 'Tracking'],
-    ['/department-head/asset-history', 'Asset History'],
     ['/department-head/reports', 'Reports'],
     ['/department-head/analytics', 'Analytics'],
     ['/department-head/notifications', 'Notifications'],
@@ -314,10 +313,10 @@ describe('Department Head sidebar specification', () => {
   const sidebarItems = [...itemSource.matchAll(/\{ path: '([^']+)', label: '([^']+)'/g)]
     .map(([, route, label]) => [route, label]);
 
-  it('contains exactly the approved 23 items once, in the approved order and categories', () => {
+  it('contains exactly the approved 22 items once, in the approved order and categories', () => {
     expect(sidebarItems).toEqual(expectedItems);
-    expect(new Set(sidebarItems.map(([route]) => route)).size).toBe(23);
-    expect(new Set(sidebarItems.map(([, label]) => label)).size).toBe(23);
+    expect(new Set(sidebarItems.map(([route]) => route)).size).toBe(22);
+    expect(new Set(sidebarItems.map(([, label]) => label)).size).toBe(22);
 
     const sectionSource = appSource.match(/const departmentManagerSections = \[([\s\S]*?)\];/)?.[1] || '';
     expect([...sectionSource.matchAll(/\{ label: '([^']+)'/g)].map(([, label]) => label)).toEqual([
@@ -330,10 +329,20 @@ describe('Department Head sidebar specification', () => {
     expect(sectionSource).toContain('departmentHeadItems.slice(0, 1)');
     expect(sectionSource).toContain('departmentHeadItems.slice(1, 5)');
     expect(sectionSource).toContain('departmentHeadItems.slice(5, 13)');
-    expect(sectionSource).toContain('departmentHeadItems.slice(13, 20)');
-    expect(sectionSource).toContain('departmentHeadItems.slice(20)');
+    expect(sectionSource).toContain('departmentHeadItems.slice(13, 19)');
+    expect(sectionSource).toContain('departmentHeadItems.slice(19)');
+    expect(itemSource).not.toContain("label: 'Asset History'");
     expect(appSource).toContain("sidebarRole === 'department_head' && departmentManagerSections.map");
     expect(appSource).toMatch(/sidebarRole === 'department_head'\s*\?\s*departmentHeadItems/);
+  });
+
+  describe('Department Head analytics route access', () => {
+    const appSource = fs.readFileSync(path.resolve(__dirname, 'App.jsx'), 'utf8');
+
+    it('relies on the Department Head protected parent route instead of optional permission configuration', () => {
+      expect(appSource).toMatch(/<Route path="analytics" element={<DeptAnalytics \/>} \/>/);
+      expect(appSource).not.toMatch(/<Route path="analytics" element={<ProtectedRoute allowedPermissions=\{\['department_head\.analytics\.view'\]\}/);
+    });
   });
 
   it('maps Department Head inventory to the inventory view and keeps reports separate', () => {
