@@ -444,9 +444,9 @@ export default function DisposalFinancialRecords() {
 
     try {
       const result = await Promise.allSettled([
-        request('/finance/disposal-financial-records'),
-        request('/finance/disposal-financial-records/candidates'),
-        request('/departments'),
+        request('/api/finance/disposal-financial-records'),
+        request('/api/finance/disposal-financial-records/candidates'),
+        request('/api/finance/dashboard/filters'),
       ]);
 
       if (result[0].status === "fulfilled") {
@@ -460,7 +460,12 @@ export default function DisposalFinancialRecords() {
       }
 
       if (result[2].status === "fulfilled") {
-        setDepartments(toArray(result[2].value));
+        const financeDepartments = result[2].value?.data?.departments;
+        setDepartments(
+          Array.isArray(financeDepartments)
+            ? financeDepartments.map(({ value, label }) => ({ id: value, name: label }))
+            : []
+        );
       }
     } catch (err) {
       setError(
@@ -682,7 +687,7 @@ export default function DisposalFinancialRecords() {
     try {
       if (editing && selectedRecord) {
         await request(
-          `/finance/disposal-financial-records/${getId(
+          `/api/finance/disposal-financial-records/${getId(
             selectedRecord
           )}`,
           {
@@ -696,7 +701,7 @@ export default function DisposalFinancialRecords() {
         );
       } else {
         await request(
-          '/finance/disposal-financial-records',
+          '/api/finance/disposal-financial-records',
           {
             method: "POST",
             body: JSON.stringify(payload),
