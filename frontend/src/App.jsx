@@ -2434,13 +2434,6 @@ const AdminRecovery = () => {
   );
 };
 
-const AdminFooter = () => (
-  <footer className="dashboard-footer">
-    <span aria-hidden="true">◆</span>
-    <span>© {new Date().getFullYear()} Mekdela Amba University · Asset Management System</span>
-  </footer>
-);
-
 const MenuToggleButton = ({ isOpen, onToggle, toggleRef, controls = 'application-navigation-panel' }) => (
   <button
     ref={toggleRef}
@@ -3159,7 +3152,6 @@ function AppContent() {
           {children}
         </main>
       </DashboardLayout>
-      <AdminFooter />
       <ToastContainer position="top-right" autoClose={3000} />
       {pendingPublicPath && (
         <div className="public-navigation-modal" role="dialog" aria-modal="true" aria-labelledby="public-navigation-title">
@@ -3435,7 +3427,7 @@ function AppContent() {
     { path: '/department-head/assets', label: 'Assets', icon: Package },
     { path: '/department-head/inventory', label: 'Inventory', icon: Layers },
     { path: '/department-head/requests', label: 'Asset Requests', icon: ClipboardList },
-    { path: '/department-head/approvals', label: 'Approval Queue', icon: ClipboardCheck },
+    { path: '/department-head/approval-queue', label: 'Approval Queue', icon: ClipboardCheck },
     { path: '/department-head/assignments', label: 'Assignments', icon: UserRound },
     { path: '/department-head/transfers', label: 'Transfers', icon: ArrowLeftRight },
     { path: '/department-head/returns', label: 'Returns', icon: Undo2 },
@@ -3483,8 +3475,7 @@ function AppContent() {
     { path: '/department-head/maintenance', label: 'Maintenance Requests', icon: Wrench },
     { path: '/department-head/returns', label: 'Asset Returns', icon: ArrowLeftRight },
     { path: '/department-head/movement', label: 'Asset Movement', icon: ArrowLeftRight },
-    { path: '/department-head/notifications', label: 'Notifications', icon: Bell },
-    { path: '/department-head/history', label: 'Asset History', icon: ClipboardCheck }
+    { path: '/department-head/notifications', label: 'Notifications', icon: Bell }
   ];
   const departmentManagerSections = [
     { label: 'MAIN', items: departmentHeadItems.slice(0, 1) },
@@ -3710,7 +3701,7 @@ function AppContent() {
             <Route path="inventory" element={<DeptReports inventoryMode />} />
             <Route path="requests" element={<DeptAssetRequests />} />
             <Route path="asset-requests" element={<DeptApprovals />} />
-            <Route path="approvals" element={<ApprovalQueue />} />
+            <Route path="approvals" element={<Navigate to="/department-head/approval-queue" replace />} />
             <Route path="approval-queue" element={<DepartmentDeanRoute />} />
             <Route path="assignments" element={<ProtectedRoute allowedPermissions={['assets.view']}><DeptAssignments /></ProtectedRoute>} />
             <Route path="transfers" element={<ScopedWorkflowPage type="transfers" />} />
@@ -3734,6 +3725,11 @@ function AppContent() {
             <Route path="history" element={<DepartmentActivityHistory />} />
             <Route path="asset-history" element={<ProtectedRoute allowedPermissions={['department_head.history.view']}><DepartmentAssetHistory /></ProtectedRoute>} />
             <Route path="history/:id" element={<DeptAssetHistory />} />
+          </Route>
+
+          <Route path="/locations/laboratories" element={<ProtectedRoute allowedRoles={['department_head']}><RoleLayout /></ProtectedRoute>}>
+            <Route index element={<DeptLaboratories />} />
+            <Route path=":id" element={<DeptLaboratories />} />
           </Route>
 
           <Route path="/department" element={<LegacyDepartmentWorkspaceRedirect />}>

@@ -422,9 +422,26 @@
   overflow-wrap: anywhere;
 }
 
-.dar-documents a {
+.dar-documents a,
+.dar-documents button {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 34px;
+  border: 1px solid #dbe5ef;
+  border-radius: 7px;
+  background: #fff;
   color: #2459a6;
+}
+
+.dar-documents button {
+  cursor: pointer;
+}
+
+.dar-documents button:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 .dar-spin {

@@ -294,7 +294,7 @@ describe('Department Head sidebar specification', () => {
     ['/department-head/assets', 'Assets'],
     ['/department-head/inventory', 'Inventory'],
     ['/department-head/requests', 'Asset Requests'],
-    ['/department-head/approvals', 'Approval Queue'],
+    ['/department-head/approval-queue', 'Approval Queue'],
     ['/department-head/assignments', 'Assignments'],
     ['/department-head/transfers', 'Transfers'],
     ['/department-head/returns', 'Returns'],
@@ -355,6 +355,7 @@ describe('Department Head sidebar specification', () => {
   it('keeps legacy Department Head request and service URLs mapped to their existing scoped pages', () => {
     expect(appSource).toContain('<Route path="asset-requests" element={<DeptApprovals />} />');
     expect(appSource).toContain('<Route path="approval-queue" element={<DepartmentDeanRoute />} />');
+    expect(appSource).toContain('<Route path="approvals" element={<Navigate to="/department-head/approval-queue" replace />} />');
     expect(appSource).toContain('<Route path="service-requests" element={<DepartmentMaintenance />} />');
   });
 

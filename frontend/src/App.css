@@ -3521,6 +3521,15 @@ body.dark .spinner {
 .department-profile-summary-item { display: flex; flex-direction: column; gap: 7px; padding: 14px 12px; border: 1px solid #e2e8f0; border-radius: 9px; color: #0369a1; background: #f8fafc; }
 .department-profile-summary-item strong { color: #0f172a; font-size: 25px; line-height: 1; }
 .department-profile-summary-item span { color: #64748b; font-size: 12px; }
+.department-profile-activity { margin-top: 20px; }
+.department-profile-activity-state { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 0; color: #64748b; font-size: 13px; }
+.department-profile-activity-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.department-profile-activity-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 13px 0; border-top: 1px solid #e2e8f0; }
+.department-profile-activity-copy { display: grid; gap: 4px; min-width: 0; }
+.department-profile-activity-copy strong { color: #0f172a; font-size: 14px; }
+.department-profile-activity-copy span { color: #334155; font-size: 13px; overflow-wrap: anywhere; }
+.department-profile-activity-copy small, .department-profile-activity-list time { color: #64748b; font-size: 12px; }
+.department-profile-activity-list time { flex: 0 0 auto; text-align: right; }
 .department-profile-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 8px 13px; border: 1px solid #cbd5e1; border-radius: 7px; color: #0f172a; background: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .department-profile-button--primary { border-color: #0284c7; color: #fff; background: #0369a1; }
 .department-profile-button:hover:not(:disabled) { border-color: #0284c7; background: #f0f9ff; }
@@ -3543,14 +3552,14 @@ body.dark .spinner {
 .department-profile-form .department-profile-details { grid-column: 1 / -1; width: 100%; }
 .department-profile-form label { display: grid; gap: 6px; color: #334155; font-size: 12px; font-weight: 700; }
 .department-profile-form label:last-of-type { grid-column: 1 / -1; }
-.department-profile-form input, .department-profile-form textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 7px; padding: 9px 10px; color: #0f172a; background: #fff; font: inherit; font-size: 14px; }
-.department-profile-form input[aria-invalid="true"], .department-profile-form textarea[aria-invalid="true"] { border-color: #dc2626; }
+.department-profile-form input, .department-profile-form select, .department-profile-form textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 7px; padding: 9px 10px; color: #0f172a; background: #fff; font: inherit; font-size: 14px; }
+.department-profile-form input[aria-invalid="true"], .department-profile-form select[aria-invalid="true"], .department-profile-form textarea[aria-invalid="true"] { border-color: #dc2626; }
 .department-profile-form textarea { resize: vertical; }
 .department-profile-form-actions { grid-column: 1 / -1; justify-content: flex-end; margin-top: 4px; }
 .department-profile-form-error { grid-column: 1 / -1; margin: 0; color: #b91c1c; font-size: 13px; }
 @keyframes department-profile-spin { to { transform: rotate(360deg); } }
 @media (max-width: 800px) { .department-profile-layout { grid-template-columns: 1fr; } }
-@media (max-width: 560px) { .department-profile-page { padding: 18px 14px; } .department-profile-header { flex-direction: column; gap: 16px; } .department-profile-header .department-profile-button { width: 100%; } .department-profile-details, .department-profile-form { grid-template-columns: 1fr; } .department-profile-detail:last-child, .department-profile-form label:last-of-type, .department-profile-form-actions, .department-profile-form-error { grid-column: auto; } .department-profile-form-actions { justify-content: stretch; } .department-profile-form-actions .department-profile-button { flex: 1; } }
+@media (max-width: 560px) { .department-profile-page { padding: 18px 14px; } .department-profile-header { flex-direction: column; gap: 16px; } .department-profile-header .department-profile-button { width: 100%; } .department-profile-details, .department-profile-form { grid-template-columns: 1fr; } .department-profile-detail:last-child, .department-profile-form label:last-of-type, .department-profile-form-actions, .department-profile-form-error { grid-column: auto; } .department-profile-form-actions { justify-content: stretch; } .department-profile-form-actions .department-profile-button { flex: 1; } .department-profile-activity-list li { flex-direction: column; gap: 5px; } .department-profile-activity-list time { text-align: left; } }
 
 /* Shared dashboard frame: full-width header above a fixed sidebar and page content. */
 .dashboard-layout {

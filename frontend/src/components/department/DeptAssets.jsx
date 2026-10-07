@@ -19,6 +19,7 @@ import {
   MapPin,
   Package2,
   QrCode,
+  RefreshCw,
   Search,
   ShieldCheck,
   Sparkles,
@@ -26,6 +27,8 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
+
+const assetTypeOf = (asset) => asset.assetType || asset.asset_type || asset.specifications?.assetType || asset.specifications?.asset_type || '';
 
 const DeptAssets = () => {
   const { user } = useAuth();
@@ -42,9 +45,14 @@ const DeptAssets = () => {
   const [filterLocation, setFilterLocation] = useState('');
   const [filterLaboratory, setFilterLaboratory] = useState('');
   const [filterEmployee, setFilterEmployee] = useState('');
+  const [filterAssetType, setFilterAssetType] = useState('');
   const [filterMaintenance, setFilterMaintenance] = useState('');
+  const [sortBy, setSortBy] = useState('asset_tag');
+  const [sortDirection, setSortDirection] = useState('asc');
+  const [page, setPage] = useState(1);
   const [qrIdentifier, setQrIdentifier] = useState('');
   const [qrError, setQrError] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -65,6 +73,8 @@ const DeptAssets = () => {
   const verificationPath = location.pathname.startsWith('/college') ? '/college/verification' : '/department-head/verification';
   const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
   const canExport = permissions.includes('reports.export') || permissions.includes('assets.export') || permissions.includes('college.assets.export');
+  const canRequestTransfer = permissions.includes('assets.transfer');
+  const canViewHistory = permissions.includes('department_head.history.view');
 
   const normalizeAssignmentRows = useCallback((rows = []) => rows.map((assignment) => ({
     ...assignment,
@@ -86,6 +96,7 @@ const DeptAssets = () => {
 
   const fetchDepartmentAssets = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const assetRows = await getAllAssets(axios);
       setAssets(assetRows.map((asset) => ({
@@ -100,8 +111,8 @@ const DeptAssets = () => {
       })));
     } catch (error) {
       console.error('Department assets fetch error:', error);
+      setLoadError(t.fetchError || 'Failed to load assets');
       toast.error(t.fetchError || 'Failed to load assets');
-      setAssets([]);
     } finally {
       setLoading(false);
     }
@@ -190,12 +201,20 @@ const DeptAssets = () => {
 
   const summaryStats = useMemo(() => {
     const total = assets.length;
-    const inUse = assets.filter((asset) => String(asset.status || '').toLowerCase() === 'in-use').length;
-    const available = assets.filter((asset) => String(asset.status || '').toLowerCase() === 'available').length;
-    const maintenance = assets.filter((asset) => String(asset.status || '').toLowerCase() === 'under-maintenance' || String(asset.maintenance_status || '').toLowerCase() === 'pending' || String(asset.maintenance_status || '').toLowerCase() === 'in-progress').length;
+    const normalizedStatus = (value) => String(value || '').toLowerCase().replace(/[_ ]+/g, '-');
+    const inUse = assets.filter((asset) => ['in-use', 'assigned'].includes(normalizedStatus(asset.status))).length;
+    const available = assets.filter((asset) => ['available', 'ready', 'idle'].includes(normalizedStatus(asset.status))).length;
+    const maintenance = assets.filter((asset) => ['under-maintenance', 'maintenance'].includes(normalizedStatus(asset.status))
+      || ['pending', 'approved', 'assigned', 'in-progress', 'waiting-for-parts'].includes(normalizedStatus(asset.maintenance_status))).length;
     const damaged = assets.filter((asset) => String(asset.condition || '').toLowerCase() === 'damaged').length;
+    const totalValue = assets.reduce((sum, asset) => {
+      const value = [asset.current_value, asset.currentValue, asset.purchase_cost, asset.purchasePrice]
+        .map(Number)
+        .find((candidate) => Number.isFinite(candidate) && candidate > 0);
+      return sum + (value || 0);
+    }, 0);
 
-    return { total, inUse, available, maintenance, damaged };
+    return { total, inUse, available, maintenance, damaged, totalValue };
   }, [assets]);
 
   const filteredAssets = useMemo(() => {
@@ -217,16 +236,45 @@ const DeptAssets = () => {
         asset.digitalId, asset.department_name, asset.location, asset.assigned_to_name,
         asset.laboratory_name,
       ];
+      const matchesLaboratory = filterLaboratory === '__unassigned__'
+        ? !asset.laboratory_name
+        : !filterLaboratory || String(asset.laboratory_name || '') === filterLaboratory;
       return matchesStatus(asset)
         && (!filterCategory || String(asset.category_name || '').toLowerCase() === filterCategory.toLowerCase())
         && (!filterCondition || String(asset.condition || '').toLowerCase() === filterCondition.toLowerCase())
         && (!filterLocation || String(asset.location || '') === filterLocation)
-        && (!filterLaboratory || String(asset.laboratory_name || '') === filterLaboratory)
+        && matchesLaboratory
         && (!filterEmployee || String(asset.assigned_to_name || 'Unassigned') === filterEmployee)
+        && (!filterAssetType || String(assetTypeOf(asset) || 'Not recorded') === filterAssetType)
         && (!filterMaintenance || String(asset.maintenance_status || 'None') === filterMaintenance)
         && (!query || fields.some((field) => String(field || '').toLowerCase().includes(query)));
+    }).sort((first, second) => {
+      const valueFor = (asset) => {
+        if (sortBy === 'asset_type') return assetTypeOf(asset) || '';
+        if (sortBy === 'category') return asset.category_name || '';
+        if (sortBy === 'status') return asset.status || '';
+        if (sortBy === 'location') return asset.location || '';
+        return asset.asset_tag || asset.assetCode || '';
+      };
+      return String(valueFor(first)).localeCompare(String(valueFor(second)), undefined, { numeric: true, sensitivity: 'base' })
+        * (sortDirection === 'desc' ? -1 : 1);
     });
-  }, [assets, filterStatus, filterCategory, filterCondition, filterLocation, filterLaboratory, filterEmployee, filterMaintenance, search]);
+  }, [assets, filterStatus, filterCategory, filterCondition, filterLocation, filterLaboratory, filterEmployee, filterAssetType, filterMaintenance, search, sortBy, sortDirection]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, filterStatus, filterCategory, filterCondition, filterLocation, filterLaboratory, filterEmployee, filterAssetType, filterMaintenance, sortBy, sortDirection]);
+
+  const pageSize = 25;
+  const pageCount = Math.max(1, Math.ceil(filteredAssets.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageAssets = filteredAssets.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const valueDisplay = (asset) => {
+    const value = [asset.current_value, asset.currentValue, asset.purchase_cost, asset.purchasePrice]
+      .map(Number)
+      .find((candidate) => Number.isFinite(candidate) && candidate > 0);
+    return value ? `$${value.toLocaleString()}` : 'Not recorded';
+  };
 
   const assetQuickFilters = [
     { value: '', label: t.allStatus, icon: Package2 },
@@ -330,6 +378,16 @@ const DeptAssets = () => {
   };
 
   const handleAction = (type, asset) => {
+    if (type === 'request_asset') {
+      setShowDetailModal(false);
+      navigate('/department-head/requests');
+      return;
+    }
+    if (type === 'request_transfer') {
+      setShowDetailModal(false);
+      navigate('/department-head/transfers');
+      return;
+    }
     setSelectedAsset(asset);
     setActionType(type);
     setActionData({});
@@ -343,36 +401,21 @@ const DeptAssets = () => {
           toast.error('Please describe the maintenance problem.');
           return;
         }
-        await axios.post('/api/maintenance', {
+        await axios.post('/api/department-head/maintenance-requests', {
           asset_id: selectedAsset.id,
-          title: actionData.type || 'Maintenance request',
+          problem: actionData.type || 'Maintenance request',
           description: actionData.description.trim(),
           priority: actionData.priority || 'medium',
         });
-      } else if (actionType === 'report_damaged') {
-        await axios.post('/api/approvals', {
-          asset_id: selectedAsset.id,
-          type: 'Asset Damage Report',
-          item: selectedAsset.name,
-          quantity: 1,
-          priority: actionData.severity === 'Critical' ? 'critical' : 'high',
-          reason: `${actionData.severity || 'Damaged asset'}: ${actionData.description || 'Damage reported by department'}`,
-        });
       } else {
-        await axios.post('/api/approvals', {
-          asset_id: selectedAsset.id,
-          type: actionType === 'request_transfer' ? 'Asset Transfer' : 'Asset Request',
-          item: selectedAsset.name,
-          quantity: 1,
-          reason: actionData.reason || actionData.target || 'Department asset request',
-        });
+        throw new Error('This asset action is not available in the Department Head workflow.');
       }
       toast.success(t.actionSuccess || 'Action completed successfully');
       setShowActionModal(false);
       if (isAssignmentView) await fetchAssignmentAssets();
       else await fetchDepartmentAssets();
     } catch (error) {
-      toast.error(t.actionError || 'Failed to perform action');
+      toast.error(error.response?.data?.message || error.message || t.actionError || 'Failed to perform action');
     }
   };
 
@@ -413,8 +456,16 @@ const DeptAssets = () => {
       'ICT Equipment',
       'Electrical',
       'Other',
+      'Computers',
+      'Presentation Equipment',
+      'Printers',
+      'Monitor',
       ...assets.map((a) => a.category_name),
     ].filter(Boolean))],
+    [assets],
+  );
+  const uniqueAssetTypes = useMemo(
+    () => [...new Set(assets.map(assetTypeOf).filter(Boolean))].sort(),
     [assets],
   );
   const uniqueLocations = useMemo(
@@ -780,7 +831,10 @@ const DeptAssets = () => {
     setFilterLocation('');
     setFilterLaboratory('');
     setFilterEmployee('');
+    setFilterAssetType('');
     setFilterMaintenance('');
+    setSortBy('asset_tag');
+    setSortDirection('asc');
   };
 
   const exportButton = canExport && (
@@ -800,11 +854,25 @@ const DeptAssets = () => {
     );
   }
 
+  if (loadError) {
+    return (
+      <div style={styles.container}>
+        <div role="alert" style={{ ...styles.emptyState, border: `1px solid ${isDark ? '#7f1d1d' : '#fecaca'}`, borderRadius: '16px', background: isDark ? '#2a1720' : '#fff7f7' }}>
+          <div>{t.fetchError || 'Unable to load department assets.'}</div>
+          <button type="button" style={{ ...styles.buttonPrimary, marginTop: '16px' }} onClick={fetchDepartmentAssets}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const metricCards = [
     { label: t.totalAssets, value: summaryStats.total, icon: Package2, accent: '#60a5fa' },
     { label: t.inUse, value: summaryStats.inUse, icon: CheckCircle2, accent: '#34d399' },
     { label: t.available, value: summaryStats.available, icon: ShieldCheck, accent: '#38bdf8' },
     { label: t.underMaintenance, value: summaryStats.maintenance, icon: Wrench, accent: '#f59e0b' },
+    { label: 'Total Asset Value', value: summaryStats.totalValue ? `$${summaryStats.totalValue.toLocaleString()}` : 'Not recorded', icon: Package2, accent: '#a78bfa' },
   ];
 
   return (
@@ -920,11 +988,26 @@ const DeptAssets = () => {
             <p style={styles.subtitle}>
               {isAssignmentView ? 'Department assignment records for' : t.departmentAssets} <strong>{user?.department || 'Department'}</strong>
               <span style={{ marginLeft: '12px', fontSize: '0.85rem', color: isDark ? '#a7bad4' : '#5a6f8d' }}>
-                {filteredAssets.length} {isAssignmentView ? 'records' : t.totalAssets}
+                {assets.length} {isAssignmentView ? 'records' : t.totalAssets}
               </span>
             </p>
           </div>
-          <div style={styles.headerActions}>{exportButton}</div>
+          <div style={styles.headerActions}>
+            {!isAssignmentView && (
+              <>
+                <button type="button" style={styles.buttonSecondary} onClick={fetchDepartmentAssets} disabled={loading}>
+                  <RefreshCw size={15} /> Refresh
+                </button>
+                <button type="submit" form="department-asset-identifier" style={styles.buttonSecondary}>
+                  <QrCode size={15} /> Identify Asset
+                </button>
+                <button type="button" style={styles.buttonPrimary} onClick={() => navigate('/department-head/requests')}>
+                  Request Asset
+                </button>
+              </>
+            )}
+            {exportButton}
+          </div>
         </div>
 
         <div className="overview-grid">
@@ -942,7 +1025,7 @@ const DeptAssets = () => {
         </div>
 
         {!isAssignmentView && (
-          <form onSubmit={identifyAssetByQr} style={{ ...styles.controls, marginBottom: 0 }}>
+        <form id="department-asset-identifier" onSubmit={identifyAssetByQr} style={{ ...styles.controls, marginBottom: 0 }}>
             <QrCode size={18} aria-hidden="true" />
             <input
               type="search"
@@ -952,7 +1035,6 @@ const DeptAssets = () => {
               value={qrIdentifier}
               onChange={(event) => setQrIdentifier(event.target.value)}
             />
-            <button type="submit" style={styles.buttonPrimary}><QrCode size={15} /> Identify asset</button>
             {qrError && <span role="alert" style={{ color: '#dc2626', flexBasis: '100%' }}>{qrError}</span>}
           </form>
         )}
@@ -978,6 +1060,13 @@ const DeptAssets = () => {
             ))}
           </select>
 
+          {!isAssignmentView && (
+            <select aria-label="Asset type filter" style={styles.select} value={filterAssetType} onChange={(e) => setFilterAssetType(e.target.value)}>
+              <option value="">All Asset Types</option>
+              {uniqueAssetTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+            </select>
+          )}
+
           <select aria-label="Condition filter" style={styles.select} value={filterCondition} onChange={(e) => setFilterCondition(e.target.value)}>
             <option value="">{t.allConditions}</option>
             <option value="Good">{t.good}</option>
@@ -996,6 +1085,7 @@ const DeptAssets = () => {
           {!isAssignmentView && (
             <select aria-label="Laboratory filter" style={styles.select} value={filterLaboratory} onChange={(e) => setFilterLaboratory(e.target.value)}>
               <option value="">All Laboratories</option>
+              <option value="__unassigned__">Unassigned / No Laboratory</option>
               {uniqueLaboratories.map((laboratory) => (
                 <option key={laboratory} value={laboratory}>{laboratory}</option>
               ))}
@@ -1009,6 +1099,20 @@ const DeptAssets = () => {
               <option key={emp} value={emp}>{emp}</option>
             ))}
           </select>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: isDark ? '#a7bad4' : '#5a6f8d', fontWeight: 600 }}>
+            Sort by
+            <select aria-label="Sort assets by" style={styles.select} value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="asset_tag">Asset Tag</option>
+              <option value="category">Category</option>
+              <option value="status">Status</option>
+              <option value="location">Location</option>
+              {uniqueAssetTypes.length > 0 && <option value="asset_type">Asset Type</option>}
+            </select>
+          </label>
+          <button type="button" style={styles.clearButton} aria-label={`Sort ${sortDirection === 'asc' ? 'descending' : 'ascending'}`} onClick={() => setSortDirection((direction) => direction === 'asc' ? 'desc' : 'asc')}>
+            {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+          </button>
 
           <button style={styles.clearButton} onClick={clearFilters}>
             <X size={14} /> {t.clearFilters}
@@ -1046,6 +1150,7 @@ const DeptAssets = () => {
                 <th style={styles.th}>{t.assetTag}</th>
                 <th style={styles.th}>{t.name}</th>
                 <th style={styles.th}>{t.category}</th>
+                {!isAssignmentView && <th style={styles.th}>Asset Type</th>}
                 <th style={styles.th}>{t.status}</th>
                 <th style={styles.th}>{t.condition}</th>
                 <th style={styles.th}>{t.location}</th>
@@ -1058,12 +1163,18 @@ const DeptAssets = () => {
             <tbody>
               {filteredAssets.length === 0 ? (
                 <tr>
-                  <td colSpan="10" style={{ ...styles.td, textAlign: 'center', padding: '30px' }}>
-                    {t.noAssets}
+                  <td colSpan={isAssignmentView ? 10 : 11} style={{ ...styles.td, textAlign: 'center', padding: '30px' }}>
+                    {assets.length === 0 ? (
+                      <div>
+                        <strong>No Department Assets</strong>
+                        <p>There are currently no assets associated with your department.</p>
+                        <button type="button" style={styles.buttonPrimary} onClick={() => navigate('/department-head/requests')}>Request Asset</button>
+                      </div>
+                    ) : 'No assets match the selected filters.'}
                   </td>
                 </tr>
               ) : (
-                filteredAssets.map((asset) => (
+                pageAssets.map((asset) => (
                   <tr
                     key={asset.id}
                     style={styles.clickableRow}
@@ -1078,6 +1189,7 @@ const DeptAssets = () => {
                     <td style={styles.td}><span style={styles.assetTag}>{asset.asset_tag}</span></td>
                     <td style={styles.td}>{asset.name}</td>
                     <td style={styles.td}>{asset.category_name || '-'}</td>
+                    {!isAssignmentView && <td style={styles.td}>{assetTypeOf(asset) || 'Not recorded'}</td>}
                     <td style={styles.td}>
                       <span style={styles.statusBadge(displayStatus(asset.status))}>{displayStatus(asset.status)}</span>
                     </td>
@@ -1110,7 +1222,7 @@ const DeptAssets = () => {
                         </span>
                       ) : '-'}
                     </td>
-                    <td style={styles.td}>${(asset.current_value || 0).toLocaleString()}</td>
+                    <td style={styles.td}>{valueDisplay(asset)}</td>
                     <td style={styles.td}>
                       <button
                         type="button"
@@ -1139,6 +1251,13 @@ const DeptAssets = () => {
               )}
             </tbody>
           </table>
+          {filteredAssets.length > pageSize && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', padding: '12px 0' }}>
+              <span aria-live="polite">Page {currentPage} of {pageCount} · {filteredAssets.length} assets</span>
+              <button type="button" style={styles.buttonSecondary} disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Previous</button>
+              <button type="button" style={styles.buttonSecondary} disabled={currentPage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Next</button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1167,7 +1286,12 @@ const DeptAssets = () => {
               </div>
               <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>{t.location}</div>
-                <div style={styles.detailValue}>{selectedAsset.location || '-'}</div>
+                <div style={styles.detailValue}>
+                  {selectedAsset.location || '-'}
+                  {selectedAsset.BuildingRecord?.buildingName && <div>Building: {selectedAsset.BuildingRecord.buildingName}</div>}
+                  {selectedAsset.BuildingRecord?.floor && <div>Floor: {selectedAsset.BuildingRecord.floor}</div>}
+                  {selectedAsset.RoomRecord?.roomName && <div>Room: {selectedAsset.RoomRecord.roomName}</div>}
+                </div>
               </div>
               <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>Laboratory</div>
@@ -1194,7 +1318,19 @@ const DeptAssets = () => {
               </div>
               <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>{t.value}</div>
-                <div style={styles.detailValue}>${(selectedAsset.current_value || 0).toLocaleString()}</div>
+                <div style={styles.detailValue}>{valueDisplay(selectedAsset)}</div>
+              </div>
+              <div style={styles.detailItem}>
+                <div style={styles.detailLabel}>Acquisition date</div>
+                <div style={styles.detailValue}>
+                  {selectedAsset.purchaseDate || selectedAsset.purchase_date
+                    ? new Date(selectedAsset.purchaseDate || selectedAsset.purchase_date).toLocaleDateString()
+                    : 'Not recorded'}
+                </div>
+              </div>
+              <div style={styles.detailItem}>
+                <div style={styles.detailLabel}>Funding source</div>
+                <div style={styles.detailValue}>{selectedAsset.fundingSource || selectedAsset.funding_source || 'Not recorded'}</div>
               </div>
               <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>{t.lastMaintenance}</div>
@@ -1215,11 +1351,10 @@ const DeptAssets = () => {
             </div>
 
             <div style={styles.actionButtons}>
-              <button style={styles.actionButton('#48bb78')} onClick={() => handleAction('request_transfer', selectedAsset)}><Building2 size={15} /> {t.requestTransfer}</button>
+              {canRequestTransfer && <button style={styles.actionButton('#48bb78')} onClick={() => handleAction('request_transfer', selectedAsset)}><Building2 size={15} /> {t.requestTransfer}</button>}
               <button style={styles.actionButton('#ed8936')} onClick={() => handleAction('request_maintenance', selectedAsset)}><Wrench size={15} /> {t.requestMaintenance}</button>
-              <button style={styles.actionButton('#fc8181')} onClick={() => handleAction('report_damaged', selectedAsset)}><AlertTriangle size={15} /> {t.reportDamaged}</button>
               <button style={styles.actionButton('#805ad5')} onClick={() => handleAction('request_asset', selectedAsset)}><MapPin size={15} /> {t.requestAsset}</button>
-              <button style={styles.actionButton('#2b6cb0')} onClick={() => navigate(`${historyBasePath}/${selectedAsset.id}`)}><History size={15} /> Full history</button>
+              {canViewHistory && <button style={styles.actionButton('#2b6cb0')} onClick={() => navigate(`${historyBasePath}/${selectedAsset.id}`)}><History size={15} /> Full history</button>}
               <button style={styles.actionButton('#0f766e')} onClick={() => navigate(verificationPath)}><ClipboardCheck size={15} /> Physical verification</button>
             </div>
 
@@ -1305,10 +1440,7 @@ const DeptAssets = () => {
           <div style={styles.actionModalContent} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h2 style={styles.modalTitle}>
-                {actionType === 'request_transfer' && '📤 ' + t.requestTransfer}
                 {actionType === 'request_maintenance' && '🔧 ' + t.requestMaintenance}
-                {actionType === 'report_damaged' && '⚠️ ' + t.reportDamaged}
-                {actionType === 'request_asset' && '📋 ' + t.requestAsset}
               </h2>
               <button style={styles.modalClose} onClick={() => setShowActionModal(false)}><X size={18} /></button>
             </div>
@@ -1316,17 +1448,6 @@ const DeptAssets = () => {
             <div style={{ marginBottom: '18px', color: isDark ? '#9bb5d5' : '#5a6f8d' }}>
               {t.asset}: <strong>{selectedAsset.asset_tag} - {selectedAsset.name}</strong>
             </div>
-
-            {actionType === 'request_transfer' && (
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>{t.transferTo}</label>
-                <input type="text" style={styles.formInput} placeholder={t.enterEmployeeName} value={actionData.target || ''} onChange={(e) => setActionData({ ...actionData, target: e.target.value })} />
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>{t.reason}</label>
-                  <textarea style={styles.formTextarea} placeholder={t.transferReasonPlaceholder} value={actionData.reason || ''} onChange={(e) => setActionData({ ...actionData, reason: e.target.value })} />
-                </div>
-              </div>
-            )}
 
             {actionType === 'request_maintenance' && (
               <div>
@@ -1352,38 +1473,6 @@ const DeptAssets = () => {
                     <option value="high">High</option>
                     <option value="critical">Critical</option>
                   </select>
-                </div>
-              </div>
-            )}
-
-            {actionType === 'report_damaged' && (
-              <div>
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>{t.damageSeverity}</label>
-                  <select style={styles.formInput} value={actionData.severity || ''} onChange={(e) => setActionData({ ...actionData, severity: e.target.value })}>
-                    <option value="">{t.selectSeverity}</option>
-                    <option value="Minor">{t.minor}</option>
-                    <option value="Moderate">{t.moderate}</option>
-                    <option value="Major">{t.major}</option>
-                    <option value="Critical">{t.critical}</option>
-                  </select>
-                </div>
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>{t.damageDescription}</label>
-                  <textarea style={styles.formTextarea} placeholder={t.damageDescriptionPlaceholder} value={actionData.description || ''} onChange={(e) => setActionData({ ...actionData, description: e.target.value })} />
-                </div>
-              </div>
-            )}
-
-            {actionType === 'request_asset' && (
-              <div>
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>{t.requestReason}</label>
-                  <textarea style={styles.formTextarea} placeholder={t.requestReasonPlaceholder} value={actionData.reason || ''} onChange={(e) => setActionData({ ...actionData, reason: e.target.value })} />
-                </div>
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>{t.requiredBy}</label>
-                  <input type="date" style={styles.formInput} value={actionData.requiredBy || ''} onChange={(e) => setActionData({ ...actionData, requiredBy: e.target.value })} />
                 </div>
               </div>
             )}

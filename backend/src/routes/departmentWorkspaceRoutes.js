@@ -47,8 +47,8 @@ const requireScopedTrackingAsset = async (req, res, next) => {
 };
 
 router.use(...requireDepartmentHead, resolveDepartmentScope);
-router.get('/profile', getDepartmentProfile);
-router.put('/profile', updateDepartmentProfile);
+router.get('/profile', requirePermission('department.profile.view'), getDepartmentProfile);
+router.put('/profile', requirePermission('department.profile.update'), updateDepartmentProfile);
 router.get('/reports', getDepartmentReports);
 router.get('/reports/assets', reportFor('assets'));
 router.get('/reports/maintenance', reportFor('maintenance'));
@@ -57,6 +57,7 @@ router.get('/reports/assignments', analytics.getReport('assignments'));
 router.get('/reports/transfers', analytics.getReport('transfers'));
 router.get('/reports/verification', analytics.getReport('verification'));
 router.get('/reports/escalations', analytics.getReport('escalations'));
+router.get('/staff', requirePermission('users.view'), listDepartmentStaff);
 router.get('/returns', returnWorkflow.listReturns);
 router.post('/returns', returnWorkflow.createReturn);
 router.get('/returns/:id', returnWorkflow.getReturn);
@@ -82,7 +83,6 @@ router.get('/dashboard/service-status', getDepartmentDashboardSection('serviceRe
 router.get('/dashboard/request-status', getDepartmentDashboardSection('acquisitionRequestStatus'));
 router.get('/dashboard/recent-activities', getDepartmentDashboardSection('recentActivities'));
 router.get('/assets', listDepartmentAssets);
-router.get('/staff', listDepartmentStaff);
 router.get('/locations', (req, res, next) => {
   if (String(req.query.export || '').toLowerCase() !== 'true') return next();
   return requirePermission('reports.export')(req, res, next);
@@ -99,12 +99,12 @@ router.get('/asset-requests', assetRequests.listRequests);
 router.post('/asset-requests', assetRequests.createRequest);
 router.get('/asset-requests/:id', assetRequests.getRequest);
 router.post('/asset-requests/:id/submit', assetRequests.submitDraft);
-router.get('/approvals', assetRequests.listApprovalQueue);
-router.get('/approvals/:id', assetRequests.getApprovalReview);
-router.post('/approvals/:id/approve', approvalAction('approve'));
-router.post('/approvals/:id/reject', approvalAction('reject'));
-router.post('/approvals/:id/request-changes', approvalAction('request-changes'));
-router.post('/approvals/:id/escalate', approvalAction('escalate'));
+router.get('/approvals', requirePermission('department_head.approvals.review'), assetRequests.listApprovalQueue);
+router.get('/approvals/:id', requirePermission('department_head.approvals.review'), assetRequests.getApprovalReview);
+router.post('/approvals/:id/approve', requirePermission('department_head.approvals.approve'), approvalAction('approve'));
+router.post('/approvals/:id/reject', requirePermission('department_head.approvals.reject'), approvalAction('reject'));
+router.post('/approvals/:id/request-changes', requirePermission('department_head.approvals.request_changes'), approvalAction('request-changes'));
+router.post('/approvals/:id/escalate', requirePermission('department_head.approvals.escalate'), approvalAction('escalate'));
 router.get('/verification/history', physicalVerification.listVerifications);
 router.post('/verification/records', physicalVerification.createVerification);
 router.get('/verification', verification.listSessions);

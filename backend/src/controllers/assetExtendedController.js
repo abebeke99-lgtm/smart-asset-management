@@ -352,8 +352,10 @@ const deleteAssetDocument = async (req, res, next) => {
 
 const downloadAssetDocument = async (req, res, next) => {
   try {
-    const document = await AssetDocument.findByPk(req.params.documentId);
-    if (!document || String(document.assetId) !== String(req.params.id)) {
+    const document = await AssetDocument.findOne({
+      where: { id: req.params.documentId, assetId: req.params.id, status: 'active' },
+    });
+    if (!document) {
       return res.status(404).json({ success: false, message: 'Document not found' });
     }
     if (isCollegeScopedRole(req.user?.role)) {

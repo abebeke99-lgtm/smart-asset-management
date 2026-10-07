@@ -8,7 +8,7 @@ const routeSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/depar
 
 test('department staff listing is authenticated, department-scoped, and paginated', () => {
   assert.match(routeSource, /router\.use\(\.\.\.requireDepartmentHead, resolveDepartmentScope\)/);
-  assert.match(routeSource, /router\.get\('\/staff', listDepartmentStaff\)/);
+  assert.match(routeSource, /router\.get\('\/staff', requirePermission\('users\.view'\), listDepartmentStaff\)/);
   assert.match(controllerSource, /departmentId: req\.organizationScope\.departmentId/);
   assert.match(controllerSource, /collegeId = req\.organizationScope\.collegeId/);
   assert.match(controllerSource, /findAndCountAll\(\{ where,.*limit, offset \}/s);
@@ -20,6 +20,7 @@ test('department staff search and status filters use real User fields', () => {
   assert.match(controllerSource, /username: \{ \[Op\.like\]:/);
   assert.match(controllerSource, /email: \{ \[Op\.like\]:/);
   assert.match(controllerSource, /phone: \{ \[Op\.like\]:/);
-  assert.match(controllerSource, /if \(req\.query\.status === 'active'\) \{[\s\S]*?where\.active = true;[\s\S]*?where\.status = 'active';/);
-  assert.match(controllerSource, /else if \(req\.query\.status === 'inactive'\) \{[\s\S]*?where\.active = false;[\s\S]*?where\[Op\.and\]/);
+  assert.match(controllerSource, /const status = String\(req\.query\.status \|\| ''\)\.trim\(\)\.toLowerCase\(\);[\s\S]*?if \(status === 'active'\) \{[\s\S]*?where\.active = true;[\s\S]*?where\.status = 'active';/);
+  assert.match(controllerSource, /else if \(status === 'inactive'\) \{[\s\S]*?where\.active = false;[\s\S]*?where\[Op\.and\]/);
+  assert.match(controllerSource, /else if \(status === 'suspended'\) \{\s*where\.status = 'suspended';/);
 });

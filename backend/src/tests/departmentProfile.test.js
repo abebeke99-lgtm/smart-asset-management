@@ -226,6 +226,8 @@ test('department profile update persists only editable fields and returns the sa
   };
   const persistedUpdates = [];
   const auditEntries = [];
+  let auditOptions;
+  let transactionContext;
   const department = {
     id: 3,
     name: 'Engineering',
@@ -253,8 +255,14 @@ test('department profile update persists only editable fields and returns the sa
   Asset.count = async () => 12;
   Location.findOne = async () => ({ id: 2 });
   Location.findByPk = async () => ({ id: 2 });
-  AuditLog.create = async (entry) => { auditEntries.push(entry); };
-  sequelize.transaction = async (callback) => callback({ id: 'profile-test-transaction' });
+  AuditLog.create = async (entry, options) => {
+    auditEntries.push(entry);
+    auditOptions = options;
+  };
+  sequelize.transaction = async (callback) => {
+    transactionContext = { id: 'profile-test-transaction' };
+    return callback(transactionContext);
+  };
   t.after(() => {
     Department.findByPk = originals.departmentFindByPk;
     User.count = originals.userCount;
@@ -288,11 +296,22 @@ test('department profile update persists only editable fields and returns the sa
   assert.equal(auditEntries.length, 1);
   assert.equal(auditEntries[0].userId, 10);
   assert.equal(auditEntries[0].action, 'UPDATE_DEPARTMENT_PROFILE');
-  assert.deepEqual(JSON.parse(auditEntries[0].details), {
-    departmentId: 3,
-    oldValues: { contact: '55512345', email: 'engineering@example.test', office: 'Main Office', description: 'Old description' },
-    newValues: { contact: '+1 (555) 123-4567', email: 'new@example.test', office: 'Main Office', description: 'Updated' },
+  const auditDetails = JSON.parse(auditEntries[0].details);
+  assert.equal(auditDetails.entityId, 3);
+  assert.equal(auditDetails.role, 'department_head');
+  assert.deepEqual(auditDetails.changedFields, ['contact', 'email', 'description']);
+  assert.deepEqual(auditDetails.oldValue, {
+    contact: '55512345',
+    email: 'engineering@example.test',
+    description: 'Old description',
   });
+  assert.deepEqual(auditDetails.newValue, {
+    contact: '+1 (555) 123-4567',
+    email: 'new@example.test',
+    description: 'Updated',
+  });
+  assert.ok(auditDetails.timestamp);
+  assert.equal(auditOptions.transaction, transactionContext);
 });
 
 test('the existing department list and detail endpoints enforce configured department scope', () => {
@@ -306,7 +325,7 @@ test('the existing department list and detail endpoints enforce configured depar
   }
 });
 
-test('department profile endpoints require department-head authentication, scope, and permissions', () => {
+test('department profile endpoints require department-head authentication, scope, and profile permissions', () => {
   const dashboardRouteIndex = departmentWorkspaceRoutes.stack.findIndex((layer) => layer.route?.path === '/dashboard' && layer.route.methods.get);
   const profileRouteIndexes = [];
 
@@ -314,8 +333,26 @@ test('department profile endpoints require department-head authentication, scope
     const layerIndex = departmentWorkspaceRoutes.stack.findIndex((layer) => layer.route?.path === '/profile' && layer.route.methods[method]);
     const route = departmentWorkspaceRoutes.stack[layerIndex]?.route;
     assert.ok(route, `Expected profile ${method.toUpperCase()} route`);
-    assert.equal(route.stack.length, 1, `Profile ${method.toUpperCase()} is authorized by the router's Department Head role guard`);
-    assert.equal(route.stack[0].handle.name, method === 'get' ? 'getDepartmentProfile' : 'updateDepartmentProfile');
+    assert.equal(route.stack.length, 2, `Profile ${method.toUpperCase()} includes its profile permission check`);
+    assert.equal(route.stack[1].handle.name, method === 'get' ? 'getDepartmentProfile' : 'updateDepartmentProfile');
+    const deniedResponse = makeResponse();
+    let deniedNextCalled = false;
+    route.stack[0].handle({ user: { permissions: [] } }, deniedResponse, () => { deniedNextCalled = true; });
+    assert.equal(deniedResponse.statusCode, 403);
+    assert.equal(deniedNextCalled, false);
+    const wrongPermissionResponse = makeResponse();
+    let wrongPermissionNextCalled = false;
+    route.stack[0].handle({
+      user: { permissions: [method === 'get' ? 'department.profile.update' : 'department.profile.view'] },
+    }, wrongPermissionResponse, () => { wrongPermissionNextCalled = true; });
+    assert.equal(wrongPermissionResponse.statusCode, 403);
+    assert.equal(wrongPermissionNextCalled, false);
+    const allowedResponse = makeResponse();
+    let allowedNextCalled = false;
+    route.stack[0].handle({
+      user: { permissions: [method === 'get' ? 'department.profile.view' : 'department.profile.update'] },
+    }, allowedResponse, () => { allowedNextCalled = true; });
+    assert.equal(allowedNextCalled, true);
     profileRouteIndexes.push(layerIndex);
   }
   assert.ok(dashboardRouteIndex >= 0, 'Expected the department dashboard route');
@@ -326,11 +363,6 @@ test('department profile endpoints require department-head authentication, scope
   for (const middleware of [...requireDepartmentHead, resolveDepartmentScope]) {
     assert.ok(departmentWorkspaceRoutes.stack.some((layer) => layer.handle === middleware));
   }
-  assert.equal(
-    departmentWorkspaceRoutes.stack.findIndex((layer) => layer.handle.name === 'requireDepartmentPermission'),
-    -1,
-    'Profile endpoints must not depend on optional per-role permission-matrix entries',
-  );
 });
 
 test('department staff listing searches and filters only the authenticated department records', async (t) => {
@@ -377,6 +409,36 @@ test('department staff listing searches and filters only the authenticated depar
   assert.equal(res.payload.data[0].fullName, 'Department Lecturer');
 });
 
+test('department staff listing supports the model-defined suspended status without trusting request department ids', async (t) => {
+  const originalFindAndCountAll = User.findAndCountAll;
+  const originalFindAll = User.findAll;
+  const originalCount = User.count;
+  let staffQuery;
+  User.findAndCountAll = async (options) => {
+    staffQuery = options;
+    return { count: 1, rows: [{ id: 22, fullName: 'Suspended Lecturer', status: 'suspended' }] };
+  };
+  User.findAll = async () => [{ role: 'staff' }];
+  User.count = async () => 0;
+  t.after(() => {
+    User.findAndCountAll = originalFindAndCountAll;
+    User.findAll = originalFindAll;
+    User.count = originalCount;
+  });
+
+  const res = makeResponse();
+  await listDepartmentStaff({
+    organizationScope: { departmentId: 7, collegeId: 2 },
+    query: { departmentId: 99, status: 'suspended' },
+  }, res, (error) => { throw error; });
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(staffQuery.where.departmentId, 7);
+  assert.equal(staffQuery.where.status, 'suspended');
+  assert.equal(staffQuery.where.departmentId === 99, false);
+  assert.equal(res.payload.data[0].status, 'suspended');
+});
+
 test('department staff endpoint rejects missing scope and is behind department-head authentication and scope middleware', async (t) => {
   const res = makeResponse();
   await listDepartmentStaff({ organizationScope: {}, query: {} }, res, (error) => { throw error; });
@@ -385,6 +447,17 @@ test('department staff endpoint rejects missing scope and is behind department-h
   const staffRoute = require('../routes/departmentWorkspaceRoutes').stack
     .find((layer) => layer.route?.path === '/staff' && layer.route.methods.get);
   assert.ok(staffRoute);
+  assert.equal(staffRoute.route.stack.length, 2);
+  const requireStaffPermission = staffRoute.route.stack[0].handle;
+  const deniedResponse = makeResponse();
+  let deniedNextCalled = false;
+  requireStaffPermission({ user: { permissions: [] } }, deniedResponse, () => { deniedNextCalled = true; });
+  assert.equal(deniedResponse.statusCode, 403);
+  assert.equal(deniedNextCalled, false);
+  const allowedResponse = makeResponse();
+  let allowedNextCalled = false;
+  requireStaffPermission({ user: { permissions: ['users.view'] } }, allowedResponse, () => { allowedNextCalled = true; });
+  assert.equal(allowedNextCalled, true);
   const { requireDepartmentHead, resolveDepartmentScope } = require('../middlewares/organizationScope');
   const workspaceRouter = require('../routes/departmentWorkspaceRoutes');
   for (const middleware of [...requireDepartmentHead, resolveDepartmentScope]) {

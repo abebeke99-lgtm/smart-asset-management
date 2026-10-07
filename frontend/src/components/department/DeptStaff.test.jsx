@@ -36,6 +36,7 @@ const member = {
   phone: '555-0123',
   role: 'staff',
   laboratory: 'Physics Lab',
+  department: 'Engineering',
   active: true,
   status: 'active',
 };
@@ -45,7 +46,7 @@ const response = (data = [member], overrides = {}) => ({
     success: true,
     data,
     summary: { total: data.length, active: data.length, inactive: 0 },
-    filters: { positions: ['Lecturer', 'Laboratory Staff'] },
+    filters: { positions: ['Lecturer', 'Laboratory Staff'], roles: ['staff', 'teaching_assistant'] },
     pagination: { page: 1, pages: 1, total: data.length },
     ...overrides,
   },
@@ -73,7 +74,7 @@ describe('Department Head staff', () => {
     expect(screen.getByText('Physics Lab')).toBeInTheDocument();
     expect(screen.getByText('Total Staff').parentElement).toHaveTextContent('1');
     expect(apiClient.get).toHaveBeenCalledWith('/department-head/staff', {
-      params: { page: 1, limit: 25 },
+      params: { search: undefined, position: undefined, status: undefined, page: 1, limit: 25 },
     });
     expect(screen.queryByRole('button', { name: 'Export' })).not.toBeInTheDocument();
   });
@@ -94,6 +95,16 @@ describe('Department Head staff', () => {
     }), { timeout: 1500 });
   });
 
+  it('filters by a role returned by the department-scoped API', async () => {
+    render(<DeptStaff />);
+    await screen.findByText('Aster Lecturer');
+
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'teaching_assistant' } });
+    await waitFor(() => expect(apiClient.get).toHaveBeenLastCalledWith('/department-head/staff', {
+      params: { search: undefined, position: undefined, status: undefined, role: 'teaching_assistant', page: 1, limit: 25 },
+    }));
+  });
+
   it('clears filters and refreshes the scoped staff list', async () => {
     render(<DeptStaff />);
     await screen.findByText('Aster Lecturer');
@@ -111,16 +122,60 @@ describe('Department Head staff', () => {
 
   it('opens a staff detail view with the requested fields', async () => {
     render(<DeptStaff />);
-    fireEvent.click(await screen.findByRole('button', { name: 'View' }));
+    const viewButton = await screen.findByRole('button', { name: 'View' });
+    fireEvent.click(viewButton);
 
     const dialog = screen.getByRole('dialog', { name: 'Aster Lecturer' });
     expect(dialog).toHaveTextContent('EMP-018');
+    expect(dialog).toHaveTextContent('Engineering');
     expect(dialog).toHaveTextContent('Lecturer');
     expect(dialog).toHaveTextContent('Staff');
     expect(dialog).toHaveTextContent('Physics Lab');
     expect(dialog).toHaveTextContent('Active');
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.keyDown(dialog, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(viewButton).toHaveFocus());
+  });
+
+  it('filters by the supported suspended status and renders it distinctly', async () => {
+    const suspendedMember = { ...member, status: 'suspended' };
+    apiClient.get.mockResolvedValue(response([suspendedMember], {
+      summary: { total: 1, active: 0, inactive: 1 },
+    }));
+    render(<DeptStaff />);
+
+    expect(await screen.findByText('Aster Lecturer')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'suspended' } });
+    await waitFor(() => expect(apiClient.get).toHaveBeenLastCalledWith('/department-head/staff', {
+      params: { search: undefined, position: undefined, status: 'suspended', page: 1, limit: 25 },
+    }));
+    expect(await screen.findByText('Suspended', { selector: 'span' })).toHaveClass('suspended');
+  });
+
+  it('distinguishes an empty filtered result from an empty department directory', async () => {
+    apiClient.get.mockImplementation((_url, { params }) => Promise.resolve(
+      params.search ? response([], { summary: { total: 0, active: 0, inactive: 0 } }) : response(),
+    ));
+    render(<DeptStaff />);
+    await screen.findByText('Aster Lecturer');
+
+    fireEvent.change(screen.getByLabelText('Search staff'), { target: { value: 'Nobody' } });
+    expect(await screen.findByText('No staff members match your filters.')).toBeInTheDocument();
+  });
+
+  it('retains server-side pagination and requests the next page', async () => {
+    apiClient.get.mockImplementation((_url, { params }) => Promise.resolve(response(
+      params.page === 2 ? [{ ...member, id: 19, fullName: 'Page Two Staff' }] : [member],
+      { pagination: { page: params.page, pages: 2, total: 26 } },
+    )));
+    render(<DeptStaff />);
+    expect(await screen.findByText('Aster Lecturer')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+
+    expect(await screen.findByText('Page Two Staff')).toBeInTheDocument();
+    expect(apiClient.get).toHaveBeenLastCalledWith('/department-head/staff', {
+      params: { search: undefined, position: undefined, status: undefined, page: 2, limit: 25 },
+    });
   });
 
   it('shows loading errors and supports retry', async () => {

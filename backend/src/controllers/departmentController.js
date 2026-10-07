@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const { sequelize, Asset, User, Department, Location, College, Building, Campus, Approval, Assignment, Transfer, AssetReturn, Maintenance, VerificationSession, VerificationItem, ServiceRequest, AuditLog, AssetMovement, Room } = require('../models');
 const { normalizeRoleValue } = require('../middlewares/auth');
+const { createAuditLog } = require('../services/auditLogService');
 
 const pageValues = (query) => {
   const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
@@ -181,9 +182,6 @@ const serializeDepartmentProfile = (department, totalStaff, totalAssets) => ({
   name: department.name,
   code: department.code,
   description: department.description || '',
-  headId: department.headId,
-  collegeId: department.collegeId,
-  locationId: department.locationId,
   contact: department.phone || '',
   phone: department.phone || '',
   email: department.email || '',
@@ -212,7 +210,7 @@ const getDepartmentProfile = async (req, res, next) => {
     const department = await Department.findByPk(departmentId, {
       include: [
         { model: College, attributes: ['id', 'collegeName', 'collegeCode'], required: false },
-        { model: User, as: 'Head', attributes: ['id', 'fullName', 'username', 'email'], required: false },
+        { model: User, as: 'Head', attributes: ['id', 'fullName', 'username'], required: false },
         { model: Location, as: 'LocationRecord', attributes: ['id', 'name', 'code'], required: false },
       ],
     });
@@ -246,7 +244,7 @@ const updateDepartmentProfile = async (req, res, next) => {
     const department = await Department.findByPk(departmentId, {
       include: [
         { model: College, attributes: ['id', 'collegeName', 'collegeCode'], required: false },
-        { model: User, as: 'Head', attributes: ['id', 'fullName', 'username', 'email'], required: false },
+        { model: User, as: 'Head', attributes: ['id', 'fullName', 'username'], required: false },
         { model: Location, as: 'LocationRecord', attributes: ['id', 'name', 'code'], required: false },
       ],
     });
@@ -285,7 +283,7 @@ const updateDepartmentProfile = async (req, res, next) => {
       const updatedDepartment = await Department.findByPk(departmentId, {
         include: [
           { model: College, attributes: ['id', 'collegeName', 'collegeCode'], required: false },
-          { model: User, as: 'Head', attributes: ['id', 'fullName', 'username', 'email'], required: false },
+          { model: User, as: 'Head', attributes: ['id', 'fullName', 'username'], required: false },
           { model: Location, as: 'LocationRecord', attributes: ['id', 'name', 'code'], required: false },
         ],
         transaction,
@@ -298,12 +296,20 @@ const updateDepartmentProfile = async (req, res, next) => {
         office: updatedDepartment.LocationRecord?.name || '',
         description: updatedDepartment.description || '',
       };
-      await AuditLog.create({
+      const changedFields = Object.keys(newValues).filter((field) => oldValues[field] !== newValues[field]);
+      const changedOldValues = Object.fromEntries(changedFields.map((field) => [field, oldValues[field]]));
+      const changedNewValues = Object.fromEntries(changedFields.map((field) => [field, newValues[field]]));
+      await createAuditLog({
         userId: req.user.id,
+        role: req.user.role,
         action: 'UPDATE_DEPARTMENT_PROFILE',
         entity: `department:${departmentId}`,
-        details: JSON.stringify({ departmentId, oldValues, newValues }),
-      }, { transaction });
+        entityId: departmentId,
+        oldValue: changedOldValues,
+        newValue: changedNewValues,
+        details: { departmentId, changedFields },
+        transaction,
+      });
       return updatedDepartment;
     });
 
@@ -667,20 +673,25 @@ const listDepartmentStaff = async (req, res, next) => {
       if (/^\d+$/.test(search)) searchFields.push({ id: Number(search) });
       where[Op.or] = searchFields;
     }
-    const position = String(req.query.position || req.query.role || '').trim();
+    const position = String(req.query.position || '').trim();
     if (position) {
       const positionField = User.rawAttributes.position ? 'position' : 'role';
       where[positionField] = position;
     }
-    if (req.query.status === 'active') {
+    const role = String(req.query.role || '').trim();
+    if (role) where.role = role;
+    const status = String(req.query.status || '').trim().toLowerCase();
+    if (status === 'active') {
       where.active = true;
       where.status = 'active';
-    } else if (req.query.status === 'inactive') {
+    } else if (status === 'inactive') {
       where.active = false;
       where[Op.and] = [
         ...(where[Op.and] || []),
         { [Op.or]: [{ active: false }, { status: { [Op.ne]: 'active' } }] },
       ];
+    } else if (status === 'suspended') {
+      where.status = 'suspended';
     }
 
     const staffAttributes = [
@@ -688,9 +699,7 @@ const listDepartmentStaff = async (req, res, next) => {
       'phone', 'active', 'status', 'createdAt',
       ...['employeeId', 'position', 'office', 'laboratory'].filter((field) => User.rawAttributes[field]),
     ];
-    const positions = User.rawAttributes.position
-      ? ['position']
-      : ['role'];
+    const filterAttributes = User.rawAttributes.position ? ['position', 'role'] : ['role'];
     const [result, active, inactive, total] = await Promise.all([
       User.findAndCountAll({ where, attributes: staffAttributes, order: [['fullName', 'ASC']], limit, offset }),
       User.count({ where: { ...scope, active: true, status: 'active' } }),
@@ -699,18 +708,23 @@ const listDepartmentStaff = async (req, res, next) => {
     ]);
     const positionRows = await User.findAll({
       where: scope,
-      attributes: positions,
-      group: positions,
-      order: [[positions[0], 'ASC']],
+      attributes: filterAttributes,
+      group: filterAttributes,
+      order: [[User.rawAttributes.position ? 'position' : 'role', 'ASC']],
       raw: true,
     });
-    const positionKey = positions[0];
+    const positionKey = User.rawAttributes.position ? 'position' : 'role';
     const availablePositions = [...new Set(positionRows.map((row) => String(row[positionKey] || '').trim()).filter(Boolean))];
+    const availableRoles = [...new Set(positionRows.map((row) => String(row.role || '').trim()).filter(Boolean))];
     res.json({
       success: true,
       data: result.rows,
       summary: { total, active, inactive },
-      filters: { positions: availablePositions },
+      filters: {
+        positions: availablePositions,
+        positionField: User.rawAttributes.position ? 'position' : 'role',
+        roles: availableRoles,
+      },
       pagination: { page, limit, total: result.count, pages: Math.ceil(result.count / limit) },
     });
   } catch (error) { next(error); }

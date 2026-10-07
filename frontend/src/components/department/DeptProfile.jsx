@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Building2, CheckCircle2, ClipboardList, Edit3, FileText, Mail, MapPin, Package, Phone, RefreshCw, Save, UserRound, Users, X } from 'lucide-react';
+import { Activity, Building2, CheckCircle2, ClipboardList, Edit3, FileText, Mail, MapPin, Package, Phone, RefreshCw, Save, UserRound, Users, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../contexts/AuthContext';
 import apiClient from '../../services/apiClient';
@@ -29,6 +29,11 @@ const getDepartmentDescription = (value, missingLabel) => {
   return description;
 };
 
+const getEditableDepartmentDescription = (value) => {
+  const description = String(value ?? '').trim();
+  return /^auto-created department scope\b/i.test(description) ? '' : description;
+};
+
 const normalizeRoleValue = (role) => {
   if (!role) return '';
   const value = String(role).trim().toLowerCase();
@@ -43,7 +48,7 @@ const normalizeRoleValue = (role) => {
 };
 
 const DeptProfile = () => {
-  const { user } = useAuth();
+  const { user, hasPermission = () => false } = useAuth();
   const { language } = useLanguage();
   const languageRef = useRef(language);
   languageRef.current = language;
@@ -58,9 +63,94 @@ const DeptProfile = () => {
   const [saveMessage, setSaveMessage] = useState('');
   const [saveError, setSaveError] = useState('');
   const [serverFieldErrors, setServerFieldErrors] = useState({});
+  const [officeLocations, setOfficeLocations] = useState([]);
+  const [officeLocationsState, setOfficeLocationsState] = useState({ loading: true, error: '' });
+  const [recentActivities, setRecentActivities] = useState([]);
+  const [activityState, setActivityState] = useState({ loading: true, error: '' });
+  const inFlightActivityRequest = useRef(null);
 
   const normalizedRole = normalizeRoleValue(user?.role);
   const userId = String(user?.id ?? '');
+  const loadOfficeLocations = useCallback(async () => {
+    setOfficeLocationsState({ loading: true, error: '' });
+    try {
+      const locations = [];
+      let page = 1;
+      let pages = 1;
+      do {
+        const response = await apiClient.get('/department-head/locations', {
+          params: { page, limit: 100 },
+        });
+        const payload = response.data || {};
+        const rows = Array.isArray(payload.data) ? payload.data : [];
+        locations.push(...rows.filter((location) => (
+          location.recordType === 'department_location'
+        )));
+        pages = Math.max(1, Number(payload.pagination?.pages ?? payload.pagination?.totalPages) || 1);
+        page += 1;
+      } while (page <= pages);
+
+      const uniqueLocations = [...new Map(
+        locations.filter((location) => typeof location.name === 'string' && location.name.trim())
+          .map((location) => [location.name, location]),
+      ).values()];
+      setOfficeLocations(uniqueLocations);
+      setOfficeLocationsState({ loading: false, error: '' });
+    } catch (requestError) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Department profile office locations request failed', {
+          status: requestError.response?.status || 0,
+          url: '/api/department-head/locations',
+        });
+      }
+      setOfficeLocations([]);
+      setOfficeLocationsState({
+        loading: false,
+        error: translateMessage(languageRef.current, 'departmentProfile.officeLocationsError'),
+      });
+    }
+  }, []);
+
+  const loadRecentActivities = useCallback((force = false) => {
+    if (normalizedRole !== 'department_head') {
+      setRecentActivities([]);
+      setActivityState({ loading: false, error: '' });
+      return Promise.resolve(null);
+    }
+    if (!force && inFlightActivityRequest.current?.userId === userId) {
+      return inFlightActivityRequest.current.promise;
+    }
+
+    setActivityState({ loading: true, error: '' });
+    const request = apiClient.get('/department-head/dashboard/recent-activities')
+      .then((response) => {
+        const activities = response.data?.data;
+        if (!Array.isArray(activities)) throw new Error('Recent department activity was not returned by the server.');
+        setRecentActivities(activities.slice(0, 5));
+        setActivityState({ loading: false, error: '' });
+        return activities;
+      })
+      .catch((requestError) => {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Department profile activity request failed', {
+            status: requestError.response?.status || 0,
+            url: '/api/department-head/dashboard/recent-activities',
+          });
+        }
+        setRecentActivities([]);
+        setActivityState({ loading: false, error: translateMessage(languageRef.current, 'departmentProfile.activityError') });
+        return null;
+      })
+      .finally(() => {
+        if (inFlightActivityRequest.current?.promise === request) {
+          inFlightActivityRequest.current = null;
+        }
+      });
+
+    inFlightActivityRequest.current = { userId, promise: request };
+    return request;
+  }, [normalizedRole, userId]);
+
   const loadProfile = useCallback((force = false) => {
     const translate = (key) => translateMessage(languageRef.current, `departmentProfile.${key}`);
 
@@ -98,6 +188,8 @@ const DeptProfile = () => {
         setDepartment(withSummary);
         setSaveMessage('');
         loadedProfileUserId.current = userId;
+        loadOfficeLocations();
+        loadRecentActivities();
         return withSummary;
       })
       .catch((requestError) => {
@@ -123,13 +215,13 @@ const DeptProfile = () => {
 
     inFlightProfileRequest.current = { userId, promise: request };
     return request;
-  }, [normalizedRole, userId]);
+  }, [loadOfficeLocations, loadRecentActivities, normalizedRole, userId]);
 
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
 
-  const canEdit = normalizedRole === 'department_head';
+  const canEdit = normalizedRole === 'department_head' && hasPermission('department.profile.update');
   const missing = t('notProvided');
   const departmentName = getDisplayValue(department?.name, missing);
   const collegeName = getDisplayValue(department?.college?.collegeName || department?.college?.name, missing);
@@ -175,6 +267,10 @@ const DeptProfile = () => {
               {isEditing ? (
                 <ProfileForm
                   department={department}
+                  headName={headName}
+                  officeLocations={officeLocations}
+                  officeLocationsState={officeLocationsState}
+                  onRetryOfficeLocations={loadOfficeLocations}
                   saving={saving}
                   serverFieldErrors={serverFieldErrors}
                   t={t}
@@ -232,6 +328,44 @@ const DeptProfile = () => {
               </div>
             </aside>
           </div>
+          <section className="department-profile-card department-profile-activity" aria-labelledby="department-profile-activity-title">
+            <div className="department-profile-section-heading">
+              <Activity size={18} aria-hidden="true" />
+              <h2 id="department-profile-activity-title">{t('recentActivity')}</h2>
+            </div>
+            {activityState.loading && <p className="department-profile-activity-state" role="status">{t('activityLoading')}</p>}
+            {!activityState.loading && activityState.error && (
+              <div className="department-profile-activity-state" role="alert">
+                <span>{activityState.error}</span>
+                <button type="button" className="department-profile-button" onClick={() => loadRecentActivities(true)}>
+                  <RefreshCw size={15} aria-hidden="true" /> {t('retry')}
+                </button>
+              </div>
+            )}
+            {!activityState.loading && !activityState.error && recentActivities.length === 0 && (
+              <p className="department-profile-activity-state">{t('noRecentActivity')}</p>
+            )}
+            {!activityState.loading && !activityState.error && recentActivities.length > 0 && (
+              <ol className="department-profile-activity-list">
+                {recentActivities.map((activity) => {
+                  const date = activity.date ? new Date(activity.date) : null;
+                  const dateText = date && !Number.isNaN(date.getTime())
+                    ? date.toLocaleString(language === 'am' ? 'am-ET' : 'en-US')
+                    : missing;
+                  return (
+                    <li key={activity.id}>
+                      <div className="department-profile-activity-copy">
+                        <strong>{activity.action || missing}</strong>
+                        <span>{activity.entity || missing}</span>
+                        <small>{activity.user || missing} · {activity.status || missing}</small>
+                      </div>
+                      <time dateTime={date && !Number.isNaN(date.getTime()) ? date.toISOString() : undefined}>{dateText}</time>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </section>
         </>
       )}
     </section>
@@ -263,14 +397,27 @@ const ProfileLoadingState = ({ message }) => (
 );
 const ProfileErrorState = ({ message, retryLabel, onRetry }) => <div className="department-profile-state department-profile-state--error" role="alert"><p>{message}</p><button type="button" className="department-profile-button" onClick={onRetry}><RefreshCw size={16} aria-hidden="true" /> {retryLabel}</button></div>;
 
-const ProfileForm = ({ department, saving, serverFieldErrors, t, onCancel, onSave }) => {
-  const [values, setValues] = useState({
+const ProfileForm = ({
+  department,
+  headName,
+  officeLocations,
+  officeLocationsState,
+  onRetryOfficeLocations,
+  saving,
+  serverFieldErrors,
+  t,
+  onCancel,
+  onSave,
+}) => {
+  const initialValues = {
     contact: department.contact || department.phone || '',
     email: department.email || '',
     office: department.locationRecord?.name || department.office || '',
-    description: department.description || '',
-  });
+    description: getEditableDepartmentDescription(department.description),
+  };
+  const [values, setValues] = useState(initialValues);
   const [validationErrors, setValidationErrors] = useState({});
+  const hasChanges = Object.keys(initialValues).some((field) => values[field] !== initialValues[field]);
 
   const update = (event) => {
     const { name, value } = event.target;
@@ -301,10 +448,14 @@ const ProfileForm = ({ department, saving, serverFieldErrors, t, onCancel, onSav
     }
 
     setValidationErrors({});
-    onSave({ contact, email, office, description: description.trim() });
+    const updates = Object.fromEntries(Object.entries({ contact, email, office, description: description.trim() })
+      .filter(([field, value]) => value !== initialValues[field]));
+    if (Object.keys(updates).length) onSave(updates);
   };
 
-  const fieldError = (name) => validationErrors[name] || serverFieldErrors?.[name];
+  const fieldError = (name) => validationErrors[name]
+    || serverFieldErrors?.[name]
+    || (name === 'office' ? officeLocationsState.error : '');
   const fieldProps = (name) => ({
     'aria-invalid': Boolean(fieldError(name)),
     'aria-describedby': fieldError(name) ? `department-profile-${name}-error` : undefined,
@@ -316,26 +467,52 @@ const ProfileForm = ({ department, saving, serverFieldErrors, t, onCancel, onSav
       <DetailItem icon={Building2} label={t('departmentName')} value={getDisplayValue(department.name, t('notProvided'))} />
       <DetailItem icon={FileText} label={t('departmentCode')} value={getDisplayValue(department.code, t('notProvided'))} />
       <DetailItem icon={Building2} label={t('college')} value={getDisplayValue(department.college?.collegeName || department.college?.name, t('notProvided'))} />
-      <DetailItem icon={UserRound} label={t('departmentHead')} value={getDisplayValue(department.head?.fullName || department.head?.username, t('notProvided'))} />
+      <DetailItem icon={UserRound} label={t('departmentHead')} value={headName} />
       <EditableDetailItem icon={Phone} id="department-profile-contact" name="contact" label={t('contact')} value={values.contact} error={fieldError('contact')} onChange={update} inputProps={{ type: 'tel', maxLength: 50, ...fieldProps('contact') }} />
       <EditableDetailItem icon={Mail} id="department-profile-email" name="email" label={t('email')} value={values.email} error={fieldError('email')} onChange={update} inputProps={{ type: 'email', maxLength: 255, ...fieldProps('email') }} />
-      <EditableDetailItem icon={MapPin} id="department-profile-office" name="office" label={t('office')} value={values.office} error={fieldError('office')} onChange={update} inputProps={{ maxLength: 255, ...fieldProps('office') }} />
+      <EditableDetailItem
+        icon={MapPin}
+        id="department-profile-office"
+        name="office"
+        label={t('office')}
+        value={values.office}
+        error={fieldError('office')}
+        onChange={update}
+        errorAction={officeLocationsState.error && (
+          <button type="button" className="department-profile-button" onClick={onRetryOfficeLocations}>
+            <RefreshCw size={14} aria-hidden="true" /> {t('retry')}
+          </button>
+        )}
+        inputProps={{
+          as: 'select',
+          disabled: saving || officeLocationsState.loading || Boolean(officeLocationsState.error),
+          ...fieldProps('office'),
+        }}
+      >
+        <option value="">{officeLocationsState.loading
+          ? t('loadingOfficeLocations')
+          : officeLocations.length ? t('selectOffice') : t('noOfficeLocations')}</option>
+        {officeLocations.map((location) => (
+          <option key={location.id} value={location.name}>{location.name}</option>
+        ))}
+      </EditableDetailItem>
       <DetailItem icon={CheckCircle2} label={t('status')} value={String(department.status || '').toLowerCase() === 'active' ? t('active') : String(department.status || '').toLowerCase() === 'inactive' ? t('inactive') : getDisplayValue(department.status, t('notProvided'))} />
       <EditableDetailItem icon={FileText} id="department-profile-description" name="description" label={t('description')} value={values.description} error={fieldError('description')} onChange={update} inputProps={{ as: 'textarea', maxLength: 500, rows: 4, ...fieldProps('description') }} />
     </dl>
-    <div className="department-profile-form-actions"><button type="button" className="department-profile-button" onClick={onCancel} disabled={saving}><X size={16} aria-hidden="true" /> {t('cancel')}</button><button type="submit" className="department-profile-button department-profile-button--primary" disabled={saving}><Save size={16} aria-hidden="true" />{saving ? t('saving') : t('save')}</button></div>
+    <div className="department-profile-form-actions"><button type="button" className="department-profile-button" onClick={onCancel} disabled={saving}><X size={16} aria-hidden="true" /> {t('cancel')}</button><button type="submit" className="department-profile-button department-profile-button--primary" disabled={saving || !hasChanges}><Save size={16} aria-hidden="true" />{saving ? t('saving') : t('save')}</button></div>
   </form>;
 };
 
-const EditableDetailItem = ({ icon: Icon, id, name, label, value, error, onChange, inputProps }) => {
+const EditableDetailItem = ({ icon: Icon, id, name, label, value, error, errorAction, onChange, inputProps, children }) => {
   const { as, ...attributes } = inputProps;
-  const Input = as === 'textarea' ? 'textarea' : 'input';
+  const Input = as === 'textarea' ? 'textarea' : as === 'select' ? 'select' : 'input';
   return <div className="department-profile-detail department-profile-detail--editable">
     <Icon size={17} aria-hidden="true" />
     <div>
       <dt><label htmlFor={id}>{label}</label></dt>
-      <dd><Input id={id} name={name} value={value} onChange={onChange} {...attributes} /></dd>
+      <dd><Input id={id} name={name} value={value} onChange={onChange} {...attributes}>{children}</Input></dd>
       <ProfileFieldError id={`${id}-error`} message={error} />
+      {errorAction}
     </div>
   </div>;
 };

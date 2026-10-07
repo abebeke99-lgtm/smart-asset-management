@@ -31,7 +31,9 @@ const getStaffName = (member) => member.fullName || member.username || '';
 const getStaffStatus = (member) => {
   const status = String(member.status || '').toLowerCase();
   if (status && status !== 'active') return status;
-  return Boolean(member.active ?? member.is_active) ? 'active' : 'inactive';
+  const active = member.active ?? member.is_active;
+  if (active !== undefined && active !== null) return Boolean(active) ? 'active' : 'inactive';
+  return status || 'inactive';
 };
 const getStaffPosition = (member) => member.position || member.departmentRole || '';
 const getEmployeeId = (member) => member.employeeId || member.employee_id || '';
@@ -44,17 +46,21 @@ const DeptStaff = () => {
   const { language, theme } = useLanguage();
   const [staff, setStaff] = useState([]);
   const [positions, setPositions] = useState([]);
+  const [positionField, setPositionField] = useState('position');
+  const [roles, setRoles] = useState([]);
   const [summary, setSummary] = useState({ total: 0, active: 0, inactive: 0 });
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [filterPosition, setFilterPosition] = useState('');
+  const [filterRole, setFilterRole] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
+  const viewButtonRef = useRef(null);
   const lastRequestKeyRef = useRef('');
   const isDark = theme === 'dark';
   const t = useMemo(() => (language === 'en' ? englishTranslations : amharicTranslations), [language]);
@@ -66,7 +72,8 @@ const DeptStaff = () => {
     search: search || undefined,
     position: filterPosition || undefined,
     status: filterStatus || undefined,
-  }), [filterPosition, filterStatus, search]);
+    ...(filterRole ? { role: filterRole } : {}),
+  }), [filterPosition, filterRole, filterStatus, search]);
 
   const loadStaff = useCallback(async () => {
     const requestKey = JSON.stringify({ ...queryParams, page });
@@ -84,6 +91,8 @@ const DeptStaff = () => {
       setStaff(Array.isArray(payload.data) ? payload.data : []);
       setSummary(payload.summary || { total: 0, active: 0, inactive: 0 });
       setPositions(Array.isArray(payload.filters?.positions) ? payload.filters.positions : []);
+      setPositionField(payload.filters?.positionField === 'role' ? 'role' : 'position');
+      setRoles(Array.isArray(payload.filters?.roles) ? payload.filters.roles : []);
       setPagination(payload.pagination || { page, pages: 1, total: 0 });
     } catch (requestError) {
       const message = getApiErrorMessage(requestError, t.loadError) || requestError?.message || t.loadError;
@@ -152,11 +161,17 @@ const DeptStaff = () => {
     setSearchInput('');
     setSearch('');
     setFilterPosition('');
+    setFilterRole('');
     setFilterStatus('');
     setPage(1);
   };
 
   const displayValue = (value) => String(value ?? '').trim() || t.notProvided;
+  const hasActiveFilters = Boolean(searchInput || filterPosition || filterRole || filterStatus);
+  const closeStaffDetails = () => {
+    setSelectedStaff(null);
+    window.setTimeout(() => viewButtonRef.current?.focus(), 0);
+  };
 
   return (
     <main className={`department-staff-page${isDark ? ' is-dark' : ''}`}>
@@ -195,21 +210,31 @@ const DeptStaff = () => {
             />
           </label>
           <label className="staff-select-label">
-            <span className="sr-only">{t.position}</span>
+            <span className="sr-only">{positionField === 'role' ? t.role : t.position}</span>
             <select value={filterPosition} onChange={(event) => { setFilterPosition(event.target.value); setPage(1); }}>
-              <option value="">{t.allPositions}</option>
+              <option value="">{positionField === 'role' ? t.allRoles : t.allPositions}</option>
               {positions.map((position) => <option key={position} value={position}>{formatRole(position)}</option>)}
             </select>
           </label>
+          {positionField !== 'role' && (
+            <label className="staff-select-label">
+              <span className="sr-only">{t.role}</span>
+              <select value={filterRole} onChange={(event) => { setFilterRole(event.target.value); setPage(1); }}>
+                <option value="">{t.allRoles}</option>
+                {roles.map((role) => <option key={role} value={role}>{formatRole(role)}</option>)}
+              </select>
+            </label>
+          )}
           <label className="staff-select-label">
             <span className="sr-only">{t.status}</span>
             <select value={filterStatus} onChange={(event) => { setFilterStatus(event.target.value); setPage(1); }}>
               <option value="">{t.allStatus}</option>
               <option value="active">{t.active}</option>
               <option value="inactive">{t.inactive}</option>
+              <option value="suspended">{t.statusValues.suspended}</option>
             </select>
           </label>
-          <button className="staff-button staff-button-quiet" type="button" onClick={clearFilters} disabled={!searchInput && !filterPosition && !filterStatus}>
+          <button className="staff-button staff-button-quiet" type="button" onClick={clearFilters} disabled={!searchInput && !filterPosition && !filterRole && !filterStatus}>
             <X size={16} aria-hidden="true" /> {t.clearFilters}
           </button>
           <button className="staff-icon-button" type="button" onClick={retryLoadStaff} disabled={loading} aria-label={t.refresh} title={t.refresh}>
@@ -225,18 +250,27 @@ const DeptStaff = () => {
             <button className="staff-button staff-button-primary" type="button" onClick={retryLoadStaff}><RefreshCw size={16} aria-hidden="true" /> {t.retry}</button>
           </div>
         ) : staff.length === 0 ? (
-          <div className="staff-state"><UserRound size={30} aria-hidden="true" /><p>{t.empty}</p></div>
+          <div className="staff-state" role="status"><UserRound size={30} aria-hidden="true" /><p>{hasActiveFilters ? t.noMatches : t.empty}</p></div>
         ) : (
           <div className="staff-table-wrap">
             <table className="staff-table">
               <thead><tr>
-                <th>{t.staffId}</th><th>{t.fullName}</th><th>{t.employeeId}</th><th>{t.position}</th>
+                <th>{t.staffId}</th><th>{t.fullName}</th><th>{t.employeeId}</th><th>{t.department}</th><th>{t.position}</th>
                 <th>{t.email}</th><th>{t.phone}</th><th>{t.role}</th><th>{t.office}</th><th>{t.status}</th>
                 <th><span className="sr-only">{t.actions}</span></th>
               </tr></thead>
               <tbody>
                 {staff.map((member) => (
-                  <StaffRow key={member.id} member={member} displayValue={displayValue} onView={() => setSelectedStaff(member)} t={t} />
+                  <StaffRow
+                    key={member.id}
+                    member={member}
+                    displayValue={displayValue}
+                    onView={(event) => {
+                      viewButtonRef.current = event.currentTarget;
+                      setSelectedStaff(member);
+                    }}
+                    t={t}
+                  />
                 ))}
               </tbody>
             </table>
@@ -254,7 +288,7 @@ const DeptStaff = () => {
           </div>
         )}
       </section>
-      {selectedStaff && <StaffDetails member={selectedStaff} displayValue={displayValue} onClose={() => setSelectedStaff(null)} t={t} />}
+      {selectedStaff && <StaffDetails member={selectedStaff} displayValue={displayValue} onClose={closeStaffDetails} t={t} />}
     </main>
   );
 };
@@ -274,12 +308,13 @@ const StaffRow = ({ member, displayValue, onView, t }) => {
       <td className="staff-id">{displayValue(member.id)}</td>
       <td><div className="staff-name"><span className="staff-avatar"><UserRound size={16} aria-hidden="true" /></span><strong>{displayValue(getStaffName(member))}</strong></div></td>
       <td>{displayValue(getEmployeeId(member))}</td>
+      <td>{displayValue(member.department)}</td>
       <td><span className="staff-with-icon"><BriefcaseBusiness size={15} aria-hidden="true" /> {displayValue(getStaffPosition(member) || formatRole(member.role))}</span></td>
       <td><span className="staff-with-icon"><Mail size={15} aria-hidden="true" /> {displayValue(member.email)}</span></td>
       <td><span className="staff-with-icon"><Phone size={15} aria-hidden="true" /> {displayValue(member.phone)}</span></td>
       <td>{displayValue(formatRole(member.role))}</td>
       <td><span className="staff-with-icon"><MapPin size={15} aria-hidden="true" /> {displayValue(getStaffOffice(member))}</span></td>
-      <td><span className={`staff-status ${status === 'active' ? 'active' : 'inactive'}`}>{status === 'active' ? <CheckCircle2 size={14} /> : <XCircle size={14} />} {statusLabel}</span></td>
+      <td><span className={`staff-status ${status === 'active' ? 'active' : status === 'suspended' ? 'suspended' : 'inactive'}`}>{status === 'active' ? <CheckCircle2 size={14} /> : <XCircle size={14} />} {statusLabel}</span></td>
       <td><button className="staff-view-button" type="button" onClick={onView}><UserRound size={15} aria-hidden="true" /> {t.view}</button></td>
     </tr>
   );
@@ -287,16 +322,48 @@ const StaffRow = ({ member, displayValue, onView, t }) => {
 
 const StaffDetails = ({ member, displayValue, onClose, t }) => {
   const status = getStaffStatus(member);
+  const dialogRef = useRef(null);
+  const closeButtonRef = useRef(null);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+
+    const focusable = dialogRef.current?.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (!focusable?.length) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
     <div className="staff-modal-backdrop" role="presentation" onClick={onClose}>
-      <section className="staff-modal" role="dialog" aria-modal="true" aria-labelledby="staff-details-title" onClick={(event) => event.stopPropagation()}>
+      <section ref={dialogRef} className="staff-modal" role="dialog" aria-modal="true" aria-labelledby="staff-details-title" onClick={(event) => event.stopPropagation()} onKeyDown={handleKeyDown}>
         <div className="staff-modal-header">
           <div><div className="department-staff-eyebrow"><UserRound size={15} aria-hidden="true" /> {t.staffDetails}</div><h2 id="staff-details-title">{displayValue(getStaffName(member))}</h2></div>
-          <button className="staff-icon-button" type="button" onClick={onClose} aria-label={t.close} title={t.close}><X size={18} /></button>
+          <button ref={closeButtonRef} className="staff-icon-button" type="button" onClick={onClose} aria-label={t.close} title={t.close}><X size={18} /></button>
         </div>
         <div className="staff-detail-grid">
           <DetailItem icon={Archive} label={t.staffId} value={displayValue(member.id)} />
           <DetailItem icon={Archive} label={t.employeeId} value={displayValue(getEmployeeId(member))} />
+          <DetailItem icon={Building2} label={t.department} value={displayValue(member.department)} />
           <DetailItem icon={BriefcaseBusiness} label={t.position} value={displayValue(getStaffPosition(member) || formatRole(member.role))} />
           <DetailItem icon={Mail} label={t.email} value={displayValue(member.email)} />
           <DetailItem icon={Phone} label={t.phone} value={displayValue(member.phone)} />
@@ -324,7 +391,9 @@ const englishTranslations = {
   search: 'Search staff',
   searchPlaceholder: 'Search by ID, name, employee ID, email, phone, position, or role',
   allPositions: 'All Positions',
+  allRoles: 'All Roles',
   allStatus: 'All Status',
+  noMatches: 'No staff members match your filters.',
   clearFilters: 'Clear filters',
   refresh: 'Refresh staff',
   loading: 'Loading department staff...',
@@ -366,7 +435,9 @@ const amharicTranslations = {
   search: 'ሰራተኞችን ፈልግ',
   searchPlaceholder: 'በመለያ፣ ስም፣ የሰራተኛ መለያ፣ ኢሜይል፣ ስልክ፣ የስራ መደብ ወይም ሚና ፈልግ',
   allPositions: 'ሁሉም የስራ መደቦች',
+  allRoles: 'ሁሉም ሚናዎች',
   allStatus: 'ሁሉም ሁኔታዎች',
+  noMatches: 'ከማጣሪያዎችዎ ጋር የሚዛመድ ሰራተኛ አልተገኘም።',
   clearFilters: 'ማጣሪያዎችን አጽዳ',
   refresh: 'የሰራተኞችን ዝርዝር አድስ',
   loading: 'የዲፓርትመንት ሰራተኞችን በመጫን ላይ...',

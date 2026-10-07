@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import DeptAssets from './DeptAssets';
 
@@ -35,10 +35,12 @@ const departmentAssets = [
     status: 'available',
     condition: 'Good',
     location: 'Room 1',
+    assetType: 'Non-Fixed Asset',
     assigned_to_name: 'A. User',
     laboratoryName: 'Computer Lab',
     serialNumber: 'SER-120',
     digitalId: 'QR-120',
+    purchasePrice: 1000,
   },
   {
     id: 13,
@@ -57,8 +59,14 @@ const departmentAssets = [
 const renderAssets = () => render(
   <MemoryRouter initialEntries={['/department-head/assets']}>
     <DeptAssets />
+    <CurrentPath />
   </MemoryRouter>
 );
+
+const CurrentPath = () => {
+  const location = useLocation();
+  return <output aria-label="Current path">{location.pathname}</output>;
+};
 
 describe('Department Assets', () => {
   beforeEach(() => {
@@ -88,6 +96,9 @@ describe('Department Assets', () => {
     renderAssets();
     expect(await screen.findByText('Engineering Laptop')).toBeInTheDocument();
     expect(screen.getByText('Lab Microscope')).toBeInTheDocument();
+    expect(screen.getAllByText('$1,000')).toHaveLength(2);
+    expect(screen.getAllByText('Not recorded')).toHaveLength(2);
+    expect(screen.getByText('Total Asset Value').parentElement).toHaveTextContent('$1,000');
     expect(axios.get).toHaveBeenCalledWith('/api/assets', {
       params: { page: 1, limit: 50 },
     });
@@ -120,6 +131,8 @@ describe('Department Assets', () => {
     renderAssets();
     fireEvent.click(await screen.findByText('Engineering Laptop'));
 
+    expect(screen.queryByRole('button', { name: 'Request Transfer' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Report Damaged' })).not.toBeInTheDocument();
     expect(await screen.findByText('QR-120')).toBeInTheDocument();
     expect(screen.getAllByText('Computer Lab')).toHaveLength(2);
     expect(await screen.findByText('device-manual.pdf')).toBeInTheDocument();
@@ -141,5 +154,47 @@ describe('Department Assets', () => {
     renderAssets();
     await screen.findByText('Engineering Laptop');
     expect(screen.queryByRole('button', { name: /export to excel/i })).not.toBeInTheDocument();
+  });
+
+  it('refreshes assets, requests an asset through the department request page, and filters by asset type', async () => {
+    renderAssets();
+    expect(await screen.findByText('Engineering Laptop')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Asset type filter'), { target: { value: 'Non-Fixed Asset' } });
+    expect(screen.getByText('Engineering Laptop')).toBeInTheDocument();
+    expect(screen.queryByText('Lab Microscope')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(axios.get).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('Engineering Laptop')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Request Asset' }));
+    expect(screen.getByLabelText('Current path')).toHaveTextContent('/department-head/requests');
+  });
+
+  it('retries a failed asset list request instead of showing a false empty state', async () => {
+    axios.get.mockRejectedValueOnce(new Error('Network unavailable'));
+    renderAssets();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Failed to load assets');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('Engineering Laptop')).toBeInTheDocument();
+  });
+
+  it('submits maintenance requests using the Department Head scoped workflow', async () => {
+    renderAssets();
+    fireEvent.click(await screen.findByText('Engineering Laptop'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Request Maintenance' }));
+    fireEvent.change(screen.getByPlaceholderText('Describe the maintenance required...'), {
+      target: { value: 'Laptop battery is failing' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => expect(axios.post).toHaveBeenCalledWith('/api/department-head/maintenance-requests', {
+      asset_id: 12,
+      problem: 'Maintenance request',
+      description: 'Laptop battery is failing',
+      priority: 'medium',
+    }));
   });
 });

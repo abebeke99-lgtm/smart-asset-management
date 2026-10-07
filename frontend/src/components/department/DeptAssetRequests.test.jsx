@@ -20,14 +20,27 @@ const requestData = {
   unit: 'units',
   priority: 'high',
   status: 'Submitted',
+  asset: { id: 51, name: 'Microscope' },
   justification: 'Required for laboratory classes',
   createdAt: '2026-10-06T09:00:00.000Z',
   history: [{ id: 1, newStatus: 'Submitted', comment: 'Request submitted', changedByName: 'Department Head', createdAt: '2026-10-06T09:00:00.000Z' }],
+};
+const originalUrlMethods = {
+  createObjectURL: window.URL.createObjectURL,
+  revokeObjectURL: window.URL.revokeObjectURL,
 };
 
 beforeEach(() => {
   jest.clearAllMocks();
   apiClient.get.mockResolvedValue({ data: { data: [requestData] } });
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+  if (originalUrlMethods.createObjectURL) window.URL.createObjectURL = originalUrlMethods.createObjectURL;
+  else delete window.URL.createObjectURL;
+  if (originalUrlMethods.revokeObjectURL) window.URL.revokeObjectURL = originalUrlMethods.revokeObjectURL;
+  else delete window.URL.revokeObjectURL;
 });
 
 test('shows real request status and loads request history in details', async () => {
@@ -47,7 +60,7 @@ test('shows real request status and loads request history in details', async () 
 test('shows supporting documents supplied by the existing asset document record', async () => {
   const requestWithDocument = {
     ...requestData,
-    supportingDocuments: [{ id: 3, name: 'Warranty.pdf', filePath: '/uploads/warranty.pdf', description: 'Warranty certificate' }],
+    supportingDocuments: [{ id: 3, assetId: 51, name: 'Warranty.pdf', mimeType: 'application/pdf', description: 'Warranty certificate' }],
   };
   apiClient.get.mockImplementation((url) => Promise.resolve({
     data: { data: url.endsWith('/5') ? requestWithDocument : [requestData] },
@@ -56,7 +69,16 @@ test('shows supporting documents supplied by the existing asset document record'
   await screen.findByText('AR-2026-TEST');
   fireEvent.click(screen.getByRole('button', { name: 'View AR-2026-TEST' }));
 
-  expect(await screen.findByRole('link', { name: 'Open Warranty.pdf' })).toHaveAttribute('href', '/uploads/warranty.pdf');
+  expect(await screen.findByRole('button', { name: 'Download Warranty.pdf' })).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: /Warranty\.pdf/ })).not.toBeInTheDocument();
+  window.URL.createObjectURL = jest.fn(() => 'blob:secure-asset-document');
+  window.URL.revokeObjectURL = jest.fn();
+  jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  fireEvent.click(screen.getByRole('button', { name: 'Download Warranty.pdf' }));
+  await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith(
+    '/api/assets/51/documents/3/file',
+    { responseType: 'blob' },
+  ));
 });
 
 test('creates a request with mandatory justification and refreshes the real list', async () => {

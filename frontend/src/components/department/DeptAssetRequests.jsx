@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ClipboardList, Eye, ExternalLink, FileText, Plus, RefreshCw, Search, Send, X } from 'lucide-react';
-import { apiClient, getApiErrorMessage, resolveAssetUrl } from '../../utils/api';
+import { ClipboardList, Download, Eye, FileText, Plus, RefreshCw, Search, Send, X } from 'lucide-react';
+import { apiClient, getApiErrorMessage } from '../../utils/api';
 import './DeptAssetRequests.css';
 
 const REQUEST_STATUSES = ['Draft', 'Submitted', 'Under Review', 'Approved', 'Rejected', 'Changes Requested', 'Escalated', 'Completed'];
@@ -44,6 +44,7 @@ const DeptAssetRequests = () => {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [submittingDraft, setSubmittingDraft] = useState(null);
+  const [downloadingDocumentId, setDownloadingDocumentId] = useState(null);
 
   const loadRequests = useCallback(async (initial = false) => {
     if (initial) setLoading(true);
@@ -126,6 +127,28 @@ const DeptAssetRequests = () => {
       if (response.data?.data) setSelected(response.data.data);
     } catch (detailError) {
       setError(getApiErrorMessage(detailError, 'Unable to load request details.'));
+    }
+  };
+
+  const downloadDocument = async (document) => {
+    const assetId = document.assetId || selected?.asset?.id;
+    if (!assetId) {
+      setError('This supporting document is not linked to an asset that can be securely downloaded.');
+      return;
+    }
+    setDownloadingDocumentId(document.id);
+    try {
+      const response = await apiClient.get(`/api/assets/${assetId}/documents/${document.id}/file`, { responseType: 'blob' });
+      const objectUrl = window.URL.createObjectURL(response.data);
+      const link = window.document.createElement('a');
+      link.href = objectUrl;
+      link.download = String(document.name || 'asset-document').split(/[\\/]/).pop();
+      link.click();
+      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 0);
+    } catch (downloadError) {
+      setError(getApiErrorMessage(downloadError, 'Unable to download this supporting document.'));
+    } finally {
+      setDownloadingDocumentId(null);
     }
   };
 
@@ -286,7 +309,7 @@ const DeptAssetRequests = () => {
               {selected.history?.length ? <ol>{selected.history.map((entry) => <li key={entry.id}><strong>{entry.newStatus}</strong><span>{entry.comment || 'Status updated'} · {entry.changedByName || 'User'} · {formatDate(entry.createdAt)}</span></li>)}</ol> : <p>No history recorded.</p>}
             </section>
             <section className="dar-history"><h3>Supporting documents</h3>
-              {selected.supportingDocuments?.length ? <ul className="dar-documents">{selected.supportingDocuments.map((document) => <li key={document.id}><FileText size={16} /><span>{document.name}{document.description ? ` — ${document.description}` : ''}</span><a href={resolveAssetUrl(document.filePath)} target="_blank" rel="noreferrer" aria-label={`Open ${document.name}`}><ExternalLink size={16} /></a></li>)}</ul> : <p>No supporting documents are attached.</p>}
+              {selected.supportingDocuments?.length ? <ul className="dar-documents">{selected.supportingDocuments.map((document) => <li key={document.id}><FileText size={16} /><span>{document.name}{document.description ? ` — ${document.description}` : ''}</span><button type="button" onClick={() => downloadDocument(document)} disabled={downloadingDocumentId === document.id} aria-label={`Download ${document.name}`}>{downloadingDocumentId === document.id ? 'Downloading…' : <Download size={16} />}</button></li>)}</ul> : <p>No supporting documents are attached.</p>}
             </section>
           </section>
         </div>
