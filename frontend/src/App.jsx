@@ -16,12 +16,10 @@ import 'react-toastify/dist/ReactToastify.css';
 import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, Folder, GitBranch, House, Info, Languages, Layers, LayoutDashboard, LifeBuoy, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, QrCode, Radio, Search, Settings, ShieldCheck, Sun, TrendingUp, Undo2, UserCircle, UserRound, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
-import CollegeManagerPages from './components/college/CollegeManagerPages';
 import CollegeDepartments from './pages/college/CollegeDepartments';
 import DepartmentDetails from './components/college/DepartmentDetails';
 import DepartmentMaintenance from './components/department/DepartmentMaintenance';
 import DepartmentReturns from './components/department/DepartmentReturns';
-import ScopedWorkflowPage from './components/shared/ScopedWorkflowPage';
 
 // ==========================================
 // IMPORT UI CONTEXT
@@ -53,15 +51,12 @@ import AssetCreate from './components/shared/AssetCreate';
 import AssetDetails from './components/shared/AssetDetails';
 
 import AdminUserManagement from './components/admin/AdminUserManagement';
-import AdminReports from './components/admin/AdminReports';
 import AdminSettings from './components/admin/AdminSettings';
 import AdminNotifications from './components/admin/AdminNotifications';
 import AdminBackup from './components/admin/AdminBackup';
 import AdminRolesPermissions from './components/admin/AdminRolesPermissions';
 import AdminAuditLogs from './components/admin/AdminAuditLogs';
 import AdminDepartmentManagement from './components/admin/AdminDepartmentManagement';
-import AdminAnalyticsCenter from './components/admin/AdminAnalyticsCenter';
-import AdminAssetAnalytics from './components/admin/AdminAssetAnalytics';
 import AdminChemicalQuarantine from './components/admin/AdminChemicalQuarantine';
 import SystemMonitoring from './components/admin/SystemMonitoring';
 import AdminCollegeManagement from './components/admin/AdminCollegeManagement';
@@ -69,14 +64,11 @@ import EnamIntegration from './components/admin/EnamIntegration';
 
 import ICTDashboard from './components/ict/ICTDashboard';
 import ICTAssets from './components/ict/ICTAssets';
-import ICTAssignments from './components/ict/ICTAssignments';
 import ICTMaintenance from './components/ict/ICTMaintenance';
 import ICTRepairHistory from './components/ict/ICTRepairHistory';
 import ICTDeviceHealth from './components/ict/ICTDeviceHealth';
 import ICTRFIDTracking from './components/ict/ICTRFIDTracking';
 import ICTAssetHistory from './components/ict/ICTAssetHistory';
-import ICTReports from './components/ict/ICTReports';
-import ICTAssetAnalytics from './components/ict/ICTAssetAnalytics';
 import ICTInventory from './components/ict/ICTInventory';
 import ICTAssetRequests from './components/ict/ICTAssetRequests';
 import ICTEquipment from './components/ict/ICTEquipment';
@@ -91,29 +83,17 @@ import ICTWarranty from './components/ict/ICTWarranty';
 import ICTPhotoEvidence from './components/ict/ICTPhotoEvidence';
 import GlobalSearch from './components/common/GlobalSearch';
 
-import DeptDashboard from './components/department/DeptDashboard';
 import DeptProfile from './components/department/DeptProfile';
-import DeptStaff from './components/department/DeptStaff';
-import DeptLocations from './components/department/DeptLocations';
 import DeptLaboratories from './components/department/DeptLaboratories';
-import DeptAssets from './components/department/DeptAssets';
-import DeptAssignments from './components/department/DeptAssignments';
-import DeptInventory from './components/department/DeptInventory';
-import DeptReports from './components/department/DeptReports';
-import DeptApprovals from './components/department/DeptApprovals';
 import ApprovalQueue from './components/department/ApprovalQueue';
 import DeptAssetRequests from './components/department/DeptAssetRequests';
-import DeptUtilization from './components/department/DeptUtilization';
-import DeptAnalytics from './components/department/DeptAnalytics';
 import DeptVerification from './components/department/DeptVerification';
-import DeptTracking from './components/department/DeptTracking';
 import DeptNotifications from './components/department/DeptNotifications';
 import DeptAssetHistory from './components/department/DeptAssetHistory';
 import DepartmentActivityHistory from './components/department/DepartmentActivityHistory';
 import DepartmentAssetHistory from './components/department/DepartmentAssetHistory';
 import DeptTickets from './components/department/DeptTickets';
 
-import FinanceDashboard from './components/finance/FinanceDashboard';
 import FinancePurchaseRequests from './components/finance/FinancePurchaseRequests';
 import FinancePurchaseOrders from './components/finance/FinancePurchaseOrders';
 import FinanceSuppliers from './components/finance/FinanceSuppliers';
@@ -121,10 +101,8 @@ import FinancePurchaseHistory from './components/finance/FinancePurchaseHistory'
 import FinanceInvoices from './components/finance/FinanceInvoices';
 import FinancePayments from './components/finance/FinancePayments';
 import FinanceTransactions from './components/finance/FinanceTransactions';
-import FinanceReports from './components/finance/FinanceReports';
 import FinanceBudgetManagement from './components/finance/FinanceBudgetManagement';
 import FinanceValuation from './components/finance/FinanceValuation';
-import FinanceDepreciation from './components/finance/FinanceDepreciation';
 import Capitalization from './components/finance/Capitalization';
 import DisposalFinancialRecords from './components/finance/DisposalFinancialRecords';
 import FinanceBudgetReports from './components/finance/FinanceBudgetReports';
@@ -132,20 +110,12 @@ import FinanceDepreciationReports from './components/finance/FinanceDepreciation
 import FinanceAssetValueReports from './components/finance/FinanceAssetValueReports';
 import FinanceNotifications from './components/finance/FinanceNotifications';
 
-import StoreDashboard from './components/store/StoreDashboard';
-import StoreInventory from './components/store/StoreInventory';
-import StoreAssets from './components/store/StoreAssets';
-import StoreLowStock from './components/store/StoreLowStock';
-import StoreAdjustments from './components/store/StoreAdjustments';
 import StoreReceivePage from './components/store/StoreReceivePage';
 import StoreIssuePage from './components/store/StoreIssuePage';
 import StoreReturnsPage from './components/store/StoreReturnsPage';
-import StoreTransfers from './components/store/StoreTransfers';
 import StoreAssetRequests from './components/store/StoreAssetRequests';
 import StoreHistory from './components/store/StoreHistory';
 import StoreMaintenance from './components/store/StoreMaintenance';
-import StoreWarranty from './components/store/StoreWarranty';
-import StoreReports from './components/store/StoreReports';
 import StoreNotifications from './components/store/StoreNotifications';
 
 import MaintDashboard from './components/maintenance/MaintDashboard';
@@ -199,12 +169,42 @@ import InfrastructureNotifications from './components/infrastructure/Infrastruct
 
 // Admin Components
 const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'));
+const CollegeManagerPages = lazy(() => import('./components/college/CollegeManagerPages'));
 const AdminAssets = lazy(() => import('./components/admin/AdminAssets'));
 const AdminAssignment = lazy(() => import('./components/admin/AdminAssignment'));
 const AdminTransfer = lazy(() => import('./components/admin/AdminTransfer'));
 const AdminMaintenance = lazy(() => import('./components/admin/AdminMaintenance'));
 const AdminRFIDTracking = lazy(() => import('./components/admin/AdminRFIDTracking'));
+const AdminReports = lazy(() => import('./components/admin/AdminReports'));
+const AdminAnalyticsCenter = lazy(() => import('./components/admin/AdminAnalyticsCenter'));
+const AdminAssetAnalytics = lazy(() => import('./components/admin/AdminAssetAnalytics'));
+const ICTAssetAnalytics = lazy(() => import('./components/ict/ICTAssetAnalytics'));
+const ICTAssignments = lazy(() => import('./components/ict/ICTAssignments'));
+const ICTReports = lazy(() => import('./components/ict/ICTReports'));
+const DeptDashboard = lazy(() => import('./components/department/DeptDashboard'));
+const DeptAssets = lazy(() => import('./components/department/DeptAssets'));
+const DeptAssignments = lazy(() => import('./components/department/DeptAssignments'));
+const DeptInventory = lazy(() => import('./components/department/DeptInventory'));
+const DeptReports = lazy(() => import('./components/department/DeptReports'));
+const DeptApprovals = lazy(() => import('./components/department/DeptApprovals'));
+const DeptStaff = lazy(() => import('./components/department/DeptStaff'));
+const DeptLocations = lazy(() => import('./components/department/DeptLocations'));
+const DeptAnalytics = lazy(() => import('./components/department/DeptAnalytics'));
+const FinanceReports = lazy(() => import('./components/finance/FinanceReports'));
+const FinanceDashboard = lazy(() => import('./components/finance/FinanceDashboard'));
+const FinanceDepreciation = lazy(() => import('./components/finance/FinanceDepreciation'));
 const FinanceFinancialReports = lazy(() => import('./components/finance/FinanceFinancialReports'));
+const DeptTracking = lazy(() => import('./components/department/DeptTracking'));
+const DeptUtilization = lazy(() => import('./components/department/DeptUtilization'));
+const StoreDashboard = lazy(() => import('./components/store/StoreDashboard'));
+const StoreInventory = lazy(() => import('./components/store/StoreInventory'));
+const StoreAssets = lazy(() => import('./components/store/StoreAssets'));
+const StoreLowStock = lazy(() => import('./components/store/StoreLowStock'));
+const StoreAdjustments = lazy(() => import('./components/store/StoreAdjustments'));
+const StoreTransfers = lazy(() => import('./components/store/StoreTransfers'));
+const StoreWarranty = lazy(() => import('./components/store/StoreWarranty'));
+const StoreReports = lazy(() => import('./components/store/StoreReports'));
+const ScopedWorkflowPage = lazy(() => import('./components/shared/ScopedWorkflowPage'));
 
 export const normalizeRole = (role) => {
   if (!role) return 'user';
@@ -335,7 +335,7 @@ const LegacyDepartmentWorkspaceRedirect = () => {
 };
 
 const DepartmentDeanRoute = () => (
-  <ProtectedRoute allowedRoles={['department_head']} allowedPermissions={['department_head.approvals.review']}>
+  <ProtectedRoute allowedRoles={['department_head']}>
     <ApprovalQueue />
   </ProtectedRoute>
 );
@@ -3719,9 +3719,9 @@ function AppContent() {
             <Route path="maintenance" element={<DepartmentMaintenance />} />
             <Route path="maintenance-requests" element={<DepartmentMaintenance />} />
             <Route path="service-requests" element={<DepartmentMaintenance />} />
-            <Route path="tickets" element={<ProtectedRoute allowedPermissions={['department_head.tickets.view']}><DeptTickets /></ProtectedRoute>} />
-            <Route path="tickets/escalated" element={<ProtectedRoute allowedPermissions={['department_head.tickets.view']}><DeptTickets escalatedOnly /></ProtectedRoute>} />
-            <Route path="escalated-tickets" element={<ProtectedRoute allowedPermissions={['department_head.tickets.view']}><DeptTickets escalatedOnly /></ProtectedRoute>} />
+            <Route path="tickets" element={<DeptTickets />} />
+            <Route path="tickets/escalated" element={<DeptTickets escalatedOnly />} />
+            <Route path="escalated-tickets" element={<DeptTickets escalatedOnly />} />
             <Route path="movement" element={<Navigate to="/department-head/history" replace />} />
             <Route path="utilization" element={<DeptUtilization />} />
             <Route path="verification" element={<DeptVerification />} />

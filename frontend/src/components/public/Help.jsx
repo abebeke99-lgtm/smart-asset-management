@@ -125,6 +125,23 @@ const Help = () => {
           </article>
         </section>
 
+        <section className="help-section" aria-labelledby="help-demo-accounts">
+          <h3 id="help-demo-accounts">{text('Development Demo Accounts', 'የልማት ሙከራ መለያዎች')}</h3>
+          <p>{text(
+            'For local development only, seeded demo accounts use the shared password configured by the system administrator. Never use demo accounts or shared passwords in production.',
+            'ለአካባቢያዊ ልማት ብቻ፣ የተዘሩ የሙከራ መለያዎች በስርዓት አስተዳዳሪው የተዋቀረውን የጋራ የይለፍ ቃል ይጠቀማሉ። በምርት ስርዓት የሙከራ መለያዎችን ወይም የጋራ የይለፍ ቃሎችን በፍጹም አይጠቀሙ።'
+          )}</p>
+          <ul>
+            {['admin', 'ict_officer', 'college_manager', 'department_head', 'finance', 'store_manager', 'maintenance', 'infrastructure'].map((username) => (
+              <li key={username}><code>{username}</code></li>
+            ))}
+          </ul>
+          <p>{text(
+            'If a local demo login fails, ask the administrator to confirm the configured demo password. In a local development environment, set SEED_DEMO_PASSWORD in the backend environment, then run npm run reset:demo-passwords from the backend directory. This resets every listed demo account.',
+            'የአካባቢያዊ የሙከራ መግቢያ ካልሰራ፣ አስተዳዳሪው የተዋቀረውን የሙከራ የይለፍ ቃል እንዲያረጋግጥ ይጠይቁ። በአካባቢያዊ የልማት አካባቢ፣ SEED_DEMO_PASSWORD ን በbackend አካባቢ ያዋቅሩና npm run reset:demo-passwords ን ከbackend ማውጫ ያስኪዱ። ይህ ሁሉንም የተዘረዘሩ የሙከራ መለያዎች ይቀይራል።'
+          )}</p>
+        </section>
+
         <section className="help-section" aria-labelledby="help-password-reset">
           <h3 id="help-password-reset">{text('Password Reset', 'የይለፍ ቃል ዳግም ማስጀመር')}</h3>
           <div className="help-action-links">

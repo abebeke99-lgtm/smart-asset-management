@@ -5,6 +5,7 @@ import { getAllAssets } from '../../services/assetApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
 import * as XLSX from 'xlsx';
+import './ScopedWorkflowPage.css';
 
 const CONFIG = {
   transfers: { title: 'Asset Transfers', path: 'transfers', createLabel: 'Create Transfer', fields: ['asset_id', 'destination_department_id', 'destination_location', 'reason'] },
@@ -407,25 +408,27 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
   }
 
   return (
-    <section className="college-workspace-page">
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+    <section className="college-workspace-page scoped-transfer-page">
+      <header className="scoped-transfer-header">
         <div>
           <div className="college-breadcrumb">{translate(scope === 'college' ? 'College' : 'Department')} / {translate('Transfers')}</div>
           <h1>{translate('Asset Transfers')}</h1>
+          <p>Track and manage transfers within your authorized department.</p>
         </div>
-        <button type="button" onClick={exportTransfers} disabled={!rows.length || loading}>{translate('Export Excel')}</button>
+        <button type="button" className="scoped-transfer-button scoped-transfer-button--secondary" onClick={exportTransfers} disabled={!rows.length || loading}>{translate('Export Excel')}</button>
       </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, margin: '16px 0' }}>
-        <div className="college-stat-card"><strong>{statusSummary.total}</strong><span>{translate('Total')}</span></div>
-        <div className="college-stat-card"><strong>{statusSummary.pending}</strong><span>{translate('Pending')}</span></div>
-        <div className="college-stat-card"><strong>{statusSummary.approved}</strong><span>{translate('Approved')}</span></div>
-        <div className="college-stat-card"><strong>{statusSummary.received}</strong><span>{translate('Received')}</span></div>
-        <div className="college-stat-card"><strong>{statusSummary.rejected}</strong><span>{translate('Rejected / Cancelled')}</span></div>
+      <div className="scoped-transfer-stats" aria-label="Transfer summary">
+        <div className="scoped-transfer-stat"><strong>{statusSummary.total}</strong><span>{translate('Total')}</span></div>
+        <div className="scoped-transfer-stat"><strong>{statusSummary.pending}</strong><span>{translate('Pending')}</span></div>
+        <div className="scoped-transfer-stat"><strong>{statusSummary.approved}</strong><span>{translate('Approved')}</span></div>
+        <div className="scoped-transfer-stat"><strong>{statusSummary.received}</strong><span>{translate('Received')}</span></div>
+        <div className="scoped-transfer-stat"><strong>{statusSummary.rejected}</strong><span>{translate('Rejected / Cancelled')}</span></div>
       </div>
 
-      <div className="college-toolbar" style={{ marginBottom: 18 }}>
-        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+      <div className="scoped-transfer-toolbar">
+        <label htmlFor="transfer-status-filter">Status
+        <select id="transfer-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
           <option value="">{translate('All statuses')}</option>
           <option value="Requested">{translate('Requested')}</option>
           <option value="Approved">{translate('Approved')}</option>
@@ -435,53 +438,59 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
           <option value="Rejected">{translate('Rejected')}</option>
           <option value="Cancelled">{translate('Cancelled')}</option>
         </select>
-        <button type="button" onClick={load}>{translate('Refresh')}</button>
+        </label>
+        <button type="button" className="scoped-transfer-button scoped-transfer-button--secondary" onClick={load} disabled={loading}>{translate('Refresh')}</button>
       </div>
 
-      {scope === 'department' && <form className="college-form" onSubmit={createTransfer} style={{ marginBottom: 24 }}>
-        <select required value={form.assetId} onChange={(event) => setForm((previous) => ({ ...previous, assetId: event.target.value }))}>
+      {scope === 'department' && <form className="scoped-transfer-form" onSubmit={createTransfer}>
+        <div className="scoped-transfer-form-heading"><div><h2>Create a transfer</h2><p>Provide the asset and destination details to submit a transfer request.</p></div></div>
+        <label htmlFor="transfer-asset">Asset
+        <select id="transfer-asset" required value={form.assetId} onChange={(event) => setForm((previous) => ({ ...previous, assetId: event.target.value }))}>
           <option value="">{translate('Select real asset')}</option>
           {assets.map((asset) => (
             <option key={asset.id} value={asset.id}>{asset.name} ({asset.assetCode || asset.id})</option>
           ))}
         </select>
+        </label>
 
         {selectedAsset && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, background: '#f8fafc', padding: 12, borderRadius: 10 }}>
-            <div><strong>{translate('Current Department')}</strong><div>{selectedAsset.department || '—'}</div></div>
-            <div><strong>{translate('Current Location')}</strong><div>{selectedAsset.location || '—'}</div></div>
-            <div><strong>{translate('Asset Status')}</strong><div>{translate(selectedAsset.status) || '—'}</div></div>
+          <div className="scoped-transfer-asset-summary">
+            <div><strong>{translate('Current Department')}</strong><span>{selectedAsset.department || '—'}</span></div>
+            <div><strong>{translate('Current Location')}</strong><span>{selectedAsset.location || '—'}</span></div>
+            <div><strong>{translate('Asset Status')}</strong><span>{translate(selectedAsset.status) || '—'}</span></div>
           </div>
         )}
 
-        <select required value={form.destinationDepartmentId} onChange={(event) => setForm((previous) => ({ ...previous, destinationDepartmentId: event.target.value }))}>
+        <label htmlFor="transfer-destination-department">Destination department
+        <select id="transfer-destination-department" required value={form.destinationDepartmentId} onChange={(event) => setForm((previous) => ({ ...previous, destinationDepartmentId: event.target.value }))}>
           <option value="">{translate('Select destination department')}</option>
           {departments.map((department) => (
             <option key={department.id} value={department.id}>{department.name || department.departmentName}</option>
           ))}
         </select>
+        </label>
 
-        <input required placeholder={translate('Destination location')} value={form.newLocation} onChange={(event) => setForm((previous) => ({ ...previous, newLocation: event.target.value }))} />
-        <input type="date" value={form.transferDate} onChange={(event) => setForm((previous) => ({ ...previous, transferDate: event.target.value }))} />
-        <textarea required rows="3" placeholder={translate('Transfer reason / notes')} value={form.transferReason} onChange={(event) => setForm((previous) => ({ ...previous, transferReason: event.target.value }))} />
-        <textarea rows="2" placeholder={translate('Additional notes')} value={form.notes} onChange={(event) => setForm((previous) => ({ ...previous, notes: event.target.value }))} />
+        <label htmlFor="transfer-destination-location">{translate('Destination location')}<input id="transfer-destination-location" required value={form.newLocation} onChange={(event) => setForm((previous) => ({ ...previous, newLocation: event.target.value }))} /></label>
+        <label htmlFor="transfer-date">Transfer date<input id="transfer-date" type="date" value={form.transferDate} onChange={(event) => setForm((previous) => ({ ...previous, transferDate: event.target.value }))} /></label>
+        <label className="scoped-transfer-form-wide" htmlFor="transfer-reason">{translate('Transfer reason / notes')}<textarea id="transfer-reason" required rows="3" value={form.transferReason} onChange={(event) => setForm((previous) => ({ ...previous, transferReason: event.target.value }))} /></label>
+        <label className="scoped-transfer-form-wide" htmlFor="transfer-notes">{translate('Additional notes')}<textarea id="transfer-notes" rows="2" value={form.notes} onChange={(event) => setForm((previous) => ({ ...previous, notes: event.target.value }))} /></label>
 
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <button type="submit" disabled={saving}>{saving ? translate('Submitting') : translate('Create Transfer')}</button>
-          <button type="button" className="secondary" onClick={() => setForm({ assetId: '', destinationDepartmentId: '', newLocation: '', transferReason: '', transferDate: new Date().toISOString().slice(0, 10), notes: '' })}>{translate('Clear')}</button>
+        <div className="scoped-transfer-form-actions">
+          <button type="submit" className="scoped-transfer-button scoped-transfer-button--primary" disabled={saving}>{saving ? translate('Submitting') : translate('Create Transfer')}</button>
+          <button type="button" className="scoped-transfer-button scoped-transfer-button--secondary" onClick={() => setForm({ assetId: '', destinationDepartmentId: '', newLocation: '', transferReason: '', transferDate: new Date().toISOString().slice(0, 10), notes: '' })}>{translate('Clear')}</button>
         </div>
       </form>}
 
-      {error && <div className="error-banner" style={{ marginBottom: 12 }}>{error}</div>}
-      {successMessage && <div className="success-banner" style={{ marginBottom: 12 }}>{successMessage}</div>}
+      {error && <div className="scoped-transfer-alert scoped-transfer-alert--error" role="alert">{error}</div>}
+      {successMessage && <div className="scoped-transfer-alert scoped-transfer-alert--success" role="status">{successMessage}</div>}
 
       {loading ? (
-        <div>{translate('Loading transfer records...')}</div>
+        <div className="scoped-transfer-loading" role="status"><span />{translate('Loading transfer records...')}</div>
       ) : rows.length === 0 ? (
-        <div className="empty-state">{translate('No transfer records found.')}</div>
+        <div className="scoped-transfer-empty"><h2>{translate('No transfer records found.')}</h2><p>New transfer requests will appear here.</p></div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table className="college-table">
+        <div className="scoped-transfer-table-wrap">
+          <table className="college-table scoped-transfer-table">
             <thead>
               <tr>
                 <th>{translate('Asset')}</th>
@@ -497,30 +506,30 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
                 <tr key={row.id}>
                   <td>{row.assetName || translate('Unknown')}</td>
                   <td>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px', borderRadius: 999, background: row.status === 'Approved' ? '#10b981' : row.status === 'Rejected' ? '#ef4444' : row.status === 'Cancelled' ? '#94a3b8' : row.status === 'Completed' ? '#22c55e' : '#f59e0b', color: '#fff', fontSize: 11, fontWeight: 700 }}>
+                    <span className={`scoped-transfer-badge scoped-transfer-badge--${(row.status || 'pending').toLowerCase().replace(/\s+/g, '-')}`}>
                       {translate(row.status || 'Pending')}
                     </span>
                   </td>
                   <td>
                     <div>{row.fromDepartment || '—'} → {row.fromLocation || '—'}</div>
-                    <div style={{ color: '#64748b', fontSize: 11, marginTop: 4 }}>→ {row.toDepartment || '—'} → {row.toLocation || '—'}</div>
+                    <div className="scoped-transfer-route-destination">→ {row.toDepartment || '—'} → {row.toLocation || '—'}</div>
                   </td>
                   <td>{row.transferReason || '—'}</td>
                   <td>{row.transferDate ? new Date(row.transferDate).toLocaleDateString() : '—'}</td>
                   <td>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      <button type="button" onClick={() => openTransferDetails(row)} disabled={processingId === row.id}>{translate('View')}</button>
+                    <div className="scoped-transfer-row-actions">
+                      <button className="scoped-transfer-button scoped-transfer-button--secondary" type="button" onClick={() => openTransferDetails(row)} disabled={processingId === row.id}>{translate('View')}</button>
                       {scope === 'college' && row.status === 'Requested' && (
-                        <button type="button" onClick={() => handleAction(row, 'approve')} disabled={processingId === row.id}>{translate('Approve')}</button>
+                        <button className="scoped-transfer-button scoped-transfer-button--primary" type="button" onClick={() => handleAction(row, 'approve')} disabled={processingId === row.id}>{translate('Approve')}</button>
                       )}
                       {scope === 'college' && row.status === 'Requested' && (
-                        <button type="button" onClick={() => handleAction(row, 'reject')} disabled={processingId === row.id}>{translate('Reject')}</button>
+                        <button className="scoped-transfer-button scoped-transfer-button--danger" type="button" onClick={() => handleAction(row, 'reject')} disabled={processingId === row.id}>{translate('Reject')}</button>
                       )}
                       {scope === 'department' && role === 'department_head' && ['Requested', 'Approved'].includes(row.status) && (
-                        <button type="button" onClick={() => handleAction(row, 'cancel')} disabled={processingId === row.id}>Cancel</button>
+                        <button className="scoped-transfer-button scoped-transfer-button--danger" type="button" onClick={() => handleAction(row, 'cancel')} disabled={processingId === row.id}>Cancel</button>
                       )}
                       {scope === 'department' && role === 'department_head' && row.status === 'In Transit' && Number(row.destinationDepartmentId ?? row.destination_department_id) === Number(user?.departmentId ?? user?.department_id) && (
-                        <button type="button" onClick={() => handleAction(row, 'receive')} disabled={processingId === row.id}>Confirm receipt</button>
+                        <button className="scoped-transfer-button scoped-transfer-button--primary" type="button" onClick={() => handleAction(row, 'receive')} disabled={processingId === row.id}>Confirm receipt</button>
                       )}
                     </div>
                   </td>
@@ -532,14 +541,14 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
       )}
 
       {selectedTransfer && (
-        <div role="dialog" aria-modal="true" style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ width: 'min(760px, 92vw)', ...(scope === 'college' ? { maxHeight: '90vh', overflowY: 'auto' } : {}), background: '#fff', borderRadius: 16, padding: 24, boxShadow: '0 14px 32px rgba(0,0,0,0.15)' }}>
+        <div className="scoped-transfer-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="transfer-details-title">
+          <div className="scoped-transfer-modal">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0 }}>{translate('Transfer Details')}</h3>
-              <button type="button" onClick={() => setSelectedTransfer(null)}>{translate('Close')}</button>
+              <h3 id="transfer-details-title" style={{ margin: 0 }}>{translate('Transfer Details')}</h3>
+              <button className="scoped-transfer-button scoped-transfer-button--secondary" type="button" onClick={() => setSelectedTransfer(null)}>{translate('Close')}</button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+            <div className="scoped-transfer-modal-grid">
               <div><strong>{translate('Transfer ID')}</strong><div>{selectedTransfer.id}</div></div>
               <div><strong>{translate('Asset')}</strong><div>{selectedTransfer.assetName || '—'}</div></div>
               <div><strong>{translate('Asset Code')}</strong><div>{selectedTransfer.assetCode || '—'}</div></div>

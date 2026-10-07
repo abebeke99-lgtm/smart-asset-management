@@ -1,21 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Check, ClipboardCheck, ExternalLink, FileText, RefreshCw, X, XCircle } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
 import { apiClient, getApiErrorMessage, resolveAssetUrl } from '../../utils/api';
 import './ApprovalQueue.css';
 
 const actions = [
-  { id: 'approve', label: 'Approve', permission: 'department_head.approvals.approve', icon: Check },
-  { id: 'reject', label: 'Reject', permission: 'department_head.approvals.reject', icon: XCircle, needsReason: true },
-  { id: 'request-changes', label: 'Request Changes', permission: 'department_head.approvals.request_changes', icon: FileText, needsReason: true },
-  { id: 'escalate', label: 'Escalate to College', permission: 'department_head.approvals.escalate', icon: AlertTriangle, needsReason: true },
+  { id: 'approve', label: 'Approve', icon: Check },
+  { id: 'reject', label: 'Reject', icon: XCircle, needsReason: true },
+  { id: 'request-changes', label: 'Request Changes', icon: FileText, needsReason: true },
+  { id: 'escalate', label: 'Escalate to College', icon: AlertTriangle, needsReason: true },
 ];
 const formatDate = (value) => value ? new Date(value).toLocaleString() : 'Not recorded';
 const displayStatus = (value) => String(value || 'Unknown');
 
 const ApprovalQueue = () => {
-  const { hasPermission } = useAuth();
-  const canReview = hasPermission('department_head.approvals.review');
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,8 +38,8 @@ const ApprovalQueue = () => {
   }, []);
 
   useEffect(() => {
-    if (canReview) loadQueue(true);
-  }, [canReview, loadQueue]);
+    loadQueue(true);
+  }, [loadQueue]);
 
   const openReview = async (request) => {
     setError('');
@@ -76,10 +73,6 @@ const ApprovalQueue = () => {
       setProcessing(false);
     }
   };
-
-  if (!canReview) {
-    return <main className="approval-queue-state" role="alert">You do not have permission to review department approvals.</main>;
-  }
 
   return (
     <main className="approval-queue">
@@ -162,7 +155,7 @@ const ApprovalQueue = () => {
             </section>
             {selected.status === 'Submitted' || selected.status === 'Under Review' ? (
               <footer className="approval-queue-actions">
-                {actions.filter((item) => hasPermission(item.permission)).map((item) => (
+                {actions.map((item) => (
                   <button type="button" key={item.id} className={`approval-queue-action action-${item.id}`} onClick={() => startAction(item)}>
                     <item.icon size={16} /> {item.label}
                   </button>

@@ -99,6 +99,35 @@ test('department-head assignment reads require assets.view and creation requires
   assert.equal(genericRole.statusCode, 200);
 });
 
+test('department-head assignment list uses a database-column-mapped department filter', async (t) => {
+  const handler = getHandler(getRoute(assignmentRoutes, 'get', '/'));
+  const originalFindAndCountAll = models.Assignment.findAndCountAll;
+  let queryOptions;
+  models.Assignment.findAndCountAll = async (options) => {
+    queryOptions = options;
+    return { count: 0, rows: [] };
+  };
+  t.after(() => { models.Assignment.findAndCountAll = originalFindAndCountAll; });
+
+  const response = makeResponse();
+  await handler(request(), response, (error) => { throw error; });
+
+  assert.equal(response.statusCode, 200);
+  const assetInclude = queryOptions.include.find((include) => include.model === models.Asset);
+  assert.deepEqual(assetInclude.where, { departmentId: 7, collegeId: 3 });
+  assert.equal(assetInclude.required, true);
+
+  queryOptions.model = models.Assignment;
+  models.Assignment._validateIncludedElements(queryOptions);
+  const sql = models.sequelize.dialect.queryGenerator.selectQuery(
+    models.Assignment.getTableName(),
+    queryOptions,
+    models.Assignment,
+  );
+  assert.match(sql, /`Asset`\.`department_id` = 7/);
+  assert.doesNotMatch(sql, /`Asset`\.`departmentId`/);
+});
+
 test('assignment validation rejects malformed dates before opening a transaction', async () => {
   const handler = getHandler(getRoute(assignmentRoutes, 'post', '/'));
   const originalTransaction = models.sequelize.transaction;

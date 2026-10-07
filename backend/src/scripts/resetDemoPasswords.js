@@ -4,6 +4,8 @@ require('../models');
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
 const { sequelize, User } = require('../models');
+const { getConfiguredRolePermissions } = require('../services/rolePermissionService');
+const { isAccountActive } = require('../utils/accountStatus');
 
 const EXPECTED_ROLES = {
   admin: 'admin',
@@ -16,58 +18,94 @@ const EXPECTED_ROLES = {
   infrastructure: 'infrastructure',
 };
 
-async function resetDemoPasswords() {
-  const password = String(process.env.SEED_DEMO_PASSWORD || process.env.DEMO_USER_PASSWORD || '').trim();
-  if (!password) throw new Error();
+async function resetDemoPasswords({
+  password: configuredPassword = process.env.SEED_DEMO_PASSWORD,
+  database = sequelize,
+  userModel = User,
+  getRolePermissions = getConfiguredRolePermissions,
+} = {}) {
+  const password = String(configuredPassword ?? '').trim();
+  if (!password) throw new Error('SEED_DEMO_PASSWORD is required.');
 
-  return sequelize.transaction(async (transaction) => {
+  await database.authenticate();
+
+  return database.transaction(async (transaction) => {
     const usernames = Object.keys(EXPECTED_ROLES);
-    const accounts = await User.findAll({
+    const accounts = await userModel.findAll({
       where: { username: { [Op.in]: usernames } },
-      attributes: ['id', 'username', 'role', 'active'],
+      attributes: ['id', 'username', 'role', 'active', 'status', 'lockoutUntil'],
       transaction,
       lock: transaction.LOCK.UPDATE,
     });
 
-    if (accounts.length !== usernames.length || accounts.some((user) => user.role !== EXPECTED_ROLES[user.username] || !user.active)) {
-      throw new Error();
+    if (
+      accounts.length !== usernames.length
+      || accounts.some((user) => (
+        user.role !== EXPECTED_ROLES[user.username]
+        || !isAccountActive(user.active)
+        || ['inactive', 'suspended'].includes(String(user.status || '').toLowerCase())
+        || (user.lockoutUntil && new Date(user.lockoutUntil) > new Date())
+      ))
+    ) {
+      throw new Error('Demo accounts are missing, inactive, locked, or have unexpected roles.');
     }
 
+    const permissionsBefore = await Promise.all(
+      usernames.map(async (username) => [username, await getRolePermissions(EXPECTED_ROLES[username])])
+    );
     const passwordHash = await bcrypt.hash(password, 10);
     const userIds = accounts.map((user) => user.id);
-    const [updatedCount] = await User.update(
+    const [updatedCount] = await userModel.update(
       { password: passwordHash },
       { where: { id: { [Op.in]: userIds } }, transaction }
     );
-    if (updatedCount !== usernames.length) throw new Error();
+    if (updatedCount !== usernames.length) throw new Error('Not all demo account passwords were updated.');
 
-    const updatedUsers = await User.findAll({
+    const updatedUsers = await userModel.findAll({
       where: { id: { [Op.in]: userIds } },
-      attributes: ['username', 'active', 'password'],
+      attributes: ['username', 'role', 'active', 'status', 'password'],
       transaction,
     });
+    const usersByName = new Map(updatedUsers.map((user) => [user.username, user]));
     const authenticationChecks = await Promise.all(
-      updatedUsers.map((user) => bcrypt.compare(password, user.password))
+      usernames.map(async (username) => {
+        const user = usersByName.get(username);
+        return Boolean(
+          user
+          && user.role === EXPECTED_ROLES[username]
+          && isAccountActive(user.active)
+          && !['inactive', 'suspended'].includes(String(user.status || '').toLowerCase())
+          && await bcrypt.compare(password, user.password)
+        );
+      })
+    );
+    const permissionsAfter = await Promise.all(
+      usernames.map(async (username) => [username, await getRolePermissions(EXPECTED_ROLES[username])])
     );
 
     if (
       updatedUsers.length !== usernames.length
-      || updatedUsers.some((user) => !user.active)
       || authenticationChecks.some((valid) => !valid)
+      || JSON.stringify(permissionsAfter) !== JSON.stringify(permissionsBefore)
     ) {
-      throw new Error();
+      throw new Error('Post-reset password, account, or permission verification failed.');
     }
 
-    return updatedCount;
+    return usernames;
   });
 }
 
-resetDemoPasswords()
-  .then((updatedCount) => {
-    console.log(`Password reset succeeded: ${updatedCount} accounts updated.`);
-  })
-  .catch(() => {
-    console.error('Password reset failed; no credentials displayed.');
-    process.exitCode = 1;
-  })
-  .finally(() => sequelize.close());
+if (require.main === module) {
+  resetDemoPasswords()
+    .then((usernames) => {
+      usernames.forEach((username) => console.log(`${username}: PASS`));
+      console.log(`Password reset succeeded: ${usernames.length} accounts updated.`);
+    })
+    .catch(() => {
+      console.error('Password reset failed. No credentials displayed.');
+      process.exitCode = 1;
+    })
+    .finally(async () => sequelize.close());
+}
+
+module.exports = { EXPECTED_ROLES, resetDemoPasswords };

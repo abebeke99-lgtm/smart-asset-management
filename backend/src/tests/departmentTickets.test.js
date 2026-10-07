@@ -105,3 +105,18 @@ test('ticket list and detail routes are read-only', () => {
     { path: '/tickets/:id', methods: ['get'] },
   ]);
 });
+
+test('department ticket routes rely on Department Head authentication and department scope, not optional permissions', () => {
+  for (const [path, method, handler] of [
+    ['/tickets', 'get', 'listTickets'],
+    ['/escalated-tickets', 'get', 'listEscalatedTickets'],
+    ['/tickets/escalated', 'get', 'listEscalatedTickets'],
+    ['/tickets/:id', 'get', 'getTicket'],
+    ['/tickets/:id/follow-up', 'post', 'addTicketFollowUp'],
+  ]) {
+    const route = departmentWorkspaceRoutes.stack.find((layer) => layer.route?.path === path && layer.route.methods[method])?.route;
+    assert.ok(route, `Expected ${method.toUpperCase()} ${path}`);
+    assert.equal(route.stack.length, 1, `${method.toUpperCase()} ${path} must not require an optional permission-matrix entry`);
+    assert.equal(route.stack[0].handle.name, handler);
+  }
+});

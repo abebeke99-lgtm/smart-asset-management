@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Building2, CheckCircle2, ClipboardList, Edit3, FileText, Mail, MapPin, Package, Phone, RefreshCw, Save, UserRound, Users, X } from 'lucide-react';
+import { toast } from 'react-toastify';
 import { useAuth } from '../../contexts/AuthContext';
 import apiClient from '../../services/apiClient';
 import { useLanguage } from '../../contexts/UiContext';
@@ -28,13 +29,26 @@ const getDepartmentDescription = (value, missingLabel) => {
   return description;
 };
 
+const normalizeRoleValue = (role) => {
+  if (!role) return '';
+  const value = String(role).trim().toLowerCase();
+  const aliases = {
+    'department head': 'department_head',
+    'department-head': 'department_head',
+    'department_head': 'department_head',
+    'dept_head': 'department_head',
+    'department': 'department_head',
+  };
+  return aliases[value] || value;
+};
+
 const DeptProfile = () => {
   const { user } = useAuth();
   const { language } = useLanguage();
   const languageRef = useRef(language);
   languageRef.current = language;
   const inFlightProfileRequest = useRef(null);
-  const loadedProfileDepartmentId = useRef(null);
+  const loadedProfileUserId = useRef(null);
   const t = useCallback((key) => translateMessage(language, `departmentProfile.${key}`), [language]);
   const [department, setDepartment] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -43,50 +57,35 @@ const DeptProfile = () => {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [saveError, setSaveError] = useState('');
+  const [serverFieldErrors, setServerFieldErrors] = useState({});
 
-  const hasDepartmentProfileUpdatePermission = Array.isArray(user?.permissions)
-    && user.permissions.some((permission) => String(permission).trim().toLowerCase() === 'department.profile.update');
-
+  const normalizedRole = normalizeRoleValue(user?.role);
+  const userId = String(user?.id ?? '');
   const loadProfile = useCallback((force = false) => {
     const translate = (key) => translateMessage(languageRef.current, `departmentProfile.${key}`);
-    const departmentId = Number(user?.departmentId ?? user?.department_id);
 
-    if (user?.role !== 'department_head') {
-      loadedProfileDepartmentId.current = null;
+    if (normalizedRole !== 'department_head') {
+      loadedProfileUserId.current = null;
       setDepartment(null);
       setError(translate('unauthorized'));
       setLoading(false);
       return Promise.resolve(null);
     }
 
-    if (!force && loadedProfileDepartmentId.current === departmentId) {
+    if (!force && loadedProfileUserId.current === userId) {
       return Promise.resolve(null);
     }
-    if (inFlightProfileRequest.current?.departmentId === departmentId) {
+    if (inFlightProfileRequest.current?.userId === userId) {
       return inFlightProfileRequest.current.promise;
     }
 
     setLoading(true);
     setError('');
 
-    if (!Number.isSafeInteger(departmentId) || departmentId < 1) {
-      loadedProfileDepartmentId.current = null;
-      setDepartment(null);
-      setError(translate('unauthorized'));
-      setLoading(false);
-      return Promise.resolve(null);
-    }
-
     const request = apiClient.get('/department-head/profile')
       .then((response) => {
         const profile = response.data?.data;
-        if (profile === null || profile === undefined) {
-          setDepartment(null);
-          setSaveMessage('');
-          loadedProfileDepartmentId.current = departmentId;
-          return null;
-        }
-        if (Number(profile.id) !== departmentId) {
+        if (!profile || typeof profile !== 'object') {
           setDepartment(null);
           setError(translate('notFound'));
           return null;
@@ -98,7 +97,7 @@ const DeptProfile = () => {
         };
         setDepartment(withSummary);
         setSaveMessage('');
-        loadedProfileDepartmentId.current = departmentId;
+        loadedProfileUserId.current = userId;
         return withSummary;
       })
       .catch((requestError) => {
@@ -110,7 +109,7 @@ const DeptProfile = () => {
             message: typeof responseMessage === 'string' ? responseMessage.slice(0, 300) : undefined,
           });
         }
-        loadedProfileDepartmentId.current = null;
+        loadedProfileUserId.current = null;
         setDepartment(null);
         setError(getProfileErrorMessage(requestError, translate));
         return null;
@@ -122,20 +121,20 @@ const DeptProfile = () => {
         }
       });
 
-    inFlightProfileRequest.current = { departmentId, promise: request };
+    inFlightProfileRequest.current = { userId, promise: request };
     return request;
-  }, [user?.departmentId, user?.department_id, user?.role]);
+  }, [normalizedRole, userId]);
 
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
 
-  const canEdit = user?.role === 'department_head' && hasDepartmentProfileUpdatePermission;
+  const canEdit = normalizedRole === 'department_head';
   const missing = t('notProvided');
   const departmentName = getDisplayValue(department?.name, missing);
   const collegeName = getDisplayValue(department?.college?.collegeName || department?.college?.name, missing);
   const headName = getDisplayValue(department?.head?.fullName || department?.head?.username, missing);
-  const officeName = getDisplayValue(department?.locationRecord?.name || department?.office || department?.location?.name, missing);
+  const officeName = getDisplayValue(department?.office || department?.locationRecord?.name || department?.location?.name, missing);
   const status = String(department?.status || '').trim().toLowerCase();
   const statusLabel = status === 'active' || status === 'inactive' ? t(status) : getDisplayValue(status, missing);
 
@@ -151,7 +150,11 @@ const DeptProfile = () => {
           </div>
         </div>
         {canEdit && department && !isEditing && (
-          <button type="button" className="department-profile-button department-profile-button--primary" onClick={() => setIsEditing(true)}>
+          <button type="button" className="department-profile-button department-profile-button--primary" onClick={() => {
+            setServerFieldErrors({});
+            setSaveError('');
+            setIsEditing(true);
+          }}>
             <Edit3 size={16} aria-hidden="true" /> {t('edit')}
           </button>
         )}
@@ -173,21 +176,36 @@ const DeptProfile = () => {
                 <ProfileForm
                   department={department}
                   saving={saving}
+                  serverFieldErrors={serverFieldErrors}
                   t={t}
-                  onCancel={() => setIsEditing(false)}
+                  onCancel={() => {
+                    setServerFieldErrors({});
+                    setSaveError('');
+                    setIsEditing(false);
+                  }}
                   onSave={async (values) => {
                     setSaving(true);
                     setSaveMessage('');
                     setSaveError('');
+                    setServerFieldErrors({});
                     try {
-                      await apiClient.put('/department-head/profile', values);
-                      const updatedProfile = await loadProfile(true);
-                      if (updatedProfile) {
-                        setIsEditing(false);
-                        setSaveMessage(t('updated'));
-                      }
+                      const response = await apiClient.put('/department-head/profile', values);
+                      const profile = response.data?.data;
+                      if (!profile || typeof profile !== 'object') throw new Error('The updated profile was not returned by the server.');
+                      setDepartment({
+                        ...profile,
+                        userCount: Number(profile.summary?.totalStaff ?? profile.userCount ?? 0),
+                        assetCount: Number(profile.summary?.totalAssets ?? profile.assetCount ?? 0),
+                      });
+                      setIsEditing(false);
+                      setSaveMessage(t('updated'));
+                      toast.success(t('updated'));
                     } catch (saveError) {
-                      setSaveError(getProfileErrorMessage(saveError, t, 'saveError'));
+                      const fieldErrors = saveError.response?.data?.errors;
+                      if (fieldErrors && typeof fieldErrors === 'object') setServerFieldErrors(fieldErrors);
+                      if (!fieldErrors || Object.keys(fieldErrors).length === 0) {
+                        setSaveError(getProfileErrorMessage(saveError, t, 'saveError'));
+                      }
                     } finally {
                       setSaving(false);
                     }
@@ -245,48 +263,85 @@ const ProfileLoadingState = ({ message }) => (
 );
 const ProfileErrorState = ({ message, retryLabel, onRetry }) => <div className="department-profile-state department-profile-state--error" role="alert"><p>{message}</p><button type="button" className="department-profile-button" onClick={onRetry}><RefreshCw size={16} aria-hidden="true" /> {retryLabel}</button></div>;
 
-const ProfileForm = ({ department, saving, t, onCancel, onSave }) => {
+const ProfileForm = ({ department, saving, serverFieldErrors, t, onCancel, onSave }) => {
   const [values, setValues] = useState({
-    phone: department.phone || '',
+    contact: department.contact || department.phone || '',
     email: department.email || '',
     office: department.locationRecord?.name || department.office || '',
     description: department.description || '',
   });
-  const [validationError, setValidationError] = useState('');
+  const [validationErrors, setValidationErrors] = useState({});
 
-  const update = (event) => setValues((current) => ({ ...current, [event.target.name]: event.target.value }));
+  const update = (event) => {
+    const { name, value } = event.target;
+    setValues((current) => ({ ...current, [name]: value }));
+    setValidationErrors((current) => ({ ...current, [name]: '' }));
+  };
   const submit = (event) => {
     event.preventDefault();
-    const phone = values.phone.trim();
+    const contact = values.contact.trim();
     const email = values.email.trim();
     const office = values.office.trim();
-    const description = values.description.trim();
+    const description = values.description;
+    const nextErrors = {};
 
+    if (contact && (!/^[+()\d\s.-]{7,50}$/.test(contact) || contact.replace(/\D/g, '').length < 7)) {
+      nextErrors.contact = t('phoneInvalid');
+    }
     if (email.length > 255 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
-      setValidationError(t('emailInvalid'));
-      return;
+      nextErrors.email = t('emailInvalid');
     }
-    if (phone && (!/^[+()\d\s.-]{7,50}$/.test(phone) || phone.replace(/\D/g, '').length < 7)) {
-      setValidationError(t('phoneInvalid'));
-      return;
+    if (office.length > 255) nextErrors.office = t('officeTooLong');
+    if (description.trim().length > 500) {
+      nextErrors.description = t('descriptionTooLong');
     }
-    if (description.length > 2000) {
-      setValidationError(t('descriptionTooLong'));
+    if (Object.keys(nextErrors).length) {
+      setValidationErrors(nextErrors);
       return;
     }
 
-    setValidationError('');
-    onSave({ phone, email, office, description });
+    setValidationErrors({});
+    onSave({ contact, email, office, description: description.trim() });
   };
 
+  const fieldError = (name) => validationErrors[name] || serverFieldErrors?.[name];
+  const fieldProps = (name) => ({
+    'aria-invalid': Boolean(fieldError(name)),
+    'aria-describedby': fieldError(name) ? `department-profile-${name}-error` : undefined,
+  });
   return <form className="department-profile-form" onSubmit={submit}>
-    {validationError && <p className="department-profile-form-error" role="alert">{validationError}</p>}
-    <label>{t('contact')}<input name="phone" type="tel" maxLength="50" value={values.phone} onChange={update} /></label>
-    <label>{t('email')}<input name="email" type="email" maxLength="255" value={values.email} onChange={update} /></label>
-    <label>{t('office')}<input name="office" maxLength="255" value={values.office} onChange={update} /></label>
-    <label>{t('description')}<textarea name="description" value={values.description} onChange={update} maxLength="2000" rows="4" /></label>
+    <ProfileFieldError message={serverFieldErrors?._form} />
+    <dl className="department-profile-details department-profile-details--editing">
+      <DetailItem icon={Building2} label={t('departmentId')} value={getDisplayValue(department.id, t('notProvided'))} />
+      <DetailItem icon={Building2} label={t('departmentName')} value={getDisplayValue(department.name, t('notProvided'))} />
+      <DetailItem icon={FileText} label={t('departmentCode')} value={getDisplayValue(department.code, t('notProvided'))} />
+      <DetailItem icon={Building2} label={t('college')} value={getDisplayValue(department.college?.collegeName || department.college?.name, t('notProvided'))} />
+      <DetailItem icon={UserRound} label={t('departmentHead')} value={getDisplayValue(department.head?.fullName || department.head?.username, t('notProvided'))} />
+      <EditableDetailItem icon={Phone} id="department-profile-contact" name="contact" label={t('contact')} value={values.contact} error={fieldError('contact')} onChange={update} inputProps={{ type: 'tel', maxLength: 50, ...fieldProps('contact') }} />
+      <EditableDetailItem icon={Mail} id="department-profile-email" name="email" label={t('email')} value={values.email} error={fieldError('email')} onChange={update} inputProps={{ type: 'email', maxLength: 255, ...fieldProps('email') }} />
+      <EditableDetailItem icon={MapPin} id="department-profile-office" name="office" label={t('office')} value={values.office} error={fieldError('office')} onChange={update} inputProps={{ maxLength: 255, ...fieldProps('office') }} />
+      <DetailItem icon={CheckCircle2} label={t('status')} value={String(department.status || '').toLowerCase() === 'active' ? t('active') : String(department.status || '').toLowerCase() === 'inactive' ? t('inactive') : getDisplayValue(department.status, t('notProvided'))} />
+      <EditableDetailItem icon={FileText} id="department-profile-description" name="description" label={t('description')} value={values.description} error={fieldError('description')} onChange={update} inputProps={{ as: 'textarea', maxLength: 500, rows: 4, ...fieldProps('description') }} />
+    </dl>
     <div className="department-profile-form-actions"><button type="button" className="department-profile-button" onClick={onCancel} disabled={saving}><X size={16} aria-hidden="true" /> {t('cancel')}</button><button type="submit" className="department-profile-button department-profile-button--primary" disabled={saving}><Save size={16} aria-hidden="true" />{saving ? t('saving') : t('save')}</button></div>
   </form>;
 };
+
+const EditableDetailItem = ({ icon: Icon, id, name, label, value, error, onChange, inputProps }) => {
+  const { as, ...attributes } = inputProps;
+  const Input = as === 'textarea' ? 'textarea' : 'input';
+  return <div className="department-profile-detail department-profile-detail--editable">
+    <Icon size={17} aria-hidden="true" />
+    <div>
+      <dt><label htmlFor={id}>{label}</label></dt>
+      <dd><Input id={id} name={name} value={value} onChange={onChange} {...attributes} /></dd>
+      <ProfileFieldError id={`${id}-error`} message={error} />
+    </div>
+  </div>;
+};
+
+const ProfileFieldError = ({ id, message }) => message
+  ? <p id={id} className="department-profile-form-error" role="alert">{message}</p>
+  : null;
 
 export default DeptProfile;

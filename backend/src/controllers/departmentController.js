@@ -1,5 +1,6 @@
 const { Op } = require('sequelize');
-const { Asset, User, Department, Location, College, Building, Campus, Approval, Assignment, Transfer, AssetReturn, Maintenance, VerificationSession, VerificationItem, ServiceRequest, AuditLog, AssetMovement, Room } = require('../models');
+const { sequelize, Asset, User, Department, Location, College, Building, Campus, Approval, Assignment, Transfer, AssetReturn, Maintenance, VerificationSession, VerificationItem, ServiceRequest, AuditLog, AssetMovement, Room } = require('../models');
+const { normalizeRoleValue } = require('../middlewares/auth');
 
 const pageValues = (query) => {
   const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
@@ -86,85 +87,93 @@ const isPendingAcquisitionStatus = (status) => ['draft', 'submitted', 'pending',
 const userName = (user) => user && (user.fullName || user.username);
 const assetName = (asset) => asset && [asset.name, asset.assetCode].filter(Boolean).join(' - ');
 
-const departmentProfileValidationError = (message) => {
-  const error = new Error(message);
-  error.statusCode = 422;
-  return error;
-};
+const sanitizeProfileText = (value) => value
+  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+  .trim();
 
 const normalizeDepartmentProfileFields = async (payload = {}) => {
-  const allowedKeys = new Set(['phone', 'email', 'office', 'locationId', 'description']);
+  const allowedKeys = new Set(['contact', 'email', 'office', 'description']);
+  const errors = {};
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    throw departmentProfileValidationError('Unsupported department profile fields were supplied.');
+    return { updates: {}, errors: { _form: 'Department profile fields must be an object.' } };
   }
-  const unsupported = Object.keys(payload || {}).filter((key) => !allowedKeys.has(key));
-  if (unsupported.length) {
-    throw departmentProfileValidationError('Unsupported department profile fields were supplied.');
+
+  for (const key of Object.keys(payload)) {
+    if (!allowedKeys.has(key)) errors[key] = 'This field cannot be updated.';
+  }
+  if (Object.keys(payload).length === 0) {
+    errors._form = 'At least one editable department profile field is required.';
   }
 
   const updates = {};
-
-  if (Object.prototype.hasOwnProperty.call(payload, 'phone')) {
-    if (payload.phone !== null && typeof payload.phone !== 'string') {
-      throw departmentProfileValidationError('Department contact is invalid.');
+  if (Object.prototype.hasOwnProperty.call(payload, 'contact')) {
+    if (typeof payload.contact !== 'string') {
+      errors.contact = 'Enter a valid contact number.';
+    } else {
+      const contact = sanitizeProfileText(payload.contact);
+      if (contact.length > 50 || (contact && (!/^[+()\d\s.-]+$/.test(contact) || contact.replace(/\D/g, '').length < 7))) {
+        errors.contact = 'Enter a valid contact number.';
+      } else {
+        updates.phone = contact;
+      }
     }
-    const phone = String(payload.phone ?? '').trim();
-    if (phone && (!/^[+()\d\s.-]{7,50}$/.test(phone) || phone.replace(/\D/g, '').length < 7)) {
-      throw departmentProfileValidationError('Department contact is invalid.');
-    }
-    updates.phone = phone;
   }
 
   if (Object.prototype.hasOwnProperty.call(payload, 'email')) {
-    if (payload.email !== null && typeof payload.email !== 'string') {
-      throw departmentProfileValidationError('Department email is invalid.');
+    if (typeof payload.email !== 'string') {
+      errors.email = 'Enter a valid email address.';
+    } else {
+      const email = sanitizeProfileText(payload.email);
+      if (email.length > 255 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+        errors.email = 'Enter a valid email address.';
+      } else {
+        updates.email = email;
+      }
     }
-    const email = String(payload.email ?? '').trim();
-    if (email.length > 255 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
-      throw departmentProfileValidationError('Department email is invalid.');
+  }
+
+  if (Object.prototype.hasOwnProperty.call(payload, 'office')) {
+    if (typeof payload.office !== 'string') {
+      errors.office = 'Enter a valid office.';
+    } else {
+      const office = sanitizeProfileText(payload.office);
+      if (office.length > 255) {
+        errors.office = 'Office must be 255 characters or fewer.';
+      } else if (!office) {
+        updates.locationId = null;
+      } else {
+        const location = await Location.findOne({ where: { name: office }, attributes: ['id'] });
+        if (!location) {
+          errors.office = 'Select an existing office location.';
+        } else {
+          updates.locationId = location.id;
+        }
+      }
     }
-    updates.email = email;
   }
 
   if (Object.prototype.hasOwnProperty.call(payload, 'description')) {
-    if (payload.description !== null && typeof payload.description !== 'string') {
-      throw departmentProfileValidationError('Department description is invalid.');
-    }
-    const description = String(payload.description ?? '').trim();
-    if (description.length > 2000) {
-      throw departmentProfileValidationError('Department description exceeds the allowed length.');
-    }
-    updates.description = description;
-  }
-
-  if (Object.prototype.hasOwnProperty.call(payload, 'locationId') || Object.prototype.hasOwnProperty.call(payload, 'office')) {
-    const rawLocationId = payload.locationId ?? payload.office;
-    if (rawLocationId === null || rawLocationId === undefined || rawLocationId === '') {
-      updates.locationId = null;
-    } else if (typeof rawLocationId === 'string' && /^\d+$/.test(rawLocationId.trim())) {
-      const locationId = Number(rawLocationId.trim());
-      if (!Number.isSafeInteger(locationId) || locationId < 1) {
-        throw departmentProfileValidationError('Office location is invalid.');
-      }
-      updates.locationId = locationId;
-    } else if (typeof rawLocationId === 'number' && Number.isSafeInteger(rawLocationId) && rawLocationId > 0) {
-      updates.locationId = rawLocationId;
-    } else if (typeof rawLocationId !== 'string') {
-      throw departmentProfileValidationError('Office location is invalid.');
+    if (typeof payload.description !== 'string') {
+      errors.description = 'Enter a valid description.';
     } else {
-      const officeName = String(rawLocationId).trim();
-      if (officeName.length > 255) {
-        throw departmentProfileValidationError('Office location is invalid.');
+      const description = sanitizeProfileText(payload.description);
+      if (description.length > 500) {
+        errors.description = 'Description must be 500 characters or fewer.';
+      } else {
+        updates.description = description;
       }
-      const location = await Location.findOne({ where: { name: officeName }, attributes: ['id'] });
-      if (!location) {
-        throw departmentProfileValidationError('Office location not found.');
-      }
-      updates.locationId = location.id;
     }
   }
 
-  return updates;
+  return { updates, errors };
+};
+
+const getDepartmentProfileUserId = (req) => {
+  if (!req.user) return { status: 401 };
+  if (normalizeRoleValue(req.user.role) !== 'department_head') return { status: 403 };
+  const departmentId = Number(req.user.departmentId ?? req.user.department_id);
+  if (!Number.isSafeInteger(departmentId) || departmentId < 1) return { status: 404 };
+  return { departmentId };
 };
 
 const serializeDepartmentProfile = (department, totalStaff, totalAssets) => ({
@@ -175,6 +184,7 @@ const serializeDepartmentProfile = (department, totalStaff, totalAssets) => ({
   headId: department.headId,
   collegeId: department.collegeId,
   locationId: department.locationId,
+  contact: department.phone || '',
   phone: department.phone || '',
   email: department.email || '',
   status: department.status,
@@ -192,10 +202,12 @@ const serializeDepartmentProfile = (department, totalStaff, totalAssets) => ({
 
 const getDepartmentProfile = async (req, res, next) => {
   try {
-    const departmentId = Number(req.organizationScope?.departmentId);
-    if (!Number.isSafeInteger(departmentId) || departmentId < 1) {
-      return res.status(403).json({ success: false, message: 'Department scope is not configured for this account.' });
+    const scope = getDepartmentProfileUserId(req);
+    if (scope.status) {
+      const message = scope.status === 401 ? 'Authentication required.' : scope.status === 403 ? 'Access denied for this role.' : 'Department profile not found.';
+      return res.status(scope.status).json({ success: false, message });
     }
+    const { departmentId } = scope;
 
     const department = await Department.findByPk(departmentId, {
       include: [
@@ -224,10 +236,12 @@ const getDepartmentProfile = async (req, res, next) => {
 
 const updateDepartmentProfile = async (req, res, next) => {
   try {
-    const departmentId = Number(req.organizationScope?.departmentId);
-    if (!Number.isSafeInteger(departmentId) || departmentId < 1) {
-      return res.status(403).json({ success: false, message: 'Department scope is not configured for this account.' });
+    const scope = getDepartmentProfileUserId(req);
+    if (scope.status) {
+      const message = scope.status === 401 ? 'Authentication required.' : scope.status === 403 ? 'Access denied for this role.' : 'Department profile not found.';
+      return res.status(scope.status).json({ success: false, message });
     }
+    const { departmentId } = scope;
 
     const department = await Department.findByPk(departmentId, {
       include: [
@@ -241,9 +255,16 @@ const updateDepartmentProfile = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Department profile not found.' });
     }
 
-    const updates = await normalizeDepartmentProfileFields(req.body || {});
-    if (!updates || Object.keys(updates).length === 0) {
-      return res.status(422).json({ success: false, message: 'No valid department profile fields were supplied for update.' });
+    const { updates, errors } = await normalizeDepartmentProfileFields(req.body || {});
+    if (Object.keys(errors).length) {
+      return res.status(422).json({ success: false, message: 'Please correct the department profile fields.', errors });
+    }
+    if (Object.keys(updates).length === 0) {
+      return res.status(422).json({
+        success: false,
+        message: 'At least one editable department profile field is required.',
+        errors: { _form: 'At least one editable department profile field is required.' },
+      });
     }
 
     if (updates.locationId !== undefined && updates.locationId !== null) {
@@ -253,13 +274,37 @@ const updateDepartmentProfile = async (req, res, next) => {
       }
     }
 
-    await department.update(updates);
-    const refreshed = await Department.findByPk(departmentId, {
-      include: [
-        { model: College, attributes: ['id', 'collegeName', 'collegeCode'], required: false },
-        { model: User, as: 'Head', attributes: ['id', 'fullName', 'username', 'email'], required: false },
-        { model: Location, as: 'LocationRecord', attributes: ['id', 'name', 'code'], required: false },
-      ],
+    const oldValues = {
+      contact: department.phone || '',
+      email: department.email || '',
+      office: department.LocationRecord?.name || '',
+      description: department.description || '',
+    };
+    const refreshed = await sequelize.transaction(async (transaction) => {
+      await department.update(updates, { transaction });
+      const updatedDepartment = await Department.findByPk(departmentId, {
+        include: [
+          { model: College, attributes: ['id', 'collegeName', 'collegeCode'], required: false },
+          { model: User, as: 'Head', attributes: ['id', 'fullName', 'username', 'email'], required: false },
+          { model: Location, as: 'LocationRecord', attributes: ['id', 'name', 'code'], required: false },
+        ],
+        transaction,
+      });
+      if (!updatedDepartment) throw new Error('Department profile not found.');
+
+      const newValues = {
+        contact: updatedDepartment.phone || '',
+        email: updatedDepartment.email || '',
+        office: updatedDepartment.LocationRecord?.name || '',
+        description: updatedDepartment.description || '',
+      };
+      await AuditLog.create({
+        userId: req.user.id,
+        action: 'UPDATE_DEPARTMENT_PROFILE',
+        entity: `department:${departmentId}`,
+        details: JSON.stringify({ departmentId, oldValues, newValues }),
+      }, { transaction });
+      return updatedDepartment;
     });
 
     const [totalStaff, totalAssets] = await Promise.all([
@@ -270,9 +315,6 @@ const updateDepartmentProfile = async (req, res, next) => {
 
     return res.json({ success: true, message: 'Department profile updated successfully.', data: profile, summary: profile.summary });
   } catch (error) {
-    if (error.statusCode === 422) {
-      return res.status(422).json({ success: false, message: error.message });
-    }
     if (error.message === 'Department profile not found.') {
       return res.status(404).json({ success: false, message: error.message });
     }

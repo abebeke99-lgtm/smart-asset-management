@@ -3,7 +3,6 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const models = require('../models');
-const { requirePermission } = require('../middlewares/auth');
 const { decideApproval, getApprovalReview } = require('../controllers/departmentAssetRequestController');
 
 const { sequelize, DepartmentAssetRequest, DepartmentAssetRequestHistory, AuditLog } = models;
@@ -120,24 +119,19 @@ test('invalid request IDs are rejected before database access', async (t) => {
   assert.equal(databaseCalls, 0);
 });
 
-test('approval routes authenticate, department-scope, and require the matching action permission', () => {
+test('approval routes authenticate and department-scope without optional permission-matrix entries', () => {
   assert.match(routeSource, /router\.use\(\.\.\.requireDepartmentHead, resolveDepartmentScope\)/);
-  assert.match(routeSource, /router\.get\('\/approvals', requirePermission\('department_head\.approvals\.review'\)/);
-  for (const [pathName, permission] of [
-    ['approve', 'approve'],
-    ['reject', 'reject'],
-    ['request-changes', 'request_changes'],
-    ['escalate', 'escalate'],
+  for (const [method, routePath] of [
+    ['get', '/approvals'],
+    ['get', '/approvals/:id'],
+    ['post', '/approvals/:id/approve'],
+    ['post', '/approvals/:id/reject'],
+    ['post', '/approvals/:id/request-changes'],
+    ['post', '/approvals/:id/escalate'],
   ]) {
-    assert.ok(routeSource.includes(`router.post('/approvals/:id/${pathName}', requirePermission('department_head.approvals.${permission}')`));
+    assert.ok(routeSource.includes(`router.${method}('${routePath}'`));
+    const routeRegistration = routeSource.match(new RegExp(`router\\.${method}\\('${routePath.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}', ([^\\n]+)`));
+    assert.ok(routeRegistration);
+    assert.doesNotMatch(routeRegistration[1], /requirePermission/);
   }
-});
-
-test('a user without the action permission is denied', () => {
-  const middleware = requirePermission('department_head.approvals.approve');
-  const response = makeResponse();
-  let nextCalled = false;
-  middleware({ user: { id: 7, permissions: ['department_head.approvals.review'] } }, response, () => { nextCalled = true; });
-  assert.equal(response.statusCode, 403);
-  assert.equal(nextCalled, false);
 });

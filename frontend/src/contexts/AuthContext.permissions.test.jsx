@@ -64,4 +64,28 @@ describe("AuthContext permission refresh", () => {
     expect(apiClient.get).toHaveBeenCalledTimes(2);
     expect(JSON.parse(localStorage.getItem("user")).permissions).toContain("users.view");
   });
+
+  it("preserves the Axios response when formatting API errors", async () => {
+    render(
+      <AuthProvider>
+        <AuthorizationState />
+      </AuthProvider>,
+    );
+
+    const response = { status: 403, data: { message: "Missing department profile permission." } };
+    const apiError = { response, config: { url: "/api/department-head/profile" }, message: "Request failed" };
+    const rejectResponse = apiClient.interceptors.response.use.mock.calls[0][1];
+
+    let thrownError;
+    try {
+      rejectResponse(apiError);
+    } catch (error) {
+      thrownError = error;
+    }
+
+    expect(thrownError).toBe(apiError);
+    expect(thrownError.response).toBe(response);
+    expect(thrownError.status).toBe(403);
+    expect(thrownError.message).toBe("Server error occurred (403)");
+  });
 });

@@ -135,17 +135,31 @@ const resolveCollegeScope = async (req, res, next) => {
 
 const resolveDepartmentScope = async (req, res, next) => {
   const requestedDepartmentId = req.user?.departmentId ?? req.user?.department_id ?? null;
-  const department = requestedDepartmentId
-    ? await Department.findOne({ where: { id: requestedDepartmentId, status: 'active' } })
-    : null;
-
-  if (!department) {
-    return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
+  const isDepartmentProfileRequest = req.path === '/profile';
+  const profileDepartmentId = Number(requestedDepartmentId);
+  if (isDepartmentProfileRequest && (!Number.isSafeInteger(profileDepartmentId) || profileDepartmentId < 1)) {
+    return res.status(404).json({ success: false, message: 'Department profile not found.' });
   }
 
-  req.user.departmentId = department.id;
-  req.organizationScope = { department, departmentId: department.id, collegeId: department.collegeId };
-  return next();
+  try {
+    const department = isDepartmentProfileRequest
+      ? await Department.findByPk(profileDepartmentId)
+      : requestedDepartmentId
+        ? await Department.findOne({ where: { id: requestedDepartmentId, status: 'active' } })
+        : null;
+
+    if (!department) {
+      const status = isDepartmentProfileRequest ? 404 : 403;
+      const message = isDepartmentProfileRequest ? 'Department profile not found.' : 'Department scope is not configured for this account';
+      return res.status(status).json({ success: false, message });
+    }
+
+    req.user.departmentId = department.id;
+    req.organizationScope = { department, departmentId: department.id, collegeId: department.collegeId };
+    return next();
+  } catch (error) {
+    return next(error);
+  }
 };
 
 const resolveConfiguredDepartmentScope = async (req, res, next) => {

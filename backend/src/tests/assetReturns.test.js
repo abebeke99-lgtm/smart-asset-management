@@ -1,7 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const routes = require('../routes/returnWorkflowRoutes');
-const { createReturn, listReturns } = require('../controllers/returnWorkflowController');
+const workspaceRoutes = require('../routes/departmentWorkspaceRoutes');
+const { requireDepartmentHead, resolveDepartmentScope } = require('../middlewares/organizationScope');
+const { createReturn, listReturns, getReturn, cancelReturn } = require('../controllers/returnWorkflowController');
 const { sequelize, Asset, Assignment, AssetReturn, AuditLog, Maintenance, MaintenanceHistory, User } = require('../models');
 
 const response = () => ({
@@ -24,25 +26,55 @@ const makeTransaction = () => ({
   async rollback() { this.finished = 'rollback'; },
 });
 
-test('department return routes enforce the controlled view and manage permissions', async () => {
-  for (const [path, method, permission] of [
-    ['/department-head/returns', 'get', 'department_head.returns.view'],
-    ['/department-head/returns', 'post', 'department_head.returns.manage'],
+test('department return routes require Department Head role and department scope without optional permissions', () => {
+  for (const [path, method] of [
+    ['/department-head/returns', 'get'],
+    ['/department-head/returns', 'post'],
+    ['/department-head/returns/:id', 'get'],
+    ['/department-head/returns/:id/cancel', 'post'],
+    ['/department/returns', 'get'],
+    ['/department/returns', 'post'],
   ]) {
     const route = routes.stack.find((layer) => layer.route?.path === path && layer.route.methods[method]);
     assert.ok(route);
-    const guard = route.route.stack[3]?.handle;
-    assert.ok(guard, `${method.toUpperCase()} ${path} should include a permission guard`);
+    assert.equal(route.route.stack.length, 4);
+    assert.equal(route.route.stack[0].handle, requireDepartmentHead[0]);
     const roleGuard = route.route.stack[1].handle;
+    assert.equal(roleGuard, requireDepartmentHead[1]);
+    assert.equal(route.route.stack[2].handle, resolveDepartmentScope);
     const wrongRole = response();
-    roleGuard({ user: { role: 'store_manager', permissions: [permission] } }, wrongRole, () => assert.fail('must deny a non-department role'));
+    roleGuard({ user: { role: 'store_manager' } }, wrongRole, () => assert.fail('must deny a non-department role'));
     assert.equal(wrongRole.statusCode, 403);
-    const denied = response();
-    guard({ user: { role: 'department_head', permissions: [] } }, denied, () => assert.fail('must deny missing permission'));
-    assert.equal(denied.statusCode, 403);
     let allowed = false;
-    guard({ user: { role: 'department_head', permissions: [permission] } }, response(), () => { allowed = true; });
+    roleGuard({ user: { role: 'department_head', permissions: [] } }, response(), () => { allowed = true; });
     assert.equal(allowed, true);
+  }
+
+  for (const [path, method] of [
+    ['/returns', 'get'],
+    ['/returns', 'post'],
+    ['/returns/:id', 'get'],
+    ['/returns/:id/cancel', 'post'],
+  ]) {
+    const routeIndex = workspaceRoutes.stack.findIndex((layer) => layer.route?.path === path && layer.route.methods[method]);
+    const route = workspaceRoutes.stack[routeIndex]?.route;
+    const dashboardIndex = workspaceRoutes.stack.findIndex((layer) => layer.route?.path === '/dashboard' && layer.route.methods.get);
+    const assetGateIndex = dashboardIndex - 1;
+    assert.ok(route);
+    assert.equal(workspaceRoutes.stack[assetGateIndex].route, undefined, 'Expected the shared assets.view middleware immediately before the dashboard');
+    assert.ok(routeIndex < assetGateIndex, `${method.toUpperCase()} ${path} must not be blocked by the shared assets.view gate`);
+    assert.equal(route.stack.length, 1);
+    assert.equal(route.stack.length, 1);
+    assert.equal(route.stack[0].handle, ({
+      'get /returns': listReturns,
+      'post /returns': createReturn,
+      'get /returns/:id': getReturn,
+      'post /returns/:id/cancel': cancelReturn,
+    })[`${method} ${path}`]);
+  }
+
+  for (const middleware of [...requireDepartmentHead, resolveDepartmentScope]) {
+    assert.ok(workspaceRoutes.stack.some((layer) => layer.handle === middleware));
   }
 });
 

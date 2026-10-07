@@ -1,7 +1,7 @@
 export const messages = {
   en: {
     departmentProfile: {
-      breadcrumb: 'Department / Management',
+      breadcrumb: 'DEPARTMENT / MANAGEMENT',
       title: 'Department Profile',
       subtitle: 'Profile and operational information for your authorized department.',
       information: 'Department Information',
@@ -10,9 +10,9 @@ export const messages = {
       departmentCode: 'Department Code',
       college: 'College',
       departmentHead: 'Department Head',
-      contact: 'Contact / Phone',
+      contact: 'Contact',
       email: 'Email',
-      office: 'Office / Location',
+      office: 'Office',
       description: 'Description',
       status: 'Status',
       active: 'Active',
@@ -38,7 +38,8 @@ export const messages = {
       nameRequired: 'Department name is required.',
       emailInvalid: 'Enter a valid email address.',
       phoneInvalid: 'Enter a valid phone number.',
-      descriptionTooLong: 'Description must be 2000 characters or fewer.',
+      descriptionTooLong: 'Description must be 500 characters or fewer.',
+      officeTooLong: 'Office must be 255 characters or fewer.',
     },
     departmentLaboratories: {
       breadcrumb: 'Department / Facilities',
@@ -534,7 +535,8 @@ export const messages = {
       nameRequired: 'የዲፓርትመንቱ ስም ያስፈልጋል።',
       emailInvalid: 'ትክክለኛ የኢሜይል አድራሻ ያስገቡ።',
       phoneInvalid: 'ትክክለኛ ስልክ ቁጥር ያስገቡ።',
-      descriptionTooLong: 'መግለጫው ከ2000 ቁምፊዎች መብለጥ የለበትም።',
+      descriptionTooLong: 'መግለጫው ከ500 ቁምፊዎች መብለጥ የለበትም።',
+      officeTooLong: 'የቢሮው ስም ከ255 ቁምፊዎች መብለጥ የለበትም።',
     },
     departmentLaboratories: {
       breadcrumb: 'ዲፓርትመንት / ተቋማት',

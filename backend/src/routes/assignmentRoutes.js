@@ -124,9 +124,6 @@ router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'
     const departmentScope = getDepartmentScopeId(req);
 
     const andClauses = [];
-    if (departmentScope && ['department_head'].includes(String(req.user.role || '').toLowerCase())) {
-      andClauses.push({ '$Asset.departmentId$': departmentScope });
-    }
     const now = new Date();
     if (status === 'active') {
       andClauses.push({ status: 'active' });

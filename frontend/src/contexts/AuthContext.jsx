@@ -125,9 +125,9 @@ export const AuthProvider = ({ children }) => {
             onUnauthorized();
           }
           const status = error.response.status ? ` (${error.response.status})` : '';
-          const apiError = new Error(getApiErrorMessage(error, `Server error occurred${status}`));
-          apiError.status = error.response.status;
-          throw apiError;
+          error.message = getApiErrorMessage(error, `Server error occurred${status}`);
+          error.status = error.response.status;
+          throw error;
         }
         if (error.request) {
           const networkError = new Error('Unable to connect to server. Please try again.');

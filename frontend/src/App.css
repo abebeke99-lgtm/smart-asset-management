@@ -3540,9 +3540,11 @@ body.dark .spinner {
 .department-profile-notice { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; padding: 11px 14px; border: 1px solid; border-radius: 8px; font-size: 13px; font-weight: 700; }
 .department-profile-notice--success { color: #166534; border-color: #bbf7d0; background: #f0fdf4; }
 .department-profile-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding-top: 18px; border-top: 1px solid #e2e8f0; }
+.department-profile-form .department-profile-details { grid-column: 1 / -1; width: 100%; }
 .department-profile-form label { display: grid; gap: 6px; color: #334155; font-size: 12px; font-weight: 700; }
 .department-profile-form label:last-of-type { grid-column: 1 / -1; }
 .department-profile-form input, .department-profile-form textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 7px; padding: 9px 10px; color: #0f172a; background: #fff; font: inherit; font-size: 14px; }
+.department-profile-form input[aria-invalid="true"], .department-profile-form textarea[aria-invalid="true"] { border-color: #dc2626; }
 .department-profile-form textarea { resize: vertical; }
 .department-profile-form-actions { grid-column: 1 / -1; justify-content: flex-end; margin-top: 4px; }
 .department-profile-form-error { grid-column: 1 / -1; margin: 0; color: #b91c1c; font-size: 13px; }

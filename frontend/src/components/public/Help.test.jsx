@@ -22,7 +22,7 @@ describe('Help page', () => {
     expect(screen.getByText('University Asset Management System')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Help & Support' })).toBeInTheDocument();
     expect(screen.getByText('Practical guidance for signing in and using the asset workflows available to your role.')).toBeInTheDocument();
-    ['Quick Actions', 'Help Topics', 'Password Reset', 'Frequently Asked Questions', 'Roles and Access', 'Need More Help?'].forEach((title) => {
+    ['Quick Actions', 'Help Topics', 'Development Demo Accounts', 'Password Reset', 'Frequently Asked Questions', 'Roles and Access', 'Need More Help?'].forEach((title) => {
       expect(screen.getAllByRole('heading', { name: title })).toHaveLength(1);
     });
     expect(screen.queryByText('Official contact details have not been configured.')).not.toBeInTheDocument();
@@ -50,6 +50,17 @@ describe('Help page', () => {
     expect(screen.getByRole('button', { name: 'How do I request a transfer?' })).toBeInTheDocument();
     expect(screen.getByText('Your dashboard and available actions depend on your assigned role.')).toBeInTheDocument();
     expect(screen.getByText('System administration and broad asset-management workflows according to assigned permissions.')).toBeInTheDocument();
+  });
+
+  it('documents local demo usernames and safe password reset guidance without exposing a password', () => {
+    render(<MemoryRouter><Help /></MemoryRouter>);
+
+    const demoAccounts = screen.getByRole('heading', { name: 'Development Demo Accounts' }).parentElement;
+    ['admin', 'ict_officer', 'college_manager', 'department_head', 'finance', 'store_manager', 'maintenance', 'infrastructure'].forEach((username) => {
+      expect(within(demoAccounts).getByText(username)).toBeInTheDocument();
+    });
+    expect(within(demoAccounts).getByText(/SEED_DEMO_PASSWORD/)).toBeInTheDocument();
+    expect(within(demoAccounts).getByText(/resets every listed demo account/i)).toBeInTheDocument();
   });
 
   it('expands and collapses FAQ answers', () => {

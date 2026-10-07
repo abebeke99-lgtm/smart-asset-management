@@ -41,7 +41,7 @@ describe('Department Head profile', () => {
     apiClient.get.mockResolvedValue(successfulProfileResponse());
   });
 
-  it('loads and displays the authorized department details and database counts without edit permission', async () => {
+  it('loads and displays the authorized department details and database counts', async () => {
     render(<DeptProfile />);
 
     expect(screen.getByRole('status')).toHaveTextContent('Loading department profile');
@@ -56,8 +56,31 @@ describe('Department Head profile', () => {
     expect(screen.getByText('Total Staff').parentElement).toHaveTextContent('5');
     expect(screen.getByText('Total Assets').parentElement).toHaveTextContent('5');
     expect(screen.getAllByText('Not provided')).toHaveLength(4);
-    expect(screen.queryByRole('button', { name: 'Edit Profile' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit Profile' })).toBeInTheDocument();
     expect(apiClient.get).toHaveBeenCalledWith('/department-head/profile');
+  });
+
+  it('renders all ten profile fields, including the linked head and editable contact details', async () => {
+    apiClient.get.mockResolvedValue(successfulProfileResponse({
+      ...profile,
+      description: 'Provides computing services.',
+      phone: '+1 555 123 4567',
+      email: 'it@example.test',
+      office: 'Room 204',
+      status: 'inactive',
+    }));
+
+    render(<DeptProfile />);
+
+    expect(await screen.findByText('3', { selector: 'dd' })).toBeInTheDocument();
+    for (const field of ['Department ID', 'Department Name', 'Department Code', 'College', 'Department Head', 'Contact', 'Email', 'Office', 'Description', 'Status']) {
+      expect(screen.getByText(field)).toBeInTheDocument();
+    }
+    expect(screen.getByText('+1 555 123 4567')).toBeInTheDocument();
+    expect(screen.getByText('it@example.test')).toBeInTheDocument();
+    expect(screen.getByText('Room 204')).toBeInTheDocument();
+    expect(screen.getByText('Provides computing services.')).toBeInTheDocument();
+    expect(screen.getAllByText('Inactive')).toHaveLength(2);
   });
 
   it('shows a loading state until the profile request resolves', async () => {
@@ -106,13 +129,14 @@ describe('Department Head profile', () => {
     expect(apiClient.get).toHaveBeenNthCalledWith(2, '/department-head/profile');
   });
 
-  it('does not request or display another department when the authenticated account has no configured scope', async () => {
+  it('lets the API report a missing authenticated department assignment', async () => {
     useAuth.mockReturnValue({ user: { id: 10, role: 'department_head' } });
+    apiClient.get.mockRejectedValue({ response: { status: 404 } });
 
     render(<DeptProfile />);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('You are not authorized to view this department.');
-    expect(apiClient.get).not.toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Department profile not found.');
+    expect(apiClient.get).toHaveBeenCalledWith('/department-head/profile');
     expect(screen.queryByText('Engineering')).not.toBeInTheDocument();
   });
 
@@ -137,36 +161,45 @@ describe('Department Head profile', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('የዲፓርትመንት መገለጫን መጫን አልተቻለም።');
   });
 
-  it('renders a distinct empty state when the service has no profile payload', async () => {
+  it('renders a not-found state when the service has no profile payload', async () => {
     apiClient.get.mockResolvedValue({ data: { success: true, data: null } });
 
     render(<DeptProfile />);
 
-    expect(await screen.findByText('Department profile information is not available.')).toHaveAttribute('role', 'status');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Department profile not found.');
   });
 
-  it('allows editing only when the department head has the update permission', async () => {
-    useAuth.mockReturnValue({ user: { id: 10, role: 'department_head', departmentId: 3, permissions: ['department.profile.update'] } });
+  it('allows the department head to edit only the editable profile fields without depending on optional permission configuration', async () => {
+    useAuth.mockReturnValue({ user: { id: 10, role: 'department_head', departmentId: 3, permissions: [] } });
 
     render(<DeptProfile />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Profile' }));
+    expect(screen.getByLabelText('Contact')).toBeInTheDocument();
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByLabelText('Office')).toBeInTheDocument();
+    expect(screen.getByLabelText('Description')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Department ID')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Department Name')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Department Code')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('College')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Department Head')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Status')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save Changes' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Save Changes' })).not.toBeInTheDocument());
     expect(apiClient.put).not.toHaveBeenCalled();
   });
 
-  it('saves through the department-head endpoint and reloads the persisted profile', async () => {
+  it('saves only editable fields through the department-head endpoint and displays its updated profile', async () => {
     useAuth.mockReturnValue({ user: { id: 10, role: 'department_head', departmentId: 3, permissions: ['department.profile.update'] } });
-    apiClient.get
-      .mockResolvedValueOnce(successfulProfileResponse())
-      .mockResolvedValueOnce(successfulProfileResponse({ ...profile, email: 'engineering@example.test' }));
-    apiClient.put.mockResolvedValue({ data: { success: true } });
+    apiClient.put.mockResolvedValue({ data: { success: true, data: { ...profile, email: 'engineering@example.test' } } });
 
     render(<DeptProfile />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Profile' }));
+    expect(screen.getByText('Department ID')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Department ID')).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'engineering@example.test' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
@@ -174,24 +207,22 @@ describe('Department Head profile', () => {
     expect(apiClient.put).toHaveBeenCalledWith('/department-head/profile', expect.objectContaining({
       email: 'engineering@example.test',
     }));
-    expect(Object.keys(apiClient.put.mock.calls[0][1]).sort()).toEqual(['description', 'email', 'office', 'phone']);
-    expect(apiClient.get).toHaveBeenCalledTimes(2);
+    expect(Object.keys(apiClient.put.mock.calls[0][1]).sort()).toEqual(['contact', 'description', 'email', 'office']);
+    expect(apiClient.get).toHaveBeenCalledTimes(1);
     expect(screen.getByText('engineering@example.test')).toBeInTheDocument();
   });
 
-  it('shows a localized save validation error and leaves the editable profile open', async () => {
+  it('shows field-level save validation errors and leaves the editable profile open', async () => {
     useAuth.mockReturnValue({ user: { id: 10, role: 'department_head', departmentId: 3, permissions: ['department.profile.update'] } });
-    useLanguage.mockReturnValue({ language: 'am' });
-    apiClient.put.mockRejectedValue({ response: { status: 422, data: { message: 'Department email is invalid.' } } });
+    apiClient.put.mockRejectedValue({ response: { status: 422, data: { message: 'Please correct the department profile fields.', errors: { email: 'Enter a valid email address.' } } } });
 
     render(<DeptProfile />);
-    fireEvent.click(await screen.findByRole('button', { name: 'መገለጫ አርትዕ' }));
-    fireEvent.change(screen.getByLabelText('ኢሜይል'), { target: { value: 'valid@example.test' } });
-    fireEvent.click(screen.getByRole('button', { name: 'ለውጦችን አስቀምጥ' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Profile' }));
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'valid@example.test' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('እባክዎ የተጠቆሙትን መስኮች ያስተካክሉ።');
-    expect(screen.getByLabelText('ኢሜይል')).toBeInTheDocument();
-    expect(screen.queryByText('Department email is invalid.')).not.toBeInTheDocument();
+    expect(await screen.findByText('Enter a valid email address.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Email')).toHaveAttribute('aria-invalid', 'true');
   });
 
   it('uses the Amharic catalog for profile fields and status', async () => {

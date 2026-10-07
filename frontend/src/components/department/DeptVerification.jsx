@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ClipboardCheck, LoaderCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import apiClient from '../../services/apiClient';
 import { useLanguage } from '../../contexts/UiContext';
+import './DeptVerification.css';
 
 const conditionOptions = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged', 'Unknown'];
 const localDate = () => {
@@ -99,22 +100,28 @@ const DeptVerification = () => {
     }
   };
 
-  return <section className="department-verification-page" style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
-    <header style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+  return <section className="department-verification-page">
+    <header className="department-verification-header">
       <div>
-        <p><ShieldCheck size={15} aria-hidden="true" /> {copy('Department operations', 'የክፍል ስራዎች')}</p>
+        <p className="department-verification-kicker"><ShieldCheck size={15} aria-hidden="true" /> {copy('Department operations', 'የክፍል ስራዎች')}</p>
         <h1>{copy('Physical Asset Verification', 'የንብረት አካላዊ ማረጋገጫ')}</h1>
-        <p>{copy('Verify the asset in person. Each check is permanently recorded for your department.', 'ንብረቱን በአካል ያረጋግጡ። እያንዳንዱ ማረጋገጫ ለክፍልዎ ይመዘገባል።')}</p>
+        <p className="department-verification-subtitle">{copy('Verify the asset in person. Each check is permanently recorded for your department.', 'ንብረቱን በአካል ያረጋግጡ። እያንዳንዱ ማረጋገጫ ለክፍልዎ ይመዘገባል።')}</p>
       </div>
-      <button type="button" onClick={load} disabled={loading}>
+      <button className="department-verification-button department-verification-button--secondary" type="button" onClick={load} disabled={loading}>
         <RefreshCw size={16} /> {copy('Refresh', 'አድስ')}
       </button>
     </header>
 
-    {error && <div role="alert" style={{ padding: 12, marginBottom: 16, border: '1px solid #fecaca', color: '#991b1b' }}>{error}</div>}
-    {success && <div role="status" style={{ padding: 12, marginBottom: 16, border: '1px solid #bbf7d0', color: '#166534' }}>{success}</div>}
+    {error && <div className="department-verification-alert department-verification-alert--error" role="alert">{error}</div>}
+    {success && <div className="department-verification-alert department-verification-alert--success" role="status">{success}</div>}
 
-    <form onSubmit={recordVerification} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, padding: 20, border: '1px solid #dbe3ec', borderRadius: 8, marginBottom: 28 }}>
+    <form className="department-verification-form" onSubmit={recordVerification}>
+      <div className="department-verification-form-heading">
+        <div>
+          <h2>{copy('Record a physical check', 'የአካላዊ ማረጋገጫ ይመዝግቡ')}</h2>
+          <p>{copy('Identify the department asset and record what you observe.', 'የክፍሉን ንብረት ይለዩና ያዩትን ይመዝግቡ።')}</p>
+        </div>
+      </div>
       <label>
         {copy('Identify asset', 'ንብረቱን ይለዩ')}
         <select value={form.assetId} onChange={updateAsset} disabled={loading || Boolean(form.qrCode)} required={!form.qrCode}>
@@ -134,9 +141,9 @@ const DeptVerification = () => {
         />
       </label>
 
-      {selectedAsset && <div style={{ gridColumn: '1 / -1', padding: 12, background: '#f8fafc', borderRadius: 6 }}>
+      {selectedAsset && <div className="department-verification-asset-summary">
         <strong>{selectedAsset.assetCode || `#${selectedAsset.id}`} · {selectedAsset.name}</strong>
-        <div>{copy('Expected location', 'የሚጠበቀው ቦታ')}: {selectedAsset.location || copy('Not specified', 'አልተገለጸም')}</div>
+        <span>{copy('Expected location', 'የሚጠበቀው ቦታ')}: {selectedAsset.location || copy('Not specified', 'አልተገለጸም')}</span>
       </div>}
 
       <label>
@@ -154,24 +161,30 @@ const DeptVerification = () => {
         {copy('Verification date', 'የማረጋገጫ ቀን')}
         <input type="date" value={form.verificationDate} onChange={(event) => setForm((current) => ({ ...current, verificationDate: event.target.value }))} required />
       </label>
-      <label style={{ gridColumn: '1 / -1' }}>
+      <label className="department-verification-form-wide">
         {copy('Exceptions or notes', 'ልዩነቶች ወይም ማስታወሻ')}
         <textarea value={form.exceptions} onChange={(event) => setForm((current) => ({ ...current, exceptions: event.target.value }))} maxLength={2000} rows={3} />
       </label>
-      <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+      <div className="department-verification-form-actions">
         <small>{copy('Verified by is taken from your signed-in account.', 'ያረጋገጠው ሰው ከገቡበት መለያ ይወሰዳል።')}</small>
-        <button type="submit" disabled={busy || loading || (!form.assetId && !form.qrCode.trim())}>
+        <button className="department-verification-button department-verification-button--primary" type="submit" disabled={busy || loading || (!form.assetId && !form.qrCode.trim())}>
           {busy ? <LoaderCircle size={16} /> : <ClipboardCheck size={16} />} {copy('Record verification', 'ማረጋገጫ መዝግብ')}
         </button>
       </div>
     </form>
 
-    <section aria-labelledby="verification-history-heading">
-      <h2 id="verification-history-heading">{copy('Verification history', 'የማረጋገጫ ታሪክ')}</h2>
-      {loading ? <div aria-busy="true"><LoaderCircle /> {copy('Loading history...', 'ታሪክ በመጫን ላይ...')}</div> : history.length === 0 ? (
-        <p>{copy('No physical verifications have been recorded for this department.', 'ለዚህ ክፍል የአካል ማረጋገጫ አልተመዘገበም።')}</p>
-      ) : <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+    <section className="department-verification-history" aria-labelledby="verification-history-heading">
+      <div className="department-verification-history-heading">
+        <h2 id="verification-history-heading">{copy('Verification history', 'የማረጋገጫ ታሪክ')}</h2>
+        {!loading && history.length > 0 && <span>{history.length} {copy('records', 'መዝገቦች')}</span>}
+      </div>
+      {loading ? <div className="department-verification-state" aria-busy="true"><LoaderCircle className="department-verification-spinner" /> {copy('Loading history...', 'ታሪክ በመጫን ላይ...')}</div> : history.length === 0 ? (
+        <div className="department-verification-state department-verification-empty">
+          <ClipboardCheck size={24} aria-hidden="true" />
+          <p>{copy('No physical verifications have been recorded for this department.', 'ለዚህ ክፍል የአካል ማረጋገጫ አልተመዘገበም።')}</p>
+        </div>
+      ) : <div className="department-verification-table-wrap">
+        <table className="department-verification-table">
           <thead><tr>{[
             copy('Asset', 'ንብረት'),
             copy('Expected location', 'የሚጠበቀው ቦታ'),
@@ -180,15 +193,15 @@ const DeptVerification = () => {
             copy('Date', 'ቀን'),
             copy('Verified by', 'ያረጋገጠው'),
             copy('Exceptions', 'ልዩነቶች'),
-          ].map((heading) => <th key={heading} scope="col" style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid #cbd5e1' }}>{heading}</th>)}</tr></thead>
+          ].map((heading) => <th key={heading} scope="col">{heading}</th>)}</tr></thead>
           <tbody>{history.map((entry) => <tr key={entry.id}>
-            <td style={{ padding: 10, borderBottom: '1px solid #e2e8f0' }}>{entry.assetCode || `#${entry.assetId}`} · {entry.assetName || entry.Asset?.name || ''}{entry.scannedQrCode && <small style={{ display: 'block' }}>QR: {entry.scannedQrCode}</small>}</td>
-            <td style={{ padding: 10, borderBottom: '1px solid #e2e8f0' }}>{entry.expectedLocation || '—'}</td>
-            <td style={{ padding: 10, borderBottom: '1px solid #e2e8f0' }}>{entry.actualLocation}</td>
-            <td style={{ padding: 10, borderBottom: '1px solid #e2e8f0' }}>{entry.actualCondition}{entry.actualCondition?.toLowerCase() !== entry.expectedCondition?.toLowerCase() && <small style={{ display: 'block' }}>{copy('Expected', 'የሚጠበቀው')}: {entry.expectedCondition}</small>}</td>
-            <td style={{ padding: 10, borderBottom: '1px solid #e2e8f0' }}>{entry.verificationDate}</td>
-            <td style={{ padding: 10, borderBottom: '1px solid #e2e8f0' }}>{entry.Verifier?.fullName || entry.Verifier?.username || entry.verifiedBy}</td>
-            <td style={{ padding: 10, borderBottom: '1px solid #e2e8f0', whiteSpace: 'pre-wrap' }}>{entry.exceptions || '—'}</td>
+            <td>{entry.assetCode || `#${entry.assetId}`} · {entry.assetName || entry.Asset?.name || ''}{entry.scannedQrCode && <small>QR: {entry.scannedQrCode}</small>}</td>
+            <td>{entry.expectedLocation || '—'}</td>
+            <td>{entry.actualLocation}</td>
+            <td>{entry.actualCondition}{entry.actualCondition?.toLowerCase() !== entry.expectedCondition?.toLowerCase() && <small>{copy('Expected', 'የሚጠበቀው')}: {entry.expectedCondition}</small>}</td>
+            <td>{entry.verificationDate}</td>
+            <td>{entry.Verifier?.fullName || entry.Verifier?.username || entry.verifiedBy}</td>
+            <td className="department-verification-exceptions">{entry.exceptions || '—'}</td>
           </tr>)}</tbody>
         </table>
       </div>}

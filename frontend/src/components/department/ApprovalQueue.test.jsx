@@ -1,10 +1,8 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ApprovalQueue from './ApprovalQueue';
-import { useAuth } from '../../contexts/AuthContext';
 import { apiClient } from '../../utils/api';
 
-jest.mock('../../contexts/AuthContext', () => ({ useAuth: jest.fn() }));
 jest.mock('../../utils/api', () => ({
   apiClient: { get: jest.fn(), post: jest.fn() },
   getApiErrorMessage: (_error, fallback) => fallback,
@@ -24,7 +22,6 @@ const approval = {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  useAuth.mockReturnValue({ hasPermission: () => true });
   apiClient.get.mockImplementation((url) => Promise.resolve({
     data: { data: url.endsWith('/25') ? approval : [approval] },
   }));
@@ -47,12 +44,13 @@ test('reviews a request and submits only the named action, not a caller-selected
   expect(apiClient.post.mock.calls[0][1]).not.toHaveProperty('status');
 });
 
-test('does not render actions the current user is not permitted to perform', async () => {
-  useAuth.mockReturnValue({ hasPermission: (permission) => permission === 'department_head.approvals.review' });
+test('shows department approval actions without optional permission-matrix entries', async () => {
   render(<ApprovalQueue />);
   await screen.findByText('Microscope');
   fireEvent.click(screen.getByRole('button', { name: 'Review' }));
   expect(await screen.findByText('Required for laboratory work')).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Request Changes' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Escalate to College' })).toBeInTheDocument();
 });
