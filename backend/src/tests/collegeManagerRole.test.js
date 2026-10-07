@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { Config } = require('../models');
 const { normalizeRoleValue, requireRole } = require('../middlewares/auth');
 const { getConfiguredRolePermissions } = require('../services/rolePermissionService');
+const { DEFAULT_ROLE_PERMISSIONS } = require('../constants/rolePermissions');
 
 const makeResponse = () => ({
   status(code) {
@@ -27,7 +28,7 @@ test('college manager role is accepted under the college scope guard', () => {
   assert.equal(req.user.role, 'college_manager', 'college_manager should remain the canonical college manager role');
 });
 
-test('legacy college role is accepted and normalized to college_manager', () => {
+test('college role remains distinct from college_manager authorization', () => {
   const req = { user: { role: 'college' } };
   const res = makeResponse();
   let nextCalled = false;
@@ -36,18 +37,19 @@ test('legacy college role is accepted and normalized to college_manager', () => 
     nextCalled = true;
   });
 
-  assert.equal(normalizeRoleValue('college'), 'college_manager');
+  assert.equal(normalizeRoleValue('college'), 'college');
   assert.equal(normalizeRoleValue('college_manager'), 'college_manager');
-  assert.equal(nextCalled, true, 'legacy college role should pass the college-manager guard');
-  assert.equal(req.user.role, 'college_manager', 'legacy role should normalize to the canonical manager role');
+  assert.equal(nextCalled, false, 'college role must not pass the college-manager guard');
+  assert.equal(req.user.role, 'college', 'college role should retain its own identity');
 });
 
-test('legacy college role receives college_manager permissions', async () => {
+test('college role receives only its own configured permissions', async () => {
   const originalFindByPk = Config.findByPk;
   Config.findByPk = async () => null;
   try {
     const permissions = await getConfiguredRolePermissions('college');
-    assert.deepEqual(permissions, await getConfiguredRolePermissions('college_manager'));
+    assert.deepEqual(permissions, DEFAULT_ROLE_PERMISSIONS.college);
+    assert.notDeepEqual(permissions, await getConfiguredRolePermissions('college_manager'));
   } finally {
     Config.findByPk = originalFindByPk;
   }

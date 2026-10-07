@@ -164,74 +164,15 @@ const Login = () => {
         }
         .login-panel {
           width: min(100%, 980px);
-          display: grid;
-          grid-template-columns: minmax(0, 1.1fr) minmax(320px, 440px);
-          gap: 30px;
-          align-items: center;
-          justify-content: center;
-        }
-        .login-spotlight {
           display: flex;
           flex-direction: column;
           justify-content: center;
-          min-height: 540px;
-          padding: clamp(24px, 3vw, 38px);
-          border: 1px solid var(--color-border);
-          border-radius: 28px;
-          background: linear-gradient(135deg, rgba(0, 87, 184, 0.08), rgba(255, 255, 255, 0.9));
-          box-shadow: var(--shadow-lg);
-        }
-        .login-spotlight-badge {
-          width: fit-content;
-          padding: 7px 12px;
-          border-radius: 999px;
-          background: rgba(0, 87, 184, 0.08);
-          border: 1px solid rgba(0, 87, 184, 0.12);
-          color: var(--color-primary);
-          font-size: 0.72rem;
-          font-weight: 800;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-        }
-        .login-spotlight h1 {
-          margin: 18px 0 12px;
-          color: var(--color-sidebar);
-          font-size: clamp(2.2rem, 4vw, 3.4rem);
-          line-height: 1.08;
-          letter-spacing: -0.04em;
-        }
-        .login-spotlight p {
-          max-width: 30rem;
-          margin: 0;
-          color: var(--color-text-secondary);
-          font-size: 1rem;
-          line-height: 1.7;
-        }
-        .login-feature-list {
-          display: grid;
-          gap: 12px;
-          padding: 0;
-          margin: 24px 0 0;
-          list-style: none;
-        }
-        .login-feature-list li {
-          display: flex;
           align-items: center;
-          gap: 10px;
-          color: var(--color-text-primary);
-          font-weight: 600;
-        }
-        .login-feature-list li::before {
-          content: "";
-          width: 10px;
-          height: 10px;
-          flex-shrink: 0;
-          border-radius: 50%;
-          background: var(--color-primary);
-          box-shadow: 0 0 0 5px rgba(0, 87, 184, 0.12);
+          gap: 0;
         }
         .login-card {
           width: min(100%, 440px);
+          margin: 0 auto;
           padding: 32px 28px;
           border: 1px solid var(--color-border);
           border-radius: 22px;
@@ -354,19 +295,6 @@ const Login = () => {
         .login-submit:disabled { cursor: wait; opacity: 0.7; }
         .login-signup { margin-top: 22px; color: var(--color-text-secondary); text-align: center; font-size: 0.82rem; }
         .login-signup a { color: var(--color-primary); font-weight: 700; text-decoration: none; }
-        @media (max-width: 820px) {
-          .login-panel {
-            grid-template-columns: 1fr;
-          }
-          .login-spotlight {
-            min-height: auto;
-            display: none;
-          }
-          .login-card {
-            width: min(100%, 440px);
-            margin: 0 auto;
-          }
-        }
         @media (max-width: 640px) {
           .login-page { padding: 18px 14px; }
           .login-card { padding: 24px 18px; }
@@ -374,16 +302,6 @@ const Login = () => {
       `}</style>
       <main className="login-page">
         <section className="login-panel">
-          <aside className="login-spotlight" aria-label="University asset management overview">
-            <span className="login-spotlight-badge">Mekdela Amba University</span>
-            <h1>Asset Management</h1>
-            <p>Track inventory, oversee departments, coordinate maintenance, and keep every university asset visible from one secure operational dashboard.</p>
-            <ul className="login-feature-list">
-              <li>Lifecycle tracking</li>
-              <li>Department visibility</li>
-              <li>Maintenance coordination</li>
-            </ul>
-          </aside>
           <main className="login-card">
             <img className="login-logo" src="/assets/mekdela-amba-university-logo.png" alt="Mekdela Amba University logo" />
             <div className="login-heading"><h2>{t.title}</h2><p>{t.subtitle}</p></div>

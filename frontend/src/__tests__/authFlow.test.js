@@ -93,7 +93,7 @@ describe('ProtectedRoute auth flow', () => {
     expect(screen.queryByText('ICT Network')).not.toBeInTheDocument();
   });
 
-  it('allows a legacy college user to open the college-manager dashboard URL', () => {
+  it('blocks a college user from manually opening the college-manager dashboard URL', () => {
     useAuth.mockReturnValue({ user: { role: 'college' }, loading: false });
 
     render(
@@ -104,8 +104,8 @@ describe('ProtectedRoute auth flow', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('College Manager Dashboard')).toBeInTheDocument();
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('You do not have permission to access this section.');
+    expect(screen.queryByText('College Manager Dashboard')).not.toBeInTheDocument();
   });
 
   it('uploads profile photos without forcing a multipart content-type header', async () => {

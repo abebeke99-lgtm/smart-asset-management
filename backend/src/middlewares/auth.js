@@ -1,41 +1,11 @@
 const passport = require('../config/passport');
 const { DEFAULT_ROLE_PERMISSIONS, getConfiguredRolePermissions } = require('../services/rolePermissionService');
+const { normalizeRoleForStorage } = require('../constants/rolePermissions');
 const { isAccountActive } = require('../utils/accountStatus');
 
 const ROLE_PERMISSIONS = DEFAULT_ROLE_PERMISSIONS;
 
-const normalizeRoleValue = (role) => {
-  if (!role) return '';
-  const value = String(role).trim().toLowerCase();
-  const aliases = {
-    admin: 'admin',
-    administrator: 'admin',
-    'department head': 'department_head',
-    dept_head: 'department_head',
-    'department-head': 'department_head',
-    department_head: 'department_head',
-    department: 'department_head',
-    college: 'college_manager',
-    'college manager': 'college_manager',
-    'college-manager': 'college_manager',
-    college_manager: 'college_manager',
-    'infrastructure director': 'infrastructure',
-    'infrastructure directorate': 'infrastructure',
-    infrastructure_directorate: 'infrastructure',
-    'infrastructure-directorate': 'infrastructure',
-    infra: 'infrastructure',
-    'ict officer': 'ict_officer',
-    'ict-officer': 'ict_officer',
-    ict_officer: 'ict_officer',
-    'finance officer': 'finance',
-    'store manager': 'store_manager',
-    'store-manager': 'store_manager',
-    store_manager: 'store_manager',
-    maintenance: 'maintenance',
-    maint: 'maintenance',
-  };
-  return aliases[value] || value.replace(/[\s-]+/g, '_');
-};
+const normalizeRoleValue = normalizeRoleForStorage;
 
 const normalizePermissionValue = (permission) => String(permission || '')
   .trim()
@@ -74,7 +44,7 @@ const requireAuth = (req, res, next) => {
       if (configuredPermissions !== null) req.user.rolePermissions = configuredPermissions;
       req.user.permissions = resolveUserPermissions(req.user);
 
-      if (!isAccountActive(req.user.active) || ['inactive', 'disabled', 'suspended', 'blocked'].includes(String(req.user.status || '').toLowerCase())) {
+      if (!isAccountActive(req.user.active) || ['disabled', 'suspended', 'blocked'].includes(String(req.user.status || '').toLowerCase())) {
         return res.status(403).json({ success: false, message: 'This account is not active.' });
       }
 
@@ -90,7 +60,7 @@ const requireActiveAccount = (req, res, next) => {
     return res.status(401).json({ success: false, message: 'Authentication required' });
   }
 
-  const isActive = isAccountActive(req.user.active) && !['inactive', 'disabled', 'suspended', 'blocked'].includes(String(req.user.status || '').toLowerCase());
+  const isActive = isAccountActive(req.user.active) && !['disabled', 'suspended', 'blocked'].includes(String(req.user.status || '').toLowerCase());
   if (!isActive) {
     return res.status(403).json({ success: false, message: 'This account is not active.' });
   }

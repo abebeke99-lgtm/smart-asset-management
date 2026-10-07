@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
-import { apiClient, getApiErrorMessage, isCurrentAuthRequest } from '../utils/api';
+import { apiClient, getApiErrorMessage } from '../utils/api';
 import { sanitizeAuthToken } from '../utils/auth';
 
 let diagnosticsInstalled = false;
@@ -26,26 +26,12 @@ const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 const normalizeRoleValue = (role) => {
   if (!role) return '';
-
-  const resolvedRole = Array.isArray(role)
-    ? role.find((entry) => entry !== null && entry !== undefined && String(entry).trim())
-    : role && typeof role === 'object'
-      ? role.role ?? role.name ?? role.value ?? (Array.isArray(role.roles) ? role.roles.find((entry) => entry !== null && entry !== undefined && String(entry).trim()) : '')
-      : role;
-
-  const value = String(resolvedRole ?? '').trim().toLowerCase();
-  if (!value) return '';
-
-  const normalizedValue = value.replace(/[_-]+/g, ' ');
+  const value = String(role).trim().toLowerCase();
   const aliases = {
-    admin: 'admin',
-    administrator: 'admin',
     'department head': 'department_head',
-    'dept head': 'department_head',
     'dept_head': 'department_head',
     'department-head': 'department_head',
-    department: 'department_head',
-    college: 'college_manager',
+    'department': 'department_head',
     'college manager': 'college_manager',
     'college-manager': 'college_manager',
     college_manager: 'college_manager',
@@ -53,18 +39,9 @@ const normalizeRoleValue = (role) => {
     'infrastructure directorate': 'infrastructure',
     'infrastructure_directorate': 'infrastructure',
     'infrastructure-directorate': 'infrastructure',
-    infra: 'infrastructure',
-    'ict officer': 'ict_officer',
-    'finance officer': 'finance',
-    'store manager': 'store_manager',
-    maintenance: 'maintenance',
-    maint: 'maintenance',
-    staff: 'staff',
-    student: 'student',
-    user: 'user',
+    'infra': 'infrastructure'
   };
-
-  return aliases[normalizedValue] || normalizedValue.replace(/\s+/g, '_');
+  return aliases[value] || value;
 };
 
 const normalizePermissionValue = (permission) => String(permission || '').trim().toLowerCase().replace(/\s+/g, '.').replace(/[_-]+/g, '.').replace(/\.+/g, '.').replace(/^\.|\.$/g, '');
@@ -78,7 +55,7 @@ const normalizeUser = (userData) => {
 
   const department = userData.department;
   const profilePhoto = userData.profilePhoto ?? userData.profile_photo ?? userData.avatar ?? userData.photo_url ?? userData.avatar_url ?? null;
-  const role = normalizeRoleValue(userData.role ?? userData.roles ?? userData.roleName ?? userData.userRole);
+  const role = normalizeRoleValue(userData.role);
   const permissionSource = Array.isArray(userData.permissions)
     ? userData.permissions
     : Array.isArray(userData.rolePermissions)
@@ -144,7 +121,7 @@ export const AuthProvider = ({ children }) => {
           throw networkError;
         }
         if (error.response) {
-          if (error.response.status === 401 && isCurrentAuthRequest(error)) {
+          if (error.response.status === 401) {
             onUnauthorized();
           }
           const status = error.response.status ? ` (${error.response.status})` : '';
@@ -222,17 +199,14 @@ export const AuthProvider = ({ children }) => {
       try {
         axios.defaults.headers.common.Authorization = `Bearer ${token}`;
         const response = await api.get('/api/users/profile');
-        if (localStorage.getItem('token') !== token) return;
         const currentUser = response.data?.data || response.data?.user;
         if (!currentUser) throw new Error('Invalid session response');
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(normalizeUser(currentUser)));
         if (mounted) setUser(normalizeUser(currentUser));
       } catch (error) {
-        if (localStorage.getItem('token') === token) {
-          clearStoredAuth();
-          if (mounted) setUser(null);
-        }
+        clearStoredAuth();
+        if (mounted) setUser(null);
       } finally {
         if (mounted) setLoading(false);
       }

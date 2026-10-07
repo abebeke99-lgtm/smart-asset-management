@@ -5,9 +5,9 @@ const cors = require('cors');
 const helmet = require('helmet');
 const passport = require('./config/passport');
 const { sequelize, testConnection } = require('./config/database');
-const { User } = require('./models');
+require('./models');
 const { syncDatabase } = require('./config/sync');
-const { seedDatabase, DEMO_USERS } = require('./config/seed');
+const { seedDatabase } = require('./config/seed');
 const { initializeInitialAdmin } = require('./services/initialAdminService');
 const { ensureUploadDirectories } = require('./utils/uploadUtils');
 
@@ -18,7 +18,6 @@ const assetRoutes = require('./routes/assetRoutes');
 const ictAssetRoutes = require('./routes/ictAssetRoutes');
 const maintenanceRoutes = require('./routes/maintenanceRoutes');
 const rfidRoutes = require('./routes/rfidRoutes');
-const adminRfidRoutes = require('./routes/adminRfidRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const adminSupportRoutes = require('./routes/adminSupportRoutes');
 const assignmentRoutes = require('./routes/assignmentRoutes');
@@ -53,7 +52,6 @@ const searchRoutes = require('./routes/searchRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const backupService = require('./services/backupService');
 const { startAssetRetentionScheduler } = require('./services/assetRetentionService');
-const { startServiceRequestEscalationScheduler } = require('./services/serviceRequestEscalationService');
 const { requestMetricsMiddleware } = require('./middlewares/requestMetrics');
 const { requestContextMiddleware } = require('./middlewares/requestContext');
 const { requireAuth, requireRole } = require('./middlewares/auth');
@@ -130,9 +128,7 @@ app.use(cors({
       return;
     }
 
-    const error = new Error(`Origin ${origin} is not allowed by CORS`);
-    error.status = 403;
-    callback(error);
+    callback(new Error(`Origin ${origin} is not allowed by CORS`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -154,13 +150,11 @@ app.use('/api/uploads', uploadRoutes);
 app.use('/uploads', express.static(uploadRoot, { index: false, dotfiles: 'ignore' }));
 app.use('/api/users', userRoutes);
 app.use('/api/admin/users', requireAuth, requireRole('admin'), userRoutes);
-app.use('/api', require('./routes/userManagementOptionsRoutes'));
 app.use('/api/assets', assetRoutes);
 app.use('/api/ict/software-licenses', softwareLicenseRoutes);
 app.use('/api/ict', ictAssetRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/rfid', rfidRoutes);
-app.use('/api/admin/rfid', adminRfidRoutes);
 app.use('/api/tracking', rfidRoutes);
 app.use('/api/assignments', assignmentRoutes);
 app.use('/api/transfers', transferRoutes);
@@ -214,29 +208,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-async function autoSeedLocalDemoUsers() {
-  if (process.env.NODE_ENV === 'production') {
-    return false;
-  }
-
-  if (process.env.SEED_DEMO_DATA === 'true') {
-    return true;
-  }
-
-  try {
-    const missingDemoUsers = await Promise.all(
-      DEMO_USERS.map(async ({ username }) => {
-        const record = await User.findOne({ where: { username } });
-        return !record;
-      })
-    );
-    return missingDemoUsers.some(Boolean);
-  } catch (error) {
-    console.warn('Unable to determine local demo seed state; skipping automatic demo seeding.', error.message);
-    return false;
-  }
-}
-
 async function initializeDatabase() {
   const retryDelays = [5000, 10000, 20000, 30000, 60000];
   for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
@@ -259,13 +230,12 @@ async function initializeDatabase() {
         }
       }
       if (process.env.NODE_ENV !== 'production') {
-        if (process.env.SEED_DEMO_DATA === 'true' || await autoSeedLocalDemoUsers()) {
+        if (process.env.SEED_DEMO_DATA === 'true') {
           await seedDatabase();
         }
       }
       backupService.startAutomaticBackupScheduler();
       startAssetRetentionScheduler();
-      startServiceRequestEscalationScheduler();
       console.log('Database initialization completed.');
       break;
     }

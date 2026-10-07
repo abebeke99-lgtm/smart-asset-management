@@ -56,7 +56,6 @@ const normalizeRoleForStorage = (role) => {
     'ict-officer': 'ict_officer',
     ict_officer: 'ict_officer',
     ict: 'ict_officer',
-    college: 'college_manager',
     'college manager': 'college_manager',
     'college-manager': 'college_manager',
     college_manager: 'college_manager',

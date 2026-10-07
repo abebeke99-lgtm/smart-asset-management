@@ -23,7 +23,7 @@ describe('normalizeRole', () => {
     }).toEqual({
       admin: '/admin/dashboard',
       ict_officer: '/ict/dashboard',
-      college: '/college-manager/dashboard',
+      college: '/college/dashboard',
       college_manager: '/college-manager/dashboard',
       department_head: '/department-head/dashboard',
       finance: '/finance/dashboard',
@@ -33,7 +33,7 @@ describe('normalizeRole', () => {
       staff: '/staff/dashboard',
       student: '/student/dashboard',
     });
-    expect(normalizeRole('college')).toBe('college_manager');
+    expect(normalizeRole('college')).toBe('college');
     expect(normalizeRole('college_manager')).toBe('college_manager');
   });
 });
