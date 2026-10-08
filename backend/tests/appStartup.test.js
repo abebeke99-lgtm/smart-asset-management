@@ -64,11 +64,22 @@ test('database schema sync runs in production and fails startup when initializat
 test('asset QR schema repair runs even when general schema synchronization is skipped', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
   const skipSync = source.indexOf('if (skipSync)');
-  const qrRepair = source.indexOf('if (schemaReady) await ensureQrCodeColumn();');
+  const qrRepair = source.indexOf('await ensureQrCodeColumn();');
   const databaseReady = source.indexOf('if (databaseConnected && schemaReady)');
   assert.ok(skipSync >= 0);
   assert.ok(qrRepair > skipSync);
   assert.ok(databaseReady > qrRepair);
+});
+
+test('room schema repair runs after database schema readiness, including when sync is skipped', () => {
+  const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
+  const skipSync = source.indexOf('if (skipSync)');
+  const roomRepair = source.indexOf('await ensureRoomSchema();');
+  const databaseReady = source.indexOf('if (databaseConnected && schemaReady)');
+  assert.match(source, /const \{ ensureRoomSchema \} = require\('\.\/scripts\/migrations\/roomSchema'\);/);
+  assert.ok(skipSync >= 0);
+  assert.ok(roomRepair > skipSync);
+  assert.ok(databaseReady > roomRepair);
 });
 
 test('test startup does not bootstrap an admin with the local environment password', () => {

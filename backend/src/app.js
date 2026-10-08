@@ -10,6 +10,7 @@ const { syncDatabase } = require('./config/sync');
 const { seedDatabase } = require('./config/seed');
 const { initializeInitialAdmin } = require('./services/initialAdminService');
 const { ensureQrCodeColumn } = require('./scripts/migrations/adminRfidTracking');
+const { ensureRoomSchema } = require('./scripts/migrations/roomSchema');
 const { ensureUploadDirectories } = require('./utils/uploadUtils');
 
 const authRoutes = require('./routes/authRoutes');
@@ -242,7 +243,10 @@ async function initializeDatabase() {
         } else {
           schemaReady = await syncDatabase();
         }
-        if (schemaReady) await ensureQrCodeColumn();
+        if (schemaReady) {
+          await ensureQrCodeColumn();
+          await ensureRoomSchema();
+        }
       } catch (error) {
         schemaReady = false;
         console.error('Database schema initialization failed:', error.message);
