@@ -18,7 +18,6 @@ export default function AdminProfile() {
   const navigate = useNavigate();
 
   const fields = [
-    ['Full name', user?.fullName || user?.full_name],
     ['Username', user?.username],
     ['Email', user?.email],
     ['Phone', user?.phone],

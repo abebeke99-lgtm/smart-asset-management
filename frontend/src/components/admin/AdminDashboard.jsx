@@ -51,6 +51,7 @@ const emptyDashboard = {
   statistics: {},
   assetByCondition: [],
   assetByCategory: [],
+  recentActivity: [],
   thresholds: {},
 };
 const emptyStatistics = Object.freeze({});
@@ -228,6 +229,11 @@ function AdminDashboard() {
       borderRadius: 5,
     }],
   }), [dashboard.assetByCategory, tr]);
+  const recentActivity = Array.isArray(dashboard.recentActivity) ? dashboard.recentActivity : [];
+  const activityDateFormatter = useMemo(() => new Intl.DateTimeFormat(language === "am" ? "am-ET" : "en-ET", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }), [language]);
 
   const chartState = (rows, title) => {
     if (loading) return <div className="admin-dashboard-chart-skeleton" aria-label={`Loading ${title}`} />;
@@ -294,6 +300,34 @@ function AdminDashboard() {
             )}
           </section>
         </div>
+      </section>
+
+      <section className="admin-dashboard-section" aria-labelledby="admin-dashboard-recent-activity">
+        <div className="admin-dashboard-section-heading">
+          <div>
+            <span className="admin-dashboard-eyebrow">{tr("dashboard.adminHome.recentActivityDescription")}</span>
+            <h2 id="admin-dashboard-recent-activity">{tr("dashboard.adminHome.recentActivity")}</h2>
+          </div>
+        </div>
+        {recentActivity.length ? (
+          <ul className="admin-dashboard-activity-list">
+            {recentActivity.map((entry) => {
+              const createdAt = entry.createdAt ? new Date(entry.createdAt) : null;
+              const validDate = createdAt && !Number.isNaN(createdAt.getTime());
+              return (
+                <li className="admin-dashboard-activity-item" key={entry.id}>
+                  <div>
+                    <strong>{entry.label || entry.action || tr("dashboard.adminHome.systemEvent")}</strong>
+                    {entry.entity && <span>{entry.entity}</span>}
+                  </div>
+                  {validDate && <time dateTime={createdAt.toISOString()}>{activityDateFormatter.format(createdAt)}</time>}
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="admin-dashboard-empty">{tr("dashboard.adminHome.noActivity")}</div>
+        )}
       </section>
 
       <details className="admin-dashboard-thresholds">

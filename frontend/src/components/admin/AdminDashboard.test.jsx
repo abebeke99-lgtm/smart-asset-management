@@ -48,6 +48,13 @@ describe("normalizeDashboardThresholds", () => {
             },
             assetByCondition: [],
             assetByCategory: [],
+            recentActivity: [{
+              id: 1,
+              action: "ASSET_ASSIGNED",
+              label: "Asset assignment",
+              entity: "asset:ASSET-001",
+              createdAt: "2026-10-07T12:00:00.000Z",
+            }],
             thresholds: {},
           },
         },
@@ -81,14 +88,17 @@ describe("normalizeDashboardThresholds", () => {
       expect(apiClient.get).toHaveBeenCalledTimes(1);
     });
 
-    test("omits maintenance overview, inventory alerts, and recent activity", async () => {
+    test("renders API recent activity without adding unrelated dashboard panels", async () => {
       render(<UIProvider><AdminDashboard /></UIProvider>);
 
       expect(await screen.findByRole("heading", { name: "Asset Overview" })).toBeInTheDocument();
       expect(screen.queryByRole("heading", { name: "Maintenance overview" })).not.toBeInTheDocument();
       expect(screen.queryByRole("heading", { name: "Inventory alerts" })).not.toBeInTheDocument();
-      expect(screen.queryByRole("heading", { name: "Recent activity" })).not.toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Recent activity" })).toBeInTheDocument();
+      expect(await screen.findByText("Asset assignment")).toBeInTheDocument();
+      expect(screen.getByText("asset:ASSET-001")).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Asset distribution" })).toBeInTheDocument();
+      expect(apiClient.get).toHaveBeenCalledWith("/api/admin/dashboard", { timeout: 15000 });
     });
   });
 });
