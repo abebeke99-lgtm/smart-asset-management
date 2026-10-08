@@ -1,410 +1,400 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, RefreshCw, Save, Search, ShieldCheck } from "lucide-react";
+import { Check, RefreshCw, Save, Search, ShieldCheck, UserPlus } from "lucide-react";
 import apiClient, { getApiErrorMessage } from "../../services/apiClient";
 import PageHeader from "./ui/PageHeader";
 import "./AdminRolesPermissions.css";
 
-const ROLE_API = "/api/admin/roles";
-const PERMISSION_API = "/api/admin/permissions";
-const LOAD_ERROR = "Unable to load roles and permissions. Please try again.";
-const EMPTY_MESSAGE = "No roles or permissions found.";
-
-const PERMISSION_TYPES = [
-  "View",
-  "Create",
-  "Edit",
-  "Delete",
-  "Approve",
-  "Assign",
-  "Transfer",
-  "Maintain",
-  "Report",
-  "Configure",
-];
-
-const getPayloadData = (response) => response?.data?.data ?? response?.data;
-
-const getList = (value, key) => {
-  if (Array.isArray(value)) return value;
-  if (Array.isArray(value?.[key])) return value[key];
-  if (Array.isArray(value?.data)) return value.data;
-  return [];
+const API = "/api/admin/roles-permissions";
+const ACTIONS = ["view", "create", "edit", "delete", "approve", "assign", "transfer", "maintain", "report", "configure"];
+const HIGH_RISK_ACTIONS = new Set(["delete", "approve", "transfer", "configure"]);
+const SCOPES = ["system", "college", "department", "store", "location", "own"];
+const SCOPE_LABELS = {
+  system: "System-wide",
+  college: "College",
+  department: "Department",
+  store: "Store",
+  location: "Location",
+  own: "Own records",
 };
+const responseData = (response) => response?.data?.data ?? [];
+const emptyCell = () => ({ state: "none", scopeType: "college" });
 
-const getRoleId = (role) => String(role?.id ?? role?.roleId ?? role?.role_id ?? "");
-const getRoleName = (role) => role?.label || role?.displayName || role?.name || "Unnamed role";
-const getPermissionName = (permission) => {
-  if (typeof permission === "string") return permission;
-  return String(permission?.name || permission?.key || permission?.permissionName || permission?.permission_name || "");
-};
-const getPermissionModule = (permissionName) => permissionName.split(".")[0] || "other";
-const getPermissionType = (permissionName) => {
-  const action = permissionName.split(".").at(-1)?.toLowerCase();
-  const actionTypes = {
-    view: "View",
-    create: "Create",
-    import: "Create",
-    update: "Edit",
-    edit: "Edit",
-    delete: "Delete",
-    approve: "Approve",
-    assign: "Assign",
-    transfer: "Transfer",
-    maintain: "Maintain",
-    complete: "Maintain",
-    generate: "Report",
-    export: "Report",
-    print: "Report",
-    report: "Report",
-    manage: "Configure",
-    configure: "Configure",
-  };
-  return actionTypes[action] || "";
-};
+const createMatrix = (roles, permissions) => Object.fromEntries(roles.map((role) => {
+  const cells = Object.fromEntries(permissions.map((permission) => [permission.id, emptyCell()]));
+  (role.permissions || []).forEach((grant) => {
+    cells[grant.id] = {
+      state: grant.limited ? "limited" : "full",
+      scopeType: grant.limited ? grant.scopeType : "system",
+    };
+  });
+  return [String(role.id), cells];
+}));
 
-const formatLabel = (value) =>
-  String(value || "")
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-
-const responsePermissions = (response) => {
-  const payload = getPayloadData(response);
-  const values = payload?.permissions ?? response?.data?.permissions ?? [];
-  return Array.isArray(values) ? values.map(getPermissionName).filter(Boolean) : [];
-};
+const formatRoleName = (role) => role?.label || role?.displayName || role?.name || "Unnamed role";
 
 function AdminRolesPermissions() {
   const [roles, setRoles] = useState([]);
   const [permissions, setPermissions] = useState([]);
-  const [selectedRoleId, setSelectedRoleId] = useState("");
-  const [selectedPermissions, setSelectedPermissions] = useState([]);
-  const [permissionSearch, setPermissionSearch] = useState("");
-  const [permissionTypeFilter, setPermissionTypeFilter] = useState("");
+  const [matrix, setMatrix] = useState({});
+  const [users, setUsers] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+  const [assignments, setAssignments] = useState([]);
+  const [newRoleId, setNewRoleId] = useState("");
+  const [newScopeType, setNewScopeType] = useState("system");
+  const [newScopeId, setNewScopeId] = useState("");
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleDescription, setNewRoleDescription] = useState("");
+  const [editingRoleId, setEditingRoleId] = useState("");
+  const [editingRoleName, setEditingRoleName] = useState("");
+  const [editingRoleDescription, setEditingRoleDescription] = useState("");
   const [roleSearch, setRoleSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const [permissionsLoading, setPermissionsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [refreshVersion, setRefreshVersion] = useState(0);
 
-  const loadCatalog = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
-    setSuccess("");
     try {
-      const [roleResponse, permissionResponse] = await Promise.all([
-        apiClient.get(ROLE_API),
-        apiClient.get(PERMISSION_API),
+      const [roleResponse, permissionResponse, userResponse] = await Promise.all([
+        apiClient.get(`${API}/roles`),
+        apiClient.get(`${API}/permissions`),
+        apiClient.get(`${API}/users`),
       ]);
-      const nextRoles = getList(getPayloadData(roleResponse), "roles");
-      const nextPermissions = getList(getPayloadData(permissionResponse), "permissions")
-        .map(getPermissionName)
-        .filter(Boolean);
+      const nextRoles = responseData(roleResponse);
+      const nextPermissions = responseData(permissionResponse).sort((left, right) => ACTIONS.indexOf(left.action) - ACTIONS.indexOf(right.action));
+      const nextUsers = responseData(userResponse);
       setRoles(nextRoles);
       setPermissions(nextPermissions);
-      setSelectedRoleId((current) =>
-        nextRoles.some((role) => getRoleId(role) === current)
-          ? current
-          : getRoleId(nextRoles[0]),
-      );
+      setUsers(nextUsers);
+      setMatrix(createMatrix(nextRoles, nextPermissions));
+      setSelectedUserId((current) => nextUsers.some((user) => String(user.id) === current)
+        ? current
+        : String(nextUsers[0]?.id || ""));
     } catch (loadError) {
-      console.error("Roles and permissions loading error:", loadError);
       setRoles([]);
       setPermissions([]);
-      setError(LOAD_ERROR);
+      setUsers([]);
+      setError(getApiErrorMessage(loadError, "Unable to load roles and permissions."));
     } finally {
       setLoading(false);
     }
   }, []);
 
+  useEffect(() => { load(); }, [load, refreshVersion]);
+
+  const selectedUser = users.find((user) => String(user.id) === selectedUserId);
   useEffect(() => {
-    loadCatalog();
-  }, [loadCatalog, refreshVersion]);
+    setAssignments((selectedUser?.roles || []).map((role) => ({
+      roleId: Number(role.id),
+      scopeType: role.scopeType || "system",
+      scopeId: role.scopeId == null ? "" : String(role.scopeId),
+    })));
+  }, [selectedUser]);
 
-  useEffect(() => {
-    if (!selectedRoleId) {
-      setSelectedPermissions([]);
-      return undefined;
-    }
-
-    let active = true;
-    setPermissionsLoading(true);
-    setError("");
-    apiClient
-      .get(`${ROLE_API}/${encodeURIComponent(selectedRoleId)}/permissions`)
-      .then((response) => {
-        if (!active) return;
-        const nextPermissions = responsePermissions(response);
-        setSelectedPermissions(nextPermissions.length > 0 || selectedRoleId !== "admin" ? nextPermissions : [...permissions]);
-      })
-      .catch((loadError) => {
-        console.error("Role permissions loading error:", loadError);
-        if (active) {
-          setSelectedPermissions(selectedRoleId === "admin" ? [...permissions] : []);
-          setError(LOAD_ERROR);
-        }
-      })
-      .finally(() => {
-        if (active) setPermissionsLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [selectedRoleId, refreshVersion, permissions]);
-
-  const selectedRole = roles.find((role) => getRoleId(role) === selectedRoleId);
   const filteredRoles = useMemo(() => {
     const query = roleSearch.trim().toLowerCase();
     if (!query) return roles;
     return roles.filter((role) =>
-      `${getRoleName(role)} ${role?.description || ""}`.toLowerCase().includes(query),
+      `${formatRoleName(role)} ${role.description || ""}`.toLowerCase().includes(query),
     );
   }, [roles, roleSearch]);
 
-  const permissionMatrix = useMemo(() => {
-    const query = permissionSearch.trim().toLowerCase();
-    return permissions.reduce((groups, permissionName) => {
-      if (query && !permissionName.toLowerCase().includes(query)) return groups;
-      const permissionType = getPermissionType(permissionName);
-      if (permissionTypeFilter && permissionType !== permissionTypeFilter) return groups;
-      const moduleName = getPermissionModule(permissionName);
-      groups[moduleName] ||= { types: {}, additional: [] };
-      if (permissionType) {
-        groups[moduleName].types[permissionType] ||= [];
-        groups[moduleName].types[permissionType].push(permissionName);
-      } else {
-        groups[moduleName].additional.push(permissionName);
-      }
-      return groups;
-    }, {});
-  }, [permissions, permissionSearch, permissionTypeFilter]);
-
-  const isReadOnlyRole = selectedRoleId === "admin";
-
-  const isDirty = useMemo(() => {
-    const rolePermissions = (selectedRole?.permissions || []).map(getPermissionName).sort();
-    const currentPermissions = [...selectedPermissions].sort();
-    return rolePermissions.length !== currentPermissions.length
-      || rolePermissions.some((permission, index) => permission !== currentPermissions[index]);
-  }, [selectedPermissions, selectedRole]);
-
-  const togglePermission = (permissionName) => {
-    if (isReadOnlyRole) return;
+  const setCell = (roleId, permissionId, update) => {
+    setMatrix((current) => ({
+      ...current,
+      [roleId]: {
+        ...current[roleId],
+        [permissionId]: { ...current[roleId][permissionId], ...update },
+      },
+    }));
     setSuccess("");
-    setSelectedPermissions((current) =>
-      current.includes(permissionName)
-        ? current.filter((permission) => permission !== permissionName)
-        : [...current, permissionName],
-    );
   };
 
-  const savePermissions = async () => {
-    if (!selectedRoleId || !isDirty) return;
-    const revoked = (selectedRole?.permissions || [])
-      .map(getPermissionName)
-      .filter((permission) => !selectedPermissions.includes(permission));
-    if (revoked.length && !window.confirm(`Revoke ${revoked.length} permission${revoked.length === 1 ? "" : "s"} from ${getRoleName(selectedRole)}?`)) {
-      return;
-    }
+  const changedRoles = useMemo(() => roles.filter((role) => {
+    const cells = matrix[String(role.id)] || {};
+    const baseline = createMatrix([role], permissions)[String(role.id)] || {};
+    return permissions.some((permission) => {
+      const current = cells[permission.id] || emptyCell();
+      const initial = baseline[permission.id] || emptyCell();
+      return current.state !== initial.state
+        || (current.state === "limited" && current.scopeType !== initial.scopeType);
+    });
+  }), [matrix, roles, permissions]);
+
+  const saveMatrix = async () => {
+    if (!changedRoles.length) return;
+    const criticalChanges = changedRoles.flatMap((role) => permissions
+      .filter((permission) => HIGH_RISK_ACTIONS.has(permission.action))
+      .filter((permission) => {
+        const original = (role.permissions || []).find((grant) => grant.id === permission.id);
+        const current = matrix[String(role.id)]?.[permission.id] || emptyCell();
+        const originalState = !original ? "none" : original.limited ? "limited" : "full";
+        return originalState !== current.state
+          || (current.state === "limited" && original?.scopeType !== current.scopeType);
+      })
+      .map((permission) => `${role.label}: ${permission.action} (${role.userCount} assigned user${role.userCount === 1 ? "" : "s"})`));
+    if (criticalChanges.length && !window.confirm(`Confirm these high-risk permission changes:\n${criticalChanges.join("\n")}`)) return;
 
     setSaving(true);
     setError("");
     setSuccess("");
     try {
-      const response = await apiClient.put(
-        `${ROLE_API}/${encodeURIComponent(selectedRoleId)}/permissions`,
-        { permissions: selectedPermissions },
-      );
-      if (response?.data?.success !== true) {
-        throw new Error("The backend did not confirm the permission update.");
-      }
-      const savedPermissions = responsePermissions(response);
-      setSelectedPermissions(savedPermissions);
-      setRoles((current) =>
-        current.map((role) =>
-          getRoleId(role) === selectedRoleId
-            ? { ...role, permissions: savedPermissions, permissionCount: savedPermissions.length }
-            : role,
-        ),
-      );
-      setSuccess("Permissions updated successfully.");
+      const response = await apiClient.put(`${API}/matrix`, {
+        roles: roles.map((role) => ({
+          roleId: role.id,
+          grants: permissions.map((permission) => ({
+            permissionId: permission.id,
+            ...(matrix[String(role.id)]?.[permission.id] || emptyCell()),
+          })),
+        })),
+      });
+      if (response?.data?.success !== true) throw new Error("The permission matrix was not saved.");
+      setSuccess("Permission matrix saved successfully.");
+      setRefreshVersion((current) => current + 1);
     } catch (saveError) {
-      console.error("Role permissions update error:", saveError);
-      setError(getApiErrorMessage(saveError, "Unable to update permissions. Please try again."));
+      setError(getApiErrorMessage(saveError, "Unable to save the permission matrix."));
     } finally {
       setSaving(false);
     }
   };
 
-  const refresh = () => setRefreshVersion((version) => version + 1);
+  const createRole = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      await apiClient.post(`${API}/roles`, { name: newRoleName, displayName: newRoleName, description: newRoleDescription });
+      setNewRoleName("");
+      setNewRoleDescription("");
+      setSuccess("Role created successfully.");
+      setRefreshVersion((current) => current + 1);
+    } catch (saveError) {
+      setError(getApiErrorMessage(saveError, "Unable to create the role."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const beginRoleEdit = (role) => {
+    setEditingRoleId(String(role.id));
+    setEditingRoleName(role.label || role.name);
+    setEditingRoleDescription(role.description || "");
+  };
+
+  const saveRoleEdit = async (event) => {
+    event.preventDefault();
+    const role = roles.find((item) => String(item.id) === editingRoleId);
+    if (!role || !editingRoleName.trim()) return;
+    setSaving(true);
+    setError("");
+    try {
+      await apiClient.put(`${API}/roles/${role.id}`, {
+        displayName: editingRoleName.trim(),
+        description: editingRoleDescription,
+      });
+      setEditingRoleId("");
+      setSuccess("Role updated successfully.");
+      setRefreshVersion((current) => current + 1);
+    } catch (saveError) {
+      setError(getApiErrorMessage(saveError, "Unable to update this role."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleRoleActive = async (role) => {
+    if (role.name === "admin") return;
+    const action = role.active ? "deactivate" : "activate";
+    if (!window.confirm(`Are you sure you want to ${action} ${formatRoleName(role)}? This affects ${role.userCount} assigned user${role.userCount === 1 ? "" : "s"}.`)) return;
+    setSaving(true);
+    setError("");
+    try {
+      await apiClient.put(`${API}/roles/${role.id}`, { active: !role.active });
+      setSuccess(`${formatRoleName(role)} ${action}d.`);
+      setRefreshVersion((current) => current + 1);
+    } catch (saveError) {
+      setError(getApiErrorMessage(saveError, `Unable to ${action} this role.`));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteRole = async (role) => {
+    if (role.isSystem) return;
+    if (!window.confirm(`Delete ${formatRoleName(role)}? This role has ${role.userCount} assigned users.`)) return;
+    setSaving(true);
+    setError("");
+    try {
+      await apiClient.delete(`${API}/roles/${role.id}`);
+      setSuccess("Role deleted.");
+      setRefreshVersion((current) => current + 1);
+    } catch (saveError) {
+      setError(getApiErrorMessage(saveError, "Unable to delete this role."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const searchUsers = async (event) => {
+    event.preventDefault();
+    setError("");
+    try {
+      const response = await apiClient.get(`${API}/users?search=${encodeURIComponent(userSearch.trim())}`);
+      const nextUsers = responseData(response);
+      setUsers(nextUsers);
+      setSelectedUserId((current) => nextUsers.some((user) => String(user.id) === current)
+        ? current
+        : String(nextUsers[0]?.id || ""));
+    } catch (searchError) {
+      setError(getApiErrorMessage(searchError, "Unable to search users."));
+    }
+  };
+
+  const addAssignment = () => {
+    if (!newRoleId || assignments.some((item) => item.roleId === Number(newRoleId))) return;
+    setAssignments((current) => [...current, {
+      roleId: Number(newRoleId),
+      scopeType: newScopeType,
+      scopeId: newScopeType === "system" || newScopeType === "own" ? "" : newScopeId,
+    }]);
+    setNewRoleId("");
+    setNewScopeId("");
+  };
+
+  const saveAssignments = async () => {
+    if (!selectedUser) return;
+    const assignmentsChanged = JSON.stringify(assignments) !== JSON.stringify((selectedUser.roles || []).map((role) => ({
+      roleId: Number(role.id),
+      scopeType: role.scopeType || "system",
+      scopeId: role.scopeId == null ? "" : String(role.scopeId),
+    })));
+    if (!assignmentsChanged) return;
+    const summary = assignments.map((assignment) => {
+      const role = roles.find((item) => Number(item.id) === assignment.roleId);
+      return `${formatRoleName(role)} (${SCOPE_LABELS[assignment.scopeType]}${assignment.scopeId ? ` #${assignment.scopeId}` : ""})`;
+    }).join(", ") || "no roles";
+    if (!window.confirm(`Update roles for ${selectedUser.fullName || selectedUser.username} to: ${summary}?`)) return;
+
+    setSaving(true);
+    setError("");
+    try {
+      await apiClient.put(`${API}/users/${selectedUser.id}/roles`, {
+        assignments: assignments.map((item) => ({
+          roleId: item.roleId,
+          scopeType: item.scopeType,
+          scopeId: item.scopeId ? Number(item.scopeId) : null,
+        })),
+      });
+      setSuccess("User role assignments updated.");
+      setRefreshVersion((current) => current + 1);
+    } catch (saveError) {
+      setError(getApiErrorMessage(saveError, "Unable to update user roles."));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <main className="admin-roles-page">
       <div className="admin-roles-heading">
-        <PageHeader
-          eyebrow="Administrator / Organization"
-          title="Roles & Permissions"
-          subtitle="Review system roles and configure the permissions assigned to each role."
-        />
-        <button className="admin-roles-button admin-roles-button-secondary" type="button" onClick={refresh} disabled={loading || saving} aria-label="Refresh roles and permissions">
+        <PageHeader eyebrow="Administrator / Organization" title="Roles & Permissions" subtitle="Manage role access and scoped user assignments." />
+        <button className="admin-roles-button admin-roles-button-secondary" type="button" onClick={() => setRefreshVersion((value) => value + 1)} disabled={loading || saving} aria-label="Refresh roles and permissions">
           <RefreshCw size={16} aria-hidden="true" /> Refresh
         </button>
       </div>
-
       {error && <div className="admin-roles-alert admin-roles-alert-error" role="alert">{error}</div>}
       {success && <div className="admin-roles-alert admin-roles-alert-success" role="status"><Check size={17} aria-hidden="true" />{success}</div>}
-
-      {loading ? (
-        <div className="admin-roles-state" role="status">Loading roles and permissions...</div>
-      ) : roles.length === 0 || permissions.length === 0 ? (
-        <div className="admin-roles-state">{EMPTY_MESSAGE}</div>
-      ) : (
-        <div className="admin-roles-layout">
-          <section className="admin-roles-panel" aria-labelledby="admin-roles-list-title">
+      {loading ? <div className="admin-roles-state" role="status">Loading roles and permissions...</div> : (
+        <>
+          <section className="admin-roles-panel" aria-labelledby="roles-heading">
             <div className="admin-roles-panel-heading">
-              <div>
-                <h2 id="admin-roles-list-title">System roles</h2>
-                <p>Select a role to inspect its saved permissions.</p>
-              </div>
+              <div><h2 id="roles-heading">Roles</h2><p>System roles are protected from deletion. Inactive roles cannot be assigned.</p></div>
               <ShieldCheck size={20} aria-hidden="true" />
             </div>
-            <label className="admin-roles-search">
-              <Search size={16} aria-hidden="true" />
-              <span className="admin-roles-visually-hidden">Search roles</span>
-              <input value={roleSearch} onChange={(event) => setRoleSearch(event.target.value)} placeholder="Search roles" />
-            </label>
+            <form className="admin-roles-permission-filters" onSubmit={createRole}>
+              <label className="admin-roles-search"><span>New role name</span><input value={newRoleName} onChange={(event) => setNewRoleName(event.target.value)} required maxLength={150} /></label>
+              <label className="admin-roles-search"><span>Description</span><input value={newRoleDescription} onChange={(event) => setNewRoleDescription(event.target.value)} maxLength={500} /></label>
+              <button className="admin-roles-button admin-roles-button-primary" type="submit" disabled={saving || !newRoleName.trim()}><UserPlus size={16} /> Create role</button>
+            </form>
+            <label className="admin-roles-search"><Search size={16} aria-hidden="true" /><span className="admin-roles-visually-hidden">Search roles</span><input value={roleSearch} onChange={(event) => setRoleSearch(event.target.value)} placeholder="Search roles" /></label>
             <div className="admin-roles-list">
-              {filteredRoles.length === 0 ? (
-                <p className="admin-roles-empty">No roles or permissions found.</p>
-              ) : filteredRoles.map((role) => {
-                const roleId = getRoleId(role);
-                return (
-                  <button
-                    type="button"
-                    key={roleId}
-                    className={`admin-roles-list-item${roleId === selectedRoleId ? " is-selected" : ""}`}
-                    onClick={() => {
-                      setSelectedRoleId(roleId);
-                      setSelectedPermissions([]);
-                      setSuccess("");
-                    }}
-                    aria-pressed={roleId === selectedRoleId}
-                  >
-                    <span className="admin-roles-role-mark" aria-hidden="true">{getRoleName(role).charAt(0).toUpperCase()}</span>
-                    <span className="admin-roles-role-copy">
-                      <strong>{getRoleName(role)}</strong>
-                      <span>{Number(role.permissionCount ?? role.permissions?.length ?? 0)} permissions</span>
-                    </span>
-                  </button>
-                );
-              })}
+              {filteredRoles.map((role) => (
+                <div className="admin-roles-list-item" key={role.id}>
+                  <span className="admin-roles-role-mark" aria-hidden="true">{formatRoleName(role).charAt(0).toUpperCase()}</span>
+                  <span className="admin-roles-role-copy"><strong>{formatRoleName(role)}</strong><span>{role.description} · {role.userCount} users · {role.isSystem ? "System" : "Custom"} · {role.active ? "Active" : "Inactive"}</span></span>
+                  <button type="button" className="admin-roles-button admin-roles-button-secondary" onClick={() => beginRoleEdit(role)} disabled={saving}>Edit</button>
+                  <button type="button" className="admin-roles-button admin-roles-button-secondary" onClick={() => toggleRoleActive(role)} disabled={saving || role.name === "admin"}>{role.active ? "Deactivate" : "Activate"}</button>
+                  {!role.isSystem && <button type="button" className="admin-roles-button admin-roles-button-secondary" onClick={() => deleteRole(role)} disabled={saving}>Delete</button>}
+                </div>
+              ))}
             </div>
-          </section>
-
-          <section className="admin-roles-panel admin-roles-permission-panel" aria-labelledby="admin-role-permissions-title">
-            <div className="admin-roles-panel-heading admin-roles-permission-heading">
-              <div>
-                <h2 id="admin-role-permissions-title">{selectedRole ? getRoleName(selectedRole) : "Role permissions"}</h2>
-                <p>{selectedRole?.description || "Permissions loaded from the saved role configuration."}</p>
-              </div>
-              <div className="admin-roles-actions">
-                <button
-                  className="admin-roles-button admin-roles-button-primary"
-                  type="button"
-                  onClick={savePermissions}
-                  disabled={!isDirty || saving || permissionsLoading || isReadOnlyRole}
-                >
-                  <Save size={16} aria-hidden="true" /> {saving ? "Saving..." : "Save changes"}
-                </button>
-              </div>
-            </div>
-
-            <div className="admin-roles-permission-filters">
-              <label className="admin-roles-search admin-roles-permission-search">
-                <Search size={16} aria-hidden="true" />
-                <span className="admin-roles-visually-hidden">Search permissions</span>
-                <input value={permissionSearch} onChange={(event) => setPermissionSearch(event.target.value)} placeholder="Search permissions" />
-              </label>
-              <label className="admin-roles-type-filter">
-                <span>Permission type</span>
-                <select value={permissionTypeFilter} onChange={(event) => setPermissionTypeFilter(event.target.value)}>
-                  <option value="">All types</option>
-                  {PERMISSION_TYPES.map((permissionType) => <option key={permissionType} value={permissionType}>{permissionType}</option>)}
-                </select>
-              </label>
-            </div>
-
-            {permissionsLoading ? (
-              <div className="admin-roles-state" role="status">Loading role permissions...</div>
-            ) : Object.keys(permissionMatrix).length === 0 ? (
-              <div className="admin-roles-state">{EMPTY_MESSAGE}</div>
-            ) : (
-              <div className="admin-roles-matrix-scroll">
-                <table className="admin-roles-matrix">
-                  <thead>
-                    <tr>
-                      <th scope="col">Module</th>
-                      {PERMISSION_TYPES.map((permissionType) => <th scope="col" key={permissionType}>{permissionType}</th>)}
-                      <th scope="col">Other supported permissions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(permissionMatrix).map(([moduleName, modulePermissions]) => (
-                      <tr key={moduleName}>
-                        <th scope="row" data-label="Module">{formatLabel(moduleName)}</th>
-                        {PERMISSION_TYPES.map((permissionType) => {
-                          const names = modulePermissions.types[permissionType] || [];
-                          return (
-                            <td key={permissionType} data-label={permissionType}>
-                              {names.length ? (
-                                <div className="admin-roles-permission-items">
-                                  {names.map((permissionName) => (
-                                    <label className="admin-roles-permission-toggle" key={permissionName}>
-                                      <input
-                                        type="checkbox"
-                                        checked={selectedPermissions.includes(permissionName)}
-                                        onChange={() => togglePermission(permissionName)}
-                                        disabled={saving || permissionsLoading || isReadOnlyRole}
-                                        aria-label={`${permissionName} permission`}
-                                      />
-                                      <code>{permissionName}</code>
-                                    </label>
-                                  ))}
-                                </div>
-                              ) : <span className="admin-roles-not-defined">Not defined</span>}
-                            </td>
-                          );
-                        })}
-                        <td data-label="Other supported permissions">
-                          {modulePermissions.additional.length ? (
-                            <div className="admin-roles-permission-items">
-                              {modulePermissions.additional.map((permissionName) => (
-                                <label className="admin-roles-permission-toggle" key={permissionName}>
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedPermissions.includes(permissionName)}
-                                    onChange={() => togglePermission(permissionName)}
-                                    disabled={saving || permissionsLoading}
-                                    aria-label={`${permissionName} permission`}
-                                  />
-                                  <code>{permissionName}</code>
-                                </label>
-                              ))}
-                            </div>
-                          ) : <span className="admin-roles-not-defined">Not defined</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            {editingRoleId && (
+              <form className="admin-roles-permission-filters" onSubmit={saveRoleEdit}>
+                <label className="admin-roles-search"><span>Edit role name</span><input value={editingRoleName} onChange={(event) => setEditingRoleName(event.target.value)} required maxLength={150} /></label>
+                <label className="admin-roles-search"><span>Edit description</span><input value={editingRoleDescription} onChange={(event) => setEditingRoleDescription(event.target.value)} maxLength={500} /></label>
+                <button className="admin-roles-button admin-roles-button-primary" type="submit" disabled={saving}>Save role</button>
+                <button className="admin-roles-button admin-roles-button-secondary" type="button" onClick={() => setEditingRoleId("")}>Cancel</button>
+              </form>
             )}
           </section>
-        </div>
+
+          <section className="admin-roles-panel admin-roles-permission-panel" aria-labelledby="matrix-heading">
+            <div className="admin-roles-panel-heading">
+              <div><h2 id="matrix-heading">Permission matrix</h2><p>Each cell is Full, Limited, or None. Limited is restricted to the selected organizational scope and the user’s assigned scope.</p></div>
+              <button className="admin-roles-button admin-roles-button-primary" type="button" onClick={saveMatrix} disabled={saving || !changedRoles.length}><Save size={16} /> Save changes</button>
+            </div>
+            <div className="admin-roles-matrix-scroll">
+              <table className="admin-roles-matrix">
+                <thead><tr><th scope="col">Role</th>{ACTIONS.map((action) => <th key={action} scope="col">{action.charAt(0).toUpperCase() + action.slice(1)}</th>)}</tr></thead>
+                <tbody>{filteredRoles.map((role) => (
+                  <tr key={role.id}>
+                    <th scope="row" data-label="Role">{formatRoleName(role)}<small>{role.userCount} users</small></th>
+                    {permissions.map((permission) => {
+                      const cell = matrix[String(role.id)]?.[permission.id] || emptyCell();
+                      return (
+                        <td key={permission.id} data-label={permission.action}>
+                          <select aria-label={`${formatRoleName(role)} ${permission.action} permission`} value={cell.state} disabled={saving || (role.name === "admin" && permission.action === "configure")} onChange={(event) => setCell(String(role.id), permission.id, { state: event.target.value, scopeType: cell.scopeType })}>
+                            <option value="full">Full</option><option value="limited">Limited</option><option value="none">None</option>
+                          </select>
+                          {cell.state === "limited" && (
+                            <select aria-label={`${formatRoleName(role)} ${permission.action} scope`} value={cell.scopeType} disabled={saving} onChange={(event) => setCell(String(role.id), permission.id, { scopeType: event.target.value })}>
+                              {SCOPES.filter((scope) => scope !== "system").map((scope) => <option key={scope} value={scope}>{SCOPE_LABELS[scope]}</option>)}
+                            </select>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <p className="admin-roles-state">Full = system-wide role grant. Limited = only records matching both the selected scope and the user’s role-assignment scope. None = no grant.</p>
+          </section>
+
+          <section className="admin-roles-panel" aria-labelledby="assignment-heading">
+            <div className="admin-roles-panel-heading"><div><h2 id="assignment-heading">User role assignments</h2><p>Each role may be assigned with an independent organizational scope.</p></div></div>
+            <form className="admin-roles-permission-filters" onSubmit={searchUsers}>
+              <label className="admin-roles-search"><span>Find user</span><input value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="Name, username, or email" /></label>
+              <button className="admin-roles-button admin-roles-button-secondary" type="submit">Search users</button>
+            </form>
+            <div className="admin-roles-permission-filters">
+              <label className="admin-roles-search"><span>User</span><select value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)}>{users.map((user) => <option key={user.id} value={user.id}>{user.fullName || user.username} ({user.username})</option>)}</select></label>
+              <label className="admin-roles-search"><span>Role</span><select value={newRoleId} onChange={(event) => setNewRoleId(event.target.value)}><option value="">Choose role</option>{roles.filter((role) => role.active && !assignments.some((item) => item.roleId === role.id)).map((role) => <option key={role.id} value={role.id}>{formatRoleName(role)}</option>)}</select></label>
+              <label className="admin-roles-search"><span>Scope</span><select value={newScopeType} onChange={(event) => setNewScopeType(event.target.value)}>{SCOPES.map((scope) => <option key={scope} value={scope}>{SCOPE_LABELS[scope]}</option>)}</select></label>
+              {!["system", "own"].includes(newScopeType) && <label className="admin-roles-search"><span>Scope ID</span><input type="number" min="1" value={newScopeId} onChange={(event) => setNewScopeId(event.target.value)} /></label>}
+              <button className="admin-roles-button admin-roles-button-secondary" type="button" onClick={addAssignment} disabled={!newRoleId || (!["system", "own"].includes(newScopeType) && !newScopeId)}>Add role</button>
+            </div>
+            <div className="admin-roles-list">{assignments.map((assignment) => {
+              const role = roles.find((item) => item.id === assignment.roleId);
+              return <div className="admin-roles-list-item" key={assignment.roleId}><span className="admin-roles-role-copy"><strong>{formatRoleName(role)}</strong><span>{SCOPE_LABELS[assignment.scopeType]}{assignment.scopeId ? ` · ID ${assignment.scopeId}` : ""}</span></span><button type="button" className="admin-roles-button admin-roles-button-secondary" onClick={() => setAssignments((current) => current.filter((item) => item.roleId !== assignment.roleId))}>Remove</button></div>;
+            })}</div>
+            <button className="admin-roles-button admin-roles-button-primary" type="button" onClick={saveAssignments} disabled={saving || !selectedUser}>Save user assignments</button>
+          </section>
+        </>
       )}
     </main>
   );

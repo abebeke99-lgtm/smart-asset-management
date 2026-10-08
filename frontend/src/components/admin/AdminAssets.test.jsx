@@ -1,4 +1,4 @@
-import { buildLocationHierarchy, getRegistrationChecks, normalizeAssetRecord } from './AdminAssets';
+import { buildLocationHierarchy, formatDate, getRegistrationChecks, normalizeAssetRecord } from './AdminAssets';
 
 describe('AdminAssets data shaping', () => {
   it('normalizes real backend asset rows into table fields', () => {
@@ -15,13 +15,14 @@ describe('AdminAssets data shaping', () => {
       location: 'Laboratory 204',
       fundingSource: 'Research Fund',
       warrantyExpiry: '2027-05-20',
+      qrCode: 'QR-ASSET-17',
       rfidTag: 'RFID-17',
       campusId: 1,
       buildingId: 2,
       roomId: 3,
       CampusRecord: { campusName: 'Main Campus' },
       BuildingRecord: { buildingName: 'Science Building' },
-      RoomRecord: { roomName: 'Laboratory 204' },
+      RoomRecord: { roomName: 'Laboratory 204', roomType: 'laboratory' },
       AssignmentRecord: { User: { fullName: 'Aster Bekele' } },
       AssetDocument: [{ documentType: 'manual', fileName: 'manual.pdf' }],
       GrantRecord: { name: 'Research Grant' },
@@ -35,6 +36,15 @@ describe('AdminAssets data shaping', () => {
     expect(asset.status).toBe('Under Maintenance');
     expect(asset.warranty).toContain('Active');
     expect(asset.manualLabel).toBe('View Manual');
+    expect(asset.campus).toBe('Main Campus');
+    expect(asset.laboratory).toBe('Laboratory 204');
+    expect(asset.building).toBe('Science Building');
+    expect(asset.room).toBe('Laboratory 204');
+    expect(asset.qrValue).toBe('QR-ASSET-17');
+  });
+
+  it('uses one abbreviated English date format for all dates', () => {
+    expect(formatDate('2026-09-15')).toBe('15 Sep 2026');
   });
 
   it('builds a readable campus-to-room hierarchy', () => {
@@ -81,5 +91,9 @@ describe('AdminAssets data shaping', () => {
       equipmentManual: { name: 'manual.pdf' },
     });
     expect(completeChecks.filter((item) => item.complete)).toHaveLength(15);
+  });
+
+  it('treats the no-research-grant choice as satisfying the required grant check', () => {
+    expect(getRegistrationChecks({ noResearchGrant: true }).find((item) => item.label === 'Research Grant').complete).toBe(true);
   });
 });

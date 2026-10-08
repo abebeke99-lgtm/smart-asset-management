@@ -4,20 +4,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, ArrowLeftRight, Building2, Check, ChevronLeft, ChevronRight, Circle, Download, Eye, FileText, History, Layers3, Package, Pencil, Plus, QrCode, RefreshCw, Search, Shield, Trash2, Undo2, UserCheck, Wrench, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import apiClient, { getApiErrorMessage } from '../../services/apiClient';
+import { Can } from '../../hooks/usePermission';
 import './AdminAssets.css';
-
-const STATUS_FILTER_OPTIONS = [
-  { label: 'Active', value: 'available' },
-  { label: 'Available', value: 'available' },
-  { label: 'In Use', value: 'in-use' },
-  { label: 'Under Maintenance', value: 'under-maintenance' },
-  { label: 'Damaged', value: 'damaged' },
-  { label: 'Replaced', value: 'replaced' },
-  { label: 'Pending Disposal', value: 'pending-disposal' },
-  { label: 'Retired', value: 'retired' },
-  { label: 'Disposed', value: 'disposed' },
-  { label: 'Expired', value: 'expired' },
-];
 
 const normalizeStatusText = (value) => {
   const raw = String(value || '').trim();
@@ -32,11 +20,14 @@ const normalizeStatusText = (value) => {
   return aliases[normalized] || raw.replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
-const formatDate = (value) => {
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export const formatDate = (value) => {
   if (!value) return '—';
-  const date = new Date(value);
+  const dateValue = String(value);
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(dateValue) ? `${dateValue}T00:00:00` : value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  return `${String(date.getDate()).padStart(2, '0')} ${SHORT_MONTHS[date.getMonth()]} ${date.getFullYear()}`;
 };
 
 const formatTimestamp = (value) => {
@@ -77,7 +68,7 @@ export const normalizeAssetRecord = (asset = {}, index = 0) => {
   const warrantyText = [warrantyInfo.provider || warrantyInfo.vendor || warrantyInfo.company, warrantyInfo.status, warrantyExpiry ? `Expires: ${formatDate(warrantyExpiry)}` : ''].filter(Boolean).join(' • ') || 'No Warranty';
   const rawStatus = String(asset?.status || asset?.assetStatus || 'Active');
   const assetId = asset?.assetCode || asset?.asset_code || asset?.digitalId || asset?.digital_id || asset?.assetId || asset?.id || `ASSET-${index + 1}`;
-  const qrValue = asset?.rfidTag || asset?.rfid_tag || asset?.digitalId || asset?.digital_id || asset?.assetCode || String(asset?.id || assetId);
+  const qrValue = asset?.qrCode || asset?.qr_code || asset?.digitalId || asset?.digital_id || asset?.rfidTag || asset?.rfid_tag || asset?.assetCode || String(asset?.id || assetId);
   return {
     id: Number(asset?.id ?? asset?.assetId ?? index + 1),
     assetId,
@@ -92,7 +83,7 @@ export const normalizeAssetRecord = (asset = {}, index = 0) => {
     campus: asset?.CampusRecord?.campusName || asset?.campusName || asset?.campus_name || '—',
     college: asset?.College?.collegeName || asset?.College?.name || asset?.collegeName || asset?.college_name || '—',
     departmentValue: asset?.DepartmentRecord?.name || asset?.departmentName || (typeof asset?.department === 'string' ? asset.department : null) || asset?.department_name || '—',
-    laboratory: asset?.laboratoryName || asset?.LaboratoryRecord?.roomName || asset?.laboratory_name || '—',
+    laboratory: asset?.laboratoryName || asset?.LaboratoryRecord?.roomName || asset?.laboratory_name || (String(asset?.RoomRecord?.roomType || '').toLowerCase().includes('lab') ? asset?.RoomRecord?.roomName : null) || '—',
     building: asset?.BuildingRecord?.buildingName || asset?.buildingName || asset?.building_name || '—',
     room: asset?.RoomRecord?.roomName || asset?.roomName || asset?.room_name || asset?.location || '—',
     locationHierarchy: buildLocationHierarchy(asset),
@@ -139,13 +130,13 @@ export const getRegistrationChecks = (form = {}) => [
   { label: 'Building', complete: Boolean(form.buildingId) },
   { label: 'Room', complete: Boolean(form.roomId) },
   { label: 'Status', complete: Boolean(form.status) },
-  { label: 'Research Grant', complete: Boolean(String(form.fundingSource || '').trim()) },
+  { label: 'Research Grant', complete: Boolean(form.noResearchGrant || String(form.fundingSource || '').trim()) },
   { label: 'Warranty', complete: Boolean(form.warrantyCoverage) },
   { label: 'Equipment Manual', complete: Boolean(form.equipmentManual) },
 ];
 
 function AllAssets() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const initialStatus = searchParams.get('status') || 'All';
   const initialCategory = searchParams.get('category') || 'All';
@@ -155,14 +146,8 @@ function AllAssets() {
   const [lookupError, setLookupError] = useState('');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState(initialStatus);
-  const [categoryFilter, setCategoryFilter] = useState(initialCategory);
-  const [filters, setFilters] = useState({ campus: '', college: '', department: '', laboratory: '', purchaseFrom: '', purchaseTo: '', grant: 'any', maintenanceStatus: '' });
-  const [deletedOnly, setDeletedOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [sortBy, setSortBy] = useState('created_at');
-  const [sortOrder, setSortOrder] = useState('desc');
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [modalType, setModalType] = useState(null);
   const [historyRows, setHistoryRows] = useState([]);
@@ -187,18 +172,10 @@ function AllAssets() {
   const searchInputRef = useRef(null);
   const modalRef = useRef(null);
   const requestControllerRef = useRef(null);
-  const categories = useMemo(() => ['All', ...categoryOptions], [categoryOptions]);
-  const categoryFilterOptions = useMemo(
-    () => categoryFilter !== 'All' && !categoryOptions.includes(categoryFilter)
-      ? ['All', categoryFilter, ...categoryOptions]
-      : categories,
-    [categories, categoryFilter, categoryOptions],
-  );
   const campusOptions = useMemo(() => campuses.filter((item) => item.status === 'active').map((item) => ({ id: item.id, name: item.campusName || item.name })), [campuses]);
-  const filteredDepartments = useMemo(() => departments.filter((item) => item.status === 'active' && (!filters.college || String(item.collegeId || item.college_id) === String(filters.college))), [departments, filters.college]);
   const laboratoryOptions = useMemo(() => rooms
     .filter((item) => item.status === 'active' && /lab/i.test(String(item.roomType || item.room_type || '')))
-    .map((item) => ({ id: item.id, name: item.roomName || item.room_name || item.name, buildingId: item.buildingId || item.building_id }))
+    .map((item) => ({ id: item.id, name: item.roomName || item.room_name || item.name, buildingId: item.buildingId || item.building_id, departmentId: item.departmentId || item.department_id }))
     .filter((item) => item.id && item.name), [rooms]);
 
   useEffect(() => {
@@ -219,19 +196,10 @@ function AllAssets() {
           page: nextPage,
           limit: nextSize,
           search: debouncedSearch || undefined,
-          status: deletedOnly || statusFilter === 'All' ? undefined : statusFilter,
-          category: categoryFilter === 'All' ? undefined : categoryFilter,
-          campus_id: filters.campus || undefined,
-          college_id: filters.college || undefined,
-          department_id: filters.department || undefined,
-          laboratory_id: filters.laboratory || undefined,
-          purchase_from: filters.purchaseFrom || undefined,
-          purchase_to: filters.purchaseTo || undefined,
-          research_grant: filters.grant === 'any' ? undefined : filters.grant,
-          maintenance_status: filters.maintenanceStatus || undefined,
-          deleted: deletedOnly ? 'true' : undefined,
-          sort_by: sortBy,
-          sort_order: sortOrder,
+          status: initialStatus === 'All' ? undefined : initialStatus,
+          category: initialCategory === 'All' ? undefined : initialCategory,
+          sort_by: 'created_at',
+          sort_order: 'desc',
         },
       });
       const payload = response?.data || {};
@@ -253,7 +221,7 @@ function AllAssets() {
     } finally {
       if (requestControllerRef.current === controller) setLoading(false);
     }
-  }, [categoryFilter, debouncedSearch, deletedOnly, filters, page, pageSize, sortBy, sortOrder, statusFilter]);
+  }, [debouncedSearch, initialCategory, initialStatus, page, pageSize]);
 
   const fetchLookups = useCallback(async () => {
     const [usersResult, departmentsResult, categoriesResult, collegesResult, locationsResult, campusesResult, buildingsResult, roomsResult, settingsResult] = await Promise.allSettled([
@@ -341,7 +309,7 @@ function AllAssets() {
 
   const openRegisterModal = () => {
     setSelectedAsset(null);
-    setRegistrationForm({ name: '', category: '', serialNumber: '', quantity: '', purchaseDate: '', campusId: '', collegeId: '', departmentId: '', laboratoryId: '', buildingId: '', roomId: '', status: '', fundingSource: '', warrantyCoverage: '' });
+    setRegistrationForm({ name: '', category: '', serialNumber: '', quantity: '', purchaseDate: '', campusId: '', collegeId: '', departmentId: '', laboratoryId: '', buildingId: '', roomId: '', status: '', fundingSource: '', noResearchGrant: false, warrantyCoverage: '' });
     setManualFile(null);
     setRegistrationResult(null);
     setModalType('register');
@@ -499,7 +467,7 @@ function AllAssets() {
         roomId: registrationForm.roomId || null,
         location: selectedRoom?.name || '',
         status: registrationForm.status,
-        fundingSource: registrationForm.fundingSource,
+        fundingSource: registrationForm.noResearchGrant ? '' : registrationForm.fundingSource,
         warrantyCoverage: registrationForm.warrantyCoverage,
         warrantyExpiry,
         equipmentManual: { fileName: manualFile.name, mimeType: manualFile.type, data: encodedManual },
@@ -552,7 +520,7 @@ function AllAssets() {
     finally { setSaving(false); }
   };
 
-  const [registrationForm, setRegistrationForm] = useState({ name: '', category: '', serialNumber: '', quantity: '', purchaseDate: '', campusId: '', collegeId: '', departmentId: '', laboratoryId: '', buildingId: '', roomId: '', status: '', fundingSource: '', warrantyCoverage: '' });
+  const [registrationForm, setRegistrationForm] = useState({ name: '', category: '', serialNumber: '', quantity: '', purchaseDate: '', campusId: '', collegeId: '', departmentId: '', laboratoryId: '', buildingId: '', roomId: '', status: '', fundingSource: '', noResearchGrant: false, warrantyCoverage: '' });
   const [manualFile, setManualFile] = useState(null);
   const [registrationResult, setRegistrationResult] = useState(null);
 
@@ -560,18 +528,16 @@ function AllAssets() {
   const pageButtons = Array.from({ length: pageCount }, (_, index) => index + 1).filter((value) => value === 1 || value === pageCount || Math.abs(value - page) <= 1);
   const firstResult = pagination.total ? ((page - 1) * pageSize) + 1 : 0;
   const lastResult = Math.min(page * pageSize, Number(pagination.total ?? assets.length));
-  const resetFilters = () => { setSearch(''); setStatusFilter('All'); setCategoryFilter('All'); setFilters({ campus: '', college: '', department: '', laboratory: '', purchaseFrom: '', purchaseTo: '', grant: 'any', maintenanceStatus: '' }); setDeletedOnly(false); setSortBy('created_at'); setSortOrder('desc'); setPage(1); };
-  const updateFilter = (name, value) => {
-    setFilters((current) => ({ ...current, [name]: value, ...(name === 'college' ? { department: '', laboratory: '' } : {}), ...(name === 'department' ? { laboratory: '' } : {}) }));
+  const clearQueryFilter = (key) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete(key);
+    setSearchParams(nextParams);
     setPage(1);
   };
   const activeFilters = [
     ...(search ? [['Search', search, () => { setSearch(''); setPage(1); }]] : []),
-    ...(statusFilter !== 'All' ? [['Status', statusFilter, () => setStatusFilter('All')]] : []),
-    ...(categoryFilter !== 'All' ? [['Category', categoryFilter, () => setCategoryFilter('All')]] : []),
-    ...[['campus', 'Campus'], ['college', 'College'], ['department', 'Department'], ['laboratory', 'Laboratory'], ['purchaseFrom', 'From'], ['purchaseTo', 'To'], ['maintenanceStatus', 'Maintenance']].filter(([key]) => filters[key]).map(([key, label]) => [label, filters[key], () => updateFilter(key, '')]),
-    ...(filters.grant !== 'any' ? [['Research grant', filters.grant === 'has' ? 'Has grant' : 'No grant', () => updateFilter('grant', 'any')]] : []),
-    ...(deletedOnly ? [['Deleted assets', 'Only', () => setDeletedOnly(false)]] : []),
+    ...(initialStatus !== 'All' ? [['Status', initialStatus, () => clearQueryFilter('status')]] : []),
+    ...(initialCategory !== 'All' ? [['Category', initialCategory, () => clearQueryFilter('category')]] : []),
   ];
 
   return (
@@ -582,19 +548,6 @@ function AllAssets() {
         {lookupError && <div className="aa-alert" role="alert"><div className="aa-alert-message"><AlertTriangle size={18} /><div><strong>Registration data unavailable</strong><div>{lookupError}</div></div></div><button type="button" className="aa-button" onClick={fetchLookups} aria-label="Retry loading registration data">Retry</button></div>}
         <section className="aa-toolbar" aria-label="Asset filters">
           <label className="aa-filter-search"><Search size={16} aria-hidden="true" /><input ref={searchInputRef} aria-label="Filter assets" value={search} onChange={(event) => { setPage(1); setSearch(event.target.value); }} placeholder="Search assets, serial numbers, locations..." />{search && <button type="button" className="aa-clear-search" onClick={() => { setPage(1); setSearch(''); }} aria-label="Clear search"><X size={16} /></button>}</label>
-          <select aria-label="Filter by status" className="aa-select" value={statusFilter} onChange={(event) => { setPage(1); setStatusFilter(event.target.value); }}><option value="All">All Statuses</option>{STATUS_FILTER_OPTIONS.map((status) => <option key={`${status.label}-${status.value}`} value={status.value}>{status.label}</option>)}</select>
-          <select aria-label="Filter by category" className="aa-select" value={categoryFilter} onChange={(event) => { setPage(1); setCategoryFilter(event.target.value); }}>{categoryFilterOptions.map((category) => <option key={category} value={category}>{category === 'All' ? 'All Categories' : category}</option>)}</select>
-          <select aria-label="Filter by campus" className="aa-select" value={filters.campus} onChange={(event) => updateFilter('campus', event.target.value)}><option value="">All Campuses</option>{campusOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-          <select aria-label="Filter by college" className="aa-select" value={filters.college} onChange={(event) => updateFilter('college', event.target.value)}><option value="">All Colleges</option>{colleges.map((item) => <option key={item.id} value={item.id}>{item.name || item.collegeName}</option>)}</select>
-          <select aria-label="Filter by department" className="aa-select" value={filters.department} onChange={(event) => updateFilter('department', event.target.value)}><option value="">All Departments</option>{filteredDepartments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-          <select aria-label="Filter by laboratory" className="aa-select" value={filters.laboratory} onChange={(event) => updateFilter('laboratory', event.target.value)}><option value="">All Laboratories</option>{laboratoryOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-          <label className="aa-date-filter">Purchase from<input aria-label="Purchase date from" type="date" value={filters.purchaseFrom} onChange={(event) => updateFilter('purchaseFrom', event.target.value)} /></label>
-          <label className="aa-date-filter">Purchase to<input aria-label="Purchase date to" type="date" value={filters.purchaseTo} onChange={(event) => updateFilter('purchaseTo', event.target.value)} /></label>
-          <select aria-label="Filter by research grant" className="aa-select" value={filters.grant} onChange={(event) => updateFilter('grant', event.target.value)}><option value="any">Any Grant</option><option value="has">Has Grant</option><option value="none">No Grant</option></select>
-          <select aria-label="Filter by maintenance status" className="aa-select" value={filters.maintenanceStatus} onChange={(event) => updateFilter('maintenanceStatus', event.target.value)}><option value="">Any Maintenance</option><option value="open">Open</option><option value="pending">Pending</option><option value="in_progress">In Progress</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select>
-          <label className="aa-deleted-toggle"><input type="checkbox" checked={deletedOnly} onChange={(event) => { setDeletedOnly(event.target.checked); if (event.target.checked) setStatusFilter('All'); setPage(1); }} />Deleted</label>
-          <select aria-label="Sort assets by" className="aa-select" value={sortBy} onChange={(event) => setSortBy(event.target.value)}><option value="created_at">Created date</option><option value="name">Name</option><option value="status">Status</option><option value="purchaseDate">Purchase date</option><option value="assetCode">Asset ID</option></select>
-          <select aria-label="Sort order" className="aa-select" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}><option value="desc">Descending</option><option value="asc">Ascending</option></select><button type="button" className="aa-button aa-button-ghost" onClick={resetFilters} aria-label="Reset filters">Reset filters</button>
         </section>
         {activeFilters.length > 0 && <div className="aa-active-filters" aria-label="Active filters">{activeFilters.map(([label, value, remove]) => <button type="button" className="aa-filter-chip" key={`${label}-${value}`} onClick={remove} aria-label={`Remove ${label} filter ${value}`}>{label}: {value}<X size={13} /></button>)}</div>}
         <section className="aa-summary" aria-label="Asset summary">
@@ -649,22 +602,22 @@ function AssetTableRow({ asset, recoveryDays, onAction, onQr, onManual }) {
     <td>{asset.laboratory}</td>
     <td>{asset.building}</td>
     <td>{asset.room}</td>
-    <td>{asset.qrReady ? <button type="button" className="aa-button" onClick={() => onQr(asset)} aria-label={`View QR code for ${asset.name}`}><QrCode size={15} />View QR</button> : <span className="aa-secondary-text">No QR</span>}</td>
+    <td>{asset.qrReady ? <button type="button" className="aa-qr-thumbnail" onClick={() => onQr(asset)} aria-label={`View QR code for ${asset.name}`} title="Open larger QR code"><QRCodeSVG value={String(asset.qrValue)} size={36} includeMargin={false} aria-hidden="true" /></button> : <span className="aa-secondary-text">No QR</span>}</td>
     <td><span className={`aa-chip ${asset.researchGrant === 'No Grant' ? 'aa-chip-muted' : ''}`}>{asset.researchGrant}</span></td>
     <td><div className="aa-warranty"><span className={`aa-status ${warrantyClass}`}>{warrantyLabel}</span><span className="aa-secondary-text">{asset.warrantyExpiry ? formatDate(asset.warrantyExpiry) : '—'}</span></div></td>
     <td>{asset.hasManual ? <button type="button" className="aa-button" onClick={() => onManual(asset)} aria-label={`View equipment manual for ${asset.name}`}><FileText size={15} />View Manual</button> : <span className="aa-secondary-text">No Manual</span>}</td>
     <td><div className="aa-action-group">
       <ActionButton label={`View ${asset.name}`} title="View asset" onClick={() => onAction('view', asset)}><Eye size={16} /></ActionButton>
-      {!deletedAt && <ActionButton label={`Edit ${asset.name}`} title="Edit asset" onClick={() => onAction('edit', asset)}><Pencil size={16} /></ActionButton>}
-      {!deletedAt && !isTerminal && <ActionButton label={`Assign ${asset.name}`} title="Assign asset" onClick={() => onAction('assign', asset)}><UserCheck size={16} /></ActionButton>}
-      {!deletedAt && !isTerminal && <ActionButton label={`Transfer ${asset.name}`} title="Transfer asset" onClick={() => onAction('transfer', asset)}><ArrowLeftRight size={16} /></ActionButton>}
-      {!deletedAt && !isTerminal && <ActionButton label={`Send ${asset.name} to maintenance`} title="Send to maintenance" onClick={() => onAction('maintenance', asset)}><Wrench size={16} /></ActionButton>}
+      {!deletedAt && <Can permission={['assets.update', 'ict.assets.update', 'college.assets.update']}><ActionButton label={`Edit ${asset.name}`} title="Edit asset" onClick={() => onAction('edit', asset)}><Pencil size={16} /></ActionButton></Can>}
+      {!deletedAt && !isTerminal && <Can permission={['assets.assign', 'ict.assets.assign']}><ActionButton label={`Assign ${asset.name}`} title="Assign asset" onClick={() => onAction('assign', asset)}><UserCheck size={16} /></ActionButton></Can>}
+      {!deletedAt && !isTerminal && <Can permission={['assets.transfer', 'ict.assets.transfer']}><ActionButton label={`Transfer ${asset.name}`} title="Transfer asset" onClick={() => onAction('transfer', asset)}><ArrowLeftRight size={16} /></ActionButton></Can>}
+      {!deletedAt && !isTerminal && <Can permission={['maintenance.request.create', 'maintenance.update', 'ict.maintenance.create']}><ActionButton label={`Send ${asset.name} to maintenance`} title="Send to maintenance" onClick={() => onAction('maintenance', asset)}><Wrench size={16} /></ActionButton></Can>}
       <ActionButton label={`View history for ${asset.name}`} title="View history" onClick={() => onAction('viewHistory', asset)}><History size={16} /></ActionButton>
       <ActionButton label={`View QR code for ${asset.name}`} title="View QR code" onClick={() => onAction('viewQr', asset)}><QrCode size={16} /></ActionButton>
-      {!deletedAt && !isTerminal && <ActionButton label={`Retire ${asset.name}`} title="Retire asset" variant="aa-action-warning" onClick={() => onAction('retire', asset)}><Shield size={16} /></ActionButton>}
-      {!deletedAt && !isTerminal && <ActionButton label={`Dispose ${asset.name}`} title="Dispose asset" variant="aa-action-danger" onClick={() => onAction('dispose', asset)}><AlertTriangle size={16} /></ActionButton>}
-      {deletedAt ? isRecoverable && <ActionButton label={`Restore ${asset.name}`} title="Restore asset" onClick={() => onAction('restore', asset)}><Undo2 size={16} /></ActionButton> : <ActionButton label={`Delete ${asset.name}`} title="Delete asset" variant="aa-action-danger" onClick={() => onAction('delete', asset)}><Trash2 size={16} /></ActionButton>}
-      {!deletedAt && String(asset.rawStatus || '').toLowerCase() === 'pending-disposal' && <ActionButton label={`Complete disposal for ${asset.name}`} title="Complete disposal" variant="aa-action-warning" onClick={() => onAction('completeDisposal', asset)}><AlertTriangle size={16} /></ActionButton>}
+      {!deletedAt && !isTerminal && <Can permission="assets.dispose"><ActionButton label={`Retire ${asset.name}`} title="Retire asset" variant="aa-action-warning" onClick={() => onAction('retire', asset)}><Shield size={16} /></ActionButton></Can>}
+      {!deletedAt && !isTerminal && <Can permission="assets.dispose"><ActionButton label={`Dispose ${asset.name}`} title="Dispose asset" variant="aa-action-danger" onClick={() => onAction('dispose', asset)}><AlertTriangle size={16} /></ActionButton></Can>}
+      {deletedAt ? isRecoverable && <Can permission="assets.delete"><ActionButton label={`Restore ${asset.name}`} title="Restore asset" onClick={() => onAction('restore', asset)}><Undo2 size={16} /></ActionButton></Can> : <Can permission="assets.delete"><ActionButton label={`Delete ${asset.name}`} title="Delete asset" variant="aa-action-danger" onClick={() => onAction('delete', asset)}><Trash2 size={16} /></ActionButton></Can>}
+      {!deletedAt && String(asset.rawStatus || '').toLowerCase() === 'pending-disposal' && <Can permission="assets.dispose"><ActionButton label={`Complete disposal for ${asset.name}`} title="Complete disposal" variant="aa-action-warning" onClick={() => onAction('completeDisposal', asset)}><AlertTriangle size={16} /></ActionButton></Can>}
     </div></td>
   </tr>;
 }
@@ -701,14 +654,14 @@ function AssetModal({ type, asset, qrAsset, historyRows, users, departments, col
           <label className="aa-label">Serial Number *<input required maxLength="255" placeholder="Enter serial number" value={registrationForm.serialNumber} onChange={(event) => setRegistrationForm((current) => ({ ...current, serialNumber: event.target.value }))} /></label>
           <label className="aa-label">Quantity *<input required type="number" min="1" max={registrationForm.serialNumber ? 1 : undefined} step="1" placeholder="Enter quantity" value={registrationForm.quantity} onChange={(event) => setRegistrationForm((current) => ({ ...current, quantity: event.target.value }))} /></label>
           <label className="aa-label">Purchase Date *<input required type="date" value={registrationForm.purchaseDate} onChange={(event) => setRegistrationForm((current) => ({ ...current, purchaseDate: event.target.value }))} /></label>
-          <label className="aa-label">Campus *<select required value={registrationForm.campusId} onChange={(event) => setRegistrationForm((current) => ({ ...current, campusId: event.target.value, buildingId: '', laboratoryId: '', roomId: '' }))}><option value="">Select campus</option>{campusOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-          <label className="aa-label">College *<select required value={registrationForm.collegeId} onChange={(event) => setRegistrationForm((current) => ({ ...current, collegeId: event.target.value, departmentId: '' }))}><option value="">Select college</option>{colleges.filter((item) => item.status === 'active').map((item) => <option key={item.id} value={item.id}>{item.name || item.collegeName}</option>)}</select></label>
-          <label className="aa-label">Department *<select required value={registrationForm.departmentId} onChange={(event) => setRegistrationForm((current) => ({ ...current, departmentId: event.target.value, laboratoryId: '' }))}><option value="">Select department</option>{departments.filter((item) => !registrationForm.collegeId || String(item.collegeId || item.college_id) === String(registrationForm.collegeId)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label className="aa-label">Campus *<select required value={registrationForm.campusId} onChange={(event) => setRegistrationForm((current) => ({ ...current, campusId: event.target.value, collegeId: '', departmentId: '', buildingId: '', laboratoryId: '', roomId: '' }))}><option value="">Select campus</option>{campusOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label className="aa-label">College *<select required value={registrationForm.collegeId} onChange={(event) => setRegistrationForm((current) => ({ ...current, collegeId: event.target.value, departmentId: '', buildingId: '', laboratoryId: '', roomId: '' }))}><option value="">Select college</option>{colleges.filter((item) => item.status === 'active').map((item) => <option key={item.id} value={item.id}>{item.name || item.collegeName}</option>)}</select></label>
+          <label className="aa-label">Department *<select required value={registrationForm.departmentId} onChange={(event) => setRegistrationForm((current) => ({ ...current, departmentId: event.target.value, buildingId: '', laboratoryId: '', roomId: '' }))}><option value="">Select department</option>{departments.filter((item) => !registrationForm.collegeId || String(item.collegeId || item.college_id) === String(registrationForm.collegeId)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
           <label className="aa-label">Building *<select required value={registrationForm.buildingId} onChange={(event) => setRegistrationForm((current) => ({ ...current, buildingId: event.target.value, laboratoryId: '', roomId: '' }))}><option value="">Select building</option>{buildings.filter((item) => item.status === 'active' && (!registrationForm.campusId || String(item.campusId || item.campus_id) === String(registrationForm.campusId))).map((item) => <option key={item.id} value={item.id}>{item.buildingName || item.building_name || item.name}</option>)}</select></label>
-          <label className="aa-label">Laboratory *<select required disabled={!registrationForm.buildingId} value={registrationForm.laboratoryId} onChange={(event) => setRegistrationForm((current) => ({ ...current, laboratoryId: event.target.value, roomId: '' }))}><option value="">Select laboratory</option>{laboratoryOptions.filter((item) => String(item.buildingId) === String(registrationForm.buildingId)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label className="aa-label">Laboratory *<select required disabled={!registrationForm.departmentId || !registrationForm.buildingId} value={registrationForm.laboratoryId} onChange={(event) => setRegistrationForm((current) => ({ ...current, laboratoryId: event.target.value, roomId: '' }))}><option value="">Select laboratory</option>{laboratoryOptions.filter((item) => String(item.buildingId) === String(registrationForm.buildingId) && (!item.departmentId || String(item.departmentId) === String(registrationForm.departmentId))).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><span className="aa-secondary-text">{!registrationForm.departmentId ? 'Select a department first.' : !registrationForm.buildingId ? 'Select a building first.' : 'Choose a laboratory in the selected department and building.'}</span></label>
           <label className="aa-label">Room *<select required disabled={!registrationForm.laboratoryId} value={registrationForm.roomId} onChange={(event) => setRegistrationForm((current) => ({ ...current, roomId: event.target.value }))}><option value="">Select room</option>{rooms.filter((item) => item.status === 'active' && String(item.buildingId || item.building_id) === String(registrationForm.buildingId) && String(item.id) === String(registrationForm.laboratoryId)).map((item) => <option key={item.id} value={item.id}>{item.roomName || item.room_name || item.name}</option>)}</select></label>
           <label className="aa-label">Status *<select required value={registrationForm.status} onChange={(event) => setRegistrationForm((current) => ({ ...current, status: event.target.value }))}><option value="">Select status</option><option value="available">Active</option><option value="in-use">In Use</option><option value="under-maintenance">Under Maintenance</option><option value="damaged">Damaged</option></select></label>
-          <label className="aa-label">Research Grant *<input required placeholder="Enter grant or funding code (or None)" value={registrationForm.fundingSource} onChange={(event) => setRegistrationForm((current) => ({ ...current, fundingSource: event.target.value }))} /></label>
+          <fieldset className="aa-label aa-grant-field"><legend>Research Grant *</legend><label className="aa-checkbox-label"><input type="checkbox" checked={registrationForm.noResearchGrant || false} onChange={(event) => setRegistrationForm((current) => ({ ...current, noResearchGrant: event.target.checked, fundingSource: event.target.checked ? '' : current.fundingSource }))} />No research grant</label><input required={!registrationForm.noResearchGrant} disabled={registrationForm.noResearchGrant} placeholder="Enter grant or funding code" value={registrationForm.fundingSource} onChange={(event) => setRegistrationForm((current) => ({ ...current, fundingSource: event.target.value }))} /></fieldset>
           <label className="aa-label">Warranty *<select required value={registrationForm.warrantyCoverage} onChange={(event) => setRegistrationForm((current) => ({ ...current, warrantyCoverage: event.target.value }))}><option value="">Select warranty coverage</option><option value="none">No warranty</option><option value="1">1 year</option><option value="2">2 years</option><option value="3">3 years</option><option value="5">5 years</option></select></label>
           <label className="aa-label aa-form-wide">Equipment Manual *<input required type="file" accept=".pdf,.doc,.jpg,.jpeg,.png,application/pdf,application/msword,image/jpeg,image/png" onChange={(event) => setManualFile(event.target.files?.[0] || null)} /><span className="aa-secondary-text">{manualFile?.name || 'Upload PDF, DOC, JPG, or PNG (max 10 MB)'}</span></label>
         </div></div>
@@ -718,7 +671,7 @@ function AssetModal({ type, asset, qrAsset, historyRows, users, departments, col
       {type === 'assign' && <><label className="aa-label">Assigned user *<select required value={assignForm.userId} onChange={(event) => setAssignForm((current) => ({ ...current, userId: event.target.value }))}><option value="">Select user</option>{users.map((user) => <option key={user.id} value={user.id}>{user.fullName || user.username || `User ${user.id}`}</option>)}</select></label><label className="aa-label">Department<select value={assignForm.departmentId} onChange={(event) => setAssignForm((current) => ({ ...current, departmentId: event.target.value }))}><option value="">Select department</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label><label className="aa-label">Laboratory<select value={assignForm.laboratoryId || ''} onChange={(event) => setAssignForm((current) => ({ ...current, laboratoryId: event.target.value }))}><option value="">Select laboratory</option>{laboratoryOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="aa-label">Assignment date<input type="date" value={assignForm.date || ''} onChange={(event) => setAssignForm((current) => ({ ...current, date: event.target.value }))} /></label><label className="aa-label">Condition<select value={assignForm.condition || 'Good'} onChange={(event) => setAssignForm((current) => ({ ...current, condition: event.target.value }))}><option>Good</option><option>Fair</option><option>Poor</option><option>Damaged</option></select></label><label className="aa-label">Location<input value={assignForm.location} onChange={(event) => setAssignForm((current) => ({ ...current, location: event.target.value }))} /></label><label className="aa-label aa-form-wide">Notes<textarea value={assignForm.notes || ''} onChange={(event) => setAssignForm((current) => ({ ...current, notes: event.target.value }))} /></label></>}
       {type === 'transfer' && <><label className="aa-label">Destination campus<select value={transferForm.campusId || ''} onChange={(event) => setTransferForm((current) => ({ ...current, campusId: event.target.value }))}><option value="">Select campus</option>{campusOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="aa-label">Destination college<select value={transferForm.collegeId || ''} onChange={(event) => setTransferForm((current) => ({ ...current, collegeId: event.target.value, departmentId: '' }))}><option value="">Select college</option>{colleges.map((item) => <option key={item.id} value={item.id}>{item.name || item.collegeName}</option>)}</select></label><label className="aa-label">Destination department *<select required value={transferForm.departmentId} onChange={(event) => setTransferForm((current) => ({ ...current, departmentId: event.target.value }))}><option value="">Select department</option>{departments.filter((item) => !transferForm.collegeId || String(item.collegeId || item.college_id) === String(transferForm.collegeId)).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label><label className="aa-label">Destination laboratory<select value={transferForm.laboratoryId || ''} onChange={(event) => setTransferForm((current) => ({ ...current, laboratoryId: event.target.value }))}><option value="">Select laboratory</option>{laboratoryOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="aa-label">Destination location *<input required value={transferForm.location} onChange={(event) => setTransferForm((current) => ({ ...current, location: event.target.value }))} /></label><label className="aa-label">Condition<select value={transferForm.condition || 'Good'} onChange={(event) => setTransferForm((current) => ({ ...current, condition: event.target.value }))}><option>Good</option><option>Fair</option><option>Poor</option><option>Damaged</option></select></label><label className="aa-label aa-form-wide">Reason *<textarea required value={transferForm.reason} onChange={(event) => setTransferForm((current) => ({ ...current, reason: event.target.value }))} /></label></>}
       {type === 'maintenance' && <><label className="aa-label">Maintenance title *<input required value={maintenanceForm.title} onChange={(event) => setMaintenanceForm((current) => ({ ...current, title: event.target.value }))} /></label><label className="aa-label">Priority<select value={maintenanceForm.priority} onChange={(event) => setMaintenanceForm((current) => ({ ...current, priority: event.target.value }))}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></label><label className="aa-label aa-form-wide">Issue / description *<textarea required value={maintenanceForm.description} onChange={(event) => setMaintenanceForm((current) => ({ ...current, description: event.target.value }))} /></label></>}
-      <div className={`aa-modal-footer ${type === 'register' ? 'aa-form-wide' : ''}`}><button type="button" className="aa-button" aria-label="Cancel asset changes" onClick={onClose}>Cancel</button><button type="submit" className="aa-button aa-button-primary" aria-label={type === 'register' ? 'Register asset' : type === 'edit' ? 'Save asset' : type === 'assign' ? 'Assign asset' : type === 'transfer' ? 'Transfer asset' : 'Send to maintenance'} disabled={saving || (type === 'register' && completedRegistrationFields !== 12)}>{saving ? 'Saving...' : type === 'register' ? 'Register Asset' : type === 'edit' ? 'Save asset' : type === 'assign' ? 'Assign asset' : type === 'transfer' ? 'Transfer asset' : 'Send to maintenance'}</button></div>
+      <div className={`aa-modal-footer ${type === 'register' ? 'aa-form-wide' : ''}`}><button type="button" className="aa-button" aria-label="Cancel asset changes" onClick={onClose}>Cancel</button><button type="submit" className="aa-button aa-button-primary" aria-label={type === 'register' ? 'Register asset' : type === 'edit' ? 'Save asset' : type === 'assign' ? 'Assign asset' : type === 'transfer' ? 'Transfer asset' : 'Send to maintenance'} disabled={saving || (type === 'register' && completedRegistrationFields !== registrationChecks.length)}>{saving ? 'Saving...' : type === 'register' ? 'Register Asset' : type === 'edit' ? 'Save asset' : type === 'assign' ? 'Assign asset' : type === 'transfer' ? 'Transfer asset' : 'Send to maintenance'}</button></div>
     </form>}
     {['detail', 'history', 'qr'].includes(type) && <footer className="aa-modal-footer"><button type="button" className="aa-button" aria-label="Close asset dialog" onClick={onClose}>Close</button></footer>}
   </section></div>;

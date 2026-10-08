@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { toast } from 'react-toastify';
 
 const configuredApiUrl = [
   process.env.REACT_APP_API_URL,
@@ -47,7 +48,9 @@ const apiClient = axios.create({
 export const getApiErrorMessage = (error, fallback = 'Unable to connect to the server. Please try again.') => {
   if (!error) return fallback;
   if (error.response?.status === 401) return 'Session expired. Please sign in again.';
-  if (error.response?.status === 403) return 'You do not have permission to view this information.';
+  if (error.response?.status === 403) {
+    return error.response?.data?.message || 'Access denied. You do not have permission to perform this action.';
+  }
   if (error.response?.status >= 500) return 'Unable to load dashboard data. Please try again.';
   if (error.response?.data?.message) return error.response.data.message;
   if (error.response?.status === 404) return 'The requested resource was not found.';
@@ -116,6 +119,11 @@ apiClient.interceptors.response.use(
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.assign('/login');
       }
+    }
+    if (error.response?.status === 403) {
+      error.message = error.response?.data?.message
+        || 'Access denied. You do not have permission to perform this action.';
+      toast.error(error.message, { toastId: 'authorization-denied' });
     }
 
     return Promise.reject(error);

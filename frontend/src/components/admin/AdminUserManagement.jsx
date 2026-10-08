@@ -20,17 +20,14 @@ const EMPTY_FORM = {
 };
 
 async function apiRequest(url, options = {}) {
+  let response;
   try {
-    const response = await apiClient.request({
+    response = await apiClient.request({
       url,
       method: options.method || "GET",
       data: options.body ? JSON.parse(options.body) : undefined,
       headers: options.headers,
     });
-    if (response.data?.success === false) {
-      throw new Error(response.data.message || "Unable to complete the user management request.");
-    }
-    return response.data;
   } catch (error) {
     console.error("User management API request failed", {
       url,
@@ -40,6 +37,10 @@ async function apiRequest(url, options = {}) {
     });
     throw new Error(getApiErrorMessage(error, error.message || "Unable to complete the user management request."));
   }
+  if (response.data?.success === false) {
+    throw new Error(response.data.message || "Unable to complete the user management request.");
+  }
+  return response.data;
 }
 
 function extractArray(data, keys = []) {
@@ -1152,7 +1153,7 @@ export default function Users() {
           </button>
         </div>
 
-        {error && (
+        {error && !showForm && (
           <div className="error-box">
             {error}
           </div>

@@ -9,191 +9,136 @@ jest.mock("../../services/apiClient", () => ({
   default: {
     get: jest.fn(),
     put: jest.fn(),
+    post: jest.fn(),
+    delete: jest.fn(),
   },
   getApiErrorMessage: jest.fn((_error, fallback) => fallback),
 }));
 
-const roles = [
+const permissionRows = [
+  { id: 10, key: "roles_permissions.view", action: "view" },
+  { id: 11, key: "roles_permissions.create", action: "create" },
+  { id: 12, key: "roles_permissions.edit", action: "edit" },
+  { id: 13, key: "roles_permissions.delete", action: "delete" },
+  { id: 14, key: "roles_permissions.approve", action: "approve" },
+  { id: 15, key: "roles_permissions.assign", action: "assign" },
+  { id: 16, key: "roles_permissions.transfer", action: "transfer" },
+  { id: 17, key: "roles_permissions.maintain", action: "maintain" },
+  { id: 18, key: "roles_permissions.report", action: "report" },
+  { id: 19, key: "roles_permissions.configure", action: "configure" },
+];
+const roleRows = [
   {
-    id: "admin",
+    id: 1,
+    name: "admin",
     label: "Administrator",
-    description: "System administrator",
-    permissions: ["assets.view", "roles.view"],
-    permissionCount: 2,
+    description: "System administration",
+    isSystem: true,
+    active: true,
+    userCount: 1,
+    permissions: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19].map((id) => ({
+      id,
+      key: `roles_permissions.${permissionRows.find((permission) => permission.id === id)?.action || "view"}`,
+      action: permissionRows.find((permission) => permission.id === id)?.action || "view",
+      scopeType: "system",
+      limited: false,
+    })),
   },
   {
-    id: "ict_officer",
+    id: 2,
+    name: "ict_officer",
     label: "ICT Officer",
     description: "ICT operations",
-    permissions: ["assets.view"],
-    permissionCount: 1,
+    isSystem: true,
+    active: true,
+    userCount: 2,
+    permissions: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19].map((id) => ({
+      id,
+      key: `roles_permissions.${permissionRows.find((permission) => permission.id === id)?.action || "view"}`,
+      action: permissionRows.find((permission) => permission.id === id)?.action || "view",
+      scopeType: [13, 19].includes(id) ? "college" : "system",
+      limited: [13, 19].includes(id),
+    })),
   },
 ];
-
-const permissions = [
-  { name: "assets.view" },
-  { name: "assets.create" },
-  { name: "roles.view" },
+const userRows = [
+  { id: 7, fullName: "Test Administrator", username: "admin", roles: [{ id: 1, name: "Administrator", scopeType: "system" }] },
 ];
 
-const setApiResponses = () => {
+const setupApi = () => {
   apiClient.get.mockImplementation((url) => {
-    if (url === "/api/admin/roles") {
-      return Promise.resolve({ data: { success: true, data: roles } });
-    }
-    if (url === "/api/admin/permissions") {
-      return Promise.resolve({ data: { success: true, data: permissions } });
-    }
-    const role = decodeURIComponent(url.split("/")[4]);
-    return Promise.resolve({
-      data: {
-        success: true,
-        data: {
-          role,
-          permissions: role === "admin" ? ["assets.view", "roles.view"] : ["assets.view"],
-        },
-      },
-    });
+    if (url === "/api/admin/roles-permissions/roles") return Promise.resolve({ data: { success: true, data: roleRows } });
+    if (url === "/api/admin/roles-permissions/permissions") return Promise.resolve({ data: { success: true, data: permissionRows } });
+    if (url === "/api/admin/roles-permissions/users") return Promise.resolve({ data: { success: true, data: userRows } });
+    return Promise.reject(new Error(`Unexpected GET ${url}`));
   });
 };
 
 describe("Admin Roles & Permissions", () => {
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-
   beforeEach(() => {
     jest.clearAllMocks();
-    setApiResponses();
+    setupApi();
   });
 
-  it("loads roles and permission state from the API", async () => {
+  it("loads the role-by-action matrix and scope controls", async () => {
     render(<AdminRolesPermissions />);
 
-    expect(screen.getByRole("status")).toHaveTextContent("Loading roles and permissions...");
-    expect(await screen.findByRole("heading", { name: "Administrator" })).toBeInTheDocument();
-    expect(apiClient.get).toHaveBeenCalledWith("/api/admin/roles");
-    expect(apiClient.get).toHaveBeenCalledWith("/api/admin/permissions");
-    expect(await screen.findByRole("checkbox", { name: "assets.view permission" })).toBeChecked();
-    expect(apiClient.get).toHaveBeenCalledWith("/api/admin/roles/admin/permissions");
-    expect(screen.getByRole("checkbox", { name: "assets.create permission" })).not.toBeChecked();
-    expect(screen.getByRole("columnheader", { name: "Create" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Permission matrix" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Configure" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Delete" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Administrator view permission" })).toHaveValue("full");
+    expect(screen.getByRole("combobox", { name: "ICT Officer delete permission" })).toHaveValue("limited");
+    expect(screen.getByRole("combobox", { name: "ICT Officer delete scope" })).toHaveValue("college");
+    expect(screen.getByText(/Limited is restricted to the selected organizational scope/)).toBeInTheDocument();
   });
 
-  it("loads the selected role permissions and persists changes through the API", async () => {
+  it("confirms high-risk changes with the affected user count before saving", async () => {
     const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
-    apiClient.put.mockResolvedValue({
-      data: {
-        success: true,
-        data: { role: "ict_officer", permissions: ["assets.view", "assets.create"] },
-        permissions: ["assets.view", "roles.view", "assets.create"],
-      },
-    });
-
+    apiClient.put.mockResolvedValue({ data: { success: true, data: roleRows } });
     render(<AdminRolesPermissions />);
-    fireEvent.click(await screen.findByRole("button", { name: /ICT Officer/ }));
-    const createPermission = await screen.findByRole("checkbox", { name: "assets.create permission" });
-    await waitFor(() => expect(createPermission).toBeEnabled());
-    fireEvent.click(screen.getByRole("checkbox", { name: "assets.create permission" }));
-    await waitFor(() => expect(screen.getByRole("checkbox", { name: "assets.create permission" })).toBeChecked());
-    await waitFor(() => expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled());
+
+    fireEvent.change(await screen.findByRole("combobox", { name: "ICT Officer delete permission" }), { target: { value: "full" } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => expect(apiClient.put).toHaveBeenCalledWith(
-      "/api/admin/roles/ict_officer/permissions",
-      { permissions: ["assets.view", "assets.create"] },
+      "/api/admin/roles-permissions/matrix",
+      expect.objectContaining({ roles: expect.arrayContaining([expect.objectContaining({ roleId: 2 })]) }),
     ));
-    expect(await screen.findByRole("status")).toHaveTextContent("Permissions updated successfully.");
-    expect(confirmSpy).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: /Administrator/ }));
-    await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith("/api/admin/roles/admin/permissions"));
-    expect(screen.getByRole("checkbox", { name: "assets.view permission" })).toBeChecked();
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("ICT Officer: delete (2 assigned users)"));
     confirmSpy.mockRestore();
   });
 
-  it("shows the required load error when roles or permissions cannot be loaded", async () => {
-    const errorLog = jest.spyOn(console, "error").mockImplementation(() => {});
-    apiClient.get.mockRejectedValue(new Error("network error"));
-
+  it("assigns scoped roles to a selected user after confirmation", async () => {
+    const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
+    apiClient.put.mockResolvedValue({ data: { success: true } });
     render(<AdminRolesPermissions />);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Unable to load roles and permissions. Please try again.",
-    );
-    expect(errorLog).toHaveBeenCalledWith("Roles and permissions loading error:", expect.any(Error));
+    const roleSelect = await screen.findByRole("combobox", { name: "Role" });
+    fireEvent.change(roleSelect, { target: { value: "2" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Scope" }), { target: { value: "department" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Scope ID" }), { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add role" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save user assignments" }));
+
+    await waitFor(() => expect(apiClient.put).toHaveBeenCalledWith(
+      "/api/admin/roles-permissions/users/7/roles",
+      { assignments: [{ roleId: 1, scopeType: "system", scopeId: null }, { roleId: 2, scopeType: "department", scopeId: 12 }] },
+    ));
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("Test Administrator"));
+    confirmSpy.mockRestore();
   });
 
-  it("includes configured finance roles", async () => {
-    const supportedRoles = [
-      ...roles,
-      { id: "finance", label: "Finance", permissions: ["financial.view"], permissionCount: 1 },
-    ];
-    apiClient.get.mockImplementation((url) => {
-      if (url === "/api/admin/roles") return Promise.resolve({ data: { success: true, data: supportedRoles } });
-      if (url === "/api/admin/permissions") return Promise.resolve({ data: { success: true, data: permissions } });
-      const role = decodeURIComponent(url.split("/")[4]);
-      const selected = supportedRoles.find((item) => item.id === role);
-      return Promise.resolve({ data: { success: true, data: { role, permissions: selected?.permissions || [] } } });
-    });
-
+  it("creates and refreshes a custom role", async () => {
+    apiClient.post.mockResolvedValue({ data: { success: true } });
     render(<AdminRolesPermissions />);
 
-    expect(await screen.findByRole("button", { name: /Finance/ })).toBeInTheDocument();
-  });
+    fireEvent.change(await screen.findByRole("textbox", { name: "New role name" }), { target: { value: "Research Coordinator" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Description" }), { target: { value: "Research equipment access" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create role" }));
 
-  it("shows the full Administrator permission selection as read-only", async () => {
-    const adminPermissions = ["assets.view", "assets.create", "roles.view"];
-    apiClient.get.mockImplementation((url) => {
-      if (url === "/api/admin/roles") {
-        return Promise.resolve({
-          data: {
-            success: true,
-            data: [{ id: "admin", label: "Administrator", permissions: adminPermissions }],
-          },
-        });
-      }
-      if (url === "/api/admin/permissions") {
-        return Promise.resolve({ data: { success: true, data: adminPermissions.map((name) => ({ name })) } });
-      }
-      return Promise.resolve({
-        data: { success: true, data: { role: "admin", permissions: adminPermissions } },
-      });
-    });
-
-    render(<AdminRolesPermissions />);
-
-    const createPermission = await screen.findByRole("checkbox", { name: "assets.create permission" });
-    await waitFor(() => expect(createPermission).toBeChecked());
-    expect(createPermission).toBeDisabled();
-    expect(screen.getByRole("checkbox", { name: "roles.view permission" })).toBeChecked();
-  });
-
-  it("searches canonical permission names and filters Edit to update permissions", async () => {
-    const catalog = [
-      { name: "assets.view" },
-      { name: "assets.update" },
-      { name: "assets.transfer.approve" },
-      { name: "college.documents.manage" },
-    ];
-    apiClient.get.mockImplementation((url) => {
-      if (url === "/api/admin/roles") return Promise.resolve({ data: { success: true, data: roles } });
-      if (url === "/api/admin/permissions") return Promise.resolve({ data: { success: true, data: catalog } });
-      return Promise.resolve({
-        data: { success: true, data: { role: "admin", permissions: ["assets.view"] } },
-      });
-    });
-
-    render(<AdminRolesPermissions />);
-    const search = await screen.findByRole("textbox", { name: "Search permissions" });
-    fireEvent.change(search, { target: { value: "assets.transfer.approve" } });
-    expect(screen.getByRole("checkbox", { name: "assets.transfer.approve permission" })).toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: "assets.update permission" })).not.toBeInTheDocument();
-
-    fireEvent.change(search, { target: { value: "" } });
-    fireEvent.change(screen.getByRole("combobox", { name: "Permission type" }), { target: { value: "Edit" } });
-    expect(screen.getByRole("checkbox", { name: "assets.update permission" })).toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: "assets.view permission" })).not.toBeInTheDocument();
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith(
+      "/api/admin/roles-permissions/roles",
+      { name: "Research Coordinator", displayName: "Research Coordinator", description: "Research equipment access" },
+    ));
   });
 });

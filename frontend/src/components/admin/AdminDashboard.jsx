@@ -23,7 +23,6 @@ import {
   Package,
   RefreshCw,
   Settings2,
-  ShieldAlert,
   Users,
   Wrench,
 } from "lucide-react";
@@ -52,9 +51,6 @@ const emptyDashboard = {
   statistics: {},
   assetByCondition: [],
   assetByCategory: [],
-  maintenanceOverview: [],
-  inventoryAlerts: [],
-  recentActivity: [],
   thresholds: {},
 };
 const emptyStatistics = Object.freeze({});
@@ -62,15 +58,6 @@ const defaultThresholds = {
   lowStockPercent: 10,
   expirationNoticeDays: 30,
   escalationHours: 72,
-};
-const maintenanceLabels = ["Submitted", "Scheduled", "In-Progress", "Completed", "Escalated"];
-const inventoryAlertLabels = ["Low stock", "Out of stock", "Expiring chemicals", "Expired chemicals", "Quarantined chemicals"];
-const inventoryAlertTranslations = {
-  "Low stock": "lowStockAlert",
-  "Out of stock": "outOfStock",
-  "Expiring chemicals": "expiringChemicals",
-  "Expired chemicals": "expiredChemicals",
-  "Quarantined chemicals": "quarantinedChemicals",
 };
 const chartOptions = {
   responsive: true,
@@ -98,13 +85,6 @@ export const normalizeDashboardThresholds = (value) => {
       return [key, Number.isFinite(candidate) && candidate > 0 ? candidate : fallback];
     }),
   );
-};
-
-const formatDate = (value, language) => {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "Date unavailable"
-    : date.toLocaleString(language === "am" ? "am-ET" : "en", { dateStyle: "medium", timeStyle: "short" });
 };
 
 const StatCard = ({ title, value, icon: Icon, to, loading, error, tr, tone = "primary" }) => (
@@ -207,22 +187,17 @@ function AdminDashboard() {
   const workflowStats = statistics.workflow || emptyStatistics;
   const inventoryStats = statistics.inventory || emptyStatistics;
   const maintenanceStats = statistics.maintenance || emptyStatistics;
-  const maintenanceOverview = dashboard.maintenanceOverview?.length
-    ? dashboard.maintenanceOverview
-    : maintenanceLabels.map((label) => ({ label, value: 0 }));
-  const inventoryAlerts = dashboard.inventoryAlerts?.length
-    ? dashboard.inventoryAlerts
-    : inventoryAlertLabels.map((label) => ({ label, value: 0 }));
-  const localizedInventoryAlert = (label) => {
-    const key = inventoryAlertTranslations[label];
-    return key ? tr(`dashboard.adminHome.${key}`, label) : label;
-  };
   const statCards = useMemo(() => [
     { title: tr("dashboard.adminStats.totalAssets"), value: assetStats.total, icon: Package, to: "/admin/assets", tone: "primary" },
-    { title: tr("dashboard.adminStats.activeAssets"), value: assetStats.active, icon: Activity, to: "/admin/assets?status=available", tone: "success" },
+    { title: tr("dashboard.adminStats.activeAssets"), value: assetStats.active, icon: Activity, to: "/admin/assets", tone: "success" },
     { title: tr("dashboard.adminStats.damagedAssets"), value: assetStats.damaged, icon: Archive, to: "/admin/assets?status=damaged", tone: "warning" },
     { title: tr("dashboard.adminStats.replacedAssets"), value: assetStats.replaced, icon: RefreshCw, to: "/admin/assets?status=replaced", tone: "info" },
     { title: tr("dashboard.adminStats.expiredAssets"), value: assetStats.expired, icon: Clock3, to: "/admin/assets?status=expired", tone: "danger" },
+    { title: tr("dashboard.adminStats.retiredAssets", "Retired Assets"), value: assetStats.retired, icon: Archive, to: "/admin/assets?status=retired", tone: "neutral" },
+    ...(assetStats.otherStatuses || []).map(({ status, count }) => {
+      const label = String(status || "Unknown").replace(/[_-]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
+      return { title: `${label} Assets`, value: count, icon: Archive, to: `/admin/assets?status=${encodeURIComponent(status || "unknown")}`, tone: "neutral" };
+    }),
     { title: tr("dashboard.adminStats.totalUsers"), value: organizationStats.users, icon: Users, to: "/admin/users", tone: "info" },
     { title: tr("dashboard.adminStats.colleges"), value: organizationStats.colleges, icon: Building2, to: "/admin/colleges", tone: "primary" },
     { title: tr("dashboard.adminStats.departments"), value: organizationStats.departments, icon: Building2, to: "/admin/departments", tone: "primary" },
@@ -320,59 +295,6 @@ function AdminDashboard() {
           </section>
         </div>
       </section>
-
-      <section className="admin-dashboard-section" aria-labelledby="admin-dashboard-maintenance">
-        <div className="admin-dashboard-section-heading">
-          <div><span className="admin-dashboard-eyebrow">{tr("dashboard.adminHome.workManagement")}</span><h2 id="admin-dashboard-maintenance">{tr("dashboard.adminHome.maintenanceOverview")}</h2></div>
-          <SafeLink className="admin-dashboard-text-link" to="/admin/maintenance">{tr("dashboard.adminHome.viewMaintenance")} <ArrowUpRight size={15} aria-hidden="true" /></SafeLink>
-        </div>
-        <div className="admin-dashboard-maintenance-grid">
-          {maintenanceOverview.map((row) => (
-            <SafeLink className="admin-dashboard-maintenance-card" to="/admin/maintenance" key={row.label}>
-              <span>{translateStatus(language, row.label)}</span>
-              {loading ? <span className="admin-dashboard-value-skeleton" /> : error ? <strong className="admin-dashboard-stat-error">{tr("dashboard.adminHome.unavailable")}</strong> : <strong>{numberFormat.format(row.value || 0)}</strong>}
-            </SafeLink>
-          ))}
-        </div>
-      </section>
-
-      <div className="admin-dashboard-lower-grid">
-        <section className="admin-dashboard-section" aria-labelledby="admin-dashboard-inventory-alerts">
-          <div className="admin-dashboard-section-heading">
-            <div><span className="admin-dashboard-eyebrow">{tr("dashboard.adminHome.inventory")}</span><h2 id="admin-dashboard-inventory-alerts">{tr("dashboard.adminHome.inventoryAlerts")}</h2></div>
-            <SafeLink className="admin-dashboard-text-link" to="/admin/inventory/quarantine">{tr("dashboard.adminHome.openInventory")} <ArrowUpRight size={15} aria-hidden="true" /></SafeLink>
-          </div>
-          <div className="admin-dashboard-alert-list">
-            {inventoryAlerts.map((alert) => (
-              <SafeLink className="admin-dashboard-alert-row" to="/admin/inventory/quarantine" key={alert.label}>
-                <span className="admin-dashboard-alert-icon"><ShieldAlert size={17} aria-hidden="true" /></span>
-                <span>{localizedInventoryAlert(alert.label)}</span>
-                {loading ? <span className="admin-dashboard-value-skeleton" /> : error ? <strong className="admin-dashboard-stat-error">{tr("dashboard.adminHome.unavailable")}</strong> : <strong>{numberFormat.format(alert.value || 0)}</strong>}
-                <ArrowUpRight size={14} aria-hidden="true" />
-              </SafeLink>
-            ))}
-          </div>
-        </section>
-
-        <section className="admin-dashboard-section" aria-labelledby="admin-dashboard-recent-activity">
-          <div className="admin-dashboard-section-heading">
-            <div><span className="admin-dashboard-eyebrow">{tr("dashboard.adminHome.auditTrail")}</span><h2 id="admin-dashboard-recent-activity">{tr("dashboard.adminHome.recentActivity")}</h2></div>
-            <SafeLink className="admin-dashboard-text-link" to="/admin/audit-logs">{tr("dashboard.adminHome.viewAuditLog")} <ArrowUpRight size={15} aria-hidden="true" /></SafeLink>
-          </div>
-          <div className="admin-dashboard-activity-list" aria-live="polite">
-            {loading && <div className="admin-dashboard-empty">{tr("dashboard.adminHome.loadingActivity")}</div>}
-            {error && <div className="admin-dashboard-inline-error" role="status">{tr("dashboard.adminHome.activityUnavailable")}</div>}
-            {!loading && !error && !(dashboard.recentActivity || []).length && <div className="admin-dashboard-empty">{tr("dashboard.adminHome.noActivity")}</div>}
-            {!loading && !error && (dashboard.recentActivity || []).map((item) => (
-              <article className="admin-dashboard-activity-row" key={item.id}>
-                <span className="admin-dashboard-activity-icon"><Activity size={16} aria-hidden="true" /></span>
-                <div><strong>{item.label || item.action || tr("dashboard.adminHome.systemEvent")}</strong><span>{item.entity || item.action || tr("dashboard.adminHome.systemActivity")}</span></div>
-                <time dateTime={item.createdAt}>{formatDate(item.createdAt, language)}</time>
-              </article>
-            ))}
-          </div>
-        </section>
-      </div>
 
       <details className="admin-dashboard-thresholds">
         <summary><Settings2 size={17} aria-hidden="true" /> {tr("dashboard.adminHome.thresholds")}</summary>

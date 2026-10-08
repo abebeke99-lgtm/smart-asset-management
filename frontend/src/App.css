@@ -425,7 +425,7 @@ body {
 }
 
 .public-layout.home-route {
-  background: #e8edf0;
+  background: #FFFFFF;
 }
 
 .public-layout.login-public-layout .public-main {
@@ -494,12 +494,12 @@ body {
 }
 
 .home-public-header {
-  --public-header-text: var(--color-header-text);
-  --public-header-muted: var(--color-header-text-muted);
-  --public-header-primary: var(--color-brand-gold);
-  --public-header-action: var(--color-brand-gold);
-  --public-header-border: var(--color-header-border);
-  background: var(--color-header-gradient) !important;
+  --public-header-text: #0F1F2E;
+  --public-header-muted: #304B65;
+  --public-header-primary: #315D82;
+  --public-header-action: #315D82;
+  --public-header-border: #D7E1EA;
+  background: #FFFFFF !important;
 }
 
 .public-site-header a {
@@ -766,6 +766,19 @@ body {
 .public-site-header .public-login-button:hover {
   border-color: var(--color-brand-gold-light) !important;
   background: var(--color-brand-gold-light) !important;
+}
+
+.public-site-header.home-public-header .public-login-button {
+  color: #FFFFFF !important;
+}
+
+.public-site-header.home-public-header .public-login-button:hover {
+  border-color: #274B69 !important;
+  background: #274B69 !important;
+}
+
+.public-site-header.home-public-header :focus-visible {
+  outline-color: #315D82;
 }
 
 .public-site-header .app-header-actions > button {

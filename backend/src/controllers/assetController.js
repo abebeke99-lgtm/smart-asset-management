@@ -19,7 +19,7 @@ const serializeAsset = (asset, assignment = null, laboratoryName = null) => {
     asset_tag: data.assetCode,
     serial_number: data.serialNumber,
     rfid_tag: data.rfidTag,
-    qrCode: data.digitalId,
+    qrCode: data.qrCode || data.digitalId,
     condition: data.condition,
     condition_status: data.condition,
     department_name: data.department,
@@ -33,7 +33,12 @@ const serializeAsset = (asset, assignment = null, laboratoryName = null) => {
     assigned_to_type: assignment ? assignedToType : null,
     assigned_to_id: assignment?.assignedToId || assignment?.assignedTo || null,
     assigned_date: assignment?.assignedDate || assignment?.createdAt || null,
-    laboratoryName,
+    campusName: data.CampusRecord?.campusName || null,
+    collegeName: data.College?.collegeName || null,
+    departmentName: data.DepartmentRecord?.name || data.department || null,
+    laboratoryName: laboratoryName || (String(data.RoomRecord?.roomType || '').toLowerCase().includes('lab') ? data.RoomRecord.roomName : null),
+    buildingName: data.BuildingRecord?.buildingName || null,
+    roomName: data.RoomRecord?.roomName || null,
   };
 };
 
@@ -169,11 +174,11 @@ const getAllAssets = async (req, res) => {
     const { count, rows } = await Asset.findAndCountAll({
       where,
       include: [
-        { model: Campus, as: 'CampusRecord', required: false },
-        { model: College, required: false },
-        { model: Department, as: 'DepartmentRecord', required: false },
-        { model: Building, as: 'BuildingRecord', required: false },
-        { model: Room, as: 'RoomRecord', required: false },
+        { model: Campus, as: 'CampusRecord', attributes: ['id', 'campusName'], required: false },
+        { model: College, attributes: ['id', 'collegeName'], required: false },
+        { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name'], required: false },
+        { model: Building, as: 'BuildingRecord', attributes: ['id', 'buildingName'], required: false },
+        { model: Room, as: 'RoomRecord', attributes: ['id', 'roomName', 'roomType', 'departmentId', 'buildingId'], required: false },
         { model: AssetDocument, where: { status: 'active' }, required: false },
       ],
       ...(includeDeleted ? { paranoid: false } : {}),

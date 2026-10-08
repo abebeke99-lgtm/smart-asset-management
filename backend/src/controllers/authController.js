@@ -11,6 +11,7 @@ const { getRequestContext, getClientIp } = require('../middlewares/requestContex
 const { getConfiguredRolePermissions } = require('../services/rolePermissionService');
 const { getSecuritySettings, validatePassword } = require('../services/passwordPolicyService');
 const { isAccountActive } = require('../utils/accountStatus');
+const { getDatabasePermissionKeys } = require('../middlewares/authorize');
 
 const LOGIN_ALIASES = {
   admin: ['admin'],
@@ -231,7 +232,9 @@ const login = async (req, res) => {
       forcePasswordChange: Boolean(user.forcePasswordChange),
     };
     const rolePermissions = await getConfiguredRolePermissions(user.role);
-    if (rolePermissions !== null) safeUser.permissions = rolePermissions;
+    if (rolePermissions !== null) safeUser.permissions = [
+      ...new Set([...rolePermissions, ...await getDatabasePermissionKeys(user)]),
+    ];
 
     await recordAuthEvent({ userId: user.id, action: 'LOGIN', result: 'Success', req });
 

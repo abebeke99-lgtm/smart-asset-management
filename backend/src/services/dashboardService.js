@@ -53,7 +53,38 @@ const countGroupedValues = (rows, values) => rows.reduce((total, row) => (
   values.includes(normalize(row.key)) ? total + numberValue(row.count) : total
 ), 0);
 
-const countWhereAny = (field, values) => ({ [field]: { [Op.in]: values } });
+const getAssetStatusStatistics = (rows) => {
+  const statistics = { total: 0, active: 0, underMaintenance: 0, damaged: 0, replaced: 0, expired: 0, retired: 0 };
+  const otherStatuses = new Map();
+  const knownStatusBuckets = new Map([
+    ['active', 'active'], ['available', 'active'], ['assigned', 'active'], ['in use', 'active'], ['functional', 'active'],
+    ['maintenance', 'underMaintenance'], ['under maintenance', 'underMaintenance'], ['in maintenance', 'underMaintenance'],
+    ['under repair', 'underMaintenance'], ['in repair', 'underMaintenance'], ['testing', 'underMaintenance'],
+    ['damaged', 'damaged'], ['lost', 'damaged'], ['missing', 'damaged'],
+    ['replaced', 'replaced'], ['expired', 'expired'],
+    ['retired', 'retired'], ['disposed', 'retired'], ['deleted', 'retired'],
+  ]);
+
+  for (const row of rows) {
+    const count = numberValue(row.count);
+    const normalizedStatus = normalize(row.status);
+    statistics.total += count;
+    const bucket = knownStatusBuckets.get(normalizedStatus);
+    if (bucket) {
+      statistics[bucket] += count;
+      continue;
+    }
+    const label = String(row.status || 'Unknown').trim() || 'Unknown';
+    const key = normalizedStatus || 'unknown';
+    const existing = otherStatuses.get(key);
+    otherStatuses.set(key, { status: label, count: (existing?.count || 0) + count });
+  }
+
+  return {
+    ...statistics,
+    otherStatuses: [...otherStatuses.values()].sort((left, right) => left.status.localeCompare(right.status)),
+  };
+};
 
 const getDashboardAnalytics = async () => {
   const thresholds = await readThresholds();
@@ -65,18 +96,13 @@ const getDashboardAnalytics = async () => {
   const escalationCutoff = new Date(now.getTime() - thresholds.escalationHours * 60 * 60 * 1000);
 
   const [
-    totalAssets,
-    activeAssets,
-    damagedAssets,
-    replacedAssets,
-    expiredAssets,
+    assetStatusRows,
     functionalAssets,
     totalUsers,
     totalColleges,
     totalDepartments,
     openServiceRequests,
     pendingApprovalCounts,
-    assetsUnderMaintenance,
     maintenanceStatusRows,
     overdueMaintenance,
     escalatedRequests,
@@ -86,11 +112,11 @@ const getDashboardAnalytics = async () => {
     assetCategoryRows,
     recentActivity,
   ] = await Promise.all([
-    Asset.count(),
-    Asset.count({ where: { status: { [Op.in]: ['active', 'available', 'assigned', 'in_use', 'functional'] } } }),
-    Asset.count({ where: { [Op.or]: [countWhereAny('condition', ['damaged']), countWhereAny('status', ['damaged'])] } }),
-    Asset.count({ where: { [Op.or]: [countWhereAny('condition', ['replaced']), countWhereAny('status', ['replaced'])] } }),
-    Asset.count({ where: { [Op.or]: [countWhereAny('condition', ['expired']), countWhereAny('status', ['expired']), { expiryDate: { [Op.lt]: today } }] } }),
+    Asset.findAll({
+      attributes: ['status', [fn('COUNT', col('id')), 'count']],
+      group: ['status'],
+      raw: true,
+    }),
     Asset.count({
       where: {
         condition: { [Op.in]: ['functional', 'Functional', 'good', 'Good', 'fair', 'Fair', 'poor', 'Poor'] },
@@ -106,7 +132,6 @@ const getDashboardAnalytics = async () => {
       Approval.count({ where: { status: 'pending' } }),
       Transfer.count({ where: { status: { [Op.in]: ['Requested', 'Pending'] } } }),
     ]),
-    Asset.count({ where: { status: { [Op.in]: ['maintenance', 'under maintenance', 'in_maintenance', 'under-maintenance'] } } }),
     Maintenance.findAll({
       attributes: [[fn('LOWER', col('status')), 'key'], [fn('COUNT', col('id')), 'count']],
       group: [fn('LOWER', col('status'))],
@@ -139,6 +164,7 @@ const getDashboardAnalytics = async () => {
     }),
   ]);
 
+  const assetStatusStatistics = getAssetStatusStatistics(assetStatusRows);
   const lowStockInventory = inventoryRows.filter((item) => {
     const quantity = numberValue(item.quantity);
     const available = numberValue(item.availableQuantity);
@@ -205,12 +231,7 @@ const getDashboardAnalytics = async () => {
     thresholds,
     statistics: {
       assets: {
-        total: totalAssets,
-        active: activeAssets,
-        damaged: damagedAssets,
-        replaced: replacedAssets,
-        expired: expiredAssets,
-        underMaintenance: assetsUnderMaintenance,
+        ...assetStatusStatistics,
       },
       organization: { users: totalUsers, colleges: totalColleges, departments: totalDepartments },
       workflow: { openServiceRequests, pendingApprovals },
@@ -219,9 +240,9 @@ const getDashboardAnalytics = async () => {
     },
     assetByCondition: [
       { label: 'Functional', value: functionalAssets },
-      { label: 'Damaged', value: damagedAssets },
-      { label: 'Replaced', value: replacedAssets },
-      { label: 'Expired', value: expiredAssets },
+      { label: 'Damaged', value: assetStatusStatistics.damaged },
+      { label: 'Replaced', value: assetStatusStatistics.replaced },
+      { label: 'Expired', value: assetStatusStatistics.expired },
     ],
     assetByCategory,
     maintenanceOverview: [
@@ -249,4 +270,4 @@ const getDashboardAnalytics = async () => {
   };
 };
 
-module.exports = { getDashboardAnalytics, defaultThresholds };
+module.exports = { getDashboardAnalytics, getAssetStatusStatistics, defaultThresholds };

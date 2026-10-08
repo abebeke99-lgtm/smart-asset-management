@@ -1,6 +1,9 @@
 const { sequelize } = require('../config/database');
 const User = require('./User');
 const Role = require('./Role');
+const Permission = require('./Permission');
+const RolePermission = require('./RolePermission');
+const UserRole = require('./UserRole');
 const UserActivityLog = require('./UserActivityLog');
 const PasswordRecovery = require('./PasswordRecovery');
 const College = require('./College');
@@ -87,6 +90,19 @@ const IncidentHistory = require('./IncidentHistory');
 const IncidentAttachment = require('./IncidentAttachment');
 const AssetHistory = require('./AssetHistory');
 const AssetRegistrationRequest = require('./AssetRegistrationRequest');
+
+Role.belongsToMany(Permission, { through: RolePermission, foreignKey: 'roleId', otherKey: 'permissionId' });
+Permission.belongsToMany(Role, { through: RolePermission, foreignKey: 'permissionId', otherKey: 'roleId' });
+Role.hasMany(RolePermission, { foreignKey: 'roleId' });
+RolePermission.belongsTo(Role, { foreignKey: 'roleId' });
+Permission.hasMany(RolePermission, { foreignKey: 'permissionId' });
+RolePermission.belongsTo(Permission, { foreignKey: 'permissionId' });
+User.belongsToMany(Role, { through: UserRole, foreignKey: 'userId', otherKey: 'roleId' });
+Role.belongsToMany(User, { through: UserRole, foreignKey: 'roleId', otherKey: 'userId' });
+User.hasMany(UserRole, { foreignKey: 'userId' });
+UserRole.belongsTo(User, { foreignKey: 'userId' });
+Role.hasMany(UserRole, { foreignKey: 'roleId' });
+UserRole.belongsTo(Role, { foreignKey: 'roleId' });
 
 Asset.hasMany(Assignment, { foreignKey: 'assetId' });
 Assignment.belongsTo(Asset, { foreignKey: 'assetId' });
@@ -504,6 +520,9 @@ module.exports = {
   sequelize,
   User,
   Role,
+  Permission,
+  RolePermission,
+  UserRole,
   UserActivityLog,
   PasswordRecovery,
   College,

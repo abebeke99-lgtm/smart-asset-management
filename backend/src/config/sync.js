@@ -202,6 +202,8 @@ async function syncDatabase() {
 
     // Create only missing tables; existing tables are left untouched by sync.
     await createMissingTables();
+    const { applyRolesPermissionsMigration } = require('../scripts/migrations/rolesPermissions');
+    await applyRolesPermissionsMigration();
     const queryInterface = sequelize.getQueryInterface();
     await ensureColumn('asset_returns', 'return_date', { type: require('sequelize').DataTypes.DATEONLY, allowNull: true });
     await ensureColumn('asset_returns', 'evidence_url', { type: require('sequelize').DataTypes.STRING(1000), allowNull: true });

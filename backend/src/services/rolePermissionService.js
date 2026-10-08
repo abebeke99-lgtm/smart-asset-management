@@ -19,7 +19,6 @@ const getRolePermissionMatrix = async () => {
 
 const getConfiguredRolePermissions = async (role) => {
   const normalizedRole = normalizeRoleForStorage(role);
-  if (normalizedRole === 'admin') return ['*'];
   const matrix = await getRolePermissionMatrix();
   const permissions = matrix[normalizedRole];
   return Array.isArray(permissions) ? [...new Set(permissions.map(String))] : [];

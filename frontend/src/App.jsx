@@ -52,6 +52,7 @@ import AssetDetails from './components/shared/AssetDetails';
 
 import AdminUserManagement from './components/admin/AdminUserManagement';
 import AdminSettings from './components/admin/AdminSettings';
+import AdminProfile from './components/admin/AdminProfile';
 import AdminNotifications from './components/admin/AdminNotifications';
 import AdminBackup from './components/admin/AdminBackup';
 import AdminRolesPermissions from './components/admin/AdminRolesPermissions';
@@ -2514,7 +2515,7 @@ const AdminHeader = ({ userName, roleLabel, unreadCount, onLogout, adminTheme, s
           <option value="system">System</option>
                 </select>
               </label>
-              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); navigate('/admin/settings'); }}>
+              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); navigate('/admin/profile'); }}>
                 <UserCircle size={16} /> Profile
               </button>
               <button type="button" role="menuitem" onClick={onLogout}>
@@ -2535,7 +2536,7 @@ const AdminHeader = ({ userName, roleLabel, unreadCount, onLogout, adminTheme, s
             );
 
 function AppContent() {
-  const { user, logout, loading: authLoading } = useAuth();
+  const { user, logout, loading: authLoading, hasPermission } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { language, setLanguage } = useLanguage();
@@ -3481,9 +3482,15 @@ function AppContent() {
     { label: 'OPERATIONS', items: departmentHeadItems.slice(13, 18) },
     { label: 'REPORTS & ANALYTICS', items: departmentHeadItems.slice(18) }
   ];
-  const navigationItems = sidebarRole === 'department_head'
-    ? departmentHeadItems
-    : [...sidebarItems, ...(isDepartmentDean ? departmentDeanItems : isDepartmentStaff ? departmentStaffItems : [])];
+  const navigationItems = [
+    ...(sidebarRole === 'department_head'
+      ? departmentHeadItems
+      : [...sidebarItems, ...(isDepartmentDean ? departmentDeanItems : isDepartmentStaff ? departmentStaffItems : [])]),
+    ...(hasPermission('roles_permissions.configure') && sidebarRole !== 'admin'
+      ? [{ path: '/admin/roles-permissions', label: 'Roles & Permissions', icon: ShieldCheck }]
+      : []),
+  ]
+    .filter((item) => item.path !== '/admin/roles-permissions' || hasPermission('roles_permissions.configure'));
   const currentActiveSidebar = [...navigationItems]
     .sort((left, right) => right.path.length - left.path.length)
     .find((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))?.path
@@ -3571,6 +3578,8 @@ function AppContent() {
             <Route path="settings" element={<Navigate to="/admin/settings" replace />} />
           </Route>
 
+          <Route path="/admin/roles-permissions" element={<ProtectedRoute allowedPermissions={['roles_permissions.configure']}><AdminRolesPermissions /></ProtectedRoute>} />
+
           {/* ADMIN ROUTES - canonical administrator module */}
           <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminLayout /></ProtectedRoute>}>
             <Route index element={<AdminDashboard />} />
@@ -3587,7 +3596,6 @@ function AppContent() {
             <Route path="inventory/quarantine" element={<AdminChemicalQuarantine />} />
 
             <Route path="users" element={<AdminUserManagement />} />
-            <Route path="roles-permissions" element={<ProtectedRoute allowedRoles={['admin']} allowedPermissions={['roles.view']}><AdminRolesPermissions /></ProtectedRoute>} />
             <Route path="audit-logs" element={<ProtectedRoute allowedRoles={['admin']} allowedPermissions={['audit.view']}><AdminAuditLogs /></ProtectedRoute>} />
             <Route path="colleges" element={<AdminCollegeManagement />} />
             <Route path="departments" element={<AdminDepartmentManagement />} />
@@ -3599,6 +3607,7 @@ function AppContent() {
             <Route path="analytics/system" element={<AdminAnalyticsCenter system />} />
 
             <Route path="settings" element={<AdminSettings />} />
+            <Route path="profile" element={<AdminProfile />} />
             <Route path="notifications" element={<AdminNotifications />} />
             <Route path="backup" element={<AdminBackup />} />
             <Route path="enam" element={<EnamIntegration />} />

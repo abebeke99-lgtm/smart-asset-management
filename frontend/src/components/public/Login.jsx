@@ -95,7 +95,7 @@ const Login = () => {
     try {
       const result = await login(username.trim(), password);
       if (!result?.success) {
-        setError(t.invalidCredentials);
+        setError(result?.error || t.invalidCredentials);
         return;
       }
       const roleRoutes = {

@@ -8,6 +8,7 @@ const { saveProfilePhoto, validateProfilePhoto, buildPublicFileUrl } = require('
 const { createAuditLog } = require('../services/auditLogService');
 const { getUserReferenceCounts } = require('../services/userReferenceService');
 const { getConfiguredRolePermissions } = require('../services/rolePermissionService');
+const { getDatabasePermissionKeys } = require('../middlewares/authorize');
 const { getSecuritySettings, validatePassword } = require('../services/passwordPolicyService');
 const { ROLE_NAMES, normalizeRoleForStorage } = require('../constants/rolePermissions');
 const { isValidUsername } = require('../utils/validators');
@@ -457,7 +458,12 @@ const getCurrentUserProfile = async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     const data = safeUser(user);
     const permissions = await getConfiguredRolePermissions(user.role);
-    if (permissions !== null) data.permissions = permissions;
+    if (permissions !== null) {
+      const databasePermissions = typeof user.toJSON === 'function'
+        ? await getDatabasePermissionKeys(user)
+        : [];
+      data.permissions = [...new Set([...permissions, ...databasePermissions])];
+    }
     return res.json({ success: true, data });
   } catch (error) {
     console.error('User profile request failed:', error);

@@ -121,8 +121,8 @@ const Home = () => {
 
     <style>{`
       .uam-home-page {
-        color: #fff;
-        background: #419fd9;
+        color: #0F1F2E;
+        background: #FFFFFF;
       }
 
       .uam-hero {
@@ -130,15 +130,15 @@ const Home = () => {
         isolation: isolate;
         overflow: hidden;
         min-height: min(760px, calc(100svh - 82px));
-        background: #419fd9;
-        color: #fff;
+        background: #FFFFFF;
+        color: #0F1F2E;
       }
 
       .uam-hero::after {
         position: absolute;
         inset: 0;
         z-index: -1;
-        background: linear-gradient(90deg, rgba(30, 111, 166, 0.88) 0%, rgba(50, 139, 194, 0.82) 52%, rgba(65, 159, 217, 0.72) 100%);
+        background: rgba(255, 255, 255, 0.08);
         content: '';
       }
 
@@ -146,7 +146,7 @@ const Home = () => {
         position: absolute;
         inset: 0;
         z-index: -2;
-        background: #419fd9;
+        background: #FFFFFF;
       }
 
       .uam-hero-image {
@@ -161,7 +161,7 @@ const Home = () => {
       }
 
       .uam-hero-image.is-active {
-        opacity: 1;
+        opacity: 0.14;
         transform: scale(1);
       }
 
@@ -187,7 +187,7 @@ const Home = () => {
       .uam-eyebrow {
         display: inline-block;
         margin-bottom: 18px;
-        color: #a8d4ff;
+        color: #315D82;
         font-size: 0.8rem;
         font-weight: 800;
         letter-spacing: 0.12em;
@@ -197,6 +197,7 @@ const Home = () => {
       .uam-hero-copy h1 {
         max-width: 720px;
         margin: 0;
+        color: #0F1F2E;
         font-size: clamp(3rem, 5vw, 4.5rem);
         line-height: 1.06;
         letter-spacing: 0;
@@ -207,7 +208,7 @@ const Home = () => {
       .uam-lead {
         max-width: 650px;
         margin: 22px 0 10px;
-        color: #f1f6fc;
+        color: #304B65;
         font-size: 1.12rem;
         line-height: 1.65;
         animation: uam-enter 550ms 50ms ease both;
@@ -216,7 +217,7 @@ const Home = () => {
       .uam-supporting-text {
         max-width: 660px;
         margin: 0 0 26px;
-        color: #c8d6e5;
+        color: #304B65;
         font-size: 0.98rem;
         line-height: 1.65;
         animation: uam-enter 600ms 90ms ease both;
@@ -237,7 +238,7 @@ const Home = () => {
         align-items: center;
         min-width: 0;
         gap: 9px;
-        color: #f1f6fc;
+        color: #304B65;
         font-size: 0.94rem;
         font-weight: 600;
         line-height: 1.4;
@@ -245,7 +246,7 @@ const Home = () => {
 
       .uam-highlight-list svg {
         flex: 0 0 auto;
-        color: #83c3ff;
+        color: #315D82;
       }
 
       .uam-cta-row {
@@ -272,40 +273,41 @@ const Home = () => {
 
       .uam-primary-button:focus-visible,
       .uam-secondary-button:focus-visible {
-        outline: 3px solid #a8d4ff;
+        outline: 3px solid #315D82;
         outline-offset: 4px;
       }
 
       .uam-primary-button {
-        color: #102640;
-        background: #fff;
-        box-shadow: 0 8px 22px rgba(3, 15, 29, 0.22);
+        color: #fff;
+        background: #315D82;
+        box-shadow: 0 6px 18px rgba(15, 31, 46, 0.12);
       }
 
       .uam-secondary-button {
-        border-color: rgba(219, 234, 254, 0.62);
-        color: #fff;
-        background: rgba(255,255,255,0.06);
+        border-color: #315D82;
+        color: #315D82;
+        background: #FFFFFF;
       }
 
       .uam-primary-button:hover {
         transform: translateY(-2px);
-        background: #e8f3ff;
-        box-shadow: 0 12px 28px rgba(3, 15, 29, 0.3);
+        background: #274B69;
+        box-shadow: 0 8px 22px rgba(15, 31, 46, 0.16);
       }
 
       .uam-secondary-button:hover {
         transform: translateY(-2px);
-        border-color: #fff;
-        background: rgba(255,255,255,0.13);
+        border-color: #274B69;
+        color: #274B69;
+        background: #F4F8FB;
       }
 
       .uam-hero-panel {
         padding: clamp(24px, 3vw, 34px);
-        border: 1px solid rgba(210, 229, 249, 0.24);
+        border: 1px solid #D7E1EA;
         border-radius: 12px;
-        background: rgba(11, 29, 52, 0.72);
-        box-shadow: 0 24px 58px rgba(2, 12, 24, 0.28);
+        background: #FFFFFF;
+        box-shadow: 0 16px 40px rgba(15, 31, 46, 0.08);
         backdrop-filter: blur(14px);
         animation: uam-panel-enter 550ms 120ms ease both;
         transition: transform 250ms ease, box-shadow 250ms ease;
@@ -313,7 +315,7 @@ const Home = () => {
 
       .uam-hero-panel:hover {
         transform: translateY(-3px);
-        box-shadow: 0 28px 64px rgba(2, 12, 24, 0.34);
+        box-shadow: 0 20px 48px rgba(15, 31, 46, 0.12);
       }
 
       .uam-panel-header {
@@ -321,7 +323,7 @@ const Home = () => {
         align-items: center;
         gap: 8px;
         margin-bottom: 24px;
-        color: #dbeafe;
+        color: #315D82;
         font-size: 0.82rem;
         font-weight: 800;
         letter-spacing: 0.08em;
@@ -334,13 +336,13 @@ const Home = () => {
 
       .uam-panel-card {
         padding: 19px 0;
-        border-top: 1px solid rgba(210, 229, 249, 0.19);
+        border-top: 1px solid #D7E1EA;
       }
 
       .uam-panel-label {
         display: block;
         margin-bottom: 7px;
-        color: #a9c9e8;
+        color: #315D82;
         font-size: 0.75rem;
         font-weight: 800;
         letter-spacing: 0.1em;
@@ -349,7 +351,7 @@ const Home = () => {
 
       .uam-panel-card strong {
         display: block;
-        color: #fff;
+        color: #304B65;
         font-size: 1.02rem;
         font-weight: 600;
         line-height: 1.55;
@@ -435,7 +437,7 @@ const Home = () => {
 
       @media (max-width: 640px) {
         .uam-hero { min-height: auto; }
-        .uam-hero::after { background: linear-gradient(90deg, rgba(30, 111, 166, 0.9), rgba(65, 159, 217, 0.82)); }
+        .uam-hero::after { background: rgba(255, 255, 255, 0.08); }
         .uam-hero-shell { width: min(100% - 32px, 560px); grid-template-columns: 1fr; gap: 36px; padding: 58px 0 64px; }
         .uam-hero-copy h1 { font-size: clamp(2.35rem, 10vw, 3rem); }
         .uam-lead { margin-top: 18px; font-size: 1.03rem; }

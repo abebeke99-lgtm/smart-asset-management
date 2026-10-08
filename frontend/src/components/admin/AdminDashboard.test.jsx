@@ -34,12 +34,13 @@ describe("normalizeDashboardThresholds", () => {
 
   describe("administrator dashboard identity", () => {
     beforeEach(() => {
+      localStorage.clear();
       apiClient.get.mockResolvedValue({
         data: {
           success: true,
           data: {
             statistics: {
-              assets: { total: 10, active: 7, damaged: 1, replaced: 1, expired: 1 },
+              assets: { total: 13, active: 7, damaged: 1, replaced: 1, expired: 1, retired: 1, otherStatuses: [{ status: "pending-disposal", count: 2 }] },
               organization: { users: 4, colleges: 2, departments: 3 },
               workflow: { openServiceRequests: 1, pendingApprovals: 2 },
               inventory: { lowStockItems: 1, expiringChemicals: 0 },
@@ -47,9 +48,6 @@ describe("normalizeDashboardThresholds", () => {
             },
             assetByCondition: [],
             assetByCategory: [],
-            maintenanceOverview: [],
-            inventoryAlerts: [],
-            recentActivity: [],
             thresholds: {},
           },
         },
@@ -61,7 +59,10 @@ describe("normalizeDashboardThresholds", () => {
 
       const activeAssets = await screen.findByRole("link", { name: "Active Assets: 7" });
       expect(activeAssets).toHaveClass("admin-dashboard-stat-card--success");
+      expect(activeAssets).toHaveAttribute("href", "/admin/assets");
       expect(screen.getByRole("link", { name: "Expired Assets: 1" })).toHaveClass("admin-dashboard-stat-card--danger");
+      expect(screen.getByRole("link", { name: "Retired Assets: 1" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Pending Disposal Assets: 2" })).toBeInTheDocument();
     });
 
     test("updates dashboard copy without repeating its API request when language changes", async () => {
@@ -78,6 +79,16 @@ describe("normalizeDashboardThresholds", () => {
 
       expect(await screen.findByRole("link", { name: "ንቁ ንብረቶች: 7" })).toBeInTheDocument();
       expect(apiClient.get).toHaveBeenCalledTimes(1);
+    });
+
+    test("omits maintenance overview, inventory alerts, and recent activity", async () => {
+      render(<UIProvider><AdminDashboard /></UIProvider>);
+
+      expect(await screen.findByRole("heading", { name: "Asset Overview" })).toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "Maintenance overview" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "Inventory alerts" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "Recent activity" })).not.toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Asset distribution" })).toBeInTheDocument();
     });
   });
 });

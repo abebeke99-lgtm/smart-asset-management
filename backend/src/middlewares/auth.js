@@ -1,7 +1,9 @@
 const passport = require('../config/passport');
+const { Role } = require('../models');
 const { DEFAULT_ROLE_PERMISSIONS, getConfiguredRolePermissions } = require('../services/rolePermissionService');
 const { normalizeRoleForStorage } = require('../constants/rolePermissions');
 const { isAccountActive } = require('../utils/accountStatus');
+const { getDatabasePermissionKeys } = require('./authorize');
 
 const ROLE_PERMISSIONS = DEFAULT_ROLE_PERMISSIONS;
 
@@ -14,6 +16,8 @@ const normalizePermissionValue = (permission) => String(permission || '')
   .replace(/[_-]+/g, '.')
   .replace(/\.+/g, '.')
   .replace(/^\.|\.$/g, '');
+const isHighRiskPermission = (permission) => ['delete', 'approve', 'transfer', 'configure']
+  .includes(normalizePermissionValue(permission).split('.').pop());
 
 const resolveUserPermissions = (user) => {
   if (!user) return [];
@@ -40,9 +44,22 @@ const requireAuth = (req, res, next) => {
     try {
       const normalizedRole = normalizeRoleValue(req.user.role);
       req.user.role = normalizedRole;
+      const primaryRole = typeof req.user.setDataValue === 'function'
+        ? await Role.findOne({ where: { name: normalizedRole } })
+        : null;
+      if (primaryRole && !primaryRole.active) {
+        return res.status(403).json({ success: false, message: 'This role is inactive. Contact an administrator.' });
+      }
       const configuredPermissions = await getConfiguredRolePermissions(normalizedRole);
       if (configuredPermissions !== null) req.user.rolePermissions = configuredPermissions;
       req.user.permissions = resolveUserPermissions(req.user);
+      const databasePermissions = typeof req.user.setDataValue === 'function'
+        ? await getDatabasePermissionKeys(req.user)
+        : [];
+      req.user.permissions = [...new Set([...req.user.permissions, ...databasePermissions])];
+      if (typeof req.user.setDataValue === 'function') {
+        req.user.setDataValue('permissions', req.user.permissions);
+      }
 
       if (!isAccountActive(req.user.active) || ['disabled', 'suspended', 'blocked'].includes(String(req.user.status || '').toLowerCase())) {
         return res.status(403).json({ success: false, message: 'This account is not active.' });
@@ -92,7 +109,10 @@ const requirePermission = (...permissions) => (req, res, next) => {
 
   const permissionSet = new Set(resolveUserPermissions(req.user).map(normalizePermissionValue));
   const requiredPermissions = permissions.map(normalizePermissionValue).filter(Boolean);
-  const missingPermission = requiredPermissions.find((permission) => !permissionSet.has(permission) && !permissionSet.has('*'));
+  const missingPermission = requiredPermissions.find((permission) => (
+    !permissionSet.has(permission)
+    && (isHighRiskPermission(permission) || !permissionSet.has('*'))
+  ));
 
   if (missingPermission) {
     return res.status(403).json({ success: false, message: 'You do not have permission to perform this action.' });
@@ -108,7 +128,9 @@ const requireAnyPermission = (...permissions) => (req, res, next) => {
 
   const permissionSet = new Set(resolveUserPermissions(req.user).map(normalizePermissionValue));
   const requiredPermissions = permissions.map(normalizePermissionValue).filter(Boolean);
-  if (!requiredPermissions.some((permission) => permissionSet.has(permission) || permissionSet.has('*'))) {
+  if (!requiredPermissions.some((permission) => (
+    permissionSet.has(permission) || (!isHighRiskPermission(permission) && permissionSet.has('*'))
+  ))) {
     return res.status(403).json({ success: false, message: 'You do not have permission to perform this action.' });
   }
 

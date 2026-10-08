@@ -197,7 +197,7 @@ describe('Administrator route wiring', () => {
 
   it('registers all documented paths in the sidebar and renders their owning page under admin RBAC', () => {
     expect(appSource).toContain('<Route path="/admin" element={<ProtectedRoute allowedRoles={[\'admin\']}><AdminLayout /></ProtectedRoute>}>');
-    expect(appSource).toContain('<Route path="roles-permissions" element={<ProtectedRoute allowedRoles={[\'admin\']} allowedPermissions={[\'roles.view\']}><AdminRolesPermissions /></ProtectedRoute>} />');
+    expect(appSource).toContain('<Route path="/admin/roles-permissions" element={<ProtectedRoute allowedPermissions={[\'roles_permissions.configure\']}><AdminRolesPermissions /></ProtectedRoute>} />');
     for (const [route, nestedPath, component] of documentedRoutes) {
       if (nestedPath) {
         if (nestedPath !== 'roles-permissions') {
