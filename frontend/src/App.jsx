@@ -281,10 +281,41 @@ export const getDashboardRoute = (role) => {
 const publicPaths = ['/home', '/about', '/services', '/contact', '/contac', '/register', '/forgot-password', '/reset-password'];
 
 const AccessDenied = () => (
-  <main role="alert" aria-labelledby="access-denied-title" style={{ padding: '48px 24px', textAlign: 'center' }}>
-    <h1 id="access-denied-title">Access denied</h1>
-    <p>You do not have permission to access this section.</p>
-    <Link to="/dashboard">Return to your dashboard</Link>
+  <main
+    role="alert"
+    aria-labelledby="access-denied-title"
+    style={{
+      minHeight: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '56px 24px',
+      background: '#edf3f8',
+      borderRadius: '18px',
+      boxShadow: 'inset 0 0 0 1px rgba(15, 31, 46, 0.04)',
+    }}
+  >
+    <div style={{ textAlign: 'center', maxWidth: '680px', width: '100%' }}>
+      <h1 id="access-denied-title" style={{ margin: '0 0 18px', fontSize: '3rem', lineHeight: 1.15, fontWeight: 700, color: '#111827' }}>
+        Access denied
+      </h1>
+      <p style={{ margin: '0 0 12px', fontSize: '1.2rem', lineHeight: 1.6, color: '#1f2937' }}>
+        You do not have permission to access this section.
+      </p>
+      <Link
+        to="/dashboard"
+        style={{
+          display: 'inline-block',
+          color: '#0f4c81',
+          textDecoration: 'underline',
+          textUnderlineOffset: '4px',
+          fontWeight: 600,
+          fontSize: '1.05rem',
+        }}
+      >
+        Return to your dashboard
+      </Link>
+    </div>
   </main>
 );
 
