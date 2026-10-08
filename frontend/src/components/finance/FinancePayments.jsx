@@ -33,8 +33,23 @@ const emptyForm = {
 
 const getValue = (...values) => values.find((value) => value !== undefined && value !== null && value !== "");
 
+const finiteNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const normalizeSummary = (summary = {}) => ({
+  total: finiteNumber(summary.total),
+  pending: finiteNumber(summary.pending),
+  approved: finiteNumber(summary.approved),
+  processing: finiteNumber(summary.processing),
+  processed: finiteNumber(summary.processed),
+  rejected: finiteNumber(summary.rejected),
+  totalAmount: finiteNumber(summary.totalAmount),
+});
+
 const formatMoney = (value, currency = "ETB") => {
-  const amount = Number(value || 0);
+  const amount = finiteNumber(value);
   return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
 };
 
@@ -61,7 +76,7 @@ const normalizePayment = (item) => ({
   invoiceNumber: getValue(item.invoiceNumber, item.invoice_number, item.invoice?.invoiceNumber, item.InvoiceRecord?.invoiceNumber, ""),
   supplierName: getValue(item.supplierName, item.supplier_name, item.supplier?.name, item.InvoiceRecord?.supplierName, ""),
   paymentDate: getValue(item.paymentDate, item.payment_date, item.date, item.createdAt, ""),
-  amount: Number(getValue(item.amount, item.paymentAmount, item.payment_amount, 0)),
+  amount: finiteNumber(getValue(item.amount, item.paymentAmount, item.payment_amount, 0)),
   currency: getValue(item.currency, "ETB"),
   paymentMethod: getValue(item.paymentMethod, item.payment_method, "BANK_TRANSFER"),
   referenceNumber: getValue(item.referenceNumber, item.reference_number, item.reference, ""),
@@ -85,7 +100,7 @@ export default function FinancePayments() {
   const [status, setStatus] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [summary, setSummary] = useState({ total: 0, pending: 0, approved: 0, processed: 0, rejected: 0, totalAmount: 0 });
+  const [summary, setSummary] = useState(() => normalizeSummary());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [pagination, setPagination] = useState({ total: 0, page: 1, pageSize: 10, totalPages: 1 });
@@ -115,7 +130,7 @@ export default function FinancePayments() {
       const payloadRows = Array.isArray(response?.data?.data) ? response.data.data : [];
       const rows = payloadRows.map(normalizePayment);
       setPayments(rows);
-      setSummary(response?.data?.summary || { total: 0, pending: 0, approved: 0, processed: 0, rejected: 0, totalAmount: 0 });
+      setSummary(normalizeSummary(response?.data?.summary));
       const total = Number(response?.data?.pagination?.total ?? payloadRows.length ?? 0);
       setPagination({
         total: Number.isFinite(total) ? total : rows.length,

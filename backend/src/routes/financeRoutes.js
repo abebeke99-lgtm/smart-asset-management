@@ -26,6 +26,10 @@ const { listPurchaseHistory, getPurchaseHistory } = require('../controllers/fina
 const {
   listFinanceTransactions,
   getFinanceTransaction,
+  createFinanceTransaction,
+  updateFinanceTransaction,
+  postFinanceTransaction,
+  voidFinanceTransaction,
 } = require('../controllers/financeTransactionController');
 const { listCapitalization, createCapitalization, getCapitalization } = require('../controllers/financeCapitalizationController');
 const { listDisposalFinancialRecords, listDisposalCandidates, createDisposalFinancialRecord, updateDisposalFinancialRecord } = require('../controllers/financeDisposalController');
@@ -68,6 +72,10 @@ router.get('/purchase-history', ...financeAccess, listPurchaseHistory);
 router.get('/purchase-history/:id', ...financeAccess, getPurchaseHistory);
 router.get('/transactions', ...financeAccess, listFinanceTransactions);
 router.get('/transactions/:id', ...financeAccess, getFinanceTransaction);
+router.post('/transactions', ...financeAccess, createFinanceTransaction);
+router.put('/transactions/:id', ...financeAccess, updateFinanceTransaction);
+router.post('/transactions/:id/post', ...financeAccess, postFinanceTransaction);
+router.post('/transactions/:id/void', ...financeAccess, voidFinanceTransaction);
 router.post('/purchase-orders', ...financeAccess, createPurchaseOrder);
 router.put('/purchase-orders/:id', ...financeAccess, updatePurchaseOrder);
 router.patch('/purchase-orders/:id/approve', ...financeAccess, approvePurchaseOrder);

@@ -1,5 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const rateLimitKeyGenerator = require('../utils/rateLimitKeyGenerator');
 const {
   login,
   register,
@@ -20,6 +21,7 @@ const router = express.Router();
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 30,
+  keyGenerator: rateLimitKeyGenerator,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { success: false, message: 'Too many login attempts. Please try again later.' },
@@ -28,6 +30,7 @@ const loginLimiter = rateLimit({
 const forgotPasswordLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 5,
+  keyGenerator: rateLimitKeyGenerator,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { success: false, message: 'Too many password reset requests. Please try again later.' },
@@ -36,6 +39,7 @@ const forgotPasswordLimiter = rateLimit({
 const otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 8,
+  keyGenerator: rateLimitKeyGenerator,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { success: false, message: 'Too many verification attempts. Please try again later.' },
@@ -44,6 +48,7 @@ const otpLimiter = rateLimit({
 const resetLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
+  keyGenerator: rateLimitKeyGenerator,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { success: false, message: 'Too many password reset attempts. Please try again later.' },

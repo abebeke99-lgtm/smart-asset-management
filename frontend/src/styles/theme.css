@@ -27,9 +27,9 @@
   --color-brand-card: #FFFFFF;
 
   /* ---------- Header ---------- */
-  --color-header: #0066CC;
-  --color-header-gradient: linear-gradient(110deg, #003B7A 0%, #0066CC 100%);
-  --color-header-hover: #003B7A;
+  --color-header: #419FD9;
+  --color-header-gradient: linear-gradient(110deg, #419FD9 0%, #419FD9 100%);
+  --color-header-hover: #2582BC;
   --color-header-border: rgba(255, 255, 255, 0.2);
   --color-header-text: #FFFFFF;
   --color-header-text-strong: #FFFFFF;

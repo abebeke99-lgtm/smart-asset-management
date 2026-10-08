@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { translateMessage } from '../i18n/messages';
 
 const UiContext = createContext();
@@ -9,19 +9,21 @@ export const useLanguage = () => {
   if (!context) {
     throw new Error('useLanguage must be used within UiProvider');
   }
-  return { 
-    language: context.language, 
-    setLanguage: context.setLanguage, 
-    theme: context.theme 
+  return {
+    language: context.language,
+    setLanguage: context.setLanguage,
+    t: context.t,
+    theme: context.theme
   };
 };
 
 export const useTranslation = () => {
   const context = useContext(UiContext);
-  const language = normalizeLanguage(context?.language);
   return {
-    language,
-    t: (key, fallback) => translateMessage(language, key, fallback)
+    language: normalizeLanguage(context?.language),
+    t: context?.t || ((key, fallback, values) => (
+      translateMessage(normalizeLanguage(context?.language), key, fallback, values)
+    ))
   };
 };
 
@@ -45,6 +47,9 @@ export const UiProvider = ({ children }) => {
       typeof nextLanguage === 'function' ? nextLanguage(currentLanguage) : nextLanguage
     ));
   };
+  const t = useCallback((key, fallback, values) => (
+    translateMessage(language, key, fallback, values)
+  ), [language]);
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('theme') || 'light';
   });
@@ -64,6 +69,7 @@ export const UiProvider = ({ children }) => {
   const value = {
     language,
     setLanguage: setSupportedLanguage,
+    t,
     theme,
     setTheme
   };

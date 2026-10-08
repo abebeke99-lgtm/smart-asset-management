@@ -3,8 +3,6 @@ import {
   Search,
   Plus,
   Eye,
-  Pencil,
-  Trash2,
   Download,
   RefreshCw,
   X,
@@ -32,8 +30,10 @@ const PAGE_SIZE = 10;
 
 const STATUS_OPTIONS = [
   "Open",
+  "Assigned",
   "In Progress",
-  "Pending",
+  "Pending User",
+  "Pending Parts",
   "Resolved",
   "Closed",
   "Cancelled",
@@ -53,24 +53,11 @@ const CATEGORY_OPTIONS = [
 ];
 
 const initialForm = {
- ticketNumber: "",
-  requesterName: "",
-  requesterId: "",
-  department: "",
-  contact: "",
-  category: "Hardware",
-  priority: "Medium",
-  subject: "",
-  description: "",
-  assignedTo: "",
-  status: "Open",
-  assetTag: "",
-  location: "",
-  openedDate: "",
-  dueDate: "",
-  resolvedDate: "",
-  resolution: "",
-  notes: "",
+ category: "Hardware",
+ priority: "Medium",
+ subject: "",
+ description: "",
+ dueDate: "",
 };
 
 async function request(url, options = {}) {
@@ -127,6 +114,7 @@ function normalizeTicket(item, index) {
     ticketNumber:
       item.ticketNumber ??
       item.ticket_number ??
+      item.requestCode ??
       item.ticketNo ??
       item.referenceNumber ??
       `TKT-${String(index + 1).padStart(5, "0")}`,
@@ -134,6 +122,11 @@ function normalizeTicket(item, index) {
     requesterName:
       item.requesterName ??
       item.requester_name ??
+      (typeof item.requester === "string"
+        ? item.requester
+        : item.requester?.name) ??
+      item.Reporter?.fullName ??
+      item.Reporter?.username ??
       item.requester?.name ??
       item.user?.name ??
       "",
@@ -148,12 +141,15 @@ function normalizeTicket(item, index) {
       item.department ??
       item.departmentName ??
       item.department_name ??
+      item.DepartmentRecord?.name ??
       "",
 
     contact:
       item.contact ??
       item.phone ??
       item.email ??
+      item.Reporter?.phone ??
+      item.Reporter?.email ??
       "",
 
     category:
@@ -162,7 +158,9 @@ function normalizeTicket(item, index) {
       item.issue_category ??
       "Other",
 
-    priority: item.priority ?? "Medium",
+    priority: String(item.priority ?? "Medium")
+      .toLowerCase()
+      .replace(/^\w/, (letter) => letter.toUpperCase()),
 
     subject:
       item.subject ??
@@ -179,21 +177,28 @@ function normalizeTicket(item, index) {
     assignedTo:
       item.assignedTo ??
       item.assigned_to ??
+      item.assigned_technician ??
+      item.Assignee?.fullName ??
+      item.Assignee?.username ??
       item.technician?.name ??
       item.technicianName ??
       "",
 
-    status: item.status ?? "Open",
+    status: String(item.status ?? "Open")
+      .replace(/-/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase()),
 
     assetTag:
       item.assetTag ??
       item.asset_tag ??
+      item.Asset?.assetCode ??
       item.asset?.assetTag ??
       "",
 
     location:
       item.location ??
       item.locationName ??
+      item.supportLocation ??
       "",
 
     openedDate:
@@ -211,11 +216,13 @@ function normalizeTicket(item, index) {
     resolvedDate:
       item.resolvedDate ??
       item.resolved_date ??
+      item.completedAt ??
       "",
 
     resolution:
       item.resolution ??
       item.resolutionDetails ??
+      item.resolutionSummary ??
       "",
 
     notes: item.notes ?? "",
@@ -278,10 +285,13 @@ function getPriorityClasses(priority) {
 function getStatusClasses(status) {
   switch (String(status).toLowerCase()) {
     case "open":
+    case "assigned":
       return "border-blue-200 bg-blue-50 text-blue-700";
     case "in progress":
       return "border-indigo-200 bg-indigo-50 text-indigo-700";
     case "pending":
+    case "pending user":
+    case "pending parts":
       return "border-amber-200 bg-amber-50 text-amber-700";
     case "resolved":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -371,12 +381,13 @@ function FormField({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+      <label htmlFor={`${name}-field`} className="mb-1.5 block text-sm font-medium text-slate-700">
         {label}
         {required && <span className="ml-1 text-red-500">*</span>}
       </label>
 
       <input
+        id={`${name}-field`}
         type={type}
         name={name}
         value={value}
@@ -398,11 +409,12 @@ function SelectField({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium text-slate-700">
+      <label htmlFor={`${name}-field`} className="mb-1.5 block text-sm font-medium text-slate-700">
         {label}
       </label>
 
       <select
+        id={`${name}-field`}
         name={name}
         value={value}
         onChange={onChange}
@@ -449,7 +461,6 @@ export default function TechnicalSupport() {
   const [showForm, setShowForm] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
-  const [editingTicket, setEditingTicket] = useState(null);
   const [selectedTicket, setSelectedTicket] = useState(null);
 
   const [form, setForm] = useState(initialForm);
@@ -459,22 +470,7 @@ export default function TechnicalSupport() {
     setError("");
 
     try {
-      let data;
-
-      try {
-        data = await request("/technical-support");
-      } catch {
-        try {
-          data = await request("/technicalSupport");
-        } catch {
-          try {
-            data = await request("/support-tickets");
-          } catch {
-            data = await request("/supportTickets");
-          }
-        }
-      }
-
+      const data = await request("/technical-support/tickets?limit=100");
       setTickets(getArray(data).map(normalizeTicket));
     } catch (err) {
       setError(
@@ -499,11 +495,12 @@ export default function TechnicalSupport() {
     const open = tickets.filter(
       (ticket) =>
         ticket.status === "Open" ||
+        ticket.status === "Assigned" ||
         ticket.status === "In Progress"
     ).length;
 
-    const pending = tickets.filter(
-      (ticket) => ticket.status === "Pending"
+    const pending = tickets.filter((ticket) =>
+      ticket.status.startsWith("Pending")
     ).length;
 
     const resolved = tickets.filter(
@@ -597,42 +594,7 @@ export default function TechnicalSupport() {
   }, [page, totalPages]);
 
   const openCreate = () => {
-    setEditingTicket(null);
-
-    setForm({
-      ...initialForm,
-      ticketNumber: `TKT-${Date.now()
-        .toString()
-        .slice(-8)}`,
-      openedDate: new Date().toISOString().slice(0, 10),
-    });
-
-    setShowForm(true);
-  };
-
-  const openEdit = (ticket) => {
-    setEditingTicket(ticket);
-
-    setForm({
-      ticketNumber: ticket.ticketNumber || "",
-      requesterName: ticket.requesterName || "",
-      requesterId: ticket.requesterId || "",
-      department: ticket.department || "",
-      contact: ticket.contact || "",
-      category: ticket.category || "Hardware",
-      priority: ticket.priority || "Medium",
-      subject: ticket.subject || "",
-      description: ticket.description || "",
-      assignedTo: ticket.assignedTo || "",
-      status: ticket.status || "Open",
-      assetTag: ticket.assetTag || "",
-      location: ticket.location || "",
-      openedDate: ticket.openedDate?.slice?.(0, 10) || "",
-      dueDate: ticket.dueDate?.slice?.(0, 10) || "",
-      resolvedDate: ticket.resolvedDate?.slice?.(0, 10) || "",
-      resolution: ticket.resolution || "",
-      notes: ticket.notes || "",
-    });
+    setForm(initialForm);
 
     setShowForm(true);
   };
@@ -647,7 +609,6 @@ export default function TechnicalSupport() {
 
     setShowForm(false);
     setShowDetails(false);
-    setEditingTicket(null);
     setSelectedTicket(null);
   };
 
@@ -663,120 +624,33 @@ export default function TechnicalSupport() {
   const saveTicket = async (event) => {
     event.preventDefault();
 
-    if (!form.requesterName.trim()) {
-      setError("Requester name is required.");
-      return;
-    }
-
-    if (!form.subject.trim()) {
-      setError("Issue subject is required.");
+    if (!form.subject.trim() || !form.description.trim()) {
+      setError("Issue subject and description are required.");
       return;
     }
 
     setSaving(true);
     setError("");
 
-    const payload = {
-      ticketNumber: form.ticketNumber,
-      requesterName: form.requesterName,
-      requesterId: form.requesterId,
-      department: form.department,
-      contact: form.contact,
-      category: form.category,
-      priority: form.priority,
-      subject: form.subject,
-      description: form.description,
-      assignedTo: form.assignedTo,
-      status: form.status,
-      assetTag: form.assetTag,
-      location: form.location,
-      openedDate: form.openedDate,
-      dueDate: form.dueDate,
-      resolvedDate: form.resolvedDate,
-      resolution: form.resolution,
-      notes: form.notes,
-    };
-
     try {
-      if (editingTicket) {
-        let response;
-
-        try {
-          response = await request(
-            `/technical-support/${editingTicket.id}`,
-            {
-              method: "PUT",
-              body: JSON.stringify(payload),
-            }
-          );
-        } catch {
-          try {
-            response = await request(
-              `/technicalSupport/${editingTicket.id}`,
-              {
-                method: "PUT",
-                body: JSON.stringify(payload),
-              }
-            );
-          } catch {
-            response = await request(
-              `/support-tickets/${editingTicket.id}`,
-              {
-                method: "PUT",
-                body: JSON.stringify(payload),
-              }
-            );
-          }
-        }
-
-        const updated = normalizeTicket(
-          response?.data || response || payload,
-          0
-        );
-
-        setTickets((current) =>
-          current.map((item) =>
-            item.id === editingTicket.id
-              ? {
-                  ...item,
-                  ...updated,
-                  id: editingTicket.id,
-                }
-              : item
-          )
-        );
-      } else {
-        let response;
-
-        try {
-          response = await request("/technical-support", {
-            method: "POST",
-            body: JSON.stringify(payload),
-          });
-        } catch {
-          try {
-            response = await request("/technicalSupport", {
-              method: "POST",
-              body: JSON.stringify(payload),
-            });
-          } catch {
-            response = await request("/support-tickets", {
-              method: "POST",
-              body: JSON.stringify(payload),
-            });
-          }
-        }
-
-        const created = normalizeTicket(
-          response?.data || response || payload,
-          tickets.length
-        );
-
-        setTickets((current) => [created, ...current]);
-      }
+      const category =
+        form.category === "Account Access"
+          ? "account / access"
+          : form.category.toLowerCase();
+      const response = await request("/technical-support/tickets", {
+        method: "POST",
+        body: JSON.stringify({
+          subject: form.subject.trim(),
+          description: form.description.trim(),
+          category,
+          priority: form.priority.toLowerCase(),
+          dueDate: form.dueDate || null,
+        }),
+      });
+      const created = normalizeTicket(response?.data || response, tickets.length);
+      setTickets((current) => [created, ...current]);
 
       setForm(initialForm);
-      setEditingTicket(null);
       setShowForm(false);
     } catch (err) {
       setError(
@@ -784,47 +658,6 @@ export default function TechnicalSupport() {
       );
     } finally {
       setSaving(false);
-    }
-  };
-
-  const deleteTicket = async (ticket) => {
-    const confirmed = window.confirm(
-      `Delete support ticket ${ticket.ticketNumber}?`
-    );
-
-    if (!confirmed) return;
-
-    setError("");
-
-    try {
-      try {
-        await request(`/technical-support/${ticket.id}`, {
-          method: "DELETE",
-        });
-      } catch {
-        try {
-          await request(`/technicalSupport/${ticket.id}`, {
-            method: "DELETE",
-          });
-        } catch {
-          await request(`/support-tickets/${ticket.id}`, {
-            method: "DELETE",
-          });
-        }
-      }
-
-      setTickets((current) =>
-        current.filter((item) => item.id !== ticket.id)
-      );
-
-      if (selectedTicket?.id === ticket.id) {
-        setSelectedTicket(null);
-        setShowDetails(false);
-      }
-    } catch (err) {
-      setError(
-        err.message || "Unable to delete support ticket."
-      );
     }
   };
 
@@ -1321,28 +1154,6 @@ export default function TechnicalSupport() {
                           >
                             <Eye size={16} />
                           </button>
-
-                          <button
-                            type="button"
-                            title="Edit ticket"
-                            onClick={() =>
-                              openEdit(ticket)
-                            }
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                          >
-                            <Pencil size={16} />
-                          </button>
-
-                          <button
-                            type="button"
-                            title="Delete ticket"
-                            onClick={() =>
-                              deleteTicket(ticket)
-                            }
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700"
-                          >
-                            <Trash2 size={16} />
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1408,70 +1219,20 @@ export default function TechnicalSupport() {
         </div>
       </div>
 
-      {/* Create / Edit Modal */}
+      {/* Create Modal */}
       {showForm && (
         <Modal
-          title={
-            editingTicket
-              ? "Edit Support Ticket"
-              : "Create Support Ticket"
-          }
-          icon={editingTicket ? Pencil : Plus}
+          title="Create Support Ticket"
+          icon={Plus}
           onClose={closeModals}
           large
         >
           <form onSubmit={saveTicket}>
             <div className="max-h-[70vh] overflow-y-auto px-6 py-5">
+              <p className="mb-5 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                This request will be submitted under your signed-in account.
+              </p>
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <FormField
-                  label="Ticket Number"
-                  name="ticketNumber"
-                  value={form.ticketNumber}
-                  onChange={handleChange}
-                  placeholder="TKT-00001"
-                />
-
-                <FormField
-                  label="Requester Name"
-                  name="requesterName"
-                  value={form.requesterName}
-                  onChange={handleChange}
-                  placeholder="Full name"
-                  required
-                />
-
-                <FormField
-                  label="Requester ID"
-                  name="requesterId"
-                  value={form.requesterId}
-                  onChange={handleChange}
-                  placeholder="Employee / Student ID"
-                />
-
-                <FormField
-                  label="Contact"
-                  name="contact"
-                  value={form.contact}
-                  onChange={handleChange}
-                  placeholder="Phone or email"
-                />
-
-                <FormField
-                  label="Department"
-                  name="department"
-                  value={form.department}
-                  onChange={handleChange}
-                  placeholder="Department / College"
-                />
-
-                <FormField
-                  label="Location"
-                  name="location"
-                  value={form.location}
-                  onChange={handleChange}
-                  placeholder="Building / Office"
-                />
-
                 <SelectField
                   label="Category"
                   name="category"
@@ -1488,51 +1249,11 @@ export default function TechnicalSupport() {
                   options={PRIORITY_OPTIONS}
                 />
 
-                <SelectField
-                  label="Status"
-                  name="status"
-                  value={form.status}
-                  onChange={handleChange}
-                  options={STATUS_OPTIONS}
-                />
-
-                <FormField
-                  label="Assigned Technician"
-                  name="assignedTo"
-                  value={form.assignedTo}
-                  onChange={handleChange}
-                  placeholder="Technician name"
-                />
-
-                <FormField
-                  label="Asset Tag"
-                  name="assetTag"
-                  value={form.assetTag}
-                  onChange={handleChange}
-                  placeholder="ICT-00001"
-                />
-
-                <FormField
-                  label="Opened Date"
-                  name="openedDate"
-                  type="date"
-                  value={form.openedDate}
-                  onChange={handleChange}
-                />
-
                 <FormField
                   label="Due Date"
                   name="dueDate"
                   type="date"
                   value={form.dueDate}
-                  onChange={handleChange}
-                />
-
-                <FormField
-                  label="Resolved Date"
-                  name="resolvedDate"
-                  type="date"
-                  value={form.resolvedDate}
                   onChange={handleChange}
                 />
 
@@ -1557,40 +1278,12 @@ export default function TechnicalSupport() {
                     value={form.description}
                     onChange={handleChange}
                     rows={4}
+                    required
                     placeholder="Describe the technical problem, symptoms, and relevant details..."
                     className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
                 </div>
 
-                <div className="md:col-span-2">
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Resolution
-                  </label>
-
-                  <textarea
-                    name="resolution"
-                    value={form.resolution}
-                    onChange={handleChange}
-                    rows={3}
-                    placeholder="Describe the solution or action taken..."
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Internal Notes
-                  </label>
-
-                  <textarea
-                    name="notes"
-                    value={form.notes}
-                    onChange={handleChange}
-                    rows={3}
-                    placeholder="Internal support notes..."
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
               </div>
             </div>
 
@@ -1616,9 +1309,7 @@ export default function TechnicalSupport() {
                   />
                 )}
 
-                {editingTicket
-                  ? "Save Changes"
-                  : "Create Ticket"}
+                Create Ticket
               </button>
             </div>
           </form>
@@ -1827,18 +1518,6 @@ export default function TechnicalSupport() {
             </div>
 
             <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowDetails(false);
-                  openEdit(selectedTicket);
-                }}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                <Pencil size={16} />
-                Edit Ticket
-              </button>
-
               <button
                 type="button"
                 onClick={closeModals}

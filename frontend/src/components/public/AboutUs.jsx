@@ -159,7 +159,7 @@ const AboutUs = () => {
           display: flex;
           align-items: center;
           min-height: 260px;
-          background-image: linear-gradient(90deg, rgba(7, 24, 45, 0.82), rgba(7, 24, 45, 0.52)), url('/images/university/mekdela-amba-campus.svg');
+          background-image: linear-gradient(90deg, rgba(30, 111, 166, 0.88), rgba(65, 159, 217, 0.72)), url('/images/university/mekdela-amba-campus.svg');
           background-size: cover;
           background-position: center;
         }
@@ -167,7 +167,7 @@ const AboutUs = () => {
         .about-hero-overlay {
           position: absolute;
           inset: 0;
-          background: rgba(7, 24, 45, 0.18);
+          background: rgba(65, 159, 217, 0.12);
         }
 
         .about-hero-inner {

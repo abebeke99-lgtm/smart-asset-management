@@ -45,6 +45,17 @@ test('finance report routes expose asset value, financial, budget, and depreciat
   assert.match(routeSource, /router\.get\(['"]\/asset-value-reports\/filters['"]/i);
 });
 
+test('budget report selects the mapped college column and returns college names for the frontend', () => {
+  const controllerSource = fs.readFileSync(path.resolve(__dirname, '../src/controllers/financeController.js'), 'utf8');
+  const budgetHandler = controllerSource.slice(controllerSource.indexOf('const listBudgetReports ='), controllerSource.indexOf('const listDepreciation ='));
+
+  assert.match(budgetHandler, /as: 'CollegeRecord', attributes: \['id', 'collegeName'\]/);
+  assert.match(budgetHandler, /name: value\.CollegeRecord\.collegeName/);
+  assert.match(budgetHandler, /College\.findAll\(\{ attributes: \['id', 'collegeName'\]/);
+  assert.match(budgetHandler, /colleges: colleges\.map\(\(college\) => \(\{ id: college\.id, name: college\.collegeName \}\)\)/);
+  assert.doesNotMatch(budgetHandler, /\['collegeName', 'name'\]/);
+});
+
 test('Finance financial reports route uses the backend-backed report screen', () => {
   assert.match(appSource, /const FinanceFinancialReports = lazy\(\(\) => import\('\.\/components\/finance\/FinanceFinancialReports'\)\)/);
   assert.match(appSource, /<Route path="financial-reports" element={<FinanceFinancialReports \/>} \/>/);
@@ -60,25 +71,31 @@ test('financial report summaries aggregate only records for the selected report 
   assert.match(reportsHandler, /const summary = buildFinanceReportSummary\(\{ \.\.\.summarySources, accumulatedDepreciation:/);
 });
 
-test('financial reports do not classify inventory movement quantities as financial transactions', () => {
+test('financial transaction reports read persisted finance transactions, not inventory movements', () => {
   const controllerSource = fs.readFileSync(path.resolve(__dirname, '../src/controllers/financeController.js'), 'utf8');
   const reportsHandler = controllerSource.slice(controllerSource.indexOf('const listFinanceReports ='), controllerSource.indexOf('const generateFinanceReport ='));
   const generateHandler = controllerSource.slice(controllerSource.indexOf('const generateFinanceReport ='), controllerSource.indexOf('const listBudgetReports ='));
 
-  assert.match(reportsHandler, /filters\.reportType === 'transactions'[\s\S]*?res\.status\(501\)/);
+  assert.match(reportsHandler, /filters\.reportType === 'transactions'[\s\S]*?FinanceTransaction\.findAll/);
   assert.doesNotMatch(reportsHandler, /InventoryTransaction|transactionRows/);
   assert.doesNotMatch(controllerSource, /transactions: transactions\.reduce/);
-  assert.match(generateHandler, /filters\.reportType === 'transactions'[\s\S]*?res\.status\(501\)/);
+  assert.match(generateHandler, /filters\.reportType === 'transactions'[\s\S]*?FinanceTransaction\.count/);
 });
 
-test('finance transactions do not synthesize ledger rows when no persisted ledger model exists', () => {
+test('finance transactions use authenticated persistent endpoints with a no-hard-delete lifecycle', () => {
   const transactionController = require('../src/controllers/financeTransactionController');
   const routeSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/financeRoutes.js'), 'utf8');
   const appSource = fs.readFileSync(path.resolve(__dirname, '../../frontend/src/components/finance/FinanceTransactions.jsx'), 'utf8');
 
   assert.match(routeSource, /router\.get\('\/transactions', \.\.\.financeAccess, listFinanceTransactions\)/);
-  assert.doesNotMatch(routeSource, /router\.(post|put|patch|delete)\('\/transactions/);
-  assert.doesNotMatch(appSource, /openEdit\(\s*selectedTransaction\s*\)/);
+  assert.match(routeSource, /router\.post\('\/transactions', \.\.\.financeAccess, createFinanceTransaction\)/);
+  assert.match(routeSource, /router\.put\('\/transactions\/:id', \.\.\.financeAccess, updateFinanceTransaction\)/);
+  assert.match(routeSource, /router\.post\('\/transactions\/:id\/post', \.\.\.financeAccess, postFinanceTransaction\)/);
+  assert.match(routeSource, /router\.post\('\/transactions\/:id\/void', \.\.\.financeAccess, voidFinanceTransaction\)/);
+  assert.doesNotMatch(routeSource, /router\.delete\('\/transactions/);
+  assert.match(appSource, /api\.post\("\/finance\/transactions"/);
+  assert.match(appSource, /api\.put\(`\/finance\/transactions\//);
+  assert.match(appSource, /\/void`/);
   assert.ok(transactionController.listFinanceTransactions);
 });
 

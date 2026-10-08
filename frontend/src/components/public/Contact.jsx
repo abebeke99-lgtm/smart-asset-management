@@ -266,12 +266,12 @@ const Contact = () => {
 
         .contact-hero {
           padding: clamp(52px, 6vw, 82px) 0 28px;
-          background: linear-gradient(135deg, rgba(27, 54, 93, 0.08), rgba(42, 77, 122, 0.04));
-          border-bottom: 1px solid var(--contact-border);
+          background: #419FD9;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.28);
         }
 
         .contact-page-dark .contact-hero {
-          background: linear-gradient(135deg, rgba(11, 25, 42, 0.98), rgba(24, 50, 76, 0.96));
+          background: #419FD9;
         }
 
         .contact-hero-inner {
@@ -290,6 +290,12 @@ const Contact = () => {
           font-weight: 800;
           letter-spacing: 0.12em;
           text-transform: uppercase;
+        }
+
+        .contact-hero .contact-eyebrow,
+        .contact-hero .contact-university,
+        .contact-hero .contact-system {
+          color: #ffffff;
         }
 
         .contact-hero h1 {
@@ -370,7 +376,7 @@ const Contact = () => {
         .contact-supporting-text {
           margin: 18px 0 0;
           max-width: 760px;
-          color: var(--contact-muted);
+          color: rgba(255, 255, 255, 0.92);
           font-size: 1.05rem;
           line-height: 1.7;
         }

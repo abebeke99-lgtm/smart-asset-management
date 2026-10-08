@@ -150,6 +150,7 @@ export const messages = {
         message: 'Something went wrong while loading this section.',
         retry: 'Retry'
       },
+      paginationRange: 'Showing {start}–{end} of {total}',
       status: {
         active: 'Active',
         approved: 'Approved',
@@ -468,14 +469,17 @@ export const messages = {
       footerSecurityRbac: 'Role-Based Access Control',
       footerSecurityAudit: 'Audit & Accountability',
       footerUsefulLinks: 'Useful links',
-      footerCopyright: 'All rights reserved.'
+      footerCopyright: 'All rights reserved.',
+      footerDevelopedBy: 'Developed by'
     },
     appearance: {
       languageEnglish: 'Switch language to English',
       languageAmharic: 'Switch language to Amharic',
       light: 'Light',
       dark: 'Dark',
-      language: 'Language'
+      language: 'Language',
+      switchToLightTheme: 'Switch to light theme',
+      switchToDarkTheme: 'Switch to dark theme'
     },
     legal: {
       privacyPolicy: 'Privacy Policy',
@@ -655,6 +659,7 @@ export const messages = {
         message: 'ይህን ክፍል በመጫን ላይ ችግር ተፈጥሯል።',
         retry: 'እንደገና ሞክር'
       },
+      paginationRange: 'ከ{total} ውስጥ {start}–{end} በማሳየት ላይ',
       status: {
         active: 'ንቁ',
         approved: 'ጸድቋል',
@@ -974,14 +979,17 @@ export const messages = {
       footerSecurityRbac: 'በሚና ላይ የተመሰረተ የመዳረሻ ቁጥጥር',
       footerSecurityAudit: 'ኦዲት እና ተጠያቂነት',
       footerUsefulLinks: 'ጠቃሚ አገናኞች',
-      footerCopyright: 'ሁሉም መብቶች የተጠበቁ ናቸው።'
+      footerCopyright: 'ሁሉም መብቶች የተጠበቁ ናቸው።',
+      footerDevelopedBy: 'በ'
     },
     appearance: {
       languageEnglish: 'ቋንቋን ወደ እንግሊዝኛ ቀይር',
       languageAmharic: 'ቋንቋን ወደ አማርኛ ቀይር',
       light: 'ብርሃን',
       dark: 'ጨለማ',
-      language: 'ቋንቋ'
+      language: 'ቋንቋ',
+      switchToLightTheme: 'ወደ ብርሃን ገጽታ ቀይር',
+      switchToDarkTheme: 'ወደ ጨለማ ገጽታ ቀይር'
     },
     legal: {
       privacyPolicy: 'የግላዊነት ፖሊሲ',
@@ -1026,9 +1034,13 @@ export const getShellTranslations = (language) => {
   };
 };
 
-export const translateMessage = (language, key, fallback) => {
+export const translateMessage = (language, key, fallback, values) => {
   const read = (catalog) => key.split('.').reduce((value, segment) => value?.[segment], catalog);
-  return read(messages[language]) ?? read(messages.en) ?? fallback ?? key;
+  const message = read(messages[language]) ?? read(messages.en) ?? fallback ?? key;
+  if (!values || typeof message !== 'string') return message;
+  return message.replace(/\{(\w+)\}/g, (placeholder, name) => (
+    Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : placeholder
+  ));
 };
 
 export const translateNavigationLabel = (language, label) => {

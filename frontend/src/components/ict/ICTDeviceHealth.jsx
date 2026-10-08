@@ -79,12 +79,19 @@ const initialForm = {
 };
 
 async function apiRequest(url, options = {}) {
+  const token =
+    localStorage.getItem("token") ||
+    localStorage.getItem("authToken") ||
+    sessionStorage.getItem("token") ||
+    sessionStorage.getItem("authToken");
   const response = await fetch(`${API_BASE_URL}${url}`, {
+    ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
-    ...options,
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -131,7 +138,9 @@ function normalizeDevice(item, index) {
     assetTag:
       item.assetTag ??
       item.asset_tag ??
+      item.assetCode ??
       item.asset?.assetTag ??
+      item.asset?.assetCode ??
       item.asset?.asset_tag ??
       "",
 
@@ -146,6 +155,7 @@ function normalizeDevice(item, index) {
       item.deviceType ??
       item.device_type ??
       item.type ??
+      item.category ??
       item.asset?.category ??
       "Desktop",
 
@@ -232,6 +242,7 @@ function normalizeDevice(item, index) {
     networkStatus:
       item.networkStatus ??
       item.network_status ??
+      item.technicalHealth?.networkStatus ??
       item.network?.status ??
       "Connected",
 
@@ -256,6 +267,7 @@ function normalizeDevice(item, index) {
     lastChecked:
       item.lastChecked ??
       item.last_checked ??
+      item.lastInspection ??
       item.checkedAt ??
       item.checked_at ??
       "",
@@ -269,11 +281,13 @@ function normalizeDevice(item, index) {
       item.department ??
       item.departmentName ??
       item.department_name ??
+      item.asset?.department ??
       "",
 
     location:
       item.location ??
       item.locationName ??
+      item.asset?.location ??
       "",
 
     notes: item.notes ?? "",
@@ -612,22 +626,7 @@ export default function DeviceHealth() {
     setError("");
 
     try {
-      let data;
-
-      try {
-        data = await apiRequest("/device-health");
-      } catch {
-        try {
-          data = await apiRequest("/deviceHealth");
-        } catch {
-          try {
-            data = await apiRequest("/device-health-status");
-          } catch {
-            data = await apiRequest("/devices/health");
-          }
-        }
-      }
-
+      const data = await apiRequest("/ict/device-health?limit=50");
       setDevices(
         extractArray(data).map(normalizeDevice)
       );

@@ -122,7 +122,7 @@ const Home = () => {
     <style>{`
       .uam-home-page {
         color: #fff;
-        background: #0b1d34;
+        background: #419fd9;
       }
 
       .uam-hero {
@@ -130,7 +130,7 @@ const Home = () => {
         isolation: isolate;
         overflow: hidden;
         min-height: min(760px, calc(100svh - 82px));
-        background: #0b1d34;
+        background: #419fd9;
         color: #fff;
       }
 
@@ -138,7 +138,7 @@ const Home = () => {
         position: absolute;
         inset: 0;
         z-index: -1;
-        background: linear-gradient(90deg, rgba(8, 24, 44, 0.91) 0%, rgba(10, 33, 59, 0.82) 52%, rgba(10, 33, 59, 0.70) 100%);
+        background: linear-gradient(90deg, rgba(30, 111, 166, 0.88) 0%, rgba(50, 139, 194, 0.82) 52%, rgba(65, 159, 217, 0.72) 100%);
         content: '';
       }
 
@@ -146,7 +146,7 @@ const Home = () => {
         position: absolute;
         inset: 0;
         z-index: -2;
-        background: #0b1d34;
+        background: #419fd9;
       }
 
       .uam-hero-image {
@@ -435,7 +435,7 @@ const Home = () => {
 
       @media (max-width: 640px) {
         .uam-hero { min-height: auto; }
-        .uam-hero::after { background: linear-gradient(90deg, rgba(8, 24, 44, 0.94), rgba(10, 33, 59, 0.83)); }
+        .uam-hero::after { background: linear-gradient(90deg, rgba(30, 111, 166, 0.9), rgba(65, 159, 217, 0.82)); }
         .uam-hero-shell { width: min(100% - 32px, 560px); grid-template-columns: 1fr; gap: 36px; padding: 58px 0 64px; }
         .uam-hero-copy h1 { font-size: clamp(2.35rem, 10vw, 3rem); }
         .uam-lead { margin-top: 18px; font-size: 1.03rem; }

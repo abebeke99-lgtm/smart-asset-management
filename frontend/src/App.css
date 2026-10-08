@@ -428,6 +428,15 @@ body {
   background: #e8edf0;
 }
 
+.public-layout.login-public-layout .public-main {
+  display: flex;
+}
+
+.public-layout.login-public-layout .login-page {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .public-layout.home-route .public-main {
   display: flex;
   flex: 1 1 auto;
@@ -670,6 +679,9 @@ body {
 
 .public-language-toggle button[aria-pressed="true"] {
   color: var(--public-header-primary);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42);
 }
 
 .public-language-toggle button:hover:not([aria-pressed="true"]) {
@@ -4720,4 +4732,8 @@ body.dark .department-head-sidebar .admin-nav-link:not(.is-active) > svg {
   .dashboard-layout > .dashboard-layout-header .dashboard-profile-button {
     transition: none;
   }
+}
+
+body #root :not(svg):not(footer):not(footer *) {
+  color: #000 !important;
 }

@@ -1,4 +1,4 @@
-const { sequelize, Asset, FinancialRecord, DepreciationRecord, CapitalizationRecord, AuditLog, User, Department, PurchaseOrder, Invoice, Payment, Budget, FiscalYear, FundSource, College } = require('../models');
+const { sequelize, Asset, FinancialRecord, FinanceTransaction, DepreciationRecord, CapitalizationRecord, AuditLog, User, Department, PurchaseOrder, Invoice, Payment, Budget, FiscalYear, FundSource, College } = require('../models');
 const { Op } = require('sequelize');
 const { summarizeBudget, cents } = require('../services/budgetService');
 const depreciationService = require('../services/depreciationService');
@@ -509,7 +509,52 @@ const listFinanceReports = async (req, res, next) => {
     if (!ensureFinance(req, res)) return;
     const filters = buildFinanceReportFilters(req.query);
     if (filters.reportType === 'transactions') {
-      return res.status(501).json({ success: false, message: 'Financial transaction reports are unavailable: this system has no persisted financial transaction model.' });
+      const transactionWhere = { ...dateWhere('transactionDate', filters) };
+      if (filters.department) transactionWhere.departmentId = Number(filters.department);
+      if (filters.status) transactionWhere.status = filters.status;
+      const search = String(req.query.search || '').trim();
+      if (search) transactionWhere[Op.or] = ['transactionNumber', 'referenceNumber', 'description', 'supplierName', 'accountName']
+        .map((field) => ({ [field]: { [Op.like]: `%${search}%` } }));
+      const transactions = await FinanceTransaction.findAll({
+        where: transactionWhere,
+        order: [['transactionDate', 'DESC'], ['id', 'DESC']],
+      });
+      const rows = transactions.map((transaction) => ({
+        id: `transaction-${transaction.id}`,
+        report_number: transaction.transactionNumber,
+        report_type: 'transaction',
+        report_date: transaction.transactionDate,
+        financial_year: reportYear(transaction.transactionDate),
+        department: transaction.departmentName || 'Unassigned',
+        category: transaction.transactionType,
+        status: transaction.status,
+        transactions: amount(transaction.amount),
+        debits: amount(transaction.debit),
+        credits: amount(transaction.credit),
+        notes: transaction.description || transaction.referenceNumber || '',
+      }));
+      const page = Math.max(1, Number(req.query.page) || 1);
+      const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
+      const summary = {
+        totalTransactions: transactions.length,
+        totalAmount: transactions.reduce((sum, row) => sum + amount(row.amount), 0),
+        totalDebits: transactions.reduce((sum, row) => sum + amount(row.debit), 0),
+        totalCredits: transactions.reduce((sum, row) => sum + amount(row.credit), 0),
+      };
+      if (String(req.query.export).toLowerCase() === 'csv') {
+        const columns = ['report_number', 'report_type', 'report_date', 'financial_year', 'department', 'category', 'status', 'transactions', 'debits', 'credits', 'notes'];
+        const csv = [columns.join(','), ...rows.map((row) => columns.map((column) => JSON.stringify(row[column] ?? '')).join(','))].join('\n');
+        return res.type('text/csv').set('Content-Disposition', 'attachment; filename="financial-transactions.csv"').send(csv);
+      }
+      return res.json({
+        success: true,
+        data: rows.slice((page - 1) * limit, page * limit),
+        summary,
+        pagination: { page, limit, total: rows.length, pages: Math.max(1, Math.ceil(rows.length / limit)) },
+        departments: [...new Set(rows.map((row) => row.department).filter(Boolean))],
+        categories: [...new Set(rows.map((row) => row.category).filter(Boolean))],
+        financialYears: [...new Set(rows.map((row) => row.financial_year).filter(Boolean))],
+      });
     }
     const assetWhere = { ...dateWhere('purchaseDate', filters) };
     if (filters.department) assetWhere.departmentId = Number(filters.department);
@@ -566,7 +611,11 @@ const generateFinanceReport = async (req, res, next) => {
     if (!ensureFinance(req, res)) return;
     const filters = buildFinanceReportFilters(req.body || {});
     if (filters.reportType === 'transactions') {
-      return res.status(501).json({ success: false, message: 'Financial transaction reports are unavailable: this system has no persisted financial transaction model.' });
+      const transactionWhere = { ...dateWhere('transactionDate', filters) };
+      if (filters.department) transactionWhere.departmentId = Number(filters.department);
+      if (filters.status) transactionWhere.status = filters.status;
+      await FinanceTransaction.count({ where: transactionWhere });
+      return res.status(200).json({ success: true, message: 'Financial transaction report generated from persisted transactions.', generatedAt: new Date().toISOString() });
     }
     return res.status(200).json({ success: true, message: 'Financial report generated from current database transactions.', generatedAt: new Date().toISOString() });
   } catch (error) {
@@ -596,7 +645,7 @@ const listBudgetReports = async (req, res, next) => {
     const include = [
       { model: FiscalYear, as: 'FiscalYear', attributes: ['id', 'code', 'name', 'startDate', 'endDate', 'status'] },
       { model: FundSource, as: 'FundSource', attributes: ['id', 'code', 'name', 'status'] },
-      { model: College, as: 'CollegeRecord', attributes: ['id', ['collegeName', 'name']], required: false },
+      { model: College, as: 'CollegeRecord', attributes: ['id', 'collegeName'], required: false },
       { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name'], required: false },
     ];
     const result = await Budget.findAndCountAll({ where, include, limit, offset: (page - 1) * limit, distinct: true, order: [['budgetCode', 'ASC']] });
@@ -613,7 +662,9 @@ const listBudgetReports = async (req, res, next) => {
         financialYear: value.FiscalYear?.code || value.FiscalYear?.name || '',
         fundSource: value.FundSource || null,
         fundingSource: value.FundSource?.name || value.FundSource?.code || '',
-        college: value.CollegeRecord || null,
+        college: value.CollegeRecord
+          ? { id: value.CollegeRecord.id, name: value.CollegeRecord.collegeName }
+          : null,
         department: value.DepartmentRecord || null,
         status: value.status,
       }));
@@ -664,10 +715,10 @@ const listBudgetReports = async (req, res, next) => {
     const [fiscalYears, fundSources, colleges, departments] = await Promise.all([
       FiscalYear.findAll({ order: [['startDate', 'DESC']] }),
       FundSource.findAll({ order: [['name', 'ASC']] }),
-      College.findAll({ attributes: ['id', ['collegeName', 'name']], order: [['collegeName', 'ASC']] }),
+      College.findAll({ attributes: ['id', 'collegeName'], order: [['collegeName', 'ASC']] }),
       Department.findAll({ attributes: ['id', 'name', 'collegeId'], order: [['name', 'ASC']] }),
     ]);
-    res.json({ success: true, data: rows, summary, filters: { fiscalYears, fundSources, colleges, departments }, pagination: { page, limit, total: result.count, totalPages: Math.max(1, Math.ceil(result.count / limit)) } });
+    res.json({ success: true, data: rows, summary, filters: { fiscalYears, fundSources, colleges: colleges.map((college) => ({ id: college.id, name: college.collegeName })), departments }, pagination: { page, limit, total: result.count, totalPages: Math.max(1, Math.ceil(result.count / limit)) } });
   } catch (error) {
     next(error);
   }

@@ -218,10 +218,15 @@ async function initializeDatabase() {
     const databaseConnected = await testConnection();
     let schemaReady = false;
     if (databaseConnected) {
-      try {
-        schemaReady = await syncDatabase();
-      } catch (error) {
-        console.error('Database schema initialization failed:', error.message);
+      if (process.env.DB_SYNC_ON_START === 'false') {
+        schemaReady = true;
+        console.log('Database schema sync skipped (DB_SYNC_ON_START=false).');
+      } else {
+        try {
+          schemaReady = await syncDatabase();
+        } catch (error) {
+          console.error('Database schema initialization failed:', error.message);
+        }
       }
     }
     if (databaseConnected && schemaReady) {
@@ -263,11 +268,12 @@ async function startServer() {
     console.error('Could not initialize upload directories:', error.message);
   }
 
-  await initializeDatabase();
-
   return new Promise((resolve, reject) => {
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
+      initializeDatabase().catch((error) => {
+        console.error('Background database initialization failed:', error.message);
+      });
       resolve();
     });
     server.once('error', reject);

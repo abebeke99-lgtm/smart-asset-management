@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { getDashboardRoute, normalizeRole } from './App';
 
 describe('normalizeRole', () => {
@@ -36,4 +38,14 @@ describe('normalizeRole', () => {
     expect(normalizeRole('college')).toBe('college');
     expect(normalizeRole('college_manager')).toBe('college_manager');
   });
+});
+
+test('maintenance dashboard destination is registered as a dashboard route', () => {
+  const appSource = fs.readFileSync(path.resolve(__dirname, './App.jsx'), 'utf8');
+  const maintenanceRoutes = appSource.slice(
+    appSource.indexOf('<Route path="/maintenance"'),
+    appSource.indexOf('<Route path="/infrastructure"'),
+  );
+
+  expect(maintenanceRoutes).toMatch(/<Route path="dashboard" element={<MaintDashboard \/>} \/>/);
 });

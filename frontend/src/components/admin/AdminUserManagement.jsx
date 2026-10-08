@@ -27,6 +27,9 @@ async function apiRequest(url, options = {}) {
       data: options.body ? JSON.parse(options.body) : undefined,
       headers: options.headers,
     });
+    if (response.data?.success === false) {
+      throw new Error(response.data.message || "Unable to complete the user management request.");
+    }
     return response.data;
   } catch (error) {
     console.error("User management API request failed", {
@@ -380,6 +383,7 @@ export default function Users() {
       [name]: "",
       ...(name === "collegeId" ? { departmentId: "" } : {}),
     }));
+    setError("");
   };
 
   const saveUser = async (event) => {
@@ -455,6 +459,7 @@ export default function Users() {
       const message = err.message || "Unable to save user.";
       const key = /username/i.test(message) ? "username" : /email/i.test(message) ? "email" : /phone/i.test(message) ? "phone" : /role/i.test(message) ? "roleId" : "";
       if (key) setFieldErrors({ [key]: message });
+      setError(message);
       toast.error(message);
     } finally {
       saveInProgress.current = false;
@@ -1429,8 +1434,9 @@ export default function Users() {
               noValidate
             >
               {loading && <div role="status">Loading roles and colleges...</div>}
+              {error && <div className="error-box" role="alert">{error}</div>}
               {!loading && roles.length === 0 && (
-                <div className="error-box" role="alert">{error || "Role options are unavailable. Please refresh and try again."}</div>
+                !error && <div className="error-box" role="alert">Role options are unavailable. Please refresh and try again.</div>
               )}
               <div className="form-row">
                 <div className="form-group">

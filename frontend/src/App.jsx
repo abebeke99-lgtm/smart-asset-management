@@ -25,7 +25,7 @@ import DepartmentReturns from './components/department/DepartmentReturns';
 // IMPORT UI CONTEXT
 // ==========================================
 
-import { UIProvider, useLanguage, useTheme } from './contexts/UiContext';
+import { UIProvider, useLanguage, useTheme, useTranslation } from './contexts/UiContext';
 import { getShellTranslations, translateNavigationLabel } from './i18n/messages';
 
 // ==========================================
@@ -472,21 +472,24 @@ export const shouldShowDashboardHeader = (path = '') => !isPublicRoute(path) && 
 // LOADING COMPONENT
 // ==========================================
 
-const LoadingFallback = () => (
-  <div style={{
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: '100vh',
-    fontSize: '1.2rem',
-    color: '#4a5568'
-  }}>
-    <div style={{ textAlign: 'center' }}>
-      <div style={{ fontSize: '2rem', marginBottom: '8px' }}>⏳</div>
-      <div>Loading...</div>
+const LoadingFallback = () => {
+  const { t } = useTranslation();
+  return (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '100vh',
+      fontSize: '1.2rem',
+      color: '#4a5568'
+    }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: '2rem', marginBottom: '8px' }}>⏳</div>
+        <div>{t('shell.loading')}</div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const normalizeListResponse = (payload) => {
   if (Array.isArray(payload)) return payload;
@@ -2841,8 +2844,8 @@ function AppContent() {
         type="button"
         className="public-theme-toggle"
         onClick={toggleTheme}
-        aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
-        title={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}
+        aria-label={theme === 'light' ? t.switchToDarkTheme : t.switchToLightTheme}
+        title={theme === 'light' ? t.switchToDarkTheme : t.switchToLightTheme}
       >
         {theme === 'light' ? <Moon size={18} aria-hidden="true" /> : <Sun size={18} aria-hidden="true" />}
       </button>
@@ -2894,9 +2897,10 @@ function AppContent() {
 
   const PublicLayout = ({ children }) => {
     const isHomeRoute = location.pathname === '/' || location.pathname === '/home';
+    const isLoginRoute = shouldUseStandaloneLoginLayout(location.pathname);
 
     return (
-      <div className={`public-layout${isHomeRoute ? ' home-route' : ''}`}>
+      <div className={`public-layout${isHomeRoute ? ' home-route' : ''}${isLoginRoute ? ' login-public-layout' : ''}`}>
         <PublicHeader />
         <main className="public-main">
           {children}
@@ -3187,16 +3191,9 @@ function AppContent() {
     return (
       <>
         {isLoginRoute ? (
-          <>
+          <PublicLayout>
             <Login />
-            <AppFooter
-              t={t}
-              language={language}
-              setLanguage={setLanguage}
-              organization={organizationProfile}
-              onPublicNavigation={requestPublicNavigation}
-            />
-          </>
+          </PublicLayout>
         ) : (
           <PublicLayout>
             <Suspense fallback={<LoadingFallback />}>
@@ -3814,6 +3811,7 @@ function AppContent() {
           {/* MAINTENANCE ROUTES - Fixed with RoleLayout */}
           <Route path="/maintenance" element={<ProtectedRoute allowedRoles={['maintenance', 'admin', 'ict_officer']}><MaintenanceLayout /></ProtectedRoute>}>
             <Route index element={<MaintDashboard />} />
+            <Route path="dashboard" element={<MaintDashboard />} />
             <Route path="requests" element={<MaintRequests />} />
             <Route path="inspection" element={<MaintAssetInspection />} />
             <Route path="work-orders" element={<MaintWorkOrders />} />

@@ -40,11 +40,11 @@ const Help = () => {
         .help-page { --help-primary: #123B63; --help-secondary: #1E5A8A; --help-accent: #D9A441; --help-bg: #F5F8FC; --help-card: #FFFFFF; --help-text: #172033; --help-muted: #64748B; --help-border: #E2E8F0; --help-page-bg: var(--help-bg); --help-surface: var(--help-card); --help-text-main: var(--help-text); --help-text-soft: var(--help-muted); --help-outline: var(--help-border); --help-brand: var(--help-primary); --help-brand-alt: var(--help-secondary); --help-highlight: var(--help-accent); background: var(--help-page-bg); color: var(--help-text-main); min-height: 100%; }
         .help-page-dark { --help-page-bg: #0f172a; --help-surface: #111c2c; --help-text-main: #e2e8f0; --help-text-soft: #a7b3c7; --help-outline: rgba(148,163,184,0.22); --help-brand: #93c5fd; --help-brand-alt: #cbd5e1; --help-highlight: #f4c86b; }
         .help-page, .help-page * { box-sizing: border-box; }
-        .help-shell { width: min(760px, calc(100% - 40px)); margin: 0 auto; }
-        .help-header { padding: 36px 0 28px; border-bottom: 1px solid var(--help-outline); background: linear-gradient(135deg, rgba(18,59,99,0.08), rgba(30,90,138,0.06)); }
-        .help-header h1 { margin: 0; font-size: 2rem; line-height: 1.2; overflow-wrap: anywhere; }
-        .help-system { margin: 8px 0 0; color: var(--help-brand-alt); font-size: 1.2rem; }
-        .help-header h2 { margin: 22px 0 0; font-size: 1.65rem; }
+        .help-shell { width: 100%; max-width: none; padding: 0 20px; margin: 0; }
+        .help-header { padding: 36px 0 28px; border-bottom: 1px solid rgba(255,255,255,0.28); background: #419FD9; color: #fff; }
+        .help-header h1 { margin: 0; color: #fff; font-size: 2rem; line-height: 1.2; overflow-wrap: anywhere; }
+        .help-system { margin: 8px 0 0; color: rgba(255,255,255,0.92); font-size: 1.2rem; }
+        .help-header h2 { margin: 22px 0 0; color: #fff; font-size: 1.65rem; }
         .help-body { padding: 28px 0 48px; }
         .help-intro { margin: 0 0 24px; color: var(--help-text-soft); line-height: 1.65; }
         .help-section { padding: 24px 0; border-top: 1px solid var(--help-outline); }

@@ -217,7 +217,7 @@ const Services = () => {
           min-height: 240px;
           align-items: center;
           overflow: hidden;
-          background: #07182d;
+          background: #419fd9;
           isolation: isolate;
         }
 
@@ -236,7 +236,7 @@ const Services = () => {
         }
 
         .services-hero-overlay {
-          background: linear-gradient(90deg, rgba(7, 24, 45, 0.91), rgba(7, 24, 45, 0.72) 56%, rgba(7, 24, 45, 0.52));
+          background: linear-gradient(90deg, rgba(30, 111, 166, 0.88), rgba(50, 139, 194, 0.82) 56%, rgba(65, 159, 217, 0.72));
         }
 
         .services-hero-content {

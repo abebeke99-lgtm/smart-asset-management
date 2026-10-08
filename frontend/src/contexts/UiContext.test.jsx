@@ -22,17 +22,37 @@ describe('UiProvider language', () => {
 
     act(() => result.current.setLanguage('am'));
     expect(result.current.language).toBe('am');
+    expect(result.current.t('auth.signIn')).toBe('ግባ');
     expect(localStorage.getItem('language')).toBe('am');
     expect(document.documentElement.lang).toBe('am');
     expect(document.documentElement.dir).toBe('ltr');
 
     act(() => result.current.setLanguage('en'));
     expect(result.current.language).toBe('en');
+    expect(result.current.t('auth.signIn')).toBe('Sign In');
     expect(localStorage.getItem('language')).toBe('en');
     expect(document.documentElement.lang).toBe('en');
 
     act(() => result.current.setLanguage('fr'));
     expect(result.current.language).toBe('en');
     expect(localStorage.getItem('language')).toBe('en');
+  });
+
+  it('restores the selected language when the provider is mounted again', () => {
+    const firstMount = renderHook(() => useLanguage(), { wrapper: UIProvider });
+    act(() => firstMount.result.current.setLanguage('am'));
+    firstMount.unmount();
+
+    const secondMount = renderHook(() => useLanguage(), { wrapper: UIProvider });
+    expect(secondMount.result.current.language).toBe('am');
+    expect(secondMount.result.current.t('navigation.dashboard')).toBe('ዳሽቦርድ');
+  });
+
+  it('interpolates named parameters in translated messages', () => {
+    const { result } = renderHook(() => useLanguage(), { wrapper: UIProvider });
+    expect(result.current.t('common.paginationRange', undefined, { start: 1, end: 10, total: 25 })).toBe('Showing 1–10 of 25');
+
+    act(() => result.current.setLanguage('am'));
+    expect(result.current.t('common.paginationRange', undefined, { start: 1, end: 10, total: 25 })).toBe('ከ25 ውስጥ 1–10 በማሳየት ላይ');
   });
 });

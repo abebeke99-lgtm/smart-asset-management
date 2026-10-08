@@ -107,7 +107,7 @@ const Footer = ({ t, organization, role, onPublicNavigation }) => {
       </div>
 
       <div className="footer-bottom">
-        <span>© {year} Mekdela Amba University. All rights reserved. Developed by Bekele (0986481821)</span>
+        <span>© {year} Mekdela Amba University. {t.footerCopyright} {t.footerDevelopedBy} Bekele (0986481821)</span>
       </div>
     </footer>
   );

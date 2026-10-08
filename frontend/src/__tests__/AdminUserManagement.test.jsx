@@ -154,6 +154,28 @@ test('submits the add-user form, closes it, and refreshes the visible user list'
   expect(await screen.findByText('new.user@example.edu')).toBeInTheDocument();
 });
 
+test('keeps the add-user form open and shows the API error when user creation is rejected', async () => {
+  await openCreateForm();
+  fillValidNewUser();
+  apiClient.request.mockImplementation(({ url, method }) => {
+    if (method === 'POST' && url === '/api/users') {
+      return Promise.resolve({
+        data: { success: false, message: 'Username or email is already in use' },
+      });
+    }
+    if (url.startsWith('/api/users?')) return Promise.resolve({ data: { users: usersResponse, pagination: { total: usersResponse.length, pages: 1 } } });
+    if (url === '/api/users/stats') return Promise.resolve({ data: { data: { total: usersResponse.length, active: usersResponse.length, inactive: 0, suspended: 0 } } });
+    if (url === '/api/roles') return Promise.resolve({ data: { roles: roleNames.map((name) => ({ name, displayName: name })) } });
+    if (url === '/api/colleges') return Promise.resolve({ data: { colleges: [] } });
+    return Promise.resolve({ data: { departments: [] } });
+  });
+
+  fireEvent.submit(document.querySelector('form'));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Username or email is already in use');
+  expect(screen.getByLabelText('Password *')).toBeInTheDocument();
+});
+
 test('prevents duplicate add-user submissions while the create request is pending', async () => {
   await openCreateForm();
   fillValidNewUser();

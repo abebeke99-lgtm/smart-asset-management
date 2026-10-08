@@ -3,26 +3,17 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { Op } = require('sequelize');
-const { FinanceTransaction } = require('../models');
+const { sequelize, FinanceTransaction, AuditLog } = require('../models');
 const financeRoutes = require('../routes/financeRoutes');
 const authMiddleware = require('../middlewares/auth');
-const {
-  listFinanceTransactions,
-  getFinanceTransaction,
-} = require('../controllers/financeTransactionController');
+const handlers = require('../controllers/financeTransactionController');
 
 const invoke = async (handler, request = {}) => {
   const response = {
     statusCode: 200,
     body: null,
-    status(code) {
-      this.statusCode = code;
-      return this;
-    },
-    json(body) {
-      this.body = body;
-      return this;
-    },
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
   };
   let nextError;
   await handler({
@@ -36,149 +27,303 @@ const invoke = async (handler, request = {}) => {
   return response;
 };
 
-test('finance transaction model is registered with soft deletion and audit actors', () => {
-  assert.ok(FinanceTransaction);
-  assert.equal(FinanceTransaction.options.paranoid, true);
-  for (const field of ['transactionNumber', 'transactionDate', 'amount', 'debit', 'credit', 'createdBy', 'updatedBy', 'deletedBy']) {
-    assert.ok(FinanceTransaction.rawAttributes[field], `expected ${field} model attribute`);
-  }
+const routeFor = (method, routePath) => financeRoutes.stack
+  .find((layer) => layer.route?.path === routePath && layer.route.methods[method])?.route;
+
+const transactionRecord = (values = {}) => ({
+  id: 9,
+  transactionNumber: 'TXN-2026-000009',
+  type: 'debit',
+  status: 'pending',
+  amount: '125.50',
+  currency: 'ETB',
+  transactionDate: '2026-10-07',
+  referenceType: 'other',
+  createdBy: 27,
+  ...values,
+  async update(changes, options) {
+    this.updateOptions = options;
+    Object.assign(this, changes);
+  },
+  toJSON() {
+    const { updateOptions, ...data } = this;
+    return data;
+  },
 });
 
-test('finance transaction API is read-only and requires authentication and finance/admin roles', () => {
+const withTransactionMocks = async (testBody, overrides = {}) => {
+  const originals = {
+    transaction: sequelize.transaction,
+    findByPk: FinanceTransaction.findByPk,
+    create: FinanceTransaction.create,
+    audit: AuditLog.create,
+  };
+  const calls = [];
+  const transaction = {
+    LOCK: { UPDATE: 'UPDATE' },
+    finished: false,
+    async commit() { this.finished = 'commit'; calls.push('commit'); },
+    async rollback() { this.finished = 'rollback'; calls.push('rollback'); },
+  };
+  sequelize.transaction = async () => transaction;
+  FinanceTransaction.findByPk = overrides.findByPk || (async () => transactionRecord());
+  FinanceTransaction.create = overrides.create || (async (values, options) => {
+    calls.push('create');
+    return transactionRecord({ ...values, id: 31, createOptions: options });
+  });
+  AuditLog.create = overrides.audit || (async (entry, options) => {
+    calls.push(entry.action);
+    assert.equal(options.transaction, transaction);
+  });
+  try {
+    await testBody({ calls, transaction });
+  } finally {
+    sequelize.transaction = originals.transaction;
+    FinanceTransaction.findByPk = originals.findByPk;
+    FinanceTransaction.create = originals.create;
+    AuditLog.create = originals.audit;
+  }
+};
+
+const validInput = (overrides = {}) => ({
+  transactionNumber: 'TXN-2026-000009',
+  transactionDate: '2026-10-07',
+  type: 'debit',
+  amount: 125.5,
+  status: 'pending',
+  referenceType: 'other',
+  ...overrides,
+});
+
+test('financial transaction model and migration match persistent lifecycle schema', () => {
+  assert.equal(FinanceTransaction.getTableName(), 'financial_transactions');
+  assert.equal(FinanceTransaction.options.paranoid, false);
+  for (const field of ['transactionNumber', 'type', 'status', 'amount', 'transactionDate', 'referenceType', 'referenceId', 'supplierId', 'createdBy', 'postedBy', 'postedAt', 'voidedBy', 'voidedAt', 'voidReason']) {
+    assert.ok(FinanceTransaction.rawAttributes[field], `expected ${field} model attribute`);
+  }
+  const migration = fs.readFileSync(path.resolve(__dirname, '../../database/migrations/20261008_financial_transactions_lifecycle.sql'), 'utf8');
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS financial_transactions/);
+  assert.match(migration, /financial_transactions_reference_idx/);
+});
+
+test('finance transaction routes require authentication and finance/admin roles and never hard-delete', () => {
   const expected = [
     ['get', '/transactions'],
     ['get', '/transactions/:id'],
+    ['post', '/transactions'],
+    ['put', '/transactions/:id'],
+    ['post', '/transactions/:id/post'],
+    ['post', '/transactions/:id/void'],
   ];
   for (const [method, routePath] of expected) {
-    const route = financeRoutes.stack.find((layer) => layer.route?.path === routePath && layer.route.methods[method])?.route;
+    const route = routeFor(method, routePath);
     assert.ok(route, `expected ${method.toUpperCase()} ${routePath}`);
     assert.equal(route.stack[0].handle, authMiddleware.requireAuth);
-    assert.equal(route.stack.length, 3, 'expected authentication, role authorization, and controller');
+    assert.equal(typeof route.stack[1].handle, 'function');
   }
+  assert.equal(financeRoutes.stack.some((layer) => layer.route?.path.startsWith('/transactions') && layer.route.methods.delete), false);
 });
 
-test('finance transactions expose no create endpoint or controller', () => {
-  assert.equal(financeRoutes.stack.some((layer) => layer.route?.path === '/transactions'
-    && layer.route.methods.post), false);
-  assert.equal(require('../controllers/financeTransactionController').createFinanceTransaction, undefined);
-});
-
-test('finance transactions expose no update endpoints or controller', () => {
-  assert.equal(financeRoutes.stack.some((layer) => layer.route?.path === '/transactions/:id'
-    && (layer.route.methods.put || layer.route.methods.patch)), false);
-  assert.equal(require('../controllers/financeTransactionController').updateFinanceTransaction, undefined);
-});
-
-test('finance transactions expose no delete endpoint or controller', () => {
-  assert.equal(financeRoutes.stack.some((layer) => layer.route?.path === '/transactions/:id'
-    && layer.route.methods.delete), false);
-  assert.equal(require('../controllers/financeTransactionController').deleteFinanceTransaction, undefined);
-});
-
-test('finance transaction page uses only read APIs', () => {
-  const page = fs.readFileSync(path.resolve(__dirname, '../../../frontend/src/components/finance/FinanceTransactions.jsx'), 'utf8');
-  assert.match(page, /api\.get\(\s*["']\/finance\/transactions["']/);
-  assert.doesNotMatch(page, /api\.(post|put|patch|delete)\(/);
-});
-
-test('finance route role middleware rejects unauthenticated and unrelated roles', () => {
-  const route = financeRoutes.stack.find((layer) => layer.route?.path === '/transactions' && layer.route.methods.get)?.route;
-  const authorize = route.stack[1].handle;
-  const run = (user) => {
+test('finance transaction RBAC rejects unauthenticated and non-finance roles with 401 and 403', () => {
+  const authorize = routeFor('get', '/transactions').stack[1].handle;
+  const call = (user) => {
     const response = {
       statusCode: 200,
-      body: null,
       status(code) { this.statusCode = code; return this; },
       json(body) { this.body = body; return this; },
     };
-    let nextCalled = false;
-    authorize({ user }, response, () => { nextCalled = true; });
-    return { response, nextCalled };
+    let passed = false;
+    authorize({ user }, response, () => { passed = true; });
+    return { response, passed };
   };
-
-  assert.equal(run({ id: 1, role: 'finance' }).nextCalled, true);
-  assert.equal(run({ id: 2, role: 'admin' }).nextCalled, true);
-  const unauthorizedRole = run({ id: 3, role: 'department_head' });
-  assert.equal(unauthorizedRole.response.statusCode, 403);
-  const unauthenticated = run(undefined);
-  assert.equal(unauthenticated.response.statusCode, 401);
+  assert.equal(call({ id: 1, role: 'finance' }).passed, true);
+  assert.equal(call({ id: 2, role: 'admin' }).passed, true);
+  assert.equal(call({ id: 3, role: 'finance_manager' }).response.statusCode, 403);
+  assert.equal(call({ id: 4, role: 'department_head' }).response.statusCode, 403);
+  assert.equal(call(undefined).response.statusCode, 401);
 });
 
-test('lists persistent transactions with filters, stable newest-first ordering, pagination, and summary', async () => {
-  const originalFindAndCountAll = FinanceTransaction.findAndCountAll;
-  const originalFindOne = FinanceTransaction.findOne;
-  let queryOptions;
+test('lists filtered persistent transactions with pagination and filtered summary totals', async () => {
+  const originals = {
+    findAndCountAll: FinanceTransaction.findAndCountAll,
+    findOne: FinanceTransaction.findOne,
+  };
+  let listOptions;
+  let summaryOptions;
   FinanceTransaction.findAndCountAll = async (options) => {
-    queryOptions = options;
-    return {
-      count: 2,
-      rows: [{
-        toJSON: () => ({ id: 8, transactionNumber: 'TXN-8', amount: '100.50', debit: '100.50', credit: '0', currency: 'ETB' }),
-      }],
-    };
+    listOptions = options;
+    return { count: 12, rows: [transactionRecord()] };
   };
   FinanceTransaction.findOne = async (options) => {
-    assert.equal(options.raw, true);
-    return { amountTotal: '300.75', debitTotal: '200.50', creditTotal: '100.25' };
+    summaryOptions = options;
+    return { totalCount: '12', postedCount: '5', pendingCount: '4', totalDebits: '900.50', totalCredits: '230.25' };
   };
   try {
-    const response = await invoke(listFinanceTransactions, {
+    const response = await invoke(handlers.listFinanceTransactions, {
       query: {
         page: '2',
         pageSize: '5',
-        search: 'TXN',
-        status: 'Posted',
-        transactionType: 'Payment',
+        search: 'INV-9',
+        status: 'posted',
+        type: 'credit',
+        referenceType: 'invoice',
         dateFrom: '2026-10-01',
         dateTo: '2026-10-31',
       },
     });
     assert.equal(response.statusCode, 200);
-    assert.equal(response.body.success, true);
-    assert.equal(response.body.data[0].amount, 100.5);
-    assert.equal(response.body.summary.amountTotal, 300.75);
-    assert.deepEqual(response.body.pagination, { page: 2, pageSize: 5, limit: 5, total: 2, totalPages: 1, pages: 1 });
-    assert.deepEqual(queryOptions.order, [['transactionDate', 'DESC'], ['id', 'DESC']]);
-    assert.equal(queryOptions.limit, 5);
-    assert.equal(queryOptions.offset, 5);
-    assert.equal(queryOptions.where.status, 'Posted');
-    assert.equal(queryOptions.where.transactionType, 'Payment');
-    assert.equal(queryOptions.where.transactionDate[Op.gte], '2026-10-01');
-    assert.equal(queryOptions.where.transactionDate[Op.lte], '2026-10-31');
-    assert.equal(queryOptions.where[Op.or][0].transactionNumber[Op.like], '%TXN%');
+    assert.equal(response.body.data.length, 1);
+    assert.equal(response.body.data[0].debit, 125.5);
+    assert.deepEqual(response.body.pagination, { page: 2, pageSize: 5, total: 12, totalPages: 3 });
+    assert.deepEqual(response.body.summary, {
+      totalCount: 12,
+      postedCount: 5,
+      pendingCount: 4,
+      totalDebits: 900.5,
+      totalCredits: 230.25,
+    });
+    assert.equal(listOptions.limit, 5);
+    assert.equal(listOptions.offset, 5);
+    assert.equal(listOptions.where.status, 'posted');
+    assert.equal(listOptions.where.type, 'credit');
+    assert.equal(listOptions.where.referenceType, 'invoice');
+    assert.equal(listOptions.where.transactionDate[Op.gte], '2026-10-01');
+    assert.equal(listOptions.where.transactionDate[Op.lte], '2026-10-31');
+    assert.equal(listOptions.where[Op.or][0].transactionNumber[Op.like], '%INV-9%');
+    assert.deepEqual(summaryOptions.where, listOptions.where);
   } finally {
-    FinanceTransaction.findAndCountAll = originalFindAndCountAll;
-    FinanceTransaction.findOne = originalFindOne;
+    FinanceTransaction.findAndCountAll = originals.findAndCountAll;
+    FinanceTransaction.findOne = originals.findOne;
   }
 });
 
-test('gets a persistent transaction by ID', async () => {
-  const originalFindByPk = FinanceTransaction.findByPk;
-  const record = {
-    id: 9,
-    transactionNumber: 'TXN-2026-0001',
-    currency: 'ETB',
-    notes: '',
-    toJSON() { return { id: this.id, transactionNumber: this.transactionNumber, currency: 'ETB' }; },
+test('empty transaction listing returns zero rows and zero totals', async () => {
+  const originals = {
+    findAndCountAll: FinanceTransaction.findAndCountAll,
+    findOne: FinanceTransaction.findOne,
   };
-  FinanceTransaction.findByPk = async () => record;
+  FinanceTransaction.findAndCountAll = async () => ({ count: 0, rows: [] });
+  FinanceTransaction.findOne = async () => ({
+    totalCount: 0,
+    postedCount: 0,
+    pendingCount: 0,
+    totalDebits: 0,
+    totalCredits: 0,
+  });
   try {
-    const getResponse = await invoke(getFinanceTransaction, { params: { id: '9' } });
-    assert.equal(getResponse.statusCode, 200);
-    assert.equal(getResponse.body.data.id, 9);
+    const response = await invoke(handlers.listFinanceTransactions);
+    assert.deepEqual(response.body.data, []);
+    assert.deepEqual(response.body.pagination, { page: 1, pageSize: 10, total: 0, totalPages: 0 });
+    assert.equal(response.body.summary.totalCount, 0);
+    assert.equal(response.body.summary.totalDebits, 0);
   } finally {
-    FinanceTransaction.findByPk = originalFindByPk;
+    FinanceTransaction.findAndCountAll = originals.findAndCountAll;
+    FinanceTransaction.findOne = originals.findOne;
   }
 });
 
-test('returns 404 for missing transaction details', async () => {
-  const originalFindByPk = FinanceTransaction.findByPk;
-  FinanceTransaction.findByPk = async () => null;
-  try {
-    const response = await invoke(getFinanceTransaction, { params: { id: '99999' } });
-    assert.equal(response.statusCode, 404);
-    assert.equal(response.body.message, 'Transaction not found');
-  } finally {
-    FinanceTransaction.findByPk = originalFindByPk;
+test('validates amount, entry type, lifecycle status, date, and reference type', async () => {
+  for (const body of [
+    validInput({ amount: 0 }),
+    validInput({ type: 'transfer' }),
+    validInput({ status: 'draft' }),
+    validInput({ transactionDate: '2026-02-30' }),
+    validInput({ referenceType: 'invoice' }),
+  ]) {
+    const response = await invoke(handlers.createFinanceTransaction, { body });
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.body.success, false);
   }
+});
+
+test('creates pending transactions persistently and audits creation in same database transaction', async () => {
+  await withTransactionMocks(async ({ calls, transaction }) => {
+    const response = await invoke(handlers.createFinanceTransaction, { body: validInput() });
+    assert.equal(response.statusCode, 201);
+    assert.equal(response.body.data.status, 'pending');
+    assert.equal(response.body.data.type, 'debit');
+    assert.equal(response.body.data.debit, 125.5);
+    assert.ok(calls.includes('FINANCE_TRANSACTION_CREATED'));
+    assert.equal(transaction.finished, 'commit');
+  }, {
+    create: async (values, options) => {
+      assert.equal(values.createdBy, 27);
+      assert.equal(values.status, 'pending');
+      assert.equal(options.transaction.finished, false);
+      return transactionRecord({ ...values, id: 31 });
+    },
+  });
+});
+
+test('updates only pending transactions and audits the old and new values', async () => {
+  await withTransactionMocks(async ({ calls, transaction }) => {
+    const response = await invoke(handlers.updateFinanceTransaction, {
+      params: { id: '9' },
+      body: { ...validInput(), amount: 500 },
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.data.amount, 500);
+    assert.ok(calls.includes('FINANCE_TRANSACTION_UPDATED'));
+    assert.equal(transaction.finished, 'commit');
+  });
+});
+
+test('rejects editing a posted transaction', async () => {
+  await withTransactionMocks(async ({ transaction }) => {
+    const response = await invoke(handlers.updateFinanceTransaction, { params: { id: '9' }, body: validInput() });
+    assert.equal(response.statusCode, 409);
+    assert.equal(transaction.finished, 'rollback');
+  }, { findByPk: async () => transactionRecord({ status: 'posted' }) });
+});
+
+test('posts pending transactions and records poster/time with audit log', async () => {
+  await withTransactionMocks(async ({ calls, transaction }) => {
+    const response = await invoke(handlers.postFinanceTransaction, { params: { id: '9' } });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.data.status, 'posted');
+    assert.equal(response.body.data.postedBy, 27);
+    assert.ok(response.body.data.postedAt);
+    assert.ok(calls.includes('FINANCE_TRANSACTION_POSTED'));
+    assert.equal(transaction.finished, 'commit');
+  });
+});
+
+test('voids a transaction only with a required reason and never deletes the row', async () => {
+  await withTransactionMocks(async ({ calls, transaction }) => {
+    const response = await invoke(handlers.voidFinanceTransaction, {
+      params: { id: '9' },
+      body: { reason: 'Duplicate source document' },
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.data.status, 'voided');
+    assert.equal(response.body.data.voidReason, 'Duplicate source document');
+    assert.equal(response.body.data.voidedBy, 27);
+    assert.ok(calls.includes('FINANCE_TRANSACTION_VOIDED'));
+    assert.equal(transaction.finished, 'commit');
+  });
+  const invalid = await invoke(handlers.voidFinanceTransaction, { params: { id: '9' }, body: {} });
+  assert.equal(invalid.statusCode, 400);
+});
+
+test('GET transaction detail returns persisted record or 404', async () => {
+  const original = FinanceTransaction.findByPk;
+  FinanceTransaction.findByPk = async () => transactionRecord();
+  try {
+    assert.equal((await invoke(handlers.getFinanceTransaction, { params: { id: '9' } })).statusCode, 200);
+    FinanceTransaction.findByPk = async () => null;
+    assert.equal((await invoke(handlers.getFinanceTransaction, { params: { id: '9' } })).statusCode, 404);
+  } finally {
+    FinanceTransaction.findByPk = original;
+  }
+});
+
+test('frontend consumes API filters, persistent summaries, and lifecycle endpoints', () => {
+  const page = fs.readFileSync(path.resolve(__dirname, '../../../frontend/src/components/finance/FinanceTransactions.jsx'), 'utf8');
+  assert.match(page, /api\.get\(\s*["']\/finance\/transactions["']/);
+  assert.match(page, /params\.type = type/);
+  assert.match(page, /summary\.totalDebits/);
+  assert.match(page, /api\.post\("\/finance\/transactions"/);
+  assert.match(page, /api\.put\(`\/finance\/transactions\//);
+  assert.match(page, /\/void`/);
+  assert.doesNotMatch(page, /api\.delete\(/);
 });

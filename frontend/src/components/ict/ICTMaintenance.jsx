@@ -83,12 +83,19 @@ const initialForm = {
 };
 
 async function apiRequest(url, options = {}) {
+  const token =
+    localStorage.getItem("token") ||
+    localStorage.getItem("authToken") ||
+    sessionStorage.getItem("token") ||
+    sessionStorage.getItem("authToken");
   const response = await fetch(`${API_BASE_URL}${url}`, {
+    ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
-    ...options,
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -138,11 +145,12 @@ function normalizeMaintenance(item, index) {
       item.maintenance_number ??
       item.referenceNumber ??
       item.reference_number ??
-      `MNT-${String(index + 1).padStart(5, "0")}`,
+      `MNT-${String(item.id ?? index + 1).padStart(5, "0")}`,
 
     assetTag:
       item.assetTag ??
       item.asset_tag ??
+      item.asset?.assetCode ??
       item.asset?.assetTag ??
       item.asset?.asset_tag ??
       "",
@@ -164,6 +172,7 @@ function normalizeMaintenance(item, index) {
       item.maintenanceType ??
       item.maintenance_type ??
       item.type ??
+      item.title ??
       "Preventive",
 
     priority: item.priority ?? "Medium",
@@ -172,14 +181,16 @@ function normalizeMaintenance(item, index) {
 
     requestedBy:
       item.requestedBy ??
-      item.requested_by ??
+      item.requested_by_name ??
       item.requester?.name ??
+      item.requested_by ??
       "",
 
     assignedTechnician:
       item.assignedTechnician ??
       item.assigned_technician ??
       item.technicianName ??
+      item.assigned_to_name ??
       item.technician?.name ??
       "",
 
@@ -187,11 +198,13 @@ function normalizeMaintenance(item, index) {
       item.department ??
       item.departmentName ??
       item.department_name ??
+      item.asset?.department ??
       "",
 
     location:
       item.location ??
       item.locationName ??
+      item.asset?.location ??
       "",
 
     scheduledDate:
@@ -559,30 +572,7 @@ export default function ICTMaintenance() {
     setError("");
 
     try {
-      let data;
-
-      try {
-        data = await apiRequest(
-          "/ict-maintenance"
-        );
-      } catch {
-        try {
-          data = await apiRequest(
-            "/ictMaintenance"
-          );
-        } catch {
-          try {
-            data = await apiRequest(
-              "/maintenance"
-            );
-          } catch {
-            data = await apiRequest(
-              "/maintenance-records"
-            );
-          }
-        }
-      }
-
+      const data = await apiRequest("/maintenance?limit=100");
       setRecords(
         extractArray(data).map(
           normalizeMaintenance
