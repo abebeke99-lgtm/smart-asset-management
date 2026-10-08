@@ -13,41 +13,43 @@ const assertNoDuplicates = async (field) => {
   }
 };
 
-const up = async () => {
+const ensureQrCodeColumn = async () => {
   const queryInterface = sequelize.getQueryInterface();
   let columns = await queryInterface.describeTable('assets');
+  if (!columns.qr_code && !columns.digital_id) {
+    throw new Error('Assets table has neither qr_code nor digital_id to initialize QR codes.');
+  }
+
+  let indexes = await queryInterface.showIndex('assets');
+  if (columns.qr_code && !columns.qr_code.allowNull && hasUniqueIndex(indexes, 'qr_code')) {
+    return false;
+  }
+
   if (!columns.qr_code) {
     await queryInterface.addColumn('assets', 'qr_code', {
       type: DataTypes.STRING(100),
       allowNull: true,
       defaultValue: null,
     });
+    columns.qr_code = { allowNull: true };
   }
-  columns = await queryInterface.describeTable('assets');
-  if (!columns.digital_id) throw new Error('Assets table is missing digital_id and cannot backfill qr_code.');
-  if (!columns.rfid_tag) {
-    await queryInterface.addColumn('assets', 'rfid_tag', {
-      type: DataTypes.STRING(255),
-      allowNull: true,
-      defaultValue: null,
+
+  if (columns.qr_code.allowNull) {
+    if (columns.digital_id) {
+      await sequelize.query('UPDATE assets SET qr_code = digital_id WHERE (qr_code IS NULL OR TRIM(qr_code) = \'\') AND digital_id IS NOT NULL AND TRIM(digital_id) <> \'\'');
+    }
+    await sequelize.query('UPDATE assets SET qr_code = CONCAT(\'QR-\', UPPER(REPLACE(UUID(), \'-\', \'\'))) WHERE qr_code IS NULL OR TRIM(qr_code) = \'\'');
+  }
+
+  await assertNoDuplicates('qr_code');
+  if (columns.qr_code.allowNull) {
+    await queryInterface.changeColumn('assets', 'qr_code', {
+      type: DataTypes.STRING(100),
+      allowNull: false,
     });
   }
-  await sequelize.query('UPDATE assets SET qr_code = digital_id WHERE (qr_code IS NULL OR TRIM(qr_code) = \'\') AND digital_id IS NOT NULL AND TRIM(digital_id) <> \'\'');
-  await sequelize.query('UPDATE assets SET qr_code = CONCAT(\'QR-\', UPPER(REPLACE(UUID(), \'-\', \'\'))) WHERE qr_code IS NULL OR TRIM(qr_code) = \'\'');
-  await sequelize.query('UPDATE assets SET qr_code = NULL WHERE TRIM(qr_code) = \'\'');
-  await sequelize.query('UPDATE assets SET rfid_tag = NULL WHERE TRIM(rfid_tag) = \'\'');
-  await assertNoDuplicates('qr_code');
-  await assertNoDuplicates('rfid_tag');
-  await queryInterface.changeColumn('assets', 'qr_code', {
-    type: DataTypes.STRING(100),
-    allowNull: false,
-  });
-  await queryInterface.changeColumn('assets', 'rfid_tag', {
-    type: DataTypes.STRING(255),
-    allowNull: true,
-    defaultValue: null,
-  });
-  const indexes = await queryInterface.showIndex('assets');
+
+  indexes = await queryInterface.showIndex('assets');
   if (!hasUniqueIndex(indexes, 'qr_code')) {
     await queryInterface.addConstraint('assets', {
       fields: ['qr_code'],
@@ -55,6 +57,28 @@ const up = async () => {
       name: 'assets_qr_code_unique',
     });
   }
+  return true;
+};
+
+const up = async () => {
+  const queryInterface = sequelize.getQueryInterface();
+  await ensureQrCodeColumn();
+  const columns = await queryInterface.describeTable('assets');
+  if (!columns.rfid_tag) {
+    await queryInterface.addColumn('assets', 'rfid_tag', {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      defaultValue: null,
+    });
+  }
+  await sequelize.query('UPDATE assets SET rfid_tag = NULL WHERE TRIM(rfid_tag) = \'\'');
+  await assertNoDuplicates('rfid_tag');
+  await queryInterface.changeColumn('assets', 'rfid_tag', {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    defaultValue: null,
+  });
+  const indexes = await queryInterface.showIndex('assets');
   if (!hasUniqueIndex(indexes, 'rfid_tag')) {
     await queryInterface.addConstraint('assets', {
       fields: ['rfid_tag'],
@@ -84,4 +108,4 @@ if (require.main === module) {
     .finally(() => sequelize.close());
 }
 
-module.exports = { up };
+module.exports = { ensureQrCodeColumn, up };

@@ -9,6 +9,7 @@ require('./models');
 const { syncDatabase } = require('./config/sync');
 const { seedDatabase } = require('./config/seed');
 const { initializeInitialAdmin } = require('./services/initialAdminService');
+const { ensureQrCodeColumn } = require('./scripts/migrations/adminRfidTracking');
 const { ensureUploadDirectories } = require('./utils/uploadUtils');
 
 const authRoutes = require('./routes/authRoutes');
@@ -234,15 +235,17 @@ async function initializeDatabase() {
     if (databaseConnected) {
       const repairRequired = await schemaRepairRequired();
       const skipSync = process.env.DB_SYNC_ON_START === 'false' && !repairRequired;
-      if (skipSync) {
-        schemaReady = true;
-        console.log('Database schema sync skipped (DB_SYNC_ON_START=false).');
-      } else {
-        try {
+      try {
+        if (skipSync) {
+          schemaReady = true;
+          console.log('Database schema sync skipped (DB_SYNC_ON_START=false).');
+        } else {
           schemaReady = await syncDatabase();
-        } catch (error) {
-          console.error('Database schema initialization failed:', error.message);
         }
+        if (schemaReady) await ensureQrCodeColumn();
+      } catch (error) {
+        schemaReady = false;
+        console.error('Database schema initialization failed:', error.message);
       }
     }
     if (databaseConnected && schemaReady) {
@@ -284,12 +287,10 @@ async function startServer() {
     console.error('Could not initialize upload directories:', error.message);
   }
 
+  await initializeDatabase();
   return new Promise((resolve, reject) => {
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
-      initializeDatabase().catch((error) => {
-        console.error('Background database initialization failed:', error.message);
-      });
       resolve();
     });
     server.once('error', reject);
