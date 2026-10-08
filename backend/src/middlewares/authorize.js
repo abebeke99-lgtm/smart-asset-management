@@ -4,26 +4,40 @@ const { createAuditLog } = require('../services/auditLogService');
 
 const SCOPES = new Set(['system', 'college', 'department', 'store', 'location', 'own']);
 const HIGH_RISK_ACTIONS = new Set(['delete', 'approve', 'transfer', 'configure']);
+let warnedAboutMissingPermissionTables = false;
+
+const isMissingPermissionTable = (error) => (
+  error?.original?.code === 'ER_NO_SUCH_TABLE'
+  || error?.parent?.code === 'ER_NO_SUCH_TABLE'
+);
 
 const getEffectiveUserRoles = async (user) => {
-  const assignments = await UserRole.findAll({
-    where: { userId: user.id },
-    include: [{
-      model: Role,
-      required: true,
-      where: { active: true },
-      through: { attributes: ['scopeType', 'scopeId'] },
-    }],
-  });
-  if (assignments.length) {
-    return assignments.map((assignment) => ({
-      role: assignment.Role,
-      scopeType: assignment.scopeType,
-      scopeId: assignment.scopeId,
-    }));
+  try {
+    const assignments = await UserRole.findAll({
+      attributes: ['id', 'userId', 'roleId', 'scopeType', 'scopeId'],
+      where: { userId: user.id },
+      include: [{
+        model: Role,
+        required: true,
+        attributes: ['id', 'name', 'active'],
+        where: { active: true },
+      }],
+    });
+    if (assignments.length) {
+      return assignments.map((assignment) => ({
+        role: assignment.Role,
+        scopeType: assignment.scopeType,
+        scopeId: assignment.scopeId,
+      }));
+    }
+  } catch (error) {
+    if (!isMissingPermissionTable(error)) throw error;
   }
 
-  const legacyRole = await Role.findOne({ where: { name: String(user.role || '').toLowerCase(), active: true } });
+  const legacyRole = await Role.findOne({
+    where: { name: String(user.role || '').toLowerCase(), active: true },
+    attributes: ['id', 'name', 'active'],
+  });
   return legacyRole ? [{ role: legacyRole, scopeType: 'system', scopeId: null }] : [];
 };
 
@@ -50,20 +64,29 @@ const matchesAssignmentScope = (assignment, grant, target, userId) => {
 };
 
 const getDatabasePermissionKeys = async (user) => {
-  const roles = await getEffectiveUserRoles(user);
-  if (!roles.length) return [];
-  const grants = await RolePermission.findAll({
-    where: { roleId: { [Op.in]: roles.map(({ role }) => role.id) } },
-    include: [{ model: Permission, required: true }],
-  });
-  return grants
-    .filter((grant) => {
-      const assignment = roles.find(({ role }) => role.id === grant.roleId);
-      return assignment && (grant.scopeType === 'system' && !grant.limited
-        || assignment.scopeType === 'system'
-        || assignment.scopeType === grant.scopeType);
-    })
-    .map((grant) => grant.Permission.key);
+  try {
+    const roles = await getEffectiveUserRoles(user);
+    if (!roles.length) return [];
+    const grants = await RolePermission.findAll({
+      where: { roleId: { [Op.in]: roles.map(({ role }) => role.id) } },
+      include: [{ model: Permission, required: true }],
+    });
+    return grants
+      .filter((grant) => {
+        const assignment = roles.find(({ role }) => role.id === grant.roleId);
+        return assignment && (grant.scopeType === 'system' && !grant.limited
+          || assignment.scopeType === 'system'
+          || assignment.scopeType === grant.scopeType);
+      })
+      .map((grant) => grant.Permission.key);
+  } catch (error) {
+    if (!isMissingPermissionTable(error)) throw error;
+    if (!warnedAboutMissingPermissionTables) {
+      console.warn('Role-permission tables are not installed; authorization is using the configured legacy role matrix until migration completes.');
+      warnedAboutMissingPermissionTables = true;
+    }
+    return [];
+  }
 };
 
 const authorize = (permissionKey, options = {}) => async (req, res, next) => {
@@ -108,6 +131,12 @@ const authorize = (permissionKey, options = {}) => async (req, res, next) => {
     }
     return next();
   } catch (error) {
+    if (isMissingPermissionTable(error)) {
+      return res.status(503).json({
+        success: false,
+        message: 'Role-permission tables are not installed. Apply the roles and permissions migration.',
+      });
+    }
     return next(error);
   }
 };

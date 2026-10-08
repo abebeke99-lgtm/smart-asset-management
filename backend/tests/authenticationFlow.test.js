@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { randomBytes } = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { User, Config, AuditLog } = require('../src/models');
+const { User, Config, AuditLog, UserActivityLog, UserRole, Role, RolePermission } = require('../src/models');
 const { login } = require('../src/controllers/authController');
 const { getJwtSecret } = require('../src/config/jwt');
 const verificationController = require('../src/controllers/verificationController');
@@ -33,6 +33,10 @@ const invokeLogin = async (user) => {
     findOne: User.findOne,
     findByPk: Config.findByPk,
     createAudit: AuditLog.create,
+    createUserActivity: UserActivityLog.create,
+    userRoleFindAll: UserRole.findAll,
+    roleFindOne: Role.findOne,
+    rolePermissionFindAll: RolePermission.findAll,
     jwtSecret: process.env.JWT_SECRET,
   };
 
@@ -42,6 +46,10 @@ const invokeLogin = async (user) => {
   };
   Config.findByPk = async () => null;
   AuditLog.create = async () => ({});
+  UserActivityLog.create = async () => ({});
+  UserRole.findAll = async () => [];
+  Role.findOne = async () => null;
+  RolePermission.findAll = async () => [];
   process.env.JWT_SECRET = jwtSecret;
 
   const response = {
@@ -58,6 +66,10 @@ const invokeLogin = async (user) => {
     User.findOne = previous.findOne;
     Config.findByPk = previous.findByPk;
     AuditLog.create = previous.createAudit;
+    UserActivityLog.create = previous.createUserActivity;
+    UserRole.findAll = previous.userRoleFindAll;
+    Role.findOne = previous.roleFindOne;
+    RolePermission.findAll = previous.rolePermissionFindAll;
     if (previous.jwtSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previous.jwtSecret;
   }

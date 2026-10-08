@@ -189,7 +189,6 @@ const AdminAssignment = () => {
   const getUserName = useCallback((user) => user?.fullName || user?.full_name || user?.name || user?.username || t.unnamedUser, [t.unnamedUser]);
   const getDepartmentName = (department) => department?.name || department?.department_name || department?.title || 'Not specified';
   const getAssetTag = (asset) => asset?.assetCode || asset?.asset_code || asset?.assetTag || asset?.asset_tag || `AST-${asset?.id || ''}`;
-  const getAssetName = (asset) => asset?.name || asset?.asset_name || 'Unnamed asset';
   const getRoomName = (room) => room?.roomName || room?.room_name || room?.name || '';
   const getBuildingName = (building) => building?.buildingName || building?.building_name || building?.name || '';
   const getCampusName = (campus) => campus?.campusName || campus?.campus_name || campus?.name || '';
@@ -525,11 +524,6 @@ const AdminAssignment = () => {
       recipient.role,
     ].some((value) => String(value || '').toLowerCase().includes(query)));
   }, [scopedUsers, userSearch, getUserName]);
-  const formAsset = assets.find((asset) => String(asset.id) === String(formData.assetId));
-  const assetOptions = reassigningAssignment
-    ? [formAsset].filter(Boolean)
-    : availableAssets;
-
   const totalPages = Math.max(1, Number(serverPagination.pages) || 1);
 
   useEffect(() => {
@@ -571,11 +565,15 @@ const AdminAssignment = () => {
     });
   };
 
-  const handleAssetSearchChange = (value) => {
-    const match = assetOptions.find((asset) => String(asset.id) === String(value));
+  const handleAssetIdChange = (value) => {
+    const normalizedValue = value.trim().toLowerCase();
+    const match = assets.find((asset) => (
+      String(asset.id) === value.trim()
+      || String(getAssetTag(asset)).trim().toLowerCase() === normalizedValue
+    ));
     setFormData((previous) => ({
       ...previous,
-      assetId: match ? String(match.id) : '',
+      assetId: value,
       ...(match ? {
         college: String(match.collegeId || match.college_id || previous.college || ''),
         department: previous.assignedToType === 'user' ? previous.department : String(match.departmentId || match.department_id || ''),
@@ -594,7 +592,7 @@ const AdminAssignment = () => {
     if (saving) return;
 
     if (!formData.assetId) {
-      toast.error(t.assetRequired || 'Please select an asset.');
+      toast.error(t.assetRequired || 'Please enter an asset ID.');
       return;
     }
 
@@ -628,7 +626,11 @@ const AdminAssignment = () => {
       return;
     }
 
-    const selectedAsset = assets.find((asset) => String(asset.id) === String(formData.assetId));
+    const normalizedAssetId = formData.assetId.trim().toLowerCase();
+    const selectedAsset = assets.find((asset) => (
+      String(asset.id) === formData.assetId.trim()
+      || String(getAssetTag(asset)).trim().toLowerCase() === normalizedAssetId
+    ));
     if (!selectedAsset) {
       toast.error(t.assetNotFound || 'Selected asset was not found.');
       return;
@@ -677,7 +679,7 @@ const AdminAssignment = () => {
 
     try {
       const payload = {
-        asset_id: formData.assetId,
+        asset_id: String(selectedAsset.id),
         assigned_to_type: formData.assignedToType,
         assigned_to_id: formData.assignedTo,
         college_id: formData.college || null,
@@ -1222,22 +1224,17 @@ const AdminAssignment = () => {
                   <div style={styles.formGrid}>
                     <div style={styles.formGroup}>
                       <label style={styles.label} htmlFor="assignment-asset-id">{t.assetId} *</label>
-                      <select
+                      <input
                         id="assignment-asset-id"
+                        name="assetId"
+                        type="text"
                         value={formData.assetId}
-                        onChange={(event) => handleAssetSearchChange(event.target.value)}
+                        onChange={(event) => handleAssetIdChange(event.target.value)}
+                        placeholder={t.assetIdPlaceholder}
                         style={styles.formInput}
                         required
                         disabled={Boolean(reassigningAssignment)}
-                        aria-label={t.selectAsset}
-                      >
-                        <option value="">{t.selectAsset}</option>
-                        {assetOptions.map((asset) => (
-                          <option key={asset.id} value={asset.id}>
-                            {getAssetTag(asset)} — {getAssetName(asset)}{asset.category ? ` — ${asset.category}` : ''}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </div>
 
                     <div style={styles.formGroup}>
@@ -1781,12 +1778,12 @@ const englishTranslations = {
   createAssignment: 'Create Assignment',
   cancel: 'Cancel',
   saving: 'Saving...',
-  selectAsset: 'Select asset',
+  assetIdPlaceholder: 'Enter Asset ID',
   selectUser: 'Select user',
   selectDepartment: 'Select department',
   enterLocation: 'Enter location',
   enterNotes: 'Assignment notes...',
-  assetRequired: 'Please select an asset.',
+  assetRequired: 'Please enter an asset ID.',
   assigneeRequired: 'Please select a user.',
   assignmentDateRequired: 'Assignment date is required.',
   invalidDate: 'Please enter a valid assignment date.',
@@ -1891,12 +1888,12 @@ const amharicTranslations = {
   createAssignment: 'ምደባ ፍጠር',
   cancel: 'ሰርዝ',
   saving: 'በማስቀመጥ ላይ...',
-  selectAsset: 'ንብረት ይምረጡ',
+  assetIdPlaceholder: 'የንብረት መለያ ያስገቡ',
   selectUser: 'ተጠቃሚ ይምረጡ',
   selectDepartment: 'ክፍል ይምረጡ',
   enterLocation: 'ቦታ ያስገቡ',
   enterNotes: 'የምደባ ማስታወሻ...',
-  assetRequired: 'እባክዎ ንብረት ይምረጡ።',
+  assetRequired: 'እባክዎ የንብረት መለያ ያስገቡ።',
   assigneeRequired: 'እባክዎ ተጠቃሚ ይምረጡ።',
   assignmentDateRequired: 'የምደባ ቀን ያስፈልጋል።',
   invalidDate: 'እባክዎ ትክክለኛ የምደባ ቀን ያስገቡ።',

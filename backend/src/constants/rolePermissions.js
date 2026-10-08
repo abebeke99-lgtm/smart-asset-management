@@ -1,6 +1,10 @@
 const PERMISSIONS = [
   'users.view', 'users.create', 'users.update', 'users.delete', 'users.activate', 'users.deactivate', 'users.lock', 'users.unlock',
   'roles.view', 'roles.manage', 'permissions.view', 'permissions.manage',
+  'roles_permissions.view', 'roles_permissions.create', 'roles_permissions.edit',
+  'roles_permissions.delete', 'roles_permissions.approve', 'roles_permissions.assign',
+  'roles_permissions.transfer', 'roles_permissions.maintain', 'roles_permissions.report',
+  'roles_permissions.configure',
   'assets.view', 'assets.create', 'assets.update', 'assets.delete', 'assets.assign', 'assets.transfer', 'assets.transfer.approve', 'assets.return', 'assets.dispose',
   'inventory.view', 'inventory.stock_in', 'inventory.stock_out', 'inventory.stock_movement',
   'colleges.view', 'colleges.manage', 'departments.view', 'departments.manage', 'locations.view', 'locations.manage',

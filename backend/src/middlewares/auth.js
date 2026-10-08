@@ -45,7 +45,10 @@ const requireAuth = (req, res, next) => {
       const normalizedRole = normalizeRoleValue(req.user.role);
       req.user.role = normalizedRole;
       const primaryRole = typeof req.user.setDataValue === 'function'
-        ? await Role.findOne({ where: { name: normalizedRole } })
+        ? await Role.findOne({
+          where: { name: normalizedRole },
+          attributes: ['id', 'name', 'active'],
+        })
         : null;
       if (primaryRole && !primaryRole.active) {
         return res.status(403).json({ success: false, message: 'This role is inactive. Contact an administrator.' });

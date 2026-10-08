@@ -18,6 +18,7 @@ const Transfer = sequelize.define('Transfer', {
   destinationRoomId: { type: DataTypes.INTEGER, allowNull: true, field: 'destination_room_id' },
   destinationFloor: { type: DataTypes.INTEGER, allowNull: true, field: 'destination_floor' },
   conditionAtTransfer: { type: DataTypes.STRING(100), allowNull: true, field: 'condition_at_transfer' },
+  expectedReturnDate: { type: DataTypes.DATE, allowNull: true, field: 'expected_return_date' },
   assetStatusBeforeTransfer: { type: DataTypes.STRING(100), allowNull: true, field: 'asset_status_before_transfer' },
   sourceDepartment: { type: DataTypes.STRING(255), allowNull: false },
   destinationDepartment: { type: DataTypes.STRING(255), allowNull: false },

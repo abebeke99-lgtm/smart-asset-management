@@ -127,6 +127,7 @@ test('ICT network report queries college-scoped network assets and includes stor
 });
 
 test('ICT software-license report returns scoped expiration status and active assignments without license keys', async () => {
+  const originalDepartmentFindAll = Department.findAll;
   const originalLicenseFindAndCountAll = SoftwareLicense.findAndCountAll;
   const originalLicenseFindAll = SoftwareLicense.findAll;
   const originalAssignmentFindAll = SoftwareLicenseAssignment.findAll;
@@ -155,6 +156,7 @@ test('ICT software-license report returns scoped expiration status and active as
     Asset: { assetCode: 'ICT-009', name: 'Computer 9' },
     User: { fullName: 'Test User', username: 'testuser' },
   }];
+  Department.findAll = async () => [];
 
   try {
     let response;
@@ -180,10 +182,12 @@ test('ICT software-license report returns scoped expiration status and active as
     SoftwareLicense.findAndCountAll = originalLicenseFindAndCountAll;
     SoftwareLicense.findAll = originalLicenseFindAll;
     SoftwareLicenseAssignment.findAll = originalAssignmentFindAll;
+    Department.findAll = originalDepartmentFindAll;
   }
 });
 
 test('ICT support report scopes support requests and reports requester, assignee, and resolution', async () => {
+  const originalDepartmentFindAll = Department.findAll;
   const originalFindAndCountAll = ServiceRequest.findAndCountAll;
   const originalFindAll = ServiceRequest.findAll;
   let reportQuery;
@@ -215,6 +219,7 @@ test('ICT support report scopes support requests and reports requester, assignee
     if (options.include) summaryQuery = options;
     return requests;
   };
+  Department.findAll = async () => [];
 
   try {
     let response;
@@ -244,10 +249,12 @@ test('ICT support report scopes support requests and reports requester, assignee
   } finally {
     ServiceRequest.findAndCountAll = originalFindAndCountAll;
     ServiceRequest.findAll = originalFindAll;
+    Department.findAll = originalDepartmentFindAll;
   }
 });
 
 test('ICT incident report scopes through existing college relations and includes resolution history', async () => {
+  const originalDepartmentFindAll = Department.findAll;
   const originalFindAndCountAll = Incident.findAndCountAll;
   const originalFindAll = Incident.findAll;
   let reportQuery;
@@ -281,6 +288,7 @@ test('ICT incident report scopes through existing college relations and includes
     };
   };
   Incident.findAll = async () => [{ status: 'resolved', priority: 'critical', category: 'network' }];
+  Department.findAll = async () => [];
 
   try {
     let response;
@@ -311,6 +319,7 @@ test('ICT incident report scopes through existing college relations and includes
   } finally {
     Incident.findAndCountAll = originalFindAndCountAll;
     Incident.findAll = originalFindAll;
+    Department.findAll = originalDepartmentFindAll;
   }
 });
 

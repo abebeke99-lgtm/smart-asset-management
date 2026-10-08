@@ -116,13 +116,14 @@ describe('New Assignment form', () => {
 
   afterEach(() => jest.restoreAllMocks());
 
-  test('offers only available assets, filters inactive users, and creates a user assignment', async () => {
+  test('accepts a manually entered asset ID, filters inactive users, and creates a user assignment', async () => {
     await renderAssignmentPage();
     openForm();
 
-    const assetSelect = screen.getByLabelText('Asset ID *');
-    expect(assetSelect.querySelector('option[value="11"]')).toHaveTextContent('Microscope');
-    expect(assetSelect.querySelector('option[value="12"]')).not.toBeInTheDocument();
+    const assetIdInput = screen.getByLabelText('Asset ID *');
+    expect(assetIdInput).toHaveAttribute('type', 'text');
+    expect(assetIdInput).toHaveAttribute('placeholder', 'Enter Asset ID');
+    expect(assetIdInput).toHaveValue('');
 
     selectAssetAndType('user');
     const userSelect = screen.getByLabelText('Assigned To *');
@@ -172,7 +173,7 @@ describe('New Assignment form', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
     openForm();
-    selectAssetAndType('laboratory', '13');
+    selectAssetAndType('laboratory', 'AST-0013');
     fireEvent.change(screen.getByLabelText('College *'), { target: { value: '3' } });
     fireEvent.change(screen.getByLabelText('Department *'), { target: { value: '7' } });
     fireEvent.change(screen.getByLabelText('Assigned To *'), { target: { value: '22' } });
@@ -187,6 +188,15 @@ describe('New Assignment form', () => {
       department_id: '7',
       college_id: '3',
     })));
+  });
+
+  test('requires an asset ID before creating an assignment', async () => {
+    await renderAssignmentPage();
+    openForm();
+    fireEvent.submit(screen.getByLabelText('Asset ID *').closest('form'));
+
+    expect(apiClient.post).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('Please enter an asset ID.');
   });
 
   test('rejects an expected return date earlier than the assignment date', async () => {

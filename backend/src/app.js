@@ -214,13 +214,27 @@ app.use((err, req, res, next) => {
   });
 });
 
+async function schemaRepairRequired() {
+  try {
+    const table = await sequelize.getQueryInterface().describeTable('users');
+    const needsLegacyPasswordRename = !table.password_hash && Boolean(table.password);
+    const needsStatusColumn = !table.status;
+    return needsLegacyPasswordRename || needsStatusColumn;
+  } catch (error) {
+    console.warn('Could not inspect user schema for startup repair:', error.message);
+    return false;
+  }
+}
+
 async function initializeDatabase() {
   const retryDelays = [5000, 10000, 20000, 30000, 60000];
   for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
     const databaseConnected = await testConnection();
     let schemaReady = false;
     if (databaseConnected) {
-      if (process.env.DB_SYNC_ON_START === 'false') {
+      const repairRequired = await schemaRepairRequired();
+      const skipSync = process.env.DB_SYNC_ON_START === 'false' && !repairRequired;
+      if (skipSync) {
         schemaReady = true;
         console.log('Database schema sync skipped (DB_SYNC_ON_START=false).');
       } else {

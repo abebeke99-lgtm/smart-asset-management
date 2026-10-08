@@ -1,6 +1,13 @@
 const { spawnSync } = require('node:child_process');
+const path = require('node:path');
 
-const result = spawnSync(process.execPath, ['--test', ...process.argv.slice(2)], {
+const arguments_ = process.argv.slice(2);
+const jest = arguments_.includes('--jest');
+const runnerArguments = arguments_.filter((argument) => argument !== '--jest');
+const testCommand = jest
+  ? [process.execPath, [path.resolve(__dirname, '../node_modules/jest/bin/jest.js'), ...runnerArguments]]
+  : [process.execPath, ['--test', ...runnerArguments]];
+const result = spawnSync(testCommand[0], testCommand[1], {
   env: { ...process.env, NODE_ENV: 'test' },
   stdio: 'inherit',
 });

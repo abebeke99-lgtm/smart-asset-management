@@ -9,8 +9,24 @@ import './AdminTransfer.css';
 const PAGE_SIZE = 10;
 const STATUSES = ['Requested', 'Approved', 'In Transit', 'Received', 'Rejected', 'Cancelled'];
 const TRANSFERABLE_BLOCKED = new Set(['retired', 'disposed', 'deleted', 'soft-deleted', 'under-maintenance', 'in-maintenance', 'maintenance', 'testing', 'lost', 'missing', 'in-transfer']);
-const EMPTY_FORM = {
+const getTodayInputDate = () => {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+};
+const isValidDateInput = (value) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+  if (!match) return false;
+  const [, year, month, day] = match.map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+};
+const createEmptyForm = () => ({
   assetId: '',
+  serialNumber: '',
+  transferReference: '',
+  sourceCampusId: '',
+  sourceCollegeId: '',
+  sourceDepartmentId: '',
   destinationCampusId: '',
   destinationCollegeId: '',
   destinationDepartmentId: '',
@@ -18,8 +34,11 @@ const EMPTY_FORM = {
   destinationFloor: '',
   destinationRoomId: '',
   condition: 'Good',
+  transferDate: getTodayInputDate(),
+  expectedReturnDate: '',
   reason: '',
-};
+  notes: '',
+});
 
 const getRows = (response, keys = []) => {
   const payload = response?.data;
@@ -69,6 +88,18 @@ const formatDateTime = (value) => {
 };
 
 const getTransferAssetId = (transfer) => String(transfer?.assetId ?? transfer?.asset_id ?? '');
+const getAssetByIdentifier = (assets, value) => {
+  const identifier = String(value || '').trim().toLowerCase();
+  if (!identifier) return null;
+  return assets.find((asset) => [
+    asset.id,
+    getAssetId(asset),
+    asset.digitalId,
+    asset.digital_id,
+    asset.assetTag,
+    asset.asset_tag,
+  ].some((candidate) => String(candidate || '').trim().toLowerCase() === identifier)) || null;
+};
 
 const AdminTransfer = () => {
   const { user } = useAuth();
@@ -102,26 +133,26 @@ const AdminTransfer = () => {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, pages: 1 });
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [assetSearch, setAssetSearch] = useState('');
+  const [form, setForm] = useState(createEmptyForm);
   const [details, setDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
 
-  const assetsById = useMemo(() => new Map(assets.map((asset) => [String(asset.id), asset])), [assets]);
   const campusesById = useMemo(() => new Map(campuses.map((item) => [String(item.id), item])), [campuses]);
   const collegesById = useMemo(() => new Map(colleges.map((item) => [String(item.id), item])), [colleges]);
   const departmentsById = useMemo(() => new Map(departments.map((item) => [String(item.id), item])), [departments]);
   const buildingsById = useMemo(() => new Map(buildings.map((item) => [String(item.id), item])), [buildings]);
   const roomsById = useMemo(() => new Map(rooms.map((item) => [String(item.id), item])), [rooms]);
-  const formatAssetLabel = useCallback((asset) => {
-    const serial = asset.serialNumber || asset.serial_number;
-    return `${getAssetId(asset)} — ${getAssetName(asset)}${serial ? ` — ${serial}` : ''} (ID ${asset.id})`;
-  }, []);
   const openFormForAsset = useCallback((asset) => {
-    setForm({ ...EMPTY_FORM, assetId: String(asset.id) });
-    setAssetSearch(formatAssetLabel(asset));
+    setForm({
+      ...createEmptyForm(),
+      assetId: String(getAssetId(asset)),
+      serialNumber: String(asset.serialNumber || asset.serial_number || ''),
+      sourceCampusId: String(asset.campusId || asset.campus_id || ''),
+      sourceCollegeId: String(asset.collegeId || asset.college_id || ''),
+      sourceDepartmentId: String(asset.departmentId || asset.department_id || ''),
+    });
     setShowForm(true);
-  }, [formatAssetLabel]);
+  }, []);
 
   const getLocationLabel = useCallback((values, prefix) => {
     const campus = campusesById.get(String(values?.[`${prefix}CampusId`] ?? values?.[`${prefix}_campus_id`] ?? ''));
@@ -213,7 +244,7 @@ const AdminTransfer = () => {
   useEffect(() => {
     const assetId = searchParams.get('assetId') || location.state?.assetId;
     if (!assetId || optionsLoading || !assets.length) return;
-    const asset = assets.find((item) => String(item.id) === String(assetId));
+    const asset = getAssetByIdentifier(assets, assetId);
     if (!asset) {
       toast.error('The requested asset is not available for transfer.');
       return;
@@ -221,7 +252,7 @@ const AdminTransfer = () => {
     openFormForAsset(asset);
   }, [assets, location.state, openFormForAsset, optionsLoading, searchParams]);
 
-  const selectedAsset = assetsById.get(String(form.assetId));
+  const selectedAsset = getAssetByIdentifier(assets, form.assetId);
   const filteredColleges = useMemo(() => {
     const linkedToCampus = colleges.filter((college) => String(college.campusId || college.campus_id || '') === String(form.destinationCampusId));
     const unlinked = colleges.filter((college) => !(college.campusId || college.campus_id));
@@ -245,19 +276,22 @@ const AdminTransfer = () => {
     && (!(room.departmentId || room.department_id) || String(room.departmentId || room.department_id) === String(form.destinationDepartmentId))
   )), [form.destinationBuildingId, form.destinationDepartmentId, form.destinationFloor, rooms]);
 
-  const currentLocation = selectedAsset ? {
-    sourceCampusId: selectedAsset.campusId || selectedAsset.campus_id,
-    sourceCollegeId: selectedAsset.collegeId || selectedAsset.college_id,
-    sourceDepartmentId: selectedAsset.departmentId || selectedAsset.department_id,
-    sourceBuildingId: selectedAsset.buildingId || selectedAsset.building_id,
-    sourceRoomId: selectedAsset.roomId || selectedAsset.room_id,
-    sourceFloor: getRoomFloor(roomsById.get(String(selectedAsset.roomId || selectedAsset.room_id || ''))),
-    currentLocation: selectedAsset.location || selectedAsset.current_location,
-  } : null;
-
   const handleFormField = (event) => {
     const { name, value } = event.target;
     setForm((current) => {
+      if (name === 'assetId') {
+        const asset = getAssetByIdentifier(assets, value);
+        return {
+          ...current,
+          assetId: value,
+          serialNumber: asset ? String(asset.serialNumber || asset.serial_number || '') : '',
+          sourceCampusId: asset ? String(asset.campusId || asset.campus_id || '') : '',
+          sourceCollegeId: asset ? String(asset.collegeId || asset.college_id || '') : '',
+          sourceDepartmentId: asset ? String(asset.departmentId || asset.department_id || '') : '',
+        };
+      }
+      if (name === 'sourceCampusId') return { ...current, sourceCampusId: value, sourceCollegeId: '', sourceDepartmentId: '' };
+      if (name === 'sourceCollegeId') return { ...current, sourceCollegeId: value, sourceDepartmentId: '' };
       if (name === 'destinationCampusId') return { ...current, destinationCampusId: value, destinationCollegeId: '', destinationDepartmentId: '', destinationBuildingId: '', destinationFloor: '', destinationRoomId: '' };
       if (name === 'destinationCollegeId') return { ...current, destinationCollegeId: value, destinationDepartmentId: '' };
       if (name === 'destinationBuildingId') return { ...current, destinationBuildingId: value, destinationFloor: '', destinationRoomId: '' };
@@ -266,22 +300,30 @@ const AdminTransfer = () => {
     });
   };
 
-  const handleAssetSearch = (value) => {
-    setAssetSearch(value);
-    const match = assets.find((asset) => formatAssetLabel(asset) === value || String(asset.id) === value);
-    setForm((current) => ({ ...current, assetId: match ? String(match.id) : '' }));
-  };
-
   const resetForm = () => {
-    setForm(EMPTY_FORM);
-    setAssetSearch('');
+    setForm(createEmptyForm());
     setShowForm(false);
   };
 
   const submitTransferRequest = async (event) => {
     event.preventDefault();
     if (!canTransfer || saving) return;
-    if (!selectedAsset) return toast.error('Select an asset from the searchable list.');
+    if (!form.assetId.trim()) return toast.error('Asset ID is required.');
+    if (!selectedAsset) return toast.error('Asset ID was not found.');
+    if (activeAssetIds.has(String(selectedAsset.id))) return toast.error('This asset already has an active transfer.');
+    if (form.serialNumber.trim() && form.serialNumber.trim().toLowerCase() !== String(selectedAsset.serialNumber || selectedAsset.serial_number || '').trim().toLowerCase()) {
+      return toast.error('Serial Number does not match the selected asset.');
+    }
+    if (!isValidDateInput(form.transferDate)) return toast.error('Transfer date is required and must be valid.');
+    if (form.expectedReturnDate && (!isValidDateInput(form.expectedReturnDate) || form.expectedReturnDate < form.transferDate)) {
+      return toast.error('Expected return must be a valid date on or after the transfer date.');
+    }
+    const sameSource = String(selectedAsset.campusId || selectedAsset.campus_id || '') === form.sourceCampusId
+      && String(selectedAsset.collegeId || selectedAsset.college_id || '') === form.sourceCollegeId
+      && String(selectedAsset.departmentId || selectedAsset.department_id || '') === form.sourceDepartmentId;
+    if (!form.sourceCampusId || !form.sourceCollegeId || !form.sourceDepartmentId || !sameSource) {
+      return toast.error('From Campus, College, and Department must match the asset’s current location.');
+    }
     if (!form.destinationDepartmentId || !form.destinationCampusId || !form.destinationCollegeId || !form.destinationBuildingId || form.destinationFloor === '' || !form.destinationRoomId) {
       return toast.error('Select a destination campus, college, department, building, floor, and laboratory.');
     }
@@ -299,10 +341,16 @@ const AdminTransfer = () => {
       && Number(selectedAsset.roomId || selectedAsset.room_id) === Number(form.destinationRoomId);
     if (sameLocation) return toast.error('Choose a destination different from the asset’s current location.');
     if (!form.reason.trim()) return toast.error('Transfer reason is required.');
+    if (form.transferReference.trim().length > 40) return toast.error('Transfer Reference must be 40 characters or fewer.');
     setSaving(true);
     try {
       await apiClient.post('/api/transfers', {
-        assetId: Number(form.assetId),
+        assetId: Number(selectedAsset.id),
+        serialNumber: form.serialNumber.trim() || undefined,
+        transferNumber: form.transferReference.trim() || undefined,
+        sourceCampusId: Number(form.sourceCampusId),
+        sourceCollegeId: Number(form.sourceCollegeId),
+        sourceDepartmentId: Number(form.sourceDepartmentId),
         destinationCampusId: Number(form.destinationCampusId),
         destinationCollegeId: Number(form.destinationCollegeId) || null,
         destinationDepartmentId: Number(form.destinationDepartmentId),
@@ -312,6 +360,9 @@ const AdminTransfer = () => {
         newLocation: location,
         conditionAtTransfer: form.condition,
         reason: form.reason.trim(),
+        transferDate: form.transferDate,
+        expectedReturnDate: form.expectedReturnDate || null,
+        notes: form.notes.trim(),
       });
       toast.success('Transfer request submitted for authorization.');
       resetForm();
@@ -384,68 +435,97 @@ const AdminTransfer = () => {
             <h1><ArrowRightLeft aria-hidden="true" /> Asset Transfer</h1>
             <p className="admin-transfer-subtitle">Request, authorize, dispatch, and confirm asset transfers with a complete custody record.</p>
           </div>
-          {canTransfer && <button type="button" className="transfer-button transfer-button--primary" onClick={() => { setForm(EMPTY_FORM); setAssetSearch(''); setShowForm((value) => !value); }} disabled={optionsLoading}>
+          {canTransfer && <button type="button" className="transfer-button transfer-button--primary" onClick={() => { if (showForm) resetForm(); else { setForm(createEmptyForm()); setShowForm(true); } }} disabled={optionsLoading}>
             {showForm ? <X size={18} /> : <Plus size={18} />}{showForm ? 'Close request' : 'New transfer request'}
           </button>}
         </div>
 
-        {showForm && <section className="transfer-panel" aria-labelledby="transfer-form-title">
-          <div className="transfer-panel-heading">
-            <div><h2 id="transfer-form-title">Transfer request</h2><p>Requested By and transfer date are recorded by the server when submitted.</p></div>
-          </div>
-          <form onSubmit={submitTransferRequest}>
-            <div className="transfer-form-grid">
-              <label className="transfer-field transfer-field--wide">
-                Asset *
-                <input value={assetSearch} list="transfer-asset-options" autoComplete="off" onChange={(event) => handleAssetSearch(event.target.value)} placeholder="Search by asset ID, name, or serial number" required aria-describedby="transfer-asset-help" />
-                <datalist id="transfer-asset-options">{assets.filter((asset) => !activeAssetIds.has(String(asset.id))).map((asset) => <option key={asset.id} value={formatAssetLabel(asset)} />)}</datalist>
-                <small id="transfer-asset-help">Maintenance, retired, disposed, lost, deleted, and already-transferring assets are excluded.</small>
-              </label>
-              {selectedAsset && <>
-                <div className="transfer-field"><span>Asset ID</span><input value={getAssetId(selectedAsset)} readOnly /></div>
-                <div className="transfer-field"><span>Current location</span><input value={getLocationLabel(currentLocation, 'source')} readOnly /></div>
-                <div className="transfer-field"><span>Requested By</span><input value={user?.fullName || user?.username || 'Current user'} readOnly /></div>
-              </>}
-              <label className="transfer-field">
-                Destination Campus *
-                <select name="destinationCampusId" value={form.destinationCampusId} onChange={handleFormField} required><option value="">Choose campus</option>{campuses.map((item) => <option key={item.id} value={item.id}>{getCampusName(item)}</option>)}</select>
-              </label>
-              <label className="transfer-field">
-                Destination College *
-                <select name="destinationCollegeId" value={form.destinationCollegeId} onChange={handleFormField} required disabled={!form.destinationCampusId}><option value="">Choose college</option>{filteredColleges.map((item) => <option key={item.id} value={item.id}>{getCollegeName(item)}{!(item.campusId || item.campus_id) ? ' (campus not mapped)' : ''}</option>)}</select>
-              </label>
-              <label className="transfer-field">
-                Destination Department *
-                <select name="destinationDepartmentId" value={form.destinationDepartmentId} onChange={handleFormField} required disabled={!form.destinationCollegeId}><option value="">Choose department</option>{filteredDepartments.map((item) => <option key={item.id} value={item.id}>{getDepartmentName(item)}</option>)}</select>
-              </label>
-              <label className="transfer-field">
-                Destination Building *
-                <select name="destinationBuildingId" value={form.destinationBuildingId} onChange={handleFormField} required disabled={!form.destinationCampusId}><option value="">Choose building</option>{filteredBuildings.map((item) => <option key={item.id} value={item.id}>{getBuildingName(item)}</option>)}</select>
-              </label>
-              <label className="transfer-field">
-                Destination Floor *
-                <select name="destinationFloor" value={form.destinationFloor} onChange={handleFormField} required disabled={!selectedBuilding}><option value="">Choose floor</option>{floors.map((floor) => <option key={floor} value={floor}>{floor}</option>)}</select>
-              </label>
-              <label className="transfer-field">
-                Destination Laboratory / Room *
-                <select name="destinationRoomId" value={form.destinationRoomId} onChange={handleFormField} required disabled={!form.destinationDepartmentId || !form.destinationBuildingId || form.destinationFloor === ''}><option value="">Choose laboratory</option>{filteredLaboratories.map((room) => <option key={room.id} value={room.id}>{getRoomName(room)}{room.roomCode ? ` (${room.roomCode})` : ''}{!(room.departmentId || room.department_id) ? ' (department not mapped)' : ''}</option>)}</select>
-              </label>
-              <label className="transfer-field">
-                Transfer Date
-                <input value="Recorded by server on submission" readOnly />
-              </label>
-              <label className="transfer-field">
-                Condition *
-                <select name="condition" value={form.condition} onChange={handleFormField} required><option>Excellent</option><option>Good</option><option>Fair</option><option>Poor</option><option>Damaged</option></select>
-              </label>
-              <label className="transfer-field transfer-field--wide">
-                Reason *
-                <textarea name="reason" value={form.reason} onChange={handleFormField} required maxLength={5000} rows={3} placeholder="Why is this asset being moved?" />
-              </label>
-            </div>
-            <div className="transfer-form-actions"><button type="button" className="transfer-button transfer-button--quiet" onClick={resetForm} disabled={saving}>Cancel</button><button type="submit" className="transfer-button transfer-button--primary" disabled={saving || optionsLoading || !canTransfer}>{saving ? <LoaderCircle className="transfer-spin" size={18} /> : <Plus size={18} />}Submit request</button></div>
-          </form>
-        </section>}
+        {showForm && <div className="transfer-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) resetForm(); }}>
+          <section className="transfer-detail-modal transfer-request-modal" role="dialog" aria-modal="true" aria-labelledby="transfer-form-title">
+            <header>
+              <div><p className="admin-transfer-eyebrow">ASSET GOVERNANCE</p><h2 id="transfer-form-title">New Transfer Request</h2></div>
+              <button type="button" className="transfer-icon-button" aria-label="Close transfer request" onClick={resetForm} disabled={saving}><X size={20} /></button>
+            </header>
+            <form onSubmit={submitTransferRequest}>
+              <div className="transfer-form-grid">
+                <label className="transfer-field">
+                  Asset ID *
+                  <input name="assetId" type="text" value={form.assetId} onChange={handleFormField} placeholder="Enter Asset ID" autoComplete="off" required />
+                  {selectedAsset && <small>{getAssetName(selectedAsset)} · {activeAssetIds.has(String(selectedAsset.id)) ? 'Already has an active transfer' : 'Available for transfer'}</small>}
+                </label>
+                <label className="transfer-field">
+                  Serial Number
+                  <input name="serialNumber" type="text" value={form.serialNumber} onChange={handleFormField} placeholder="Enter Serial Number" />
+                </label>
+                <label className="transfer-field">
+                  Transfer Reference
+                  <input name="transferReference" type="text" value={form.transferReference} onChange={handleFormField} placeholder="Enter Transfer Reference" maxLength={40} />
+                </label>
+                <label className="transfer-field">
+                  From Campus *
+                  <select name="sourceCampusId" value={form.sourceCampusId} onChange={handleFormField} required><option value="">Choose campus</option>{campuses.map((item) => <option key={item.id} value={item.id}>{getCampusName(item)}</option>)}</select>
+                </label>
+                <label className="transfer-field">
+                  From College *
+                  <select name="sourceCollegeId" value={form.sourceCollegeId} onChange={handleFormField} required><option value="">Choose college</option>{colleges.map((item) => <option key={item.id} value={item.id}>{getCollegeName(item)}</option>)}</select>
+                </label>
+                <label className="transfer-field">
+                  From Department *
+                  <select name="sourceDepartmentId" value={form.sourceDepartmentId} onChange={handleFormField} required><option value="">Choose department</option>{departments.map((item) => <option key={item.id} value={item.id}>{getDepartmentName(item)}</option>)}</select>
+                </label>
+                <label className="transfer-field">
+                  To Campus *
+                  <select name="destinationCampusId" value={form.destinationCampusId} onChange={handleFormField} required><option value="">Choose campus</option>{campuses.map((item) => <option key={item.id} value={item.id}>{getCampusName(item)}</option>)}</select>
+                </label>
+                <label className="transfer-field">
+                  To College *
+                  <select name="destinationCollegeId" value={form.destinationCollegeId} onChange={handleFormField} required disabled={!form.destinationCampusId}><option value="">Choose college</option>{filteredColleges.map((item) => <option key={item.id} value={item.id}>{getCollegeName(item)}{!(item.campusId || item.campus_id) ? ' (campus not mapped)' : ''}</option>)}</select>
+                </label>
+                <label className="transfer-field">
+                  To Department *
+                  <select name="destinationDepartmentId" value={form.destinationDepartmentId} onChange={handleFormField} required disabled={!form.destinationCollegeId}><option value="">Choose department</option>{filteredDepartments.map((item) => <option key={item.id} value={item.id}>{getDepartmentName(item)}</option>)}</select>
+                </label>
+                <label className="transfer-field">
+                  Destination Building *
+                  <select name="destinationBuildingId" value={form.destinationBuildingId} onChange={handleFormField} required disabled={!form.destinationCampusId}><option value="">Choose building</option>{filteredBuildings.map((item) => <option key={item.id} value={item.id}>{getBuildingName(item)}</option>)}</select>
+                </label>
+                <label className="transfer-field">
+                  Destination Floor *
+                  <select name="destinationFloor" value={form.destinationFloor} onChange={handleFormField} required disabled={!selectedBuilding}><option value="">Choose floor</option>{floors.map((floor) => <option key={floor} value={floor}>{floor}</option>)}</select>
+                </label>
+                <label className="transfer-field">
+                  Destination Laboratory / Room *
+                  <select name="destinationRoomId" value={form.destinationRoomId} onChange={handleFormField} required disabled={!form.destinationDepartmentId || !form.destinationBuildingId || form.destinationFloor === ''}><option value="">Choose laboratory</option>{filteredLaboratories.map((room) => <option key={room.id} value={room.id}>{getRoomName(room)}{room.roomCode ? ` (${room.roomCode})` : ''}{!(room.departmentId || room.department_id) ? ' (department not mapped)' : ''}</option>)}</select>
+                </label>
+                <label className="transfer-field">
+                  Transfer Date *
+                  <input name="transferDate" type="date" value={form.transferDate} onChange={handleFormField} required />
+                </label>
+                <label className="transfer-field">
+                  Condition *
+                  <select name="condition" value={form.condition} onChange={handleFormField} required><option>Excellent</option><option>Good</option><option>Fair</option><option>Poor</option><option>Damaged</option></select>
+                </label>
+                <label className="transfer-field">
+                  Expected Return
+                  <input name="expectedReturnDate" type="date" value={form.expectedReturnDate} onChange={handleFormField} min={form.transferDate} />
+                </label>
+                <label className="transfer-field">
+                  Requested By
+                  <input value={user?.fullName || user?.full_name || user?.username || 'Current user'} readOnly />
+                </label>
+                <label className="transfer-field transfer-field--wide">
+                  Transfer Reason *
+                  <textarea name="reason" value={form.reason} onChange={handleFormField} required maxLength={5000} rows={3} placeholder="Why is this asset being moved?" />
+                </label>
+                <label className="transfer-field transfer-field--wide">
+                  Notes
+                  <textarea name="notes" value={form.notes} onChange={handleFormField} rows={3} placeholder="Additional transfer notes" />
+                </label>
+              </div>
+              <div className="transfer-form-actions"><button type="button" className="transfer-button transfer-button--quiet" onClick={resetForm} disabled={saving}>Cancel</button><button type="submit" className="transfer-button transfer-button--primary" disabled={saving || optionsLoading || !canTransfer}>{saving ? <LoaderCircle className="transfer-spin" size={18} /> : <Plus size={18} />}Create Transfer Request</button></div>
+            </form>
+          </section>
+        </div>}
 
         <section className="transfer-panel">
           <form className="transfer-filters" onSubmit={submitSearch} aria-label="Filter transfers">

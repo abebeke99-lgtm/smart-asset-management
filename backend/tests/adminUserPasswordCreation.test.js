@@ -18,6 +18,8 @@ test('admin-created user stores a bcrypt password and can log in normally', asyn
   const originalActivityCreate = models.UserActivityLog.create;
   const originalConfigFindByPk = models.Config.findByPk;
   const originalRoleFindOne = models.Role.findOne;
+  const originalUserRoleFindAll = models.UserRole.findAll;
+  const originalRolePermissionFindAll = models.RolePermission.findAll;
   const originalTransaction = models.sequelize.transaction;
   const previousJwtSecret = process.env.JWT_SECRET;
   const password = 'ManageMe#42';
@@ -44,6 +46,8 @@ test('admin-created user stores a bcrypt password and can log in normally', asyn
     return createdUser;
   };
   models.Role.findOne = async () => ({ name: 'staff', active: true });
+  models.UserRole.findAll = async () => [];
+  models.RolePermission.findAll = async () => [];
   models.sequelize.transaction = async (callback) => callback({ id: 'test-transaction' });
   models.AuditLog.create = async () => ({ id: 1 });
   models.UserActivityLog.create = async () => ({ id: 1 });
@@ -113,6 +117,8 @@ test('admin-created user stores a bcrypt password and can log in normally', asyn
     models.UserActivityLog.create = originalActivityCreate;
     models.Config.findByPk = originalConfigFindByPk;
     models.Role.findOne = originalRoleFindOne;
+    models.UserRole.findAll = originalUserRoleFindAll;
+    models.RolePermission.findAll = originalRolePermissionFindAll;
     models.sequelize.transaction = originalTransaction;
     if (previousJwtSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previousJwtSecret;

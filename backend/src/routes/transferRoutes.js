@@ -31,6 +31,15 @@ const generateTransferNumber = () => {
   const randomPart = `${Math.floor(Math.random() * 9000) + 1000}`;
   return `TRF-${year}-${timestampPart}${randomPart}`;
 };
+const parseDateInput = (value) => {
+  const normalized = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    const date = new Date(`${normalized}T12:00:00.000Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === normalized ? date : null;
+  }
+  const date = new Date(normalized);
+  return normalized && !Number.isNaN(date.getTime()) ? date : null;
+};
 
 const resolveTransferOrganizationScope = (req, res, next) => ['ict_officer', 'college_manager', 'store_manager'].includes(req.user.role)
   ? resolveCollegeScope(req, res, next)
@@ -73,6 +82,8 @@ const toTransferResponse = (transfer) => {
     new_location: data.newLocation,
     transfer_reason: data.transferReason,
     transfer_date: data.transferDate,
+    expected_return_date: data.expectedReturnDate,
+    notes: data.notes,
     requested_by: data.requestedBy,
     approved_by: data.approvedBy,
     received_by: data.receivedBy,
@@ -294,6 +305,26 @@ router.post('/', requireAuth, requireRole(...transferRoles), requirePermission('
     const newLocation = String(req.body.newLocation ?? req.body.new_location ?? req.body.destinationLocation ?? req.body.destination_location ?? '').trim();
     const transferReason = String(req.body.transferReason ?? req.body.reason ?? req.body.transfer_reason ?? '').trim();
     const requestedCondition = String(req.body.conditionAtTransfer ?? req.body.condition ?? '').trim();
+    const requestedTransferDate = req.body.transferDate ?? req.body.transfer_date;
+    const requestedExpectedReturnDate = req.body.expectedReturnDate ?? req.body.expected_return_date;
+    const transferDate = requestedTransferDate ? parseDateInput(requestedTransferDate) : new Date();
+    const expectedReturnDate = requestedExpectedReturnDate ? parseDateInput(requestedExpectedReturnDate) : null;
+    const requestedTransferNumber = String(req.body.transferNumber ?? req.body.transfer_number ?? '').trim();
+    const requestedSerialNumber = String(req.body.serialNumber ?? req.body.serial_number ?? '').trim();
+    const notes = String(req.body.notes ?? '').trim();
+
+    if (!transferDate || (requestedExpectedReturnDate && !expectedReturnDate)) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Transfer date and expected return must be valid dates.' });
+    }
+    if (expectedReturnDate && expectedReturnDate < transferDate) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Expected return cannot be before the transfer date.' });
+    }
+    if (requestedTransferNumber.length > 40) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Transfer reference must be 40 characters or fewer.' });
+    }
 
     if (!Number.isInteger(assetId) || assetId < 1 || !Number.isInteger(destinationCollegeIdValue === undefined ? 0 : Number(destinationCollegeIdValue)) || Number(destinationCollegeIdValue) < 1 || !Number.isInteger(destinationDepartmentId) || destinationDepartmentId < 1 || !destinationCampusIdValue || !destinationBuildingIdValue || destinationFloorValue === undefined || destinationFloorValue === '' || !destinationRoomIdValue || !newLocation || !transferReason) {
       await transaction.rollback();
@@ -312,6 +343,22 @@ router.post('/', requireAuth, requireRole(...transferRoles), requirePermission('
     if (!asset) {
       await transaction.rollback();
       return res.status(404).json({ success: false, message: 'Asset not found or has been deleted.' });
+    }
+    if (requestedSerialNumber && requestedSerialNumber.toLowerCase() !== String(asset.serialNumber || '').trim().toLowerCase()) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'Serial number does not match the selected asset.' });
+    }
+    const sourceCampusId = req.body.sourceCampusId ?? req.body.source_campus_id;
+    const sourceCollegeId = req.body.sourceCollegeId ?? req.body.source_college_id;
+    const sourceDepartmentId = req.body.sourceDepartmentId ?? req.body.source_department_id;
+    if ([sourceCampusId, sourceCollegeId, sourceDepartmentId].some((value) => value !== undefined)) {
+      const sourceMatchesAsset = Number(sourceCampusId || 0) === Number(asset.campusId || 0)
+        && Number(sourceCollegeId || 0) === Number(asset.collegeId || 0)
+        && Number(sourceDepartmentId || 0) === Number(asset.departmentId || 0);
+      if (!sourceMatchesAsset) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: 'Source location must match the asset’s current location.' });
+      }
     }
     const eligibility = assetIsTransferable(asset);
     if (!eligibility.ok) {
@@ -376,8 +423,12 @@ router.post('/', requireAuth, requireRole(...transferRoles), requirePermission('
       return res.status(409).json({ success: false, message: 'Asset already has an active transfer.' });
     }
 
-    let transferNumber = generateTransferNumber();
-    while (await Transfer.findOne({ where: { transferNumber }, transaction })) transferNumber = generateTransferNumber();
+    let transferNumber = requestedTransferNumber || generateTransferNumber();
+    if (requestedTransferNumber && await Transfer.findOne({ where: { transferNumber }, transaction })) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'Transfer reference is already in use.' });
+    }
+    while (!requestedTransferNumber && await Transfer.findOne({ where: { transferNumber }, transaction })) transferNumber = generateTransferNumber();
     const now = new Date();
     const sourceRoom = asset.roomId ? await Room.findByPk(asset.roomId, { transaction }) : null;
     const transfer = await Transfer.create({
@@ -401,7 +452,9 @@ router.post('/', requireAuth, requireRole(...transferRoles), requirePermission('
       newLocation,
       transferReason,
       conditionAtTransfer: requestedCondition || asset.condition || 'Good',
-      transferDate: now,
+      transferDate,
+      expectedReturnDate,
+      notes,
       requestedAt: now,
       status: 'Requested',
       createdBy: req.user.id,

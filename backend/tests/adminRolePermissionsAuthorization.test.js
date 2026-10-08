@@ -125,8 +125,10 @@ test("permission catalog includes every permission required by active routes", (
     "college.approvals.approve",
     "college.documents.manage",
     "college.verification.manage",
+    "roles_permissions.configure",
   ]) {
     assert.ok(PERMISSIONS.includes(permission), `${permission} must be editable in the role matrix`);
+    assert.ok(DEFAULT_ROLE_PERMISSIONS.admin.includes(permission), `Administrators must have ${permission}`);
   }
   assert.ok(DEFAULT_ROLE_PERMISSIONS.college_manager.includes("assets.transfer.approve"));
 });

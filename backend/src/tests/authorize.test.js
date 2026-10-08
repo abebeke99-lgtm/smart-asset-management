@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { Permission, RolePermission, UserRole } = require('../models');
-const { authorize, matchesAssignmentScope } = require('../middlewares/authorize');
+const { Permission, Role, RolePermission, UserRole } = require('../models');
+const { authorize, getDatabasePermissionKeys, matchesAssignmentScope } = require('../middlewares/authorize');
 const { requirePermission } = require('../middlewares/auth');
 const { getAdministratorAssignmentError } = require('../services/roleGovernanceService');
 
@@ -53,6 +53,47 @@ test('authorize resolves permissions across multiple assigned roles', async () =
     assert.equal(result.status, 200);
     assert.equal(result.nextError, null);
   });
+});
+
+test('database permission lookup uses user-role scope columns and direct role associations', async () => {
+  let userRoleQuery;
+  await withMocks([
+    [UserRole, { findAll: async (options) => {
+      userRoleQuery = options;
+      return [{ Role: { id: 1 }, scopeType: 'system', scopeId: null }];
+    } }],
+    [RolePermission, { findAll: async () => [{ roleId: 1, Permission: { key: 'assets.view' } }] }],
+  ], async () => {
+    const permissions = await getDatabasePermissionKeys({ id: 7, role: 'admin' });
+    assert.deepEqual(permissions, ['assets.view']);
+  });
+
+  assert.deepEqual(userRoleQuery.attributes, ['id', 'userId', 'roleId', 'scopeType', 'scopeId']);
+  assert.deepEqual(userRoleQuery.include[0].attributes, ['id', 'name', 'active']);
+  assert.equal(userRoleQuery.include[0].through, undefined);
+});
+
+test('missing role-permission tables fall back to the configured legacy permission matrix', async () => {
+  const missingTable = Object.assign(new Error('Missing role-permission table'), {
+    original: { code: 'ER_NO_SUCH_TABLE' },
+  });
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  try {
+    await withMocks([
+      [UserRole, { findAll: async () => { throw missingTable; } }],
+      [Role, { findOne: async (options) => {
+        assert.deepEqual(options.attributes, ['id', 'name', 'active']);
+        return { id: 1, name: 'admin', active: true };
+      } }],
+      [RolePermission, { findAll: async () => { throw missingTable; } }],
+    ], async () => {
+      const permissions = await getDatabasePermissionKeys({ id: 7, role: 'admin' });
+      assert.deepEqual(permissions, []);
+    });
+  } finally {
+    console.warn = originalWarn;
+  }
 });
 
 test('authorize denies a removed permission immediately', async () => {

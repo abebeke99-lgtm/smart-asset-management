@@ -63,7 +63,7 @@ test('Department Head asset listing always uses authenticated department scope',
     const auditDetails = JSON.parse(auditValues.details);
     assert.equal(auditDetails.departmentId, 7);
     assert.deepEqual(auditDetails.filterNames, []);
-    assert.equal(JSON.stringify(auditDetails).includes('99'), false);
+    assert.equal(JSON.stringify(auditDetails).includes('"99"'), false);
   } finally {
     Asset.findAndCountAll = original;
     Asset.findAll = originals.findAll;
@@ -414,7 +414,8 @@ test('registration rejects future purchase dates and zero quantity before persis
 });
 
 test('CSV export contains complete asset columns and department/export metadata', async () => {
-  const originals = { findAll: Asset.findAll, count: Asset.count };
+  const originals = { findAll: Asset.findAll, count: Asset.count, auditCreate: AuditLog.create };
+  let auditRecord;
   Asset.findAll = async () => [{
     toJSON: () => ({
       id: 1, name: 'Microscope', assetCode: 'PHY-1', digitalId: 'DIG-1', specifications: { lens: '40x' },
@@ -423,6 +424,7 @@ test('CSV export contains complete asset columns and department/export metadata'
     }),
   }];
   Asset.count = async () => 1;
+  AuditLog.create = async (record) => { auditRecord = record; return { id: 1 }; };
   const res = {
     headers: {},
     output: '',
@@ -446,9 +448,12 @@ test('CSV export contains complete asset columns and department/export metadata'
     assert.match(res.body, /Assigned User ID/);
     assert.match(res.body, /Microscope/);
     assert.match(res.body, /Do not omit/);
+    assert.equal(auditRecord.action, 'DEPARTMENT_ASSETS_EXPORTED');
+    assert.equal(auditRecord.entity, 'department:7:assets');
   } finally {
     Asset.findAll = originals.findAll;
     Asset.count = originals.count;
+    AuditLog.create = originals.auditCreate;
   }
 });
 

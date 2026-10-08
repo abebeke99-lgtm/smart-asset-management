@@ -208,6 +208,7 @@ async function syncDatabase() {
     await ensureColumn('asset_returns', 'return_date', { type: require('sequelize').DataTypes.DATEONLY, allowNull: true });
     await ensureColumn('asset_returns', 'evidence_url', { type: require('sequelize').DataTypes.STRING(1000), allowNull: true });
     const assignmentColumns = await queryInterface.describeTable('assignments');
+    await ensureColumn('transfers', 'expected_return_date', { type: require('sequelize').DataTypes.DATE, allowNull: true });
     if (assignmentColumns.assigned_to && assignmentColumns.assigned_to.allowNull === false) {
       await queryInterface.changeColumn('assignments', 'assigned_to', {
         type: require('sequelize').DataTypes.INTEGER,
