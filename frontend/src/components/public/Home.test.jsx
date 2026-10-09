@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { UIProvider } from '../../contexts/UiContext';
 import App from '../../App';
@@ -50,6 +50,47 @@ describe('Home', () => {
     expect(content.querySelector('.uam-hero-copy')).toBeInTheDocument();
     expect(content.querySelector('.uam-hero-panel')).toBeInTheDocument();
     expect(content).toHaveTextContent('Manage, track, assign, maintain, and monitor every university asset from one centralized platform.');
+  });
+
+  it('shows the active hero image at full opacity and keeps the smooth responsive image treatment', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <UIProvider><Home /></UIProvider>
+      </MemoryRouter>
+    );
+    const image = container.querySelector('.uam-hero-image.is-active');
+    const homeStyles = container.querySelector('style').textContent;
+
+    expect(image).toHaveStyle({ opacity: '1', objectFit: 'cover' });
+    expect(homeStyles).toContain('transition: opacity 700ms ease, transform 5s ease');
+    expect(homeStyles).toContain('height: min(760px, calc(100svh - 82px))');
+    expect(homeStyles).not.toContain('.uam-hero-media::after');
+    expect(homeStyles).not.toContain('opacity: 0.14');
+  });
+
+  it('rotates hero images with a crossfade', () => {
+    jest.useFakeTimers();
+    const { container } = render(
+      <MemoryRouter>
+        <UIProvider><Home /></UIProvider>
+      </MemoryRouter>
+    );
+
+    expect(container.querySelectorAll('.uam-hero-image.is-active')[0]).toHaveAttribute(
+      'src',
+      '/images/hero/4-1.jpg',
+    );
+
+    act(() => {
+      jest.advanceTimersByTime(5000);
+    });
+
+    expect(container.querySelectorAll('.uam-hero-image.is-active')).toHaveLength(1);
+    expect(container.querySelector('.uam-hero-image.is-active')).toHaveAttribute(
+      'src',
+      '/images/hero/imagegs.jpg',
+    );
+    jest.useRealTimers();
   });
 
   it('renders Amharic page content from the shared language context', () => {

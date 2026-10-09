@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import AboutUs from './AboutUs';
 
 let mockLanguage = 'en';
@@ -31,22 +31,12 @@ describe('About page', () => {
     mockLanguage = 'en';
   });
 
-  it('starts collapsed and toggles the full university information', () => {
+  it('omits the university heading, About Us panel, breadcrumb, and toggle while retaining page content', () => {
     render(<AboutUs />);
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Mekdela Amba University' })).toBeInTheDocument();
-    const toggle = screen.getByRole('button', { name: 'About Us' });
-    const content = document.getElementById('about-expandable-content');
-
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(toggle).toHaveTextContent('⌄');
-    expect(content).toHaveAttribute('aria-hidden', 'true');
-
-    fireEvent.click(toggle);
-
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(toggle).toHaveTextContent('⌃');
-    expect(content).toHaveAttribute('aria-hidden', 'false');
+    expect(screen.queryByRole('heading', { level: 1, name: 'Mekdela Amba University' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'About Us' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Vision' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Mission' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Core Values' })).toBeInTheDocument();
@@ -60,12 +50,6 @@ describe('About page', () => {
     expect(document.querySelector('svg')).toBeNull();
     expect(screen.queryByText(/asset management system/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/centralized records|movement and responsibility|verification and care|reporting and oversight/i)).not.toBeInTheDocument();
-
-    fireEvent.click(toggle);
-
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(toggle).toHaveTextContent('⌄');
-    expect(content).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('renders university information in Amharic when selected', () => {
@@ -73,8 +57,8 @@ describe('About page', () => {
 
     render(<AboutUs />);
 
-    expect(screen.getByRole('heading', { level: 1, name: 'መቅደላ አምባ ዩኒቨርሲቲ' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'ስለ እኛ' }));
+    expect(screen.queryByRole('heading', { level: 1, name: 'መቅደላ አምባ ዩኒቨርሲቲ' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ስለ እኛ' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'ራዕይ' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'ተልዕኮ' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'ዋና እሴቶች' })).toBeInTheDocument();

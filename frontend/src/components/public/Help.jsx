@@ -216,7 +216,7 @@ const Help = () => {
         <div className="help-shell">
           <p className="help-system">{text('Mekdela Amba University · University Asset Management System', 'መቅደላ አምባ ዩኒቨርሲቲ · የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት')}</p>
           <h1>{text('Help & Support', 'እገዛና ድጋፍ')}</h1>
-          <p className="help-intro">{text('Find clear guidance for managing university assets and using the tools available to your role.', 'የዩኒቨርሲቲ ንብረቶችን ለማስተዳደርና ለሚናዎ የሚገኙትን መሣሪያዎች ለመጠቀም ግልጽ መመሪያ ያግኙ።')}</p>
+          <p className="help-intro">{text('Find guidance for managing university assets and using the tools available to your role.', 'የዩኒቨርሲቲ ንብረቶችን ለማስተዳደርና ለሚናዎ የሚገኙትን መሣሪያዎች ለመጠቀም መመሪያ ያግኙ።')}</p>
         </div>
       </header>
 
@@ -230,7 +230,10 @@ const Help = () => {
               setQuery(event.target.value);
               setOpenFaqId(null);
             }}
-            placeholder={text('Search topics, questions, or keywords', 'ርዕሶችን፣ ጥያቄዎችን ወይም ቁልፍ ቃላትን ይፈልጉ')}
+            placeholder={text(
+              'Search by topic, question, or keyword (e.g., transfer, inventory, assignment)',
+              'በርዕስ፣ በጥያቄ ወይም በቁልፍ ቃል ይፈልጉ (ለምሳሌ፦ ዝውውር፣ ኢንቬንተሪ፣ ምደባ)'
+            )}
             aria-label={text('Search help topics', 'የእገዛ ርዕሶችን ይፈልጉ')}
             aria-describedby="help-search-hint"
           />
@@ -248,7 +251,7 @@ const Help = () => {
             </button>
           )}
         </form>
-        <p className="help-search-hint" id="help-search-hint">{text('Search by topic, question, or a word such as “transfer” or “inventory”.', 'በርዕስ፣ በጥያቄ ወይም እንደ “ዝውውር” ወይም “ኢንቬንተሪ” ባሉ ቃላት ይፈልጉ።')}</p>
+        <p className="help-search-hint" id="help-search-hint">{text('Results update as you type. Search is not case-sensitive.', 'በሚተይቡበት ጊዜ ውጤቶች ይታያሉ። ፍለጋው በትልቅና በትንሽ ፊደል መካከል ልዩነት አያደርግም።')}</p>
 
         <nav className="help-action-links" aria-label={text('Quick links', 'ፈጣን አገናኞች')}>
           <Link to="/login">{text('Login', 'ግባ')}</Link>
@@ -311,7 +314,19 @@ const Help = () => {
               ))}
             </div>
           ) : (
-            <p className="help-empty" role="status">{text('No matching help topics found. Try another keyword or clear your search.', 'ተዛማጅ የእገዛ ርዕስ አልተገኘም። ሌላ ቁልፍ ቃል ይሞክሩ ወይም ፍለጋውን ያጽዱ።')}</p>
+            <div className="help-empty" role="status">
+              <p>{text('No results found. Try another keyword or clear your search.', 'ምንም ውጤት አልተገኘም። ሌላ ቁልፍ ቃል ይሞክሩ ወይም ፍለጋውን ያጽዱ።')}</p>
+              <button
+                className="help-empty-clear"
+                type="button"
+                onClick={() => {
+                  setQuery('');
+                  setOpenFaqId(null);
+                }}
+              >
+                {text('Clear search', 'ፍለጋውን አጽዳ')}
+              </button>
+            </div>
           )}
         </section>
 

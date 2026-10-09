@@ -150,8 +150,8 @@ export const ROUTES = {
   // Store Routes
   STORE_DASHBOARD: '/store/dashboard',
   INFRASTRUCTURE_DASHBOARD: '/infrastructure/dashboard',
-  STAFF_DASHBOARD: '/staff/dashboard',
-  STUDENT_DASHBOARD: '/student/dashboard',
+  STAFF_DASHBOARD: '/department',
+  STUDENT_DASHBOARD: '/student',
   STORE_INVENTORY: '/store/inventory',
   STORE_AVAILABLE_ASSETS: '/store/available-assets',
   STORE_LOW_STOCK: '/store/low-stock',

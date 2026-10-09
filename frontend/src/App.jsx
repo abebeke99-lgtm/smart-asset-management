@@ -271,8 +271,8 @@ export const getDashboardRoute = (role) => {
     store_manager: '/store/dashboard',
     maintenance: '/maintenance/dashboard',
     infrastructure: '/infrastructure/dashboard',
-    staff: '/staff/dashboard',
-    student: '/student/dashboard',
+    staff: '/department',
+    student: '/student',
   };
 
   return roleMap[normalizeRole(role)] || '/home';
@@ -280,44 +280,49 @@ export const getDashboardRoute = (role) => {
 
 const publicPaths = ['/home', '/about', '/services', '/contact', '/contac', '/register', '/forgot-password', '/reset-password'];
 
-const AccessDenied = () => (
-  <main
-    role="alert"
-    aria-labelledby="access-denied-title"
-    style={{
-      minHeight: '100%',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '56px 24px',
-      background: '#edf3f8',
-      borderRadius: '18px',
-      boxShadow: 'inset 0 0 0 1px rgba(15, 31, 46, 0.04)',
-    }}
-  >
-    <div style={{ textAlign: 'center', maxWidth: '680px', width: '100%' }}>
-      <h1 id="access-denied-title" style={{ margin: '0 0 18px', fontSize: '3rem', lineHeight: 1.15, fontWeight: 700, color: '#111827' }}>
-        Access denied
-      </h1>
-      <p style={{ margin: '0 0 12px', fontSize: '1.2rem', lineHeight: 1.6, color: '#1f2937' }}>
-        You do not have permission to access this section.
-      </p>
-      <Link
-        to="/dashboard"
-        style={{
-          display: 'inline-block',
-          color: '#0f4c81',
-          textDecoration: 'underline',
-          textUnderlineOffset: '4px',
-          fontWeight: 600,
-          fontSize: '1.05rem',
-        }}
-      >
-        Return to your dashboard
-      </Link>
-    </div>
-  </main>
-);
+const AccessDenied = () => {
+  const { user } = useAuth();
+  const dashboardRoute = getDashboardRoute(user?.role || user?.roles);
+
+  return (
+    <main
+      role="alert"
+      aria-labelledby="access-denied-title"
+      style={{
+        minHeight: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '56px 24px',
+        background: '#edf3f8',
+        borderRadius: '18px',
+        boxShadow: 'inset 0 0 0 1px rgba(15, 31, 46, 0.04)',
+      }}
+    >
+      <div style={{ textAlign: 'center', maxWidth: '680px', width: '100%' }}>
+        <h1 id="access-denied-title" style={{ margin: '0 0 18px', fontSize: '3rem', lineHeight: 1.15, fontWeight: 700, color: '#111827' }}>
+          Access denied
+        </h1>
+        <p style={{ margin: '0 0 12px', fontSize: '1.2rem', lineHeight: 1.6, color: '#1f2937' }}>
+          You do not have permission to access this section.
+        </p>
+        <Link
+          to={dashboardRoute}
+          style={{
+            display: 'inline-block',
+            color: '#0f4c81',
+            textDecoration: 'underline',
+            textUnderlineOffset: '4px',
+            fontWeight: 600,
+            fontSize: '1.05rem',
+          }}
+        >
+          Return to your dashboard
+        </Link>
+      </div>
+    </main>
+  );
+};
 
 export const ProtectedRoute = ({ children, allowedRoles = [], allowedPermissions = [] }) => {
   const { user, loading: authLoading, hasPermission } = useAuth();
@@ -467,6 +472,8 @@ export const isPublicRoute = (path = '') => {
 };
 
 export const shouldUseStandaloneLoginLayout = (path = '') => normalizeAppPath(path) === '/login';
+
+export const shouldShowPublicHeader = (path = '') => !shouldUseStandaloneLoginLayout(path);
 
 export const AppFooter = (props) => {
   const { pathname } = useLocation();
@@ -2942,7 +2949,7 @@ function AppContent() {
 
     return (
       <div className={`public-layout${isHomeRoute ? ' home-route' : ''}${isLoginRoute ? ' login-public-layout' : ''}`}>
-        <PublicHeader />
+        {shouldShowPublicHeader(location.pathname) && <PublicHeader />}
         <main className="public-main">
           {children}
         </main>

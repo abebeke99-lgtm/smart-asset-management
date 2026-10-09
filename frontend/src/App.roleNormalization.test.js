@@ -32,8 +32,8 @@ describe('normalizeRole', () => {
       store_manager: '/store/dashboard',
       maintenance: '/maintenance/dashboard',
       infrastructure: '/infrastructure/dashboard',
-      staff: '/staff/dashboard',
-      student: '/student/dashboard',
+      staff: '/department',
+      student: '/student',
     });
     expect(normalizeRole('college')).toBe('college');
     expect(normalizeRole('college_manager')).toBe('college_manager');

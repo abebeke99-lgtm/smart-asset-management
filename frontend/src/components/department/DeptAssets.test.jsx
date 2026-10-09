@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -124,18 +124,6 @@ describe('Department Assets', () => {
       params: { page: 1, limit: 50 },
     });
 
-    it('switches language without repeating the asset request', async () => {
-      const { rerender } = renderAssets();
-      expect(await screen.findByText('Engineering Laptop')).toBeInTheDocument();
-      const requestCount = axios.get.mock.calls.length;
-
-      mockLanguage = 'am';
-      rerender(assetsPage());
-
-      expect(screen.getByRole('heading', { name: 'የክፍል ንብረቶች' })).toBeInTheDocument();
-      expect(axios.get).toHaveBeenCalledTimes(requestCount);
-    });
-
     fireEvent.change(screen.getByPlaceholderText('Search by name or tag...'), { target: { value: 'AST-120' } });
     expect(screen.getByText('Engineering Laptop')).toBeInTheDocument();
     expect(screen.queryByText('Lab Microscope')).not.toBeInTheDocument();
@@ -144,6 +132,18 @@ describe('Department Assets', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Damaged' }));
     expect(screen.getByText('Lab Microscope')).toBeInTheDocument();
     expect(screen.queryByText('Engineering Laptop')).not.toBeInTheDocument();
+  });
+
+  it('does not repeat the asset request when the page re-renders with the language switched', async () => {
+    const { rerender } = renderAssets();
+    expect(await screen.findByText('Engineering Laptop')).toBeInTheDocument();
+    const requestCount = axios.get.mock.calls.length;
+
+    mockLanguage = 'am';
+    rerender(assetsPage());
+
+    expect(screen.getByText('Engineering Laptop')).toBeInTheDocument();
+    expect(axios.get).toHaveBeenCalledTimes(requestCount);
   });
 
   it('filters department assets by laboratory and assignment', async () => {

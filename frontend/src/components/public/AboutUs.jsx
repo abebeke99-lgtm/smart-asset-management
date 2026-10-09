@@ -1,11 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
 
 const pageContent = {
   en: {
-    title: 'Mekdela Amba University',
-    introduction: 'Mekdela Amba University is a higher education institution committed to quality teaching, research, innovation, and community development.',
-    aboutTitle: 'About Us',
     visionTitle: 'Vision',
     visionText: 'To become a center of excellence in education, research, innovation, and community engagement, contributing meaningfully to national development.',
     missionTitle: 'Mission',
@@ -46,9 +43,6 @@ const pageContent = {
     ]
   },
   am: {
-    title: 'መቅደላ አምባ ዩኒቨርሲቲ',
-    introduction: 'መቅደላ አምባ ዩኒቨርሲቲ ጥራት ያለው ትምህርትን፣ ምርምርን፣ ፈጠራንና የማህበረሰብ ልማትን የሚያበረታታ የከፍተኛ ትምህርት ተቋም ነው።',
-    aboutTitle: 'ስለ እኛ',
     visionTitle: 'ራዕይ',
     visionText: 'ለሀገራዊ ልማት ጉልህ አስተዋፅኦ በማድረግ በትምህርት፣ በምርምር፣ በፈጠራና በማህበረሰብ ተሳትፎ የላቀ የልህቀት ማዕከል መሆን።',
     missionTitle: 'ተልዕኮ',
@@ -75,86 +69,52 @@ const pageContent = {
 const AboutUs = () => {
   const { language } = useLanguage();
   const { theme } = useTheme();
-  const [isExpanded, setIsExpanded] = useState(false);
   const text = pageContent[language] || pageContent.en;
 
   return (
     <div className={`about-page-shell${theme === 'dark' ? ' about-page-dark' : ''}`}>
-      <section className="about-hero" aria-labelledby="about-hero-title">
-        <div className="about-hero-overlay" aria-hidden="true" />
-        <div className="about-container about-hero-inner">
-          <nav className="about-breadcrumb" aria-label="Breadcrumb">
-            <span className="about-breadcrumb-home" aria-hidden="true">⌂</span>
-            <a href="/home">Home</a>
-            <span className="about-breadcrumb-separator" aria-hidden="true">›</span>
-            <span aria-current="page">About Us</span>
-          </nav>
-          <h1 className="about-hero-university">{text.title}</h1>
-          <h2 id="about-hero-title" className="about-hero-heading">
-            <button
-              className="about-toggle"
-              type="button"
-              aria-expanded={isExpanded}
-              aria-controls="about-expandable-content"
-              onClick={() => setIsExpanded((expanded) => !expanded)}
-            >
-              <span>{text.aboutTitle}</span>
-              <span className="about-toggle-indicator" aria-hidden="true">{isExpanded ? '⌃' : '⌄'}</span>
-            </button>
-          </h2>
-        </div>
-      </section>
-
-      <div
-        id="about-expandable-content"
-        className={`about-expandable${isExpanded ? ' is-expanded' : ''}`}
-        aria-hidden={!isExpanded}
-      >
-        <div className="about-expandable-inner">
-          <main className="about-main" aria-label={text.aboutTitle}>
-            <div className="about-container">
-              <div className="about-two-column">
-                <article className="about-card about-card-vision" aria-labelledby="about-vision-title">
-                  <div className="about-card-head">
-                    <span className="about-card-icon" aria-hidden="true">◉</span>
-                    <h2 id="about-vision-title">{text.visionTitle}</h2>
-                  </div>
-                  <p>{text.visionText}</p>
-                </article>
-
-                <article className="about-card about-card-mission" aria-labelledby="about-mission-title">
-                  <div className="about-card-head">
-                    <span className="about-card-icon" aria-hidden="true">◎</span>
-                    <h2 id="about-mission-title">{text.missionTitle}</h2>
-                  </div>
-                  <p className="about-mission-intro">{text.missionLead}</p>
-                  <ul className="about-mission-list">
-                    {text.mission.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </article>
+      <main className="about-main" aria-label={text.visionTitle}>
+        <div className="about-container">
+          <div className="about-two-column">
+            <article className="about-card about-card-vision" aria-labelledby="about-vision-title">
+              <div className="about-card-head">
+                <span className="about-card-icon" aria-hidden="true">◉</span>
+                <h2 id="about-vision-title">{text.visionTitle}</h2>
               </div>
+              <p>{text.visionText}</p>
+            </article>
 
-              <section className="about-card about-card-values" aria-labelledby="about-values-title">
-                <div className="about-card-head about-card-head-inline">
-                  <span className="about-card-icon" aria-hidden="true">◆</span>
-                  <h2 id="about-values-title">{text.valuesTitle}</h2>
-                </div>
-                <ul className="about-values-list">
-                  {text.values.map((value) => (
-                    <li key={value.title}>
-                      <span className="about-value-badge" aria-hidden="true">✦</span>
-                      <h3>{value.title}</h3>
-                      <p>{value.description}</p>
-                    </li>
-                  ))}
-                </ul>
-              </section>
+            <article className="about-card about-card-mission" aria-labelledby="about-mission-title">
+              <div className="about-card-head">
+                <span className="about-card-icon" aria-hidden="true">◎</span>
+                <h2 id="about-mission-title">{text.missionTitle}</h2>
+              </div>
+              <p className="about-mission-intro">{text.missionLead}</p>
+              <ul className="about-mission-list">
+                {text.mission.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+
+          <section className="about-card about-card-values" aria-labelledby="about-values-title">
+            <div className="about-card-head about-card-head-inline">
+              <span className="about-card-icon" aria-hidden="true">◆</span>
+              <h2 id="about-values-title">{text.valuesTitle}</h2>
             </div>
-          </main>
+            <ul className="about-values-list">
+              {text.values.map((value) => (
+                <li key={value.title}>
+                  <span className="about-value-badge" aria-hidden="true">✦</span>
+                  <h3>{value.title}</h3>
+                  <p>{value.description}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
         </div>
-      </div>
+      </main>
 
       <style>{`
         .about-page-shell {
@@ -167,7 +127,6 @@ const AboutUs = () => {
           --about-muted: #64748b;
           --about-primary: #0797d5;
           --about-primary-strong: #0ea5e9;
-          --about-hero-overlay: rgba(7, 24, 45, 0.62);
           --about-shadow: 0 8px 22px rgba(7, 24, 45, 0.06);
           background: var(--about-bg);
           color: var(--about-text);
@@ -183,145 +142,12 @@ const AboutUs = () => {
           --about-muted: #cbd5e1;
           --about-primary: #7dd3fc;
           --about-primary-strong: #38bdf8;
-          --about-hero-overlay: rgba(7, 24, 45, 0.7);
           --about-shadow: 0 8px 22px rgba(2, 6, 23, 0.2);
         }
 
         .about-container {
           width: min(100% - 32px, 1200px);
           margin: 0 auto;
-        }
-
-        .about-hero {
-          position: relative;
-          display: flex;
-          align-items: center;
-          min-height: 260px;
-          background-image: linear-gradient(90deg, rgba(30, 111, 166, 0.88), rgba(65, 159, 217, 0.72)), url('/images/university/mekdela-amba-campus.svg');
-          background-size: cover;
-          background-position: center;
-        }
-
-        .about-hero-overlay {
-          position: absolute;
-          inset: 0;
-          background: rgba(65, 159, 217, 0.12);
-        }
-
-        .about-hero-inner {
-          position: relative;
-          z-index: 1;
-          width: min(100%, 1200px);
-          padding: 54px 0 48px;
-          color: #ffffff;
-        }
-
-        .about-breadcrumb {
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 14px;
-          color: rgba(255, 255, 255, 0.88);
-          font-size: 0.82rem;
-          font-weight: 700;
-          letter-spacing: 0.03em;
-        }
-
-        .about-breadcrumb-home {
-          display: inline-grid;
-          place-items: center;
-          width: 20px;
-          height: 20px;
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.12);
-          font-size: 0.8rem;
-        }
-
-        .about-breadcrumb a {
-          color: #ffffff;
-          text-decoration: none;
-        }
-
-        .about-breadcrumb a:hover,
-        .about-breadcrumb a:focus-visible {
-          text-decoration: underline;
-        }
-
-        .about-breadcrumb-separator {
-          color: rgba(255, 255, 255, 0.72);
-          font-size: 1.2rem;
-          line-height: 1;
-        }
-
-        .about-hero-kicker {
-          margin: 0;
-          color: rgba(255, 255, 255, 0.82);
-          font-size: 0.78rem;
-          font-weight: 800;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-        }
-
-        .about-hero h1 {
-          margin: 0;
-          color: #ffffff;
-          font-size: clamp(2.3rem, 4vw, 4rem);
-          line-height: 1.1;
-          letter-spacing: -0.04em;
-        }
-
-        .about-hero-heading {
-          margin: 20px 0 0;
-          font-size: clamp(1.5rem, 2.5vw, 2rem);
-        }
-
-        .about-toggle {
-          display: inline-flex;
-          align-items: center;
-          gap: 14px;
-          padding: 8px 0;
-          border: 0;
-          color: #ffffff;
-          background: transparent;
-          font: inherit;
-          font-weight: 700;
-          text-align: left;
-          cursor: pointer;
-        }
-
-        .about-toggle:focus-visible {
-          border-radius: 4px;
-          outline: 3px solid rgba(255, 255, 255, 0.85);
-          outline-offset: 4px;
-        }
-
-        .about-toggle-indicator {
-          display: inline-grid;
-          place-items: center;
-          width: 32px;
-          height: 32px;
-          border: 1px solid rgba(255, 255, 255, 0.55);
-          border-radius: 50%;
-          font-size: 1.35rem;
-          line-height: 1;
-        }
-
-        .about-expandable {
-          display: grid;
-          grid-template-rows: 0fr;
-          opacity: 0;
-          transition: grid-template-rows 300ms ease, opacity 220ms ease;
-        }
-
-        .about-expandable.is-expanded {
-          grid-template-rows: 1fr;
-          opacity: 1;
-        }
-
-        .about-expandable-inner {
-          min-width: 0;
-          min-height: 0;
-          overflow: hidden;
         }
 
         .about-main {
@@ -485,9 +311,6 @@ const AboutUs = () => {
         }
 
         @media (max-width: 640px) {
-          .about-hero { min-height: 200px; }
-          .about-hero-inner { padding: 36px 0 28px; }
-          .about-breadcrumb { font-size: 0.74rem; }
           .about-card-vision,
           .about-card-mission,
           .about-card-values { padding-left: 18px; padding-right: 18px; }
@@ -496,13 +319,7 @@ const AboutUs = () => {
 
         @media (max-width: 420px) {
           .about-container { width: min(100% - 24px, 1200px); }
-          .about-hero { min-height: 180px; }
-          .about-hero h1 { font-size: 2.1rem; }
           .about-card-head h2 { font-size: 1.45rem; }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .about-expandable { transition: none; }
         }
       `}</style>
     </div>

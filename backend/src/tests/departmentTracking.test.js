@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { Asset, Assignment } = require('../models');
+const { Asset, Assignment, Transfer, Maintenance } = require('../models');
 const tracking = require('../controllers/assetTrackingController');
 
 const makeResponse = () => ({
@@ -59,4 +59,42 @@ test('assignment verification requires a department-scoped assignment and compar
   assert.equal(assignmentQuery.where.assetId, 7);
   assert.equal(response.payload.data.matches, true);
   assert.equal(response.payload.data.assignedToName, 'Department Staff');
+});
+
+test('tracking reads resolve soft-deleted assets with paranoid disabled', async (t) => {
+  const originals = {
+    findOne: Asset.findOne,
+    findByPk: Asset.findByPk,
+    assignmentFindAll: Assignment.findAll,
+    transferFindAll: Transfer.findAll,
+    maintenanceFindAll: Maintenance.findAll,
+  };
+  const retrieved = { id: 7, location: 'Science Lab' };
+  const queries = {};
+  Asset.findOne = async (query) => { queries.findOne = query; return retrieved; };
+  Asset.findByPk = async (id, query) => { queries.findByPk = query; return retrieved; };
+  Assignment.findAll = async () => [];
+  Transfer.findAll = async () => [];
+  Maintenance.findAll = async () => [];
+  t.after(() => {
+    Asset.findOne = originals.findOne;
+    Asset.findByPk = originals.findByPk;
+    Assignment.findAll = originals.assignmentFindAll;
+    Transfer.findAll = originals.transferFindAll;
+    Maintenance.findAll = originals.maintenanceFindAll;
+  });
+
+  await tracking.getLocation({ params: { id: 7 } }, makeResponse(), (error) => { throw error; });
+  assert.equal(queries.findOne.paranoid, false);
+
+  await tracking.getAssignments({ params: { id: 7 } }, makeResponse(), (error) => { throw error; });
+  assert.equal(queries.findByPk.paranoid, false);
+
+  await tracking.getTransfers({ params: { id: 7 } }, makeResponse(), (error) => { throw error; });
+  assert.equal(queries.findByPk.paranoid, false);
+
+  const maintenance = makeResponse();
+  await tracking.getMaintenance({ params: { id: 7 } }, maintenance, (error) => { throw error; });
+  assert.equal(queries.findByPk.paranoid, false);
+  assert.equal(maintenance.statusCode, 200);
 });

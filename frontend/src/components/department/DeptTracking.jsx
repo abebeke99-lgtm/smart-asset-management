@@ -24,6 +24,7 @@ export default function DeptTracking() {
   const [loading, setLoading] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
   const [error, setError] = useState('');
+  const [panelNotice, setPanelNotice] = useState('');
   const [scannerMessage, setScannerMessage] = useState('');
   const [scanning, setScanning] = useState(false);
   const scannerRef = useRef(null);
@@ -60,6 +61,7 @@ export default function DeptTracking() {
     if (!code || loading) return;
     setLoading(true);
     setError('');
+    setPanelNotice('');
     setAsset(null);
     setLocation(null);
     setAssignments([]);
@@ -67,21 +69,33 @@ export default function DeptTracking() {
     setMaintenance([]);
     setDocuments([]);
     setMovementHistory([]);
+    const empty = { data: {} };
+    const emptyList = { data: { data: [] } };
+    const settle = async (path, fallback) => {
+      try {
+        return await apiClient.get(path);
+      } catch (panelError) {
+        if (!panelError) return fallback;
+        if (panelError.response?.status === 401 || panelError.response?.status === 403) throw panelError;
+        setPanelNotice(getApiErrorMessage(panelError, copy('Some tracking details could not be loaded.', 'አንዳንድ የክትትል ዝርዝሮች መጫን አልተቻለም።')));
+        return fallback;
+      }
+    };
     try {
       const scanResponse = await apiClient.get(`/assets/scan/${encodeURIComponent(code)}`);
       const scannedAsset = scanResponse.data?.data?.id ? scanResponse.data.data : scanResponse.data?.asset;
       if (!scannedAsset?.id) throw new Error(copy('Asset not found in your department.', 'በክፍልዎ ውስጥ ንብረቱ አልተገኘም።'));
       const id = encodeURIComponent(scannedAsset.id);
       const [assetResponse, locationResponse, assignmentResponse, transferResponse, maintenanceResponse, documentResponse, historyResponse] = await Promise.all([
-        apiClient.get(`/assets/${id}`),
-        apiClient.get(`/assets/${id}/location`),
-        apiClient.get(`/assets/${id}/assignments`),
-        apiClient.get(`/assets/${id}/transfers`),
-        apiClient.get(`/assets/${id}/maintenance`),
-        apiClient.get(`/assets/${id}/documents`),
-        apiClient.get(`/assets/${id}/history`),
+        settle(`/assets/${id}`, null),
+        settle(`/assets/${id}/location`, empty),
+        settle(`/assets/${id}/assignments`, emptyList),
+        settle(`/assets/${id}/transfers`, emptyList),
+        settle(`/assets/${id}/maintenance`, emptyList),
+        settle(`/assets/${id}/documents`, emptyList),
+        settle(`/assets/${id}/history`, empty),
       ]);
-      setAsset(assetResponse.data?.asset || assetResponse.data?.data || scannedAsset);
+      setAsset(assetResponse?.data?.asset || assetResponse?.data?.data || scannedAsset);
       setLocation(locationResponse.data?.data || {});
       setAssignments(rows(assignmentResponse));
       setTransfers(rows(transferResponse));
@@ -204,6 +218,7 @@ export default function DeptTracking() {
       <div id="department-tracking-qr-reader" className={scanning ? 'department-tracking__reader' : 'department-tracking__reader department-tracking__reader--hidden'} />
       {scannerMessage && <p className="department-tracking__notice" role="status">{scannerMessage}</p>}
       {error && <p className="department-tracking__error" role="alert">{error}</p>}
+      {panelNotice && <p className="department-tracking__notice" role="status">{panelNotice}</p>}
       {loading && <p className="department-tracking__loading" role="status"><RefreshCw size={16} aria-hidden="true" /> {copy('Loading authorized asset records…', 'የተፈቀዱ የንብረት መዝገቦችን በመጫን ላይ…')}</p>}
 
       {!asset && !loading && !error && (

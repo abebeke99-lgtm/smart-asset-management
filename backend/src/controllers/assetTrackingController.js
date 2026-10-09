@@ -7,7 +7,7 @@ const locationIncludes = [
   { model: Room, as: 'RoomRecord', attributes: ['roomName', 'floor'], required: false },
 ];
 
-const findAsset = (where) => Asset.findOne({ where, include: locationIncludes });
+const findAsset = (where, options = {}) => Asset.findOne({ where, ...options, include: locationIncludes });
 
 const serializeAsset = async (asset) => {
   const assignment = await Assignment.findOne({
@@ -76,7 +76,7 @@ const lookupByAssetCode = async (req, res) => {
 
 const getLocation = async (req, res) => {
   try {
-    const asset = await findAsset({ id: req.params.id });
+    const asset = await findAsset({ id: req.params.id }, { paranoid: false });
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found.' });
     return res.json({
       success: true,
@@ -117,7 +117,7 @@ const verifyLocation = async (req, res, next) => {
 
 const getAssignments = async (req, res) => {
   try {
-    const asset = await Asset.findByPk(req.params.id);
+    const asset = await Asset.findByPk(req.params.id, { paranoid: false });
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found.' });
     const rows = await Assignment.findAll({
       where: { assetId: asset.id },
@@ -183,7 +183,7 @@ const verifyAssignment = async (req, res, next) => {
 
 const getTransfers = async (req, res) => {
   try {
-    const asset = await Asset.findByPk(req.params.id);
+    const asset = await Asset.findByPk(req.params.id, { paranoid: false });
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found.' });
     const rows = await Transfer.findAll({
       where: { assetId: asset.id },
@@ -207,7 +207,7 @@ const getTransfers = async (req, res) => {
 
 const getMaintenance = async (req, res) => {
   try {
-    const asset = await Asset.findByPk(req.params.id);
+    const asset = await Asset.findByPk(req.params.id, { paranoid: false });
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found.' });
     const rows = await Maintenance.findAll({
       where: { assetId: asset.id },

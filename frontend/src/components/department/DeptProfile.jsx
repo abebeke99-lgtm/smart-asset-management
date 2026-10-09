@@ -377,7 +377,7 @@ const DetailGrid = ({ department, departmentName, collegeName, headName, officeN
     <DetailItem icon={Building2} label={t('departmentId')} value={getDisplayValue(department.id, missing)} />
     <DetailItem icon={Building2} label={t('departmentName')} value={departmentName} />
     <DetailItem icon={FileText} label={t('departmentCode')} value={getDisplayValue(department.code, missing)} />
-    <DetailItem icon={Building2} label={t('college')} value={collegeName} />
+    <DetailItem icon={Building2} label={t('collegeLabel')} value={collegeName} />
     <DetailItem icon={UserRound} label={t('departmentHead')} value={headName} />
     <DetailItem icon={Phone} label={t('contact')} value={getDisplayValue(department.phone, missing)} />
     <DetailItem icon={Mail} label={t('email')} value={getDisplayValue(department.email, missing)} />
@@ -466,7 +466,7 @@ const ProfileForm = ({
       <DetailItem icon={Building2} label={t('departmentId')} value={getDisplayValue(department.id, t('notProvided'))} />
       <DetailItem icon={Building2} label={t('departmentName')} value={getDisplayValue(department.name, t('notProvided'))} />
       <DetailItem icon={FileText} label={t('departmentCode')} value={getDisplayValue(department.code, t('notProvided'))} />
-      <DetailItem icon={Building2} label={t('college')} value={getDisplayValue(department.college?.collegeName || department.college?.name, t('notProvided'))} />
+      <DetailItem icon={Building2} label={t('collegeLabel')} value={getDisplayValue(department.college?.collegeName || department.college?.name, t('notProvided'))} />
       <DetailItem icon={UserRound} label={t('departmentHead')} value={headName} />
       <EditableDetailItem icon={Phone} id="department-profile-contact" name="contact" label={t('contact')} value={values.contact} error={fieldError('contact')} onChange={update} inputProps={{ type: 'tel', maxLength: 50, ...fieldProps('contact') }} />
       <EditableDetailItem icon={Mail} id="department-profile-email" name="email" label={t('email')} value={values.email} error={fieldError('email')} onChange={update} inputProps={{ type: 'email', maxLength: 255, ...fieldProps('email') }} />

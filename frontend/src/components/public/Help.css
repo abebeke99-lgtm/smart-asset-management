@@ -68,13 +68,16 @@
   width: 100%;
   min-height: 54px;
   border: 1px solid var(--help-border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--help-surface);
+  box-shadow: 0 4px 14px rgba(15, 35, 60, 0.06);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .help-search:focus-within {
   border-color: var(--help-brand);
   outline: 3px solid color-mix(in srgb, var(--help-brand) 22%, transparent);
+  box-shadow: 0 6px 20px rgba(36, 95, 150, 0.12);
 }
 
 .help-search-icon {
@@ -124,10 +127,11 @@
 }
 
 .help-search-clear:focus-visible,
+.help-empty-clear:focus-visible,
 .help-action-links a:focus-visible,
 .help-faq-question:focus-visible {
   outline: 3px solid var(--help-brand);
-  outline-offset: 2px;
+  outline-offset: 3px;
 }
 
 .help-search-hint {
@@ -148,6 +152,12 @@
   font-weight: 650;
   text-underline-offset: 3px;
   overflow-wrap: anywhere;
+  transition: color 150ms ease, text-decoration-color 150ms ease;
+}
+
+.help-action-links a:hover {
+  color: var(--help-text);
+  text-decoration-thickness: 2px;
 }
 
 .help-topics {
@@ -281,12 +291,39 @@
 }
 
 .help-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
   margin: 0;
   padding: 20px;
   border: 1px solid var(--help-border);
-  border-radius: 8px;
+  border-radius: 10px;
   color: var(--help-muted);
   line-height: 1.6;
+}
+
+.help-empty p {
+  margin: 0;
+}
+
+.help-empty-clear {
+  min-height: 40px;
+  padding: 8px 13px;
+  border: 1px solid var(--help-brand);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--help-brand);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.help-empty-clear:hover {
+  background: var(--help-brand);
+  color: var(--help-surface);
 }
 
 .help-footer {
@@ -332,5 +369,17 @@
   .help-faq-list {
     padding-right: 14px;
     padding-left: 14px;
+  }
+
+  .help-empty {
+    align-items: stretch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .help-search,
+  .help-action-links a,
+  .help-empty-clear {
+    transition: none;
   }
 }

@@ -751,8 +751,8 @@ body {
   padding: 0 17px !important;
   border: 1px solid var(--public-header-action) !important;
   border-radius: 8px !important;
-  background: var(--public-header-action) !important;
-  color: var(--color-primary-text) !important;
+  background: transparent !important;
+  color: var(--public-header-primary) !important;
   box-shadow: none;
   font-size: 0.86rem !important;
   font-weight: 800;
@@ -764,6 +764,7 @@ body {
 .public-site-header .public-login-button:hover {
   border-color: var(--color-primary-light) !important;
   background: var(--color-primary-light) !important;
+  color: var(--color-primary-text) !important;
 }
 
 .public-site-header.home-public-header .public-login-button:hover {

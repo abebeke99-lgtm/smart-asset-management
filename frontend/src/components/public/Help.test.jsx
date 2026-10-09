@@ -22,7 +22,7 @@ describe('Help page', () => {
 
     expect(screen.getByRole('heading', { name: 'Help & Support', level: 1 })).toBeInTheDocument();
     expect(screen.getByText('Mekdela Amba University · University Asset Management System')).toBeInTheDocument();
-    expect(screen.getByText('Find clear guidance for managing university assets and using the tools available to your role.')).toBeInTheDocument();
+    expect(screen.getByText('Find guidance for managing university assets and using the tools available to your role.')).toBeInTheDocument();
     [
       'Asset Registration and Management',
       'Asset Assignment and Return',
@@ -61,16 +61,28 @@ describe('Help page', () => {
   it('preserves all public action routes and contact/home links', () => {
     renderHelp();
 
+    expect(screen.getAllByRole('navigation', { name: 'Quick links' })).toHaveLength(1);
+    expect(screen.getAllByRole('link', { name: 'Login' })).toHaveLength(1);
+    expect(screen.getAllByRole('link', { name: 'Forgot Password' })).toHaveLength(1);
+    expect(screen.getAllByRole('link', { name: 'Contact Support' })).toHaveLength(1);
     expect(screen.getByRole('link', { name: 'Login' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('link', { name: 'Forgot Password' })).toHaveAttribute('href', '/forgot-password');
     expect(screen.getByRole('link', { name: 'Contact Support' })).toHaveAttribute('href', '/contact');
     expect(screen.getByRole('link', { name: 'View Contact Information' })).toHaveAttribute('href', '/contact');
     expect(screen.getByRole('link', { name: 'Back to Home' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('heading', { name: 'Need more help?' })).toBeInTheDocument();
+    expect(screen.getByText('For account access or workflow questions, contact the support team or your system administrator.')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'View Contact Information' })).toHaveLength(1);
+    expect(screen.getAllByRole('link', { name: 'Back to Home' })).toHaveLength(1);
   });
 
   it('filters questions by question text, answer text, category title, and keywords as the user types', () => {
     renderHelp();
     const search = screen.getByRole('searchbox', { name: 'Search help topics' });
+    expect(search).toHaveAttribute(
+      'placeholder',
+      'Search by topic, question, or keyword (e.g., transfer, inventory, assignment)'
+    );
 
     fireEvent.change(search, { target: { value: 'Department Head' } });
     expect(screen.getByRole('button', { name: 'What can a Department Head access?' })).toBeInTheDocument();
@@ -94,6 +106,10 @@ describe('Help page', () => {
     fireEvent.change(search, { target: { value: 'Reports and Dashboards' } });
     expect(screen.getByRole('heading', { name: 'Reports and Dashboards', level: 3 })).toBeInTheDocument();
     expect(screen.getByText('1 matching topic · 0 questions')).toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: 'INVENT' } });
+    expect(screen.getByRole('heading', { name: 'Inventory and Stock Management', level: 3 })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'How do I check inventory status?' })).toBeInTheDocument();
   });
 
   it('announces empty search results and restores all topics with the clear control', () => {
@@ -101,10 +117,10 @@ describe('Help page', () => {
     const search = screen.getByRole('searchbox', { name: 'Search help topics' });
 
     fireEvent.change(search, { target: { value: 'no-such-help-topic' } });
-    expect(screen.getByText('No matching help topics found. Try another keyword or clear your search.')).toBeInTheDocument();
+    expect(screen.getByText('No results found. Try another keyword or clear your search.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'How do I register a new asset?' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Clear search' })[1]);
     expect(search).toHaveValue('');
     expect(screen.getAllByRole('button', { name: /^(How do I|What)/ })).toHaveLength(11);
     expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();

@@ -135,15 +135,7 @@ const Home = () => {
         isolation: isolate;
         overflow: hidden;
         height: min(760px, calc(100svh - 82px));
-        background: #FFFFFF;
-      }
-
-      .uam-hero-media::after {
-        position: absolute;
-        inset: 0;
-        z-index: 1;
-        background: rgba(255, 255, 255, 0.08);
-        content: '';
+        background: #0F2942;
       }
 
       .uam-hero-image {
@@ -158,7 +150,7 @@ const Home = () => {
       }
 
       .uam-hero-image.is-active {
-        opacity: 0.14;
+        opacity: 1;
         transform: scale(1);
         z-index: 0;
       }

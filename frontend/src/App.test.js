@@ -3,6 +3,7 @@ import {
   AppFooter,
   shouldHideSidebarForPath,
   shouldUseStandaloneLoginLayout,
+  shouldShowPublicHeader,
   shouldShowDashboardSidebar,
   shouldShowDashboardHeader,
   isDashboardRoute,
@@ -111,6 +112,17 @@ describe('Public and dashboard route rules', () => {
     expect(isDashboardRoute('/home')).toBe(false);
   });
 
+  it('hides the public header only on the exact standalone Login route', () => {
+    expect(shouldShowPublicHeader('/login')).toBe(false);
+    expect(shouldShowPublicHeader('/login?next=%2Fadmin')).toBe(false);
+    expect(shouldShowPublicHeader('/login/')).toBe(false);
+    expect(shouldShowPublicHeader('/login-help')).toBe(true);
+    expect(shouldShowPublicHeader('/')).toBe(true);
+    expect(shouldShowPublicHeader('/help')).toBe(true);
+    expect(shouldShowPublicHeader('/admin')).toBe(true);
+    expect(shouldShowPublicHeader('/ict/dashboard')).toBe(true);
+  });
+
   it('shows the dashboard sidebar only on authenticated dashboard routes', () => {
     expect(shouldShowDashboardSidebar('/admin')).toBe(true);
     expect(shouldShowDashboardSidebar('/admin/assets')).toBe(true);
@@ -208,6 +220,17 @@ describe('Administrator route wiring', () => {
         expect(appSource).toContain('<Route index element={<AdminDashboard />} />');
       }
     }
+  });
+
+  it('keeps unrelated Admin navigation and the Maintenance Oversight entry available', () => {
+    const sidebarSource = appSource.match(/const adminSidebarSections = \[([\s\S]*?)\n\];/)?.[1] || '';
+
+    for (const label of ['Dashboard', 'All Assets', 'Users', 'Maintenance Oversight', 'Settings']) {
+      expect(sidebarSource).toContain(`label: '${label}'`);
+    }
+    expect(appSource).toContain("path: '/maintenance/technicians'");
+    expect(appSource).toContain("path: '/maintenance/history'");
+    expect(appSource).toContain('<Route path="maintenance" element={<AdminMaintenance />');
   });
 
   it('has one canonical shared app shell and redirects the analytics grouping to system analytics', () => {

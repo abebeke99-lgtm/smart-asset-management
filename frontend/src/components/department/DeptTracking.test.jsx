@@ -88,6 +88,28 @@ test('reports authorization-safe not-found results without requesting asset hist
   expect(screen.queryByText('Department laptop')).not.toBeInTheDocument();
 });
 
+test('keeps the asset view when an optional tracking panel is not available', async () => {
+  apiClient.get.mockImplementation((url) => {
+    if (url === '/assets/scan/QR-21') return Promise.resolve({ data: { data: asset } });
+    if (url === '/assets/21') return Promise.resolve({ data: { asset } });
+    if (url === '/assets/21/location') return Promise.reject({ response: { status: 404, data: { message: 'Asset not found.' } } });
+    if (url === '/assets/21/assignments') return Promise.resolve({ data: { data: [] } });
+    if (url === '/assets/21/transfers') return Promise.resolve({ data: { data: [] } });
+    if (url === '/assets/21/maintenance') return Promise.reject({ response: { status: 404, data: { message: 'Asset not found.' } } });
+    if (url === '/assets/21/documents') return Promise.resolve({ data: { data: [] } });
+    if (url === '/assets/21/history') return Promise.resolve({ data: { history: [] } });
+    return Promise.reject(new Error(`Unexpected GET ${url}`));
+  });
+  renderPage();
+  fireEvent.change(screen.getByLabelText('QR code, RFID tag, or asset ID'), { target: { value: 'QR-21' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Look up asset' }));
+
+  expect(await screen.findByRole('heading', { name: 'Department laptop' })).toBeInTheDocument();
+  expect(screen.getByText('ASSET-21')).toBeInTheDocument();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('Asset not found.');
+});
+
 test('camera QR scans use the authorized department lookup', async () => {
   const originalAnimationFrame = window.requestAnimationFrame;
   window.requestAnimationFrame = (callback) => window.setTimeout(callback, 0);
