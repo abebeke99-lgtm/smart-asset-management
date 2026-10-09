@@ -228,7 +228,7 @@ export default function FinancePayments() {
       <div style={{ maxWidth: 1500, margin: "0 auto", padding: 28 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 18, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 52, height: 52, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #0ea5e9, #3074B3)", color: "#fff", boxShadow: "0 10px 25px rgba(48, 116, 179,0.18)" }}>
+            <div style={{ width: 52, height: 52, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", background: "#3074B3", color: "#fff", boxShadow: "0 10px 25px rgba(48, 116, 179,0.18)" }}>
               <Wallet size={22} />
             </div>
             <div>

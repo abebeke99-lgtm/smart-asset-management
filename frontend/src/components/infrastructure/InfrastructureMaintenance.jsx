@@ -926,11 +926,7 @@ export default function InfrastructureMaintenance() {
           display: grid;
           place-items: center;
           color: white;
-          background: linear-gradient(
-            135deg,
-            #0ea5e9,
-            #3074B3
-          );
+          background: #3074B3;
           box-shadow:
             0 10px 25px rgba(48, 116, 179, 0.2);
           flex-shrink: 0;

@@ -37,7 +37,7 @@ const Help = () => {
   return (
     <main className={`help-page${theme === 'dark' ? ' help-page-dark' : ''}`}>
       <style>{`
-        .help-page { --help-primary: #3074B3; --help-secondary: #4F7597; --help-accent: #3074B3; --help-bg: #FFFFFF; --help-card: #FFFFFF; --help-text: #0F1F2E; --help-muted: #304B65; --help-border: #D7E1EA; --help-page-bg: var(--help-bg); --help-surface: var(--help-card); --help-text-main: var(--help-text); --help-text-soft: var(--help-muted); --help-outline: var(--help-border); --help-brand: var(--help-primary); --help-brand-alt: var(--help-secondary); --help-highlight: var(--help-accent); background: var(--help-page-bg); color: var(--help-text-main); min-height: 100%; }
+        .help-page { --help-primary: #3074B3; --help-secondary: #4F7597; --help-accent: #3074B3; --help-bg: #FFFFFF; --help-card: #FFFFFF; --help-text: #1F2937; --help-muted: #64748B; --help-border: #E2E8F0; --help-page-bg: var(--help-bg); --help-surface: var(--help-card); --help-text-main: var(--help-text); --help-text-soft: var(--help-muted); --help-outline: var(--help-border); --help-brand: var(--help-primary); --help-brand-alt: var(--help-secondary); --help-highlight: var(--help-accent); background: var(--help-page-bg); color: var(--help-text-main); min-height: 100%; }
         .help-page-dark { --help-page-bg: #0f172a; --help-surface: #111c2c; --help-text-main: #e2e8f0; --help-text-soft: #a7b3c7; --help-outline: rgba(148,163,184,0.22); --help-brand: #93c5fd; --help-brand-alt: #cbd5e1; --help-highlight: #3074B3; }
         .help-page, .help-page * { box-sizing: border-box; }
         .help-shell { width: 100%; max-width: none; padding: 0 20px; margin: 0; }

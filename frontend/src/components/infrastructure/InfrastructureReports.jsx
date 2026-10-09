@@ -675,11 +675,7 @@ export default function InfrastructureReports() {
           width: 51px;
           height: 51px;
           border-radius: 14px;
-          background: linear-gradient(
-            135deg,
-            #0ea5e9,
-            #3074B3
-          );
+          background: #3074B3;
           color: white;
           display: flex;
           align-items: center;
@@ -1008,11 +1004,7 @@ export default function InfrastructureReports() {
         .breakdown-fill {
           height: 100%;
           border-radius: inherit;
-          background: linear-gradient(
-            90deg,
-            #0ea5e9,
-            #3074B3
-          );
+          background: #3074B3;
         }
 
         .breakdown-value {

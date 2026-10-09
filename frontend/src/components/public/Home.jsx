@@ -121,7 +121,7 @@ const Home = () => {
 
     <style>{`
       .uam-home-page {
-        color: #0F1F2E;
+        color: #1F2937;
         background: #FFFFFF;
       }
 
@@ -131,7 +131,7 @@ const Home = () => {
         overflow: hidden;
         min-height: min(760px, calc(100svh - 82px));
         background: #FFFFFF;
-        color: #0F1F2E;
+        color: #1F2937;
       }
 
       .uam-hero::after {
@@ -197,7 +197,7 @@ const Home = () => {
       .uam-hero-copy h1 {
         max-width: 720px;
         margin: 0;
-        color: #0F1F2E;
+        color: #1F2937;
         font-size: clamp(3rem, 5vw, 4.5rem);
         line-height: 1.06;
         letter-spacing: 0;
@@ -208,7 +208,7 @@ const Home = () => {
       .uam-lead {
         max-width: 650px;
         margin: 22px 0 10px;
-        color: #304B65;
+        color: #64748B;
         font-size: 1.12rem;
         line-height: 1.65;
         animation: uam-enter 550ms 50ms ease both;
@@ -217,7 +217,7 @@ const Home = () => {
       .uam-supporting-text {
         max-width: 660px;
         margin: 0 0 26px;
-        color: #304B65;
+        color: #64748B;
         font-size: 0.98rem;
         line-height: 1.65;
         animation: uam-enter 600ms 90ms ease both;
@@ -238,7 +238,7 @@ const Home = () => {
         align-items: center;
         min-width: 0;
         gap: 9px;
-        color: #304B65;
+        color: #64748B;
         font-size: 0.94rem;
         font-weight: 600;
         line-height: 1.4;
@@ -291,20 +291,20 @@ const Home = () => {
 
       .uam-primary-button:hover {
         transform: translateY(-2px);
-        background: #274B69;
+        background: #245783;
         box-shadow: 0 8px 22px rgba(15, 31, 46, 0.16);
       }
 
       .uam-secondary-button:hover {
         transform: translateY(-2px);
-        border-color: #274B69;
-        color: #274B69;
+        border-color: #245783;
+        color: #245783;
         background: #F4F8FB;
       }
 
       .uam-hero-panel {
         padding: clamp(24px, 3vw, 34px);
-        border: 1px solid #D7E1EA;
+        border: 1px solid #E2E8F0;
         border-radius: 12px;
         background: #FFFFFF;
         box-shadow: 0 16px 40px rgba(15, 31, 46, 0.08);
@@ -336,7 +336,7 @@ const Home = () => {
 
       .uam-panel-card {
         padding: 19px 0;
-        border-top: 1px solid #D7E1EA;
+        border-top: 1px solid #E2E8F0;
       }
 
       .uam-panel-label {
@@ -351,7 +351,7 @@ const Home = () => {
 
       .uam-panel-card strong {
         display: block;
-        color: #304B65;
+        color: #64748B;
         font-size: 1.02rem;
         font-weight: 600;
         line-height: 1.55;
@@ -386,45 +386,45 @@ const Home = () => {
 
       .uam-shell { width: min(1120px, calc(100% - 36px)); margin: 0 auto; }
       .uam-section { padding: clamp(54px, 7vw, 82px) 0; }
-      .uam-surface { background: #fff; border-top: 1px solid #d7dee5; border-bottom: 1px solid #d7dee5; }
+      .uam-surface { background: #fff; border-top: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; }
       .uam-section-heading { margin-bottom: 26px; }
       .uam-section-heading h2 { margin: 0; color: #17212b; font-size: clamp(1.7rem, 3vw, 2.35rem); line-height: 1.2; }
       .uam-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-      .uam-card { padding: 20px; border: 1px solid #d7dee5; background: #fff; }
-      .uam-card-icon { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; margin-bottom: 12px; color: #245783; background: #eaf1ff; }
+      .uam-card { padding: 20px; border: 1px solid #E2E8F0; background: #fff; }
+      .uam-card-icon { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; margin-bottom: 12px; color: #245783; background: #EAF2FA; }
       .uam-benefits-section { background: #f5f7f9; }
       .uam-benefit-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .uam-benefit { border-radius: 6px; box-shadow: none; }
       .uam-benefit h3 { margin: 0; font-size: 1rem; line-height: 1.5; }
-      .uam-benefit p { margin: 10px 0 0; color: #40566f; line-height: 1.6; }
+      .uam-benefit p { margin: 10px 0 0; color: #64748B; line-height: 1.6; }
       .uam-card-icon { flex: 0 0 auto; border-radius: 6px; }
       .uam-workflow-list { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; margin: 0 0 26px; padding: 0; list-style: none; }
       .uam-workflow-step { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 12px; border-left: 2px solid #bfdbfe; padding: 4px 0 4px 12px; }
       .uam-workflow-step strong { font-size: 0.94rem; line-height: 1.45; }
       .uam-section-link { display: inline-flex; align-items: center; gap: 8px; color: #245783; font-weight: 700; text-decoration: none; }
       .uam-section-link:hover { text-decoration: underline; }
-      .uam-role-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin-bottom: 24px; border: 1px solid #d7dee5; background: #d7dee5; }
-      .uam-role-item { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 18px; color: #243b53; background: #fff; font-weight: 650; }
+      .uam-role-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin-bottom: 24px; border: 1px solid #E2E8F0; background: #E2E8F0; }
+      .uam-role-item { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 18px; color: #1F2937; background: #fff; font-weight: 650; }
       .uam-role-item svg { flex: 0 0 auto; color: #245783; }
-      .uam-security-section { background: #eaf1ff; }
+      .uam-security-section { background: #EAF2FA; }
       .uam-security-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-      .uam-security-item { display: flex; align-items: center; gap: 12px; color: #19324d; font-weight: 650; line-height: 1.5; }
+      .uam-security-item { display: flex; align-items: center; gap: 12px; color: #1F2937; font-weight: 650; line-height: 1.5; }
       .uam-security-item svg { flex: 0 0 auto; color: #245783; }
-      .uam-trust-section { padding: 38px 0; color: #fff; background: #17365d; }
+      .uam-trust-section { padding: 38px 0; color: #fff; background: #245783; }
       .uam-trust-content { display: flex; align-items: center; gap: 20px; }
       .uam-trust-content > svg { flex: 0 0 auto; color: #93c5fd; }
       .uam-trust-content h2 { margin: 0 0 6px; font-size: 1.35rem; }
       .uam-trust-content p { margin: 0; color: #EAF2FA; line-height: 1.6; }
       .uam-quick-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-      .uam-quick-links a { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 18px; border: 1px solid #d7dee5; border-radius: 6px; color: #243b53; background: #fff; font-weight: 700; text-decoration: none; }
+      .uam-quick-links a { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 18px; border: 1px solid #E2E8F0; border-radius: 6px; color: #1F2937; background: #fff; font-weight: 700; text-decoration: none; }
       .uam-quick-links a svg:first-child { color: #245783; }
       .uam-quick-links a svg:last-child { margin-left: auto; }
       .uam-quick-links a:hover { border-color: #245783; }
       .uam-final-cta { padding: 42px 0; background: #EAF2FA; }
       .uam-final-content { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
       .uam-final-content h2 { margin: 0 0 6px; font-size: 1.65rem; }
-      .uam-final-content p { margin: 0; color: #40566f; line-height: 1.6; }
-      .uam-final-content .uam-primary-button { gap: 10px; border-radius: 6px; color: #fff; background: #245783; }
+      .uam-final-content p { margin: 0; color: #64748B; line-height: 1.6; }
+      .uam-final-content .uam-primary-button { gap: 10px; border-radius: 6px; color: #fff; background: #3074B3; }
 
       @media (max-width: 960px) {
         .uam-hero-shell { grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr); gap: 32px; }

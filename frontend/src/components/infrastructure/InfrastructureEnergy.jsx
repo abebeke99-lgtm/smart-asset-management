@@ -98,7 +98,7 @@ export default function InfrastructureEnergy() {
         .energy-header h1 { margin: 0 0 5px; font-size: 28px; line-height: 1.15; }
         .energy-header p, .energy-muted { margin: 0; color: #64748b; font-size: 14px; }
         .energy-title { display: flex; align-items: flex-start; gap: 14px; }
-        .energy-title-icon { display: grid; place-items: center; width: 48px; height: 48px; flex: 0 0 auto; border-radius: 12px; background: linear-gradient(135deg, #0ea5e9, #3074B3); color: #fff; }
+        .energy-title-icon { display: grid; place-items: center; width: 48px; height: 48px; flex: 0 0 auto; border-radius: 12px; background: #3074B3; color: #fff; }
         .energy-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; padding: 0 13px; border: 1px solid #dbe4ee; border-radius: 8px; background: #fff; color: #1e293b; font-weight: 700; cursor: pointer; }
         .energy-btn:disabled { cursor: not-allowed; opacity: .55; }
         .energy-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }

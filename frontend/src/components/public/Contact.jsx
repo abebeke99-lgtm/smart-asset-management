@@ -217,8 +217,8 @@ const Contact = () => {
 
       <style>{`
         .contact-page {
-          --contact-primary: #1b365d;
-          --contact-secondary: #2a4d7a;
+          --contact-primary: #3074B3;
+          --contact-secondary: #245783;
           --contact-accent: #d4b46a;
           --contact-bg: #f4f7fb;
           --contact-card: #ffffff;
@@ -336,7 +336,7 @@ const Contact = () => {
           width: 56px;
           height: 56px;
           border-radius: 16px;
-          background: linear-gradient(135deg, var(--contact-primary), var(--contact-secondary));
+          background: var(--contact-primary);
           color: #ffffff;
         }
 

@@ -1006,11 +1006,7 @@ export default function InfrastructureFuel() {
           width: 49px;
           height: 49px;
           border-radius: 14px;
-          background: linear-gradient(
-            135deg,
-            #0ea5e9,
-            #3074B3
-          );
+          background: #3074B3;
           color: white;
           display: flex;
           align-items: center;

@@ -828,7 +828,7 @@ const DeptAssets = () => {
     },
     buttonPrimary: {
       padding: '10px 20px',
-      background: 'linear-gradient(135deg, #60a5fa, #3074B3)',
+      background: '#3074B3',
       color: 'white',
       border: 'none',
       borderRadius: '10px',

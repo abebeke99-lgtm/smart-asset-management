@@ -2,6 +2,18 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const request = require('supertest');
+const app = require('../src/app');
+
+test('disallowed CORS preflights return 403 without reflecting the requesting origin', async () => {
+  const response = await request(app)
+    .options('/api/auth/login')
+    .set('Origin', 'https://untrusted.invalid')
+    .set('Access-Control-Request-Method', 'POST');
+
+  assert.equal(response.status, 403);
+  assert.doesNotMatch(response.text, /untrusted\.invalid/);
+});
 
 test('app startup initializes the backup service dependency required for server boot', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');

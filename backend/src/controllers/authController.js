@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { Op } = require('sequelize');
 const { sequelize, User, PasswordRecovery, AuditLog, UserActivityLog, Config } = require('../models');
 const { normalizePhoneNumber, sendOtpSms, isSmsConfigured } = require('../services/smsService');
-const { validateEmailConfiguration, sendPasswordResetEmail, sendOtpEmail } = require('../services/emailService');
+const { validateEmailConfiguration, sendPasswordResetEmail, sendOtpEmail, logEmailDiagnostic } = require('../services/emailService');
 const { isValidEmail, isValidUsername } = require('../utils/validators');
 const { getJwtSecret } = require('../config/jwt');
 const { getRequestContext, getClientIp } = require('../middlewares/requestContext');
@@ -563,7 +563,10 @@ const requestForgotPasswordOtp = async (req, res) => {
       const emailConfiguration = validateEmailConfiguration();
       const developmentOtpFallback = process.env.NODE_ENV === 'development' && !emailConfiguration.valid;
       if (!emailConfiguration.valid && !developmentOtpFallback) {
-        console.warn(`Forgot password email configuration missing: ${(emailConfiguration.missingVariables || []).join(', ') || 'EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASSWORD'}`);
+        logEmailDiagnostic('password_reset_otp', {
+          code: 'EMAIL_NOT_CONFIGURED',
+          missingVariables: emailConfiguration.missingVariables,
+        }, req.requestId);
         return res.status(503).json({
           success: false,
           code: 'EMAIL_NOT_CONFIGURED',
@@ -619,16 +622,11 @@ const requestForgotPasswordOtp = async (req, res) => {
         });
       } catch (error) {
         await clearOtpState(recovery);
-        console.error(
-          'Password reset OTP email delivery failed:',
-          error.message || 'Unknown SMTP error',
-          error.code || 'UNKNOWN',
-          error.command || '',
-          error.responseCode || '',
-          error.errno || '',
-          error.syscall || '',
-        );
         const mappedError = mapEmailDeliveryError(error);
+        logEmailDiagnostic('password_reset_otp', {
+          code: mappedError.code,
+          error,
+        }, req.requestId);
         return res.status(503).json({ success: false, ...mappedError });
       }
 
@@ -887,7 +885,15 @@ const forgotPassword = async (req, res) => {
 
     const emailConfiguration = validateEmailConfiguration();
     if (!emailConfiguration.valid) {
-      return res.status(503).json({ success: false, message: 'Unable to process the password reset request.' });
+      logEmailDiagnostic('password_reset_email', {
+        code: 'EMAIL_NOT_CONFIGURED',
+        missingVariables: emailConfiguration.missingVariables,
+      }, req.requestId);
+      return res.status(503).json({
+        success: false,
+        code: 'EMAIL_NOT_CONFIGURED',
+        message: 'Unable to process the password reset request.',
+      });
     }
 
     const rawToken = crypto.randomBytes(32).toString('hex');
@@ -931,8 +937,11 @@ const forgotPassword = async (req, res) => {
 
     if (mailResult.status !== 'sent') {
       await rollbackResetToken();
-      console.error('Forgot password error: reset email not delivered -', mailResult.reason);
-      return res.status(503).json({ success: false, message: 'Unable to process the password reset request.' });
+      return res.status(503).json({
+        success: false,
+        code: mailResult.code || 'EMAIL_DELIVERY_FAILED',
+        message: 'Unable to process the password reset request.',
+      });
     }
 
     await recordAuthEvent({ userId: user.id, action: 'PASSWORD_RESET_REQUESTED', result: 'Success', req });

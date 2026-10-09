@@ -756,7 +756,7 @@ const StoreTransfers = () => {
       border: 'none',
       borderRadius: '8px',
       padding: '12px 16px',
-      background: 'linear-gradient(135deg,#3074B3,#245783)',
+      background: '#3074B3',
       color: '#fff',
       fontWeight: 800,
       cursor: 'pointer'

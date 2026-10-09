@@ -1075,7 +1075,7 @@ export default function Dashboard() {
         }
 
         .breadcrumb strong {
-          color: #2563EB;
+          color: #3074B3;
         }
 
         .page-header h1 {
@@ -1107,8 +1107,8 @@ export default function Dashboard() {
         }
 
         .refresh-button:hover {
-          border-color: #2563EB;
-          color: #2563EB;
+          border-color: #3074B3;
+          color: #3074B3;
         }
 
         .refresh-button:disabled {
@@ -1163,7 +1163,7 @@ export default function Dashboard() {
           align-items: center;
           gap: 14px;
           background: #FFFFFF;
-          border: 1px solid #E5E7EB;
+          border: 1px solid #E2E8F0;
           border-radius: 12px;
           padding: 18px;
           min-height: 108px;
@@ -1181,8 +1181,8 @@ export default function Dashboard() {
         }
 
         .kpi-icon.blue {
-          background: #DBEAFE;
-          color: #2563EB;
+          background: #EAF2FA;
+          color: #3074B3;
         }
 
         .kpi-icon.green {
@@ -1253,7 +1253,7 @@ export default function Dashboard() {
 
         .dashboard-card {
           background: #FFFFFF;
-          border: 1px solid #E5E7EB;
+          border: 1px solid #E2E8F0;
           border-radius: 12px;
           padding: 20px;
           min-width: 0;
@@ -1289,7 +1289,7 @@ export default function Dashboard() {
           display: inline-flex;
           align-items: center;
           gap: 5px;
-          color: #2563EB;
+          color: #3074B3;
           text-decoration: none;
           font-size: 12px;
           font-weight: 600;
@@ -1327,7 +1327,7 @@ export default function Dashboard() {
         .progress-track {
           height: 8px;
           width: 100%;
-          background: #E5E7EB;
+          background: #E2E8F0;
           border-radius: 999px;
           overflow: hidden;
         }
@@ -1343,11 +1343,11 @@ export default function Dashboard() {
         }
 
         .progress-bar.status-info {
-          background: #2563EB;
+          background: #3074B3;
         }
 
         .progress-bar.status-warning {
-          background: #F59E0B;
+          background: #D97706;
         }
 
         .progress-bar.status-danger {
@@ -1365,10 +1365,10 @@ export default function Dashboard() {
         }
 
         .condition-item {
-          border: 1px solid #E5E7EB;
+          border: 1px solid #E2E8F0;
           border-radius: 9px;
           padding: 13px;
-          background: #F9FAFB;
+          background: #F5F7FA;
         }
 
         .condition-value {
@@ -1395,8 +1395,8 @@ export default function Dashboard() {
         }
 
         .status-info {
-          background: #DBEAFE;
-          color: #1D4ED8;
+          background: #EAF2FA;
+          color: #245783;
         }
 
         .status-warning {
@@ -1420,7 +1420,7 @@ export default function Dashboard() {
           gap: 12px;
           margin-top: 16px;
           padding-top: 16px;
-          border-top: 1px solid #E5E7EB;
+          border-top: 1px solid #E2E8F0;
         }
 
         .ratio-summary div {
@@ -1459,8 +1459,8 @@ export default function Dashboard() {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #EFF6FF;
-          color: #2563EB;
+          background: #EAF2FA;
+          color: #3074B3;
           border-radius: 8px;
         }
 
@@ -1494,8 +1494,8 @@ export default function Dashboard() {
           align-items: center;
           padding: 13px;
           border-radius: 9px;
-          background: #F9FAFB;
-          border: 1px solid #E5E7EB;
+          background: #F5F7FA;
+          border: 1px solid #E2E8F0;
         }
 
         .maintenance-total span {
@@ -1519,9 +1519,9 @@ export default function Dashboard() {
           align-items: center;
           gap: 10px;
           padding: 13px;
-          border: 1px solid #E5E7EB;
+          border: 1px solid #E2E8F0;
           border-radius: 9px;
-          background: #F9FAFB;
+          background: #F5F7FA;
         }
 
         .ticket-stat-icon {
@@ -1531,8 +1531,8 @@ export default function Dashboard() {
           align-items: center;
           justify-content: center;
           border-radius: 8px;
-          background: #EFF6FF;
-          color: #2563EB;
+          background: #EAF2FA;
+          color: #3074B3;
         }
 
         .ticket-stat span {
@@ -1554,7 +1554,7 @@ export default function Dashboard() {
           gap: 7px;
           margin-top: 15px;
           padding-top: 15px;
-          border-top: 1px solid #E5E7EB;
+          border-top: 1px solid #E2E8F0;
           color: #6B7280;
           font-size: 12px;
         }
@@ -1597,8 +1597,8 @@ export default function Dashboard() {
           align-items: center;
           justify-content: center;
           border-radius: 8px;
-          background: #EFF6FF;
-          color: #2563EB;
+          background: #EAF2FA;
+          color: #3074B3;
         }
 
         .incident-icon {
@@ -1680,8 +1680,8 @@ export default function Dashboard() {
           padding: 11px 12px;
           text-align: left;
           color: #6B7280;
-          background: #F9FAFB;
-          border-bottom: 1px solid #E5E7EB;
+          background: #F5F7FA;
+          border-bottom: 1px solid #E2E8F0;
           font-size: 11px;
           font-weight: 700;
           white-space: nowrap;
@@ -1696,7 +1696,7 @@ export default function Dashboard() {
         }
 
         .activity-table tbody tr:hover {
-          background: #F9FAFB;
+          background: #F5F7FA;
         }
 
         .activity-action {

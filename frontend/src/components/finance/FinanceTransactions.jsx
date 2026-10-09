@@ -977,11 +977,7 @@ export default function FinanceTransactions() {
           justify-content: center;
           color: white;
           background:
-            linear-gradient(
-              135deg,
-              #0ea5e9,
-              #3074B3
-            );
+            #3074B3;
           box-shadow:
             0 10px 25px
             rgba(48, 116, 179, .18);

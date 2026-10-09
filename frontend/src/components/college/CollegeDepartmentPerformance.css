@@ -76,7 +76,7 @@
   color: white;
 }
 
-.college-performance-kpi-icon.blue { background: linear-gradient(135deg, #3074B3, #60a5fa); }
+.college-performance-kpi-icon.blue { background: #3074B3; }
 .college-performance-kpi-icon.cyan { background: linear-gradient(135deg, #0f766e, #2dd4bf); }
 .college-performance-kpi-icon.green { background: linear-gradient(135deg, #15803d, #22c55e); }
 .college-performance-kpi-icon.indigo { background: linear-gradient(135deg, #4f46e5, #818cf8); }

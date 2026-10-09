@@ -864,11 +864,7 @@ export default function InfrastructureTracking() {
           width: 50px;
           height: 50px;
           border-radius: 14px;
-          background: linear-gradient(
-            135deg,
-            #0ea5e9,
-            #3074B3
-          );
+          background: #3074B3;
           color: white;
           display: flex;
           align-items: center;

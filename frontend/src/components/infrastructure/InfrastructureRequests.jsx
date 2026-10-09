@@ -588,7 +588,7 @@ const styles = {
     padding: '10px 16px',
     border: 'none',
     borderRadius: '10px',
-    background: 'linear-gradient(135deg, #0f172a 0%, #245783 100%)',
+    background: '#3074B3',
     color: '#fff',
     fontWeight: 700,
     cursor: 'pointer',

@@ -739,7 +739,7 @@ const StoreAssetRequests = () => {
             borderRadius: 9,
             padding: '11px 18px',
             background:
-              'linear-gradient(135deg,#3074B3,#245783)',
+              '#3074B3',
             color: '#fff',
             fontWeight: 800,
             cursor: 'pointer'
@@ -1134,7 +1134,7 @@ const StoreAssetRequests = () => {
                   border: 'none',
                   borderRadius: 8,
                   background:
-                    'linear-gradient(135deg,#3074B3,#245783)',
+                    '#3074B3',
                   color: '#fff',
                   cursor: processing
                     ? 'not-allowed'

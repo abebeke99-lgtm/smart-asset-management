@@ -133,11 +133,15 @@ app.use(cors({
       return;
     }
 
-    callback(new Error(`Origin ${origin} is not allowed by CORS`));
+    const error = new Error('Origin is not allowed by CORS');
+    error.status = 403;
+    error.code = 'CORS_ORIGIN_NOT_ALLOWED';
+    callback(error);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['X-Request-ID']
 }));
 
 app.get('/health', healthHandler);

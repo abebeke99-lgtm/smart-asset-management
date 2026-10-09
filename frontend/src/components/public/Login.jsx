@@ -157,8 +157,7 @@ const Login = () => {
           align-items: center;
           justify-content: center;
           padding: clamp(20px, 4vw, 42px);
-          background: radial-gradient(circle at top left, rgba(0, 87, 184, 0.1), transparent 32%),
-            linear-gradient(135deg, rgba(0, 87, 184, 0.04), rgba(248, 250, 252, 0.8) 40%, rgba(221, 234, 247, 0.7));
+          background: #F5F7FA;
           color: var(--color-text-primary);
           font-family: Inter, 'Segoe UI', sans-serif;
         }
@@ -196,7 +195,7 @@ const Login = () => {
         }
         .login-back-link:hover {
           color: var(--color-text-primary);
-          background: rgba(0, 87, 184, 0.04);
+          background: var(--color-primary-light);
         }
         .login-back-link:focus-visible {
           outline: 2px solid var(--color-primary);
@@ -209,7 +208,7 @@ const Login = () => {
           margin: 0 auto 18px;
           border-radius: 18px;
           object-fit: contain;
-          background: linear-gradient(135deg, rgba(0, 87, 184, 0.08), rgba(255, 255, 255, 0.9));
+          background: #FFFFFF;
           border: 1px solid var(--color-border);
           box-shadow: 0 10px 24px rgba(7, 31, 61, 0.08);
         }
@@ -284,14 +283,15 @@ const Login = () => {
           border: 0;
           border-radius: 10px;
           color: #FFFFFF;
-          background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+          background: var(--color-primary);
           cursor: pointer;
           font-size: 0.95rem;
           font-weight: 700;
           box-shadow: var(--shadow-dashboard-primary);
+          transition: background-color 160ms ease;
         }
-        .login-submit:hover { filter: brightness(0.98); }
-        .login-submit:active { filter: brightness(0.95); }
+        .login-submit:hover { background: var(--color-primary-hover); }
+        .login-submit:active { background: var(--color-primary-hover); }
         .login-submit:disabled { cursor: wait; opacity: 0.7; }
         .login-signup { margin-top: 22px; color: var(--color-text-secondary); text-align: center; font-size: 0.82rem; }
         .login-signup a { color: var(--color-primary); font-weight: 700; text-decoration: none; }

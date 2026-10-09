@@ -1,4 +1,5 @@
 const { getMailerStatus, getSmtpTimeouts, getTransporter, readMailerConfig } = require('../utils/mailer');
+const { getRequestContext } = require('../middlewares/requestContext');
 
 const validateEmailConfiguration = () => {
   const status = getMailerStatus();
@@ -12,6 +13,39 @@ const getEmailTransport = () => {
   const validation = validateEmailConfiguration();
   if (!validation.valid) return null;
   return { transporter: getTransporter(), from: validation.config.from };
+};
+
+const logEmailDiagnostic = (operation, details = {}, requestId) => {
+  const contextRequestId = getRequestContext()?.requestId;
+  const candidateRequestId = requestId || contextRequestId || 'unavailable';
+  const safeRequestId = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(String(candidateRequestId))
+    ? String(candidateRequestId)
+    : 'unavailable';
+  const errorCode = details.error?.code;
+  const normalizeCode = (value) => /^[A-Za-z0-9_-]{1,64}$/.test(String(value || ''))
+    ? String(value).toUpperCase()
+    : null;
+  const code = normalizeCode(details.code) || normalizeCode(errorCode) || 'EMAIL_DELIVERY_FAILED';
+  const providerCode = normalizeCode(details.providerCode) || normalizeCode(errorCode);
+  const diagnostic = {
+    event: 'email_delivery_failed',
+    operation,
+    requestId: safeRequestId,
+    code,
+    ...(providerCode && providerCode !== code ? { providerCode } : {}),
+  };
+
+  const responseCode = Number(details.responseCode ?? details.error?.responseCode);
+  if (Number.isInteger(responseCode) && responseCode >= 400 && responseCode <= 599) {
+    diagnostic.responseCode = responseCode;
+  }
+
+  const missingVariables = Array.isArray(details.missingVariables)
+    ? details.missingVariables.filter((name) => /^(EMAIL|SMTP)_[A-Z0-9_]+$/.test(name))
+    : [];
+  if (missingVariables.length) diagnostic.missingVariables = missingVariables;
+
+  console.error(JSON.stringify(diagnostic));
 };
 
 const createSmtpTimeoutError = (label, timeoutMs) => {
@@ -38,16 +72,29 @@ const sendMailWithTransport = async (mailer, mailOptions) => {
     'send',
     hardTimeout,
   );
+  if (!Array.isArray(info?.accepted) || info.accepted.length === 0) {
+    const error = new Error('Email provider did not accept any recipients');
+    error.code = 'EMAIL_RECIPIENT_NOT_ACCEPTED';
+    throw error;
+  }
   return { status: 'sent', provider: 'smtp', providerMessageId: info?.messageId || null };
 };
 
 const sendMail = async (mailOptions) => {
   const mailer = getEmailTransport();
-  if (!mailer) return { status: 'failed', reason: 'Email service is not configured', code: 'EMAIL_NOT_CONFIGURED' };
+  if (!mailer) {
+    const validation = validateEmailConfiguration();
+    logEmailDiagnostic('send', {
+      code: 'EMAIL_NOT_CONFIGURED',
+      missingVariables: validation.missingVariables,
+    });
+    return { status: 'failed', reason: 'Email service is not configured', code: 'EMAIL_NOT_CONFIGURED' };
+  }
 
   try {
     return await sendMailWithTransport(mailer, mailOptions);
   } catch (error) {
+    logEmailDiagnostic('send', { error });
     return { status: 'failed', reason: 'Email delivery failed', code: error?.code };
   }
 };
@@ -128,6 +175,7 @@ module.exports = {
   validateEmailConfiguration,
   getEmailTransport,
   sendMail,
+  logEmailDiagnostic,
   verifySmtpConnection,
   sendNotificationEmail,
   sendOtpEmail,

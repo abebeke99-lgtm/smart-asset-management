@@ -207,7 +207,7 @@ const withStubs = async ({ user, onFetch, onSendMail, onCreateTransport }, run) 
   nodemailer.createTransport = (options) => {
     if (onCreateTransport) onCreateTransport(options);
     return {
-      sendMail: onSendMail || (async () => ({ messageId: 'mail-1' })),
+      sendMail: onSendMail || (async (mailOptions) => ({ messageId: 'mail-1', accepted: [mailOptions.to] })),
     };
   };
 
@@ -290,7 +290,7 @@ test('email recovery uses the OTP flow and delivers the code through SMTP', asyn
     user,
     onSendMail: async (options) => {
       delivered = options;
-      return { messageId: 'mail-otp-1' };
+      return { messageId: 'mail-otp-1', accepted: [options.to] };
     },
   }, async () => {
     const response = createResponse();
@@ -388,7 +388,7 @@ test('email OTP requests use the same generic response for registered and unregi
   const user = createUser();
   let emailDeliveryCount = 0;
 
-  await withStubs({ user, onSendMail: async () => { emailDeliveryCount += 1; return { messageId: 'email-otp' }; } }, async () => {
+  await withStubs({ user, onSendMail: async (options) => { emailDeliveryCount += 1; return { messageId: 'email-otp', accepted: [options.to] }; } }, async () => {
     const registered = createResponse();
     const unregistered = createResponse();
     await requestEmailOtp(registered, user.email);
@@ -481,7 +481,7 @@ test('development mode prints an OTP with a DEV ONLY label when SMTP is not conf
   assert.equal(user.resetOtpHash, sha256(printedOtp[1]), 'only the hash is stored');
 });
 
-test('SMTP failure details stay in server logs and the client receives only a safe response', async () => {
+test('SMTP failure logs include safe error codes without exposing provider details', async () => {
   const user = createUser();
   const originalConsoleError = console.error;
   let serverLog = '';
@@ -507,8 +507,9 @@ test('SMTP failure details stay in server logs and the client receives only a sa
   assert.equal(response.statusCode, 503);
   assert.equal(response.body.code, 'EMAIL_AUTH_FAILED');
   assert.doesNotMatch(JSON.stringify(response.body), /secret-value|diagnostic|stack|password/i);
-  assert.match(serverLog, /server-only diagnostic secret-value/);
+  assert.doesNotMatch(serverLog, /server-only diagnostic secret-value/);
   assert.match(serverLog, /EAUTH/);
+  assert.match(serverLog, /EMAIL_AUTH_FAILED/);
 });
 
 test('a failed provider delivery leaves no usable code behind', async () => {
@@ -531,6 +532,24 @@ test('a failed provider delivery leaves no usable code behind', async () => {
   }
 
   assert.equal(user.resetOtpHash, null, 'a code that was never delivered must not stay usable');
+  assert.equal(user.resetOtpExpiresAt, null);
+});
+
+test('SMTP success without an accepted recipient is treated as delivery failure', async () => {
+  const user = createUser();
+
+  await withStubs({
+    user,
+    onSendMail: async () => ({ messageId: 'mail-without-recipient-acceptance' }),
+  }, async () => {
+    const response = createResponse();
+    await requestEmailOtp(response, user.email);
+
+    assert.equal(response.statusCode, 503);
+    assert.equal(response.body.code, 'EMAIL_NETWORK_ERROR');
+  });
+
+  assert.equal(user.resetOtpHash, null, 'a code without provider acceptance must not remain usable');
   assert.equal(user.resetOtpExpiresAt, null);
 });
 
@@ -893,7 +912,7 @@ test('an eligible account only ever has a token hash stored, never the emailed t
       user,
       onSendMail: async (options) => {
         delivered = options;
-        return { messageId: 'mail-1' };
+        return { messageId: 'mail-1', accepted: [options.to] };
       },
     }, async () => {
       const response = createResponse();
@@ -937,7 +956,7 @@ test('the emailed reset link points at the configured frontend and carries no se
       user,
       onSendMail: async (options) => {
         delivered = options;
-        return { messageId: 'mail-1' };
+        return { messageId: 'mail-1', accepted: [options.to] };
       },
     }, async () => {
       await authController.forgotPassword(
