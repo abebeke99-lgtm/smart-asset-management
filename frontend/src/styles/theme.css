@@ -7,7 +7,7 @@
    component or in a component-scoped stylesheet.
 
    University identity:
-     primary blue #0057B8   deep blue #003B7A
+     primary blue #3074B3   deep blue #245B8C
      navy #071F3D           gold #F4C542
      page #F4F8FC           surface #FFFFFF
    ========================================================== */
@@ -16,43 +16,44 @@
   color-scheme: light;
 
   /* ---------- Brand ramp ---------- */
+  --primary-color: #3074B3;
   --color-brand-sky: #0284C7;
   --color-brand-sky-dark: #003B7A;
   --color-brand-navy: #071F3D;
-  --color-brand-blue: #0057B8;
-  --color-brand-blue-dark: #003B7A;
+  --color-brand-blue: var(--primary-color);
+  --color-brand-blue-dark: #245B8C;
   --color-brand-gold: #F4C542;
   --color-brand-gold-light: #FFF4CC;
   --color-brand-page: #F4F8FC;
   --color-brand-card: #FFFFFF;
 
   /* ---------- Header ---------- */
-  --color-header: #419FD9;
-  --color-header-gradient: linear-gradient(110deg, #419FD9 0%, #419FD9 100%);
-  --color-header-hover: #2582BC;
+  --color-header: var(--primary-color);
+  --color-header-gradient: linear-gradient(110deg, var(--primary-color) 0%, var(--primary-color) 100%);
+  --color-header-hover: #286399;
   --color-header-border: rgba(255, 255, 255, 0.2);
   --color-header-text: #FFFFFF;
   --color-header-text-strong: #FFFFFF;
-  --color-header-text-muted: #E5EEF8;
+  --color-header-text-muted: #FFFFFF;
   --color-header-icon-hover: rgba(255, 255, 255, 0.14);
   --color-header-focus: #F4C542;
   --color-header-badge: #F4C542;
   --color-header-control-border: rgba(255, 255, 255, 0.42);
 
   /* ---------- Sidebar ---------- */
-  --color-sidebar: #071F3D;
-  --color-sidebar-hover: #0D3B70;
-  --color-sidebar-active: #0057B8;
-  --color-sidebar-text: #E5EEF8;
-  --color-sidebar-icon: #B8CCE3;
+  --color-sidebar: var(--primary-color);
+  --color-sidebar-hover: #286399;
+  --color-sidebar-active: #245B8C;
+  --color-sidebar-text: #FFFFFF;
+  --color-sidebar-icon: #FFFFFF;
   --color-sidebar-text-active: #FFFFFF;
-  --color-sidebar-label: #B8CCE3;
+  --color-sidebar-label: #FFFFFF;
   --color-sidebar-divider: rgba(184, 204, 227, 0.22);
   --color-sidebar-accent: var(--color-brand-gold);
 
   /* ---------- Primary action ---------- */
-  --color-primary: var(--color-brand-blue);
-  --color-primary-hover: var(--color-brand-blue-dark);
+  --color-primary: var(--primary-color);
+  --color-primary-hover: #245B8C;
   --color-primary-light: #E8F1FB;
   --color-primary-text: #003B7A;
 
@@ -94,7 +95,7 @@
    --color-search-icon: #4B5563;
    --color-search-text: #111827;
    --color-search-hover: #111827;
-   --color-search-focus: #0057B8;
+   --color-search-focus: var(--primary-color);
    --color-search-shortcut-bg: #F3F4F6;
    --color-search-shortcut-text: #374151;
    --color-search-shortcut-border: #E5E7EB;
@@ -104,7 +105,7 @@
    --color-search-divider: #E5E7EB;
    --color-search-item-hover: #F3F6F9;
    --color-search-selected-bg: #E8F1FB;
-   --color-search-selected-border: #0057B8;
+   --color-search-selected-border: var(--primary-color);
    --color-search-highlight: #003B7A;
    --color-search-badge-bg: #F3F4F6;
    --color-search-badge-text: #374151;
@@ -130,7 +131,7 @@
      Every slot clears 3:1 against a white card (WCAG 1.4.11). The warning and
      info slots use their 600-weight steps because the 500-weight fills
      (#F59E0B = 2.15:1, #0EA5D9 = 2.84:1) do not. */
-  --color-chart-1: #0057B8;
+  --color-chart-1: var(--primary-color);
   --color-chart-2: #F59E0B;
   --color-chart-3: #64748B;
   --color-chart-4: #16A34A;
@@ -158,10 +159,10 @@
   --shadow-lg: 0 12px 30px rgba(7, 31, 61, 0.12);
   --shadow-dashboard-card: 0 2px 8px rgba(7, 31, 61, 0.04);
   --shadow-dashboard-card-hover: 0 8px 24px rgba(7, 31, 61, 0.08);
-  --shadow-dashboard-primary: 0 4px 12px rgba(0, 87, 184, 0.2);
+  --shadow-dashboard-primary: 0 4px 12px rgba(48, 116, 179, 0.2);
   --shadow-header: 0 1px 4px rgba(7, 31, 61, 0.16);
   --shadow-header-menu: 0 10px 24px rgba(7, 31, 61, 0.15);
-  --focus-ring: rgba(0, 87, 184, 0.35);
+  --focus-ring: rgba(48, 116, 179, 0.35);
   --transition: 160ms ease;
 
   /* ==========================================================
@@ -195,8 +196,8 @@
   --primary-blue-hover: var(--color-primary-hover);
   --color-secondary: var(--color-text-secondary);
   --color-secondary-hover: #334155;
-  --header-gradient-start: #003B7A;
-  --header-gradient-end: #0066CC;
+  --header-gradient-start: var(--primary-color);
+  --header-gradient-end: var(--primary-color);
 
   --dashboard-header: var(--color-header);
   --dashboard-sidebar: var(--color-sidebar);
