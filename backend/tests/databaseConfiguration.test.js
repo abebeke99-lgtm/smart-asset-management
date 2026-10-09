@@ -70,7 +70,7 @@ test('uses only a distinct test database when NODE_ENV is test', () => {
     DB_TEST_PORT: '3307',
     DB_TEST_NAME: 'smart_asset_db_test',
     DB_TEST_USER: 'test_user',
-    DB_TEST_PASSWORD: '',
+    DB_TEST_PASSWORD: 'local-test-password',
   });
 
   assert.deepEqual(config, {
@@ -78,13 +78,23 @@ test('uses only a distinct test database when NODE_ENV is test', () => {
     port: 3307,
     database: 'smart_asset_db_test',
     username: 'test_user',
-    password: '',
+    password: 'local-test-password',
   });
 });
 
 test('refuses test mode without explicit isolated database credentials', () => {
   assert.throws(
     () => getDatabaseConfig({ NODE_ENV: 'test', DB_TEST_HOST: 'localhost' }),
+    { code: 'DB_TEST_CONFIG_MISSING' },
+  );
+  assert.throws(
+    () => getDatabaseConfig({
+      NODE_ENV: 'test',
+      DB_TEST_HOST: 'localhost',
+      DB_TEST_NAME: 'smart_asset_db_test',
+      DB_TEST_USER: 'test_user',
+      DB_TEST_PASSWORD: '',
+    }),
     { code: 'DB_TEST_CONFIG_MISSING' },
   );
 });
@@ -100,7 +110,7 @@ test('refuses a test target identical to the development database', () => {
       DB_TEST_PORT: '3306',
       DB_TEST_NAME: 'smart_asset_db',
       DB_TEST_USER: 'root',
-      DB_TEST_PASSWORD: '',
+      DB_TEST_PASSWORD: 'local-test-password',
     }),
     { code: 'DB_TEST_CONFIG_INVALID' },
   );

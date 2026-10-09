@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { AuthProvider, useAuth } from "./AuthContext";
-import { apiClient } from "../utils/api";
+import { apiClient, isCurrentAuthRequest } from "../utils/api";
 
 jest.mock("axios", () => ({
   __esModule: true,
@@ -19,6 +19,7 @@ jest.mock("../utils/api", () => ({
     interceptors: { response: { use: jest.fn(() => 1), eject: jest.fn() } },
   },
   getApiErrorMessage: jest.fn((_error, fallback) => fallback),
+  isCurrentAuthRequest: jest.fn(),
 }));
 
 const AuthorizationState = () => {
@@ -93,5 +94,58 @@ describe("AuthContext permission refresh", () => {
     expect(thrownError.response).toBe(response);
     expect(thrownError.status).toBe(403);
     expect(thrownError.message).toBe("Server error occurred (403)");
+  });
+
+  it("does not clear the active session for a late 401 from an older token", async () => {
+    apiClient.get.mockResolvedValue({
+      data: { data: { id: 7, role: "ict_officer", permissions: ["assets.view"] } },
+    });
+    render(
+      <AuthProvider>
+        <AuthorizationState />
+      </AuthProvider>,
+    );
+    expect(await screen.findByText("Session restored")).toBeInTheDocument();
+
+    const previousToken = localStorage.getItem("token");
+    localStorage.setItem("token", "new-current-token");
+    const staleRequestError = {
+      response: { status: 401, data: { message: "Session expired" } },
+      config: { headers: { Authorization: `Bearer ${previousToken}` } },
+      message: "Request failed",
+    };
+    const rejectResponse = apiClient.interceptors.response.use.mock.calls[0][1];
+
+    isCurrentAuthRequest.mockReturnValue(false);
+    expect(() => rejectResponse(staleRequestError)).toThrow("Server error occurred (401)");
+    expect(localStorage.getItem("token")).toBe("new-current-token");
+    expect(localStorage.getItem("user")).not.toBeNull();
+  });
+
+  it("clears the session when the current token receives a 401", async () => {
+    const navigationLog = jest.spyOn(console, "error").mockImplementation(() => {});
+    apiClient.get.mockResolvedValue({
+      data: { data: { id: 7, role: "ict_officer", permissions: ["assets.view"] } },
+    });
+    render(
+      <AuthProvider>
+        <AuthorizationState />
+      </AuthProvider>,
+    );
+    expect(await screen.findByText("Session restored")).toBeInTheDocument();
+
+    const currentToken = localStorage.getItem("token");
+    const unauthorizedError = {
+      response: { status: 401, data: { message: "Session expired" } },
+      config: { headers: { Authorization: `Bearer ${currentToken}` } },
+      message: "Request failed",
+    };
+    const rejectResponse = apiClient.interceptors.response.use.mock.calls[0][1];
+
+    isCurrentAuthRequest.mockReturnValue(true);
+    expect(() => rejectResponse(unauthorizedError)).toThrow("Server error occurred (401)");
+    expect(localStorage.getItem("token")).toBeNull();
+    expect(localStorage.getItem("user")).toBeNull();
+    navigationLog.mockRestore();
   });
 });

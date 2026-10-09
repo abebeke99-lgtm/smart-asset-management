@@ -1,5 +1,13 @@
 const { Sequelize } = require('sequelize');
-require('dotenv').config();
+const path = require('node:path');
+const dotenv = require('dotenv');
+
+const backendRoot = path.resolve(__dirname, '../..');
+if (process.env.NODE_ENV === 'test') {
+  dotenv.config({ path: [path.join(backendRoot, '.env.test'), path.join(backendRoot, '.env')] });
+} else {
+  dotenv.config({ path: path.join(backendRoot, '.env') });
+}
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -22,7 +30,7 @@ function getDatabaseConfig(environment = process.env) {
       ['DB_TEST_NAME', testDatabase.database],
       ['DB_TEST_USER', testDatabase.username],
     ].filter(([, value]) => !value).map(([name]) => name);
-    if (environment.DB_TEST_PASSWORD === undefined) missing.push('DB_TEST_PASSWORD');
+    if (!String(environment.DB_TEST_PASSWORD || '').trim()) missing.push('DB_TEST_PASSWORD');
     if (missing.length) {
       const error = new Error(`Missing test database configuration: ${missing.join(', ')}`);
       error.code = 'DB_TEST_CONFIG_MISSING';

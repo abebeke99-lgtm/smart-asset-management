@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
-import { apiClient, getApiErrorMessage } from '../utils/api';
+import { apiClient, getApiErrorMessage, isCurrentAuthRequest } from '../utils/api';
 import { sanitizeAuthToken } from '../utils/auth';
 
 let diagnosticsInstalled = false;
@@ -121,7 +121,7 @@ export const AuthProvider = ({ children }) => {
           throw networkError;
         }
         if (error.response) {
-          if (error.response.status === 401) {
+          if (error.response.status === 401 && isCurrentAuthRequest(error)) {
             onUnauthorized();
           }
           const status = error.response.status ? ` (${error.response.status})` : '';

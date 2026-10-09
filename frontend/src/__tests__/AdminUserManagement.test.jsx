@@ -157,6 +157,11 @@ test('submits the add-user form, closes it, and refreshes the visible user list'
 test('keeps the add-user form open and shows the API error when user creation is rejected', async () => {
   await openCreateForm();
   fillValidNewUser();
+  fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '+251 911 234 567' } });
+  fireEvent.change(screen.getByLabelText('Account Status'), { target: { value: 'Inactive' } });
+  fireEvent.change(screen.getByLabelText('College'), { target: { value: '3' } });
+  await screen.findByRole('option', { name: 'Computer Science' });
+  fireEvent.change(screen.getByLabelText('Department'), { target: { value: '8' } });
   apiClient.request.mockImplementation(({ url, method }) => {
     if (method === 'POST' && url === '/api/users') {
       return Promise.resolve({
@@ -166,14 +171,25 @@ test('keeps the add-user form open and shows the API error when user creation is
     if (url.startsWith('/api/users?')) return Promise.resolve({ data: { users: usersResponse, pagination: { total: usersResponse.length, pages: 1 } } });
     if (url === '/api/users/stats') return Promise.resolve({ data: { data: { total: usersResponse.length, active: usersResponse.length, inactive: 0, suspended: 0 } } });
     if (url === '/api/roles') return Promise.resolve({ data: { roles: roleNames.map((name) => ({ name, displayName: name })) } });
-    if (url === '/api/colleges') return Promise.resolve({ data: { colleges: [] } });
+    if (url === '/api/colleges') return Promise.resolve({ data: { colleges: [{ id: 3, collegeName: 'College of Engineering' }] } });
+    if (url.endsWith('/departments')) return Promise.resolve({ data: { departments: [{ id: 8, name: 'Computer Science' }] } });
     return Promise.resolve({ data: { departments: [] } });
   });
 
   fireEvent.submit(document.querySelector('form'));
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Username or email is already in use');
-  expect(screen.getByLabelText('Password *')).toBeInTheDocument();
+  expect(screen.getByLabelText(/Full Name/)).toHaveValue('New User');
+  expect(screen.getByLabelText('Username *')).toHaveValue('new.user');
+  expect(screen.getByLabelText('Email')).toHaveValue('new.user@example.edu');
+  expect(screen.getByLabelText('Phone')).toHaveValue('+251 911 234 567');
+  expect(screen.getByLabelText('Role *')).toHaveValue('staff');
+  expect(screen.getByLabelText('College')).toHaveValue('3');
+  expect(screen.getByLabelText('Department')).toHaveValue('8');
+  expect(screen.getByLabelText('Account Status')).toHaveValue('Inactive');
+  expect(screen.getByLabelText('Password *')).toHaveValue('ManageMe#42');
+  expect(screen.getByLabelText('Confirm Password *')).toHaveValue('ManageMe#42');
+  expect(apiClient.request.mock.calls.filter(([request]) => request.method === 'POST' && request.url === '/api/users')).toHaveLength(1);
 });
 
 test('prevents duplicate add-user submissions while the create request is pending', async () => {
