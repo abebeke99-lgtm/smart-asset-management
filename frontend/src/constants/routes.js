@@ -77,7 +77,7 @@ export const ROUTES = {
   // College Routes
   DEPT_DASHBOARD: '/college/dashboard',
   COLLEGE_DASHBOARD: '/college/dashboard',
-  COLLEGE_MANAGER_DASHBOARD: '/college-manager/dashboard',
+  COLLEGE_MANAGER_DASHBOARD: '/college/dashboard',
   DEPARTMENT_HEAD_DASHBOARD: '/department-head/dashboard',
   DEPT_PROFILE: '/college/profile',
   DEPT_COLLEGE_STAFF: '/college/staff',

@@ -264,7 +264,7 @@ export const getDashboardRoute = (role) => {
   const roleMap = {
     admin: '/admin/dashboard',
     ict_officer: '/ict/dashboard',
-    college_manager: '/college-manager/dashboard',
+    college_manager: '/college/dashboard',
     college: '/college/dashboard',
     department_head: '/department-head/dashboard',
     finance: '/finance/dashboard',
@@ -3687,8 +3687,9 @@ function AppContent() {
           </Route>
 
           {/* COLLEGE ROUTES - canonical route for department-head responsibilities under the college role */}
-          <Route path="/college" element={<ProtectedRoute allowedRoles={['college']}><RoleLayout /></ProtectedRoute>}>
+          <Route path="/college" element={<ProtectedRoute allowedRoles={['college', 'college_manager']}><RoleLayout /></ProtectedRoute>}>
             <Route index element={<CollegeManagerPages section="dashboard" />} />
+            <Route path="dashboard" element={<CollegeManagerPages section="dashboard" />} />
             <Route path="profile" element={<CollegeManagerPages section="profile" />} />
             <Route path="departments" element={<CollegeDepartments />} />
             <Route path="departments/:departmentId" element={<DepartmentDetails />} />

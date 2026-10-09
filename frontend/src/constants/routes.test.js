@@ -47,6 +47,15 @@ describe('Store Manager route configuration', () => {
   });
 });
 
+describe('College Manager route configuration', () => {
+  test('uses the registered College Manager dashboard route', () => {
+    const routes = getRoutesByRole('college_manager');
+
+    expect(ROUTES.COLLEGE_MANAGER_DASHBOARD).toBe('/college/dashboard');
+    expect(routes).toContain('/college/dashboard');
+  });
+});
+
 describe('ICT Officer route configuration', () => {
   test('uses the canonical support and asset-history routes required by the module specification', () => {
     const routes = getRoutesByRole('ict_officer');

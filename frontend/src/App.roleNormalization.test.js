@@ -26,7 +26,7 @@ describe('normalizeRole', () => {
       admin: '/admin/dashboard',
       ict_officer: '/ict/dashboard',
       college: '/college/dashboard',
-      college_manager: '/college-manager/dashboard',
+      college_manager: '/college/dashboard',
       department_head: '/department-head/dashboard',
       finance: '/finance/dashboard',
       store_manager: '/store/dashboard',
@@ -37,6 +37,13 @@ describe('normalizeRole', () => {
     });
     expect(normalizeRole('college')).toBe('college');
     expect(normalizeRole('college_manager')).toBe('college_manager');
+  });
+
+  test('registers the College Manager dashboard destination under its role guard', () => {
+    const appSource = fs.readFileSync(path.resolve(__dirname, './App.jsx'), 'utf8');
+
+    expect(appSource).toContain('<Route path="/college" element={<ProtectedRoute allowedRoles={[\'college\', \'college_manager\']}><RoleLayout /></ProtectedRoute>}>');
+    expect(appSource).toContain('<Route path="dashboard" element={<CollegeManagerPages section="dashboard" />} />');
   });
 });
 
