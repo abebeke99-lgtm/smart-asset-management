@@ -35,6 +35,23 @@ describe('Home', () => {
     expect(screen.getByRole('link', { name: 'Explore System' })).toHaveAttribute('href', '/about');
   });
 
+  it('places the unchanged hero copy immediately below the rotating image area', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <UIProvider><Home /></UIProvider>
+      </MemoryRouter>
+    );
+    const hero = container.querySelector('.uam-hero');
+    const imageArea = hero.querySelector('.uam-hero-media');
+    const content = hero.querySelector('.uam-hero-shell');
+
+    expect(imageArea.nextElementSibling).toBe(content);
+    expect(imageArea.querySelectorAll('.uam-hero-image')).toHaveLength(3);
+    expect(content.querySelector('.uam-hero-copy')).toBeInTheDocument();
+    expect(content.querySelector('.uam-hero-panel')).toBeInTheDocument();
+    expect(content).toHaveTextContent('Manage, track, assign, maintain, and monitor every university asset from one centralized platform.');
+  });
+
   it('renders Amharic page content from the shared language context', () => {
     localStorage.setItem('language', 'am');
     render(

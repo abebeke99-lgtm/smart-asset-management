@@ -57,7 +57,7 @@ router.get('/dashboard', requirePermission('college.dashboard.view'), getCollege
 router.get('/profile', requirePermission('college.profile.view'), getCollegeProfile);
 router.put('/profile', requirePermission('college.profile.update'), updateCollegeProfile);
 router.get('/departments', requirePermission('college.departments.view'), listCollegeDepartments);
-router.post('/departments', requirePermission('college.departments.view'), createCollegeDepartment);
+router.post('/departments', requirePermission('college.departments.manage'), createCollegeDepartment);
 router.get('/department-overview', requirePermission('college.departments.view'), getCollegeDepartmentOverview);
 router.get('/department-performance', requirePermission('college.departments.view'), getCollegeDepartmentPerformance);
 router.get('/analytics/departments', requirePermission('college.departments.view'), getCollegeDepartmentReports);
@@ -65,9 +65,9 @@ router.get('/department-assets', requirePermission('college.departments.view'), 
 router.get('/departments/:id/staff', requirePermission('college.staff.view'), listCollegeDepartmentStaff);
 router.get('/departments/:id/assets', requirePermission('college.departments.view'), listCollegeDepartmentAssets);
 router.get('/departments/:id', requirePermission('college.departments.view'), getCollegeDepartmentDetails);
-router.put('/departments/:id', requirePermission('college.departments.view'), updateCollegeDepartment);
-router.patch('/departments/:id/status', requirePermission('college.departments.view'), updateCollegeDepartmentStatus);
-router.delete('/departments/:id', requirePermission('college.departments.view'), deleteCollegeDepartment);
+router.put('/departments/:id', requirePermission('college.departments.manage'), updateCollegeDepartment);
+router.patch('/departments/:id/status', requirePermission('college.departments.manage'), updateCollegeDepartmentStatus);
+router.delete('/departments/:id', requirePermission('college.departments.manage'), deleteCollegeDepartment);
 router.get('/requests', requirePermission('college.requests.view'), listCollegeRequests);
 router.get('/requests/:id', requirePermission('college.requests.view'), getCollegeRequest);
 router.get('/department-requests', requirePermission('college.requests.view'), listCollegeDepartmentRequests);

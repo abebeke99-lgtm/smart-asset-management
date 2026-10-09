@@ -56,7 +56,7 @@ router.get('/activity', requireAuth, requireRole('admin'), async (req, res, next
 });
 router.get('/:id', requireAuth, requireRole('admin', 'college', 'store_manager', 'ict_officer', 'maintenance'), getUserById);
 router.post('/', requireAuth, requireRole('admin'), requirePermission('users.create'), createUser);
-router.put('/:id', requireAuth, requireRole('admin'), updateUser);
-router.delete('/:id', requireAuth, requireRole('admin'), deleteUser);
+router.put('/:id', requireAuth, requireRole('admin'), requirePermission('users.update'), updateUser);
+router.delete('/:id', requireAuth, requireRole('admin'), requirePermission('users.delete'), deleteUser);
 
 module.exports = router;

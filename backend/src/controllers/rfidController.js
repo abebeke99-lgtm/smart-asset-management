@@ -18,7 +18,7 @@ const normalize = (item) => {
   };
 };
 
-const getAllLogs = async (req, res) => {
+const getAllLogs = async (req, res, next) => {
   try {
     const where = req.params.assetId ? { assetId: req.params.assetId } : {};
     if (req.query.asset_id) where.assetId = req.query.asset_id;
@@ -39,11 +39,11 @@ const getAllLogs = async (req, res) => {
     const normalized = logs.map(normalize);
     res.json({ success: true, data: normalized, logs: normalized, total: normalized.length, capabilities: { anomalies: false, readers: false, realtime: false } });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
-const createLog = async (req, res) => {
+const createLog = async (req, res, next) => {
   try {
     const tag = String(req.body.rfid_tag || req.body.tag || '').trim();
     const assetId = req.body.asset_id || req.body.assetId;
@@ -67,7 +67,7 @@ const createLog = async (req, res) => {
     const saved = await RFIDLog.findByPk(log.id, { include });
     res.status(201).json({ success: true, data: normalize(saved) });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };
 

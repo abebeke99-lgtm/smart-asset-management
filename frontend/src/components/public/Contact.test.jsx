@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Contact from './Contact';
 import { UiProvider } from '../../contexts/UiContext';
@@ -27,7 +27,7 @@ describe('Contact', () => {
   });
 
   const fillForm = () => {
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Test User' } });
+    fireEvent.change(screen.getByLabelText('Full Name'), { target: { value: 'Test User' } });
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.org' } });
     fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Asset assistance' } });
     fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'Please help me with this asset record.' } });
@@ -37,13 +37,19 @@ describe('Contact', () => {
     await renderContact();
 
     expect(screen.getByRole('heading', { name: 'Contact' })).toBeInTheDocument();
-    expect(screen.getAllByText('Mekdela Amba University')).toHaveLength(2);
-    expect(screen.getAllByRole('heading', { name: 'University Asset Management System' })).toHaveLength(2);
-    expect(screen.getByText('Send a message to the system administration team.')).toBeInTheDocument();
+    expect(screen.getAllByText('Mekdela Amba University')).toHaveLength(1);
+    expect(screen.getAllByRole('heading', { name: 'University Asset Management System' })).toHaveLength(1);
+    expect(within(screen.getByRole('region', { name: 'Contact' })).queryByText('University')).not.toBeInTheDocument();
+    expect(screen.queryByText('Contact the system administration team for questions or technical support related to the university asset management system.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Send a message to the system administration team.')).toBeInTheDocument();
     expect(screen.queryByText(/Address:|Phone:|@/i)).not.toBeInTheDocument();
     expect(apiClient.get).not.toHaveBeenCalled();
+    expect(screen.getByRole('region', { name: 'Contact Information' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Send a Message' })).toBeInTheDocument();
+    expect(screen.getByText('Mekdela Amba University', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getByText('University Asset Management System', { selector: 'p' })).toBeInTheDocument();
     expect(screen.getByRole('form')).toBeInTheDocument();
-    expect(screen.getByLabelText('Name')).toBeRequired();
+    expect(screen.getByLabelText('Full Name')).toBeRequired();
     expect(screen.getByLabelText('Email')).toHaveAttribute('type', 'email');
     expect(screen.getByRole('button', { name: /Send message/i })).toBeInTheDocument();
   });
@@ -53,7 +59,7 @@ describe('Contact', () => {
     await renderContact();
 
     expect(screen.getByRole('heading', { name: 'ያግኙን' })).toBeInTheDocument();
-    expect(screen.getByLabelText('ስም')).toHaveAttribute('placeholder', 'ስምዎ');
+    expect(screen.getByLabelText('ሙሉ ስም')).toHaveAttribute('placeholder', 'ስምዎ');
     expect(screen.getByLabelText('ኢሜይል')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'መልዕክት ይላኩ' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'መልዕክት ይላኩ' }));
@@ -64,7 +70,7 @@ describe('Contact', () => {
     localStorage.setItem('language', 'am');
     apiClient.post.mockResolvedValueOnce({ data: { success: true, delivery: 'sent' } });
     await renderContact();
-    fireEvent.change(screen.getByLabelText('ስም'), { target: { value: 'Test User' } });
+    fireEvent.change(screen.getByLabelText('ሙሉ ስም'), { target: { value: 'Test User' } });
     fireEvent.change(screen.getByLabelText('ኢሜይል'), { target: { value: 'user@example.org' } });
     fireEvent.change(screen.getByLabelText('ርዕስ'), { target: { value: 'Asset help' } });
     fireEvent.change(screen.getByLabelText('መልዕክት'), { target: { value: 'Please help me with this asset record.' } });
@@ -72,7 +78,7 @@ describe('Contact', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('መልዕክትዎ በተሳካ ሁኔታ ተልኳል።');
 
     apiClient.post.mockRejectedValueOnce({ response: { status: 503 } });
-    fireEvent.change(screen.getByLabelText('ስም'), { target: { value: 'Test User' } });
+    fireEvent.change(screen.getByLabelText('ሙሉ ስም'), { target: { value: 'Test User' } });
     fireEvent.change(screen.getByLabelText('ኢሜይል'), { target: { value: 'user@example.org' } });
     fireEvent.change(screen.getByLabelText('ርዕስ'), { target: { value: 'Asset help' } });
     fireEvent.change(screen.getByLabelText('መልዕክት'), { target: { value: 'Please help me with this asset record.' } });
@@ -99,7 +105,7 @@ describe('Contact', () => {
     fireEvent.click(screen.getByRole('button', { name: /Send message/i }));
 
     expect(await screen.findByRole('status')).toHaveTextContent('Your message has been submitted successfully.');
-    expect(screen.getByLabelText('Name')).toHaveValue('');
+    expect(screen.getByLabelText('Full Name')).toHaveValue('');
     expect(apiClient.post).toHaveBeenCalledWith('/contact', {
       name: 'Test User',
       email: 'user@example.org',
@@ -115,7 +121,7 @@ describe('Contact', () => {
     fireEvent.click(screen.getByRole('button', { name: /Send message/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Your message could not be delivered. Your entries have been kept.');
-    expect(screen.getByLabelText('Name')).toHaveValue('Test User');
+    expect(screen.getByLabelText('Full Name')).toHaveValue('Test User');
     expect(screen.queryByText(/SMTP credentials rejected/i)).not.toBeInTheDocument();
   });
 
@@ -136,10 +142,29 @@ describe('Contact', () => {
     fireEvent.click(screen.getByRole('button', { name: /Send message/i }));
     expect(await screen.findByText('Enter a valid email address.')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Please review the highlighted fields and try again.');
-    expect(screen.getByLabelText('Name')).toHaveValue('Test User');
+    expect(screen.getByLabelText('Full Name')).toHaveValue('Test User');
 
     apiClient.post.mockRejectedValueOnce({ response: { status: 504 } });
     fireEvent.click(screen.getByRole('button', { name: /Send message/i }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Message delivery timed out. Your message was not confirmed; please try again.');
+  });
+
+  it('prevents repeated submissions while delivery is pending', async () => {
+    let resolveSubmission;
+    apiClient.post.mockReturnValue(new Promise((resolve) => {
+      resolveSubmission = resolve;
+    }));
+    await renderContact();
+    fillForm();
+    const form = screen.getByRole('form');
+
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+
+    expect(apiClient.post).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /Sending/i })).toBeDisabled();
+
+    resolveSubmission({ data: { success: true, delivery: 'sent' } });
+    expect(await screen.findByRole('status')).toHaveTextContent('Your message has been submitted successfully.');
   });
 });

@@ -7,6 +7,7 @@ const { lookupByCode } = require('../controllers/assetTrackingController');
 
 const router = express.Router();
 const requireAdmin = [requireAuth, requireRole('admin')];
+const requireRfidAccess = requireRole('admin', 'ict_officer', 'store_manager');
 
 router.get('/lookup/:code', ...requireAdmin, lookupByCode);
 
@@ -22,7 +23,7 @@ const serializeDevice = (device) => ({
   updatedAt: device.updatedAt,
 });
 
-router.get('/devices', requireAuth, async (req, res, next) => {
+router.get('/devices', requireAuth, requireRfidAccess, async (req, res, next) => {
   try {
     const search = String(req.query.search || '').trim();
     const statusFilter = String(req.query.status || '').trim();
@@ -40,7 +41,7 @@ router.get('/devices', requireAuth, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get('/devices/:id', requireAuth, async (req, res, next) => {
+router.get('/devices/:id', requireAuth, requireRfidAccess, async (req, res, next) => {
   try {
     const device = await RfidDevice.findByPk(req.params.id);
     if (!device) return res.status(404).json({ success: false, message: 'RFID device not found' });
@@ -137,9 +138,9 @@ router.delete('/devices/:id', ...requireAdmin, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get('/', requireAuth, getAllLogs);
-router.get('/logs', requireAuth, getAllLogs);
-router.get('/history/:assetId', requireAuth, getAllLogs);
+router.get('/', requireAuth, requireRfidAccess, getAllLogs);
+router.get('/logs', requireAuth, requireRfidAccess, getAllLogs);
+router.get('/history/:assetId', requireAuth, requireRfidAccess, getAllLogs);
 router.post('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'), createLog);
 
 module.exports = router;

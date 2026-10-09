@@ -88,7 +88,7 @@ router.post('/tracking/assign', ...scopedIctAccess('ict.assets.rfid'), controlle
 router.delete('/tracking/:id/rfid', ...scopedIctAccess('ict.assets.rfid'), controller.unassignIctRfid);
 router.get('/device-health', ...scopedIctAccess('ict.devicehealth.view'), deviceHealthController.listDeviceHealth);
 router.get('/device-health/:id', ...scopedIctAccess('ict.devicehealth.view'), deviceHealthController.getDeviceHealth);
-router.post('/device-health', ...scopedIctAccess('ict.devicehealth.view'), deviceHealthController.createInspection);
+router.post('/device-health', ...scopedIctAccess('ict.devicehealth.manage'), deviceHealthController.createInspection);
 router.get('/equipment/options', ...scopedIctAccess('ict.assets.view'), controller.listIctEquipmentOptions);
 router.get('/equipment/network', ...scopedIctAccess('ict.network.view'), ictNetworkEquipmentController.listNetworkEquipment);
 router.post('/equipment/network', ...scopedIctAccess('ict.network.manage'), ictNetworkEquipmentController.createNetworkEquipment);

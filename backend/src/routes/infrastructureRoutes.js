@@ -186,10 +186,10 @@ router.delete('/fuel/:id', requireRole('admin', 'infrastructure'), deactivateInf
 router.get('/tracking', requireRole('admin', 'infrastructure'), getInfrastructureTracking);
 router.post('/tracking/scan', requireRole('admin', 'infrastructure'), scanInfrastructureTracking);
 // Get all infrastructure assets
-router.get('/', getAllInfrastructureAssets);
+router.get('/', requireRole('admin', 'infrastructure'), getAllInfrastructureAssets);
 
 // Get single infrastructure asset
-router.get('/:id', getInfrastructureAsset);
+router.get('/:id', requireRole('admin', 'infrastructure'), getInfrastructureAsset);
 
 // Create infrastructure asset (Admin and Infrastructure role only)
 router.post('/', requireRole('admin', 'infrastructure'), createInfrastructureAsset);

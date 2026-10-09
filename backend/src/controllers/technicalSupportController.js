@@ -104,8 +104,10 @@ const updateStatus = async (req, res, next) => {
   try {
     const item = await getTicket(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
     if (!item) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Support ticket not found' }); }
+    if (!isManager(req) && !canViewTicket(req, item)) { await transaction.rollback(); return res.status(403).json({ success: false, message: 'You do not have permission to access this support ticket' }); }
     const nextStatus = clean(req.body.status).toLowerCase();
     if (!STATUSES.includes(nextStatus)) { await transaction.rollback(); return res.status(422).json({ success: false, message: 'Invalid support ticket status' }); }
+    if (!isManager(req) && nextStatus !== 'open') { await transaction.rollback(); return res.status(403).json({ success: false, message: 'Only support staff may change this ticket status' }); }
     if (item.status === 'closed' && nextStatus !== 'open') { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Closed tickets must be reopened before changing status' }); }
     if (item.status === 'cancelled' && nextStatus !== 'open') { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Cancelled tickets must be reopened before changing status' }); }
     const updates = { status: nextStatus };

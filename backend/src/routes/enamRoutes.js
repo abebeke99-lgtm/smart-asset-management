@@ -85,14 +85,48 @@ const maskSecret = (value = '') => {
   return `${'•'.repeat(Math.max(4, raw.length - 4))}${raw.slice(-4)}`;
 };
 
+const BLOCKED_HOST_PATTERNS = [
+  /^localhost$/,
+  /\.localhost$/,
+  /\.local$/,
+  /\.internal$/,
+  /^0\.0\.0\.0$/,
+  /^127\./,
+  /^10\./,
+  /^192\.168\./,
+  /^169\.254\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^::1$/,
+  /^::$/,
+  /^fc[0-9a-f]{2}:/,
+  /^fd[0-9a-f]{2}:/,
+  /^fe80:/,
+];
+
+const isSafeRemoteUrl = (value) => {
+  if (typeof value !== 'string' || !value.trim()) return false;
+  let parsed;
+  try {
+    parsed = new URL(value.trim());
+  } catch (error) {
+    return false;
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+  const host = parsed.hostname.toLowerCase().replace(/^\[/, '').replace(/\]$/, '');
+  if (!host) return false;
+  if (parsed.username || parsed.password) return false;
+  return !BLOCKED_HOST_PATTERNS.some((pattern) => pattern.test(host));
+};
+
 const sanitizeSettings = (settings = {}) => {
   const next = normalizeSettings(settings);
+  const { apiKeyHash, clientSecretHash, ...safe } = next;
   return {
-    ...next,
-    apiKey: next.apiKeyMasked || '••••••••••',
-    apiKeyMasked: next.apiKeyMasked || '••••••••••',
-    baseUrl: next.baseUrl || '',
-    organizationCode: next.organizationCode || '',
+    ...safe,
+    apiKey: safe.apiKeyMasked || '••••••••••',
+    apiKeyMasked: safe.apiKeyMasked || '••••••••••',
+    baseUrl: safe.baseUrl || '',
+    organizationCode: safe.organizationCode || '',
   };
 };
 
@@ -290,6 +324,10 @@ router.put('/', ...requireAdmin, async (req, res, next) => {
       syncDirection: incoming.syncDirection || currentSettings.syncDirection || 'university_to_enam',
     });
 
+    if (nextSettings.baseUrl && !isSafeRemoteUrl(nextSettings.baseUrl)) {
+      return res.status(400).json({ success: false, message: 'ENAM base URL must be a valid public http(s) URL.' });
+    }
+
     if (typeof incoming.apiKey === 'string' && incoming.apiKey.trim()) {
       nextSettings.apiKeyHash = crypto.createHash('sha256').update(incoming.apiKey).digest('hex');
       nextSettings.apiKeyMasked = maskSecret(incoming.apiKey);
@@ -348,7 +386,7 @@ router.post('/test', ...requireAdmin, async (req, res, next) => {
     }
 
     const healthUrl = getEnamBaseHealthUrl(baseUrl);
-    if (!healthUrl) {
+    if (!healthUrl || !isSafeRemoteUrl(baseUrl)) {
       await appendLog('ERROR', 'ENAM_TEST_FAILED', 'ENAM base URL is invalid.', req.user?.id || null, null);
       return res.status(400).json({ success: false, message: 'ENAM base URL is invalid.' });
     }

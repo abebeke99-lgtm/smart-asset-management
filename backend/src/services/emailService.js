@@ -6,7 +6,8 @@ const validateEmailConfiguration = () => {
   if (!status.configured) {
     return { valid: false, reason: 'Email service is not configured', missingVariables: status.missingVariables };
   }
-  return { valid: true, config: readMailerConfig() };
+  const { password, ...safeConfig } = readMailerConfig();
+  return { valid: true, config: safeConfig };
 };
 
 const getEmailTransport = () => {

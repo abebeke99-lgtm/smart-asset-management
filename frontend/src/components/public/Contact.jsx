@@ -1,17 +1,13 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Building2, MessageSquareText, Send } from 'lucide-react';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
 
-const ContactHero = ({ title, university, system, supportingText }) => (
+const ContactHero = ({ title }) => (
   <section className="contact-hero" aria-labelledby="contact-title">
     <div className="contact-shell contact-hero-inner">
       <div className="contact-hero-copy">
-        <h1 id="contact-title" className="sr-only">{title}</h1>
-        <p className="contact-eyebrow">University</p>
-        <h2 className="contact-university">{university}</h2>
-        <h3 className="contact-system">{system}</h3>
-        <p className="contact-supporting-text">{supportingText}</p>
+        <h1 id="contact-title">{title}</h1>
       </div>
     </div>
   </section>
@@ -34,6 +30,7 @@ const initialForm = { name: '', email: '', subject: '', message: '' };
 const Contact = () => {
   const { language } = useLanguage();
   const { theme } = useTheme();
+  const submissionLock = useRef(false);
   const [form, setForm] = useState(initialForm);
   const [errors, setErrors] = useState({});
   const [notice, setNotice] = useState(null);
@@ -45,13 +42,12 @@ const Contact = () => {
     infoHeading: 'Contact Information',
     university: 'Mekdela Amba University',
     system: 'University Asset Management System',
-    supportingText: 'Contact the system administration team for questions or technical support related to the university asset management system.',
     institution: 'University',
     institutionValue: 'Mekdela Amba University',
     systemValue: 'University Asset Management System',
     formHeading: 'Send a Message',
     formIntro: 'Send a message to the system administration team.',
-    name: 'Name',
+    name: 'Full Name',
     email: 'Email',
     subject: 'Subject',
     message: 'Message',
@@ -76,14 +72,13 @@ const Contact = () => {
     title: 'ያግኙን',
     university: 'መቅደላ አምባ ዩኒቨርሲቲ',
     system: 'የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት',
-    supportingText: 'ከዩኒቨርሲቲው የንብረት አስተዳደር ስርዓት ጋር ለተያያዙ ጥያቄዎች ወይም ቴክኒካዊ ድጋፍ የስርዓቱን አስተዳደር ቡድን ያግኙ።',
     infoHeading: 'የግንኙነት መረጃ',
     institution: 'ዩኒቨርሲቲ',
     institutionValue: 'መቅደላ አምባ ዩኒቨርሲቲ',
     systemValue: 'የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት',
     formHeading: 'መልዕክት ይላኩ',
     formIntro: 'ለስርዓቱ አስተዳደር ቡድን መልዕክት ይላኩ።',
-    name: 'ስም',
+    name: 'ሙሉ ስም',
     email: 'ኢሜይል',
     subject: 'ርዕስ',
     message: 'መልዕክት',
@@ -118,9 +113,11 @@ const Contact = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (submissionLock.current) return;
     setNotice(null);
     if (!validateForm()) return;
 
+    submissionLock.current = true;
     setIsSubmitting(true);
     try {
       const response = await apiClient.post('/contact', form);
@@ -150,6 +147,7 @@ const Contact = () => {
             : !error.response ? content.networkError : content.sendFailed;
       setNotice({ type: 'error', message });
     } finally {
+      submissionLock.current = false;
       setIsSubmitting(false);
     }
   };
@@ -162,58 +160,56 @@ const Contact = () => {
 
   return (
     <main className={`contact-page${isDark ? ' contact-page-dark' : ''}`}>
-      <ContactHero
-        title={content.title}
-        university={content.university}
-        system={content.system}
-        supportingText={content.supportingText}
-      />
+      <ContactHero title={content.title} />
 
-      <section className="contact-shell contact-section" aria-labelledby="contact-information-title">
-        <div className="contact-heading-row">
-          <h2 id="contact-information-title">{content.infoHeading}</h2>
-        </div>
-        <div className="contact-info-grid">
-          <ContactInfoCard icon={Building2} label={content.institution} value={content.institutionValue} />
-          <ContactInfoCard icon={MessageSquareText} label={content.system} value={content.systemValue} />
-        </div>
-      </section>
-
-      <section className="contact-shell contact-section contact-form-section" aria-labelledby="contact-form-title">
-        <div className="contact-heading-row">
-          <h2 id="contact-form-title">{content.formHeading}</h2>
-          <p className="contact-intro">{content.formIntro}</p>
-        </div>
-        <form className="contact-form" aria-labelledby="contact-form-title" noValidate onSubmit={handleSubmit}>
-          {notice ? <p className={`contact-form-notice contact-form-notice-${notice.type}`} role={notice.type === 'error' ? 'alert' : 'status'}>{notice.message}</p> : null}
-          <div className="contact-form-grid">
-            <div className="contact-field">
-              <label htmlFor="contact-name">{content.name}</label>
-              <input id="contact-name" name="name" autoComplete="name" required maxLength={100} value={form.name} onChange={(event) => updateField('name', event.target.value)} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? 'contact-name-error' : undefined} placeholder={content.namePlaceholder} />
-              {errors.name ? <p id="contact-name-error" className="contact-field-error">{errors.name}</p> : null}
-            </div>
-            <div className="contact-field">
-              <label htmlFor="contact-email">{content.email}</label>
-              <input id="contact-email" name="email" type="email" autoComplete="email" required maxLength={254} value={form.email} onChange={(event) => updateField('email', event.target.value)} aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? 'contact-email-error' : undefined} placeholder={content.emailPlaceholder} />
-              {errors.email ? <p id="contact-email-error" className="contact-field-error">{errors.email}</p> : null}
-            </div>
-            <div className="contact-field contact-field-wide">
-              <label htmlFor="contact-subject">{content.subject}</label>
-              <input id="contact-subject" name="subject" required maxLength={150} value={form.subject} onChange={(event) => updateField('subject', event.target.value)} aria-invalid={Boolean(errors.subject)} aria-describedby={errors.subject ? 'contact-subject-error' : undefined} placeholder={content.subjectPlaceholder} />
-              {errors.subject ? <p id="contact-subject-error" className="contact-field-error">{errors.subject}</p> : null}
-            </div>
-            <div className="contact-field contact-field-wide">
-              <label htmlFor="contact-message">{content.message}</label>
-              <textarea id="contact-message" name="message" required minLength={20} maxLength={5000} rows={7} value={form.message} onChange={(event) => updateField('message', event.target.value)} aria-invalid={Boolean(errors.message)} aria-describedby={errors.message ? 'contact-message-error' : undefined} placeholder={content.messagePlaceholder} />
-              {errors.message ? <p id="contact-message-error" className="contact-field-error">{errors.message}</p> : null}
-            </div>
+      <div className="contact-shell contact-content-layout">
+        <section className="contact-section contact-information-section" aria-labelledby="contact-information-title">
+          <div className="contact-heading-row">
+            <p className="contact-section-kicker">{content.institution}</p>
+            <h2 id="contact-information-title">{content.infoHeading}</h2>
           </div>
-          <button className="contact-submit" type="submit" disabled={isSubmitting}>
-            <Send size={17} aria-hidden="true" />
-            {isSubmitting ? content.submitting : content.submit}
-          </button>
-        </form>
-      </section>
+          <div className="contact-info-grid">
+            <ContactInfoCard icon={Building2} label={content.institution} value={content.institutionValue} />
+            <ContactInfoCard icon={MessageSquareText} label={content.system} value={content.systemValue} />
+          </div>
+        </section>
+
+        <section className="contact-section contact-form-section" aria-labelledby="contact-form-title">
+          <div className="contact-heading-row">
+            <h2 id="contact-form-title">{content.formHeading}</h2>
+            <p className="contact-intro">{content.formIntro}</p>
+          </div>
+          <form className="contact-form" aria-labelledby="contact-form-title" noValidate onSubmit={handleSubmit}>
+            {notice ? <p className={`contact-form-notice contact-form-notice-${notice.type}`} role={notice.type === 'error' ? 'alert' : 'status'}>{notice.message}</p> : null}
+            <div className="contact-form-grid">
+              <div className="contact-field">
+                <label htmlFor="contact-name">{content.name}</label>
+                <input id="contact-name" name="name" autoComplete="name" required maxLength={100} value={form.name} onChange={(event) => updateField('name', event.target.value)} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? 'contact-name-error' : undefined} placeholder={content.namePlaceholder} />
+                {errors.name ? <p id="contact-name-error" className="contact-field-error">{errors.name}</p> : null}
+              </div>
+              <div className="contact-field">
+                <label htmlFor="contact-email">{content.email}</label>
+                <input id="contact-email" name="email" type="email" autoComplete="email" required maxLength={254} value={form.email} onChange={(event) => updateField('email', event.target.value)} aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? 'contact-email-error' : undefined} placeholder={content.emailPlaceholder} />
+                {errors.email ? <p id="contact-email-error" className="contact-field-error">{errors.email}</p> : null}
+              </div>
+              <div className="contact-field contact-field-wide">
+                <label htmlFor="contact-subject">{content.subject}</label>
+                <input id="contact-subject" name="subject" required maxLength={150} value={form.subject} onChange={(event) => updateField('subject', event.target.value)} aria-invalid={Boolean(errors.subject)} aria-describedby={errors.subject ? 'contact-subject-error' : undefined} placeholder={content.subjectPlaceholder} />
+                {errors.subject ? <p id="contact-subject-error" className="contact-field-error">{errors.subject}</p> : null}
+              </div>
+              <div className="contact-field contact-field-wide">
+                <label htmlFor="contact-message">{content.message}</label>
+                <textarea id="contact-message" name="message" required minLength={20} maxLength={5000} rows={7} value={form.message} onChange={(event) => updateField('message', event.target.value)} aria-invalid={Boolean(errors.message)} aria-describedby={errors.message ? 'contact-message-error' : undefined} placeholder={content.messagePlaceholder} />
+                {errors.message ? <p id="contact-message-error" className="contact-field-error">{errors.message}</p> : null}
+              </div>
+            </div>
+            <button className="contact-submit" type="submit" disabled={isSubmitting}>
+              <Send size={17} aria-hidden="true" />
+              {isSubmitting ? content.submitting : content.submit}
+            </button>
+          </form>
+        </section>
+      </div>
 
       <style>{`
         .contact-page {
@@ -247,7 +243,7 @@ const Contact = () => {
 
         .contact-page * { box-sizing: border-box; }
 
-        .sr-only {
+        .contact-page .sr-only {
           position: absolute;
           width: 1px;
           height: 1px;
@@ -279,7 +275,6 @@ const Contact = () => {
           grid-template-columns: minmax(0, 1fr);
         }
 
-        .contact-eyebrow,
         .contact-section-kicker {
           display: inline-flex;
           align-items: center;
@@ -292,15 +287,9 @@ const Contact = () => {
           text-transform: uppercase;
         }
 
-        .contact-hero .contact-eyebrow,
-        .contact-hero .contact-university,
-        .contact-hero .contact-system {
-          color: #ffffff;
-        }
-
         .contact-hero h1 {
           margin: 0;
-          color: var(--contact-text);
+          color: #ffffff;
           font-size: clamp(2.1rem, 4vw, 3.45rem);
           line-height: 1.08;
           letter-spacing: -0.04em;
@@ -354,31 +343,6 @@ const Contact = () => {
           color: var(--contact-text);
           font-size: 1rem;
           line-height: 1.5;
-        }
-
-        .contact-university {
-          margin: 0;
-          color: var(--contact-primary);
-          font-size: clamp(2.1rem, 4vw, 3.2rem);
-          line-height: 1.14;
-          letter-spacing: -0.03em;
-          font-weight: 800;
-        }
-
-        .contact-system {
-          margin: 10px 0 0;
-          color: var(--contact-secondary);
-          font-size: clamp(1.08rem, 2.1vw, 1.6rem);
-          line-height: 1.4;
-          font-weight: 700;
-        }
-
-        .contact-supporting-text {
-          margin: 18px 0 0;
-          max-width: 760px;
-          color: rgba(255, 255, 255, 0.92);
-          font-size: 1.05rem;
-          line-height: 1.7;
         }
 
         .contact-section {
@@ -689,7 +653,90 @@ const Contact = () => {
           outline-offset: 3px;
         }
 
+        .contact-content-layout {
+          display: grid;
+          grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+          align-items: start;
+          gap: clamp(28px, 4vw, 52px);
+          padding-top: clamp(36px, 5vw, 58px);
+          padding-bottom: 72px;
+        }
+
+        .contact-content-layout .contact-section {
+          min-width: 0;
+          padding: 0;
+        }
+
+        .contact-hero h1 {
+          color: #ffffff;
+        }
+
+        .contact-section-kicker {
+          margin-bottom: 8px;
+        }
+
+        .contact-info-grid {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 14px;
+        }
+
+        .contact-info-card {
+          min-height: 124px;
+          padding: 20px;
+          border-radius: 14px;
+          background: var(--contact-card);
+          box-shadow: 0 8px 20px rgba(27, 54, 93, 0.07);
+          transition: none;
+        }
+
+        .contact-page-dark .contact-info-card {
+          background: var(--contact-card);
+        }
+
+        .contact-info-card:hover {
+          transform: none;
+          border-color: var(--contact-border);
+          box-shadow: 0 8px 20px rgba(27, 54, 93, 0.07);
+        }
+
+        .contact-form {
+          max-width: none;
+          padding: clamp(20px, 2.5vw, 28px);
+          border-radius: 14px;
+          box-shadow: 0 10px 26px rgba(27, 54, 93, 0.08);
+        }
+
+        .contact-field input,
+        .contact-field textarea {
+          min-height: 46px;
+          border-radius: 8px;
+        }
+
+        .contact-field textarea {
+          min-height: 156px;
+        }
+
+        .contact-submit {
+          min-height: 48px;
+          padding: 0 20px;
+          border-radius: 8px;
+          background: #245783;
+        }
+
+        .contact-submit:hover:not(:disabled) {
+          background: #1b4568;
+        }
+
+        .contact-form-notice {
+          border-radius: 8px;
+        }
+
         @media (max-width: 860px) {
+          .contact-content-layout {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 36px;
+          }
+
           .contact-support-grid {
             grid-template-columns: 1fr;
           }
@@ -714,6 +761,16 @@ const Contact = () => {
 
           .contact-section {
             padding-top: 44px;
+          }
+
+          .contact-content-layout {
+            gap: 30px;
+            padding-top: 32px;
+            padding-bottom: 48px;
+          }
+
+          .contact-content-layout .contact-section {
+            padding-top: 0;
           }
 
           .contact-form { padding: 18px; }

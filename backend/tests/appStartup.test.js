@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const request = require('supertest');
 const app = require('../src/app');
+const { sequelize } = require('../src/config/database');
 
 test('disallowed CORS preflights return 403 without reflecting the requesting origin', async () => {
   const response = await request(app)
@@ -13,6 +14,22 @@ test('disallowed CORS preflights return 403 without reflecting the requesting or
 
   assert.equal(response.status, 403);
   assert.doesNotMatch(response.text, /untrusted\.invalid/);
+});
+
+test('both health endpoints return a request ID header', async () => {
+  const originalQuery = sequelize.query;
+  sequelize.query = async () => [];
+
+  try {
+    for (const endpoint of ['/health', '/api/health']) {
+      const response = await request(app).get(endpoint);
+      assert.equal(response.status, 200);
+      assert.match(response.headers['x-request-id'], /^[0-9a-f-]{36}$/);
+      assert.deepEqual(response.body, { status: 'ok', database: 'connected' });
+    }
+  } finally {
+    sequelize.query = originalQuery;
+  }
 });
 
 test('app startup initializes the backup service dependency required for server boot', () => {

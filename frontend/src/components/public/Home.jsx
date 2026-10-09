@@ -126,27 +126,24 @@ const Home = () => {
       }
 
       .uam-hero {
-        position: relative;
-        isolation: isolate;
-        overflow: hidden;
-        min-height: min(760px, calc(100svh - 82px));
         background: #FFFFFF;
         color: #1F2937;
       }
 
-      .uam-hero::after {
-        position: absolute;
-        inset: 0;
-        z-index: -1;
-        background: rgba(255, 255, 255, 0.08);
-        content: '';
+      .uam-hero-media {
+        position: relative;
+        isolation: isolate;
+        overflow: hidden;
+        height: min(760px, calc(100svh - 82px));
+        background: #FFFFFF;
       }
 
-      .uam-hero-media {
+      .uam-hero-media::after {
         position: absolute;
         inset: 0;
-        z-index: -2;
-        background: #FFFFFF;
+        z-index: 1;
+        background: rgba(255, 255, 255, 0.08);
+        content: '';
       }
 
       .uam-hero-image {
@@ -163,6 +160,7 @@ const Home = () => {
       .uam-hero-image.is-active {
         opacity: 0.14;
         transform: scale(1);
+        z-index: 0;
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -436,8 +434,6 @@ const Home = () => {
       }
 
       @media (max-width: 640px) {
-        .uam-hero { min-height: auto; }
-        .uam-hero::after { background: rgba(255, 255, 255, 0.08); }
         .uam-hero-shell { width: min(100% - 32px, 560px); grid-template-columns: 1fr; gap: 36px; padding: 58px 0 64px; }
         .uam-hero-copy h1 { font-size: clamp(2.35rem, 10vw, 3rem); }
         .uam-lead { margin-top: 18px; font-size: 1.03rem; }

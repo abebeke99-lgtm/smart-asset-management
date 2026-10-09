@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
 
 const pageContent = {
@@ -6,49 +6,76 @@ const pageContent = {
     title: 'Mekdela Amba University',
     introduction: 'Mekdela Amba University is a higher education institution committed to quality teaching, research, innovation, and community development.',
     aboutTitle: 'About Us',
-    aboutText: 'Mekdela Amba University provides an academic environment where students, faculty, researchers, and partners can learn, collaborate, and contribute to sustainable development.',
     visionTitle: 'Vision',
     visionText: 'To become a center of excellence in education, research, innovation, and community engagement, contributing meaningfully to national development.',
     missionTitle: 'Mission',
     missionLead: 'Mekdela Amba University is committed to:',
     mission: [
       'Providing quality and accessible higher education.',
-      'Promoting research and innovation.',
-      'Developing knowledgeable, skilled, and responsible graduates.',
-      'Supporting community engagement and development.',
+      'Promoting research, creativity, and innovation.',
+      'Developing knowledgeable, skilled, ethical, and responsible graduates.',
+      'Supporting community engagement and sustainable development.',
       'Promoting ethical leadership, professionalism, and academic excellence.'
     ],
     valuesTitle: 'Core Values',
-    values: ['Academic Excellence', 'Integrity', 'Innovation', 'Community Engagement', 'Inclusiveness', 'Responsibility'],
-    commitmentTitle: 'Our Commitment',
-    commitmentText: 'Mekdela Amba University is committed to building a strong academic community, supporting meaningful research and innovation, and preparing graduates who contribute positively to Ethiopia and beyond.'
+    values: [
+      {
+        title: 'Academic Excellence',
+        description: 'We are committed to maintaining high academic standards in teaching, learning, and research to ensure quality education and continuous improvement.'
+      },
+      {
+        title: 'Integrity',
+        description: 'We promote honesty, transparency, fairness, and ethical behavior in all academic, administrative, and professional activities.'
+      },
+      {
+        title: 'Innovation',
+        description: 'We encourage creativity, critical thinking, research, and the use of modern technology to develop new ideas and effective solutions to challenges.'
+      },
+      {
+        title: 'Community Engagement',
+        description: 'We work closely with local communities and stakeholders to address community needs, share knowledge, and contribute to social and economic development.'
+      },
+      {
+        title: 'Inclusiveness',
+        description: 'We promote equal opportunities, respect diversity, and create a welcoming learning and working environment where everyone feels valued and respected.'
+      },
+      {
+        title: 'Responsibility',
+        description: 'We encourage accountability, professionalism, environmental awareness, and responsible use of university resources to support sustainable development and serve society.'
+      }
+    ]
   },
   am: {
     title: 'መቅደላ አምባ ዩኒቨርሲቲ',
     introduction: 'መቅደላ አምባ ዩኒቨርሲቲ ጥራት ያለው ትምህርትን፣ ምርምርን፣ ፈጠራንና የማህበረሰብ ልማትን የሚያበረታታ የከፍተኛ ትምህርት ተቋም ነው።',
     aboutTitle: 'ስለ እኛ',
-    aboutText: 'መቅደላ አምባ ዩኒቨርሲቲ ተማሪዎች፣ የትምህርት ሠራተኞች፣ ተመራማሪዎችና ሰፊው ማህበረሰብ መማር፣ መተባበርና ለዘላቂ ልማት አስተዋፅኦ ማድረግ የሚችሉበትን ጠንካራ የትምህርት አካባቢ ለመፍጠር ቁርጠኛ ነው።',
     visionTitle: 'ራዕይ',
     visionText: 'ለሀገራዊ ልማት ጉልህ አስተዋፅኦ በማድረግ በትምህርት፣ በምርምር፣ በፈጠራና በማህበረሰብ ተሳትፎ የላቀ የልህቀት ማዕከል መሆን።',
     missionTitle: 'ተልዕኮ',
     missionLead: 'መቅደላ አምባ ዩኒቨርሲቲ የሚከተሉትን ለማሳካት ቁርጠኛ ነው፦',
     mission: [
       'ጥራት ያለውና ተደራሽ የከፍተኛ ትምህርት መስጠት።',
-      'ምርምርንና ፈጠራን ማበረታታት።',
-      'እውቀት ያላቸውን፣ ችሎታ የተላበሱና ኃላፊነት የሚሰማቸውን ምሩቃን ማፍራት።',
-      'የማህበረሰብ ተሳትፎንና ልማትን መደገፍ።',
+      'ምርምርን፣ ፈጠራንና አዲስ ነገር መፍጠርን ማበረታታት።',
+      'እውቀት ያላቸውን፣ ችሎታ የተላበሱ፣ ሥነ ምግባራዊና ኃላፊነት የሚሰማቸውን ምሩቃን ማፍራት።',
+      'የማህበረሰብ ተሳትፎንና ዘላቂ ልማትን መደገፍ።',
       'ሥነ ምግባራዊ አመራርን፣ ሙያዊነትንና የትምህርት ልቀትን ማበረታታት።'
     ],
     valuesTitle: 'ዋና እሴቶች',
-    values: ['የትምህርት ልቀት', 'ታማኝነት', 'ፈጠራ', 'የማህበረሰብ ተሳትፎ', 'አካታችነት', 'ኃላፊነት'],
-    commitmentTitle: 'ቁርጠኝነታችን',
-    commitmentText: 'መቅደላ አምባ ዩኒቨርሲቲ ጠንካራ የትምህርት ማህበረሰብ ለመገንባት፣ ትርጉም ያለው ምርምርና ፈጠራን ለመደገፍ፣ ለኢትዮጵያና ከዚያም ባሻገር አዎንታዊ አስተዋፅኦ የሚያደርጉ ምሩቃንን ለማዘጋጀት ቁርጠኛ ነው።'
+    values: [
+      { title: 'የትምህርት ልቀት', description: 'ትምህርት፣ መማርና ምርምር ጥራት ያለው እንዲሆንና ያለማቋረጥ እንዲሻሻል ከፍተኛ የትምህርት ደረጃዎችን ለማስጠበቅ ቁርጠኛ ነን።' },
+      { title: 'ታማኝነት', description: 'በሁሉም የትምህርት፣ የአስተዳደርና የሙያ እንቅስቃሴዎች ውስጥ ታማኝነትን፣ ግልጽነትን፣ ፍትሃዊነትንና ሥነ ምግባራዊ ባህሪን እናበረታታለን።' },
+      { title: 'ፈጠራ', description: 'አዳዲስ ሐሳቦችንና ለችግሮች ውጤታማ መፍትሄዎችን ለማዳበር ፈጠራን፣ ሂሳዊ አስተሳሰብን፣ ምርምርንና ዘመናዊ ቴክኖሎጂን መጠቀምን እናበረታታለን።' },
+      { title: 'የማህበረሰብ ተሳትፎ', description: 'የማህበረሰብ ፍላጎቶችን ለመፍታት፣ እውቀትን ለማካፈልና ለማህበራዊና ኢኮኖሚያዊ ልማት አስተዋፅኦ ለማድረግ ከአካባቢው ማህበረሰብና ባለድርሻዎች ጋር በቅርበት እንሠራለን።' },
+      { title: 'አካታችነት', description: 'እኩል ዕድሎችን እናበረታታለን፣ ልዩነትን እናከብራለን፣ እያንዳንዱ ሰው የተከበረና ዋጋ ያለው እንዲሰማው አቀባባይ የትምህርትና የሥራ አካባቢ እንፈጥራለን።' },
+      { title: 'ኃላፊነት', description: 'ዘላቂ ልማትን ለመደገፍና ህብረተሰቡን ለማገልገል ተጠያቂነትን፣ ሙያዊነትን፣ የአካባቢ ግንዛቤንና የዩኒቨርሲቲ ሀብቶችን በኃላፊነት መጠቀምን እናበረታታለን።' }
+    ]
   }
 };
 
 const AboutUs = () => {
   const { language } = useLanguage();
   const { theme } = useTheme();
+  const [isExpanded, setIsExpanded] = useState(false);
   const text = pageContent[language] || pageContent.en;
 
   return (
@@ -63,60 +90,71 @@ const AboutUs = () => {
             <span aria-current="page">About Us</span>
           </nav>
           <h1 className="about-hero-university">{text.title}</h1>
-          <h2 id="about-hero-title" className="about-hero-heading">{text.aboutTitle}</h2>
-          <p className="about-hero-copy">{text.aboutText}</p>
+          <h2 id="about-hero-title" className="about-hero-heading">
+            <button
+              className="about-toggle"
+              type="button"
+              aria-expanded={isExpanded}
+              aria-controls="about-expandable-content"
+              onClick={() => setIsExpanded((expanded) => !expanded)}
+            >
+              <span>{text.aboutTitle}</span>
+              <span className="about-toggle-indicator" aria-hidden="true">{isExpanded ? '⌃' : '⌄'}</span>
+            </button>
+          </h2>
         </div>
       </section>
 
-      <main className="about-main" aria-label={text.aboutTitle}>
-        <div className="about-container">
-          <div className="about-two-column">
-            <article className="about-card about-card-vision" aria-labelledby="about-vision-title">
-              <div className="about-card-head">
-                <span className="about-card-icon" aria-hidden="true">◉</span>
-                <h2 id="about-vision-title">{text.visionTitle}</h2>
+      <div
+        id="about-expandable-content"
+        className={`about-expandable${isExpanded ? ' is-expanded' : ''}`}
+        aria-hidden={!isExpanded}
+      >
+        <div className="about-expandable-inner">
+          <main className="about-main" aria-label={text.aboutTitle}>
+            <div className="about-container">
+              <div className="about-two-column">
+                <article className="about-card about-card-vision" aria-labelledby="about-vision-title">
+                  <div className="about-card-head">
+                    <span className="about-card-icon" aria-hidden="true">◉</span>
+                    <h2 id="about-vision-title">{text.visionTitle}</h2>
+                  </div>
+                  <p>{text.visionText}</p>
+                </article>
+
+                <article className="about-card about-card-mission" aria-labelledby="about-mission-title">
+                  <div className="about-card-head">
+                    <span className="about-card-icon" aria-hidden="true">◎</span>
+                    <h2 id="about-mission-title">{text.missionTitle}</h2>
+                  </div>
+                  <p className="about-mission-intro">{text.missionLead}</p>
+                  <ul className="about-mission-list">
+                    {text.mission.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </article>
               </div>
-              <p>{text.visionText}</p>
-            </article>
 
-            <article className="about-card about-card-mission" aria-labelledby="about-mission-title">
-              <div className="about-card-head">
-                <span className="about-card-icon" aria-hidden="true">◎</span>
-                <h2 id="about-mission-title">{text.missionTitle}</h2>
-              </div>
-              <p className="about-mission-intro">{text.missionLead}</p>
-              <ul className="about-mission-list">
-                {text.mission.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </article>
-          </div>
-
-          <section className="about-card about-card-values" aria-labelledby="about-values-title">
-            <div className="about-card-head about-card-head-inline">
-              <span className="about-card-icon" aria-hidden="true">◆</span>
-              <h2 id="about-values-title">{text.valuesTitle}</h2>
+              <section className="about-card about-card-values" aria-labelledby="about-values-title">
+                <div className="about-card-head about-card-head-inline">
+                  <span className="about-card-icon" aria-hidden="true">◆</span>
+                  <h2 id="about-values-title">{text.valuesTitle}</h2>
+                </div>
+                <ul className="about-values-list">
+                  {text.values.map((value) => (
+                    <li key={value.title}>
+                      <span className="about-value-badge" aria-hidden="true">✦</span>
+                      <h3>{value.title}</h3>
+                      <p>{value.description}</p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             </div>
-            <ul className="about-values-list">
-              {text.values.map((value) => (
-                <li key={value}>
-                  <span className="about-value-badge" aria-hidden="true">✦</span>
-                  <span>{value}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="about-card about-card-commitment" aria-labelledby="about-commitment-title">
-            <div className="about-card-head about-card-head-inline">
-              <span className="about-card-icon" aria-hidden="true">✦</span>
-              <h2 id="about-commitment-title">{text.commitmentTitle}</h2>
-            </div>
-            <p>{text.commitmentText}</p>
-          </section>
+          </main>
         </div>
-      </main>
+      </div>
 
       <style>{`
         .about-page-shell {
@@ -130,7 +168,7 @@ const AboutUs = () => {
           --about-primary: #0797d5;
           --about-primary-strong: #0ea5e9;
           --about-hero-overlay: rgba(7, 24, 45, 0.62);
-          --about-shadow: 0 16px 34px rgba(7, 24, 45, 0.08);
+          --about-shadow: 0 8px 22px rgba(7, 24, 45, 0.06);
           background: var(--about-bg);
           color: var(--about-text);
         }
@@ -146,7 +184,7 @@ const AboutUs = () => {
           --about-primary: #7dd3fc;
           --about-primary-strong: #38bdf8;
           --about-hero-overlay: rgba(7, 24, 45, 0.7);
-          --about-shadow: 0 18px 42px rgba(2, 6, 23, 0.38);
+          --about-shadow: 0 8px 22px rgba(2, 6, 23, 0.2);
         }
 
         .about-container {
@@ -232,12 +270,58 @@ const AboutUs = () => {
           letter-spacing: -0.04em;
         }
 
-        .about-hero-copy {
-          max-width: 780px;
-          margin: 14px 0 0;
-          color: rgba(255, 255, 255, 0.9);
-          font-size: clamp(1rem, 1.6vw, 1.15rem);
-          line-height: 1.7;
+        .about-hero-heading {
+          margin: 20px 0 0;
+          font-size: clamp(1.5rem, 2.5vw, 2rem);
+        }
+
+        .about-toggle {
+          display: inline-flex;
+          align-items: center;
+          gap: 14px;
+          padding: 8px 0;
+          border: 0;
+          color: #ffffff;
+          background: transparent;
+          font: inherit;
+          font-weight: 700;
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .about-toggle:focus-visible {
+          border-radius: 4px;
+          outline: 3px solid rgba(255, 255, 255, 0.85);
+          outline-offset: 4px;
+        }
+
+        .about-toggle-indicator {
+          display: inline-grid;
+          place-items: center;
+          width: 32px;
+          height: 32px;
+          border: 1px solid rgba(255, 255, 255, 0.55);
+          border-radius: 50%;
+          font-size: 1.35rem;
+          line-height: 1;
+        }
+
+        .about-expandable {
+          display: grid;
+          grid-template-rows: 0fr;
+          opacity: 0;
+          transition: grid-template-rows 300ms ease, opacity 220ms ease;
+        }
+
+        .about-expandable.is-expanded {
+          grid-template-rows: 1fr;
+          opacity: 1;
+        }
+
+        .about-expandable-inner {
+          min-width: 0;
+          min-height: 0;
+          overflow: hidden;
         }
 
         .about-main {
@@ -255,13 +339,13 @@ const AboutUs = () => {
           position: relative;
           background: var(--about-surface);
           border: 1px solid var(--about-card-border);
-          border-radius: 18px;
+          border-radius: 14px;
           box-shadow: var(--about-shadow);
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          transition: box-shadow 0.2s ease;
         }
 
         .about-card:hover {
-          transform: translateY(-3px);
+          box-shadow: 0 10px 24px rgba(7, 24, 45, 0.1);
         }
 
         .about-card-vision,
@@ -344,15 +428,14 @@ const AboutUs = () => {
           font-weight: 800;
         }
 
-        .about-card-values,
-        .about-card-commitment {
+        .about-card-values {
           padding: 26px 24px 24px;
         }
 
         .about-values-list {
           display: grid;
-          grid-template-columns: repeat(6, minmax(0, 1fr));
-          gap: 16px;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 14px;
           margin: 0;
           padding: 0;
           list-style: none;
@@ -361,19 +444,12 @@ const AboutUs = () => {
         .about-values-list li {
           display: flex;
           flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 118px;
-          padding: 14px 10px 12px;
+          align-items: flex-start;
+          min-width: 0;
+          padding: 18px;
           border: 1px solid var(--about-card-border);
-          border-radius: 14px;
-          background: linear-gradient(180deg, var(--about-surface), var(--about-surface-alt));
-          text-align: center;
-          transition: transform 0.2s ease;
-        }
-
-        .about-values-list li:hover {
-          transform: translateY(-2px);
+          border-radius: 12px;
+          background: var(--about-surface);
         }
 
         .about-value-badge {
@@ -381,24 +457,26 @@ const AboutUs = () => {
           place-items: center;
           width: 36px;
           height: 36px;
-          margin-bottom: 10px;
+          margin-bottom: 12px;
           border-radius: 50%;
           background: rgba(14, 165, 233, 0.12);
           color: var(--about-primary);
           font-size: 1rem;
         }
 
-        .about-values-list li span:last-child {
+        .about-values-list h3 {
+          margin: 0 0 8px;
           color: var(--about-text-strong);
-          font-size: 0.88rem;
-          line-height: 1.5;
+          font-size: 1rem;
+          line-height: 1.4;
           font-weight: 700;
         }
 
-        .about-card-commitment {
-          margin-top: 28px;
-          background: linear-gradient(180deg, rgba(14, 165, 233, 0.08), rgba(255, 255, 255, 0.02));
-          border-color: rgba(14, 165, 233, 0.18);
+        .about-values-list p {
+          margin: 0;
+          color: var(--about-muted);
+          font-size: 0.94rem;
+          line-height: 1.65;
         }
 
         @media (max-width: 900px) {
@@ -412,18 +490,19 @@ const AboutUs = () => {
           .about-breadcrumb { font-size: 0.74rem; }
           .about-card-vision,
           .about-card-mission,
-          .about-card-values,
-          .about-card-commitment { padding-left: 18px; padding-right: 18px; }
-          .about-values-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .about-card-values { padding-left: 18px; padding-right: 18px; }
+          .about-values-list { grid-template-columns: 1fr; }
         }
 
         @media (max-width: 420px) {
           .about-container { width: min(100% - 24px, 1200px); }
           .about-hero { min-height: 180px; }
           .about-hero h1 { font-size: 2.1rem; }
-          .about-hero-copy { font-size: 0.96rem; }
-          .about-values-list { grid-template-columns: 1fr; }
           .about-card-head h2 { font-size: 1.45rem; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .about-expandable { transition: none; }
         }
       `}</style>
     </div>

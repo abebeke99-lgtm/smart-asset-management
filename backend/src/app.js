@@ -133,7 +133,7 @@ app.use(cors({
       return;
     }
 
-    const error = new Error('Origin is not allowed by CORS');
+    const error = new Error('Origin is not allowed');
     error.status = 403;
     error.code = 'CORS_ORIGIN_NOT_ALLOWED';
     callback(error);
@@ -144,14 +144,14 @@ app.use(cors({
   exposedHeaders: ['X-Request-ID']
 }));
 
-app.get('/health', healthHandler);
-app.get('/api/health', healthHandler);
-
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(passport.initialize());
 app.use(requestContextMiddleware);
 app.use(requestMetricsMiddleware);
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/search', searchRoutes);
@@ -211,8 +211,18 @@ app.use('/api', (req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  console.error(err.stack);
   const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
+
+  if (err?.code === 'CORS_ORIGIN_NOT_ALLOWED') {
+    console.warn('Blocked a request from a disallowed CORS origin.');
+    return res.status(403).json({
+      success: false,
+      code: 'CORS_ORIGIN_NOT_ALLOWED',
+      message: 'Origin is not allowed',
+    });
+  }
+
+  console.error(err.stack);
   res.status(status).json({
     success: false,
     message: status >= 500 || process.env.NODE_ENV === 'production' ? 'Internal server error' : (err.message || 'Request failed'),

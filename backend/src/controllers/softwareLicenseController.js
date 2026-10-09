@@ -99,6 +99,22 @@ const validatePayload = (body, current = null) => {
   return { softwareName, vendor, licenseType, startDate, expiryDate, quantity, purchaseCost, renewalCost, renewalType };
 };
 
+const DATE_FIELDS = ['purchaseDate', 'renewalDate'];
+const ID_FIELDS = ['departmentId', 'locationId', 'supplierId'];
+const OPTIONAL_FIELDS = ['version', 'licenseKey', 'description', 'autoRenewal', 'currency', 'contractNumber', 'notes', ...DATE_FIELDS, ...ID_FIELDS];
+const pickLicenseFields = (body = {}) => {
+  const picked = {};
+  for (const field of OPTIONAL_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(body, field)) continue;
+    const value = body[field];
+    if (field === 'autoRenewal') picked[field] = value === true || value === 'true' || value === 1 || value === '1';
+    else if (DATE_FIELDS.includes(field)) picked[field] = dateValue(value);
+    else if (ID_FIELDS.includes(field)) picked[field] = value === null || value === '' ? null : numeric(value, null);
+    else picked[field] = value;
+  }
+  return picked;
+};
+
 const findLicense = (req) => SoftwareLicense.findOne({ where: { id: req.params.id, ...scopeWhere(req) }, include: includeRelations });
 
 const list = async (req, res, next) => {
@@ -175,7 +191,7 @@ const create = async (req, res, next) => {
     const values = validatePayload(req.body);
     const licenseNumber = String(req.body.licenseNumber || '').trim() || null;
     if (licenseNumber && await SoftwareLicense.findOne({ where: { licenseNumber } })) return res.status(409).json({ success: false, message: 'License number already exists', errors: { licenseNumber: 'License number already exists' } });
-    const license = await SoftwareLicense.create({ ...req.body, ...values, licenseNumber, collegeId: req.user.role === 'admin' ? (req.body.collegeId || null) : req.organizationScope.collegeId, usedQuantity: 0, status: calculateStatus({ expiryDate: values.expiryDate, status: req.body.status }) || 'Active', createdBy: req.user.id, updatedBy: req.user.id });
+    const license = await SoftwareLicense.create({ ...values, ...pickLicenseFields(req.body), licenseNumber, collegeId: req.user.role === 'admin' ? (req.body.collegeId || null) : req.organizationScope.collegeId, usedQuantity: 0, status: calculateStatus({ expiryDate: values.expiryDate, status: req.body.status }) || 'Active', createdBy: req.user.id, updatedBy: req.user.id });
     await writeAudit(req, 'SOFTWARE_LICENSE_CREATED', license);
     return res.status(201).json({ success: true, license: serialize(license, req) });
   } catch (error) { return next(error); }
@@ -190,7 +206,7 @@ const update = async (req, res, next) => {
     if (licenseNumber && await SoftwareLicense.findOne({ where: { licenseNumber, id: { [Op.ne]: license.id } } })) return res.status(409).json({ success: false, message: 'License number already exists', errors: { licenseNumber: 'License number already exists' } });
     const requestedStatus = req.body.status || license.status;
     const nextStatus = ['Suspended', 'Cancelled'].includes(requestedStatus) ? requestedStatus : calculateStatus({ expiryDate: values.expiryDate, status: requestedStatus });
-    await license.update({ ...req.body, ...values, licenseNumber, status: nextStatus, updatedBy: req.user.id });
+    await license.update({ ...values, ...pickLicenseFields(req.body), licenseNumber, status: nextStatus, updatedBy: req.user.id });
     await writeAudit(req, 'SOFTWARE_LICENSE_UPDATED', license);
     return res.json({ success: true, license: serialize(license, req) });
   } catch (error) { return next(error); }

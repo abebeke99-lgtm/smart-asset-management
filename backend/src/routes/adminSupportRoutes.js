@@ -96,6 +96,29 @@ const validateDepartment = async (body, id = null) => {
   return { value: { name, code, description: String(body.description || '').trim(), headId: body.headId || null } };
 };
 
+const normalizeMaintenanceCost = (row) => {
+  const data = row && row.toJSON ? row.toJSON() : (row || {});
+  const maintenance = data.Maintenance || data.maintenance || null;
+  const asset = data.Asset || data.asset || null;
+  const approvedByUser = data.ApprovedByUser || data.approvedByUser || null;
+  const toNumber = (value) => (value === null || value === undefined ? 0 : Number(value));
+  return {
+    ...data,
+    maintenance_id: data.maintenanceId ?? null,
+    repair_id: data.repairId ?? null,
+    work_order_id: data.workOrderId ?? null,
+    asset_id: data.assetId ?? null,
+    cost_category: data.costCategory || 'other',
+    cost_date: data.costDate || null,
+    unit_cost: toNumber(data.unitCost),
+    approved_by: data.approvedBy ?? null,
+    total_cost: toNumber(data.amount),
+    maintenance: maintenance ? { id: maintenance.id, title: maintenance.title, status: maintenance.status, priority: maintenance.priority } : null,
+    asset: asset ? { id: asset.id, name: asset.name, assetCode: asset.assetCode, category: asset.category, department: asset.department, location: asset.location } : null,
+    approved_by_user: approvedByUser ? { id: approvedByUser.id, username: approvedByUser.username, fullName: approvedByUser.fullName } : null,
+  };
+};
+
 const normalizeDisposalRequest = (row) => {
   const data = row.toJSON ? row.toJSON() : row;
   return {
@@ -879,13 +902,15 @@ router.get('/analytics', ...requireAdmin, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+const DISPOSAL_SORT_FIELDS = ['createdAt', 'updatedAt', 'id', 'status', 'type', 'condition', 'disposalNumber', 'scheduledDate', 'completedDate', 'purchaseValue', 'bookValue', 'netBookValue', 'estimatedDisposalValue', 'disposalCost'];
 const disposalAccess = [requireAuth, requireRole('admin', 'store_manager', 'ict_officer', 'finance')];
 
 router.get('/disposals', ...disposalAccess, async (req, res, next) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
-    const sortBy = String(req.query.sortBy || req.query.sort_by || 'createdAt');
+    const requestedSort = String(req.query.sortBy || req.query.sort_by || 'createdAt');
+    const sortBy = DISPOSAL_SORT_FIELDS.includes(requestedSort) ? requestedSort : 'createdAt';
     const sortOrder = String(req.query.sortOrder || req.query.sort_order || 'DESC').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
     const where = buildDisposalWhere(req);
 
@@ -1458,42 +1483,54 @@ router.delete(['/categories/:id', '/asset-categories/:id'], ...requireAdmin, req
   }
 });
 
-router.get('/notifications', requireAuth, async (req, res) => {
-  const notifications = await Notification.findAll({
-    where: { [require('sequelize').Op.or]: [{ userId: null }, { userId: req.user.id }] },
-    order: [['createdAt', 'DESC']],
-  });
-  const normalized = notifications.map((notification) => ({
-    ...notification.toJSON(),
-    is_read: notification.read,
-    created_at: notification.createdAt,
-  }));
-  res.json({ success: true, data: normalized, notifications: normalized });
+router.get('/notifications', requireAuth, async (req, res, next) => {
+  try {
+    const notifications = await Notification.findAll({
+      where: { [require('sequelize').Op.or]: [{ userId: null }, { userId: req.user.id }] },
+      order: [['createdAt', 'DESC']],
+    });
+    const normalized = notifications.map((notification) => ({
+      ...notification.toJSON(),
+      is_read: notification.read,
+      created_at: notification.createdAt,
+    }));
+    res.json({ success: true, data: normalized, notifications: normalized });
+  } catch (error) { next(error); }
 });
 
-router.put('/notifications/:id/read', requireAuth, async (req, res) => {
-  const notification = await Notification.findOne({ where: { id: req.params.id, userId: req.user.id } });
-  if (!notification) return res.status(404).json({ success: false, message: 'Notification not found' });
-  await notification.update({ read: true });
-  res.json({ success: true });
+router.put('/notifications/:id/read', requireAuth, async (req, res, next) => {
+  try {
+    const notification = await Notification.findOne({ where: { id: req.params.id, userId: req.user.id } });
+    if (!notification) return res.status(404).json({ success: false, message: 'Notification not found' });
+    await notification.update({ read: true });
+    res.json({ success: true });
+  } catch (error) { next(error); }
 });
 
-router.put('/notifications/read-all', requireAuth, async (req, res) => {
-  await Notification.update({ read: true }, {
-    where: { [require('sequelize').Op.or]: [{ userId: null }, { userId: req.user.id }] },
-  });
-  res.json({ success: true });
+router.put('/notifications/read-all', requireAuth, async (req, res, next) => {
+  try {
+    await Notification.update({ read: true }, {
+      where: { [require('sequelize').Op.or]: [{ userId: null }, { userId: req.user.id }] },
+    });
+    res.json({ success: true });
+  } catch (error) { next(error); }
 });
 
-router.delete('/notifications/all', requireAuth, requireRole('admin'), async (req, res) => {
-  await Notification.destroy({ where: {} });
-  res.json({ success: true });
+router.delete('/notifications/all', requireAuth, requireRole('admin'), async (req, res, next) => {
+  try {
+    await Notification.destroy({
+      where: { [require('sequelize').Op.or]: [{ userId: null }, { userId: req.user.id }] },
+    });
+    res.json({ success: true });
+  } catch (error) { next(error); }
 });
 
-router.delete('/notifications/:id', requireAuth, async (req, res) => {
-  const deleted = await Notification.destroy({ where: { id: req.params.id, userId: req.user.id } });
-  if (!deleted) return res.status(404).json({ success: false, message: 'Notification not found' });
-  res.json({ success: true });
+router.delete('/notifications/:id', requireAuth, async (req, res, next) => {
+  try {
+    const deleted = await Notification.destroy({ where: { id: req.params.id, userId: req.user.id } });
+    if (!deleted) return res.status(404).json({ success: false, message: 'Notification not found' });
+    res.json({ success: true });
+  } catch (error) { next(error); }
 });
 
 const normalizeAuditDetails = (details) => {

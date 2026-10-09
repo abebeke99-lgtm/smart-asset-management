@@ -37,6 +37,37 @@ const departmentScopeId = (req) => {
   const id = Number(value);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 };
+const GLOBAL_REQUEST_ROLES = ['admin', 'maintenance', 'ict_officer', 'infrastructure'];
+const COLLEGE_REQUEST_ROLES = ['college', 'college_manager'];
+const collegeScopeId = (req) => {
+  const value = req.organizationScope?.collegeId ?? req.user?.collegeId ?? req.user?.college_id;
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+};
+const applyServiceRequestScope = (where, req) => {
+  const role = String(req.user?.role || '').toLowerCase();
+  if (GLOBAL_REQUEST_ROLES.includes(role)) return true;
+  if (role === 'department_head') {
+    const scopeId = departmentScopeId(req);
+    if (!scopeId) return false;
+    where.departmentId = scopeId;
+    return true;
+  }
+  if (COLLEGE_REQUEST_ROLES.includes(role)) {
+    const scopeId = collegeScopeId(req);
+    if (!scopeId) return false;
+    where.collegeId = scopeId;
+    return true;
+  }
+  where[Op.and] = [...(where[Op.and] || []), { [Op.or]: [{ reportedBy: req.user.id }, { assignedTo: req.user.id }] }];
+  return true;
+};
+const scopeErrorMessage = (req) => {
+  const role = String(req.user?.role || '').toLowerCase();
+  if (role === 'department_head') return 'Department scope is not configured for this account';
+  if (COLLEGE_REQUEST_ROLES.includes(role)) return 'College scope is not configured for this account';
+  return 'Scope is not configured for this account';
+};
 
 const ROUTING_BY_CATEGORY = [
   { pattern: 'network', subscribe: /(network|router|switch|firewall|wireless|access point)/i, route: 'ictd' },
@@ -233,7 +264,7 @@ const createServiceRequest = async (req, res, next) => {
       priority,
       status: 'submitted',
       routedTo,
-      reportedBy,
+      reportedBy: req.user.id,
       departmentId,
       collegeId,
     }, { transaction });
@@ -282,10 +313,8 @@ const listServiceRequests = async (req, res, next) => {
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 20));
     const where = {};
-    if (isDepartmentHead(req)) {
-      const scopeId = departmentScopeId(req);
-      if (!scopeId) return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
-      where.departmentId = scopeId;
+    if (!applyServiceRequestScope(where, req)) {
+      return res.status(403).json({ success: false, message: scopeErrorMessage(req) });
     }
     if (req.query.status) where.status = String(req.query.status).toLowerCase();
     if (req.query.routed_to || req.query.routedTo) where.routedTo = req.query.routed_to || req.query.routedTo;
@@ -320,10 +349,8 @@ const listServiceRequests = async (req, res, next) => {
 const getServiceRequest = async (req, res, next) => {
   try {
     const where = { id: req.params.id };
-    if (isDepartmentHead(req)) {
-      const scopeId = departmentScopeId(req);
-      if (!scopeId) return res.status(403).json({ success: false, message: 'Department scope is not configured for this account' });
-      where.departmentId = scopeId;
+    if (!applyServiceRequestScope(where, req)) {
+      return res.status(403).json({ success: false, message: scopeErrorMessage(req) });
     }
     const item = await ServiceRequest.findOne({ where, include: defaultInclude() });
     if (!item) return res.status(404).json({ success: false, message: 'Service request not found' });
@@ -456,9 +483,24 @@ const listFeedback = async (req, res, next) => {
   try {
     const where = {};
     if (req.query.request_id) where.requestId = req.query.request_id;
+    const role = String(req.user?.role || '').toLowerCase();
+    const include = [{ model: User, as: 'Submitter', attributes: ['id', 'username', 'fullName'] }];
+    if (!GLOBAL_REQUEST_ROLES.includes(role)) {
+      if (role === 'department_head') {
+        const scopeId = departmentScopeId(req);
+        if (!scopeId) return res.status(403).json({ success: false, message: scopeErrorMessage(req) });
+        include.push({ model: ServiceRequest, required: true, attributes: [], where: { departmentId: scopeId } });
+      } else if (COLLEGE_REQUEST_ROLES.includes(role)) {
+        const scopeId = collegeScopeId(req);
+        if (!scopeId) return res.status(403).json({ success: false, message: scopeErrorMessage(req) });
+        include.push({ model: ServiceRequest, required: true, attributes: [], where: { collegeId: scopeId } });
+      } else {
+        where.submittedBy = req.user.id;
+      }
+    }
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 20));
-    const { count, rows } = await Feedback.findAndCountAll({ where, include: [{ model: User, as: 'Submitter', attributes: ['id', 'username', 'fullName'] }], order: [['createdAt', 'DESC']], limit, offset: (page - 1) * limit });
+    const { count, rows } = await Feedback.findAndCountAll({ where, include, order: [['createdAt', 'DESC']], limit, offset: (page - 1) * limit, distinct: true });
     res.json({ success: true, data: rows, feedback: rows, total: count, pagination: { page, limit, total: count, pages: Math.max(1, Math.ceil(count / limit)) } });
   } catch (error) { next(error); }
 };
@@ -505,7 +547,7 @@ const getRoutingOptions = async (req, res, next) => {
       routes: ROUTE_LABELS,
       rules: ROUTING_BY_CATEGORY.map((rule) => ({ pattern: rule.pattern, keywords: String(rule.subscribe).match(/\(([^)]+)\)/)?.[1] || '', route: rule.route })),
       escalation_hours: escalationHours,
-      max_open_old_tickets: MAX_OPEN_OLD_TICKETS,
+      max_open_old_tickets: MAX_UNACKNOWLEDGED_TICKETS,
     },
   });
   } catch (error) {
