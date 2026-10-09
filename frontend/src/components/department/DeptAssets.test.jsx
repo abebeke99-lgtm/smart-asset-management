@@ -148,13 +148,26 @@ describe('Department Assets', () => {
     expect(screen.getByText('Digital ID').parentElement).toHaveTextContent('DIG-120');
     expect(screen.getByText('RFID').parentElement).toHaveTextContent('RFID-120');
     expect(screen.getByText('Quantity').parentElement).toHaveTextContent('2 units');
-    expect(screen.getByText('Purchase Date').parentElement).toHaveTextContent('3/1/2024');
-    expect(screen.getByText('Warranty').parentElement).toHaveTextContent('3/1/2027');
+    expect(screen.getByText('Purchase Date').parentElement).toHaveTextContent(new Date(2024, 2, 1).toLocaleDateString());
+    expect(screen.getByText('Warranty').parentElement).toHaveTextContent(new Date(2027, 2, 1).toLocaleDateString());
     expect(screen.getAllByText('Computer Lab')).toHaveLength(2);
     expect(await screen.findByText('device-manual.pdf')).toBeInTheDocument();
     expect(await screen.findAllByText('Asset Assigned')).toHaveLength(2);
     expect(axios.get).toHaveBeenCalledWith('/api/assets/12/history');
     expect(axios.get).toHaveBeenCalledWith('/api/assets/12/documents');
+  });
+
+  it('preserves leap-day purchase dates from date-only API values', async () => {
+    const originalPurchaseDate = departmentAssets[0].purchaseDate;
+    departmentAssets[0].purchaseDate = '2024-02-29T00:00:00.000Z';
+    try {
+      renderAssets();
+      fireEvent.click(await screen.findByText('Engineering Laptop'));
+      expect(await screen.findByText('QR-120')).toBeInTheDocument();
+      expect(screen.getByText('Purchase Date').parentElement).toHaveTextContent(new Date(2024, 1, 29).toLocaleDateString());
+    } finally {
+      departmentAssets[0].purchaseDate = originalPurchaseDate;
+    }
   });
 
   it('resolves QR identifiers through the scoped lookup API', async () => {

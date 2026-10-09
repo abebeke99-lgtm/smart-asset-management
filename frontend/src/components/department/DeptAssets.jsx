@@ -30,6 +30,24 @@ import {
 
 const assetTypeOf = (asset) => asset.assetType || asset.asset_type || asset.specifications?.assetType || asset.specifications?.asset_type || '';
 
+const formatCalendarDate = (value) => {
+  if (typeof value === 'string') {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+    if (match) {
+      const [, year, month, day] = match;
+      const date = new Date(Number(year), Number(month) - 1, Number(day));
+      if (
+        date.getFullYear() === Number(year)
+        && date.getMonth() === Number(month) - 1
+        && date.getDate() === Number(day)
+      ) {
+        return date.toLocaleDateString();
+      }
+    }
+  }
+  return new Date(value).toLocaleDateString();
+};
+
 const DeptAssets = () => {
   const { user } = useAuth();
   const { language, theme } = useLanguage();
@@ -1349,7 +1367,7 @@ const DeptAssets = () => {
                 <div style={styles.detailLabel}>Purchase Date</div>
                 <div style={styles.detailValue}>
                   {selectedAsset.purchaseDate || selectedAsset.purchase_date
-                    ? new Date(selectedAsset.purchaseDate || selectedAsset.purchase_date).toLocaleDateString()
+                    ? formatCalendarDate(selectedAsset.purchaseDate || selectedAsset.purchase_date)
                     : 'Not recorded'}
                 </div>
               </div>
@@ -1371,7 +1389,7 @@ const DeptAssets = () => {
               </div>
               <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>Warranty</div>
-                <div style={styles.detailValue}>{selectedAsset.warranty_expiry || selectedAsset.warrantyExpiry ? new Date(selectedAsset.warranty_expiry || selectedAsset.warrantyExpiry).toLocaleDateString() : 'Not recorded'}</div>
+                <div style={styles.detailValue}>{selectedAsset.warranty_expiry || selectedAsset.warrantyExpiry ? formatCalendarDate(selectedAsset.warranty_expiry || selectedAsset.warrantyExpiry) : 'Not recorded'}</div>
               </div>
             </div>
 

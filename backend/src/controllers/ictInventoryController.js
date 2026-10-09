@@ -355,7 +355,7 @@ const readSpreadsheetRows = (file) => {
     }
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
       defval: '',
-      raw: false,
+      raw: true,
     });
     if (!rows.length) {
       const error = new Error('The uploaded worksheet does not contain inventory rows');
