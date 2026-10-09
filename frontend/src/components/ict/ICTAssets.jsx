@@ -1848,7 +1848,7 @@ export default function ICTAssets() {
         }
 
         .breadcrumb strong {
-          color: #2563EB;
+          color: #3074B3;
         }
 
         .page-header h1 {
@@ -1892,12 +1892,12 @@ export default function ICTAssets() {
 
         .primary-button {
           color: #FFFFFF;
-          background: #2563EB;
-          border-color: #2563EB;
+          background: #3074B3;
+          border-color: #3074B3;
         }
 
         .primary-button:hover {
-          background: #1D4ED8;
+          background: #245783;
         }
 
         .secondary-button {
@@ -1907,8 +1907,8 @@ export default function ICTAssets() {
         }
 
         .secondary-button:hover {
-          color: #2563EB;
-          border-color: #2563EB;
+          color: #3074B3;
+          border-color: #3074B3;
         }
 
         .danger-button {
@@ -1963,7 +1963,7 @@ export default function ICTAssets() {
         .filter-panel,
         .table-card {
           background: #FFFFFF;
-          border: 1px solid #E5E7EB;
+          border: 1px solid #E2E8F0;
           border-radius: 11px;
           box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
         }
@@ -1990,8 +1990,8 @@ export default function ICTAssets() {
         }
 
         .search-wrapper:focus-within {
-          border-color: #2563EB;
-          box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.08);
+          border-color: #3074B3;
+          box-shadow: 0 0 0 2px rgba(48, 116, 179, 0.08);
         }
 
         .search-wrapper input {
@@ -2032,9 +2032,9 @@ export default function ICTAssets() {
         }
 
         .filter-button.active {
-          border-color: #2563EB;
-          color: #2563EB;
-          background: #EFF6FF;
+          border-color: #3074B3;
+          color: #3074B3;
+          background: #EAF2FA;
         }
 
         .filter-count {
@@ -2045,7 +2045,7 @@ export default function ICTAssets() {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          background: #2563EB;
+          background: #3074B3;
           color: #FFFFFF;
           font-size: 10px;
         }
@@ -2107,8 +2107,8 @@ export default function ICTAssets() {
         .form-field input:focus,
         .form-field select:focus,
         .form-field textarea:focus {
-          border-color: #2563EB;
-          box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.08);
+          border-color: #3074B3;
+          box-shadow: 0 0 0 2px rgba(48, 116, 179, 0.08);
         }
 
         .field-hint {
@@ -2126,7 +2126,7 @@ export default function ICTAssets() {
           justify-content: space-between;
           gap: 15px;
           padding: 17px 18px;
-          border-bottom: 1px solid #E5E7EB;
+          border-bottom: 1px solid #E2E8F0;
         }
 
         .table-header h2 {
@@ -2170,8 +2170,8 @@ export default function ICTAssets() {
           padding: 11px 12px;
           text-align: left;
           white-space: nowrap;
-          background: #F9FAFB;
-          border-bottom: 1px solid #E5E7EB;
+          background: #F5F7FA;
+          border-bottom: 1px solid #E2E8F0;
           color: #6B7280;
           font-size: 10px;
           font-weight: 700;
@@ -2193,7 +2193,7 @@ export default function ICTAssets() {
         }
 
         .assets-table tbody tr:hover {
-          background: #F9FAFB;
+          background: #F5F7FA;
         }
 
         .asset-id {
@@ -2203,7 +2203,7 @@ export default function ICTAssets() {
         }
 
         .asset-id strong {
-          color: #2563EB;
+          color: #3074B3;
           font-size: 12px;
         }
 
@@ -2227,8 +2227,8 @@ export default function ICTAssets() {
           align-items: center;
           justify-content: center;
           border-radius: 7px;
-          background: #EFF6FF;
-          color: #2563EB;
+          background: #EAF2FA;
+          color: #3074B3;
         }
 
         .asset-name strong {
@@ -2260,8 +2260,8 @@ export default function ICTAssets() {
         }
 
         .status-badge.info {
-          color: #1D4ED8;
-          background: #DBEAFE;
+          color: #245783;
+          background: #EAF2FA;
         }
 
         .status-badge.warning {
@@ -2320,8 +2320,8 @@ export default function ICTAssets() {
         }
 
         .row-action:hover {
-          color: #2563EB;
-          background: #EFF6FF;
+          color: #3074B3;
+          background: #EAF2FA;
         }
 
         .row-action.danger:hover {
@@ -2341,7 +2341,7 @@ export default function ICTAssets() {
           width: 185px;
           padding: 5px;
           background: #FFFFFF;
-          border: 1px solid #E5E7EB;
+          border: 1px solid #E2E8F0;
           border-radius: 8px;
           box-shadow: 0 10px 25px rgba(17, 24, 39, 0.12);
         }
@@ -2405,7 +2405,7 @@ export default function ICTAssets() {
           justify-content: space-between;
           gap: 15px;
           padding: 13px 17px;
-          border-top: 1px solid #E5E7EB;
+          border-top: 1px solid #E2E8F0;
         }
 
         .pagination-info {
@@ -2444,8 +2444,8 @@ export default function ICTAssets() {
         }
 
         .pagination-controls button:not(:disabled):hover {
-          color: #2563EB;
-          border-color: #2563EB;
+          color: #3074B3;
+          border-color: #3074B3;
         }
 
         .modal-overlay {
@@ -2474,7 +2474,7 @@ export default function ICTAssets() {
           align-items: center;
           justify-content: space-between;
           padding: 17px 20px;
-          border-bottom: 1px solid #E5E7EB;
+          border-bottom: 1px solid #E2E8F0;
         }
 
         .modal-header h2 {
@@ -2516,7 +2516,7 @@ export default function ICTAssets() {
           grid-column: 1 / -1;
           margin: 15px 0 9px;
           padding-bottom: 7px;
-          border-bottom: 1px solid #E5E7EB;
+          border-bottom: 1px solid #E2E8F0;
           color: #111827;
           font-size: 13px;
           font-weight: 700;
@@ -2532,7 +2532,7 @@ export default function ICTAssets() {
           gap: 9px;
           margin-top: 10px;
           padding-top: 15px;
-          border-top: 1px solid #E5E7EB;
+          border-top: 1px solid #E2E8F0;
         }
 
         .confirmation-box,
@@ -2546,8 +2546,8 @@ export default function ICTAssets() {
         }
 
         .confirmation-box {
-          background: #EFF6FF;
-          color: #2563EB;
+          background: #EAF2FA;
+          color: #3074B3;
           border: 1px solid #BFDBFE;
         }
 
@@ -2584,9 +2584,9 @@ export default function ICTAssets() {
 
         .detail-item {
           padding: 11px;
-          border: 1px solid #E5E7EB;
+          border: 1px solid #E2E8F0;
           border-radius: 8px;
-          background: #F9FAFB;
+          background: #F5F7FA;
         }
 
         .detail-item label {
@@ -2624,10 +2624,10 @@ export default function ICTAssets() {
           border-radius: 10px;
           color: #9CA3AF;
           background:
-            linear-gradient(45deg, #F9FAFB 25%, transparent 25%),
-            linear-gradient(-45deg, #F9FAFB 25%, transparent 25%),
-            linear-gradient(45deg, transparent 75%, #F9FAFB 75%),
-            linear-gradient(-45deg, transparent 75%, #F9FAFB 75%);
+            linear-gradient(45deg, #F5F7FA 25%, transparent 25%),
+            linear-gradient(-45deg, #F5F7FA 25%, transparent 25%),
+            linear-gradient(45deg, transparent 75%, #F5F7FA 75%),
+            linear-gradient(-45deg, transparent 75%, #F5F7FA 75%);
           background-size: 18px 18px;
           background-position:
             0 0,
@@ -2658,7 +2658,7 @@ export default function ICTAssets() {
           grid-template-columns: 125px 1fr;
           gap: 16px;
           padding: 14px 0;
-          border-bottom: 1px solid #E5E7EB;
+          border-bottom: 1px solid #E2E8F0;
         }
 
         .history-item:last-child {
@@ -3043,7 +3043,7 @@ function SortIndicator({ field, sort }) {
     <span
       style={{
         marginLeft: 5,
-        color: "#2563EB",
+        color: "#3074B3",
       }}
     >
       {sort.direction === "asc"

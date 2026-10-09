@@ -73,7 +73,7 @@
 .preview-note{color:#6b7d91;font-size:13px}
 .preview-table-wrap{max-height:42vh;overflow:auto;border:1px solid #e4eaf0;border-radius:6px}
 .preview-table{min-width:720px}
-.preview-table th{position:sticky;top:0;background:#f8fafc;color:#687a8f;font-size:10px;text-transform:uppercase}
+.preview-table th{position:sticky;top:0;background:#F5F7FA;color:#687a8f;font-size:10px;text-transform:uppercase}
 .preview-table td{white-space:normal}
 .valid-label{color:#187346;font-weight:800}
 .invalid-label{color:#a52f32}

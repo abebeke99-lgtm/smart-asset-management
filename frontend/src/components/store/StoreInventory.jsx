@@ -72,7 +72,7 @@ export default function StoreInventory() {
   const value = (item, camel, snake) => asNumber(item[camel] ?? item[snake]);
   const status = (item) => String(item.assetStatus || item.status || '').replace(/_/g, ' ');
   const stockStatus = (item) => item.is_low_stock || value(item, 'availableQuantity', 'available_quantity') <= value(item, 'minimumQuantity', 'min_stock') ? value(item, 'availableQuantity', 'available_quantity') <= 0 ? t.critical : t.low : t.normal;
-  const chart = { labels: [t.available, t.reserved, t.assigned, t.damaged, t.missing], datasets: [{ label: t.quantity, data: [summary.available, summary.reserved, summary.assigned, summary.damaged, summary.missing], backgroundColor: ['#0ea5e9', '#7c3aed', '#2563eb', '#f59e0b', '#ef4444'], borderRadius: 5 }] };
+  const chart = { labels: [t.available, t.reserved, t.assigned, t.damaged, t.missing], datasets: [{ label: t.quantity, data: [summary.available, summary.reserved, summary.assigned, summary.damaged, summary.missing], backgroundColor: ['#0ea5e9', '#7c3aed', '#3074B3', '#D97706', '#ef4444'], borderRadius: 5 }] };
 
   const exportInventory = async (format) => {
     setExporting(true);

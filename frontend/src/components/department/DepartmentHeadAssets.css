@@ -28,7 +28,7 @@
 .dha-header-actions > button, .dha-export-menu > button, .dha-page button.primary {
   min-height: 40px; padding: 8px 14px; border: 1px solid #d8e4f1; border-radius: 8px; background: #fff; color: #183757; font-weight: 700;
 }
-.dha-header-actions > button.primary, .dha-page button.primary { border-color: #2563eb; background: #2563eb; color: #fff; }
+.dha-header-actions > button.primary, .dha-page button.primary { border-color: #3074B3; background: #3074B3; color: #fff; }
 .dha-filters { display: grid; grid-template-columns: minmax(240px, 2fr) repeat(4, minmax(150px, 1fr)); gap: 10px; padding: 14px; margin-bottom: 14px; border: 1px solid #e2eaf3; border-radius: 12px; background: #fff; }
 .dha-filters input, .dha-filters select, .dha-edit-form input, .dha-edit-form select, .dha-edit-form textarea, .dha-registration-form input, .dha-registration-form select, .dha-registration-form textarea { width: 100%; min-width: 0; min-height: 40px; padding: 8px 10px; border: 1px solid #d5e1ee; border-radius: 7px; background: #fff; color: #172b45; }
 .dha-table-wrap { overflow: auto; border: 1px solid #e2eaf3; border-radius: 12px; background: #fff; }
@@ -48,7 +48,7 @@
 .dha-export-menu { position: relative; }
 .dha-export-menu [role="menu"] { position: absolute; z-index: 2; right: 0; display: grid; min-width: 160px; padding: 5px; border: 1px solid #d8e4f1; border-radius: 8px; background: #fff; box-shadow: 0 8px 20px #18375722; }
 .dha-export-menu [role="menuitem"] { border: 0; border-radius: 5px; padding: 9px; background: transparent; text-align: left; }
-.dha-export-menu [role="menuitem"]:hover { background: #eff6ff; }
+.dha-export-menu [role="menuitem"]:hover { background: #EAF2FA; }
 .dha-error { padding: 16px; border: 1px solid #fecaca; border-radius: 10px; background: #fff7f7; color: #a32222; }
 .dha-overlay { position: fixed; z-index: 1000; inset: 0; display: flex; justify-content: flex-end; background: #0f172a77; }
 .dha-drawer { display: flex; flex-direction: column; width: min(720px, 100%); height: 100%; background: #fff; box-shadow: -12px 0 32px #0f172a22; }
@@ -62,7 +62,7 @@
 .dha-detail-grid dd { overflow-wrap: anywhere; margin: 5px 0 0; font-weight: 600; }
 .dha-qr { display: flex; justify-content: center; padding: 16px; }
 .dha-detail-links { display: flex; gap: 16px; padding: 12px 0; }
-.dha-detail-links a { color: #1d4ed8; font-weight: 700; }
+.dha-detail-links a { color: #245783; font-weight: 700; }
 .dha-edit-section { padding-top: 14px; border-top: 1px solid #e2eaf3; }
 .dha-edit-section h3 { font-size: 1rem; }
 .dha-edit-form, .dha-registration-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }

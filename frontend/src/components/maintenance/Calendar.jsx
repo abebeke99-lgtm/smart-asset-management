@@ -664,13 +664,13 @@ export default function Calendar() {
         }
 
         .btn-primary {
-          border-color: #2563eb;
-          background: #2563eb;
+          border-color: #3074B3;
+          background: #3074B3;
           color: white;
         }
 
         .btn-primary:hover {
-          background: #1d4ed8;
+          background: #245783;
         }
 
         .summary-grid {
@@ -738,8 +738,8 @@ export default function Calendar() {
 
         .search-box input:focus,
         .filter-select:focus {
-          border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+          border-color: #3074B3;
+          box-shadow: 0 0 0 3px rgba(48, 116, 179, 0.1);
         }
 
         .filter-select {
@@ -867,7 +867,7 @@ export default function Calendar() {
         }
 
         .today .day-number {
-          background: #2563eb;
+          background: #3074B3;
           color: white;
         }
 
@@ -881,8 +881,8 @@ export default function Calendar() {
           width: 100%;
           text-align: left;
           border: none;
-          border-left: 3px solid #2563eb;
-          background: #eff6ff;
+          border-left: 3px solid #3074B3;
+          background: #EAF2FA;
           border-radius: 5px;
           padding: 5px 6px;
           cursor: pointer;
@@ -894,8 +894,8 @@ export default function Calendar() {
         }
 
         .event-chip.event-preventive {
-          border-left-color: #2563eb;
-          background: #eff6ff;
+          border-left-color: #3074B3;
+          background: #EAF2FA;
         }
 
         .event-chip.event-work_order {
@@ -1015,8 +1015,8 @@ export default function Calendar() {
         }
 
         .type-preventive {
-          background: #dbeafe;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
         }
 
         .type-work_order {
@@ -1040,8 +1040,8 @@ export default function Calendar() {
         }
 
         .status-blue {
-          background: #dbeafe;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
         }
 
         .status-yellow {
@@ -1103,7 +1103,7 @@ export default function Calendar() {
         }
 
         .dot-preventive {
-          background: #2563eb;
+          background: #3074B3;
         }
 
         .dot-work {

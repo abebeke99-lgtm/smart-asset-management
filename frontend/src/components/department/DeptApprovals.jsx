@@ -331,7 +331,7 @@ const DeptApprovals = () => {
       padding: '8px 16px',
       borderRadius: '8px',
       border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`,
-      background: isDark ? '#141e2d' : '#f7fafc',
+      background: isDark ? '#141e2d' : '#F5F7FA',
       color: isDark ? '#8896b0' : '#4a5568',
       cursor: 'pointer',
       fontSize: '0.85rem'
@@ -350,7 +350,7 @@ const DeptApprovals = () => {
       color: isDark ? '#c8dcf5' : '#1a365d',
       fontWeight: 600,
       borderBottom: `2px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      background: isDark ? '#141e2d' : '#f7fafc',
+      background: isDark ? '#141e2d' : '#F5F7FA',
       fontSize: '0.75rem',
       textTransform: 'uppercase',
       letterSpacing: '0.5px',
@@ -451,7 +451,7 @@ const DeptApprovals = () => {
     },
     detailItem: {
       padding: '12px',
-      background: isDark ? '#141e2d' : '#f7fafc',
+      background: isDark ? '#141e2d' : '#F5F7FA',
       borderRadius: '8px'
     },
     detailLabel: {
@@ -468,7 +468,7 @@ const DeptApprovals = () => {
     },
     descriptionBox: {
       padding: '12px',
-      background: isDark ? '#141e2d' : '#f7fafc',
+      background: isDark ? '#141e2d' : '#F5F7FA',
       borderRadius: '8px',
       marginBottom: '20px',
       color: isDark ? '#c8dcf5' : '#1a365d',
@@ -556,14 +556,14 @@ const DeptApprovals = () => {
     },
     approvalRecord: {
       padding: '16px',
-      background: isDark ? '#141e2d' : '#f7fafc',
+      background: isDark ? '#141e2d' : '#F5F7FA',
       borderRadius: '8px',
       marginTop: '12px',
       borderLeft: `4px solid ${isDark ? '#48bb78' : '#48bb78'}`
     },
     rejectionRecord: {
       padding: '16px',
-      background: isDark ? '#141e2d' : '#f7fafc',
+      background: isDark ? '#141e2d' : '#F5F7FA',
       borderRadius: '8px',
       marginTop: '12px',
       borderLeft: `4px solid ${isDark ? '#fc8181' : '#fc8181'}`

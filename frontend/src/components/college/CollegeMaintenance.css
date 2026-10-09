@@ -36,7 +36,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #2563eb;
+  color: #3074B3;
 }
 
 .college-maintenance-refresh,
@@ -59,7 +59,7 @@
   gap: 8px;
   height: 42px;
   padding: 0 16px;
-  background: #e0f2fe;
+  background: #EAF2FA;
   color: #0f172a;
   font-weight: 600;
 }
@@ -71,7 +71,7 @@
 }
 
 .college-maintenance-stat {
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #F5F7FA 100%);
   border: 1px solid #e2e8f0;
   border-radius: 16px;
   padding: 18px 16px;
@@ -114,7 +114,7 @@
   height: 42px;
   border: 1px solid #cbd5e1;
   border-radius: 10px;
-  background: #f8fafc;
+  background: #F5F7FA;
   padding: 0 12px;
   color: #0f172a;
 }
@@ -175,7 +175,7 @@
 
 .college-maintenance-table-wrap th {
   color: #475569;
-  background: #f8fafc;
+  background: #F5F7FA;
   font-size: 0.75rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -204,7 +204,7 @@
   text-transform: capitalize;
 }
 
-.status-open { background: #dbeafe; color: #1d4ed8; }
+.status-open { background: #EAF2FA; color: #245783; }
 .status-progress { background: #fef3c7; color: #b45309; }
 .status-completed { background: #dcfce7; color: #166534; }
 .status-cancelled { background: #fee2e2; color: #b91c1c; }
@@ -213,7 +213,7 @@
 
 .priority-critical { background: #fee2e2; color: #b91c1c; }
 .priority-high { background: #fef3c7; color: #b45309; }
-.priority-medium { background: #dbeafe; color: #1d4ed8; }
+.priority-medium { background: #EAF2FA; color: #245783; }
 .priority-low { background: #dcfce7; color: #166534; }
 .priority-default { background: #e2e8f0; color: #334155; }
 
@@ -223,8 +223,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #eff6ff;
-  color: #2563eb;
+  background: #EAF2FA;
+  color: #3074B3;
 }
 
 .college-maintenance-empty {
@@ -247,7 +247,7 @@
 }
 
 .college-maintenance-pagination button {
-  background: #f8fafc;
+  background: #F5F7FA;
   border: 1px solid #cbd5e1;
   color: #0f172a;
   padding: 9px 14px;
@@ -298,7 +298,7 @@
   height: 38px;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  background: #f8fafc;
+  background: #F5F7FA;
   cursor: pointer;
 }
 
@@ -315,7 +315,7 @@
   padding: 12px 14px;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  background: #f8fafc;
+  background: #F5F7FA;
 }
 
 .college-maintenance-detail-item span {

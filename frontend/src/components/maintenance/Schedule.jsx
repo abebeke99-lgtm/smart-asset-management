@@ -156,7 +156,7 @@ const styles = {
   th: {
     textAlign: "left",
     padding: "13px 15px",
-    background: "#f8fafc",
+    background: "#F5F7FA",
     borderBottom: "1px solid #e5e9f0",
     color: "#667085",
     fontSize: "12px",
@@ -356,7 +356,7 @@ const styles = {
   },
 
   infoBox: {
-    background: "#f8fafc",
+    background: "#F5F7FA",
     border: "1px solid #e8edf3",
     borderRadius: "10px",
     padding: "12px",

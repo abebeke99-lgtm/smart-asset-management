@@ -646,7 +646,7 @@ export default function InfrastructureReports() {
         .reports-page {
           min-height: 100vh;
           padding: 24px;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           font-family: Inter, ui-sans-serif, system-ui,
             -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -678,7 +678,7 @@ export default function InfrastructureReports() {
           background: linear-gradient(
             135deg,
             #0ea5e9,
-            #2563eb
+            #3074B3
           );
           color: white;
           display: flex;
@@ -687,7 +687,7 @@ export default function InfrastructureReports() {
           flex-shrink: 0;
           box-shadow:
             0 10px 25px
-            rgba(37,99,235,.18);
+            rgba(48, 116, 179,.18);
         }
 
         .page-header h1 {
@@ -755,7 +755,7 @@ export default function InfrastructureReports() {
         }
 
         .btn-secondary:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .btn-success {
@@ -906,8 +906,8 @@ export default function InfrastructureReports() {
         }
 
         .metric-card.blue .metric-icon {
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
         }
 
         .metric-card.green .metric-icon {
@@ -1011,7 +1011,7 @@ export default function InfrastructureReports() {
           background: linear-gradient(
             90deg,
             #0ea5e9,
-            #2563eb
+            #3074B3
           );
         }
 
@@ -1034,7 +1034,7 @@ export default function InfrastructureReports() {
           padding: 13px;
           border: 1px solid #e2e8f0;
           border-radius: 11px;
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .status-box-label {
@@ -1068,7 +1068,7 @@ export default function InfrastructureReports() {
 
         .quick-card:hover {
           border-color: #bae6fd;
-          background: #f0f9ff;
+          background: #F5F7FA;
           transform: translateY(-1px);
         }
 
@@ -1076,8 +1076,8 @@ export default function InfrastructureReports() {
           width: 32px;
           height: 32px;
           border-radius: 9px;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1112,7 +1112,7 @@ export default function InfrastructureReports() {
         th {
           padding: 12px 14px;
           text-align: left;
-          background: #f8fafc;
+          background: #F5F7FA;
           border-bottom: 1px solid #e2e8f0;
           color: #64748b;
           font-size: 9px;
@@ -1158,8 +1158,8 @@ export default function InfrastructureReports() {
         }
 
         .badge.info {
-          color: #1d4ed8;
-          background: #dbeafe;
+          color: #245783;
+          background: #EAF2FA;
         }
 
         .badge.default {
@@ -1268,7 +1268,7 @@ export default function InfrastructureReports() {
 
         .info-item {
           padding: 12px;
-          background: #f8fafc;
+          background: #F5F7FA;
           border: 1px solid #e2e8f0;
           border-radius: 10px;
         }

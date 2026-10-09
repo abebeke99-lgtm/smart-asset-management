@@ -865,13 +865,13 @@ export default function SpareParts() {
         }
 
         .btn-primary {
-          background: #2563eb;
-          border-color: #2563eb;
+          background: #3074B3;
+          border-color: #3074B3;
           color: white;
         }
 
         .btn-primary:hover {
-          background: #1d4ed8;
+          background: #245783;
         }
 
         .btn-danger {
@@ -977,10 +977,10 @@ export default function SpareParts() {
         .input:focus,
         .select:focus,
         .textarea:focus {
-          border-color: #2563eb;
+          border-color: #3074B3;
           box-shadow:
             0 0 0 3px
-            rgba(37, 99, 235, 0.1);
+            rgba(48, 116, 179, 0.1);
         }
 
         .filter-select {
@@ -1068,8 +1068,8 @@ export default function SpareParts() {
           width: 38px;
           height: 38px;
           border-radius: 9px;
-          background: #eff6ff;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1117,7 +1117,7 @@ export default function SpareParts() {
 
         .stock-bar-fill {
           height: 100%;
-          background: #2563eb;
+          background: #3074B3;
           border-radius: 999px;
         }
 
@@ -1306,8 +1306,8 @@ export default function SpareParts() {
           width: 55px;
           height: 55px;
           border-radius: 12px;
-          background: #eff6ff;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
           display: flex;
           align-items: center;
           justify-content: center;

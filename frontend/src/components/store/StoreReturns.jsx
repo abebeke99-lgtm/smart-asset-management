@@ -262,7 +262,7 @@ const StoreReturns = () => {
               ...tab,
               background:
                 activeTab === id
-                  ? '#2563eb'
+                  ? '#3074B3'
                   : dark
                     ? '#22334d'
                     : '#f1f5f9',
@@ -557,7 +557,7 @@ function Stat({ label, value, dark }) {
         borderRadius: 9,
         background: dark
           ? '#22334d'
-          : '#f8fafc',
+          : '#F5F7FA',
         minWidth: 75
       }}
     >
@@ -619,7 +619,7 @@ const header = {
 
 const title = (dark) => ({
   margin: 0,
-  color: dark ? '#f8fafc' : '#172033'
+  color: dark ? '#F5F7FA' : '#172033'
 });
 
 const sub = (dark) => ({
@@ -649,7 +649,7 @@ const tab = {
 
 const heading = (dark) => ({
   marginTop: 0,
-  color: dark ? '#f8fafc' : '#172033'
+  color: dark ? '#F5F7FA' : '#172033'
 });
 
 const toolbar = {
@@ -681,7 +681,7 @@ const table = {
 const th = (dark) => ({
   textAlign: 'left',
   padding: 12,
-  background: dark ? '#0f1a2b' : '#f8fafc',
+  background: dark ? '#0f1a2b' : '#F5F7FA',
   color: dark ? '#cbd5e1' : '#475569',
   borderBottom: `2px solid ${dark ? '#30445f' : '#e2e8f0'}`
 });
@@ -708,7 +708,7 @@ const action = {
   border: 0,
   borderRadius: 7,
   padding: '7px 10px',
-  background: '#2563eb',
+  background: '#3074B3',
   color: '#fff',
   cursor: 'pointer',
   fontWeight: 700
@@ -720,7 +720,7 @@ const assetInfo = (dark) => ({
   alignItems: 'center',
   padding: 15,
   borderRadius: 10,
-  background: dark ? '#0f1a2b' : '#f8fafc',
+  background: dark ? '#0f1a2b' : '#F5F7FA',
   marginBottom: 20
 });
 
@@ -762,7 +762,7 @@ const primary = {
   border: 0,
   borderRadius: 8,
   padding: '10px 16px',
-  background: '#2563eb',
+  background: '#3074B3',
   color: '#fff',
   cursor: 'pointer',
   fontWeight: 700

@@ -250,7 +250,7 @@ const StoreIssue = () => {
               ...tab,
               background:
                 activeTab === id
-                  ? '#2563eb'
+                  ? '#3074B3'
                   : dark
                     ? '#22334d'
                     : '#f1f5f9',
@@ -287,7 +287,7 @@ const StoreIssue = () => {
                 ...targetButton,
                 background:
                   targetType === 'department'
-                    ? '#2563eb'
+                    ? '#3074B3'
                     : dark
                       ? '#22334d'
                       : '#f1f5f9',
@@ -309,7 +309,7 @@ const StoreIssue = () => {
                 ...targetButton,
                 background:
                   targetType === 'staff'
-                    ? '#2563eb'
+                    ? '#3074B3'
                     : dark
                       ? '#22334d'
                       : '#f1f5f9',
@@ -648,14 +648,14 @@ function AssignmentTable({
                           ).toLowerCase() ===
                           'active'
                             ? '#dcfce7'
-                            : '#dbeafe',
+                            : '#EAF2FA',
                         color:
                           String(
                             item.status || ''
                           ).toLowerCase() ===
                           'active'
                             ? '#166534'
-                            : '#1d4ed8',
+                            : '#245783',
                         fontSize: 12,
                         fontWeight: 700
                       }}
@@ -691,7 +691,7 @@ const header = {
 
 const title = (dark) => ({
   margin: 0,
-  color: dark ? '#f8fafc' : '#172033'
+  color: dark ? '#F5F7FA' : '#172033'
 });
 
 const sub = (dark) => ({
@@ -702,7 +702,7 @@ const sub = (dark) => ({
 const stockBadge = (dark) => ({
   padding: '10px 15px',
   borderRadius: 10,
-  background: dark ? '#20334d' : '#e0f2fe',
+  background: dark ? '#20334d' : '#EAF2FA',
   color: dark ? '#bfdbfe' : '#075985',
   fontWeight: 700
 });
@@ -746,7 +746,7 @@ const label = (dark) => ({
 
 const heading = (dark) => ({
   marginTop: 0,
-  color: dark ? '#f8fafc' : '#172033'
+  color: dark ? '#F5F7FA' : '#172033'
 });
 
 const primary = {
@@ -754,7 +754,7 @@ const primary = {
   border: 0,
   borderRadius: 8,
   padding: '12px 18px',
-  background: '#2563eb',
+  background: '#3074B3',
   color: '#fff',
   fontWeight: 800,
   cursor: 'pointer'
@@ -792,7 +792,7 @@ const table = {
 const th = (dark) => ({
   textAlign: 'left',
   padding: 12,
-  background: dark ? '#0f1a2b' : '#f8fafc',
+  background: dark ? '#0f1a2b' : '#F5F7FA',
   color: dark ? '#cbd5e1' : '#475569',
   borderBottom: `2px solid ${dark ? '#30445f' : '#e2e8f0'}`
 });

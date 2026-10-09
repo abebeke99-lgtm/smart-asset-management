@@ -2,15 +2,15 @@
 .college-locations-heading { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
 .college-locations-eyebrow { color: #0369a1; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .college-locations-subtitle { margin: 5px 0 0; color: #64748b; font-size: 14px; }
-.college-locations-college { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 8px; margin-left: auto; padding: 10px 14px; border: 1px solid #bae6fd; border-radius: 10px; background: #eff6ff; }
+.college-locations-college { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 8px; margin-left: auto; padding: 10px 14px; border: 1px solid #bae6fd; border-radius: 10px; background: #EAF2FA; }
 .college-locations-college svg { grid-row: span 2; color: #0284c7; }
 .college-locations-college span { font-size: 13px; font-weight: 700; }
 .college-locations-college small { color: #64748b; font-size: 11px; }
-.college-locations-refresh, .college-locations-view, .college-locations-state button, .college-locations-pagination button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1e3a8a; cursor: pointer; font: inherit; }
+.college-locations-refresh, .college-locations-view, .college-locations-state button, .college-locations-pagination button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #245783; cursor: pointer; font: inherit; }
 .college-locations-refresh { padding: 9px 12px; font-size: 13px; font-weight: 700; }
 .college-locations-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
 .college-locations-summary-card { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 12px; padding: 17px 20px; border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; box-shadow: 0 4px 12px rgba(15, 23, 42, .05); }
-.college-locations-summary-card span { grid-row: span 2; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; color: #0284c7; background: #e0f2fe; }
+.college-locations-summary-card span { grid-row: span 2; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; color: #0284c7; background: #EAF2FA; }
 .college-locations-summary-card strong { font-size: 25px; line-height: 1; }
 .college-locations-summary-card small { color: #64748b; font-size: 12px; }
 .college-locations-card { border: 1px solid #e2eaf0; border-radius: 14px; background: #fff; box-shadow: 0 4px 12px rgba(15, 23, 42, .05); }

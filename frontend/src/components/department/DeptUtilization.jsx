@@ -65,7 +65,7 @@ const DeptUtilization = () => {
   }, {}), [assets]);
 
   const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } };
-  const colors = ['#0ea5e9', '#2563eb', '#14b8a6', '#f59e0b', '#ef4444', '#64748b', '#8b5cf6'];
+  const colors = ['#0ea5e9', '#3074B3', '#14b8a6', '#D97706', '#ef4444', '#64748b', '#8b5cf6'];
 
   const updateFilter = (name, value) => setFilters((current) => ({ ...current, [name]: value }));
   const clearFilters = () => setFilters({ search: '', category: '', location: '', status: '', dateFrom: '', dateTo: '' });

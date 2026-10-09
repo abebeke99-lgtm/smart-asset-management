@@ -1,8 +1,8 @@
 .admin-roles-page {
-  --roles-blue: #2563eb;
+  --roles-blue: #3074B3;
   --roles-cyan: #0ea5d9;
   --roles-navy: #111827;
-  --roles-gold: #f4c542;
+  --roles-gold: #D97706;
   --roles-bg: #f3f6f9;
   --roles-border: #dbe3ec;
   --roles-muted: #64748b;
@@ -52,7 +52,7 @@
 }
 
 .admin-roles-button-primary:hover:not(:disabled) {
-  background: #1d4ed8;
+  background: #245783;
 }
 
 .admin-roles-button-secondary {
@@ -205,12 +205,12 @@
 }
 
 .admin-roles-list-item:hover {
-  background: #f8fafc;
+  background: #F5F7FA;
 }
 
 .admin-roles-list-item.is-selected {
   border-color: #bfdbfe;
-  background: #eff6ff;
+  background: #EAF2FA;
 }
 
 .admin-roles-role-mark {
@@ -320,7 +320,7 @@
   position: sticky;
   z-index: 1;
   top: 0;
-  background: #f8fafc;
+  background: #F5F7FA;
   color: #475569;
   font-size: 0.76rem;
   font-weight: 700;
@@ -340,7 +340,7 @@
   border-radius: 5px;
   padding: 3px 6px;
   background: #f1f5f9;
-  color: #1e3a8a;
+  color: #245783;
   font-size: 0.82rem;
 }
 

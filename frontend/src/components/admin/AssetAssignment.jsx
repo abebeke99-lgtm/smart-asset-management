@@ -709,7 +709,7 @@ export default function AssetAssignment() {
         .primary-button {
           border: 0;
           border-radius: 8px;
-          background: #2563eb;
+          background: #3074B3;
           color: white;
           padding: 11px 17px;
           font-size: 14px;
@@ -718,7 +718,7 @@ export default function AssetAssignment() {
         }
 
         .primary-button:hover {
-          background: #1d4ed8;
+          background: #245783;
         }
 
         .summary-grid {
@@ -779,8 +779,8 @@ export default function AssetAssignment() {
         .filter-select:focus,
         .form-input:focus,
         .form-textarea:focus {
-          border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+          border-color: #3074B3;
+          box-shadow: 0 0 0 3px rgba(48, 116, 179, 0.1);
         }
 
         .refresh-button {
@@ -813,7 +813,7 @@ export default function AssetAssignment() {
 
         .assignment-table th {
           padding: 13px 15px;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #475569;
           font-size: 12px;
           font-weight: 700;
@@ -834,7 +834,7 @@ export default function AssetAssignment() {
         }
 
         .asset-id {
-          color: #1d4ed8;
+          color: #245783;
           font-weight: 700;
         }
 
@@ -874,8 +874,8 @@ export default function AssetAssignment() {
         }
 
         .status-default {
-          background: #eff6ff;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
         }
 
         .actions {
@@ -896,13 +896,13 @@ export default function AssetAssignment() {
         }
 
         .action-button:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .action-button.primary {
-          background: #eff6ff;
+          background: #EAF2FA;
           border-color: #bfdbfe;
-          color: #1d4ed8;
+          color: #245783;
         }
 
         .action-button.return {
@@ -1605,7 +1605,7 @@ export default function AssetAssignment() {
             <div className="form">
               <div
                 style={{
-                  background: "#f8fafc",
+                  background: "#F5F7FA",
                   borderRadius: 8,
                   padding: 14,
                   marginBottom: 18,

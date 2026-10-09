@@ -789,7 +789,7 @@ export default function FinanceNotifications() {
 
         .finance-notifications-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           font-family: Inter, ui-sans-serif, system-ui,
             -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -837,7 +837,7 @@ export default function FinanceNotifications() {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0284c7;
         }
 
@@ -957,7 +957,7 @@ export default function FinanceNotifications() {
           width: 36px;
           height: 36px;
           border-radius: 10px;
-          background: #f0f9ff;
+          background: #F5F7FA;
           color: #0284c7;
           display: flex;
           align-items: center;
@@ -1088,18 +1088,18 @@ export default function FinanceNotifications() {
         }
 
         .notification-row:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .notification-row.unread {
-          background: #f0f9ff;
+          background: #F5F7FA;
         }
 
         .notification-icon {
           width: 42px;
           height: 42px;
           border-radius: 11px;
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0284c7;
           display: flex;
           align-items: center;
@@ -1163,7 +1163,7 @@ export default function FinanceNotifications() {
         }
 
         .priority-normal {
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #075985;
         }
 
@@ -1202,7 +1202,7 @@ export default function FinanceNotifications() {
         .icon-btn:hover {
           color: #0284c7;
           border-color: #7dd3fc;
-          background: #f0f9ff;
+          background: #F5F7FA;
         }
 
         .icon-btn.delete:hover {
@@ -1323,7 +1323,7 @@ export default function FinanceNotifications() {
 
         .modal-message {
           padding: 15px;
-          background: #f8fafc;
+          background: #F5F7FA;
           border: 1px solid #e2e8f0;
           border-radius: 10px;
           color: #334155;

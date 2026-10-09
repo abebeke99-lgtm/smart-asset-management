@@ -43,8 +43,8 @@ const MaintAssigned = () => {
   }, []);
 
   const getPriorityColor = (priority) => {
-    const colors = { 'Critical': '#fee2e2', 'High': '#fef3c7', 'Medium': '#dbeafe', 'Low': '#dcfce7' };
-    return colors[priority] || '#e5e7eb';
+    const colors = { 'Critical': '#fee2e2', 'High': '#fef3c7', 'Medium': '#EAF2FA', 'Low': '#dcfce7' };
+    return colors[priority] || '#E2E8F0';
   };
 
   const getPriorityTextColor = (priority) => {
@@ -71,7 +71,7 @@ const MaintAssigned = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '24px' }}>
         {statusGroups.map(status => (
           <div key={status} style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
-            <div style={{ fontSize: '1.6rem', fontWeight: 'bold', color: '#2864E8' }}>{countByStatus[status] || 0}</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 'bold', color: '#3074B3' }}>{countByStatus[status] || 0}</div>
             <div style={{ fontSize: '0.85rem', color: isDark ? '#94a3b8' : '#4a5568' }}>{status}</div>
           </div>
         ))}
@@ -80,7 +80,7 @@ const MaintAssigned = () => {
       {/* Kanban-style view by status */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
         {statusGroups.map(status => (
-          <div key={status} style={{ backgroundColor: isDark ? '#0f172a' : '#f8fafc', border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '16px' }}>
+          <div key={status} style={{ backgroundColor: isDark ? '#0f172a' : '#F5F7FA', border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '16px' }}>
             <h3 style={{ margin: '0 0 12px', fontSize: '1.1rem', fontWeight: '600' }}>{status}</h3>
             <div style={{ display: 'grid', gap: '12px' }}>
               {tasks.filter(t => t.status === status).map(task => (
@@ -97,7 +97,7 @@ const MaintAssigned = () => {
                   <div style={{ marginBottom: '8px' }}>
                     <div style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Progress: {task.progress}%</div>
                     <div style={{ width: '100%', height: '6px', backgroundColor: isDark ? '#334155' : '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{ width: `${task.progress}%`, height: '100%', backgroundColor: task.status === 'Completed' ? '#10b981' : '#2864E8' }} />
+                      <div style={{ width: `${task.progress}%`, height: '100%', backgroundColor: task.status === 'Completed' ? '#10b981' : '#3074B3' }} />
                     </div>
                   </div>
                 </div>

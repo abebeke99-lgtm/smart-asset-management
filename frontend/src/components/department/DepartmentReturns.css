@@ -1,12 +1,12 @@
 .department-returns-page{max-width:1450px;margin:auto;padding:28px;color:#172554}
 .department-returns-header{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:22px}
-.department-returns-header p{margin:0;color:#2563eb;text-transform:uppercase;letter-spacing:.08em;font-size:.72rem;font-weight:800}
+.department-returns-header p{margin:0;color:#3074B3;text-transform:uppercase;letter-spacing:.08em;font-size:.72rem;font-weight:800}
 .department-returns-header h1{margin:5px 0 7px}
 .department-returns-header span{color:#64748b}
 .department-returns-actions{display:flex;gap:9px}
 .department-returns-page button{border:1px solid #cbd5e1;border-radius:6px;padding:9px 13px;background:#fff;color:#334155;font-weight:700;cursor:pointer}
 .department-returns-page button:disabled{opacity:.55;cursor:not-allowed}
-.department-returns-primary{background:#2563eb!important;border-color:#2563eb!important;color:#fff!important}
+.department-returns-primary{background:#3074B3!important;border-color:#3074B3!important;color:#fff!important}
 .department-returns-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:18px;box-shadow:0 3px 12px #1725540b}
 .department-returns-card h2{margin:0 0 15px;font-size:1.1rem}
 .department-returns-table-wrap{overflow-x:auto}

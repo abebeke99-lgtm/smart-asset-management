@@ -1240,7 +1240,7 @@ export default function DisposalFinancialRecords() {
               <thead>
                 <tr
                   style={{
-                    background: "#f8fafc",
+                    background: "#F5F7FA",
                   }}
                 >
                   <Th>Asset</Th>
@@ -2036,8 +2036,8 @@ function Summary({
           width: "40px",
           height: "40px",
           borderRadius: "9px",
-          background: "#eff6ff",
-          color: "#2563eb",
+          background: "#EAF2FA",
+          color: "#3074B3",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -2498,7 +2498,7 @@ const tdStyle = {
 
 const primaryButton = {
   border: "none",
-  background: "#2563eb",
+  background: "#3074B3",
   color: "#fff",
   padding: "10px 15px",
   borderRadius: "8px",

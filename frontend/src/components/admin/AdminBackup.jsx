@@ -123,8 +123,8 @@ const statusStyle = (status) => {
     value === "processing"
   ) {
     return {
-      background: "#EFF6FF",
-      color: "#1D4ED8",
+      background: "#EAF2FA",
+      color: "#245783",
     };
   }
 
@@ -1359,7 +1359,7 @@ const styles = {
   primaryButton: {
     border: "none",
     borderRadius: "8px",
-    background: "#2563EB",
+    background: "#3074B3",
     color: "#FFFFFF",
     padding: "11px 18px",
     fontSize: "14px",
@@ -1425,7 +1425,7 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     borderRadius: "9px",
-    background: "#EFF6FF",
+    background: "#EAF2FA",
     fontSize: "20px",
   },
 
@@ -1530,7 +1530,7 @@ const styles = {
   infoBox: {
     padding: "14px",
     borderRadius: "8px",
-    background: "#F8FAFC",
+    background: "#F5F7FA",
     border: "1px solid #E2E8F0",
     color: "#475569",
     fontSize: "13px",
@@ -1543,7 +1543,7 @@ const styles = {
     border: "none",
     borderRadius: "8px",
     padding: "12px",
-    background: "#2563EB",
+    background: "#3074B3",
     color: "#FFFFFF",
     fontSize: "14px",
     fontWeight: 600,
@@ -1567,8 +1567,8 @@ const styles = {
     height: "28px",
     flexShrink: 0,
     borderRadius: "50%",
-    background: "#EFF6FF",
-    color: "#2563EB",
+    background: "#EAF2FA",
+    color: "#3074B3",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -1630,7 +1630,7 @@ const styles = {
 
   th: {
     padding: "12px 16px",
-    background: "#F8FAFC",
+    background: "#F5F7FA",
     borderBottom:
       "1px solid #E2E8F0",
     color: "#64748B",
@@ -1703,8 +1703,8 @@ const styles = {
   restoreButton: {
     border: "1px solid #BFDBFE",
     borderRadius: "6px",
-    background: "#EFF6FF",
-    color: "#1D4ED8",
+    background: "#EAF2FA",
+    color: "#245783",
     padding: "6px 9px",
     fontSize: "11px",
     fontWeight: 600,
@@ -1738,7 +1738,7 @@ const styles = {
     height: "30px",
     border: "3px solid #E2E8F0",
     borderTop:
-      "3px solid #2563EB",
+      "3px solid #3074B3",
     borderRadius: "50%",
     animation:
       "spin 0.8s linear infinite",

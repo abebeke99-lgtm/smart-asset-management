@@ -902,7 +902,7 @@ const styles = {
   primaryButton: {
     border: "none",
     borderRadius: "8px",
-    background: "#2563EB",
+    background: "#3074B3",
     color: "#FFFFFF",
     padding: "11px 18px",
     fontSize: "14px",
@@ -981,7 +981,7 @@ const styles = {
   },
 
   navButtonActive: {
-    background: "#2563EB",
+    background: "#3074B3",
     color: "#FFFFFF",
   },
 
@@ -1117,7 +1117,7 @@ const styles = {
   },
 
   sliderActive: {
-    background: "#2563EB",
+    background: "#3074B3",
   },
 
   warningBox: {
@@ -1149,7 +1149,7 @@ const styles = {
     border:
       "3px solid #E2E8F0",
     borderTop:
-      "3px solid #2563EB",
+      "3px solid #3074B3",
     borderRadius: "50%",
     animation:
       "spin 0.8s linear infinite",

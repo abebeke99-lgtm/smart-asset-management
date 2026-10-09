@@ -187,7 +187,7 @@ const Home = () => {
       .uam-eyebrow {
         display: inline-block;
         margin-bottom: 18px;
-        color: #315D82;
+        color: #3074B3;
         font-size: 0.8rem;
         font-weight: 800;
         letter-spacing: 0.12em;
@@ -246,7 +246,7 @@ const Home = () => {
 
       .uam-highlight-list svg {
         flex: 0 0 auto;
-        color: #315D82;
+        color: #3074B3;
       }
 
       .uam-cta-row {
@@ -273,19 +273,19 @@ const Home = () => {
 
       .uam-primary-button:focus-visible,
       .uam-secondary-button:focus-visible {
-        outline: 3px solid #315D82;
+        outline: 3px solid #3074B3;
         outline-offset: 4px;
       }
 
       .uam-primary-button {
         color: #fff;
-        background: #315D82;
+        background: #3074B3;
         box-shadow: 0 6px 18px rgba(15, 31, 46, 0.12);
       }
 
       .uam-secondary-button {
-        border-color: #315D82;
-        color: #315D82;
+        border-color: #3074B3;
+        color: #3074B3;
         background: #FFFFFF;
       }
 
@@ -323,7 +323,7 @@ const Home = () => {
         align-items: center;
         gap: 8px;
         margin-bottom: 24px;
-        color: #315D82;
+        color: #3074B3;
         font-size: 0.82rem;
         font-weight: 800;
         letter-spacing: 0.08em;
@@ -342,7 +342,7 @@ const Home = () => {
       .uam-panel-label {
         display: block;
         margin-bottom: 7px;
-        color: #315D82;
+        color: #3074B3;
         font-size: 0.75rem;
         font-weight: 800;
         letter-spacing: 0.1em;
@@ -391,7 +391,7 @@ const Home = () => {
       .uam-section-heading h2 { margin: 0; color: #17212b; font-size: clamp(1.7rem, 3vw, 2.35rem); line-height: 1.2; }
       .uam-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
       .uam-card { padding: 20px; border: 1px solid #d7dee5; background: #fff; }
-      .uam-card-icon { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; margin-bottom: 12px; color: #1d4ed8; background: #eaf1ff; }
+      .uam-card-icon { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; margin-bottom: 12px; color: #245783; background: #eaf1ff; }
       .uam-benefits-section { background: #f5f7f9; }
       .uam-benefit-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .uam-benefit { border-radius: 6px; box-shadow: none; }
@@ -401,30 +401,30 @@ const Home = () => {
       .uam-workflow-list { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; margin: 0 0 26px; padding: 0; list-style: none; }
       .uam-workflow-step { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 12px; border-left: 2px solid #bfdbfe; padding: 4px 0 4px 12px; }
       .uam-workflow-step strong { font-size: 0.94rem; line-height: 1.45; }
-      .uam-section-link { display: inline-flex; align-items: center; gap: 8px; color: #1d4ed8; font-weight: 700; text-decoration: none; }
+      .uam-section-link { display: inline-flex; align-items: center; gap: 8px; color: #245783; font-weight: 700; text-decoration: none; }
       .uam-section-link:hover { text-decoration: underline; }
       .uam-role-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin-bottom: 24px; border: 1px solid #d7dee5; background: #d7dee5; }
       .uam-role-item { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 18px; color: #243b53; background: #fff; font-weight: 650; }
-      .uam-role-item svg { flex: 0 0 auto; color: #1d4ed8; }
+      .uam-role-item svg { flex: 0 0 auto; color: #245783; }
       .uam-security-section { background: #eaf1ff; }
       .uam-security-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
       .uam-security-item { display: flex; align-items: center; gap: 12px; color: #19324d; font-weight: 650; line-height: 1.5; }
-      .uam-security-item svg { flex: 0 0 auto; color: #1d4ed8; }
+      .uam-security-item svg { flex: 0 0 auto; color: #245783; }
       .uam-trust-section { padding: 38px 0; color: #fff; background: #17365d; }
       .uam-trust-content { display: flex; align-items: center; gap: 20px; }
       .uam-trust-content > svg { flex: 0 0 auto; color: #93c5fd; }
       .uam-trust-content h2 { margin: 0 0 6px; font-size: 1.35rem; }
-      .uam-trust-content p { margin: 0; color: #dbeafe; line-height: 1.6; }
+      .uam-trust-content p { margin: 0; color: #EAF2FA; line-height: 1.6; }
       .uam-quick-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
       .uam-quick-links a { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 18px; border: 1px solid #d7dee5; border-radius: 6px; color: #243b53; background: #fff; font-weight: 700; text-decoration: none; }
-      .uam-quick-links a svg:first-child { color: #1d4ed8; }
+      .uam-quick-links a svg:first-child { color: #245783; }
       .uam-quick-links a svg:last-child { margin-left: auto; }
-      .uam-quick-links a:hover { border-color: #1d4ed8; }
-      .uam-final-cta { padding: 42px 0; background: #dbeafe; }
+      .uam-quick-links a:hover { border-color: #245783; }
+      .uam-final-cta { padding: 42px 0; background: #EAF2FA; }
       .uam-final-content { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
       .uam-final-content h2 { margin: 0 0 6px; font-size: 1.65rem; }
       .uam-final-content p { margin: 0; color: #40566f; line-height: 1.6; }
-      .uam-final-content .uam-primary-button { gap: 10px; border-radius: 6px; color: #fff; background: #1d4ed8; }
+      .uam-final-content .uam-primary-button { gap: 10px; border-radius: 6px; color: #fff; background: #245783; }
 
       @media (max-width: 960px) {
         .uam-hero-shell { grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr); gap: 32px; }

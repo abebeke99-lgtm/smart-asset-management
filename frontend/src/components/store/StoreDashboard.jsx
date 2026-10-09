@@ -107,8 +107,8 @@ export default function StoreDashboard() {
   const categoryEntries = Object.entries(data.categories).sort((first, second) => second[1] - first[1]);
   const categoryChart = { labels: categoryEntries.map(([category]) => category === 'Uncategorized' ? t.uncategorized : category), datasets: [{ label: t.assets, data: categoryEntries.map(([, quantity]) => quantity), backgroundColor: categoryEntries.map((_, index) => CHART_PALETTE[index % CHART_PALETTE.length]), borderRadius: 4 }] };
   const movementKeys = [
-    ['received', t.receive, '#0EA5D9'], ['issued', t.issue, '#2563EB'], ['returned', t.return, '#16A34A'],
-    ['transferred', t.transfer, '#F4C542'], ['adjusted', t.adjustment, '#7C3AED'], ['consumed', t.consumed, '#EA580C'], ['disposed', t.disposed, '#64748B'],
+    ['received', t.receive, '#0EA5D9'], ['issued', t.issue, '#3074B3'], ['returned', t.return, '#16A34A'],
+    ['transferred', t.transfer, '#D97706'], ['adjusted', t.adjustment, '#7C3AED'], ['consumed', t.consumed, '#EA580C'], ['disposed', t.disposed, '#64748B'],
   ];
   const stockMovementChart = { labels: movementKeys.map(([, label]) => label), datasets: [{ label: t.quantity, data: movementKeys.map(([key]) => Number(data.stockMovement[key] || 0)), backgroundColor: movementKeys.map(([, , color]) => color), borderRadius: 4 }] };
   const monthlyRows = data.monthlyMovements || [];

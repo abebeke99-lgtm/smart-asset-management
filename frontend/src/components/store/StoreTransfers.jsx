@@ -587,10 +587,10 @@ const StoreTransfers = () => {
       case 'pending':
       case 'pending approval':
       case 'requested':
-        return '#f59e0b';
+        return '#D97706';
 
       case 'approved':
-        return '#2563eb';
+        return '#3074B3';
 
       case 'in transit':
         return '#7c3aed';
@@ -620,9 +620,9 @@ const StoreTransfers = () => {
    */
 
   const colors = {
-    background: isDark ? '#0f172a' : '#f8fafc',
+    background: isDark ? '#0f172a' : '#F5F7FA',
     card: isDark ? '#1e293b' : '#ffffff',
-    cardSecondary: isDark ? '#172033' : '#f8fafc',
+    cardSecondary: isDark ? '#172033' : '#F5F7FA',
     border: isDark ? '#334155' : '#e2e8f0',
     text: isDark ? '#f1f5f9' : '#0f172a',
     muted: isDark ? '#94a3b8' : '#64748b',
@@ -704,8 +704,8 @@ const StoreTransfers = () => {
     },
 
     activeTab: {
-      background: isDark ? '#334155' : '#eff6ff',
-      color: isDark ? '#fff' : '#1d4ed8'
+      background: isDark ? '#334155' : '#EAF2FA',
+      color: isDark ? '#fff' : '#245783'
     },
 
     card: {
@@ -756,7 +756,7 @@ const StoreTransfers = () => {
       border: 'none',
       borderRadius: '8px',
       padding: '12px 16px',
-      background: 'linear-gradient(135deg,#2563eb,#1d4ed8)',
+      background: 'linear-gradient(135deg,#3074B3,#245783)',
       color: '#fff',
       fontWeight: 800,
       cursor: 'pointer'
@@ -832,7 +832,7 @@ const StoreTransfers = () => {
       border: 'none',
       borderRadius: '6px',
       padding: '6px 10px',
-      background: '#2563eb',
+      background: '#3074B3',
       color: '#fff',
       cursor: 'pointer',
       fontWeight: 700,

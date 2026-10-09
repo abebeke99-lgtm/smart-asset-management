@@ -659,7 +659,7 @@ export default function FinanceFinancialReports() {
 
         .finance-reports-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           font-family: Inter, ui-sans-serif, system-ui, -apple-system,
             BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -689,7 +689,7 @@ export default function FinanceFinancialReports() {
         }
 
         .breadcrumb a {
-          color: #2563eb;
+          color: #3074B3;
           text-decoration: none;
         }
 
@@ -706,7 +706,7 @@ export default function FinanceFinancialReports() {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0284c7;
         }
 
@@ -835,7 +835,7 @@ export default function FinanceFinancialReports() {
           width: 35px;
           height: 35px;
           border-radius: 9px;
-          background: #f0f9ff;
+          background: #F5F7FA;
           color: #0284c7;
           display: flex;
           align-items: center;
@@ -981,7 +981,7 @@ export default function FinanceFinancialReports() {
         }
 
         th {
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #64748b;
           font-size: 11px;
           text-transform: uppercase;
@@ -1001,7 +1001,7 @@ export default function FinanceFinancialReports() {
         }
 
         tbody tr:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .primary-cell {
@@ -1047,7 +1047,7 @@ export default function FinanceFinancialReports() {
         }
 
         .status-info {
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #075985;
         }
 
@@ -1067,7 +1067,7 @@ export default function FinanceFinancialReports() {
         .action-btn:hover {
           color: #0284c7;
           border-color: #7dd3fc;
-          background: #f0f9ff;
+          background: #F5F7FA;
         }
 
         .empty-state,
@@ -1192,7 +1192,7 @@ export default function FinanceFinancialReports() {
           padding: 12px;
           border: 1px solid #e2e8f0;
           border-radius: 10px;
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .detail-label {
@@ -1219,7 +1219,7 @@ export default function FinanceFinancialReports() {
         }
 
         .generate-note {
-          background: #f0f9ff;
+          background: #F5F7FA;
           border: 1px solid #bae6fd;
           color: #075985;
           padding: 12px;

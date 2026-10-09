@@ -661,14 +661,14 @@ export default function Inspection() {
           border: 0;
           border-radius: 8px;
           padding: 11px 16px;
-          background: #2563eb;
+          background: #3074B3;
           color: white;
           font-weight: 600;
           cursor: pointer;
         }
 
         .primary-btn:hover {
-          background: #1d4ed8;
+          background: #245783;
         }
 
         .secondary-btn {
@@ -700,7 +700,7 @@ export default function Inspection() {
 
         .stat-card {
           background: white;
-          border: 1px solid #e5e7eb;
+          border: 1px solid #E2E8F0;
           border-radius: 12px;
           padding: 17px;
           box-shadow: 0 1px 2px rgba(0,0,0,0.03);
@@ -739,7 +739,7 @@ export default function Inspection() {
 
         .toolbar {
           background: white;
-          border: 1px solid #e5e7eb;
+          border: 1px solid #E2E8F0;
           border-radius: 12px;
           padding: 16px;
           display: grid;
@@ -765,8 +765,8 @@ export default function Inspection() {
         .input:focus,
         .select:focus,
         .textarea:focus {
-          border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+          border-color: #3074B3;
+          box-shadow: 0 0 0 3px rgba(48, 116, 179,.1);
         }
 
         .textarea {
@@ -777,7 +777,7 @@ export default function Inspection() {
 
         .table-card {
           background: white;
-          border: 1px solid #e5e7eb;
+          border: 1px solid #E2E8F0;
           border-radius: 12px;
           overflow: hidden;
         }
@@ -803,7 +803,7 @@ export default function Inspection() {
         }
 
         .inspection-table th {
-          background: #f9fafb;
+          background: #F5F7FA;
           color: #6b7280;
           font-weight: 700;
           white-space: nowrap;
@@ -848,8 +848,8 @@ export default function Inspection() {
         }
 
         .status-info {
-          background: #dbeafe;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
         }
 
         .risk-high {
@@ -885,7 +885,7 @@ export default function Inspection() {
         }
 
         .action-btn:hover {
-          background: #f9fafb;
+          background: #F5F7FA;
         }
 
         .empty-state,
@@ -920,7 +920,7 @@ export default function Inspection() {
           justify-content: space-between;
           align-items: center;
           padding: 18px 20px;
-          border-bottom: 1px solid #e5e7eb;
+          border-bottom: 1px solid #E2E8F0;
           position: sticky;
           top: 0;
           background: white;
@@ -978,7 +978,7 @@ export default function Inspection() {
           justify-content: flex-end;
           gap: 10px;
           padding: 16px 20px;
-          border-top: 1px solid #e5e7eb;
+          border-top: 1px solid #E2E8F0;
           position: sticky;
           bottom: 0;
           background: white;
@@ -991,7 +991,7 @@ export default function Inspection() {
         }
 
         .detail-card {
-          border: 1px solid #e5e7eb;
+          border: 1px solid #E2E8F0;
           border-radius: 9px;
           padding: 13px;
           background: #fafafa;

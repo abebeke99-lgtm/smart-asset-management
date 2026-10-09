@@ -21,7 +21,7 @@ import { apiClient } from '../../utils/api';
 ChartJS.register(ArcElement, BarElement, CategoryScale, Filler, Legend, LinearScale, LineElement, PointElement, Title, Tooltip);
 
 const navy = '#1A237E';
-const blue = '#2563EB';
+const blue = '#3074B3';
 const green = '#16A34A';
 const purple = '#7C3AED';
 const orange = '#D97706';
@@ -163,7 +163,7 @@ const AdminAnalyticsCenter = ({ system = false }) => {
       label: 'Audit events',
       data: auditTrend.map((row) => Number(row.count || 0)),
       borderColor: blue,
-      backgroundColor: 'rgba(37, 99, 235, 0.12)',
+      backgroundColor: 'rgba(48, 116, 179, 0.12)',
       fill: true,
       tension: 0.35,
     }],

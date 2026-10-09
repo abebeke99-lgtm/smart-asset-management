@@ -1009,7 +1009,7 @@ const Depreciation = () => {
               <thead>
                 <tr
                   style={{
-                    background: "#f8fafc",
+                    background: "#F5F7FA",
                   }}
                 >
                   <Th>Asset</Th>
@@ -1312,7 +1312,7 @@ const Depreciation = () => {
           <form onSubmit={saveDepreciation}>
             <div
               style={{
-                background: "#f8fafc",
+                background: "#F5F7FA",
                 borderRadius: "9px",
                 padding: "12px",
                 marginBottom: "18px",
@@ -1625,8 +1625,8 @@ const Summary = ({
         width: "40px",
         height: "40px",
         borderRadius: "9px",
-        background: "#eff6ff",
-        color: "#2563eb",
+        background: "#EAF2FA",
+        color: "#3074B3",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -2049,7 +2049,7 @@ const labelStyle = {
 
 const primaryButton = {
   border: "none",
-  background: "#2563eb",
+  background: "#3074B3",
   color: "#fff",
   padding: "10px 15px",
   borderRadius: "8px",

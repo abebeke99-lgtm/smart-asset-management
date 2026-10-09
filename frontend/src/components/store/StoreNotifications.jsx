@@ -28,7 +28,7 @@ const getPriorityStyle = (priority) => {
   const normalized = String(priority || '').toLowerCase();
   if (['critical', 'urgent'].includes(normalized)) return { background: '#fee2e2', color: '#b91c1c' };
   if (['high'].includes(normalized)) return { background: '#ffedd5', color: '#c2410c' };
-  if (['normal', 'medium'].includes(normalized)) return { background: '#dbeafe', color: '#1d4ed8' };
+  if (['normal', 'medium'].includes(normalized)) return { background: '#EAF2FA', color: '#245783' };
   return { background: '#e2e8f0', color: '#334155' };
 };
 
@@ -237,7 +237,7 @@ const StoreNotifications = () => {
                   key={notification.id}
                   style={{
                     ...styles.notificationCard,
-                    borderLeft: isRead ? '4px solid #cbd5e1' : '4px solid #2563eb',
+                    borderLeft: isRead ? '4px solid #cbd5e1' : '4px solid #3074B3',
                   }}
                 >
                   <div style={styles.notificationHeader}>
@@ -312,7 +312,7 @@ const styles = {
   title: { margin: '8px 0 0', fontSize: '2rem', fontWeight: 800, color: '#0f172a' },
   subtitle: { marginTop: '8px', color: '#475569', maxWidth: '760px' },
   headerActions: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
-  primaryButton: { background: '#2563eb', color: '#fff', border: 'none', borderRadius: '10px', padding: '10px 16px', fontWeight: 700, cursor: 'pointer' },
+  primaryButton: { background: '#3074B3', color: '#fff', border: 'none', borderRadius: '10px', padding: '10px 16px', fontWeight: 700, cursor: 'pointer' },
   secondaryButton: { background: '#e2e8f0', color: '#0f172a', border: 'none', borderRadius: '10px', padding: '10px 16px', fontWeight: 700, cursor: 'pointer' },
   summaryGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px', marginBottom: '20px' },
   summaryCard: { background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)' },
@@ -324,8 +324,8 @@ const styles = {
   notificationCard: { background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)' },
   notificationHeader: { display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start', flexWrap: 'wrap' },
   titleRow: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' },
-  unreadDot: { width: '10px', height: '10px', borderRadius: '50%', background: '#2563eb', display: 'inline-block' },
-  notificationType: { background: '#e0f2fe', color: '#075985', padding: '4px 8px', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase' },
+  unreadDot: { width: '10px', height: '10px', borderRadius: '50%', background: '#3074B3', display: 'inline-block' },
+  notificationType: { background: '#EAF2FA', color: '#075985', padding: '4px 8px', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase' },
   priorityBadge: { padding: '4px 8px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 700 },
   notificationTitle: { margin: '0', fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' },
   message: { marginTop: '10px', color: '#475569', lineHeight: 1.6 },
@@ -333,7 +333,7 @@ const styles = {
   statusBadge: { borderRadius: '999px', padding: '4px 8px', fontWeight: 700 },
   actionRow: { marginTop: '12px' },
   metaActions: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
-  linkButton: { background: 'transparent', border: 'none', color: '#2563eb', cursor: 'pointer', fontWeight: 700 },
+  linkButton: { background: 'transparent', border: 'none', color: '#3074B3', cursor: 'pointer', fontWeight: 700 },
   deleteButton: { background: 'transparent', border: '1px solid #ef4444', color: '#b91c1c', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', fontWeight: 700 },
   emptyStateBox: { display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', textAlign: 'center', minHeight: '180px', gap: '12px', color: '#475569' },
   loadingText: { color: '#475569', margin: 0 },
@@ -341,7 +341,7 @@ const styles = {
   detailHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' },
   detailTitle: { margin: '8px 0 0', fontSize: '1.6rem', color: '#0f172a' },
   detailGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' },
-  detailCard: { background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' },
+  detailCard: { background: '#F5F7FA', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' },
 };
 
 export default StoreNotifications;

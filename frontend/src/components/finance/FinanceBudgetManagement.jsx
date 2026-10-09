@@ -581,7 +581,7 @@ export default function FinanceBudgetManagement() {
               text-align: left;
             }
             th {
-              background: #f8fafc;
+              background: #F5F7FA;
             }
           </style>
         </head>
@@ -706,7 +706,7 @@ export default function FinanceBudgetManagement() {
 
         .finance-budget-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           font-family: Inter, ui-sans-serif, system-ui, -apple-system,
             BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -836,7 +836,7 @@ export default function FinanceBudgetManagement() {
           width: 38px;
           height: 38px;
           border-radius: 10px;
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0284c7;
           display: flex;
           align-items: center;
@@ -1011,7 +1011,7 @@ export default function FinanceBudgetManagement() {
         th {
           text-align: left;
           padding: 12px 14px;
-          background: #f8fafc;
+          background: #F5F7FA;
           border-bottom: 1px solid #e2e8f0;
           color: #64748b;
           font-size: 11px;
@@ -1104,7 +1104,7 @@ export default function FinanceBudgetManagement() {
         .icon-btn:hover {
           color: #0284c7;
           border-color: #bae6fd;
-          background: #f0f9ff;
+          background: #F5F7FA;
         }
 
         .icon-btn.danger:hover {
@@ -1188,7 +1188,7 @@ export default function FinanceBudgetManagement() {
           height: 34px;
           padding: 0 9px;
           border: 1px solid #bae6fd;
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0369a1;
           border-radius: 8px;
           font-size: 12px;
@@ -1362,7 +1362,7 @@ export default function FinanceBudgetManagement() {
         .quick-link:hover {
           color: #0284c7;
           border-color: #bae6fd;
-          background: #f0f9ff;
+          background: #F5F7FA;
         }
 
         @media (max-width: 1200px) {

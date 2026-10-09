@@ -30,7 +30,7 @@ const PAGE_SIZE = 10;
 const css = `
   .transfer-page {
     min-height: 100vh;
-    background: #f8fafc;
+    background: #F5F7FA;
     color: #0f172a;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system,
       BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -171,7 +171,7 @@ const css = `
     width: 40px;
     height: 40px;
     border-radius: 11px;
-    background: #e0f2fe;
+    background: #EAF2FA;
     color: #0284c7;
     display: flex;
     align-items: center;
@@ -364,7 +364,7 @@ const css = `
 
   .transfer-table th {
     padding: 13px 16px;
-    background: #f8fafc;
+    background: #F5F7FA;
     border-bottom: 1px solid #e2e8f0;
     color: #64748b;
     font-size: 11px;
@@ -399,7 +399,7 @@ const css = `
     height: 38px;
     flex-shrink: 0;
     border-radius: 10px;
-    background: #e0f2fe;
+    background: #EAF2FA;
     color: #0284c7;
     display: flex;
     align-items: center;
@@ -448,7 +448,7 @@ const css = `
     height: 30px;
     flex-shrink: 0;
     border-radius: 8px;
-    background: #f0f9ff;
+    background: #F5F7FA;
     color: #0284c7;
     display: flex;
     align-items: center;
@@ -466,8 +466,8 @@ const css = `
     height: 32px;
     flex-shrink: 0;
     border-radius: 50%;
-    background: #eff6ff;
-    color: #2563eb;
+    background: #EAF2FA;
+    color: #3074B3;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -515,8 +515,8 @@ const css = `
   }
 
   .status-in-transit {
-    background: #dbeafe;
-    color: #1d4ed8;
+    background: #EAF2FA;
+    color: #245783;
   }
 
   .status-unknown {
@@ -546,7 +546,7 @@ const css = `
   .icon-button:hover {
     border-color: #7dd3fc;
     color: #0284c7;
-    background: #f0f9ff;
+    background: #F5F7FA;
   }
 
   .loading-state,
@@ -711,7 +711,7 @@ const css = `
     width: 40px;
     height: 40px;
     border-radius: 10px;
-    background: #e0f2fe;
+    background: #EAF2FA;
     color: #0284c7;
     display: flex;
     align-items: center;

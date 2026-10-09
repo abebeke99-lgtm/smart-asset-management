@@ -402,7 +402,7 @@ const Features = () => {
           --features-text: #10253f;
           --features-muted: #5c6d7d;
           --features-navy: #123b63;
-          --features-blue: #2563eb;
+          --features-blue: #3074B3;
           --features-cyan: #0ea5e9;
           --features-gold: #d8a84a;
           --features-success: #15803d;
@@ -493,7 +493,7 @@ const Features = () => {
         .feature-summary-box.primary {
           display: grid;
           gap: 6px;
-          background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(14, 165, 233, 0.04));
+          background: linear-gradient(135deg, rgba(48, 116, 179, 0.08), rgba(14, 165, 233, 0.04));
         }
 
         .feature-summary-label {
@@ -538,7 +538,7 @@ const Features = () => {
           width: 38px;
           height: 38px;
           border-radius: 12px;
-          background: rgba(37, 99, 235, 0.08);
+          background: rgba(48, 116, 179, 0.08);
           color: var(--features-blue);
           font-size: 0.8rem;
           font-weight: 800;
@@ -598,7 +598,7 @@ const Features = () => {
 
         .feature-card:hover {
           transform: translateY(-2px);
-          border-color: rgba(37, 99, 235, 0.3);
+          border-color: rgba(48, 116, 179, 0.3);
           box-shadow: 0 14px 26px rgba(15, 23, 42, 0.08);
         }
 
@@ -616,7 +616,7 @@ const Features = () => {
           align-items: center;
           justify-content: center;
           border-radius: 12px;
-          background: rgba(37, 99, 235, 0.08);
+          background: rgba(48, 116, 179, 0.08);
           color: var(--features-blue);
         }
 
@@ -686,7 +686,7 @@ const Features = () => {
           padding: 12px 10px 10px;
           border: 1px solid var(--features-border);
           border-radius: 16px;
-          background: linear-gradient(180deg, rgba(37, 99, 235, 0.04), rgba(14, 165, 233, 0.01));
+          background: linear-gradient(180deg, rgba(48, 116, 179, 0.04), rgba(14, 165, 233, 0.01));
           color: var(--features-text);
           font-size: 0.8rem;
           font-weight: 700;
@@ -732,7 +732,7 @@ const Features = () => {
           padding: 22px 26px;
           border: 1px solid var(--features-border);
           border-radius: 20px;
-          background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(14, 165, 233, 0.05));
+          background: linear-gradient(135deg, rgba(48, 116, 179, 0.08), rgba(14, 165, 233, 0.05));
         }
 
         .language-banner__icon {

@@ -898,7 +898,7 @@ const FinanceAudit = () => {
       padding: "28px",
       background: isDark
         ? "#0f172a"
-        : "#f8fafc",
+        : "#F5F7FA",
       color: isDark
         ? "#e2e8f0"
         : "#0f172a",
@@ -1114,7 +1114,7 @@ const FinanceAudit = () => {
       borderRadius: "9px",
       background: isDark
         ? "#0f172a"
-        : "#f8fafc",
+        : "#F5F7FA",
       border: `1px solid ${
         isDark
           ? "#334155"
@@ -1605,7 +1605,7 @@ const FinanceAudit = () => {
                           background:
                             isDark
                               ? "#0f3b59"
-                              : "#e0f2fe",
+                              : "#EAF2FA",
                           color:
                             isDark
                               ? "#7dd3fc"
@@ -2202,7 +2202,7 @@ const FinanceAudit = () => {
                   background:
                     isDark
                       ? "#0f172a"
-                      : "#f8fafc",
+                      : "#F5F7FA",
                   border: `1px solid ${
                     isDark
                       ? "#334155"
@@ -2399,7 +2399,7 @@ const FinanceAudit = () => {
                   background:
                     isDark
                       ? "#0f172a"
-                      : "#f8fafc",
+                      : "#F5F7FA",
                   border: `1px solid ${
                     isDark
                       ? "#334155"

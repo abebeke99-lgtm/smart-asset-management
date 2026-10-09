@@ -828,7 +828,7 @@ const DeptAssets = () => {
     },
     buttonPrimary: {
       padding: '10px 20px',
-      background: 'linear-gradient(135deg, #60a5fa, #2563eb)',
+      background: 'linear-gradient(135deg, #60a5fa, #3074B3)',
       color: 'white',
       border: 'none',
       borderRadius: '10px',
@@ -896,7 +896,7 @@ const DeptAssets = () => {
     { label: t.totalAssets, value: summaryStats.total, icon: Package2, accent: '#60a5fa' },
     { label: t.inUse, value: summaryStats.inUse, icon: CheckCircle2, accent: '#34d399' },
     { label: t.available, value: summaryStats.available, icon: ShieldCheck, accent: '#38bdf8' },
-    { label: t.underMaintenance, value: summaryStats.maintenance, icon: Wrench, accent: '#f59e0b' },
+    { label: t.underMaintenance, value: summaryStats.maintenance, icon: Wrench, accent: '#D97706' },
     { label: 'Total Asset Value', value: summaryStats.totalValue ? `$${summaryStats.totalValue.toLocaleString()}` : 'Not recorded', icon: Package2, accent: '#a78bfa' },
   ];
 
@@ -974,9 +974,9 @@ const DeptAssets = () => {
           transition: all 0.2s ease;
         }
         .status-pill.active {
-          background: linear-gradient(135deg, rgba(96,165,250,0.2), rgba(37,99,235,0.12));
+          background: linear-gradient(135deg, rgba(96,165,250,0.2), rgba(48, 116, 179,0.12));
           border-color: rgba(96,165,250,0.8);
-          color: ${isDark ? '#dfeeff' : '#1d4ed8'};
+          color: ${isDark ? '#dfeeff' : '#245783'};
         }
         .section-tag {
           display: inline-flex;

@@ -654,7 +654,7 @@ export default function FinanceBudgetReports() {
 
         .budget-reports-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           font-family: Inter, ui-sans-serif, system-ui,
             -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -685,7 +685,7 @@ export default function FinanceBudgetReports() {
         }
 
         .breadcrumb a {
-          color: #2563eb;
+          color: #3074B3;
           text-decoration: none;
         }
 
@@ -702,7 +702,7 @@ export default function FinanceBudgetReports() {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0284c7;
         }
 
@@ -822,7 +822,7 @@ export default function FinanceBudgetReports() {
           width: 35px;
           height: 35px;
           border-radius: 9px;
-          background: #f0f9ff;
+          background: #F5F7FA;
           color: #0284c7;
           display: flex;
           align-items: center;
@@ -984,7 +984,7 @@ export default function FinanceBudgetReports() {
         }
 
         th {
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #64748b;
           font-size: 11px;
           text-transform: uppercase;
@@ -1004,7 +1004,7 @@ export default function FinanceBudgetReports() {
         }
 
         tbody tr:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .primary-cell {
@@ -1049,7 +1049,7 @@ export default function FinanceBudgetReports() {
         }
 
         .status-info {
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #075985;
         }
 
@@ -1086,7 +1086,7 @@ export default function FinanceBudgetReports() {
         .action-btn:hover {
           color: #0284c7;
           border-color: #7dd3fc;
-          background: #f0f9ff;
+          background: #F5F7FA;
         }
 
         .loading-state,
@@ -1213,7 +1213,7 @@ export default function FinanceBudgetReports() {
           padding: 12px;
           border: 1px solid #e2e8f0;
           border-radius: 10px;
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .detail-label {
@@ -1245,7 +1245,7 @@ export default function FinanceBudgetReports() {
           padding: 12px;
           border: 1px solid #bae6fd;
           border-radius: 9px;
-          background: #f0f9ff;
+          background: #F5F7FA;
           color: #075985;
           font-size: 12px;
         }

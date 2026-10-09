@@ -975,7 +975,7 @@ export default function InfrastructureFuel() {
 
         .fuel-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           font-family: Inter, ui-sans-serif, system-ui,
             -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -1009,7 +1009,7 @@ export default function InfrastructureFuel() {
           background: linear-gradient(
             135deg,
             #0ea5e9,
-            #2563eb
+            #3074B3
           );
           color: white;
           display: flex;
@@ -1018,7 +1018,7 @@ export default function InfrastructureFuel() {
           flex-shrink: 0;
           box-shadow:
             0 10px 25px
-            rgba(37, 99, 235, 0.18);
+            rgba(48, 116, 179, 0.18);
         }
 
         .page-header h1 {
@@ -1086,7 +1086,7 @@ export default function InfrastructureFuel() {
         }
 
         .btn-secondary:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
           border-color: #cbd5e1;
         }
 
@@ -1138,8 +1138,8 @@ export default function InfrastructureFuel() {
           width: 42px;
           height: 42px;
           border-radius: 12px;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1281,7 +1281,7 @@ export default function InfrastructureFuel() {
         }
 
         th {
-          background: #f8fafc;
+          background: #F5F7FA;
           padding: 13px 15px;
           text-align: left;
           font-size: 11px;
@@ -1327,8 +1327,8 @@ export default function InfrastructureFuel() {
           width: 35px;
           height: 35px;
           border-radius: 9px;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1363,8 +1363,8 @@ export default function InfrastructureFuel() {
         }
 
         .badge.info {
-          background: #dbeafe;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
         }
 
         .badge.default {
@@ -1404,7 +1404,7 @@ export default function InfrastructureFuel() {
 
         .icon-btn:hover {
           color: #0284c7;
-          background: #f0f9ff;
+          background: #F5F7FA;
           border-color: #bae6fd;
         }
 
@@ -1458,8 +1458,8 @@ export default function InfrastructureFuel() {
           height: 35px;
           padding: 0 8px;
           border-radius: 8px;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1664,7 +1664,7 @@ export default function InfrastructureFuel() {
           border:
             1px solid #e2e8f0;
           border-radius: 11px;
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .detail-item.full {
@@ -1744,7 +1744,7 @@ export default function InfrastructureFuel() {
         }
 
         .quick-link:hover {
-          background: #f0f9ff;
+          background: #F5F7FA;
           color: #0284c7;
           border-color: #bae6fd;
         }

@@ -18,7 +18,7 @@ import apiClient from '../../services/apiClient';
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, Filler, Legend, LinearScale, LineElement, PointElement, Title, Tooltip);
 
-const toneColors = ['#2563EB', '#0EA5E9', '#16A34A', '#F59E0B', '#DC2626', '#64748B', '#7C3AED'];
+const toneColors = ['#3074B3', '#0EA5E9', '#16A34A', '#D97706', '#DC2626', '#64748B', '#7C3AED'];
 
 const formatNumber = (value) => Number(value || 0).toLocaleString();
 const formatDate = (value) => {
@@ -94,14 +94,14 @@ const CollegeAssetAnalytics = () => {
   }), [trends.assetsAddedOverTime]);
 
   const kpis = [
-    { label: 'Total Assets', value: summary.totalAssets, icon: Package, tone: '#2563EB' },
+    { label: 'Total Assets', value: summary.totalAssets, icon: Package, tone: '#3074B3' },
     { label: 'Active Assets', value: summary.activeAssets, icon: CheckCircle2, tone: '#16A34A' },
     { label: 'Assigned Assets', value: summary.assignedAssets, icon: Users, tone: '#0EA5E9' },
     { label: 'Available Assets', value: summary.availableAssets, icon: ShieldCheck, tone: '#22C55E' },
-    { label: 'Under Maintenance', value: summary.underMaintenance, icon: Wrench, tone: '#F59E0B' },
+    { label: 'Under Maintenance', value: summary.underMaintenance, icon: Wrench, tone: '#D97706' },
     { label: 'Damaged Assets', value: summary.damagedAssets, icon: AlertTriangle, tone: '#DC2626' },
     { label: 'Missing Assets', value: summary.missingAssets, icon: XCircle, tone: '#7C3AED' },
-    { label: 'Total Asset Value', value: summary.totalAssetValue, icon: Building2, tone: '#1D4ED8' },
+    { label: 'Total Asset Value', value: summary.totalAssetValue, icon: Building2, tone: '#245783' },
   ];
 
   const handleFilterChange = (field, value) => {

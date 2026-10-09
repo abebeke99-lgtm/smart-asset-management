@@ -26,16 +26,16 @@ const EMPTY = {
 };
 
 const statusMeta = {
-  pending: { label: 'Pending', color: '#f59e0b', background: '#fff7ed', icon: Clock3 },
-  approved: { label: 'Approved', color: '#2563eb', background: '#eff6ff', icon: ShieldCheck },
+  pending: { label: 'Pending', color: '#D97706', background: '#fff7ed', icon: Clock3 },
+  approved: { label: 'Approved', color: '#3074B3', background: '#EAF2FA', icon: ShieldCheck },
   rejected: { label: 'Rejected', color: '#dc2626', background: '#fef2f2', icon: X },
   cancelled: { label: 'Cancelled', color: '#6b7280', background: '#f3f4f6', icon: X },
 };
 
 const priorityMeta = {
   low: { label: 'Low', color: '#64748b', background: '#f1f5f9' },
-  medium: { label: 'Medium', color: '#2563eb', background: '#eff6ff' },
-  high: { label: 'High', color: '#f59e0b', background: '#fff7ed' },
+  medium: { label: 'Medium', color: '#3074B3', background: '#EAF2FA' },
+  high: { label: 'High', color: '#D97706', background: '#fff7ed' },
   critical: { label: 'Critical', color: '#dc2626', background: '#fef2f2' },
 };
 
@@ -324,7 +324,7 @@ const InfrastructureRequests = () => {
                         </button>
                         {request.status === 'pending' && (
                           <>
-                            <button type="button" style={{ ...styles.iconButton, background: '#e0f2fe', color: '#0369a1' }} onClick={() => setDecision({ request, value: 'approved' })} title="Approve request" aria-label="Approve request">
+                            <button type="button" style={{ ...styles.iconButton, background: '#EAF2FA', color: '#0369a1' }} onClick={() => setDecision({ request, value: 'approved' })} title="Approve request" aria-label="Approve request">
                               <ShieldCheck size={15} />
                             </button>
                             <button type="button" style={{ ...styles.iconButton, background: '#fef2f2', color: '#b91c1c' }} onClick={() => setDecision({ request, value: 'rejected' })} title="Reject request" aria-label="Reject request">
@@ -538,7 +538,7 @@ const InfrastructureRequests = () => {
 const styles = {
   page: {
     padding: '24px',
-    background: '#f8fafc',
+    background: '#F5F7FA',
     minHeight: '100%',
     color: '#0f172a',
     fontFamily: 'Inter, Segoe UI, sans-serif',
@@ -588,11 +588,11 @@ const styles = {
     padding: '10px 16px',
     border: 'none',
     borderRadius: '10px',
-    background: 'linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%)',
+    background: 'linear-gradient(135deg, #0f172a 0%, #245783 100%)',
     color: '#fff',
     fontWeight: 700,
     cursor: 'pointer',
-    boxShadow: '0 8px 22px rgba(37, 99, 235, 0.18)',
+    boxShadow: '0 8px 22px rgba(48, 116, 179, 0.18)',
   },
   secondaryButton: {
     display: 'inline-flex',
@@ -630,8 +630,8 @@ const styles = {
     width: '42px',
     height: '42px',
     borderRadius: '12px',
-    background: '#eff6ff',
-    color: '#1d4ed8',
+    background: '#EAF2FA',
+    color: '#245783',
   },
   summaryLabel: {
     fontSize: '0.76rem',
@@ -664,7 +664,7 @@ const styles = {
     border: '1px solid #e2e8f0',
     borderRadius: '12px',
     padding: '0 12px',
-    background: '#f8fafc',
+    background: '#F5F7FA',
     minWidth: '290px',
     flex: '1 1 260px',
   },
@@ -743,7 +743,7 @@ const styles = {
     textTransform: 'uppercase',
     color: '#64748b',
     borderBottom: '1px solid #e2e8f0',
-    background: '#f8fafc',
+    background: '#F5F7FA',
   },
   tableRow: {
     borderBottom: '1px solid #eef2f7',
@@ -788,7 +788,7 @@ const styles = {
     height: '32px',
     border: '1px solid #e2e8f0',
     borderRadius: '10px',
-    background: '#f8fafc',
+    background: '#F5F7FA',
     color: '#0f172a',
     cursor: 'pointer',
   },
@@ -927,7 +927,7 @@ const styles = {
     gap: '16px',
   },
   detailCard: {
-    background: '#f8fafc',
+    background: '#F5F7FA',
     border: '1px solid #e2e8f0',
     borderRadius: '14px',
     padding: '16px',

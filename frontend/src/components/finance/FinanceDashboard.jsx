@@ -937,7 +937,7 @@ export default function FinanceDashboard() {
             );
           box-shadow:
             0 12px 28px
-            rgba(37, 99, 235, .18);
+            rgba(48, 116, 179, .18);
         }
 
         .welcome-area h1 {

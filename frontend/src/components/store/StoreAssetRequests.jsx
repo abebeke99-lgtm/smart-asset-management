@@ -556,8 +556,8 @@ const StoreAssetRequests = () => {
     }
 
     return {
-      background: isDark ? '#172554' : '#dbeafe',
-      color: isDark ? '#93c5fd' : '#1d4ed8'
+      background: isDark ? '#172554' : '#EAF2FA',
+      color: isDark ? '#93c5fd' : '#245783'
     };
   };
 
@@ -579,8 +579,8 @@ const StoreAssetRequests = () => {
     }
 
     return {
-      background: isDark ? '#172554' : '#dbeafe',
-      color: isDark ? '#93c5fd' : '#2563eb'
+      background: isDark ? '#172554' : '#EAF2FA',
+      color: isDark ? '#93c5fd' : '#3074B3'
     };
   };
 
@@ -661,7 +661,7 @@ const StoreAssetRequests = () => {
           padding: 24,
           background: isDark
             ? '#0d1726'
-            : '#f8fafc',
+            : '#F5F7FA',
           color: isDark
             ? '#e2e8f0'
             : '#1e293b'
@@ -688,7 +688,7 @@ const StoreAssetRequests = () => {
         padding: 24,
         background: isDark
           ? '#0d1726'
-          : '#f8fafc',
+          : '#F5F7FA',
         color: isDark
           ? '#e2e8f0'
           : '#1e293b'
@@ -739,7 +739,7 @@ const StoreAssetRequests = () => {
             borderRadius: 9,
             padding: '11px 18px',
             background:
-              'linear-gradient(135deg,#2563eb,#1d4ed8)',
+              'linear-gradient(135deg,#3074B3,#245783)',
             color: '#fff',
             fontWeight: 800,
             cursor: 'pointer'
@@ -827,13 +827,13 @@ const StoreAssetRequests = () => {
                 activeTab === tab.id
                   ? isDark
                     ? '#263d5c'
-                    : '#eff6ff'
+                    : '#EAF2FA'
                   : 'transparent',
               color:
                 activeTab === tab.id
                   ? isDark
                     ? '#93c5fd'
-                    : '#1d4ed8'
+                    : '#245783'
                   : isDark
                   ? '#94a3b8'
                   : '#64748b'
@@ -1134,7 +1134,7 @@ const StoreAssetRequests = () => {
                   border: 'none',
                   borderRadius: 8,
                   background:
-                    'linear-gradient(135deg,#2563eb,#1d4ed8)',
+                    'linear-gradient(135deg,#3074B3,#245783)',
                   color: '#fff',
                   cursor: processing
                     ? 'not-allowed'
@@ -1247,7 +1247,7 @@ const StoreAssetRequests = () => {
                   style={{
                     background: isDark
                       ? '#0f1a2b'
-                      : '#f8fafc'
+                      : '#F5F7FA'
                   }}
                 >
                   {[
@@ -1437,7 +1437,7 @@ const StoreAssetRequests = () => {
                                 padding:
                                   '6px 10px',
                                 background:
-                                  '#2563eb',
+                                  '#3074B3',
                                 color: '#fff',
                                 cursor:
                                   'pointer',
@@ -1662,7 +1662,7 @@ const StoreAssetRequests = () => {
                     borderRadius: 9,
                     background: isDark
                       ? '#0f1a2b'
-                      : '#f8fafc',
+                      : '#F5F7FA',
                     border: `1px solid ${
                       isDark
                         ? '#293b56'
@@ -1705,7 +1705,7 @@ const StoreAssetRequests = () => {
                   borderRadius: 9,
                   background: isDark
                     ? '#0f1a2b'
-                    : '#f8fafc',
+                    : '#F5F7FA',
                   whiteSpace: 'pre-wrap'
                 }}
               >
@@ -1725,7 +1725,7 @@ const StoreAssetRequests = () => {
                   borderRadius: 9,
                   background: isDark
                     ? '#0f1a2b'
-                    : '#f8fafc',
+                    : '#F5F7FA',
                   whiteSpace: 'pre-wrap'
                 }}
               >

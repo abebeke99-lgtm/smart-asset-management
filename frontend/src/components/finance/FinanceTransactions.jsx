@@ -778,7 +778,7 @@ export default function FinanceTransactions() {
             justify-content: space-between;
             gap: 20px;
             padding: 9px 0;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid #E2E8F0;
           }
 
           .amount {
@@ -936,7 +936,7 @@ export default function FinanceTransactions() {
 
         .finance-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           font-family:
             Inter,
@@ -980,11 +980,11 @@ export default function FinanceTransactions() {
             linear-gradient(
               135deg,
               #0ea5e9,
-              #2563eb
+              #3074B3
             );
           box-shadow:
             0 10px 25px
-            rgba(37, 99, 235, .18);
+            rgba(48, 116, 179, .18);
         }
 
         .title-area h1 {
@@ -1032,11 +1032,11 @@ export default function FinanceTransactions() {
         }
 
         .btn-primary {
-          background: #2563eb;
+          background: #3074B3;
           color: white;
           box-shadow:
             0 7px 18px
-            rgba(37, 99, 235, .2);
+            rgba(48, 116, 179, .2);
         }
 
         .btn-secondary {
@@ -1072,7 +1072,7 @@ export default function FinanceTransactions() {
         }
 
         .quick-link:hover {
-          color: #2563eb;
+          color: #3074B3;
           border-color: #93c5fd;
         }
 
@@ -1114,8 +1114,8 @@ export default function FinanceTransactions() {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
         }
 
         .stat-value {
@@ -1226,7 +1226,7 @@ export default function FinanceTransactions() {
         th {
           padding: 13px 15px;
           text-align: left;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #64748b;
           border-bottom: 1px solid #e2e8f0;
           font-size: 11px;
@@ -1247,7 +1247,7 @@ export default function FinanceTransactions() {
         }
 
         .transaction-number {
-          color: #2563eb;
+          color: #3074B3;
           font-weight: 800;
         }
 
@@ -1308,8 +1308,8 @@ export default function FinanceTransactions() {
         }
 
         .status.info {
-          color: #1e40af;
-          background: #dbeafe;
+          color: #245783;
+          background: #EAF2FA;
         }
 
         .row-actions {
@@ -1331,9 +1331,9 @@ export default function FinanceTransactions() {
         }
 
         .icon-btn:hover {
-          color: #2563eb;
+          color: #3074B3;
           border-color: #93c5fd;
-          background: #eff6ff;
+          background: #EAF2FA;
         }
 
         .icon-btn.danger:hover {
@@ -1354,8 +1354,8 @@ export default function FinanceTransactions() {
           height: 52px;
           border-radius: 14px;
           margin: 0 auto 12px;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1430,7 +1430,7 @@ export default function FinanceTransactions() {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #2563eb;
+          background: #3074B3;
           color: white;
           border-radius: 8px;
           font-weight: 800;
@@ -1601,7 +1601,7 @@ export default function FinanceTransactions() {
 
         .amount-box {
           padding: 20px;
-          background: #eff6ff;
+          background: #EAF2FA;
           border: 1px solid #bfdbfe;
           border-radius: 12px;
           margin-top: 15px;
@@ -1617,7 +1617,7 @@ export default function FinanceTransactions() {
 
         .amount-box strong {
           font-size: 27px;
-          color: #1d4ed8;
+          color: #245783;
         }
 
         .delete-warning {

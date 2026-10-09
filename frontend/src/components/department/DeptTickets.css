@@ -129,7 +129,7 @@
 }
 
 .dept-tickets__table-wrap th {
-  background: #f9fafb;
+  background: #F5F7FA;
   color: #667085;
   font-size: 0.74rem;
   letter-spacing: 0.03em;
@@ -221,7 +221,7 @@
   margin-bottom: 10px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: #f9fafb;
+  background: #F5F7FA;
 }
 
 .dept-tickets__follow-ups article p {

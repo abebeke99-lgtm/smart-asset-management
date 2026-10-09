@@ -857,7 +857,7 @@ export default function InfrastructureGenerators() {
 
         .generators-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           padding: 24px;
           font-family: Inter, ui-sans-serif, system-ui,
@@ -937,7 +937,7 @@ export default function InfrastructureGenerators() {
 
         .btn:hover {
           border-color: #bae6fd;
-          background: #f0f9ff;
+          background: #F5F7FA;
           color: #0369a1;
         }
 
@@ -999,7 +999,7 @@ export default function InfrastructureGenerators() {
         }
 
         .blue {
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0284c7;
         }
 
@@ -1139,7 +1139,7 @@ export default function InfrastructureGenerators() {
         th {
           padding: 13px 15px;
           text-align: left;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #64748b;
           font-size: 11px;
           font-weight: 800;
@@ -1158,7 +1158,7 @@ export default function InfrastructureGenerators() {
         }
 
         tbody tr:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .generator-cell {
@@ -1171,7 +1171,7 @@ export default function InfrastructureGenerators() {
           width: 40px;
           height: 40px;
           border-radius: 10px;
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0284c7;
           display: flex;
           align-items: center;
@@ -1281,7 +1281,7 @@ export default function InfrastructureGenerators() {
         }
 
         .icon-btn:hover {
-          background: #f0f9ff;
+          background: #F5F7FA;
           border-color: #bae6fd;
           color: #0284c7;
         }
@@ -1375,7 +1375,7 @@ export default function InfrastructureGenerators() {
         }
 
         .page-btn:hover:not(:disabled) {
-          background: #f0f9ff;
+          background: #F5F7FA;
           border-color: #bae6fd;
           color: #0284c7;
         }
@@ -1454,7 +1454,7 @@ export default function InfrastructureGenerators() {
           padding: 13px;
           border-radius: 11px;
           border: 1px solid #e2e8f0;
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .detail-label {

@@ -183,7 +183,7 @@ const Services = () => {
           --services-navy: #07182d;
           --services-blue: #0797d5;
           --services-cyan: #16c4f4;
-          --services-background: #f7fafc;
+          --services-background: #F5F7FA;
           --services-surface: #ffffff;
           --services-text: #17324d;
           --services-muted: #64748b;
@@ -193,12 +193,12 @@ const Services = () => {
         }
 
         .services-page-dark {
-          --services-navy: #f8fafc;
+          --services-navy: #F5F7FA;
           --services-blue: #38bdf8;
           --services-cyan: #16c4f4;
           --services-background: #07182d;
           --services-surface: #0b1b33;
-          --services-text: #f8fafc;
+          --services-text: #F5F7FA;
           --services-muted: #cbd5e1;
           --services-border: #263a52;
         }

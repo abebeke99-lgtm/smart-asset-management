@@ -136,7 +136,7 @@ const RegisterInfrastructureAsset = () => {
               width: '40px',
               height: '40px',
               borderRadius: '50%',
-              background: num <= step ? '#2b6cb0' : '#e5e7eb',
+              background: num <= step ? '#2b6cb0' : '#E2E8F0',
               color: num <= step ? '#fff' : '#6b7280',
               display: 'flex',
               alignItems: 'center',
@@ -149,7 +149,7 @@ const RegisterInfrastructureAsset = () => {
               <div style={{
                 flex: 1,
                 height: '2px',
-                background: num < step ? '#2b6cb0' : '#e5e7eb',
+                background: num < step ? '#2b6cb0' : '#E2E8F0',
                 margin: '0 12px'
               }} />
             )}
@@ -165,7 +165,7 @@ const RegisterInfrastructureAsset = () => {
             <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#1a365d', marginBottom: '20px' }}>Select Asset Type</h2>
             <div style={{ display: 'grid', gap: '12px' }}>
               {assetTypes.map(type => (
-                <label key={type} style={{ display: 'flex', alignItems: 'center', padding: '12px', border: formData.assetType === type ? '2px solid #2b6cb0' : '1px solid #e5e7eb', borderRadius: '8px', cursor: 'pointer', background: formData.assetType === type ? '#eff6ff' : 'transparent' }}>
+                <label key={type} style={{ display: 'flex', alignItems: 'center', padding: '12px', border: formData.assetType === type ? '2px solid #2b6cb0' : '1px solid #E2E8F0', borderRadius: '8px', cursor: 'pointer', background: formData.assetType === type ? '#EAF2FA' : 'transparent' }}>
                   <input
                     type="radio"
                     name="assetType"
@@ -343,7 +343,7 @@ const RegisterInfrastructureAsset = () => {
         {step === 5 && (
           <div>
             <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#1a365d', marginBottom: '20px' }}>Review & Submit</h2>
-            <div style={{ background: '#f9fafb', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
+            <div style={{ background: '#F5F7FA', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
                   <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '4px' }}>Asset Type</div>
@@ -379,7 +379,7 @@ const RegisterInfrastructureAsset = () => {
               padding: '10px 20px',
               borderRadius: '8px',
               border: '1px solid #d1d5db',
-              background: step === 1 ? '#e5e7eb' : '#ffffff',
+              background: step === 1 ? '#E2E8F0' : '#ffffff',
               cursor: step === 1 ? 'not-allowed' : 'pointer',
               fontWeight: 600,
               color: step === 1 ? '#9ca3af' : '#1a365d'

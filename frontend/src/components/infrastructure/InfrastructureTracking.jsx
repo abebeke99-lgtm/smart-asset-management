@@ -833,7 +833,7 @@ export default function InfrastructureTracking() {
 
         .tracking-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           font-family: Inter, ui-sans-serif, system-ui,
             -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -867,7 +867,7 @@ export default function InfrastructureTracking() {
           background: linear-gradient(
             135deg,
             #0ea5e9,
-            #2563eb
+            #3074B3
           );
           color: white;
           display: flex;
@@ -876,7 +876,7 @@ export default function InfrastructureTracking() {
           flex-shrink: 0;
           box-shadow:
             0 10px 25px
-            rgba(37, 99, 235, 0.18);
+            rgba(48, 116, 179, 0.18);
         }
 
         .page-header h1 {
@@ -944,7 +944,7 @@ export default function InfrastructureTracking() {
         }
 
         .btn-secondary:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
           border-color: #cbd5e1;
         }
 
@@ -996,8 +996,8 @@ export default function InfrastructureTracking() {
           width: 42px;
           height: 42px;
           border-radius: 12px;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1136,7 +1136,7 @@ export default function InfrastructureTracking() {
         th {
           padding: 13px 15px;
           text-align: left;
-          background: #f8fafc;
+          background: #F5F7FA;
           border-bottom: 1px solid #e2e8f0;
           color: #64748b;
           font-size: 11px;
@@ -1178,8 +1178,8 @@ export default function InfrastructureTracking() {
           width: 35px;
           height: 35px;
           border-radius: 9px;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1190,7 +1190,7 @@ export default function InfrastructureTracking() {
           width: 31px;
           height: 31px;
           border-radius: 8px;
-          background: #f0f9ff;
+          background: #F5F7FA;
           color: #0284c7;
           display: flex;
           align-items: center;
@@ -1225,8 +1225,8 @@ export default function InfrastructureTracking() {
         }
 
         .badge.info {
-          background: #dbeafe;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
         }
 
         .badge.default {
@@ -1254,7 +1254,7 @@ export default function InfrastructureTracking() {
 
         .icon-btn:hover {
           color: #0284c7;
-          background: #f0f9ff;
+          background: #F5F7FA;
           border-color: #bae6fd;
         }
 
@@ -1307,8 +1307,8 @@ export default function InfrastructureTracking() {
           height: 35px;
           padding: 0 8px;
           border-radius: 8px;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1505,7 +1505,7 @@ export default function InfrastructureTracking() {
           padding: 13px;
           border: 1px solid #e2e8f0;
           border-radius: 11px;
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .detail-item.full {
@@ -1584,7 +1584,7 @@ export default function InfrastructureTracking() {
         }
 
         .quick-link:hover {
-          background: #f0f9ff;
+          background: #F5F7FA;
           color: #0284c7;
           border-color: #bae6fd;
         }

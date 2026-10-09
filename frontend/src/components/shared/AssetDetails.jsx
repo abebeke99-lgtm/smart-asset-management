@@ -129,7 +129,7 @@ const AssetDetails = () => {
         </div>
 
         {asset.rfid_tag && (
-          <div style={{ marginTop: '20px', padding: '12px', background: isDark ? '#0d1b2a' : '#f7fafc', borderRadius: '8px' }}>
+          <div style={{ marginTop: '20px', padding: '12px', background: isDark ? '#0d1b2a' : '#F5F7FA', borderRadius: '8px' }}>
             <span style={{ fontWeight: 600 }}>📡 {t.rfidTag}:</span> {asset.rfid_tag}
           </div>
         )}

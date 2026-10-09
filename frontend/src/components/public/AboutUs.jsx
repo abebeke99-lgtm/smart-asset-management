@@ -120,9 +120,9 @@ const AboutUs = () => {
 
       <style>{`
         .about-page-shell {
-          --about-bg: #f7fafc;
+          --about-bg: #F5F7FA;
           --about-surface: #ffffff;
-          --about-surface-alt: #f0f9ff;
+          --about-surface-alt: #F5F7FA;
           --about-card-border: #d9e4ec;
           --about-text: #17324d;
           --about-text-strong: #0b1b33;
@@ -140,8 +140,8 @@ const AboutUs = () => {
           --about-surface: #0b1b33;
           --about-surface-alt: rgba(14, 165, 233, 0.08);
           --about-card-border: rgba(255, 255, 255, 0.12);
-          --about-text: #f8fafc;
-          --about-text-strong: #f8fafc;
+          --about-text: #F5F7FA;
+          --about-text-strong: #F5F7FA;
           --about-muted: #cbd5e1;
           --about-primary: #7dd3fc;
           --about-primary-strong: #38bdf8;

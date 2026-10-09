@@ -6,10 +6,12 @@
    resolves back to this file. Never hard-code a hex in a
    component or in a component-scoped stylesheet.
 
-   University identity:
-     primary blue #3074B3   deep blue #245B8C
-     navy #071F3D           gold #F4C542
-     page #F4F8FC           surface #FFFFFF
+   University identity (brand system):
+     primary blue #3074B3   dark blue  #245783
+     light blue  #EAF2FA    page #F5F7FA   card #FFFFFF
+     text #1F2937           secondary text #64748B
+     border #E2E8F0         success #16A34A  warning #D97706
+     error  #DC2626
    ========================================================== */
 
 :root {
@@ -18,54 +20,56 @@
   /* ---------- Brand ramp ---------- */
   --primary-color: #3074B3;
   --color-brand-sky: #0284C7;
-  --color-brand-sky-dark: #003B7A;
+  --color-brand-sky-dark: #245783;
   --color-brand-navy: #071F3D;
   --color-brand-blue: var(--primary-color);
-  --color-brand-blue-dark: #245B8C;
-  --color-brand-gold: #F4C542;
-  --color-brand-gold-light: #FFF4CC;
-  --color-brand-page: #F4F8FC;
+  --color-brand-blue-dark: #245783;
+  --color-brand-gold: #D97706;
+  --color-brand-gold-light: #FDF3E7;
+  --color-brand-page: #F5F7FA;
   --color-brand-card: #FFFFFF;
 
   /* ---------- Header ---------- */
   --color-header: var(--primary-color);
   --color-header-gradient: linear-gradient(110deg, var(--primary-color) 0%, var(--primary-color) 100%);
-  --color-header-hover: #286399;
+  --color-header-hover: #245783;
   --color-header-border: rgba(255, 255, 255, 0.2);
   --color-header-text: #FFFFFF;
   --color-header-text-strong: #FFFFFF;
-  --color-header-text-muted: #FFFFFF;
-  --color-header-icon-hover: rgba(255, 255, 255, 0.14);
-  --color-header-focus: #F4C542;
-  --color-header-badge: #F4C542;
+  --color-header-text-muted: rgba(255, 255, 255, 0.85);
+  --color-header-icon-hover: rgba(255, 255, 255, 0.16);
+  --color-header-focus: #FFFFFF;
+  --color-header-badge: #DC2626;
   --color-header-control-border: rgba(255, 255, 255, 0.42);
 
-  /* ---------- Sidebar ---------- */
+  /* ---------- Sidebar ----------
+     Active item uses a subtle lighter wash of white over the primary blue,
+     plus a solid white indicator rail. */
   --color-sidebar: var(--primary-color);
-  --color-sidebar-hover: #286399;
-  --color-sidebar-active: #245B8C;
+  --color-sidebar-hover: rgba(255, 255, 255, 0.10);
+  --color-sidebar-active: rgba(255, 255, 255, 0.18);
   --color-sidebar-text: #FFFFFF;
   --color-sidebar-icon: #FFFFFF;
   --color-sidebar-text-active: #FFFFFF;
-  --color-sidebar-label: #FFFFFF;
-  --color-sidebar-divider: rgba(184, 204, 227, 0.22);
-  --color-sidebar-accent: var(--color-brand-gold);
+  --color-sidebar-label: rgba(255, 255, 255, 0.78);
+  --color-sidebar-divider: rgba(255, 255, 255, 0.16);
+  --color-sidebar-accent: #FFFFFF;
 
   /* ---------- Primary action ---------- */
   --color-primary: var(--primary-color);
-  --color-primary-hover: #245B8C;
-  --color-primary-light: #E8F1FB;
-  --color-primary-text: #003B7A;
+  --color-primary-hover: #245783;
+  --color-primary-light: #EAF2FA;
+  --color-primary-text: #245783;
 
   /* ---------- Surfaces ---------- */
   --color-background: var(--color-brand-page);
   --color-surface: var(--color-brand-card);
-  --color-surface-muted: #F4F8FC;
-  --color-border: #D9E4F0;
+  --color-surface-muted: #F5F7FA;
+  --color-border: #E2E8F0;
 
   /* ---------- Text ----------
      Secondary text stays readable on both white cards and the light page canvas. */
-  --color-text-primary: #102A43;
+  --color-text-primary: #1F2937;
   --color-text-secondary: #64748B;
   --color-text-muted: #64748B;
   --color-text-secondary-on-page: #64748B;
@@ -74,15 +78,15 @@
   --color-success: #16A34A;
   --color-success-light: #DCFCE7;
   --color-success-text: #166534;
-  --color-warning: #F59E0B;
-  --color-warning-light: #FFF4CC;
+  --color-warning: #D97706;
+  --color-warning-light: #FDF3E7;
   --color-warning-text: #92400E;
    --color-warning-icon: #B45309;
   --color-danger: #DC2626;
   --color-danger-light: #FEE2E2;
   --color-danger-text: #991B1B;
   --color-info: #0284C7;
-  --color-info-light: #E0F2FE;
+  --color-info-light: #EAF2FA;
   --color-info-text: #075985;
   --color-neutral: #6B7280;
   --color-neutral-light: #F3F4F6;
@@ -91,31 +95,31 @@
 
    /* ---------- Global search ---------- */
    --color-search-field: #FFFFFF;
-   --color-search-border: #D9E4F0;
-   --color-search-icon: #4B5563;
-   --color-search-text: #111827;
-   --color-search-hover: #111827;
+   --color-search-border: #E2E8F0;
+   --color-search-icon: #64748B;
+   --color-search-text: #1F2937;
+   --color-search-hover: #1F2937;
    --color-search-focus: var(--primary-color);
-   --color-search-shortcut-bg: #F3F4F6;
-   --color-search-shortcut-text: #374151;
-   --color-search-shortcut-border: #E5E7EB;
+   --color-search-shortcut-bg: #F5F7FA;
+   --color-search-shortcut-text: #64748B;
+   --color-search-shortcut-border: #E2E8F0;
    --color-search-dropdown: #FFFFFF;
-   --color-search-dropdown-border: #E5E7EB;
-   --color-search-group: #4B5563;
-   --color-search-divider: #E5E7EB;
-   --color-search-item-hover: #F3F6F9;
-   --color-search-selected-bg: #E8F1FB;
+   --color-search-dropdown-border: #E2E8F0;
+   --color-search-group: #64748B;
+   --color-search-divider: #E2E8F0;
+   --color-search-item-hover: #F5F7FA;
+   --color-search-selected-bg: #EAF2FA;
    --color-search-selected-border: var(--primary-color);
-   --color-search-highlight: #003B7A;
-   --color-search-badge-bg: #F3F4F6;
-   --color-search-badge-text: #374151;
-   --color-search-skeleton: #E5E7EB;
+   --color-search-highlight: #245783;
+   --color-search-badge-bg: #F5F7FA;
+   --color-search-badge-text: #64748B;
+   --color-search-skeleton: #E2E8F0;
    --color-search-error: #991B1B;
    --color-search-error-bg: #FEE2E2;
-   --color-search-empty: #4B5563;
+   --color-search-empty: #64748B;
 
-  /* ---------- Accent (active nav only) ---------- */
-  --color-accent: var(--color-brand-gold);
+  /* ---------- Accent (active nav indicator) ---------- */
+  --color-accent: var(--color-sidebar-accent);
 
   /* ---------- Footer ---------- */
    --color-footer-background: #071F3D;
@@ -124,15 +128,13 @@
    --color-footer-link: #B8CCE3;
 
   /* ---------- Tables / charts ---------- */
-  --color-table-header: #F4F8FC;
-  --color-table-hover: #E8F1FB;
-  --color-chart-grid: #D9E4F0;
+  --color-table-header: #F5F7FA;
+  --color-table-hover: #EAF2FA;
+  --color-chart-grid: #E2E8F0;
   /* Six-colour categorical ramp, led by the primary blue.
-     Every slot clears 3:1 against a white card (WCAG 1.4.11). The warning and
-     info slots use their 600-weight steps because the 500-weight fills
-     (#F59E0B = 2.15:1, #0EA5D9 = 2.84:1) do not. */
+     Every slot clears 3:1 against a white card (WCAG 1.4.11). */
   --color-chart-1: var(--primary-color);
-  --color-chart-2: #F59E0B;
+  --color-chart-2: #D97706;
   --color-chart-3: #64748B;
   --color-chart-4: #16A34A;
   --color-chart-5: #0284C7;
@@ -252,9 +254,9 @@
 ) {
    --color-background: var(--color-brand-page);
    --color-surface: var(--color-brand-card);
-   --color-surface-muted: #F9FAFB;
-   --color-text-primary: var(--color-brand-navy);
+   --color-surface-muted: #F5F7FA;
+   --color-text-primary: #1F2937;
    --color-text-secondary: var(--color-text-secondary-on-page);
-   --color-text-muted: #6B7280;
-   --color-border: #E5E7EB;
+   --color-text-muted: #64748B;
+   --color-border: #E2E8F0;
 }

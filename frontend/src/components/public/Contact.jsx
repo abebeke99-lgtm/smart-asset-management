@@ -456,7 +456,7 @@ const Contact = () => {
           width: 42px;
           height: 42px;
           border-radius: 12px;
-          background: rgba(37, 99, 235, 0.1);
+          background: rgba(48, 116, 179, 0.1);
           color: var(--contact-info);
         }
 
@@ -565,7 +565,7 @@ const Contact = () => {
           margin-top: 12px;
           padding: 5px 10px;
           border-radius: 999px;
-          background: rgba(37, 99, 235, 0.08);
+          background: rgba(48, 116, 179, 0.08);
           color: var(--contact-info);
           font-size: 0.75rem;
           font-weight: 700;
@@ -576,7 +576,7 @@ const Contact = () => {
           align-items: flex-start;
           gap: 16px;
           padding: 22px 24px;
-          background: rgba(37, 99, 235, 0.04);
+          background: rgba(48, 116, 179, 0.04);
         }
 
         .contact-page-dark .contact-status-card {
@@ -685,7 +685,7 @@ const Contact = () => {
         .contact-page input:focus-visible,
         .contact-page textarea:focus-visible,
         .contact-page select:focus-visible {
-          outline: 3px solid rgba(37, 99, 235, 0.28);
+          outline: 3px solid rgba(48, 116, 179, 0.28);
           outline-offset: 3px;
         }
 

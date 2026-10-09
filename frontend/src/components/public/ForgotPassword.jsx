@@ -530,7 +530,7 @@ const ForgotPassword = () => {
           margin: 0 auto 16px;
           border-radius: 16px;
           object-fit: contain;
-          background: #F8FAFC;
+          background: #F5F7FA;
           border: 1px solid #D7DEE5;
         }
         .forgot-heading { margin: 0 0 22px; text-align: center; }

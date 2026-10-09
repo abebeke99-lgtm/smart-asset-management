@@ -64,8 +64,8 @@ const AssetAssignment = () => {
     subtitle: { color: isDark ? '#8896b0' : '#4a5568', marginBottom: '24px' },
     card: { background: isDark ? '#1e2d45' : '#ffffff', padding: '30px', borderRadius: '12px', border: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)' },
     label: { display: 'block', marginBottom: '6px', color: isDark ? '#c8dcf5' : '#2d3748', fontWeight: 600, fontSize: '0.9rem' },
-    select: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#f7fafc', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', marginBottom: '16px', cursor: 'pointer' },
-    input: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#f7fafc', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', marginBottom: '16px' },
+    select: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#F5F7FA', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', marginBottom: '16px', cursor: 'pointer' },
+    input: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#F5F7FA', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', marginBottom: '16px' },
     button: { width: '100%', padding: '14px', background: 'linear-gradient(135deg, #1a365d, #2b6cb0)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1rem', fontWeight: 700, cursor: 'pointer' },
     emptyState: { textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }
   };

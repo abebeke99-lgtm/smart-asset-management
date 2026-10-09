@@ -1,13 +1,13 @@
 .department-locations-page {
   min-height: 100%;
   padding: clamp(18px, 3vw, 34px);
-  background: #f8fafc;
+  background: #F5F7FA;
   color: #0f172a;
 }
 
 .department-locations-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
 .department-location-header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; }
-.department-locations-breadcrumb { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 8px; color: #2563eb; font-size: .76rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.department-locations-breadcrumb { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 8px; color: #3074B3; font-size: .76rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
 .department-locations-header h1 { margin: 0; font-size: clamp(1.5rem, 2.4vw, 2rem); }
 .department-locations-header p { margin: 7px 0 0; color: #64748b; }
 .department-location-button, .department-location-view { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #cbd5e1; border-radius: 7px; padding: 9px 13px; background: #fff; color: #0f3d70; font-weight: 750; cursor: pointer; }
@@ -28,18 +28,18 @@
 .department-location-count { color: #64748b; font-size: .84rem; font-weight: 700; }
 .department-location-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
 .department-location-card { display: flex; gap: 14px; min-width: 0; padding: 18px; border: 1px solid #e2e8f0; border-radius: 9px; background: #fff; box-shadow: 0 4px 15px rgba(15, 23, 42, .05); }
-.department-location-card-icon { display: grid; flex: 0 0 44px; place-items: center; width: 44px; height: 44px; border-radius: 8px; background: #e0f2fe; color: #0369a1; }
+.department-location-card-icon { display: grid; flex: 0 0 44px; place-items: center; width: 44px; height: 44px; border-radius: 8px; background: #EAF2FA; color: #0369a1; }
 .department-location-card-content { min-width: 0; flex: 1; }
 .department-location-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .department-location-card-heading > div { min-width: 0; }
 .department-location-card h2 { margin: 0; overflow-wrap: anywhere; font-size: 1rem; }
 .department-location-card-heading > div > span { display: block; margin-top: 4px; color: #64748b; font-size: .75rem; font-weight: 700; }
-.department-location-status { flex: 0 0 auto; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 999px; color: #475569; background: #f8fafc; font-size: .7rem; font-weight: 800; text-transform: capitalize; }
+.department-location-status { flex: 0 0 auto; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 999px; color: #475569; background: #F5F7FA; font-size: .7rem; font-weight: 800; text-transform: capitalize; }
 .department-location-status-active { border-color: #bbf7d0; color: #166534; background: #f0fdf4; }
 .department-location-status-inactive { border-color: #fecaca; color: #991b1b; background: #fef2f2; }
 .department-location-card p { min-height: 40px; margin: 8px 0 14px; color: #64748b; font-size: .86rem; line-height: 1.5; }
 .department-location-card-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin: 0 0 14px; }
-.department-location-card-facts > div { display: grid; gap: 4px; min-width: 0; padding: 9px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc; }
+.department-location-card-facts > div { display: grid; gap: 4px; min-width: 0; padding: 9px; border: 1px solid #e2e8f0; border-radius: 6px; background: #F5F7FA; }
 .department-location-card-facts span { color: #64748b; font-size: .68rem; font-weight: 800; text-transform: uppercase; }
 .department-location-card-facts strong { overflow-wrap: anywhere; color: #0f172a; font-size: .82rem; }
 .department-location-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #475569; font-size: .82rem; font-weight: 700; }
@@ -59,7 +59,7 @@
 .department-location-modal { width: min(560px, 100%); border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; box-shadow: 0 24px 70px rgba(15, 23, 42, .25); }
 .department-location-modal header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px; border-bottom: 1px solid #e2e8f0; }
 .department-location-modal h2 { margin: 4px 0 0; font-size: 1.2rem; overflow-wrap: anywhere; }
-.department-location-modal-label { color: #2563eb; font-size: .75rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.department-location-modal-label { color: #3074B3; font-size: .75rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
 .department-location-icon-button { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #475569; cursor: pointer; }
 .department-location-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 20px; }
 .department-location-details div { display: grid; gap: 5px; }

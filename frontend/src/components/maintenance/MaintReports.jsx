@@ -878,13 +878,13 @@ export default function Reports() {
         }
 
         .btn-primary {
-          background: #2563eb;
-          border-color: #2563eb;
+          background: #3074B3;
+          border-color: #3074B3;
           color: white;
         }
 
         .btn-primary:hover {
-          background: #1d4ed8;
+          background: #245783;
         }
 
         .alert {
@@ -928,10 +928,10 @@ export default function Reports() {
 
         .input:focus,
         .select:focus {
-          border-color: #2563eb;
+          border-color: #3074B3;
           box-shadow:
             0 0 0 3px
-            rgba(37, 99, 235, .09);
+            rgba(48, 116, 179, .09);
         }
 
         .filter-control {
@@ -966,7 +966,7 @@ export default function Reports() {
 
         .tab.active {
           background: white;
-          color: #2563eb;
+          color: #3074B3;
           box-shadow:
             0 1px 4px
             rgba(16, 24, 40, .08);
@@ -1079,7 +1079,7 @@ export default function Reports() {
 
         .bar {
           height: 100%;
-          background: #2563eb;
+          background: #3074B3;
           border-radius: 999px;
         }
 
@@ -1163,7 +1163,7 @@ export default function Reports() {
           width: 100%;
           min-height: 3px;
           border-radius: 6px 6px 2px 2px;
-          background: #2563eb;
+          background: #3074B3;
         }
 
         .month-label {
@@ -1227,7 +1227,7 @@ export default function Reports() {
 
         .rank-bar {
           height: 100%;
-          background: #2563eb;
+          background: #3074B3;
           border-radius: 999px;
         }
 
@@ -1309,7 +1309,7 @@ export default function Reports() {
         }
 
         .reference {
-          color: #2563eb;
+          color: #3074B3;
           font-weight: 700;
         }
 
@@ -1344,8 +1344,8 @@ export default function Reports() {
         }
 
         .status-blue {
-          background: #dbeafe;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
         }
 
         .status-gray {

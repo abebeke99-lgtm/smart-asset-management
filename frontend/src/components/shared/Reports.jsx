@@ -74,10 +74,10 @@ const Reports = () => {
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' },
     title: { color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '1.5rem', fontWeight: 700 },
     controls: { display: 'flex', gap: '12px', flexWrap: 'wrap' },
-    select: { padding: '10px 16px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#f7fafc', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', cursor: 'pointer' },
+    select: { padding: '10px 16px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#F5F7FA', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', cursor: 'pointer' },
     exportButton: { padding: '10px 20px', background: 'linear-gradient(135deg, #48bb78, #38a169)', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' },
     table: { width: '100%', borderCollapse: 'collapse', background: isDark ? '#1e2d45' : '#ffffff', borderRadius: '12px', overflow: 'hidden', boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.3)' : '0 4px 12px rgba(0,0,100,0.06)' },
-    th: { padding: '12px 16px', textAlign: 'left', color: isDark ? '#c8dcf5' : '#1a365d', fontWeight: 600, borderBottom: `2px solid ${isDark ? '#32465f' : '#e8edf5'}`, background: isDark ? '#141e2d' : '#f7fafc' },
+    th: { padding: '12px 16px', textAlign: 'left', color: isDark ? '#c8dcf5' : '#1a365d', fontWeight: 600, borderBottom: `2px solid ${isDark ? '#32465f' : '#e8edf5'}`, background: isDark ? '#141e2d' : '#F5F7FA' },
     td: { padding: '12px 16px', borderBottom: `1px solid ${isDark ? '#32465f' : '#e8edf5'}`, color: isDark ? '#c8dcf5' : '#1a365d' },
     emptyState: { textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }
   };

@@ -21,7 +21,7 @@
 
 .approval-queue-heading h1 {
   margin: 7px 0 5px;
-  color: #102a43;
+  color: #1F2937;
   font-size: clamp(24px, 3vw, 30px);
   letter-spacing: -0.03em;
 }
@@ -69,7 +69,7 @@
 .approval-queue-refresh:hover,
 .approval-queue-pagination button:hover:not(:disabled) {
   border-color: #94a3b8;
-  background: #f8fafc;
+  background: #F5F7FA;
 }
 
 .approval-queue-refresh:disabled,
@@ -318,7 +318,7 @@
   padding: 3px 8px;
   border: 1px solid #e2e8f0;
   border-radius: 999px;
-  background: #f8fafc;
+  background: #F5F7FA;
   color: #475569;
   font-size: 11px;
   font-weight: 750;
@@ -348,7 +348,7 @@
 .approval-queue-status.status-changes-requested,
 .approval-queue-status.status-escalated {
   border-color: #bae6fd;
-  background: #f0f9ff;
+  background: #F5F7FA;
   color: #075985;
 }
 
@@ -369,12 +369,12 @@
   min-height: 32px;
   padding: 6px 10px;
   border-color: #bae6fd;
-  background: #f0f9ff;
+  background: #F5F7FA;
   color: #0369a1;
 }
 
 .approval-queue-review:hover {
-  background: #e0f2fe;
+  background: #EAF2FA;
 }
 
 .approval-queue-state,
@@ -470,7 +470,7 @@
 
 .approval-queue-modal-heading h2 {
   margin: 5px 0 0;
-  color: #102a43;
+  color: #1F2937;
   font-size: 21px;
 }
 
@@ -502,7 +502,7 @@
   padding: 11px 12px;
   border: 1px solid #e8edf3;
   border-radius: 8px;
-  background: #f8fafc;
+  background: #F5F7FA;
 }
 
 .approval-queue-details dt,
@@ -656,7 +656,7 @@
 .approval-queue-actions .action-request-changes,
 .approval-queue-confirm-actions .action-request-changes {
   border-color: #bae6fd;
-  background: #f0f9ff;
+  background: #F5F7FA;
   color: #0369a1;
 }
 
@@ -677,7 +677,7 @@
 
 .approval-queue-confirm h2 {
   margin: 0;
-  color: #102a43;
+  color: #1F2937;
   font-size: 20px;
 }
 

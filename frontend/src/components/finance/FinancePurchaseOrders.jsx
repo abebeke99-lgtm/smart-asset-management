@@ -1017,7 +1017,7 @@ export default function FinancePurchaseOrders() {
 
         .po-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           font-family: Inter, system-ui, -apple-system,
             BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -1138,7 +1138,7 @@ export default function FinancePurchaseOrders() {
           display: grid;
           place-items: center;
           flex-shrink: 0;
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0284c7;
         }
 
@@ -1244,7 +1244,7 @@ export default function FinancePurchaseOrders() {
         th {
           text-align: left;
           padding: 13px 15px;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #64748b;
           font-size: 10px;
           text-transform: uppercase;
@@ -1501,7 +1501,7 @@ export default function FinancePurchaseOrders() {
 
         .items-header {
           padding: 13px 15px;
-          background: #f8fafc;
+          background: #F5F7FA;
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -1589,7 +1589,7 @@ export default function FinancePurchaseOrders() {
 
         .detail-item {
           padding: 12px;
-          background: #f8fafc;
+          background: #F5F7FA;
           border-radius: 10px;
         }
 
@@ -1638,7 +1638,7 @@ export default function FinancePurchaseOrders() {
           margin: 0 auto 14px;
           display: grid;
           place-items: center;
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0284c7;
         }
 

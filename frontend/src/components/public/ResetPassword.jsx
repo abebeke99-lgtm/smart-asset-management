@@ -278,7 +278,7 @@ const resetStyles = (isDark) => `
     margin: 0 auto 16px;
     border-radius: 16px;
     object-fit: contain;
-    background: #F8FAFC;
+    background: #F5F7FA;
     border: 1px solid #D7DEE5;
   }
   .reset-heading { margin-bottom: 22px; text-align: center; color: #536575; }

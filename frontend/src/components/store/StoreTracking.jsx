@@ -274,14 +274,14 @@ const StoreTracking = () => {
   }
 
   return (
-    <div style={{ padding: 24, background: isDark ? '#020817' : '#f8fafc', minHeight: '100vh', color: isDark ? '#e2e8f0' : '#0f172a' }}>
+    <div style={{ padding: 24, background: isDark ? '#020817' : '#F5F7FA', minHeight: '100vh', color: isDark ? '#e2e8f0' : '#0f172a' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
           <div>
             <h1 style={{ margin: 0, fontSize: '2rem' }}>{t.title}</h1>
             <p style={{ margin: '8px 0 0', color: isDark ? '#94a3b8' : '#64748b' }}>{t.subtitle}</p>
           </div>
-          <button type="button" onClick={handleCreateSession} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 18px', fontWeight: 700, cursor: 'pointer' }}>
+          <button type="button" onClick={handleCreateSession} style={{ background: '#3074B3', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 18px', fontWeight: 700, cursor: 'pointer' }}>
             {t.pageButton}
           </button>
         </div>
@@ -333,27 +333,27 @@ const StoreTracking = () => {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                  <div style={{ background: isDark ? '#020817' : '#f8fafc', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
+                  <div style={{ background: isDark ? '#020817' : '#F5F7FA', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
                     <div style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', marginBottom: 6 }}>Asset Code</div>
                     <div>{selectedAsset.assetCode || '-'}</div>
                   </div>
-                  <div style={{ background: isDark ? '#020817' : '#f8fafc', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
+                  <div style={{ background: isDark ? '#020817' : '#F5F7FA', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
                     <div style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', marginBottom: 6 }}>Serial</div>
                     <div>{selectedAsset.serialNumber || '-'}</div>
                   </div>
-                  <div style={{ background: isDark ? '#020817' : '#f8fafc', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
+                  <div style={{ background: isDark ? '#020817' : '#F5F7FA', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
                     <div style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', marginBottom: 6 }}>RFID</div>
                     <div>{selectedAsset.rfidTag || '-'}</div>
                   </div>
-                  <div style={{ background: isDark ? '#020817' : '#f8fafc', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
+                  <div style={{ background: isDark ? '#020817' : '#F5F7FA', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
                     <div style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', marginBottom: 6 }}>Status</div>
                     <div>{selectedAsset.status || 'available'}</div>
                   </div>
-                  <div style={{ background: isDark ? '#020817' : '#f8fafc', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
+                  <div style={{ background: isDark ? '#020817' : '#F5F7FA', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
                     <div style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', marginBottom: 6 }}>Location</div>
                     <div>{selectedAsset.location || '-'}</div>
                   </div>
-                  <div style={{ background: isDark ? '#020817' : '#f8fafc', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
+                  <div style={{ background: isDark ? '#020817' : '#F5F7FA', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: 12, padding: 12 }}>
                     <div style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', marginBottom: 6 }}>Condition</div>
                     <div>{selectedAsset.condition || 'Good'}</div>
                   </div>
@@ -404,7 +404,7 @@ const StoreTracking = () => {
                 </div>
 
                 <div style={{ marginTop: 18, display: 'flex', justifyContent: 'flex-end' }}>
-                  <button type="button" onClick={handleVerify} disabled={saving} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 16px', fontWeight: 700, cursor: 'pointer' }}>
+                  <button type="button" onClick={handleVerify} disabled={saving} style={{ background: '#3074B3', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 16px', fontWeight: 700, cursor: 'pointer' }}>
                     {saving ? 'Saving...' : t.confirm}
                   </button>
                 </div>
@@ -428,7 +428,7 @@ const StoreTracking = () => {
                     {(session.VerificationItems || []).slice(0, 3).map((item) => (
                       <div key={`${session.id}-${item.id}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginTop: 8 }}>
                         <span>{item.Asset?.assetCode || 'Asset'}</span>
-                        <span style={{ color: item.state === 'verified' ? '#16a34a' : '#f59e0b' }}>{item.state}</span>
+                        <span style={{ color: item.state === 'verified' ? '#16a34a' : '#D97706' }}>{item.state}</span>
                       </div>
                     ))}
                   </div>

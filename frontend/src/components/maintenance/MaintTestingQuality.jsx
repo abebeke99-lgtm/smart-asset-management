@@ -995,13 +995,13 @@ export default function QualityControl() {
         }
 
         .btn-primary {
-          background: #2563eb;
-          border-color: #2563eb;
+          background: #3074B3;
+          border-color: #3074B3;
           color: white;
         }
 
         .btn-primary:hover {
-          background: #1d4ed8;
+          background: #245783;
         }
 
         .btn-success {
@@ -1109,10 +1109,10 @@ export default function QualityControl() {
         .input:focus,
         .select:focus,
         .textarea:focus {
-          border-color: #2563eb;
+          border-color: #3074B3;
           box-shadow:
             0 0 0 3px
-            rgba(37, 99, 235, 0.1);
+            rgba(48, 116, 179, 0.1);
         }
 
         .filter-select {
@@ -1249,8 +1249,8 @@ export default function QualityControl() {
         }
 
         .badge-blue {
-          background: #dbeafe;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
         }
 
         .badge-green {
@@ -1532,7 +1532,7 @@ export default function QualityControl() {
         }
 
         .decision-box.pending {
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .decision-title {
@@ -1551,7 +1551,7 @@ export default function QualityControl() {
         .score-bar {
           margin-top: 8px;
           height: 8px;
-          background: #e5e7eb;
+          background: #E2E8F0;
           border-radius: 999px;
           overflow: hidden;
         }

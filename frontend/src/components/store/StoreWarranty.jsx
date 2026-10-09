@@ -170,7 +170,7 @@ const StoreWarranty = () => {
     statCard: (color) => ({
       padding: '16px',
       borderRadius: '8px',
-      background: isDark ? '#2a2a3e' : '#f7fafc',
+      background: isDark ? '#2a2a3e' : '#F5F7FA',
       border: isDark ? `2px solid ${color}20` : `2px solid ${color}30`,
       textAlign: 'center'
     }),
@@ -244,7 +244,7 @@ const StoreWarranty = () => {
     th: {
       padding: '12px',
       textAlign: 'left',
-      background: isDark ? '#2a2a3e' : '#f7fafc',
+      background: isDark ? '#2a2a3e' : '#F5F7FA',
       color: isDark ? '#fff' : '#1a365d',
       fontWeight: '600',
       fontSize: '13px',
@@ -261,7 +261,7 @@ const StoreWarranty = () => {
         active: { bg: '#dcfce7', color: '#166534' },
         'expiring-soon': { bg: '#fef3c7', color: '#92400e' },
         expired: { bg: '#fee2e2', color: '#991b1b' },
-        unknown: { bg: '#e5e7eb', color: '#374151' }
+        unknown: { bg: '#E2E8F0', color: '#374151' }
       };
       const style = colors[status] || colors.unknown;
       return {
@@ -342,8 +342,8 @@ const StoreWarranty = () => {
             <p style={styles.statValue('#2b6cb0')}>{stats.active}</p>
             <p style={styles.statLabel}>{t.activeWarranties || 'Active'}</p>
           </div>
-          <div style={styles.statCard('#f59e0b')}>
-            <p style={styles.statValue('#f59e0b')}>{stats.expiring}</p>
+          <div style={styles.statCard('#D97706')}>
+            <p style={styles.statValue('#D97706')}>{stats.expiring}</p>
             <p style={styles.statLabel}>{t.expiringWarranties || 'Expiring Soon'}</p>
           </div>
           <div style={styles.statCard('#ef4444')}>

@@ -51,7 +51,7 @@ code {
   --text-secondary: var(--color-text-secondary);
   --text-muted: var(--color-text-muted);
   --text-muted-on-page: var(--color-text-secondary-on-page);
-  --text-on-dark: #f8fafc;
+  --text-on-dark: #F5F7FA;
   --success: var(--color-success);
   --success-light: var(--color-success-light);
   --warning: var(--color-warning);

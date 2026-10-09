@@ -517,7 +517,7 @@ export default function Colleges() {
           border: 0;
           border-radius: 8px;
           padding: 11px 17px;
-          background: #2563eb;
+          background: #3074B3;
           color: #fff;
           font-size: 14px;
           font-weight: 700;
@@ -525,7 +525,7 @@ export default function Colleges() {
         }
 
         .primary-button:hover {
-          background: #1d4ed8;
+          background: #245783;
         }
 
         .primary-button:disabled,
@@ -592,8 +592,8 @@ export default function Colleges() {
         .filter-select:focus,
         .form-input:focus,
         .form-textarea:focus {
-          border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37, 99, 235, .1);
+          border-color: #3074B3;
+          box-shadow: 0 0 0 3px rgba(48, 116, 179, .1);
         }
 
         .refresh-button {
@@ -626,7 +626,7 @@ export default function Colleges() {
 
         .colleges-table th {
           padding: 13px 15px;
-          background: #f8fafc;
+          background: #F5F7FA;
           border-bottom: 1px solid #e2e8f0;
           color: #475569;
           font-size: 12px;
@@ -662,8 +662,8 @@ export default function Colleges() {
           display: inline-flex;
           padding: 5px 8px;
           border-radius: 6px;
-          background: #eff6ff;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
           font-size: 11px;
           font-weight: 700;
         }
@@ -704,13 +704,13 @@ export default function Colleges() {
         }
 
         .action-button.view {
-          background: #eff6ff;
+          background: #EAF2FA;
           border-color: #bfdbfe;
-          color: #1d4ed8;
+          color: #245783;
         }
 
         .action-button.edit {
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .action-button.activate {
@@ -865,7 +865,7 @@ export default function Colleges() {
           padding: 12px;
           border: 1px solid #e2e8f0;
           border-radius: 8px;
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .detail-full {

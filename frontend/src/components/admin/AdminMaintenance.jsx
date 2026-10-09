@@ -932,7 +932,7 @@ const AdminMaintenance = () => {
       padding: '14px',
       background: isDark
         ? '#1a273a'
-        : '#f7fafc',
+        : '#F5F7FA',
       border:
         `1px solid ${
           isDark
@@ -1114,7 +1114,7 @@ const AdminMaintenance = () => {
       borderRadius: '10px',
       background: isDark
         ? '#162235'
-        : '#f7fafc',
+        : '#F5F7FA',
       border:
         `1px solid ${
           isDark

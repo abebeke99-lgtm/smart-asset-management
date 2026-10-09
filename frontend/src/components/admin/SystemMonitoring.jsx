@@ -1195,8 +1195,8 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     borderRadius: "9px",
-    background: "#EFF6FF",
-    color: "#2563EB",
+    background: "#EAF2FA",
+    color: "#3074B3",
     fontSize: "17px",
     fontWeight: 700,
   },
@@ -1268,7 +1268,7 @@ const styles = {
   },
 
   resourceValue: {
-    color: "#2563EB",
+    color: "#3074B3",
     fontSize: "18px",
     fontWeight: 700,
   },
@@ -1283,7 +1283,7 @@ const styles = {
   progressBar: {
     height: "100%",
     borderRadius: "999px",
-    background: "#2563EB",
+    background: "#3074B3",
     transition: "width 0.3s ease",
   },
 
@@ -1559,7 +1559,7 @@ const styles = {
     height: "32px",
     border: "3px solid #E2E8F0",
     borderTop:
-      "3px solid #2563EB",
+      "3px solid #3074B3",
     borderRadius: "50%",
     animation:
       "spin 0.8s linear infinite",

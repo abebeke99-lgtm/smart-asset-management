@@ -1,4 +1,4 @@
-.college-profile-page { padding: 24px; background: #f8fafc; color: #0f172a; }
+.college-profile-page { padding: 24px; background: #F5F7FA; color: #0f172a; }
 .college-profile-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
 .college-profile-eyebrow { color: #0369a1; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .college-profile-heading h1 { margin: 5px 0; font-size: 28px; }
@@ -10,7 +10,7 @@
 .college-profile-inline-error { color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; }
 .college-profile-identity, .college-profile-card { border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; box-shadow: 0 4px 12px rgba(15,23,42,.05); }
 .college-profile-identity { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; padding: 20px; }
-.college-profile-identity-icon { display: grid; flex: 0 0 auto; width: 54px; height: 54px; place-items: center; border-radius: 13px; color: #0369a1; background: #e0f2fe; }
+.college-profile-identity-icon { display: grid; flex: 0 0 auto; width: 54px; height: 54px; place-items: center; border-radius: 13px; color: #0369a1; background: #EAF2FA; }
 .college-profile-identity h2 { margin: 0 0 5px; font-size: 20px; }
 .college-profile-identity p { max-width: 700px; margin: 0; color: #64748b; font-size: 13px; line-height: 1.5; }
 .college-profile-status { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 6px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: capitalize; }

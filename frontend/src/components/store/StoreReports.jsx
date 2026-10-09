@@ -551,7 +551,7 @@ const StoreReports = () => {
         legend: {
           position: 'bottom',
           labels: {
-            color: isDark ? '#dbeafe' : '#0f172a',
+            color: isDark ? '#EAF2FA' : '#0f172a',
             boxWidth: 10,
           },
         },
@@ -559,11 +559,11 @@ const StoreReports = () => {
       scales: {
         y: {
           beginAtZero: true,
-          ticks: { color: isDark ? '#dbeafe' : '#0f172a' },
+          ticks: { color: isDark ? '#EAF2FA' : '#0f172a' },
           grid: { color: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)' },
         },
         x: {
-          ticks: { color: isDark ? '#dbeafe' : '#0f172a' },
+          ticks: { color: isDark ? '#EAF2FA' : '#0f172a' },
           grid: { display: false },
         },
       },
@@ -576,7 +576,7 @@ const StoreReports = () => {
     datasets: [
       {
         data: [summary.available, summary.assigned, summary.maintenance, summary.damaged, summary.missing],
-        backgroundColor: ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'],
+        backgroundColor: ['#22c55e', '#3074B3', '#D97706', '#ef4444', '#8b5cf6'],
         borderWidth: 0,
       },
     ],
@@ -1270,7 +1270,7 @@ const styles = {
   container: {
     padding: '24px',
     minHeight: '100vh',
-    background: '#f8fafc',
+    background: '#F5F7FA',
     color: '#0f172a',
   },
   headerRow: {
@@ -1435,13 +1435,13 @@ const styles = {
     fontSize: '0.72rem',
     background:
       status === 'Available' ? '#dcfce7' :
-      status === 'Assigned' ? '#dbeafe' :
+      status === 'Assigned' ? '#EAF2FA' :
       status === 'Under Maintenance' ? '#fef3c7' :
       status === 'Damaged' ? '#fee2e2' :
       status === 'Missing' ? '#f3e8ff' : '#f1f5f9',
     color:
       status === 'Available' ? '#166534' :
-      status === 'Assigned' ? '#1d4ed8' :
+      status === 'Assigned' ? '#245783' :
       status === 'Under Maintenance' ? '#92400e' :
       status === 'Damaged' ? '#b91c1c' :
       status === 'Missing' ? '#7c3aed' : '#334155',

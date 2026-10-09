@@ -85,12 +85,12 @@ const AdminAuditLogs = () => {
     light: {
       pageBg: '#f0f5ff',
       card: '#ffffff',
-      cardSoft: '#f8fafc',
+      cardSoft: '#F5F7FA',
       text: '#17365d',
       subText: '#64748b',
       border: '#d7e2ef',
-      accent: '#2563eb',
-      accentSoft: '#dbeafe',
+      accent: '#3074B3',
+      accentSoft: '#EAF2FA',
       success: '#16a34a',
       successSoft: '#dcfce7',
       warning: '#d97706',
@@ -1251,7 +1251,7 @@ const AdminAuditLogs = () => {
             }
 
             th {
-              background: #e5e7eb;
+              background: #E2E8F0;
               padding: 8px;
               border: 1px solid #cbd5e1;
               text-align: left;

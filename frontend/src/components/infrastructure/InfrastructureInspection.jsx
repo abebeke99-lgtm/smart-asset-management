@@ -953,7 +953,7 @@ export default function InfrastructureInspection() {
 
         .inspection-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           padding: 24px;
           font-family: Inter, ui-sans-serif, system-ui,
@@ -987,8 +987,8 @@ export default function InfrastructureInspection() {
           place-items: center;
           border-radius: 14px;
           color: white;
-          background: linear-gradient(135deg, #0ea5e9, #2563eb);
-          box-shadow: 0 10px 25px rgba(37, 99, 235, .20);
+          background: linear-gradient(135deg, #0ea5e9, #3074B3);
+          box-shadow: 0 10px 25px rgba(48, 116, 179, .20);
           flex-shrink: 0;
         }
 
@@ -1055,7 +1055,7 @@ export default function InfrastructureInspection() {
         }
 
         .btn-secondary:hover:not(:disabled) {
-          background: #f8fafc;
+          background: #F5F7FA;
           border-color: #94a3b8;
         }
 
@@ -1106,8 +1106,8 @@ export default function InfrastructureInspection() {
           display: grid;
           place-items: center;
           border-radius: 11px;
-          color: #2563eb;
-          background: #eff6ff;
+          color: #3074B3;
+          background: #EAF2FA;
         }
 
         .summary-card.warning .summary-icon {
@@ -1224,7 +1224,7 @@ export default function InfrastructureInspection() {
         }
 
         th {
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #64748b;
           padding: 13px 14px;
           text-align: left;
@@ -1259,8 +1259,8 @@ export default function InfrastructureInspection() {
           display: grid;
           place-items: center;
           border-radius: 10px;
-          color: #2563eb;
-          background: #eff6ff;
+          color: #3074B3;
+          background: #EAF2FA;
           flex-shrink: 0;
         }
 
@@ -1296,8 +1296,8 @@ export default function InfrastructureInspection() {
         }
 
         .badge.info {
-          color: #1d4ed8;
-          background: #eff6ff;
+          color: #245783;
+          background: #EAF2FA;
         }
 
         .badge.warning {
@@ -1389,7 +1389,7 @@ export default function InfrastructureInspection() {
         }
 
         .icon-btn:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
           border-color: #cbd5e1;
         }
 
@@ -1439,8 +1439,8 @@ export default function InfrastructureInspection() {
           border-radius: 15px;
           display: grid;
           place-items: center;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
           margin-bottom: 13px;
         }
 
@@ -1592,7 +1592,7 @@ export default function InfrastructureInspection() {
 
         .detail {
           border: 1px solid #e2e8f0;
-          background: #f8fafc;
+          background: #F5F7FA;
           border-radius: 11px;
           padding: 12px;
         }

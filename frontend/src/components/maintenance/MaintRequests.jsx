@@ -1797,13 +1797,13 @@ const styles = `
   }
 
   .primary-button {
-    border: 1px solid #2563eb;
-    background: #2563eb;
+    border: 1px solid #3074B3;
+    background: #3074B3;
     color: white;
   }
 
   .primary-button:hover {
-    background: #1d4ed8;
+    background: #245783;
   }
 
   .secondary-button {
@@ -1813,7 +1813,7 @@ const styles = `
   }
 
   .secondary-button:hover {
-    background: #f8fafc;
+    background: #F5F7FA;
   }
 
   .primary-button:disabled,
@@ -1906,8 +1906,8 @@ const styles = `
   .form-field input:focus,
   .form-field select:focus,
   .form-field textarea:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    border-color: #3074B3;
+    box-shadow: 0 0 0 3px rgba(48, 116, 179, 0.1);
   }
 
   .clear-filter-button {
@@ -1965,7 +1965,7 @@ const styles = `
 
   .requests-table th {
     text-align: left;
-    background: #f8fafc;
+    background: #F5F7FA;
     color: #64748b;
     font-size: 11px;
     text-transform: uppercase;
@@ -1984,13 +1984,13 @@ const styles = `
   }
 
   .requests-table tbody tr:hover {
-    background: #f8fafc;
+    background: #F5F7FA;
   }
 
   .request-id-button {
     border: 0;
     background: transparent;
-    color: #2563eb;
+    color: #3074B3;
     font-weight: 700;
     cursor: pointer;
     padding: 0;
@@ -2030,8 +2030,8 @@ const styles = `
   }
 
   .request-priority-medium {
-    background: #eff6ff;
-    color: #1d4ed8;
+    background: #EAF2FA;
+    color: #245783;
   }
 
   .request-priority-high {
@@ -2045,8 +2045,8 @@ const styles = `
   }
 
   .request-status-submitted {
-    background: #eff6ff;
-    color: #1d4ed8;
+    background: #EAF2FA;
+    color: #245783;
   }
 
   .request-status-scheduled {
@@ -2095,7 +2095,7 @@ const styles = `
   }
 
   .row-actions button:hover {
-    background: #eff6ff;
+    background: #EAF2FA;
     border-color: #93c5fd;
   }
 
@@ -2149,8 +2149,8 @@ const styles = `
   .spinner {
     width: 34px;
     height: 34px;
-    border: 3px solid #dbeafe;
-    border-top-color: #2563eb;
+    border: 3px solid #EAF2FA;
+    border-top-color: #3074B3;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
@@ -2308,10 +2308,10 @@ const styles = `
   }
 
   .photo-list a {
-    color: #2563eb;
+    color: #3074B3;
     text-decoration: none;
-    border: 1px solid #dbeafe;
-    background: #eff6ff;
+    border: 1px solid #EAF2FA;
+    background: #EAF2FA;
     border-radius: 6px;
     padding: 6px 9px;
     font-size: 12px;

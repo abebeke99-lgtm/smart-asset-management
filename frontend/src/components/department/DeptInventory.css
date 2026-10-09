@@ -3,7 +3,7 @@
   flex-direction: column;
   gap: 1.5rem;
   padding: 1.5rem;
-  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #F5F7FA 0%, #ffffff 100%);
   border-radius: 20px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
 }
@@ -66,13 +66,13 @@
 }
 
 .department-inventory-button.primary {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
+  border-color: #245783;
+  background: #245783;
   color: #ffffff;
 }
 
 .department-inventory-button.subtle {
-  background: #f8fafc;
+  background: #F5F7FA;
 }
 
 .department-inventory-button:disabled {
@@ -131,10 +131,10 @@
   color: #0f172a;
 }
 
-.summary-tile.blue > svg { background: #2563eb; }
+.summary-tile.blue > svg { background: #3074B3; }
 .summary-tile.green > svg { background: #16a34a; }
 .summary-tile.purple > svg { background: #7c3aed; }
-.summary-tile.amber > svg { background: #f59e0b; }
+.summary-tile.amber > svg { background: #D97706; }
 .summary-tile.red > svg { background: #ef4444; }
 
 .department-inventory-toolbar {
@@ -145,7 +145,7 @@
   padding: 1rem;
   border: 1px solid #e2e8f0;
   border-radius: 16px;
-  background: #f8fafc;
+  background: #F5F7FA;
 }
 
 .search-field {
@@ -201,7 +201,7 @@
   padding: 2rem 1rem;
   border: 1px dashed #cbd5e1;
   border-radius: 16px;
-  background: #f8fafc;
+  background: #F5F7FA;
   color: #475569;
 }
 
@@ -227,7 +227,7 @@
 }
 
 .department-inventory-table th {
-  background: #f8fafc;
+  background: #F5F7FA;
   font-size: 0.75rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -430,7 +430,7 @@
   padding: 0.85rem 0.9rem;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  background: #f8fafc;
+  background: #F5F7FA;
 }
 
 .modal-grid span {

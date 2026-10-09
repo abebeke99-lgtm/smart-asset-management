@@ -444,7 +444,7 @@ export default function AssetCategories() {
         .primary-button {
           border: 0;
           border-radius: 8px;
-          background: #2563eb;
+          background: #3074B3;
           color: white;
           padding: 11px 17px;
           font-size: 14px;
@@ -453,7 +453,7 @@ export default function AssetCategories() {
         }
 
         .primary-button:hover {
-          background: #1d4ed8;
+          background: #245783;
         }
 
         .summary-grid {
@@ -514,8 +514,8 @@ export default function AssetCategories() {
         .filter-select:focus,
         .form-input:focus,
         .form-textarea:focus {
-          border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+          border-color: #3074B3;
+          box-shadow: 0 0 0 3px rgba(48, 116, 179, 0.1);
         }
 
         .refresh-button {
@@ -547,7 +547,7 @@ export default function AssetCategories() {
         }
 
         .categories-table th {
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #475569;
           font-size: 12px;
           font-weight: 700;
@@ -586,8 +586,8 @@ export default function AssetCategories() {
           align-items: center;
           padding: 4px 8px;
           border-radius: 6px;
-          background: #eff6ff;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
           font-size: 12px;
           font-weight: 700;
         }
@@ -629,13 +629,13 @@ export default function AssetCategories() {
         }
 
         .action-button:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .action-button.primary {
           border-color: #bfdbfe;
-          background: #eff6ff;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
         }
 
         .action-button.danger {
@@ -791,7 +791,7 @@ export default function AssetCategories() {
         }
 
         .asset-table th {
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #475569;
         }
 

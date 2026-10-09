@@ -1015,14 +1015,14 @@ export default function WorkOrders() {
           border: 0;
           border-radius: 8px;
           padding: 11px 16px;
-          background: #2563eb;
+          background: #3074B3;
           color: #fff;
           font-weight: 650;
           cursor: pointer;
         }
 
         .primary-btn:hover {
-          background: #1d4ed8;
+          background: #245783;
         }
 
         .primary-btn:disabled,
@@ -1062,7 +1062,7 @@ export default function WorkOrders() {
 
         .stat-card {
           background: #fff;
-          border: 1px solid #e5e7eb;
+          border: 1px solid #E2E8F0;
           border-radius: 12px;
           padding: 17px;
           box-shadow:
@@ -1109,7 +1109,7 @@ export default function WorkOrders() {
             220px;
           gap: 12px;
           background: #fff;
-          border: 1px solid #e5e7eb;
+          border: 1px solid #E2E8F0;
           border-radius: 12px;
           padding: 16px;
           margin-bottom: 16px;
@@ -1132,10 +1132,10 @@ export default function WorkOrders() {
         .input:focus,
         .select:focus,
         .textarea:focus {
-          border-color: #2563eb;
+          border-color: #3074B3;
           box-shadow:
             0 0 0 3px
-            rgba(37,99,235,.1);
+            rgba(48, 116, 179,.1);
         }
 
         .textarea {
@@ -1146,7 +1146,7 @@ export default function WorkOrders() {
 
         .table-card {
           background: #fff;
-          border: 1px solid #e5e7eb;
+          border: 1px solid #E2E8F0;
           border-radius: 12px;
           overflow: hidden;
         }
@@ -1172,7 +1172,7 @@ export default function WorkOrders() {
         }
 
         .work-orders-table th {
-          background: #f9fafb;
+          background: #F5F7FA;
           color: #6b7280;
           font-weight: 700;
           white-space: nowrap;
@@ -1209,8 +1209,8 @@ export default function WorkOrders() {
         }
 
         .status-info {
-          background: #dbeafe;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
         }
 
         .status-primary {
@@ -1271,7 +1271,7 @@ export default function WorkOrders() {
         }
 
         .action-btn:hover {
-          background: #f9fafb;
+          background: #F5F7FA;
         }
 
         .inline-select {
@@ -1322,7 +1322,7 @@ export default function WorkOrders() {
           justify-content: space-between;
           padding: 18px 20px;
           background: #fff;
-          border-bottom: 1px solid #e5e7eb;
+          border-bottom: 1px solid #E2E8F0;
         }
 
         .modal-title {
@@ -1380,7 +1380,7 @@ export default function WorkOrders() {
           gap: 10px;
           padding: 16px 20px;
           background: #fff;
-          border-top: 1px solid #e5e7eb;
+          border-top: 1px solid #E2E8F0;
         }
 
         .details-grid {
@@ -1391,7 +1391,7 @@ export default function WorkOrders() {
         }
 
         .detail-card {
-          border: 1px solid #e5e7eb;
+          border: 1px solid #E2E8F0;
           border-radius: 9px;
           padding: 13px;
           background: #fafafa;

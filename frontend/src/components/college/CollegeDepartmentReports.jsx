@@ -123,8 +123,8 @@ const CollegeDepartmentReports = () => {
 
       <div className="college-performance-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         {kpis.map(({ label, value, icon: Icon, tint }) => (
-          <div className="college-performance-kpi-card" key={label} style={{ borderTop: `3px solid ${tint === 'blue' ? '#2563EB' : tint === 'green' ? '#16A34A' : tint === 'amber' ? '#F59E0B' : tint === 'cyan' ? '#0EA5E9' : tint === 'slate' ? '#475569' : tint === 'indigo' ? '#4F46E5' : '#E11D48'}` }}>
-            <div className="college-performance-kpi-icon" style={{ background: `${tint === 'blue' ? '#DBEAFE' : tint === 'green' ? '#DCFCE7' : tint === 'amber' ? '#FEF3C7' : tint === 'cyan' ? '#E0F2FE' : tint === 'slate' ? '#E2E8F0' : tint === 'indigo' ? '#E0E7FF' : '#FFE4E6'}`, color: tint === 'blue' ? '#1D4ED8' : tint === 'green' ? '#15803D' : tint === 'amber' ? '#B45309' : tint === 'cyan' ? '#0369A1' : tint === 'slate' ? '#334155' : tint === 'indigo' ? '#4338CA' : '#BE123C' }}><Icon size={18} /></div>
+          <div className="college-performance-kpi-card" key={label} style={{ borderTop: `3px solid ${tint === 'blue' ? '#3074B3' : tint === 'green' ? '#16A34A' : tint === 'amber' ? '#D97706' : tint === 'cyan' ? '#0EA5E9' : tint === 'slate' ? '#475569' : tint === 'indigo' ? '#4F46E5' : '#E11D48'}` }}>
+            <div className="college-performance-kpi-icon" style={{ background: `${tint === 'blue' ? '#EAF2FA' : tint === 'green' ? '#DCFCE7' : tint === 'amber' ? '#FEF3C7' : tint === 'cyan' ? '#EAF2FA' : tint === 'slate' ? '#E2E8F0' : tint === 'indigo' ? '#E0E7FF' : '#FFE4E6'}`, color: tint === 'blue' ? '#245783' : tint === 'green' ? '#15803D' : tint === 'amber' ? '#B45309' : tint === 'cyan' ? '#0369A1' : tint === 'slate' ? '#334155' : tint === 'indigo' ? '#4338CA' : '#BE123C' }}><Icon size={18} /></div>
             <div>
               <strong>{formatNumber(value)}</strong>
               <span>{label}</span>
@@ -174,7 +174,7 @@ const CollegeDepartmentReports = () => {
               {payload.statusDistribution.map((row) => (
                 <div key={row.status}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}><span>{row.status}</span><strong>{row.count}</strong></div>
-                  <div style={{ height: 8, background: '#E2E8F0', borderRadius: 999 }}><div style={{ width: `${Math.min(row.percentage || 0, 100)}%`, height: '100%', background: row.status === 'active' ? '#16A34A' : '#F59E0B', borderRadius: 999 }} /></div>
+                  <div style={{ height: 8, background: '#E2E8F0', borderRadius: 999 }}><div style={{ width: `${Math.min(row.percentage || 0, 100)}%`, height: '100%', background: row.status === 'active' ? '#16A34A' : '#D97706', borderRadius: 999 }} /></div>
                 </div>
               ))}
             </div>

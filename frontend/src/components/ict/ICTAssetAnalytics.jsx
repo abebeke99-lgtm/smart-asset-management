@@ -8,7 +8,7 @@ import { apiClient, getApiErrorMessage } from '../../utils/api';
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, Filler, Legend, LinearScale, LineElement, PointElement, Title, Tooltip);
 
-const colors = ['#2563EB', '#0EA5E9', '#16A34A', '#F59E0B', '#DC2626', '#7C3AED', '#64748B', '#0891B2'];
+const colors = ['#3074B3', '#0EA5E9', '#16A34A', '#D97706', '#DC2626', '#7C3AED', '#64748B', '#0891B2'];
 const emptyData = { summary: {}, distributions: {}, trends: {}, maintenance: {}, repairs: {}, health: {}, tracking: {}, table: [], options: {} };
 const initialFilters = { dateFrom: '', dateTo: '', category: '', status: '', condition: '', departmentId: '', location: '' };
 const formatNumber = (value) => value === null || value === undefined ? 'Not available' : Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -66,7 +66,7 @@ const ICTAssetAnalytics = () => {
   const options = data.options || {};
   const hasAssets = Number(summary.totalAssets || 0) > 0;
   const series = (rows, labelKey) => ({ labels: rows.map((row) => row[labelKey]), datasets: [{ label: 'Assets', data: rows.map((row) => Number(row.count || 0)), backgroundColor: colors, borderRadius: 5 }] });
-  const trendData = useMemo(() => ({ labels: (data.trends?.assets || []).map((row) => row.period), datasets: [{ label: 'Assets added', data: (data.trends?.assets || []).map((row) => row.count), borderColor: '#2563EB', backgroundColor: 'rgba(37,99,235,0.12)', fill: true, tension: 0.25 }] }), [data.trends?.assets]);
+  const trendData = useMemo(() => ({ labels: (data.trends?.assets || []).map((row) => row.period), datasets: [{ label: 'Assets added', data: (data.trends?.assets || []).map((row) => row.count), borderColor: '#3074B3', backgroundColor: 'rgba(48, 116, 179,0.12)', fill: true, tension: 0.25 }] }), [data.trends?.assets]);
   const statusData = series(distributions.byStatus || [], 'status');
   const categoryData = series(distributions.byCategory || [], 'category');
   const conditionData = { labels: (distributions.byCondition || []).map((row) => row.condition), datasets: [{ label: 'Assets', data: (distributions.byCondition || []).map((row) => row.count), backgroundColor: colors, borderWidth: 0 }] };
@@ -74,10 +74,10 @@ const ICTAssetAnalytics = () => {
 
   const selectOptions = (values) => [...new Set((values || []).filter(Boolean))];
   const kpis = [
-    ['Total Assets', formatNumber(summary.totalAssets), Package, '#2563EB'],
+    ['Total Assets', formatNumber(summary.totalAssets), Package, '#3074B3'],
     ['Assigned Assets', formatNumber(summary.assignedAssets), UserCheck, '#0EA5E9'],
     ['Available Assets', formatNumber(summary.availableAssets), CheckCircle2, '#16A34A'],
-    ['Under Maintenance', formatNumber(summary.underMaintenance), Wrench, '#F59E0B'],
+    ['Under Maintenance', formatNumber(summary.underMaintenance), Wrench, '#D97706'],
     ['Under Repair', formatNumber(summary.underRepair), Activity, '#DC2626'],
     ['Asset Value', formatMoney(summary.totalAssetValue), CircleDollarSign, '#7C3AED'],
     ['Average Health', summary.averageHealthScore === null ? 'Not available' : `${summary.averageHealthScore}%`, HeartPulse, '#0891B2'],

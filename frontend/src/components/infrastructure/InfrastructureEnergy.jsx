@@ -91,14 +91,14 @@ export default function InfrastructureEnergy() {
   return (
     <main className="energy-page">
       <style>{`
-        .energy-page { min-height: 100vh; padding: 24px; background: #f8fafc; color: #0f172a; }
+        .energy-page { min-height: 100vh; padding: 24px; background: #F5F7FA; color: #0f172a; }
         .energy-container { max-width: 1600px; margin: 0 auto; }
         .energy-header, .energy-header-actions, .energy-filter-row, .energy-pagination, .energy-system-heading, .energy-detail-header { display: flex; align-items: center; gap: 12px; }
         .energy-header { justify-content: space-between; align-items: flex-start; margin-bottom: 22px; gap: 20px; }
         .energy-header h1 { margin: 0 0 5px; font-size: 28px; line-height: 1.15; }
         .energy-header p, .energy-muted { margin: 0; color: #64748b; font-size: 14px; }
         .energy-title { display: flex; align-items: flex-start; gap: 14px; }
-        .energy-title-icon { display: grid; place-items: center; width: 48px; height: 48px; flex: 0 0 auto; border-radius: 12px; background: linear-gradient(135deg, #0ea5e9, #2563eb); color: #fff; }
+        .energy-title-icon { display: grid; place-items: center; width: 48px; height: 48px; flex: 0 0 auto; border-radius: 12px; background: linear-gradient(135deg, #0ea5e9, #3074B3); color: #fff; }
         .energy-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; padding: 0 13px; border: 1px solid #dbe4ee; border-radius: 8px; background: #fff; color: #1e293b; font-weight: 700; cursor: pointer; }
         .energy-btn:disabled { cursor: not-allowed; opacity: .55; }
         .energy-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
@@ -106,7 +106,7 @@ export default function InfrastructureEnergy() {
         .energy-kpi { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; }
         .energy-kpi-label { color: #64748b; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
         .energy-kpi-value { margin-top: 7px; font-size: 26px; font-weight: 800; }
-        .energy-kpi-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: #e0f2fe; color: #0284c7; }
+        .energy-kpi-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: #EAF2FA; color: #0284c7; }
         .energy-kpi.warning .energy-kpi-icon { background: #fef3c7; color: #b45309; }
         .energy-kpi.danger .energy-kpi-icon { background: #fee2e2; color: #b91c1c; }
         .energy-filter-row { flex-wrap: wrap; padding: 14px; margin-bottom: 14px; }
@@ -118,7 +118,7 @@ export default function InfrastructureEnergy() {
         .energy-table-wrap { overflow-x: auto; }
         .energy-table { width: 100%; min-width: 880px; border-collapse: collapse; }
         .energy-table th, .energy-table td { padding: 13px 15px; border-bottom: 1px solid #eef2f7; text-align: left; vertical-align: top; }
-        .energy-table th { color: #64748b; background: #f8fafc; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+        .energy-table th { color: #64748b; background: #F5F7FA; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
         .energy-system-name { font-weight: 750; }
         .energy-system-code { margin-top: 3px; color: #64748b; font-size: 12px; }
         .energy-status { display: inline-flex; padding: 4px 8px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 750; white-space: nowrap; }
@@ -138,7 +138,7 @@ export default function InfrastructureEnergy() {
         .energy-detail-section { margin-top: 22px; }
         .energy-detail-section h3 { margin: 0 0 10px; color: #0f172a; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
         .energy-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-        .energy-detail-item { padding: 11px; border: 1px solid #e2e8f0; border-radius: 7px; background: #f8fafc; }
+        .energy-detail-item { padding: 11px; border: 1px solid #e2e8f0; border-radius: 7px; background: #F5F7FA; }
         .energy-detail-item span { display: block; color: #64748b; font-size: 11px; }
         .energy-detail-item strong { display: block; margin-top: 4px; font-size: 14px; overflow-wrap: anywhere; }
         @media (max-width: 900px) { .energy-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .energy-header { flex-direction: column; } }

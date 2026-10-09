@@ -553,7 +553,7 @@ export default function InfrastructureVerification() {
 
         .infrastructure-verification-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           padding: 24px;
           font-family: Inter, ui-sans-serif, system-ui, -apple-system,
@@ -632,7 +632,7 @@ export default function InfrastructureVerification() {
 
         .btn:hover {
           border-color: #bae6fd;
-          background: #f0f9ff;
+          background: #F5F7FA;
           color: #0369a1;
         }
 
@@ -695,7 +695,7 @@ export default function InfrastructureVerification() {
         }
 
         .summary-icon.blue {
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0284c7;
         }
 
@@ -838,7 +838,7 @@ export default function InfrastructureVerification() {
         }
 
         th {
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #64748b;
           font-size: 11px;
           text-transform: uppercase;
@@ -858,7 +858,7 @@ export default function InfrastructureVerification() {
         }
 
         tbody tr:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .asset-cell {
@@ -874,7 +874,7 @@ export default function InfrastructureVerification() {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0284c7;
           flex-shrink: 0;
         }
@@ -963,7 +963,7 @@ export default function InfrastructureVerification() {
         }
 
         .icon-btn:hover {
-          background: #f0f9ff;
+          background: #F5F7FA;
           border-color: #bae6fd;
           color: #0284c7;
         }
@@ -1078,7 +1078,7 @@ export default function InfrastructureVerification() {
 
         .page-btn:hover:not(:disabled) {
           border-color: #7dd3fc;
-          background: #f0f9ff;
+          background: #F5F7FA;
           color: #0284c7;
         }
 
@@ -1160,7 +1160,7 @@ export default function InfrastructureVerification() {
           border: 1px solid #e2e8f0;
           border-radius: 11px;
           padding: 13px;
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .detail-label {
@@ -1272,7 +1272,7 @@ export default function InfrastructureVerification() {
           display: flex;
           align-items: center;
           gap: 10px;
-          background: #f0f9ff;
+          background: #F5F7FA;
           color: #075985;
           border: 1px solid #bae6fd;
           border-radius: 11px;

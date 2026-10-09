@@ -580,7 +580,7 @@ export default function Locations() {
           label="Total Locations"
           value={stats.total}
           icon="⌂"
-          accent="#2563EB"
+          accent="#3074B3"
         />
 
         <StatCard
@@ -601,7 +601,7 @@ export default function Locations() {
           label="Facilities"
           value={stats.buildings}
           icon="▦"
-          accent="#F4C542"
+          accent="#D97706"
         />
       </div>
 
@@ -1503,7 +1503,7 @@ const styles = {
   primaryButton: {
     border: "none",
     borderRadius: "9px",
-    background: "#2563EB",
+    background: "#3074B3",
     color: "#FFFFFF",
     padding: "11px 16px",
     minHeight: "42px",
@@ -1516,7 +1516,7 @@ const styles = {
     gap: "7px",
     whiteSpace: "nowrap",
     boxShadow:
-      "0 2px 5px rgba(37, 99, 235, 0.18)",
+      "0 2px 5px rgba(48, 116, 179, 0.18)",
   },
 
   plus: {
@@ -1570,7 +1570,7 @@ const styles = {
 
   statCard: {
     background: "#FFFFFF",
-    border: "1px solid #E5E7EB",
+    border: "1px solid #E2E8F0",
     borderRadius: "12px",
     padding: "18px",
     display: "flex",
@@ -1607,7 +1607,7 @@ const styles = {
 
   card: {
     background: "#FFFFFF",
-    border: "1px solid #E5E7EB",
+    border: "1px solid #E2E8F0",
     borderRadius: "12px",
     overflow: "hidden",
     boxShadow:
@@ -1616,7 +1616,7 @@ const styles = {
 
   toolbar: {
     padding: "16px",
-    borderBottom: "1px solid #E5E7EB",
+    borderBottom: "1px solid #E2E8F0",
     display: "flex",
     alignItems: "center",
     gap: "10px",
@@ -1694,8 +1694,8 @@ const styles = {
     letterSpacing: "0.04em",
     fontWeight: 750,
     color: "#64748B",
-    background: "#F8FAFC",
-    borderBottom: "1px solid #E5E7EB",
+    background: "#F5F7FA",
+    borderBottom: "1px solid #E2E8F0",
     whiteSpace: "nowrap",
   },
 
@@ -1724,7 +1724,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "#E0F2FE",
+    background: "#EAF2FA",
     color: "#0369A1",
     fontSize: "15px",
     fontWeight: 800,
@@ -1751,8 +1751,8 @@ const styles = {
     alignItems: "center",
     borderRadius: "6px",
     padding: "5px 8px",
-    background: "#EFF6FF",
-    color: "#1D4ED8",
+    background: "#EAF2FA",
+    color: "#245783",
     fontSize: "12px",
     fontWeight: 750,
   },
@@ -1801,7 +1801,7 @@ const styles = {
   actionButton: {
     border: "none",
     background: "transparent",
-    color: "#2563EB",
+    color: "#3074B3",
     padding: "5px 6px",
     borderRadius: "5px",
     fontSize: "12px",
@@ -1811,7 +1811,7 @@ const styles = {
 
   tableFooter: {
     padding: "13px 16px",
-    borderTop: "1px solid #E5E7EB",
+    borderTop: "1px solid #E2E8F0",
     textAlign: "right",
     color: "#64748B",
     fontSize: "12px",
@@ -1835,8 +1835,8 @@ const styles = {
   spinner: {
     width: "18px",
     height: "18px",
-    border: "2px solid #DBEAFE",
-    borderTopColor: "#2563EB",
+    border: "2px solid #EAF2FA",
+    borderTopColor: "#3074B3",
     borderRadius: "50%",
   },
 
@@ -1898,7 +1898,7 @@ const styles = {
 
   modalHeader: {
     padding: "20px 22px",
-    borderBottom: "1px solid #E5E7EB",
+    borderBottom: "1px solid #E2E8F0",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
@@ -1976,7 +1976,7 @@ const styles = {
 
   modalFooter: {
     padding: "15px 22px",
-    borderTop: "1px solid #E5E7EB",
+    borderTop: "1px solid #E2E8F0",
     display: "flex",
     alignItems: "center",
     justifyContent: "flex-end",
@@ -2004,7 +2004,7 @@ const styles = {
     alignItems: "center",
     gap: "14px",
     padding: "16px",
-    background: "#F8FAFC",
+    background: "#F5F7FA",
     border: "1px solid #E2E8F0",
     borderRadius: "10px",
     marginBottom: "18px",
@@ -2014,7 +2014,7 @@ const styles = {
     width: "54px",
     height: "54px",
     borderRadius: "12px",
-    background: "#E0F2FE",
+    background: "#EAF2FA",
     color: "#0369A1",
     display: "flex",
     alignItems: "center",
@@ -2046,7 +2046,7 @@ const styles = {
 
   detailItem: {
     padding: "13px",
-    border: "1px solid #E5E7EB",
+    border: "1px solid #E2E8F0",
     borderRadius: "9px",
     background: "#FFFFFF",
   },
@@ -2070,7 +2070,7 @@ const styles = {
   descriptionBox: {
     marginTop: "14px",
     padding: "14px",
-    border: "1px solid #E5E7EB",
+    border: "1px solid #E2E8F0",
     borderRadius: "9px",
   },
 

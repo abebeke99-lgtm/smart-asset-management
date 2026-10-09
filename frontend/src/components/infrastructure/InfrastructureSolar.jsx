@@ -873,7 +873,7 @@ export default function InfrastructureSolar() {
 
         .solar-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           padding: 24px;
           font-family: Inter, ui-sans-serif, system-ui,
@@ -953,7 +953,7 @@ export default function InfrastructureSolar() {
 
         .btn:hover {
           border-color: #bae6fd;
-          background: #f0f9ff;
+          background: #F5F7FA;
           color: #0369a1;
         }
 
@@ -1015,7 +1015,7 @@ export default function InfrastructureSolar() {
         }
 
         .blue {
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0284c7;
         }
 
@@ -1155,7 +1155,7 @@ export default function InfrastructureSolar() {
         th {
           padding: 13px 15px;
           text-align: left;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #64748b;
           font-size: 11px;
           font-weight: 800;
@@ -1174,7 +1174,7 @@ export default function InfrastructureSolar() {
         }
 
         tbody tr:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .system-cell {
@@ -1323,7 +1323,7 @@ export default function InfrastructureSolar() {
         }
 
         .icon-btn:hover {
-          background: #f0f9ff;
+          background: #F5F7FA;
           border-color: #bae6fd;
           color: #0284c7;
         }
@@ -1417,7 +1417,7 @@ export default function InfrastructureSolar() {
         }
 
         .page-btn:hover:not(:disabled) {
-          background: #f0f9ff;
+          background: #F5F7FA;
           border-color: #bae6fd;
           color: #0284c7;
         }
@@ -1496,7 +1496,7 @@ export default function InfrastructureSolar() {
           padding: 13px;
           border-radius: 11px;
           border: 1px solid #e2e8f0;
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .detail-label {

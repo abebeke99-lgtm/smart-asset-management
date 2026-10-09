@@ -6,10 +6,10 @@
 }
 
 .ict-theme-inventory {
-  --module-primary: #2563eb;
-  --module-accent: #1d4ed8;
-  --module-soft: #dbeafe;
-  --module-focus: rgba(37, 99, 235, 0.3);
+  --module-primary: #3074B3;
+  --module-accent: #245783;
+  --module-soft: #EAF2FA;
+  --module-focus: rgba(48, 116, 179, 0.3);
 }
 
 .ict-theme-equipment {
@@ -191,7 +191,7 @@
 }
 
 .ict-module-theme thead th {
-  background: #f8fafc;
+  background: #F5F7FA;
   color: #475569;
   font-size: 0.78rem;
   font-weight: 700;

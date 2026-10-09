@@ -45,7 +45,7 @@ const formatDate = (value) => {
 const statusTone = (status) => {
   const value = String(status || '').toLowerCase();
   if (['read', 'sent', 'delivered'].includes(value)) return { background: '#dcfce7', color: '#166534' };
-  if (['unread', 'pending'].includes(value)) return { background: '#dbeafe', color: '#1d4ed8' };
+  if (['unread', 'pending'].includes(value)) return { background: '#EAF2FA', color: '#245783' };
   if (['failed', 'archived'].includes(value)) return { background: '#fee2e2', color: '#991b1b' };
   return { background: '#fef3c7', color: '#92400e' };
 };
@@ -54,7 +54,7 @@ const priorityTone = (priority) => {
   const value = String(priority || '').toLowerCase();
   if (value === 'critical' || value === 'urgent') return { background: '#fee2e2', color: '#991b1b' };
   if (value === 'high') return { background: '#fef3c7', color: '#92400e' };
-  if (value === 'low') return { background: '#e0f2fe', color: '#0c4a6e' };
+  if (value === 'low') return { background: '#EAF2FA', color: '#0c4a6e' };
   return { background: '#e2e8f0', color: '#334155' };
 };
 
@@ -236,9 +236,9 @@ const AdminNotifications = () => {
 
       <div className="admin-kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
         <Stat label="Total Notifications" value={summary.total} icon={Bell} tone="#0EA5E9" />
-        <Stat label="Unread" value={summary.unread} icon={BellRing} tone="#2563EB" />
+        <Stat label="Unread" value={summary.unread} icon={BellRing} tone="#3074B3" />
         <Stat label="Read" value={summary.read} icon={CheckCheck} tone="#16A34A" />
-        <Stat label="High Priority" value={summary.highPriority} icon={AlertTriangle} tone="#F59E0B" />
+        <Stat label="High Priority" value={summary.highPriority} icon={AlertTriangle} tone="#D97706" />
         <Stat label="Today" value={summary.today} icon={Filter} tone="#0F172A" />
       </div>
 

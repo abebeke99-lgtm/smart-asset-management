@@ -40,9 +40,9 @@ const readThemeColor = (property, fallback) => {
   return window.getComputedStyle(document.documentElement).getPropertyValue(property).trim() || fallback;
 };
 const chartPalette = [
-  readThemeColor("--color-chart-1", "#0057B8"),
+  readThemeColor("--color-chart-1", "#3074B3"),
   readThemeColor("--color-chart-5", "#0284C7"),
-  readThemeColor("--color-chart-2", "#F59E0B"),
+  readThemeColor("--color-chart-2", "#D97706"),
   readThemeColor("--color-chart-4", "#16A34A"),
   readThemeColor("--color-chart-6", "#DC2626"),
   readThemeColor("--color-chart-7", "#7C3AED"),

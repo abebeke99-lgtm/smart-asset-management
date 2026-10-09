@@ -1251,7 +1251,7 @@ const InfrastructureAssets = () => {
 const styles = {
   page: {
     minHeight: "100%",
-    background: "#F8FAFC",
+    background: "#F5F7FA",
     color: "#0F172A",
   },
 };
@@ -1349,7 +1349,7 @@ const css = `
     height: 48px;
     border-radius: 12px;
     color: #0284c7;
-    background: #e0f2fe;
+    background: #EAF2FA;
   }
 
   .title-row h1 {
@@ -1409,7 +1409,7 @@ const css = `
   .secondary-button:hover {
     border-color: #7dd3fc;
     color: #0284c7;
-    background: #f0f9ff;
+    background: #F5F7FA;
   }
 
   .secondary-button:disabled {
@@ -1512,7 +1512,7 @@ const css = `
 
   .summary-card.total .summary-icon {
     color: #0284c7;
-    background: #e0f2fe;
+    background: #EAF2FA;
   }
 
   .summary-card.operational .summary-icon {
@@ -1614,7 +1614,7 @@ const css = `
   .filter-button.active {
     border-color: #7dd3fc;
     color: #0284c7;
-    background: #f0f9ff;
+    background: #F5F7FA;
   }
 
   .filter-count {
@@ -1642,7 +1642,7 @@ const css = `
   .filter-panel {
     margin: 12px 30px 0;
     padding: 16px;
-    border: 1px solid #dbeafe;
+    border: 1px solid #EAF2FA;
     border-radius: 11px;
     background: #f8fdff;
   }
@@ -1754,7 +1754,7 @@ const css = `
     padding: 12px 16px;
     border-bottom: 1px solid #e2e8f0;
     color: #64748b;
-    background: #f8fafc;
+    background: #F5F7FA;
     font-size: 9px;
     font-weight: 850;
     text-align: left;
@@ -1795,7 +1795,7 @@ const css = `
     height: 36px;
     border-radius: 8px;
     color: #0284c7;
-    background: #e0f2fe;
+    background: #EAF2FA;
   }
 
   .asset-info {
@@ -1911,7 +1911,7 @@ const css = `
   .view-button:hover {
     border-color: #7dd3fc;
     color: #0284c7;
-    background: #f0f9ff;
+    background: #F5F7FA;
   }
 
   .pagination {
@@ -1956,7 +1956,7 @@ const css = `
   .pagination-controls button:hover:not(:disabled) {
     border-color: #7dd3fc;
     color: #0284c7;
-    background: #f0f9ff;
+    background: #F5F7FA;
   }
 
   .pagination-controls button:disabled {
@@ -1995,7 +1995,7 @@ const css = `
     height: 68px;
     border-radius: 17px;
     color: #0284c7;
-    background: #e0f2fe;
+    background: #EAF2FA;
   }
 
   .empty-state h2 {
@@ -2018,7 +2018,7 @@ const css = `
     gap: 20px;
     margin: 18px 30px 25px;
     padding: 16px 18px;
-    border: 1px solid #dbeafe;
+    border: 1px solid #EAF2FA;
     border-radius: 12px;
     background: #f8fdff;
   }
@@ -2060,7 +2060,7 @@ const css = `
     gap: 6px;
     min-height: 33px;
     padding: 0 10px;
-    border: 1px solid #dbeafe;
+    border: 1px solid #EAF2FA;
     border-radius: 7px;
     color: #0369a1;
     background: #ffffff;
@@ -2071,7 +2071,7 @@ const css = `
 
   .navigation-links a:hover {
     border-color: #7dd3fc;
-    background: #f0f9ff;
+    background: #F5F7FA;
   }
 
   .modal-overlay {
@@ -2118,7 +2118,7 @@ const css = `
     height: 43px;
     border-radius: 10px;
     color: #0284c7;
-    background: #e0f2fe;
+    background: #EAF2FA;
   }
 
   .modal-header h2 {

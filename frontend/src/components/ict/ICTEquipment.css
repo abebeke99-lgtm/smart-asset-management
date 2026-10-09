@@ -142,7 +142,7 @@
 .ict-equipment-secondary-button:hover:not(:disabled),
 .ict-equipment-page-button:hover:not(:disabled) {
   border-color: #b9c9d8;
-  background: #f7fafc;
+  background: #F5F7FA;
   color: #172033;
 }
 

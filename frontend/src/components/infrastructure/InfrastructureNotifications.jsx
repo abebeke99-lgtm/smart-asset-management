@@ -784,7 +784,7 @@ export default function InfrastructureNotifications() {
         .notifications-page {
           min-height: 100vh;
           padding: 24px;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           font-family: Inter, ui-sans-serif,
             system-ui, -apple-system,
@@ -822,11 +822,11 @@ export default function InfrastructureNotifications() {
           background: linear-gradient(
             135deg,
             #0ea5e9,
-            #2563eb
+            #3074B3
           );
           box-shadow:
             0 10px 25px
-            rgba(37, 99, 235, .18);
+            rgba(48, 116, 179, .18);
         }
 
         .page-header h1 {
@@ -891,7 +891,7 @@ export default function InfrastructureNotifications() {
         }
 
         .btn-secondary:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .alert {
@@ -964,8 +964,8 @@ export default function InfrastructureNotifications() {
         }
 
         .stat-icon.blue {
-          color: #2563eb;
-          background: #eff6ff;
+          color: #3074B3;
+          background: #EAF2FA;
         }
 
         .stat-icon.cyan {
@@ -1109,7 +1109,7 @@ export default function InfrastructureNotifications() {
         }
 
         .notification.unread {
-          background: #f0f9ff;
+          background: #F5F7FA;
         }
 
         .notification-icon {
@@ -1120,8 +1120,8 @@ export default function InfrastructureNotifications() {
           display: flex;
           align-items: center;
           justify-content: center;
-          color: #2563eb;
-          background: #dbeafe;
+          color: #3074B3;
+          background: #EAF2FA;
         }
 
         .notification-main {
@@ -1171,7 +1171,7 @@ export default function InfrastructureNotifications() {
 
         .badge.unread {
           color: #075985;
-          background: #e0f2fe;
+          background: #EAF2FA;
         }
 
         .badge.read {
@@ -1219,9 +1219,9 @@ export default function InfrastructureNotifications() {
         }
 
         .icon-btn:hover {
-          color: #2563eb;
+          color: #3074B3;
           border-color: #bfdbfe;
-          background: #eff6ff;
+          background: #EAF2FA;
         }
 
         .icon-btn:disabled {
@@ -1300,7 +1300,7 @@ export default function InfrastructureNotifications() {
 
         .page-btn:hover:not(:disabled) {
           border-color: #93c5fd;
-          color: #2563eb;
+          color: #3074B3;
         }
 
         .page-btn:disabled {
@@ -1371,7 +1371,7 @@ export default function InfrastructureNotifications() {
           padding: 14px;
           margin-bottom: 14px;
           border-radius: 10px;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #334155;
           font-size: 12px;
           line-height: 1.6;

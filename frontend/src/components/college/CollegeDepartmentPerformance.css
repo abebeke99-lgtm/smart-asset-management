@@ -32,7 +32,7 @@
 .college-performance-pagination button {
   border: none;
   border-radius: 10px;
-  background: #1d4ed8;
+  background: #245783;
   color: white;
   display: inline-flex;
   align-items: center;
@@ -58,7 +58,7 @@
   display: flex;
   align-items: center;
   gap: 0.9rem;
-  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  background: linear-gradient(180deg, #ffffff, #F5F7FA);
   border: 1px solid #e2e8f0;
   border-radius: 18px;
   padding: 1rem 1.1rem;
@@ -76,7 +76,7 @@
   color: white;
 }
 
-.college-performance-kpi-icon.blue { background: linear-gradient(135deg, #2563eb, #60a5fa); }
+.college-performance-kpi-icon.blue { background: linear-gradient(135deg, #3074B3, #60a5fa); }
 .college-performance-kpi-icon.cyan { background: linear-gradient(135deg, #0f766e, #2dd4bf); }
 .college-performance-kpi-icon.green { background: linear-gradient(135deg, #15803d, #22c55e); }
 .college-performance-kpi-icon.indigo { background: linear-gradient(135deg, #4f46e5, #818cf8); }
@@ -102,7 +102,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
-  background: #f8fafc;
+  background: #F5F7FA;
   border: 1px solid #e2e8f0;
   border-radius: 18px;
   padding: 1rem;
@@ -150,7 +150,7 @@
   gap: 1rem;
   padding: 1rem 1.1rem;
   border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
+  background: #F5F7FA;
 }
 
 .college-performance-table-header h4 {
@@ -198,7 +198,7 @@
 }
 
 .college-performance-table-wrap thead th {
-  background: #f8fafc;
+  background: #F5F7FA;
   color: #475569;
   font-size: 0.76rem;
   text-transform: uppercase;
@@ -244,8 +244,8 @@
 
 .college-performance-detail-button {
   padding: 0.55rem 0.8rem;
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: #EAF2FA;
+  color: #245783;
 }
 
 .college-performance-empty {
@@ -261,7 +261,7 @@
   gap: 1rem;
   padding: 1rem 1.1rem;
   border-top: 1px solid #e2e8f0;
-  background: #f8fafc;
+  background: #F5F7FA;
 }
 
 .college-performance-pagination button {
@@ -280,7 +280,7 @@
   gap: 0.7rem;
   min-height: 240px;
   border: 1px solid #e2e8f0;
-  background: #f8fafc;
+  background: #F5F7FA;
   border-radius: 18px;
   color: #334155;
   font-weight: 600;
@@ -298,7 +298,7 @@
   border: none;
   border-radius: 10px;
   padding: 0.7rem 0.9rem;
-  background: #1d4ed8;
+  background: #245783;
   color: white;
   cursor: pointer;
 }
@@ -340,7 +340,7 @@
   gap: 1rem;
   padding: 1rem 1.2rem;
   border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
+  background: #F5F7FA;
 }
 
 .college-performance-modal-header p {
@@ -379,7 +379,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  background: #f8fafc;
+  background: #F5F7FA;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 0.8rem;

@@ -10,7 +10,7 @@ import { apiClient, getApiErrorMessage } from '../../utils/api';
 ChartJS.register(ArcElement, BarElement, CategoryScale, Filler, Legend, LinearScale, LineElement, PointElement, Tooltip);
 
 const initialFilters = { dateFrom: '', dateTo: '', campusId: '', collegeId: '', departmentId: '', categoryId: '', status: '', condition: '', locationId: '', acquisitionSource: '', maintenanceStatus: '' };
-const colors = ['#2563EB', '#16A34A', '#D97706', '#DC2626', '#0891B2', '#7C3AED', '#64748B', '#DB2777'];
+const colors = ['#3074B3', '#16A34A', '#D97706', '#DC2626', '#0891B2', '#7C3AED', '#64748B', '#DB2777'];
 const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { enabled: true } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } };
 const formatNumber = (value) => value === null || value === undefined ? 'Not available' : Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
 const formatMoney = (value) => value === null || value === undefined ? 'Not available' : Number(value).toLocaleString(undefined, { style: 'currency', currency: 'ETB', maximumFractionDigits: 2 });
@@ -132,7 +132,7 @@ const AdminAssetAnalytics = () => {
   const campusChart = { labels: campuses.map((row) => row.name), datasets: [{ label: 'Assets', data: campuses.map((row) => row.count), backgroundColor: colors, borderRadius: 4 }] };
   const conditionChart = { labels: conditionRows.map((row) => row.condition), datasets: [{ label: 'Assets', data: conditionRows.map((row) => row.count), backgroundColor: colors, borderWidth: 0 }] };
   const ageChart = { labels: ageRows.map((row) => row.bucket), datasets: [{ label: 'Assets', data: ageRows.map((row) => row.count), backgroundColor: colors, borderRadius: 4 }] };
-  const acquisitionChart = { labels: acquisitionRows.map((row) => row.period), datasets: [{ label: 'Assets acquired', data: acquisitionRows.map((row) => row.count), borderColor: '#2563EB', backgroundColor: 'rgba(37,99,235,0.12)', fill: true, tension: 0.25 }] };
+  const acquisitionChart = { labels: acquisitionRows.map((row) => row.period), datasets: [{ label: 'Assets acquired', data: acquisitionRows.map((row) => row.count), borderColor: '#3074B3', backgroundColor: 'rgba(48, 116, 179,0.12)', fill: true, tension: 0.25 }] };
   const maintenanceChart = { labels: maintenance.map((row) => row.period), datasets: [{ label: 'Maintenance requests', data: maintenance.map((row) => row.count), borderColor: '#D97706', backgroundColor: 'rgba(217,119,6,0.12)', fill: true, tension: 0.25 }] };
   const organizations = data?.organizations || {};
   const frequentMaintenance = [...(data?.maintenance?.frequentlyMaintained || [])].sort((first, second) => maintenanceAscending ? first.maintenanceCount - second.maintenanceCount : second.maintenanceCount - first.maintenanceCount);
@@ -185,7 +185,7 @@ const AdminAssetAnalytics = () => {
       {loading ? <div className="admin-card admin-empty-state" aria-busy="true">Loading asset analytics...</div> : !error && data && (
         <>
           <div className="admin-kpi-grid" style={{ marginBottom: 18 }}>
-            <Metric label="Total assets" value={formatNumber(kpis.totalAssets)} icon={Package} tone="#2563EB" />
+            <Metric label="Total assets" value={formatNumber(kpis.totalAssets)} icon={Package} tone="#3074B3" />
             <Metric label="Active assets" value={formatNumber(kpis.activeAssets)} icon={Package} tone="#16A34A" />
             <Metric label="Assigned assets" value={formatNumber(kpis.assignedAssets)} icon={Building2} tone="#0891B2" />
             <Metric label="Available assets" value={formatNumber(kpis.availableAssets)} icon={Package} tone="#16A34A" />
@@ -218,7 +218,7 @@ const AdminAssetAnalytics = () => {
             <div className="admin-card" style={{ marginTop: 18 }}>
             <h2 style={{ margin: '0 0 12px', color: 'var(--admin-text)', fontSize: '1rem' }}>Research-grant assets</h2>
             <div className="admin-kpi-grid" style={{ marginBottom: 12 }}>
-              <Metric label="Grant assets" value={formatNumber(grantAssets.totalAssets)} icon={Package} tone="#2563EB" />
+              <Metric label="Grant assets" value={formatNumber(grantAssets.totalAssets)} icon={Package} tone="#3074B3" />
               <Metric label="Grant asset value" value={formatMoney(grantAssets.totalValue)} icon={CircleDollarSign} tone="#7C3AED" />
             </div>
             {(grantAssets.bySource || []).length ? <div className="admin-table-scroll"><table className="admin-table"><thead><tr><th>Grant / recorded source</th><th>Assets</th><th>Value</th></tr></thead><tbody>{grantAssets.bySource.map((item) => <tr key={item.source}><td>{item.source}</td><td>{formatNumber(item.count)}</td><td>{formatMoney(item.value)}</td></tr>)}</tbody></table></div> : <div className="admin-empty-state">No research-grant assets are recorded in the selected data.</div>}

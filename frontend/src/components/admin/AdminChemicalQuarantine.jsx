@@ -549,7 +549,7 @@ export default function ChemicalQuarantine() {
           border: 0;
           border-radius: 8px;
           padding: 11px 17px;
-          background: #2563eb;
+          background: #3074B3;
           color: #fff;
           font-size: 14px;
           font-weight: 700;
@@ -557,7 +557,7 @@ export default function ChemicalQuarantine() {
         }
 
         .primary-button:hover {
-          background: #1d4ed8;
+          background: #245783;
         }
 
         .summary-grid {
@@ -617,8 +617,8 @@ export default function ChemicalQuarantine() {
         .filter-select:focus,
         .form-input:focus,
         .form-textarea:focus {
-          border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37, 99, 235, .1);
+          border-color: #3074B3;
+          box-shadow: 0 0 0 3px rgba(48, 116, 179, .1);
         }
 
         .refresh-button {
@@ -651,7 +651,7 @@ export default function ChemicalQuarantine() {
 
         .quarantine-table th {
           padding: 13px 15px;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #475569;
           font-size: 12px;
           text-align: left;
@@ -672,7 +672,7 @@ export default function ChemicalQuarantine() {
         }
 
         .reference {
-          color: #1d4ed8;
+          color: #245783;
           font-weight: 700;
         }
 
@@ -712,8 +712,8 @@ export default function ChemicalQuarantine() {
         }
 
         .status-default {
-          color: #1d4ed8;
-          background: #eff6ff;
+          color: #245783;
+          background: #EAF2FA;
         }
 
         .expiry-normal {
@@ -749,8 +749,8 @@ export default function ChemicalQuarantine() {
         }
 
         .action-button.view {
-          color: #1d4ed8;
-          background: #eff6ff;
+          color: #245783;
+          background: #EAF2FA;
           border-color: #bfdbfe;
         }
 
@@ -907,7 +907,7 @@ export default function ChemicalQuarantine() {
           padding: 12px;
           border: 1px solid #e2e8f0;
           border-radius: 8px;
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .detail-full {

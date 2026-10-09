@@ -316,7 +316,7 @@ const StoreMaintenanceStatus = () => {
   const styles = {
     page: {
       padding: '24px',
-      background: isDark ? '#020817' : '#f8fafc',
+      background: isDark ? '#020817' : '#F5F7FA',
       minHeight: '100vh',
       color: isDark ? '#e2e8f0' : '#0f172a',
     },
@@ -411,7 +411,7 @@ const StoreMaintenanceStatus = () => {
       cursor: 'pointer',
     },
     primaryButton: {
-      background: '#2563eb',
+      background: '#3074B3',
       color: '#fff',
     },
     secondaryButton: {
@@ -422,7 +422,7 @@ const StoreMaintenanceStatus = () => {
       const state = normalizeStatus(status);
       const palette = {
         pending: { background: '#fef3c7', color: '#92400e' },
-        approved: { background: '#dbeafe', color: '#1d4ed8' },
+        approved: { background: '#EAF2FA', color: '#245783' },
         assigned: { background: '#ede9fe', color: '#6d28d9' },
         'in-progress': { background: '#cffafe', color: '#0f766e' },
         'waiting-for-parts': { background: '#fce7f3', color: '#be185d' },
@@ -432,7 +432,7 @@ const StoreMaintenanceStatus = () => {
         cancelled: { background: '#f1f5f9', color: '#334155' },
         'ready-for-return': { background: '#d1fae5', color: '#065f46' },
         returned: { background: '#d1fae5', color: '#065f46' },
-        'under-maintenance': { background: '#dbeafe', color: '#1e3a8a' },
+        'under-maintenance': { background: '#EAF2FA', color: '#245783' },
         inspection: { background: '#e0e7ff', color: '#3730a3' },
         repair: { background: '#f3e8ff', color: '#7c3aed' },
         'on-hold': { background: '#fef2f2', color: '#b91c1c' },
@@ -457,7 +457,7 @@ const StoreMaintenanceStatus = () => {
     section: { marginBottom: '18px' },
     sectionTitle: { fontSize: '1rem', fontWeight: 800, marginBottom: '10px' },
     detailGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' },
-    infoBox: { background: isDark ? '#020817' : '#f8fafc', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: '10px', padding: '12px' },
+    infoBox: { background: isDark ? '#020817' : '#F5F7FA', border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`, borderRadius: '10px', padding: '12px' },
     timelineItem: { padding: '10px 0', borderBottom: `1px solid ${isDark ? '#334155' : '#e2e8f0'}` },
     nav: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px' },
   };

@@ -909,7 +909,7 @@ const AdminAssignment = () => {
       display: 'flex',
       alignItems: 'center',
       gap: '8px',
-      background: isDark ? '#0f172a' : '#f8fafc',
+      background: isDark ? '#0f172a' : '#F5F7FA',
       border: `1px solid ${isDark ? '#334155' : '#dbe7f3'}`,
       borderRadius: '10px',
       padding: '0 12px',
@@ -928,7 +928,7 @@ const AdminAssignment = () => {
       minHeight: '42px',
       borderRadius: '10px',
       border: `1px solid ${isDark ? '#334155' : '#dbe7f3'}`,
-      background: isDark ? '#0f172a' : '#f8fafc',
+      background: isDark ? '#0f172a' : '#F5F7FA',
       color: isDark ? '#f8fbff' : '#0f172a',
       padding: '0 12px',
       outline: 'none',
@@ -955,7 +955,7 @@ const AdminAssignment = () => {
       textTransform: 'uppercase',
       letterSpacing: '0.05em',
       color: isDark ? '#b9c8dd' : '#475569',
-      background: isDark ? '#0f172a' : '#f8fafc',
+      background: isDark ? '#0f172a' : '#F5F7FA',
       borderBottom: `1px solid ${isDark ? '#243244' : '#e2e8f0'}`,
       padding: '12px 16px',
     },
@@ -994,8 +994,8 @@ const AdminAssignment = () => {
       borderRadius: '8px',
       border: 'none',
       cursor: 'pointer',
-      background: 'rgba(37, 99, 235, 0.1)',
-      color: '#2563eb',
+      background: 'rgba(48, 116, 179, 0.1)',
+      color: '#3074B3',
     },
     muted: {
       color: isDark ? '#9aaec6' : '#64748b',
@@ -1071,7 +1071,7 @@ const AdminAssignment = () => {
       minHeight: '42px',
       borderRadius: '10px',
       border: `1px solid ${isDark ? '#334155' : '#dbe7f3'}`,
-      background: isDark ? '#0f172a' : '#f8fafc',
+      background: isDark ? '#0f172a' : '#F5F7FA',
       color: isDark ? '#f8fbff' : '#0f172a',
       padding: '0 12px',
       boxSizing: 'border-box',
@@ -1082,7 +1082,7 @@ const AdminAssignment = () => {
       padding: '12px',
       borderRadius: '10px',
       border: `1px solid ${isDark ? '#334155' : '#dbe7f3'}`,
-      background: isDark ? '#0f172a' : '#f8fafc',
+      background: isDark ? '#0f172a' : '#F5F7FA',
       color: isDark ? '#f8fbff' : '#0f172a',
       resize: 'vertical',
       outline: 'none',
@@ -1101,11 +1101,11 @@ const AdminAssignment = () => {
       display: 'inline-flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'rgba(37,99,235,0.08)',
+      background: 'rgba(48, 116, 179,0.08)',
     },
     skeletonRow: {
       height: '60px',
-      background: isDark ? '#0f172a' : '#f8fafc',
+      background: isDark ? '#0f172a' : '#F5F7FA',
       borderRadius: '10px',
       animation: 'pulse 1.4s ease-in-out infinite',
     },
@@ -1647,7 +1647,7 @@ const AdminAssignment = () => {
                           <td style={styles.td}>{assignment.assigned_by_name || '—'}</td>
                           <td style={styles.td}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <Clock3 size={14} color={status === 'overdue' ? '#b91c1c' : '#f59e0b'} />
+                              <Clock3 size={14} color={status === 'overdue' ? '#b91c1c' : '#D97706'} />
                               <span style={{ fontWeight: 600 }}>{formatAssignmentDate(expectedReturn)}</span>
                             </div>
                           </td>

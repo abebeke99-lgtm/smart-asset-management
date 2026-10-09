@@ -224,11 +224,11 @@ export default function FinancePayments() {
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fafc", color: "#0f172a", fontFamily: "Inter, Segoe UI, sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "#F5F7FA", color: "#0f172a", fontFamily: "Inter, Segoe UI, sans-serif" }}>
       <div style={{ maxWidth: 1500, margin: "0 auto", padding: 28 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 18, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 52, height: 52, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #0ea5e9, #2563eb)", color: "#fff", boxShadow: "0 10px 25px rgba(37,99,235,0.18)" }}>
+            <div style={{ width: 52, height: 52, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #0ea5e9, #3074B3)", color: "#fff", boxShadow: "0 10px 25px rgba(48, 116, 179,0.18)" }}>
               <Wallet size={22} />
             </div>
             <div>
@@ -246,7 +246,7 @@ export default function FinancePayments() {
           <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 15, padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>Total Payments</span>
-              <div style={{ width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "#eff6ff", color: "#2563eb" }}><CreditCard size={15} /></div>
+              <div style={{ width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "#EAF2FA", color: "#3074B3" }}><CreditCard size={15} /></div>
             </div>
             <div style={{ fontSize: 26, fontWeight: 800 }}>{stats.total}</div>
           </div>
@@ -274,7 +274,7 @@ export default function FinancePayments() {
           <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 15, padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>Total Amount</span>
-              <div style={{ width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "#dbeafe", color: "#1d4ed8" }}><CircleDollarSign size={15} /></div>
+              <div style={{ width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "#EAF2FA", color: "#245783" }}><CircleDollarSign size={15} /></div>
             </div>
             <div style={{ fontSize: 26, fontWeight: 800 }}>{formatMoney(stats.totalAmount)}</div>
           </div>
@@ -327,7 +327,7 @@ export default function FinancePayments() {
             <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}><RefreshCw size={18} className="spinner" style={{ animation: "none", marginRight: 8 }} /> Loading payments...</div>
           ) : payments.length === 0 ? (
             <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}>
-              <div style={{ width: 52, height: 52, borderRadius: 14, margin: "0 auto 10px", display: "flex", alignItems: "center", justifyContent: "center", background: "#eff6ff", color: "#2563eb" }}><CreditCard size={22} /></div>
+              <div style={{ width: 52, height: 52, borderRadius: 14, margin: "0 auto 10px", display: "flex", alignItems: "center", justifyContent: "center", background: "#EAF2FA", color: "#3074B3" }}><CreditCard size={22} /></div>
               <h3 style={{ margin: "0 0 6px", color: "#0f172a" }}>No payments found</h3>
               <p style={{ margin: 0 }}>No payment requests or processed payments are available.</p>
             </div>
@@ -336,33 +336,33 @@ export default function FinancePayments() {
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
                 <thead>
                   <tr>
-                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#f8fafc", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Payment Number</th>
-                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#f8fafc", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Invoice</th>
-                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#f8fafc", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Supplier</th>
-                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#f8fafc", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Date</th>
-                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#f8fafc", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Amount</th>
-                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#f8fafc", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Method</th>
-                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#f8fafc", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Reference</th>
-                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#f8fafc", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Status</th>
-                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#f8fafc", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Actions</th>
+                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#F5F7FA", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Payment Number</th>
+                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#F5F7FA", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Invoice</th>
+                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#F5F7FA", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Supplier</th>
+                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#F5F7FA", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Date</th>
+                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#F5F7FA", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Amount</th>
+                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#F5F7FA", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Method</th>
+                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#F5F7FA", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Reference</th>
+                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#F5F7FA", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Status</th>
+                    <th style={{ padding: "12px 15px", textAlign: "left", background: "#F5F7FA", color: "#64748b", fontSize: 11, textTransform: "uppercase" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {payments.map((payment) => (
                     <tr key={payment.id} style={{ borderBottom: "1px solid #eef2f7" }}>
-                      <td style={{ padding: "14px 15px", fontWeight: 700, color: "#2563eb" }}>{payment.paymentNumber || "—"}</td>
+                      <td style={{ padding: "14px 15px", fontWeight: 700, color: "#3074B3" }}>{payment.paymentNumber || "—"}</td>
                       <td style={{ padding: "14px 15px" }}>{payment.invoiceNumber || payment.invoiceId || "—"}</td>
                       <td style={{ padding: "14px 15px" }}>{payment.supplierName || "—"}</td>
                       <td style={{ padding: "14px 15px" }}>{formatDate(payment.paymentDate)}</td>
                       <td style={{ padding: "14px 15px", fontWeight: 800 }}>{formatMoney(payment.amount, payment.currency)}</td>
                       <td style={{ padding: "14px 15px" }}>{PAYMENT_METHOD_LABELS[payment.paymentMethod] || payment.paymentMethod || "—"}</td>
                       <td style={{ padding: "14px 15px" }}>{payment.referenceNumber || "—"}</td>
-                      <td style={{ padding: "14px 15px" }}><span className={statusClass(payment.status)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 9px", borderRadius: 999, fontSize: 11, fontWeight: 800, background: statusClass(payment.status) === "status success" ? "#dcfce7" : statusClass(payment.status) === "status danger" ? "#fee2e2" : statusClass(payment.status) === "status warning" ? "#fef3c7" : "#dbeafe", color: statusClass(payment.status) === "status success" ? "#166534" : statusClass(payment.status) === "status danger" ? "#991b1b" : statusClass(payment.status) === "status warning" ? "#92400e" : "#1e40af" }}>{STATUS_LABELS[payment.status] || payment.status}</span></td>
+                      <td style={{ padding: "14px 15px" }}><span className={statusClass(payment.status)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 9px", borderRadius: 999, fontSize: 11, fontWeight: 800, background: statusClass(payment.status) === "status success" ? "#dcfce7" : statusClass(payment.status) === "status danger" ? "#fee2e2" : statusClass(payment.status) === "status warning" ? "#fef3c7" : "#EAF2FA", color: statusClass(payment.status) === "status success" ? "#166534" : statusClass(payment.status) === "status danger" ? "#991b1b" : statusClass(payment.status) === "status warning" ? "#92400e" : "#245783" }}>{STATUS_LABELS[payment.status] || payment.status}</span></td>
                       <td style={{ padding: "14px 15px" }}>
                         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                           <button type="button" title="View" style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><Eye size={15} /></button>
                           {payment.status === "PENDING_APPROVAL" && (<button type="button" title="Approve" onClick={() => handleStatusAction(payment, "approve")} style={{ border: "1px solid #bbf7d0", background: "#f0fdf4", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><CheckCircle size={15} /></button>)}
-                          {payment.status === "APPROVED" && (<button type="button" title="Process" onClick={() => handleStatusAction(payment, "process")} style={{ border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><ArrowLeftRight size={15} /></button>)}
+                          {payment.status === "APPROVED" && (<button type="button" title="Process" onClick={() => handleStatusAction(payment, "process")} style={{ border: "1px solid #bfdbfe", background: "#EAF2FA", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><ArrowLeftRight size={15} /></button>)}
                           {payment.status === "PENDING_APPROVAL" && (<button type="button" title="Reject" onClick={() => handleStatusAction(payment, "reject")} style={{ border: "1px solid #fecaca", background: "#fef2f2", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><XCircle size={15} /></button>)}
                           {!["COMPLETED", "CANCELLED", "FAILED", "REJECTED"].includes(String(payment.status)) && (<button type="button" title="Cancel" onClick={() => handleStatusAction(payment, "cancel")} style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><XCircle size={15} /></button>)}
                         </div>
@@ -378,7 +378,7 @@ export default function FinancePayments() {
             <div style={{ color: "#64748b", fontSize: 12 }}>Page {pagination.page} of {pagination.totalPages}</div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <button type="button" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} style={{ width: 34, height: 34, border: "1px solid #e2e8f0", borderRadius: 8, background: "#fff", opacity: page <= 1 ? 0.5 : 1, cursor: page <= 1 ? "not-allowed" : "pointer" }}>←</button>
-              <span style={{ minWidth: 40, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#2563eb", color: "#fff", borderRadius: 8, fontWeight: 800 }}>{pagination.page}</span>
+              <span style={{ minWidth: 40, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#3074B3", color: "#fff", borderRadius: 8, fontWeight: 800 }}>{pagination.page}</span>
               <button type="button" disabled={page >= pagination.totalPages} onClick={() => setPage((current) => Math.min(pagination.totalPages, current + 1))} style={{ width: 34, height: 34, border: "1px solid #e2e8f0", borderRadius: 8, background: "#fff", opacity: page >= pagination.totalPages ? 0.5 : 1, cursor: page >= pagination.totalPages ? "not-allowed" : "pointer" }}>→</button>
             </div>
           </div>
@@ -389,7 +389,7 @@ export default function FinancePayments() {
             <div style={{ width: "min(880px, 100%)", background: "#fff", borderRadius: 20, boxShadow: "0 25px 70px rgba(15,23,42,.25)" }} onClick={(event) => event.stopPropagation()}>
               <div style={{ padding: "18px 20px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 42, height: 42, borderRadius: 12, background: "#eff6ff", color: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center" }}><FileText size={18} /></div>
+                  <div style={{ width: 42, height: 42, borderRadius: 12, background: "#EAF2FA", color: "#3074B3", display: "flex", alignItems: "center", justifyContent: "center" }}><FileText size={18} /></div>
                   <div>
                     <h2 style={{ margin: 0, fontSize: 18 }}>Create Payment Request</h2>
                     <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 12 }}>Create a payment request tied to a verified invoice.</p>
@@ -446,7 +446,7 @@ export default function FinancePayments() {
 
                 <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end", gap: 10 }}>
                   <button type="button" onClick={() => setShowForm(false)} style={{ minHeight: 42, padding: "0 16px", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer" }}>Cancel</button>
-                  <button type="submit" disabled={saving} style={{ minHeight: 42, padding: "0 16px", borderRadius: 10, border: "none", background: "#2563eb", color: "#fff", fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
+                  <button type="submit" disabled={saving} style={{ minHeight: 42, padding: "0 16px", borderRadius: 10, border: "none", background: "#3074B3", color: "#fff", fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
                     {saving ? <><RefreshCw size={15} style={{ animation: "none", marginRight: 6 }} />Submitting...</> : "Create Request"}
                   </button>
                 </div>

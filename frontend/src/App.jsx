@@ -424,7 +424,7 @@ class ChunkErrorBoundary extends React.Component {
             <button
               onClick={this.handleReload}
               style={{
-                background: '#3b82f6',
+                background: '#3074B3',
                 color: 'white',
                 border: 'none',
                 padding: '10px 20px',
@@ -1407,7 +1407,7 @@ const AdminAssetLocations = () => {
           <button type="button" onClick={loadData} style={{ background: '#e2e8f0', color: '#1a365d', border: 'none', borderRadius: '10px', padding: '10px 16px', cursor: 'pointer', fontWeight: 700 }}>
             Refresh
           </button>
-          <button type="button" onClick={resetForm} style={{ background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '10px', padding: '10px 18px', cursor: 'pointer', fontWeight: 700 }}>
+          <button type="button" onClick={resetForm} style={{ background: '#245783', color: '#fff', border: 'none', borderRadius: '10px', padding: '10px 18px', cursor: 'pointer', fontWeight: 700 }}>
             Create Location
           </button>
         </div>
@@ -1415,12 +1415,12 @@ const AdminAssetLocations = () => {
 
       {!loading && !error && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px', marginBottom: '20px' }}>
         {[
-          { label: 'Total Locations', subtitle: 'Registered physical locations', value: summary.totalLocations || 0, accent: '#1d4ed8' },
+          { label: 'Total Locations', subtitle: 'Registered physical locations', value: summary.totalLocations || 0, accent: '#245783' },
           { label: 'Active Locations', subtitle: 'Operational locations', value: summary.activeLocations || 0, accent: '#16a34a' },
           { label: 'Locations With Assets', subtitle: 'Locations currently containing assets', value: summary.locationsWithAssets || 0, accent: '#7c3aed' },
-          { label: 'Assets Across Locations', subtitle: 'Assets currently linked to locations', value: summary.totalAssets || 0, accent: '#f59e0b' },
+          { label: 'Assets Across Locations', subtitle: 'Assets currently linked to locations', value: summary.totalAssets || 0, accent: '#D97706' },
         ].map((card) => (
-          <div key={card.label} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '18px 20px', minHeight: '120px' }}>
+          <div key={card.label} style={{ background: '#F5F7FA', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '18px 20px', minHeight: '120px' }}>
             <div style={{ color: card.accent, fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 800 }}>Location</div>
             <div style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', margin: '12px 0 8px' }}>{Number(card.value).toLocaleString()}</div>
             <div style={{ color: '#1a365d', fontWeight: 700 }}>{card.label}</div>
@@ -1430,7 +1430,7 @@ const AdminAssetLocations = () => {
       </div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 360px) minmax(0, 1fr)', gap: '20px', marginBottom: '20px' }}>
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
+        <div style={{ background: '#F5F7FA', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
           <h3 style={{ margin: '0 0 16px', color: '#1a365d' }}>{editingId ? 'Edit Location' : 'Create Location'}</h3>
           <div style={{ display: 'grid', gap: '12px' }}>
             <input value={form.name} onChange={(event) => setForm((previous) => ({ ...previous, name: event.target.value }))} placeholder="Location name" style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
@@ -1441,7 +1441,7 @@ const AdminAssetLocations = () => {
             </select>
             <textarea value={form.description} onChange={(event) => setForm((previous) => ({ ...previous, description: event.target.value }))} placeholder="Location description" rows={4} style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', resize: 'vertical' }} />
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <button type="button" disabled={saving} onClick={saveLocation} style={{ background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 16px', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 600 }}>
+              <button type="button" disabled={saving} onClick={saveLocation} style={{ background: '#245783', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 16px', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 600 }}>
                 {saving ? 'Saving...' : (editingId ? 'Save Changes' : 'Create Location')}
               </button>
               {editingId && <button type="button" onClick={resetForm} style={{ background: '#e2e8f0', color: '#1a365d', border: 'none', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>}
@@ -1449,7 +1449,7 @@ const AdminAssetLocations = () => {
           </div>
         </div>
 
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
+        <div style={{ background: '#F5F7FA', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
             <h3 style={{ margin: 0, color: '#1a365d' }}>Location List</h3>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -1481,7 +1481,7 @@ const AdminAssetLocations = () => {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                     <span style={{ background: '#ecfeff', color: '#0f766e', borderRadius: '999px', padding: '5px 10px', fontSize: '0.8rem', fontWeight: 600 }}>{Number(location.assetCount || 0)} assets</span>
-                    <button type="button" onClick={() => startEdit(location)} style={{ background: '#edf2ff', color: '#2b6cb0', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}>Edit</button>
+                    <button type="button" onClick={() => startEdit(location)} style={{ background: '#EAF2FA', color: '#2b6cb0', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}>Edit</button>
                     <button type="button" onClick={() => removeLocation(location.id)} style={{ background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}>Delete</button>
                   </div>
                 </div>
@@ -1550,7 +1550,7 @@ const AdminAssetLifecycle = () => {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '24px' }}>
         {lifecycleStages.map((stage, index) => (
-          <div key={stage} style={{ border: '1px solid #dbeafe', background: index % 2 === 0 ? '#eff6ff' : '#f8fafc', borderRadius: '12px', padding: '12px 14px', color: '#1a365d', fontWeight: 600 }}>
+          <div key={stage} style={{ border: '1px solid #EAF2FA', background: index % 2 === 0 ? '#EAF2FA' : '#F5F7FA', borderRadius: '12px', padding: '12px 14px', color: '#1a365d', fontWeight: 600 }}>
             {index > 0 && '↓'}
             <div>{stage}</div>
           </div>
@@ -1560,20 +1560,20 @@ const AdminAssetLifecycle = () => {
       {loading ? (
         <div style={{ padding: '24px', color: '#4a5568' }}>Loading lifecycle data...</div>
       ) : filteredAssets.length === 0 ? (
-        <div style={{ padding: '24px', borderRadius: '10px', background: '#f8fafc', border: '1px dashed #cbd5e1', color: '#4a5568' }}>No asset lifecycle records match your filter.</div>
+        <div style={{ padding: '24px', borderRadius: '10px', background: '#F5F7FA', border: '1px dashed #cbd5e1', color: '#4a5568' }}>No asset lifecycle records match your filter.</div>
       ) : (
         <div style={{ display: 'grid', gap: '14px' }}>
           {filteredAssets.map((asset) => {
             const currentStage = lifecycleStages.includes(String(asset.status || '').replace(/_/g, ' ')) ? String(asset.status || '').replace(/_/g, ' ') : 'Available';
             const currentIndex = lifecycleStages.indexOf(currentStage) === -1 ? 2 : lifecycleStages.indexOf(currentStage);
             return (
-              <div key={asset.id} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', background: '#f8fafc' }}>
+              <div key={asset.id} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', background: '#F5F7FA' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
                   <div>
                     <div style={{ fontWeight: 700, color: '#1a365d', fontSize: '1.1rem' }}>{asset.name || `Asset ${asset.assetCode || asset.id}`}</div>
                     <div style={{ color: '#4a5568', fontSize: '0.85rem' }}>{asset.assetCode || 'No asset code'} · {asset.location || 'No location'}</div>
                   </div>
-                  <span style={{ background: '#e0f2fe', color: '#075985', borderRadius: '999px', padding: '6px 10px', fontWeight: 700 }}>{currentStage}</span>
+                  <span style={{ background: '#EAF2FA', color: '#075985', borderRadius: '999px', padding: '6px 10px', fontWeight: 700 }}>{currentStage}</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
                   {lifecycleStages.map((stage, index) => (
@@ -1756,7 +1756,7 @@ const AdminAssetDisposal = () => {
 
   const getStatusStyle = (status) => {
     const value = String(status || '').toLowerCase();
-    if (value === 'approved' || value === 'scheduled') return { background: '#dbeafe', color: '#1d4ed8' };
+    if (value === 'approved' || value === 'scheduled') return { background: '#EAF2FA', color: '#245783' };
     if (value === 'rejected' || value === 'cancelled') return { background: '#fee2e2', color: '#b91c1c' };
     if (value === 'retired' || value === 'disposed' || value === 'completed') return { background: '#e2e8f0', color: '#334155' };
     if (value === 'under review') return { background: '#fef3c7', color: '#b45309' };
@@ -1786,7 +1786,7 @@ const AdminAssetDisposal = () => {
   };
 
   return (
-    <div style={{ padding: '24px', background: '#f8fafc', minHeight: '100%' }}>
+    <div style={{ padding: '24px', background: '#F5F7FA', minHeight: '100%' }}>
       <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap' }}>
           <div>
@@ -1831,8 +1831,8 @@ const AdminAssetDisposal = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginBottom: '24px' }}>
           {[
             { label: 'Total Requests', value: summary.totalRequests, tone: '#0f172a' },
-            { label: 'Requested', value: summary.requested, tone: '#f59e0b' },
-            { label: 'Approved', value: summary.approved, tone: '#2563eb' },
+            { label: 'Requested', value: summary.requested, tone: '#D97706' },
+            { label: 'Approved', value: summary.approved, tone: '#3074B3' },
             { label: 'Rejected', value: summary.rejected, tone: '#dc2626' },
             { label: 'Completed', value: summary.completed, tone: '#16a34a' },
             { label: 'Retired Assets', value: summary.retiredAssets, tone: '#7c3aed' },
@@ -1988,7 +1988,7 @@ const AdminAssetDisposal = () => {
             {loading ? (
               <div style={{ padding: '26px 0', color: '#475569' }}>Loading disposal records from the university asset database...</div>
             ) : filteredRequests.length === 0 ? (
-              <div style={{ padding: '22px', borderRadius: '12px', background: '#f8fafc', border: '1px dashed #cbd5e1', color: '#475569', textAlign: 'center' }}>
+              <div style={{ padding: '22px', borderRadius: '12px', background: '#F5F7FA', border: '1px dashed #cbd5e1', color: '#475569', textAlign: 'center' }}>
                 No matching disposal requests were found.
               </div>
             ) : (
@@ -2030,7 +2030,7 @@ const AdminAssetDisposal = () => {
                       </div>
 
                       {request.reason && (
-                        <div style={{ marginTop: '14px', padding: '10px 12px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', color: '#475569' }}>
+                        <div style={{ marginTop: '14px', padding: '10px 12px', background: '#F5F7FA', borderRadius: '10px', border: '1px solid #e2e8f0', color: '#475569' }}>
                           <strong style={{ color: '#0f172a' }}>Reason:</strong> {request.reason}
                         </div>
                       )}
@@ -2220,11 +2220,11 @@ const AdminAssetDocuments = () => {
       </div>
 
       {notice && (
-        <div style={{ padding: '12px 14px', borderRadius: '8px', background: '#eff6ff', color: '#1e40af', marginBottom: '16px' }}>{notice}</div>
+        <div style={{ padding: '12px 14px', borderRadius: '8px', background: '#EAF2FA', color: '#245783', marginBottom: '16px' }}>{notice}</div>
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 360px) minmax(0, 1fr)', gap: '20px', marginBottom: '20px' }}>
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
+        <div style={{ background: '#F5F7FA', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
           <h3 style={{ margin: '0 0 16px', color: '#1a365d' }}>Upload Document</h3>
           <div style={{ display: 'grid', gap: '12px' }}>
             <select value={assetFilter} onChange={(event) => setAssetFilter(event.target.value)} style={{ padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
@@ -2247,7 +2247,7 @@ const AdminAssetDocuments = () => {
           </div>
         </div>
 
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
+        <div style={{ background: '#F5F7FA', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
             <h3 style={{ margin: 0, color: '#1a365d' }}>Document Library</h3>
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search documents" style={{ padding: '9px 12px', minWidth: '220px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
@@ -2266,12 +2266,12 @@ const AdminAssetDocuments = () => {
                       <div style={{ fontWeight: 700, color: '#1a365d' }}>{document.name}</div>
                       <div style={{ color: '#4a5568', fontSize: '0.85rem' }}>{document.assetName} · {document.type}</div>
                     </div>
-                    <span style={{ background: '#e0f2fe', color: '#075985', borderRadius: '999px', padding: '6px 10px', fontSize: '0.78rem', fontWeight: 700 }}>{document.type}</span>
+                    <span style={{ background: '#EAF2FA', color: '#075985', borderRadius: '999px', padding: '6px 10px', fontSize: '0.78rem', fontWeight: 700 }}>{document.type}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', gap: '10px', flexWrap: 'wrap' }}>
                     <div style={{ color: '#4a5568', fontSize: '0.8rem' }}>{document.uploadedAt} · {document.size}</div>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <button type="button" onClick={() => openDocument(document)} style={{ background: '#edf2ff', color: '#2b6cb0', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}>View</button>
+                      <button type="button" onClick={() => openDocument(document)} style={{ background: '#EAF2FA', color: '#2b6cb0', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}>View</button>
                       <button type="button" onClick={() => removeDocument(document)} style={{ background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer' }}>Delete</button>
                     </div>
                   </div>
@@ -2295,7 +2295,7 @@ const RoleLayout = () => {
 
   return (
     <div style={{
-      backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+      backgroundColor: isDark ? '#0f172a' : '#F5F7FA',
       color: isDark ? '#cbd5e1' : '#1e293b',
       padding: '24px',
       minHeight: 'calc(100vh - var(--header-height))'
@@ -2402,13 +2402,13 @@ const adminSidebarSections = [
 const AdminNotFound = () => (
   <div style={{ maxWidth: 680, margin: '40px auto', background: '#fff', borderRadius: 18, boxShadow: '0 8px 30px rgba(15, 23, 42, 0.08)', padding: '32px 28px' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-      <div style={{ width: 44, height: 44, borderRadius: 12, background: '#e0f2fe', display: 'grid', placeItems: 'center', color: '#0369a1', fontSize: 24 }}>⚠</div>
+      <div style={{ width: 44, height: 44, borderRadius: 12, background: '#EAF2FA', display: 'grid', placeItems: 'center', color: '#0369a1', fontSize: 24 }}>⚠</div>
       <div>
         <h1 style={{ margin: 0, fontSize: 28, color: '#0f172a' }}>Admin page not found</h1>
         <p style={{ margin: '6px 0 0', color: '#475569' }}>The page you requested is unavailable in the admin area.</p>
       </div>
     </div>
-    <Link to="/admin" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#2563eb', color: '#fff', borderRadius: 10, padding: '12px 16px', fontWeight: 600, textDecoration: 'none', marginTop: 16 }}>
+    <Link to="/admin" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#3074B3', color: '#fff', borderRadius: 10, padding: '12px 16px', fontWeight: 600, textDecoration: 'none', marginTop: 16 }}>
       Back to dashboard
     </Link>
   </div>
@@ -2446,7 +2446,7 @@ const AdminRecovery = () => {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
             <thead>
-              <tr style={{ background: '#f8fafc', color: '#475569', textAlign: 'left' }}>
+              <tr style={{ background: '#F5F7FA', color: '#475569', textAlign: 'left' }}>
                 <th style={{ padding: '12px 14px' }}>Entity</th>
                 <th style={{ padding: '12px 14px' }}>Deleted By</th>
                 <th style={{ padding: '12px 14px' }}>Deleted At</th>

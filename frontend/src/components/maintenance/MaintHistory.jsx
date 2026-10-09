@@ -1013,13 +1013,13 @@ export default function History() {
         }
 
         .btn-primary {
-          background: #2563eb;
-          border-color: #2563eb;
+          background: #3074B3;
+          border-color: #3074B3;
           color: white;
         }
 
         .btn-primary:hover {
-          background: #1d4ed8;
+          background: #245783;
         }
 
         .summary-grid {
@@ -1102,10 +1102,10 @@ export default function History() {
 
         .input:focus,
         .select:focus {
-          border-color: #2563eb;
+          border-color: #3074B3;
           box-shadow:
             0 0 0 3px
-            rgba(37, 99, 235, .09);
+            rgba(48, 116, 179, .09);
         }
 
         .filter-select {
@@ -1201,8 +1201,8 @@ export default function History() {
         }
 
         .event-request {
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
         }
 
         .event-work-order {
@@ -1289,8 +1289,8 @@ export default function History() {
         }
 
         .status-blue {
-          background: #dbeafe;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
         }
 
         .status-gray {
@@ -1310,7 +1310,7 @@ export default function History() {
         }
 
         .reference {
-          color: #2563eb;
+          color: #3074B3;
           font-weight: 700;
         }
 

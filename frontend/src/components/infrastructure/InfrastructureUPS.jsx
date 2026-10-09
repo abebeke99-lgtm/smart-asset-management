@@ -826,7 +826,7 @@ export default function InfrastructureUPS() {
 
         .ups-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           padding: 24px;
           font-family: Inter, ui-sans-serif, system-ui,
@@ -906,7 +906,7 @@ export default function InfrastructureUPS() {
 
         .btn:hover {
           border-color: #bae6fd;
-          background: #f0f9ff;
+          background: #F5F7FA;
           color: #0369a1;
         }
 
@@ -968,7 +968,7 @@ export default function InfrastructureUPS() {
         }
 
         .blue {
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0284c7;
         }
 
@@ -1108,7 +1108,7 @@ export default function InfrastructureUPS() {
         th {
           padding: 13px 15px;
           text-align: left;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #64748b;
           font-size: 11px;
           font-weight: 800;
@@ -1127,7 +1127,7 @@ export default function InfrastructureUPS() {
         }
 
         tbody tr:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .equipment-cell {
@@ -1140,7 +1140,7 @@ export default function InfrastructureUPS() {
           width: 40px;
           height: 40px;
           border-radius: 10px;
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0284c7;
           display: flex;
           align-items: center;
@@ -1264,7 +1264,7 @@ export default function InfrastructureUPS() {
         }
 
         .icon-btn:hover {
-          background: #f0f9ff;
+          background: #F5F7FA;
           border-color: #bae6fd;
           color: #0284c7;
         }
@@ -1358,7 +1358,7 @@ export default function InfrastructureUPS() {
         }
 
         .page-btn:hover:not(:disabled) {
-          background: #f0f9ff;
+          background: #F5F7FA;
           border-color: #bae6fd;
           color: #0284c7;
         }
@@ -1437,7 +1437,7 @@ export default function InfrastructureUPS() {
           padding: 13px;
           border-radius: 11px;
           border: 1px solid #e2e8f0;
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .detail-label {

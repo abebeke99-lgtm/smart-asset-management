@@ -469,7 +469,7 @@ const FinanceDepreciation = () => {
       color: isDark ? '#c8dcf5' : '#1a365d',
       fontWeight: 600,
       borderBottom: `2px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      background: isDark ? '#141e2d' : '#f7fafc',
+      background: isDark ? '#141e2d' : '#F5F7FA',
       fontSize: '0.75rem',
       textTransform: 'uppercase',
       letterSpacing: '0.5px',
@@ -585,7 +585,7 @@ const FinanceDepreciation = () => {
     },
     infoItem: {
       padding: '12px',
-      background: isDark ? '#141e2d' : '#f7fafc',
+      background: isDark ? '#141e2d' : '#F5F7FA',
       borderRadius: '8px'
     },
     infoLabel: {
@@ -706,7 +706,7 @@ const FinanceDepreciation = () => {
       color: isDark ? '#c8dcf5' : '#1a365d',
       fontWeight: 600,
       borderBottom: `2px solid ${isDark ? '#32465f' : '#e8edf5'}`,
-      background: isDark ? '#141e2d' : '#f7fafc',
+      background: isDark ? '#141e2d' : '#F5F7FA',
       fontSize: '0.75rem'
     },
     scheduleTd: {

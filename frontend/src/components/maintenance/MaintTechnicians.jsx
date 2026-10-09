@@ -50,12 +50,12 @@ const MaintTechnicians = () => {
   }, [technicians, search, statusFilter, availabilityFilter]);
 
   const getAvailabilityColor = (availability) => {
-    const colors = { 'Available': '#dcfce7', 'Assigned': '#dbeafe', 'Busy': '#fef3c7', 'On Leave': '#e0e7ff', 'Unavailable': '#fee2e2', 'Inactive': '#e5e7eb' };
-    return colors[availability] || '#e5e7eb';
+    const colors = { 'Available': '#dcfce7', 'Assigned': '#EAF2FA', 'Busy': '#fef3c7', 'On Leave': '#e0e7ff', 'Unavailable': '#fee2e2', 'Inactive': '#E2E8F0' };
+    return colors[availability] || '#E2E8F0';
   };
 
   const getAvailabilityTextColor = (availability) => {
-    const colors = { 'Available': '#166534', 'Assigned': '#1d4ed8', 'Busy': '#92400e', 'On Leave': '#4338ca', 'Unavailable': '#991b1b', 'Inactive': '#374151' };
+    const colors = { 'Available': '#166534', 'Assigned': '#245783', 'Busy': '#92400e', 'On Leave': '#4338ca', 'Unavailable': '#991b1b', 'Inactive': '#374151' };
     return colors[availability] || '#374151';
   };
 
@@ -70,7 +70,7 @@ const MaintTechnicians = () => {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '24px' }}>
         <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
-          <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#2864E8' }}>{summary.totalTechnicians || technicians.length}</div>
+          <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#3074B3' }}>{summary.totalTechnicians || technicians.length}</div>
           <div style={{ fontSize: '0.9rem', color: isDark ? '#94a3b8' : '#4a5568' }}>Total Technicians</div>
         </div>
         <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
@@ -78,7 +78,7 @@ const MaintTechnicians = () => {
           <div style={{ fontSize: '0.9rem', color: isDark ? '#94a3b8' : '#4a5568' }}>Available</div>
         </div>
         <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
-          <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#f59e0b' }}>{summary.assigned || 0}</div>
+          <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#D97706' }}>{summary.assigned || 0}</div>
           <div style={{ fontSize: '0.9rem', color: isDark ? '#94a3b8' : '#4a5568' }}>Assigned</div>
         </div>
         <div style={{ backgroundColor: cardBg, border: `1px solid ${cardBorder}`, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
@@ -141,7 +141,7 @@ const MaintTechnicians = () => {
                   <td style={{ padding: '12px', fontSize: '0.85rem' }}>
                     <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                       {tech.skills.map((skill, idx) => (
-                        <span key={`${tech.id}-${idx}`} style={{ padding: '2px 6px', borderRadius: '3px', backgroundColor: isDark ? '#334155' : '#e0f2fe', fontSize: '0.8rem' }}>{skill}</span>
+                        <span key={`${tech.id}-${idx}`} style={{ padding: '2px 6px', borderRadius: '3px', backgroundColor: isDark ? '#334155' : '#EAF2FA', fontSize: '0.8rem' }}>{skill}</span>
                       ))}
                     </div>
                   </td>
@@ -156,7 +156,7 @@ const MaintTechnicians = () => {
                     <div style={{ color: isDark ? '#cbd5e1' : '#64748b' }}>{tech.activeAssignments} active tasks</div>
                   </td>
                   <td style={{ padding: '12px', fontSize: '0.85rem' }}>
-                    <span style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: tech.status === 'Active' ? '#dcfce7' : '#e5e7eb', color: tech.status === 'Active' ? '#166534' : '#374151', fontWeight: '600' }}>{tech.status}</span>
+                    <span style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: tech.status === 'Active' ? '#dcfce7' : '#E2E8F0', color: tech.status === 'Active' ? '#166534' : '#374151', fontWeight: '600' }}>{tech.status}</span>
                   </td>
                 </tr>
               ))

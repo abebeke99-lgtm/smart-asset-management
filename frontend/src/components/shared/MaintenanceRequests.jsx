@@ -89,9 +89,9 @@ const SharedMaintenanceRequests = () => {
     metaItem: { color: isDark ? '#8896b0' : '#4a5568', fontSize: '0.85rem' },
     modal: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
     modalContent: { background: isDark ? '#1e2d45' : '#ffffff', padding: '30px', borderRadius: '12px', maxWidth: '500px', width: '90%', maxHeight: '80vh', overflow: 'auto' },
-    modalInput: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#f7fafc', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', marginBottom: '12px' },
-    modalSelect: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#f7fafc', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', marginBottom: '12px', cursor: 'pointer' },
-    modalTextarea: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#f7fafc', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', minHeight: '80px', resize: 'vertical', marginBottom: '12px' },
+    modalInput: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#F5F7FA', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', marginBottom: '12px' },
+    modalSelect: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#F5F7FA', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', marginBottom: '12px', cursor: 'pointer' },
+    modalTextarea: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${isDark ? '#32465f' : '#d0d8e8'}`, background: isDark ? '#0d1b2a' : '#F5F7FA', color: isDark ? '#c8dcf5' : '#1a365d', fontSize: '0.95rem', minHeight: '80px', resize: 'vertical', marginBottom: '12px' },
     emptyState: { textAlign: 'center', padding: '40px', color: isDark ? '#8896b0' : '#4a5568' }
   };
 

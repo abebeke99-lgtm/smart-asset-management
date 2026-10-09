@@ -47,20 +47,20 @@ const InfrastructureComponentStub = ({ title, description = '', icon: Icon = Ale
         {description && <p style={{ color: '#6b7280', margin: 0 }}>{description}</p>}
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
+      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', overflow: 'hidden' }}>
         {loading && <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>Loading data...</div>}
         {!loading && error && <div role="alert" style={{ padding: '40px', textAlign: 'center', color: '#b91c1c' }}>{error}</div>}
         {!loading && !error && assets.length === 0 && <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>No data available</div>}
         {!loading && !error && assets.length > 0 && (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+            <thead><tr style={{ background: '#F5F7FA', borderBottom: '1px solid #E2E8F0' }}>
               <th style={{ padding: '12px 16px', textAlign: 'left' }}>Name</th>
               <th style={{ padding: '12px 16px', textAlign: 'left' }}>Type</th>
               <th style={{ padding: '12px 16px', textAlign: 'left' }}>Location</th>
               <th style={{ padding: '12px 16px', textAlign: 'left' }}>Status</th>
             </tr></thead>
             <tbody>{assets.map((asset) => (
-              <tr key={asset.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+              <tr key={asset.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
                 <td style={{ padding: '12px 16px', fontWeight: 600, color: '#1a365d' }}>{asset.name}</td>
                 <td style={{ padding: '12px 16px', color: '#6b7280' }}>{asset.type || asset.category}</td>
                 <td style={{ padding: '12px 16px', color: '#6b7280' }}>{asset.location || 'Not specified'}</td>

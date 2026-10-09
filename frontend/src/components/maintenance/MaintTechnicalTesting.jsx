@@ -167,7 +167,7 @@ const MaintTechnicalTesting = () => {
 
       <div style={{ overflowX: 'auto', border: '1px solid #d9e2f2', borderRadius: '6px' }}>
         <table style={{ width: '100%', minWidth: '900px', borderCollapse: 'collapse' }}>
-          <thead><tr>{['Test', 'Asset', 'Maintenance', 'Work Order', 'Type', 'Result', 'Status', 'Quality', 'Actions'].map((label) => <th key={label} style={{ padding: '11px', textAlign: 'left', background: '#f8fafc' }}>{label}</th>)}</tr></thead>
+          <thead><tr>{['Test', 'Asset', 'Maintenance', 'Work Order', 'Type', 'Result', 'Status', 'Quality', 'Actions'].map((label) => <th key={label} style={{ padding: '11px', textAlign: 'left', background: '#F5F7FA' }}>{label}</th>)}</tr></thead>
           <tbody>
             {tests.map((item) => {
               const maintenance = item.Maintenance || {};

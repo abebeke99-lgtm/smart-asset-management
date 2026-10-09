@@ -22,7 +22,7 @@
 .college-overview-bar-row strong { color: var(--text-muted, #64748b); font-weight: 600; white-space: nowrap; }
 .college-overview-track { height: 9px; overflow: hidden; border-radius: 5px; background: #e2e8f0; }
 .college-overview-track span { display: block; height: 100%; border-radius: inherit; background: #0f766e; transition: width .25s ease; }
-.college-overview-track--staff span { background: #2563eb; }
+.college-overview-track--staff span { background: #3074B3; }
 .college-overview-table-wrap { overflow-x: auto; }
 .college-overview-table-wrap table { width: 100%; border-collapse: collapse; min-width: 760px; }
 .college-overview-table-wrap th, .college-overview-table-wrap td { padding: 13px 12px; border-bottom: 1px solid var(--border-color, #e2e8f0); text-align: left; white-space: nowrap; }

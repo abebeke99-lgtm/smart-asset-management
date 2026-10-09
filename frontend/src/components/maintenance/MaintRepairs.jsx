@@ -1063,14 +1063,14 @@ export default function Repairs() {
           border: 0;
           border-radius: 8px;
           padding: 11px 16px;
-          background: #2563eb;
+          background: #3074B3;
           color: #fff;
           font-weight: 650;
           cursor: pointer;
         }
 
         .primary-btn:hover {
-          background: #1d4ed8;
+          background: #245783;
         }
 
         .primary-btn:disabled {
@@ -1109,7 +1109,7 @@ export default function Repairs() {
 
         .stat-card {
           background: #fff;
-          border: 1px solid #e5e7eb;
+          border: 1px solid #E2E8F0;
           border-radius: 12px;
           padding: 17px;
           box-shadow:
@@ -1154,7 +1154,7 @@ export default function Repairs() {
             190px;
           gap: 12px;
           background: #fff;
-          border: 1px solid #e5e7eb;
+          border: 1px solid #E2E8F0;
           border-radius: 12px;
           padding: 16px;
           margin-bottom: 16px;
@@ -1177,10 +1177,10 @@ export default function Repairs() {
         .input:focus,
         .select:focus,
         .textarea:focus {
-          border-color: #2563eb;
+          border-color: #3074B3;
           box-shadow:
             0 0 0 3px
-            rgba(37,99,235,.1);
+            rgba(48, 116, 179,.1);
         }
 
         .textarea {
@@ -1191,7 +1191,7 @@ export default function Repairs() {
 
         .table-card {
           background: #fff;
-          border: 1px solid #e5e7eb;
+          border: 1px solid #E2E8F0;
           border-radius: 12px;
           overflow: hidden;
         }
@@ -1217,7 +1217,7 @@ export default function Repairs() {
         }
 
         .repairs-table th {
-          background: #f9fafb;
+          background: #F5F7FA;
           color: #6b7280;
           font-weight: 700;
           white-space: nowrap;
@@ -1252,8 +1252,8 @@ export default function Repairs() {
         }
 
         .status-info {
-          background: #dbeafe;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
         }
 
         .status-warning {
@@ -1284,7 +1284,7 @@ export default function Repairs() {
         }
 
         .action-btn:hover {
-          background: #f9fafb;
+          background: #F5F7FA;
         }
 
         .empty-state,
@@ -1325,7 +1325,7 @@ export default function Repairs() {
           justify-content: space-between;
           padding: 18px 20px;
           background: #fff;
-          border-bottom: 1px solid #e5e7eb;
+          border-bottom: 1px solid #E2E8F0;
         }
 
         .modal-title {
@@ -1379,7 +1379,7 @@ export default function Repairs() {
           gap: 10px;
           padding: 16px 20px;
           background: #fff;
-          border-top: 1px solid #e5e7eb;
+          border-top: 1px solid #E2E8F0;
         }
 
         .cost-summary {
@@ -1389,8 +1389,8 @@ export default function Repairs() {
           gap: 10px;
           margin-top: 5px;
           padding: 14px;
-          background: #f9fafb;
-          border: 1px solid #e5e7eb;
+          background: #F5F7FA;
+          border: 1px solid #E2E8F0;
           border-radius: 9px;
         }
 
@@ -1438,7 +1438,7 @@ export default function Repairs() {
         }
 
         .detail-card {
-          border: 1px solid #e5e7eb;
+          border: 1px solid #E2E8F0;
           border-radius: 9px;
           padding: 13px;
           background: #fafafa;

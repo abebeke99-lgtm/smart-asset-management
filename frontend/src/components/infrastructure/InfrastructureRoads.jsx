@@ -742,7 +742,7 @@ export default function InfrastructureRoads() {
 
         .roads-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           padding: 24px;
           font-family: Inter, ui-sans-serif, system-ui,
@@ -778,11 +778,11 @@ export default function InfrastructureRoads() {
           background: linear-gradient(
             135deg,
             #0ea5e9,
-            #2563eb
+            #3074B3
           );
           color: white;
           box-shadow:
-            0 10px 25px rgba(37, 99, 235, 0.2);
+            0 10px 25px rgba(48, 116, 179, 0.2);
           flex-shrink: 0;
         }
 
@@ -850,7 +850,7 @@ export default function InfrastructureRoads() {
         }
 
         .btn-secondary:hover:not(:disabled) {
-          background: #f8fafc;
+          background: #F5F7FA;
           border-color: #94a3b8;
         }
 
@@ -902,8 +902,8 @@ export default function InfrastructureRoads() {
           display: grid;
           place-items: center;
           border-radius: 11px;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
         }
 
         .summary-card.warning .summary-icon {
@@ -1028,7 +1028,7 @@ export default function InfrastructureRoads() {
         }
 
         th {
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #64748b;
           font-size: 11px;
           text-transform: uppercase;
@@ -1061,8 +1061,8 @@ export default function InfrastructureRoads() {
           width: 38px;
           height: 38px;
           border-radius: 10px;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
           display: grid;
           place-items: center;
           flex-shrink: 0;
@@ -1115,8 +1115,8 @@ export default function InfrastructureRoads() {
         }
 
         .condition-good {
-          background: #eff6ff;
-          color: #1d4ed8;
+          background: #EAF2FA;
+          color: #245783;
         }
 
         .condition-fair {
@@ -1153,7 +1153,7 @@ export default function InfrastructureRoads() {
         }
 
         .icon-btn:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
           border-color: #cbd5e1;
         }
 
@@ -1178,8 +1178,8 @@ export default function InfrastructureRoads() {
           width: 58px;
           height: 58px;
           border-radius: 15px;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
           display: grid;
           place-items: center;
           margin-bottom: 13px;
@@ -1242,7 +1242,7 @@ export default function InfrastructureRoads() {
         }
 
         .page-btn:hover:not(:disabled) {
-          background: #f8fafc;
+          background: #F5F7FA;
         }
 
         .page-btn:disabled {
@@ -1341,7 +1341,7 @@ export default function InfrastructureRoads() {
 
         .detail {
           border: 1px solid #e2e8f0;
-          background: #f8fafc;
+          background: #F5F7FA;
           border-radius: 11px;
           padding: 12px;
         }

@@ -365,7 +365,7 @@ export default function FinancePurchaseHistory() {
 
         .history-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           padding: 28px;
@@ -451,7 +451,7 @@ export default function FinancePurchaseHistory() {
           display: grid;
           place-items: center;
           border-radius: 12px;
-          background: #e0f2fe;
+          background: #EAF2FA;
           color: #0284c7;
           flex-shrink: 0;
         }
@@ -548,7 +548,7 @@ export default function FinancePurchaseHistory() {
         th {
           padding: 13px 16px;
           text-align: left;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #64748b;
           font-size: 11px;
           text-transform: uppercase;
@@ -737,7 +737,7 @@ export default function FinancePurchaseHistory() {
         }
 
         .detail-item {
-          background: #f8fafc;
+          background: #F5F7FA;
           padding: 13px;
           border-radius: 10px;
         }

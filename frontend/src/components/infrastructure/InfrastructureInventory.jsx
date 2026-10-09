@@ -33,7 +33,7 @@ const css = `
 
   .infra-inventory-page {
     min-height: 100vh;
-    background: #f8fafc;
+    background: #F5F7FA;
     color: #0f172a;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
       "Segoe UI", sans-serif;
@@ -193,7 +193,7 @@ const css = `
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #e0f2fe;
+    background: #EAF2FA;
     color: #0284c7;
   }
 
@@ -363,7 +363,7 @@ const css = `
   }
 
   .inventory-table th {
-    background: #f8fafc;
+    background: #F5F7FA;
     color: #64748b;
     font-size: 11px;
     font-weight: 800;
@@ -405,7 +405,7 @@ const css = `
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #e0f2fe;
+    background: #EAF2FA;
     color: #0284c7;
     flex-shrink: 0;
   }
@@ -450,8 +450,8 @@ const css = `
 
   .status-assigned,
   .status-in-use {
-    background: #dbeafe;
-    color: #1d4ed8;
+    background: #EAF2FA;
+    color: #245783;
   }
 
   .status-maintenance,
@@ -506,7 +506,7 @@ const css = `
   .icon-button:hover {
     color: #0284c7;
     border-color: #7dd3fc;
-    background: #f0f9ff;
+    background: #F5F7FA;
   }
 
   .empty-state {
@@ -677,7 +677,7 @@ const css = `
     width: 40px;
     height: 40px;
     border-radius: 10px;
-    background: #e0f2fe;
+    background: #EAF2FA;
     color: #0284c7;
     display: flex;
     align-items: center;
@@ -784,7 +784,7 @@ const css = `
 
   .quick-link:hover {
     border-color: #7dd3fc;
-    background: #f0f9ff;
+    background: #F5F7FA;
     color: #0284c7;
   }
 

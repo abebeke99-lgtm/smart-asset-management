@@ -90,7 +90,7 @@
 /* Colleges workspace */
 .admin-colleges-page {
   --college-navy: #172554;
-  --college-blue: #2563eb;
+  --college-blue: #3074B3;
   --college-cyan: #0ea5e9;
   background: linear-gradient(145deg, #f8fbff 0%, #f3f6fb 52%, #eef4ff 100%);
 }
@@ -108,7 +108,7 @@
 .admin-colleges-page .admin-secondary-button {
   min-height: 42px;
   border-radius: 9px;
-  box-shadow: 0 5px 14px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 5px 14px rgba(48, 116, 179, 0.12);
 }
 .colleges-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 18px; }
 .college-kpi-card {
@@ -150,11 +150,11 @@
 .colleges-toolbar .admin-search-box { flex: 1 1 360px; min-height: 40px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
 .colleges-toolbar .admin-search-box input { min-height: 38px; border: 0; outline: 0; background: transparent; }
 .colleges-toolbar .admin-select { min-height: 40px; min-width: 150px; border-radius: 8px; }
-.college-form-card { margin-bottom: 18px; border: 1px solid #bfdbfe; border-left: 4px solid var(--college-blue); background: #fbfdff; box-shadow: 0 12px 28px rgba(37, 99, 235, 0.1); }
+.college-form-card { margin-bottom: 18px; border: 1px solid #bfdbfe; border-left: 4px solid var(--college-blue); background: #fbfdff; box-shadow: 0 12px 28px rgba(48, 116, 179, 0.1); }
 .college-form-card .admin-card-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; color: var(--college-navy); font-size: 1.05rem; font-weight: 800; }
 .college-form-card textarea { min-height: 92px; resize: vertical; }
 .college-table-card { border-radius: 12px; box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06); }
-.college-table-card .admin-table th { background: #f8fafc; color: #475569; }
+.college-table-card .admin-table th { background: #F5F7FA; color: #475569; }
 .college-table-card .admin-table tbody tr { transition: background-color 150ms ease; }
 .college-table-card .admin-table tbody tr:hover { background: #f8fbff; }
 .college-table-card .admin-table td { height: 68px; vertical-align: middle; }
@@ -481,7 +481,7 @@
 .um-stat-card:hover {
   border-color: #93c5fd;
   transform: translateY(-2px);
-  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.13);
+  box-shadow: 0 14px 28px rgba(48, 116, 179, 0.13);
 }
 
 .um-stat-icon {
@@ -491,7 +491,7 @@
   width: 44px;
   height: 44px;
   border-radius: 11px;
-  background: #dbeafe;
+  background: #EAF2FA;
   color: var(--admin-primary);
 }
 
@@ -555,7 +555,7 @@
 .um-form-group select:focus,
 .um-form-group textarea:focus {
   border-color: var(--admin-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+  box-shadow: 0 0 0 3px rgba(48, 116, 179, 0.14);
 }
 
 .um-select {
@@ -636,7 +636,7 @@
   place-items: center;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #dbeafe;
+  background: #EAF2FA;
   color: var(--admin-primary-dark);
   font-weight: 800;
 }
@@ -663,7 +663,7 @@
 .um-role-badge { background: #e0e7ff; color: #3730a3; }
 .um-status-active { background: #dcfce7; color: #166534; }
 .um-status-inactive { background: #e2e8f0; color: #475569; }
-.um-activity-badge { background: #e0f2fe; color: #0369a1; }
+.um-activity-badge { background: #EAF2FA; color: #0369a1; }
 .dark .um-role-badge { background: #312e81; color: #c7d2fe; }
 .dark .um-status-active { background: #14532d; color: #bbf7d0; }
 .dark .um-status-inactive { background: #334155; color: #cbd5e1; }
@@ -683,7 +683,7 @@
   cursor: pointer;
   transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
 }
-.um-action:hover { color: var(--admin-primary); border-color: #93c5fd; background: #eff6ff; }
+.um-action:hover { color: var(--admin-primary); border-color: #93c5fd; background: #EAF2FA; }
 .um-action.delete:hover { color: var(--admin-danger); border-color: #fca5a5; background: #fef2f2; }
 
 .um-navigation {
@@ -707,7 +707,7 @@
   cursor: pointer;
 }
 .um-navigation button.active,
-.um-navigation button:hover { background: #dbeafe; color: var(--admin-primary-dark); }
+.um-navigation button:hover { background: #EAF2FA; color: var(--admin-primary-dark); }
 .dark .um-navigation button.active,
 .dark .um-navigation button:hover { background: #1e3a5f; color: #bfdbfe; }
 
@@ -715,7 +715,7 @@
 .um-active-layout { display: grid; grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.4fr); gap: 18px; }
 .um-role-items { display: grid; gap: 8px; padding: 14px; }
 .um-role-item { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; border-radius: 10px; padding: 11px; color: var(--admin-text); text-align: left; cursor: pointer; }
-.um-role-item.selected { border-color: #60a5fa; background: #eff6ff; }
+.um-role-item.selected { border-color: #60a5fa; background: #EAF2FA; }
 .dark .um-role-item.selected { background: #172554; }
 .um-role-icon { font-size: 1.1rem; }
 .um-role-item small { display: block; margin-top: 3px; color: var(--admin-muted); }

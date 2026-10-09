@@ -802,7 +802,7 @@ export default function InfrastructurePreventive() {
 
         .preventive-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           padding: 24px;
           font-family: Inter, ui-sans-serif, system-ui,
@@ -836,8 +836,8 @@ export default function InfrastructurePreventive() {
           place-items: center;
           border-radius: 14px;
           color: white;
-          background: linear-gradient(135deg, #0ea5e9, #2563eb);
-          box-shadow: 0 10px 25px rgba(37, 99, 235, 0.2);
+          background: linear-gradient(135deg, #0ea5e9, #3074B3);
+          box-shadow: 0 10px 25px rgba(48, 116, 179, 0.2);
           flex-shrink: 0;
         }
 
@@ -904,7 +904,7 @@ export default function InfrastructurePreventive() {
         }
 
         .btn-secondary:hover:not(:disabled) {
-          background: #f8fafc;
+          background: #F5F7FA;
           border-color: #94a3b8;
         }
 
@@ -955,8 +955,8 @@ export default function InfrastructurePreventive() {
           display: grid;
           place-items: center;
           border-radius: 11px;
-          color: #2563eb;
-          background: #eff6ff;
+          color: #3074B3;
+          background: #EAF2FA;
         }
 
         .summary-card.warning .summary-icon {
@@ -1073,7 +1073,7 @@ export default function InfrastructurePreventive() {
         }
 
         th {
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #64748b;
           padding: 13px 14px;
           text-align: left;
@@ -1108,8 +1108,8 @@ export default function InfrastructurePreventive() {
           display: grid;
           place-items: center;
           border-radius: 10px;
-          color: #2563eb;
-          background: #eff6ff;
+          color: #3074B3;
+          background: #EAF2FA;
           flex-shrink: 0;
         }
 
@@ -1144,8 +1144,8 @@ export default function InfrastructurePreventive() {
         }
 
         .badge.info {
-          color: #1d4ed8;
-          background: #eff6ff;
+          color: #245783;
+          background: #EAF2FA;
         }
 
         .badge.warning {
@@ -1216,7 +1216,7 @@ export default function InfrastructurePreventive() {
         }
 
         .icon-btn:hover {
-          background: #f8fafc;
+          background: #F5F7FA;
           border-color: #cbd5e1;
         }
 
@@ -1266,8 +1266,8 @@ export default function InfrastructurePreventive() {
           border-radius: 15px;
           display: grid;
           place-items: center;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
           margin-bottom: 13px;
         }
 
@@ -1419,7 +1419,7 @@ export default function InfrastructurePreventive() {
 
         .detail {
           border: 1px solid #e2e8f0;
-          background: #f8fafc;
+          background: #F5F7FA;
           border-radius: 11px;
           padding: 12px;
         }

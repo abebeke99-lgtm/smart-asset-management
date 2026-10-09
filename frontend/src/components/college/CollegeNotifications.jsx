@@ -122,7 +122,7 @@ const CollegeNotifications = () => {
     <div className="college-notifications-page">
       <div className="admin-kpi-grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginBottom: '18px' }}>
         <div className="admin-card" style={{ borderTop: '3px solid #0EA5E9' }}><Bell size={18} color="#0EA5E9" /><span style={{ display: 'block', color: '#64748b', marginTop: 8 }}>{translate('Total')}</span><strong style={{ display: 'block', color: '#0F172A', fontSize: '1.5rem', marginTop: 5 }}>{Number(summary.total || pagination.total || 0).toLocaleString(language === 'am' ? 'am-ET' : undefined)}</strong></div>
-        <div className="admin-card" style={{ borderTop: '3px solid #2563EB' }}><Bell size={18} color="#2563EB" /><span style={{ display: 'block', color: '#64748b', marginTop: 8 }}>{translate('Unread')}</span><strong style={{ display: 'block', color: '#0F172A', fontSize: '1.5rem', marginTop: 5 }}>{Number(summary.unread || 0).toLocaleString(language === 'am' ? 'am-ET' : undefined)}</strong></div>
+        <div className="admin-card" style={{ borderTop: '3px solid #3074B3' }}><Bell size={18} color="#3074B3" /><span style={{ display: 'block', color: '#64748b', marginTop: 8 }}>{translate('Unread')}</span><strong style={{ display: 'block', color: '#0F172A', fontSize: '1.5rem', marginTop: 5 }}>{Number(summary.unread || 0).toLocaleString(language === 'am' ? 'am-ET' : undefined)}</strong></div>
         <div className="admin-card" style={{ borderTop: '3px solid #16A34A' }}><CheckCheck size={18} color="#16A34A" /><span style={{ display: 'block', color: '#64748b', marginTop: 8 }}>{translate('Read')}</span><strong style={{ display: 'block', color: '#0F172A', fontSize: '1.5rem', marginTop: 5 }}>{Number(summary.read || 0).toLocaleString(language === 'am' ? 'am-ET' : undefined)}</strong></div>
       </div>
 
@@ -196,7 +196,7 @@ const CollegeNotifications = () => {
               </thead>
               <tbody>
                 {filteredNotifications.map((notification) => (
-                  <tr key={notification.id} style={{ background: notification.read ? 'transparent' : '#F8FAFC' }}>
+                  <tr key={notification.id} style={{ background: notification.read ? 'transparent' : '#F5F7FA' }}>
                     <td>
                       <div style={{ fontWeight: 700, color: '#0F172A' }}>{notification.title}</div>
                       <div style={{ color: '#475569', maxWidth: 420, whiteSpace: 'normal' }}>{notification.message || translate('No message available.')}</div>
@@ -204,7 +204,7 @@ const CollegeNotifications = () => {
                     <td>{translate(notification.type)}</td>
                     <td><span className="admin-status-badge" style={{ textTransform: 'capitalize' }}>{translate(notification.priority)}</span></td>
                     <td>{notification.createdAt ? new Date(notification.createdAt).toLocaleString(language === 'am' ? 'am-ET' : undefined) : '—'}</td>
-                    <td><span className="admin-status-badge" style={{ background: notification.read ? '#DCFCE7' : '#DBEAFE', color: notification.read ? '#166534' : '#1D4ED8' }}>{translate(notification.read ? 'Read' : 'Unread')}</span></td>
+                    <td><span className="admin-status-badge" style={{ background: notification.read ? '#DCFCE7' : '#EAF2FA', color: notification.read ? '#166534' : '#245783' }}>{translate(notification.read ? 'Read' : 'Unread')}</span></td>
                     <td>
                       <div className="admin-row-actions">
                         {!notification.read && <button className="icon-button" type="button" aria-label={translate('Mark as read')} title={translate('Mark as read')} onClick={() => markRead(notification.id)}><CheckCheck size={15} /></button>}

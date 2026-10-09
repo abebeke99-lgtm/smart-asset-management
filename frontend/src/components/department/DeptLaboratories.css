@@ -1,6 +1,6 @@
-.department-laboratories-page { min-height: 100%; padding: clamp(18px, 3vw, 34px); background: #f8fafc; color: #0f172a; }
+.department-laboratories-page { min-height: 100%; padding: clamp(18px, 3vw, 34px); background: #F5F7FA; color: #0f172a; }
 .department-laboratories-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 24px; }
-.department-laboratories-eyebrow { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; color: #2563eb; font-size: .76rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.department-laboratories-eyebrow { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; color: #3074B3; font-size: .76rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
 .department-laboratories-header h1 { margin: 0; font-size: clamp(1.5rem, 2.4vw, 2rem); overflow-wrap: anywhere; }
 .department-laboratories-header p { margin: 7px 0 0; color: #64748b; }
 .department-laboratories-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; }
@@ -20,16 +20,16 @@
 .department-laboratories-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr)); gap: 14px; }
 .department-laboratory-card { min-width: 0; padding: 17px; border: 1px solid #e2e8f0; border-radius: 9px; background: #fff; box-shadow: 0 4px 15px rgba(15, 23, 42, .05); }
 .department-laboratory-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 13px; }
-.department-laboratory-icon { display: grid; width: 43px; height: 43px; flex: 0 0 43px; place-items: center; border-radius: 8px; background: #e0f2fe; color: #0369a1; }
-.department-laboratory-status { display: inline-flex; align-items: center; min-height: 25px; padding: 4px 9px; border: 1px solid #cbd5e1; border-radius: 999px; background: #f8fafc; color: #475569; font-size: .7rem; font-weight: 800; }
+.department-laboratory-icon { display: grid; width: 43px; height: 43px; flex: 0 0 43px; place-items: center; border-radius: 8px; background: #EAF2FA; color: #0369a1; }
+.department-laboratory-status { display: inline-flex; align-items: center; min-height: 25px; padding: 4px 9px; border: 1px solid #cbd5e1; border-radius: 999px; background: #F5F7FA; color: #475569; font-size: .7rem; font-weight: 800; }
 .department-laboratory-status.status-active { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
 .department-laboratory-status.status-temporarily-closed, .department-laboratory-status.status-restricted { border-color: #fde68a; background: #fffbeb; color: #92400e; }
-.department-laboratory-status.status-under-maintenance { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+.department-laboratory-status.status-under-maintenance { border-color: #bfdbfe; background: #EAF2FA; color: #245783; }
 .department-laboratory-status.status-inactive { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
 .department-laboratory-card h2 { margin: 0; overflow-wrap: anywhere; font-size: 1.06rem; }
 .department-laboratory-id { display: block; margin-top: 5px; color: #64748b; font-size: .76rem; font-weight: 700; }
 .department-laboratory-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
-.department-laboratory-facts > div { display: grid; gap: 4px; min-width: 0; padding: 9px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc; }
+.department-laboratory-facts > div { display: grid; gap: 4px; min-width: 0; padding: 9px; border: 1px solid #e2e8f0; border-radius: 6px; background: #F5F7FA; }
 .department-laboratory-facts span { color: #64748b; font-size: .67rem; font-weight: 800; text-transform: uppercase; }
 .department-laboratory-facts strong { overflow-wrap: anywhere; font-size: .82rem; }
 .department-laboratory-card-actions { display: flex; flex-wrap: wrap; gap: 12px; border-top: 1px solid #e2e8f0; }
@@ -55,7 +55,7 @@
 .department-laboratory-table-wrap { overflow-x: auto; }
 .department-laboratory-table-wrap table { width: 100%; border-collapse: collapse; text-align: left; font-size: .84rem; }
 .department-laboratory-table-wrap th, .department-laboratory-table-wrap td { padding: 10px 11px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
-.department-laboratory-table-wrap th { color: #64748b; background: #f8fafc; font-size: .72rem; text-transform: uppercase; }
+.department-laboratory-table-wrap th { color: #64748b; background: #F5F7FA; font-size: .72rem; text-transform: uppercase; }
 .department-laboratory-activity-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
 .department-laboratory-activity-list { display: grid; gap: 0; padding: 0; margin: 0; list-style: none; }
 .department-laboratory-activity-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid #e2e8f0; }

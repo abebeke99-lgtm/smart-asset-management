@@ -57,14 +57,14 @@ const AdminCollegeDetails = () => {
     <section className="admin-workspace-page" aria-labelledby="college-details-title">
       <div className="admin-breadcrumb"><button className="icon-button" onClick={() => navigate('/admin/colleges')}><ArrowLeft size={16} /></button> Organization / Colleges / {college.collegeName || college.name}</div>
       <div className="admin-page-header">
-        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}><Building2 size={34} color="#2563EB" /><div><h1 id="college-details-title" className="admin-page-title">{college.collegeName || college.name}</h1><p className="admin-page-subtitle">{college.collegeCode || college.code} <span className={`admin-status-badge ${college.status === 'active' ? 'active' : 'inactive'}`}>{college.status}</span></p></div></div>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}><Building2 size={34} color="#3074B3" /><div><h1 id="college-details-title" className="admin-page-title">{college.collegeName || college.name}</h1><p className="admin-page-subtitle">{college.collegeCode || college.code} <span className={`admin-status-badge ${college.status === 'active' ? 'active' : 'inactive'}`}>{college.status}</span></p></div></div>
         <div style={{ display: 'flex', gap: 8 }}><button className="admin-secondary-button" onClick={() => navigate(`/admin/colleges?edit=${id}`)}><Edit2 size={16} /> Edit College</button><button className="admin-primary-button" onClick={toggleStatus}>{college.status === 'active' ? <PowerOff size={16} /> : <Power size={16} />} {college.status === 'active' ? 'Deactivate' : 'Activate'}</button></div>
       </div>
 
       <div className="admin-tabs" role="tablist">{tabs.map((item) => <button key={item} className={`admin-tab ${tab === item ? 'active' : ''}`} role="tab" aria-selected={tab === item} onClick={() => setTab(item)}>{item}</button>)}</div>
 
       {tab === 'overview' && <>
-        <div className="admin-kpi-grid" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>{stats.map(([label, value, Icon]) => <div className="admin-card" key={label}><Icon size={18} color="#2563EB" /><span>{label}</span><strong>{value}</strong></div>)}</div>
+        <div className="admin-kpi-grid" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>{stats.map(([label, value, Icon]) => <div className="admin-card" key={label}><Icon size={18} color="#3074B3" /><span>{label}</span><strong>{value}</strong></div>)}</div>
         <div className="admin-analytics-grid"><div className="admin-card"><h2>College information</h2><p>{displayValue(college.description)}</p><p>Established: {displayValue(college.establishedDate)}</p><p>Address: {displayValue(college.address || college.location)}</p></div><div className="admin-card"><h2><UserRound size={18} /> College Manager</h2><p>{college.manager?.name || 'Unassigned'}</p><p>{college.manager?.email || 'No email available'}</p></div><div className="admin-card"><h2><Activity size={18} /> Asset summary</h2><p>Available: {statistics.availableAssets ?? 'Not available'}</p><p>Assigned: {statistics.assignedAssets ?? 'Not available'}</p><p>Maintenance: {statistics.maintenanceAssets ?? 'Not available'}</p><p>Missing: {statistics.missingAssets ?? 'Not available'}</p><p>Damaged: {statistics.damagedAssets ?? 'Not available'}</p></div></div>
       </>}
 

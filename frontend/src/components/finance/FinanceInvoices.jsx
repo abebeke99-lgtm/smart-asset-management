@@ -1096,7 +1096,7 @@ export default function FinanceInvoices() {
 
         .finance-page {
           min-height: 100vh;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #0f172a;
           font-family: Inter, ui-sans-serif, system-ui, -apple-system,
             BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -1129,9 +1129,9 @@ export default function FinanceInvoices() {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: linear-gradient(135deg, #0ea5e9, #2563eb);
+          background: linear-gradient(135deg, #0ea5e9, #3074B3);
           color: white;
-          box-shadow: 0 10px 25px rgba(37, 99, 235, .18);
+          box-shadow: 0 10px 25px rgba(48, 116, 179, .18);
         }
 
         .title-area h1 {
@@ -1176,8 +1176,8 @@ export default function FinanceInvoices() {
 
         .btn-primary {
           color: white;
-          background: #2563eb;
-          box-shadow: 0 7px 18px rgba(37, 99, 235, .2);
+          background: #3074B3;
+          box-shadow: 0 7px 18px rgba(48, 116, 179, .2);
         }
 
         .btn-secondary {
@@ -1218,7 +1218,7 @@ export default function FinanceInvoices() {
         }
 
         .quick-link:hover {
-          color: #2563eb;
+          color: #3074B3;
           border-color: #93c5fd;
         }
 
@@ -1254,8 +1254,8 @@ export default function FinanceInvoices() {
           width: 35px;
           height: 35px;
           border-radius: 10px;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1363,7 +1363,7 @@ export default function FinanceInvoices() {
 
         th {
           text-align: left;
-          background: #f8fafc;
+          background: #F5F7FA;
           color: #64748b;
           font-size: 11px;
           text-transform: uppercase;
@@ -1386,7 +1386,7 @@ export default function FinanceInvoices() {
 
         .invoice-number {
           font-weight: 800;
-          color: #2563eb;
+          color: #3074B3;
         }
 
         .supplier-name {
@@ -1432,8 +1432,8 @@ export default function FinanceInvoices() {
         }
 
         .status.info {
-          color: #1e40af;
-          background: #dbeafe;
+          color: #245783;
+          background: #EAF2FA;
         }
 
         .row-actions {
@@ -1455,9 +1455,9 @@ export default function FinanceInvoices() {
         }
 
         .icon-btn:hover {
-          color: #2563eb;
+          color: #3074B3;
           border-color: #93c5fd;
-          background: #eff6ff;
+          background: #EAF2FA;
         }
 
         .icon-btn.danger:hover {
@@ -1477,8 +1477,8 @@ export default function FinanceInvoices() {
           width: 52px;
           height: 52px;
           border-radius: 14px;
-          background: #eff6ff;
-          color: #2563eb;
+          background: #EAF2FA;
+          color: #3074B3;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1547,7 +1547,7 @@ export default function FinanceInvoices() {
           height: 35px;
           padding: 0 8px;
           border: 0;
-          background: #2563eb;
+          background: #3074B3;
           color: white;
           border-radius: 8px;
           font-weight: 800;
@@ -1682,7 +1682,7 @@ export default function FinanceInvoices() {
 
         .items-header {
           padding: 12px 14px;
-          background: #f8fafc;
+          background: #F5F7FA;
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -1721,7 +1721,7 @@ export default function FinanceInvoices() {
 
         .summary-box {
           width: min(360px, 100%);
-          background: #f8fafc;
+          background: #F5F7FA;
           border-radius: 11px;
           padding: 13px;
         }

@@ -84,7 +84,7 @@ const CollegeRFIDTracking = () => {
           { key: 'uniqueLocations', label: 'Locations', value: state.summary.uniqueLocations },
           { key: 'recentScans', label: 'Recent Scans', value: state.summary.recentScans },
         ].map((item) => (
-          <div key={item.key} style={{ border: '1px solid #e5e7eb', borderRadius: '12px', background: '#f8fafc', padding: '14px 16px' }}>
+          <div key={item.key} style={{ border: '1px solid #E2E8F0', borderRadius: '12px', background: '#F5F7FA', padding: '14px 16px' }}>
             <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '6px' }}>{item.label}</div>
             <div style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a' }}>{item.value}</div>
           </div>
@@ -174,19 +174,19 @@ const CollegeRFIDTracking = () => {
       </div>
 
       {state.loading ? (
-        <div style={{ padding: '24px', border: '1px solid #e5e7eb', borderRadius: '12px', background: '#fff' }}>Loading RFID tracking data…</div>
+        <div style={{ padding: '24px', border: '1px solid #E2E8F0', borderRadius: '12px', background: '#fff' }}>Loading RFID tracking data…</div>
       ) : state.error ? (
         <div style={{ padding: '24px', border: '1px solid #fecaca', borderRadius: '12px', background: '#fff1f2', color: '#991b1b' }}>{state.error}</div>
       ) : (
         <>
-          <div style={{ border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden', background: '#fff' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid #e5e7eb', background: '#f8fafc' }}>
+          <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', overflow: 'hidden', background: '#fff' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid #E2E8F0', background: '#F5F7FA' }}>
               <strong>College RFID / QR asset register</strong>
               <span style={{ color: '#64748b' }}>{state.pagination.total} items</span>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ background: '#f8fafc' }}>
+                <thead style={{ background: '#F5F7FA' }}>
                   <tr>
                     <th style={thStyle}>Asset</th>
                     <th style={thStyle}>RFID Tag</th>
@@ -223,14 +223,14 @@ const CollegeRFIDTracking = () => {
             </div>
           </div>
 
-          <div style={{ border: '1px solid #e5e7eb', borderRadius: '12px', background: '#fff' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid #e5e7eb', background: '#f8fafc' }}>
+          <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', background: '#fff' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid #E2E8F0', background: '#F5F7FA' }}>
               <strong>Recent RFID scan activity</strong>
               <span style={{ color: '#64748b' }}>{filteredLogs.length} logs</span>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ background: '#f8fafc' }}>
+                <thead style={{ background: '#F5F7FA' }}>
                   <tr>
                     <th style={thStyle}>Time</th>
                     <th style={thStyle}>Asset</th>
