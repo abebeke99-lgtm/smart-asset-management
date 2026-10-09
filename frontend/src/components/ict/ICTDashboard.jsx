@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "./ICTDashboard.css";
+import { useTranslation } from "../../contexts/UiContext";
 import {
   Activity,
   AlertTriangle,
@@ -55,24 +56,6 @@ const API_BASE_URL =
   process.env.REACT_APP_API_URL || "/api";
 
 const DASHBOARD_ENDPOINT = `${API_BASE_URL}/ict/dashboard`;
-
-const STATUS_LABELS = {
-  available: "Available",
-  assigned: "Assigned",
-  under_maintenance: "Under Maintenance",
-  in_transit: "In Transit",
-  retired: "Retired",
-  disposed: "Disposed",
-};
-
-const CONDITION_LABELS = {
-  functional: "Functional",
-  needs_repair: "Needs Repair",
-  damaged: "Damaged",
-  missing: "Missing",
-  expired: "Expired",
-  replaced: "Replaced",
-};
 
 const DEFAULT_DASHBOARD = {
   kpis: {
@@ -264,6 +247,7 @@ function EmptyState({ message }) {
 }
 
 export default function Dashboard() {
+  const { t } = useTranslation();
   const [dashboard, setDashboard] = useState(DEFAULT_DASHBOARD);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -296,17 +280,21 @@ export default function Dashboard() {
       });
 
       if (response.status === 401) {
-        throw new Error("Your session has expired. Please log in again.");
+        const error = new Error("Your session has expired. Please log in again.");
+        error.translationKey = "dashboard.ictHome.errors.sessionExpired";
+        throw error;
       }
 
       if (response.status === 403) {
-        throw new Error(
-          "You do not have permission to access the ICT dashboard."
-        );
+        const error = new Error("You do not have permission to access the ICT dashboard.");
+        error.translationKey = "dashboard.ictHome.errors.forbidden";
+        throw error;
       }
 
       if (!response.ok) {
-        throw new Error("Unable to load ICT dashboard.");
+        const error = new Error("Unable to load ICT dashboard.");
+        error.translationKey = "dashboard.ictHome.errors.loadFailed";
+        throw error;
       }
 
       const result = await response.json();
@@ -352,8 +340,14 @@ export default function Dashboard() {
       console.error("ICT dashboard error:", err);
 
       setError(
-        err?.message ||
-          "Unable to load ICT assets. Please try again."
+        err?.translationKey
+          ? { key: err.translationKey, fallback: err.message }
+          : err?.message
+            ? { message: err.message }
+            : {
+                key: "dashboard.ictHome.errors.assetsFailed",
+                fallback: "Unable to load ICT assets. Please try again.",
+              }
       );
     } finally {
       setLoading(false);
@@ -391,7 +385,7 @@ export default function Dashboard() {
       <div className="dashboard-page ict-module-theme ict-theme-dashboard">
         <div className="dashboard-loading">
           <Loader2 className="spin" size={38} />
-          <p>Loading ICT assets...</p>
+          <p>{t("dashboard.ictHome.loading", "Loading ICT assets...")}</p>
         </div>
       </div>
     );
@@ -406,16 +400,18 @@ export default function Dashboard() {
       <div className="page-header ict-page-header">
         <div>
           <div className="breadcrumb">
-            <span>ICT Officer</span>
+            <span>{t("dashboard.ictHome.breadcrumb.ictOfficer", "ICT Officer")}</span>
             <span>/</span>
-            <strong>Dashboard</strong>
+            <strong>{t("dashboard.ictHome.breadcrumb.dashboard", "Dashboard")}</strong>
           </div>
 
-          <h1 className="ict-page-title">ICT Dashboard</h1>
+          <h1 className="ict-page-title">{t("dashboard.ictHome.pageTitle", "ICT Dashboard")}</h1>
 
           <p>
-            Mekdela Amba University ICT asset management, technical operations,
-            maintenance and support.
+            {t(
+              "dashboard.ictHome.description",
+              "Mekdela Amba University ICT asset management, technical operations, maintenance and support."
+            )}
           </p>
         </div>
 
@@ -430,7 +426,9 @@ export default function Dashboard() {
             className={refreshing ? "spin" : ""}
           />
 
-          {refreshing ? "Refreshing..." : "Refresh"}
+          {refreshing
+            ? t("dashboard.ictHome.controls.refreshing", "Refreshing...")
+            : t("dashboard.ictHome.controls.refresh", "Refresh")}
         </button>
       </div>
 
@@ -443,15 +441,15 @@ export default function Dashboard() {
           <AlertTriangle size={20} />
 
           <div>
-            <strong>Dashboard Error</strong>
-            <p>{error}</p>
+            <strong>{t("dashboard.ictHome.errors.title", "Dashboard Error")}</strong>
+            <p>{error.key ? t(error.key, error.fallback) : error.message}</p>
           </div>
 
           <button
             type="button"
             onClick={() => fetchDashboard({ initial: true })}
           >
-            Try Again
+            {t("dashboard.ictHome.controls.tryAgain", "Try Again")}
           </button>
         </div>
       )}
@@ -462,66 +460,66 @@ export default function Dashboard() {
 
       <section className="kpi-grid">
         <KpiCard
-          title="Total ICT Assets"
+          title={t("dashboard.ictHome.kpis.totalAssets", "Total ICT Assets")}
           value={dashboard.kpis.totalAssets}
           icon={Box}
-          description="All registered ICT assets"
+          description={t("dashboard.ictHome.kpiDescriptions.totalAssets", "All registered ICT assets")}
           iconClass="blue"
         />
 
         <KpiCard
-          title="Active Assets"
+          title={t("dashboard.ictHome.kpis.activeAssets", "Active Assets")}
           value={dashboard.kpis.activeAssets}
           icon={CheckCircle2}
-          description="Available or assigned"
+          description={t("dashboard.ictHome.kpiDescriptions.activeAssets", "Available or assigned")}
           iconClass="green"
         />
 
         <KpiCard
-          title="Damaged Assets"
+          title={t("dashboard.ictHome.kpis.damagedAssets", "Damaged Assets")}
           value={dashboard.kpis.damagedAssets}
           icon={ShieldAlert}
-          description="Assets requiring attention"
+          description={t("dashboard.ictHome.kpiDescriptions.damagedAssets", "Assets requiring attention")}
           iconClass="red"
         />
 
         <KpiCard
-          title="Under Maintenance"
+          title={t("dashboard.ictHome.status.underMaintenance", "Under Maintenance")}
           value={dashboard.kpis.underMaintenance}
           icon={Wrench}
-          description="Currently in maintenance"
+          description={t("dashboard.ictHome.kpiDescriptions.underMaintenance", "Currently in maintenance")}
           iconClass="orange"
         />
 
         <KpiCard
-          title="Available Assets"
+          title={t("dashboard.ictHome.kpis.availableAssets", "Available Assets")}
           value={dashboard.kpis.availableAssets}
           icon={Package}
-          description="Ready for assignment"
+          description={t("dashboard.ictHome.kpiDescriptions.availableAssets", "Ready for assignment")}
           iconClass="cyan"
         />
 
         <KpiCard
-          title="Assigned Assets"
+          title={t("dashboard.ictHome.kpis.assignedAssets", "Assigned Assets")}
           value={dashboard.kpis.assignedAssets}
           icon={Laptop}
-          description="Currently assigned"
+          description={t("dashboard.ictHome.kpiDescriptions.assignedAssets", "Currently assigned")}
           iconClass="purple"
         />
 
         <KpiCard
-          title="Open Support Tickets"
+          title={t("dashboard.ictHome.kpis.openSupportTickets", "Open Support Tickets")}
           value={dashboard.kpis.openSupportTickets}
           icon={Ticket}
-          description="Uncompleted tickets"
+          description={t("dashboard.ictHome.kpiDescriptions.openSupportTickets", "Uncompleted tickets")}
           iconClass="yellow"
         />
 
         <KpiCard
-          title="Critical Incidents"
+          title={t("dashboard.ictHome.kpis.criticalIncidents", "Critical Incidents")}
           value={dashboard.kpis.criticalIncidents}
           icon={AlertTriangle}
-          description="Unresolved high priority"
+          description={t("dashboard.ictHome.kpiDescriptions.criticalIncidents", "Unresolved high priority")}
           iconClass="danger"
         />
       </section>
@@ -534,34 +532,34 @@ export default function Dashboard() {
         {/* Asset Status */}
         <section className="dashboard-card">
           <SectionHeader
-            title="Asset Status"
-            subtitle="Current ICT asset lifecycle status"
+            title={t("dashboard.ictHome.sections.assetStatus", "Asset Status")}
+            subtitle={t("dashboard.ictHome.subtitles.assetStatus", "Current ICT asset lifecycle status")}
           />
 
           <div className="chart-content">
             <ProgressRow
-              label={STATUS_LABELS.available}
+              label={t("dashboard.ictHome.status.available", "Available")}
               value={dashboard.assetStatus.available}
               total={dashboard.kpis.totalAssets}
               status="available"
             />
 
             <ProgressRow
-              label={STATUS_LABELS.assigned}
+              label={t("dashboard.ictHome.status.assigned", "Assigned")}
               value={dashboard.assetStatus.assigned}
               total={dashboard.kpis.totalAssets}
               status="assigned"
             />
 
             <ProgressRow
-              label={STATUS_LABELS.under_maintenance}
+              label={t("dashboard.ictHome.status.underMaintenance", "Under Maintenance")}
               value={dashboard.assetStatus.under_maintenance}
               total={dashboard.kpis.totalAssets}
               status="under_maintenance"
             />
 
             <ProgressRow
-              label={STATUS_LABELS.retired}
+              label={t("dashboard.ictHome.status.retired", "Retired")}
               value={dashboard.assetStatus.retired}
               total={dashboard.kpis.totalAssets}
               status="retired"
@@ -572,8 +570,8 @@ export default function Dashboard() {
         {/* Condition */}
         <section className="dashboard-card">
           <SectionHeader
-            title="Asset Condition"
-            subtitle="Physical condition of ICT assets"
+            title={t("dashboard.ictHome.sections.assetCondition", "Asset Condition")}
+            subtitle={t("dashboard.ictHome.subtitles.assetCondition", "Physical condition of ICT assets")}
           />
 
           <div className="condition-grid">
@@ -586,7 +584,16 @@ export default function Dashboard() {
 
                   <StatusBadge
                     status={key}
-                    label={CONDITION_LABELS[key] || key}
+                    label={
+                      {
+                        functional: t("dashboard.ictHome.condition.functional", "Functional"),
+                        needs_repair: t("dashboard.ictHome.condition.needsRepair", "Needs Repair"),
+                        damaged: t("dashboard.ictHome.condition.damaged", "Damaged"),
+                        missing: t("dashboard.ictHome.condition.missing", "Missing"),
+                        expired: t("dashboard.ictHome.condition.expired", "Expired"),
+                        replaced: t("dashboard.ictHome.condition.replaced", "Replaced"),
+                      }[key] || key
+                    }
                   />
                 </div>
               )
@@ -595,7 +602,7 @@ export default function Dashboard() {
 
           <div className="ratio-summary">
             <div>
-              <span>Functional Ratio</span>
+              <span>{t("dashboard.ictHome.condition.functionalRatio", "Functional Ratio")}</span>
 
               <strong>
                 {dashboard.kpis.totalAssets > 0
@@ -609,7 +616,7 @@ export default function Dashboard() {
             </div>
 
             <div>
-              <span>Damaged Ratio</span>
+              <span>{t("dashboard.ictHome.condition.damagedRatio", "Damaged Ratio")}</span>
 
               <strong>
                 {dashboard.kpis.totalAssets > 0
@@ -632,12 +639,12 @@ export default function Dashboard() {
       <div className="dashboard-grid">
         <section className="dashboard-card">
           <SectionHeader
-            title="ICT Assets by Category"
-            subtitle="Distribution of registered ICT equipment"
+            title={t("dashboard.ictHome.sections.assetsByCategory", "ICT Assets by Category")}
+            subtitle={t("dashboard.ictHome.subtitles.assetsByCategory", "Distribution of registered ICT equipment")}
           />
 
           {dashboard.categories.length === 0 ? (
-            <EmptyState message="No ICT asset categories found." />
+            <EmptyState message={t("dashboard.ictHome.empty.assetCategories", "No ICT asset categories found.")} />
           ) : (
             <div className="category-list">
               {dashboard.categories.map((category, index) => {
@@ -672,7 +679,7 @@ export default function Dashboard() {
                     <div className="category-info">
                       <div className="category-header">
                         <span>
-                          {category.name || "Unknown Category"}
+                          {category.name || t("dashboard.ictHome.fallbacks.unknownCategory", "Unknown Category")}
                         </span>
 
                         <strong>{formatNumber(value)}</strong>
@@ -696,39 +703,39 @@ export default function Dashboard() {
 
         <section className="dashboard-card">
           <SectionHeader
-            title="Maintenance"
-            subtitle="Maintenance activity and status"
+            title={t("dashboard.ictHome.sections.maintenance", "Maintenance")}
+            subtitle={t("dashboard.ictHome.subtitles.maintenance", "Maintenance activity and status")}
           />
 
           <div className="maintenance-summary">
             <div className="maintenance-total">
-              <span>Total Records</span>
+              <span>{t("dashboard.ictHome.maintenance.totalRecords", "Total Records")}</span>
               <strong>{formatNumber(totalMaintenance)}</strong>
             </div>
 
             <ProgressRow
-              label="Scheduled"
+              label={t("dashboard.ictHome.maintenance.scheduled", "Scheduled")}
               value={dashboard.maintenance.scheduled}
               total={totalMaintenance}
               status="scheduled"
             />
 
             <ProgressRow
-              label="In Progress"
+              label={t("dashboard.ictHome.maintenance.inProgress", "In Progress")}
               value={dashboard.maintenance.in_progress}
               total={totalMaintenance}
               status="in_progress"
             />
 
             <ProgressRow
-              label="Completed"
+              label={t("dashboard.ictHome.maintenance.completed", "Completed")}
               value={dashboard.maintenance.completed}
               total={totalMaintenance}
               status="completed"
             />
 
             <ProgressRow
-              label="Overdue"
+              label={t("dashboard.ictHome.maintenance.overdue", "Overdue")}
               value={dashboard.maintenance.overdue}
               total={totalMaintenance}
               status="critical"
@@ -743,8 +750,8 @@ export default function Dashboard() {
 
       <section className="dashboard-card full-width">
         <SectionHeader
-          title="Support Tickets"
-          subtitle="Technical support workflow status"
+          title={t("dashboard.ictHome.sections.supportTickets", "Support Tickets")}
+          subtitle={t("dashboard.ictHome.subtitles.supportTickets", "Technical support workflow status")}
         />
 
         <div className="ticket-grid">
@@ -773,7 +780,7 @@ export default function Dashboard() {
 
         <div className="ticket-total">
           <Clock3 size={17} />
-          <span>Total ticket records:</span>
+          <span>{t("dashboard.ictHome.tickets.totalRecords", "Total ticket records:")}</span>
           <strong>{formatNumber(totalTickets)}</strong>
         </div>
       </section>
@@ -786,12 +793,12 @@ export default function Dashboard() {
         {/* Notifications */}
         <section className="dashboard-card">
           <SectionHeader
-            title="Notifications"
-            subtitle="Latest operational alerts"
+            title={t("dashboard.ictHome.sections.notifications", "Notifications")}
+            subtitle={t("dashboard.ictHome.subtitles.notifications", "Latest operational alerts")}
           />
 
           {dashboard.notifications.length === 0 ? (
-            <EmptyState message="No notifications found." />
+            <EmptyState message={t("dashboard.ictHome.empty.notifications", "No notifications found.")} />
           ) : (
             <div className="notification-list">
               {dashboard.notifications
@@ -811,12 +818,12 @@ export default function Dashboard() {
                     <div className="notification-content">
                       <strong>
                         {notification.title ||
-                          "Notification"}
+                          t("dashboard.ictHome.fallbacks.notification", "Notification")}
                       </strong>
 
                       <p>
                         {notification.message ||
-                          "No notification message."}
+                          t("dashboard.ictHome.fallbacks.noNotificationMessage", "No notification message.")}
                       </p>
 
                       <small>
@@ -835,12 +842,12 @@ export default function Dashboard() {
         {/* Critical Incidents */}
         <section className="dashboard-card">
           <SectionHeader
-            title="Critical Incidents"
-            subtitle="Unresolved high-priority incidents"
+            title={t("dashboard.ictHome.sections.criticalIncidents", "Critical Incidents")}
+            subtitle={t("dashboard.ictHome.subtitles.criticalIncidents", "Unresolved high-priority incidents")}
           />
 
           {dashboard.criticalIncidents.length === 0 ? (
-            <EmptyState message="No critical incidents." />
+            <EmptyState message={t("dashboard.ictHome.empty.criticalIncidents", "No critical incidents.")} />
           ) : (
             <div className="incident-list">
               {dashboard.criticalIncidents
@@ -863,25 +870,25 @@ export default function Dashboard() {
                         <strong>
                           {incident.title ||
                             incident.incidentId ||
-                            "Incident"}
+                            t("dashboard.ictHome.fallbacks.incident", "Incident")}
                         </strong>
 
                         <StatusBadge
                           status="critical"
-                          label="Critical"
+                          label={t("dashboard.ictHome.status.critical", "Critical")}
                         />
                       </div>
 
                       <p>
                         {incident.description ||
                           incident.problem ||
-                          "No description available."}
+                          t("dashboard.ictHome.fallbacks.noDescription", "No description available.")}
                       </p>
 
                       <small>
                         {incident.assetName ||
                           incident.assetId ||
-                          "No asset linked"}
+                          t("dashboard.ictHome.fallbacks.noAssetLinked", "No asset linked")}
                       </small>
                     </div>
                   </div>
@@ -893,12 +900,12 @@ export default function Dashboard() {
         {/* Inventory Alerts */}
         <section className="dashboard-card">
           <SectionHeader
-            title="Inventory Alerts"
-            subtitle="Items requiring attention"
+            title={t("dashboard.ictHome.sections.inventoryAlerts", "Inventory Alerts")}
+            subtitle={t("dashboard.ictHome.subtitles.inventoryAlerts", "Items requiring attention")}
           />
 
           {dashboard.inventoryAlerts.length === 0 ? (
-            <EmptyState message="No inventory alerts." />
+            <EmptyState message={t("dashboard.ictHome.empty.inventoryAlerts", "No inventory alerts.")} />
           ) : (
             <div className="inventory-alert-list">
               {dashboard.inventoryAlerts
@@ -919,18 +926,18 @@ export default function Dashboard() {
                       <strong>
                         {alert.title ||
                           alert.name ||
-                          "Inventory Alert"}
+                          t("dashboard.ictHome.fallbacks.inventoryAlert", "Inventory Alert")}
                       </strong>
 
                       <p>
                         {alert.message ||
                           alert.description ||
-                          "Inventory item requires attention."}
+                          t("dashboard.ictHome.fallbacks.inventoryItemAttention", "Inventory item requires attention.")}
                       </p>
 
                       {alert.quantity !== undefined && (
                         <small>
-                          Quantity:{" "}
+                          {t("dashboard.ictHome.inventory.quantity", "Quantity:")}{" "}
                           {formatNumber(alert.quantity)}
                         </small>
                       )}
@@ -948,23 +955,23 @@ export default function Dashboard() {
 
       <section className="dashboard-card full-width">
         <SectionHeader
-          title="Recent Activity"
-          subtitle="Latest ICT asset and technical operations"
+          title={t("dashboard.ictHome.sections.recentActivity", "Recent Activity")}
+          subtitle={t("dashboard.ictHome.subtitles.recentActivity", "Latest ICT asset and technical operations")}
         />
 
         {dashboard.recentActivity.length === 0 ? (
-          <EmptyState message="No recent activity found." />
+          <EmptyState message={t("dashboard.ictHome.empty.recentActivity", "No recent activity found.")} />
         ) : (
           <div className="activity-table-wrapper">
             <table className="activity-table">
               <thead>
                 <tr>
-                  <th>Date / Time</th>
-                  <th>User</th>
-                  <th>Action</th>
-                  <th>Asset</th>
-                  <th>Location</th>
-                  <th>Status</th>
+                  <th>{t("dashboard.ictHome.activity.dateTime", "Date / Time")}</th>
+                  <th>{t("dashboard.ictHome.activity.user", "User")}</th>
+                  <th>{t("dashboard.ictHome.activity.action", "Action")}</th>
+                  <th>{t("dashboard.ictHome.activity.asset", "Asset")}</th>
+                  <th>{t("dashboard.ictHome.activity.location", "Location")}</th>
+                  <th>{t("dashboard.ictHome.activity.status", "Status")}</th>
                 </tr>
               </thead>
 
@@ -1033,7 +1040,7 @@ export default function Dashboard() {
                                 /\b\w/g,
                                 (char) =>
                                   char.toUpperCase()
-                              ) || "Unknown"
+                              ) || t("dashboard.ictHome.fallbacks.unknownStatus", "Unknown")
                           }
                         />
                       </td>

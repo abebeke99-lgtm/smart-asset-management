@@ -21,8 +21,11 @@ jest.mock('../../contexts/AuthContext', () => ({
   }),
 }));
 
+let mockLanguage = 'en';
+
 jest.mock('../../contexts/UiContext', () => ({
-  useLanguage: () => ({ language: 'en', theme: 'light' }),
+  useLanguage: () => ({ language: mockLanguage, theme: 'light' }),
+  useTranslation: () => ({ language: mockLanguage, t: (key, fallback) => fallback }),
 }));
 
 const departmentAssets = [
@@ -69,6 +72,13 @@ const renderAssets = () => render(
   </MemoryRouter>
 );
 
+const assetsPage = () => (
+  <MemoryRouter initialEntries={['/department-head/assets']}>
+    <DeptAssets />
+    <CurrentPath />
+  </MemoryRouter>
+);
+
 const CurrentPath = () => {
   const location = useLocation();
   return <output aria-label="Current path">{location.pathname}</output>;
@@ -81,6 +91,7 @@ describe('Department Assets', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockLanguage = 'en';
     axios.get.mockImplementation((url) => {
       if (url === '/api/assets') {
         return Promise.resolve({ data: { assets: departmentAssets, pagination: { pages: 1 } } });
@@ -111,6 +122,18 @@ describe('Department Assets', () => {
     expect(screen.getByText('Total Asset Value').parentElement).toHaveTextContent('$1,000');
     expect(axios.get).toHaveBeenCalledWith('/api/assets', {
       params: { page: 1, limit: 50 },
+    });
+
+    it('switches language without repeating the asset request', async () => {
+      const { rerender } = renderAssets();
+      expect(await screen.findByText('Engineering Laptop')).toBeInTheDocument();
+      const requestCount = axios.get.mock.calls.length;
+
+      mockLanguage = 'am';
+      rerender(assetsPage());
+
+      expect(screen.getByRole('heading', { name: 'የክፍል ንብረቶች' })).toBeInTheDocument();
+      expect(axios.get).toHaveBeenCalledTimes(requestCount);
     });
 
     fireEvent.change(screen.getByPlaceholderText('Search by name or tag...'), { target: { value: 'AST-120' } });

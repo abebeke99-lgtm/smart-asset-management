@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { resolveAssetUrl } from '../../services/apiClient';
+import { useTranslation } from '../../contexts/UiContext';
 
-const toInitials = (user = {}) => {
-  const fullName = String(user?.fullName || user?.full_name || user?.name || user?.username || 'U').trim();
+const toInitials = (user = {}, fallbackInitial = 'U') => {
+  const fullName = String(user?.fullName || user?.full_name || user?.name || user?.username || fallbackInitial).trim();
   const parts = fullName.split(/\s+/).filter(Boolean);
 
   if (!parts.length) return 'U';
@@ -15,9 +16,11 @@ const toInitials = (user = {}) => {
 };
 
 const UserAvatar = ({ user, size = 'md', className = '' }) => {
+  const { t } = useTranslation();
   const profilePhoto = user?.profilePhoto || user?.profile_photo || null;
   const imageUrl = useMemo(() => resolveAssetUrl(profilePhoto), [profilePhoto]);
   const [imageFailed, setImageFailed] = useState(false);
+  const fallbackLabel = t('common.userAvatar');
 
   useEffect(() => {
     setImageFailed(false);
@@ -27,10 +30,10 @@ const UserAvatar = ({ user, size = 'md', className = '' }) => {
 
   if (profilePhoto && imageUrl && !imageFailed) {
     return (
-      <div className={avatarClassName} aria-label={user?.fullName || user?.username || 'User avatar'}>
+      <div className={avatarClassName} aria-label={user?.fullName || user?.username || fallbackLabel}>
         <img
           src={imageUrl}
-          alt={user?.fullName || user?.username || 'User'}
+          alt={user?.fullName || user?.username || fallbackLabel}
           onError={() => setImageFailed(true)}
         />
       </div>
@@ -38,8 +41,8 @@ const UserAvatar = ({ user, size = 'md', className = '' }) => {
   }
 
   return (
-    <div className={`${avatarClassName} user-avatar--fallback`} aria-label={user?.fullName || user?.username || 'User avatar'}>
-      {toInitials(user)}
+    <div className={`${avatarClassName} user-avatar--fallback`} aria-label={user?.fullName || user?.username || fallbackLabel}>
+      {toInitials(user, fallbackLabel)}
     </div>
   );
 };

@@ -29,8 +29,10 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import api from "../../services/api";
+import { useTranslation } from "../../contexts/UiContext";
 
 const InfrastructureDashboard = () => {
+  const { t } = useTranslation();
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,7 +73,7 @@ const InfrastructureDashboard = () => {
       setError(
         err?.response?.data?.message ||
           err?.response?.data?.error ||
-          "Unable to load Infrastructure Directorate dashboard."
+          "__dashboard_load_error__"
       );
     } finally {
       setLoading(false);
@@ -118,56 +120,56 @@ const InfrastructureDashboard = () => {
 
   const categories = [
     {
-      title: "Asset Management",
-      description: "Register, track, and manage infrastructure assets",
+      title: t("dashboard.infrastructureHome.categoryAssetManagement", "Asset Management"),
+      description: t("dashboard.infrastructureHome.categoryAssetManagementDescription", "Register, track, and manage infrastructure assets"),
       icon: Package,
       path: "/infrastructure/assets",
     },
     {
-      title: "Buildings & Facilities",
-      description: "Manage buildings, blocks, floors, and rooms",
+      title: t("dashboard.infrastructureHome.categoryBuildings", "Buildings & Facilities"),
+      description: t("dashboard.infrastructureHome.categoryBuildingsDescription", "Manage buildings, blocks, floors, and rooms"),
       icon: Building2,
       path: "/infrastructure/buildings",
     },
     {
-      title: "Electrical Systems",
-      description: "Monitor and maintain electrical infrastructure",
+      title: t("dashboard.infrastructureHome.categoryElectrical", "Electrical Systems"),
+      description: t("dashboard.infrastructureHome.categoryElectricalDescription", "Monitor and maintain electrical infrastructure"),
       icon: Zap,
       path: "/infrastructure/electrical",
     },
     {
-      title: "Power Equipment",
-      description: "Generators, transformers, UPS, and solar systems",
+      title: t("dashboard.infrastructureHome.categoryPowerEquipment", "Power Equipment"),
+      description: t("dashboard.infrastructureHome.categoryPowerEquipmentDescription", "Generators, transformers, UPS, and solar systems"),
       icon: Factory,
       path: "/infrastructure/generators",
     },
     {
-      title: "Water Systems",
-      description: "Manage water pumps, tanks, and pipelines",
+      title: t("dashboard.infrastructureHome.categoryWaterSystems", "Water Systems"),
+      description: t("dashboard.infrastructureHome.categoryWaterSystemsDescription", "Manage water pumps, tanks, and pipelines"),
       icon: Droplets,
       path: "/infrastructure/water",
     },
     {
-      title: "Facility Maintenance",
-      description: "Request and track maintenance work orders",
+      title: t("dashboard.infrastructureHome.categoryFacilityMaintenance", "Facility Maintenance"),
+      description: t("dashboard.infrastructureHome.categoryFacilityMaintenanceDescription", "Request and track maintenance work orders"),
       icon: Wrench,
       path: "/infrastructure/maintenance",
     },
     {
-      title: "Work Orders",
-      description: "Create and manage work order assignments",
+      title: t("dashboard.infrastructureHome.categoryWorkOrders", "Work Orders"),
+      description: t("dashboard.infrastructureHome.categoryWorkOrdersDescription", "Create and manage work order assignments"),
       icon: ClipboardList,
       path: "/infrastructure/work-orders",
     },
     {
-      title: "Inspection & Tracking",
-      description: "Conduct inspections and track equipment",
+      title: t("dashboard.infrastructureHome.categoryInspection", "Inspection & Tracking"),
+      description: t("dashboard.infrastructureHome.categoryInspectionDescription", "Conduct inspections and track equipment"),
       icon: ShieldCheck,
       path: "/infrastructure/inspection",
     },
     {
-      title: "Reports & Analytics",
-      description: "View infrastructure performance reports",
+      title: t("dashboard.infrastructureHome.categoryReports", "Reports & Analytics"),
+      description: t("dashboard.infrastructureHome.categoryReportsDescription", "View infrastructure performance reports"),
       icon: BarChart3,
       path: "/infrastructure/reports",
     },
@@ -175,49 +177,49 @@ const InfrastructureDashboard = () => {
 
   const statCards = [
     {
-      title: "Total Infrastructure Assets",
+      title: t("dashboard.infrastructureHome.totalAssets", "Total Infrastructure Assets"),
       value: stats.totalInfrastructureAssets,
-      description: "Registered infrastructure assets",
+      description: t("dashboard.infrastructureHome.registeredAssetsDescription", "Registered infrastructure assets"),
       icon: Package,
       className: "primary",
       path: "/infrastructure/assets",
     },
     {
-      title: "Buildings",
+      title: t("dashboard.infrastructureHome.buildings", "Buildings"),
       value: stats.buildings,
-      description: "Facilities managed",
+      description: t("dashboard.infrastructureHome.facilitiesManaged", "Facilities managed"),
       icon: Building2,
       className: "blue",
       path: "/infrastructure/buildings",
     },
     {
-      title: "Electrical Systems",
+      title: t("dashboard.infrastructureHome.electricalSystems", "Electrical Systems"),
       value: stats.electricalSystems,
-      description: "Equipment & circuits",
+      description: t("dashboard.infrastructureHome.equipmentCircuits", "Equipment & circuits"),
       icon: Zap,
       className: "amber",
       path: "/infrastructure/electrical",
     },
     {
-      title: "Under Maintenance",
+      title: t("dashboard.infrastructureHome.underMaintenance", "Under Maintenance"),
       value: stats.underMaintenance,
-      description: "Active maintenance",
+      description: t("dashboard.infrastructureHome.activeMaintenance", "Active maintenance"),
       icon: Wrench,
       className: "orange",
       path: "/infrastructure/maintenance",
     },
     {
-      title: "Open Work Orders",
+      title: t("dashboard.infrastructureHome.openWorkOrders", "Open Work Orders"),
       value: stats.openWorkOrders,
-      description: "Pending assignment",
+      description: t("dashboard.infrastructureHome.pendingAssignment", "Pending assignment"),
       icon: ClipboardList,
       className: "purple",
       path: "/infrastructure/work-orders",
     },
     {
-      title: "Critical Alerts",
+      title: t("dashboard.infrastructureHome.criticalAlerts", "Critical Alerts"),
       value: stats.criticalAlerts,
-      description: "Requires attention",
+      description: t("dashboard.infrastructureHome.requiresAttention", "Requires attention"),
       icon: AlertTriangle,
       className: "danger",
       path: "/infrastructure/notifications",
@@ -226,38 +228,38 @@ const InfrastructureDashboard = () => {
 
   const quickActions = [
     {
-      title: "Register Asset",
-      description: "Add infrastructure asset",
+      title: t("dashboard.infrastructureHome.registerAsset", "Register Asset"),
+      description: t("dashboard.infrastructureHome.addInfrastructureAsset", "Add infrastructure asset"),
       icon: Package,
       path: "/infrastructure/assets/register",
     },
     {
-      title: "Asset Verification",
-      description: "Verify infrastructure assets",
+      title: t("dashboard.infrastructureHome.assetVerification", "Asset Verification"),
+      description: t("dashboard.infrastructureHome.verifyInfrastructureAssets", "Verify infrastructure assets"),
       icon: ShieldCheck,
       path: "/infrastructure/verification",
     },
     {
-      title: "Create Work Order",
-      description: "Create maintenance work",
+      title: t("dashboard.infrastructureHome.createWorkOrder", "Create Work Order"),
+      description: t("dashboard.infrastructureHome.createMaintenanceWork", "Create maintenance work"),
       icon: ClipboardList,
       path: "/infrastructure/work-orders",
     },
     {
-      title: "Inspection",
-      description: "Inspect infrastructure",
+      title: t("dashboard.infrastructureHome.inspection", "Inspection"),
+      description: t("dashboard.infrastructureHome.inspectInfrastructure", "Inspect infrastructure"),
       icon: HardHat,
       path: "/infrastructure/inspection",
     },
     {
-      title: "Energy Management",
-      description: "Monitor energy systems",
+      title: t("dashboard.infrastructureHome.energyManagement", "Energy Management"),
+      description: t("dashboard.infrastructureHome.monitorEnergySystems", "Monitor energy systems"),
       icon: Gauge,
       path: "/infrastructure/energy",
     },
     {
-      title: "Reports",
-      description: "View infrastructure reports",
+      title: t("dashboard.infrastructureHome.reports", "Reports"),
+      description: t("dashboard.infrastructureHome.viewInfrastructureReports", "View infrastructure reports"),
       icon: BarChart3,
       path: "/infrastructure/reports",
     },
@@ -296,7 +298,7 @@ const InfrastructureDashboard = () => {
   };
 
   const formatStatus = (status) => {
-    if (!status) return "Unknown";
+    if (!status) return t("dashboard.infrastructureHome.unknown", "Unknown");
 
     return String(status)
       .replace(/_/g, " ")
@@ -335,11 +337,11 @@ const InfrastructureDashboard = () => {
             />
 
             <h3 style={styles.loadingTitle}>
-              Loading Infrastructure Dashboard
+              {t("dashboard.infrastructureHome.loadingTitle", "Loading Infrastructure Dashboard")}
             </h3>
 
             <p style={styles.loadingText}>
-              Connecting to the infrastructure management system...
+              {t("dashboard.infrastructureHome.loadingDescription", "Connecting to the infrastructure management system...")}
             </p>
           </div>
         </div>
@@ -355,15 +357,15 @@ const InfrastructureDashboard = () => {
       <div className="infra-header">
         <div>
           <div className="infra-breadcrumb">
-            <Link to="/infrastructure">Infrastructure</Link>
+            <Link to="/infrastructure">{t("dashboard.infrastructureHome.infrastructure", "Infrastructure")}</Link>
             <span>/</span>
-            <span>Dashboard</span>
+            <span>{t("dashboard.infrastructureHome.dashboard", "Dashboard")}</span>
           </div>
 
-          <h1 className="infra-title">Infrastructure Directorate</h1>
+          <h1 className="infra-title">{t("dashboard.infrastructureHome.title", "Infrastructure Directorate")}</h1>
 
           <p className="infra-subtitle">
-            Manage and monitor all university infrastructure assets and systems
+            {t("dashboard.infrastructureHome.subtitle", "Manage and monitor all university infrastructure assets and systems")}
           </p>
         </div>
 
@@ -378,7 +380,9 @@ const InfrastructureDashboard = () => {
             className={refreshing ? "spin" : ""}
           />
 
-          {refreshing ? "Refreshing..." : "Refresh"}
+          {refreshing
+            ? t("dashboard.infrastructureHome.refreshing", "Refreshing...")
+            : t("dashboard.infrastructureHome.refresh", "Refresh")}
         </button>
       </div>
 
@@ -390,8 +394,12 @@ const InfrastructureDashboard = () => {
           </div>
 
           <div className="error-content">
-            <strong>Dashboard data could not be loaded</strong>
-            <span>{error}</span>
+            <strong>{t("dashboard.infrastructureHome.loadErrorTitle", "Dashboard data could not be loaded")}</strong>
+            <span>
+              {error === "__dashboard_load_error__"
+                ? t("dashboard.infrastructureHome.loadErrorFallback", "Unable to load Infrastructure Directorate dashboard.")
+                : error}
+            </span>
           </div>
 
           <button
@@ -399,7 +407,7 @@ const InfrastructureDashboard = () => {
             className="retry-button"
             onClick={() => getDashboard()}
           >
-            Retry
+            {t("dashboard.infrastructureHome.retry", "Retry")}
           </button>
         </div>
       )}
@@ -441,8 +449,8 @@ const InfrastructureDashboard = () => {
         <section className="panel categories-panel">
           <div className="panel-header">
             <div>
-              <h2>Infrastructure Categories</h2>
-              <p>Manage major infrastructure functions</p>
+              <h2>{t("dashboard.infrastructureHome.categoriesTitle", "Infrastructure Categories")}</h2>
+              <p>{t("dashboard.infrastructureHome.categoriesDescription", "Manage major infrastructure functions")}</p>
             </div>
 
             <CloudCog size={23} />
@@ -481,8 +489,8 @@ const InfrastructureDashboard = () => {
         <section className="panel operational-panel">
           <div className="panel-header">
             <div>
-              <h2>Operational Overview</h2>
-              <p>Current infrastructure status</p>
+              <h2>{t("dashboard.infrastructureHome.operationalOverview", "Operational Overview")}</h2>
+              <p>{t("dashboard.infrastructureHome.currentInfrastructureStatus", "Current infrastructure status")}</p>
             </div>
 
             <Activity size={23} />
@@ -494,7 +502,7 @@ const InfrastructureDashboard = () => {
             </div>
 
             <div className="operational-label">
-              Operational Assets
+              {t("dashboard.infrastructureHome.operationalAssets", "Operational Assets")}
             </div>
 
             <div className="operational-progress">
@@ -522,7 +530,7 @@ const InfrastructureDashboard = () => {
                       100
                   )
                 : 0}
-              % operational
+              % {t("dashboard.infrastructureHome.operational", "operational")}
             </div>
           </div>
 
@@ -532,7 +540,7 @@ const InfrastructureDashboard = () => {
                 <span className="row-icon generator">
                   <Factory size={17} />
                 </span>
-                <span>Generators</span>
+                <span>{t("dashboard.infrastructureHome.generators", "Generators")}</span>
               </div>
 
               <strong>{stats.generators.toLocaleString()}</strong>
@@ -543,7 +551,7 @@ const InfrastructureDashboard = () => {
                 <span className="row-icon transformer">
                   <Zap size={17} />
                 </span>
-                <span>Transformers</span>
+                <span>{t("dashboard.infrastructureHome.transformers", "Transformers")}</span>
               </div>
 
               <strong>{stats.transformers.toLocaleString()}</strong>
@@ -554,7 +562,7 @@ const InfrastructureDashboard = () => {
                 <span className="row-icon maintenance">
                   <Wrench size={17} />
                 </span>
-                <span>Under Maintenance</span>
+                <span>{t("dashboard.infrastructureHome.underMaintenance", "Under Maintenance")}</span>
               </div>
 
               <strong>{stats.underMaintenance.toLocaleString()}</strong>
@@ -565,7 +573,7 @@ const InfrastructureDashboard = () => {
                 <span className="row-icon work">
                   <ClipboardList size={17} />
                 </span>
-                <span>Open Work Orders</span>
+                <span>{t("dashboard.infrastructureHome.openWorkOrders", "Open Work Orders")}</span>
               </div>
 
               <strong>{stats.openWorkOrders.toLocaleString()}</strong>
@@ -580,8 +588,8 @@ const InfrastructureDashboard = () => {
         <section className="panel status-panel">
           <div className="panel-header">
             <div>
-              <h2>Asset Status</h2>
-              <p>Current infrastructure asset condition</p>
+              <h2>{t("dashboard.infrastructureHome.assetStatus", "Asset Status")}</h2>
+              <p>{t("dashboard.infrastructureHome.currentAssetCondition", "Current infrastructure asset condition")}</p>
             </div>
 
             <TrendingUp size={22} />
@@ -590,7 +598,7 @@ const InfrastructureDashboard = () => {
           {Object.keys(statusBreakdown).length === 0 ? (
             <div className="empty-state compact">
               <Activity size={28} />
-              <span>No status data available</span>
+              <span>{t("dashboard.infrastructureHome.noStatusData", "No status data available")}</span>
             </div>
           ) : (
             <div className="status-list">
@@ -615,8 +623,8 @@ const InfrastructureDashboard = () => {
         <section className="panel quick-panel">
           <div className="panel-header">
             <div>
-              <h2>Quick Actions</h2>
-              <p>Frequently used infrastructure operations</p>
+              <h2>{t("dashboard.infrastructureHome.quickActions", "Quick Actions")}</h2>
+              <p>{t("dashboard.infrastructureHome.quickActionsDescription", "Frequently used infrastructure operations")}</p>
             </div>
 
             <Settings size={22} />
@@ -653,12 +661,12 @@ const InfrastructureDashboard = () => {
       <section className="panel table-panel">
         <div className="panel-header">
           <div>
-            <h2>Recent Infrastructure Assets</h2>
-            <p>Latest assets registered in the system</p>
+            <h2>{t("dashboard.infrastructureHome.recentAssets", "Recent Infrastructure Assets")}</h2>
+            <p>{t("dashboard.infrastructureHome.latestRegisteredAssets", "Latest assets registered in the system")}</p>
           </div>
 
           <Link to="/infrastructure/assets" className="view-all">
-            View All
+            {t("dashboard.infrastructureHome.viewAll", "View All")}
             <ArrowRight size={15} />
           </Link>
         </div>
@@ -666,9 +674,9 @@ const InfrastructureDashboard = () => {
         {recentAssets.length === 0 ? (
           <div className="empty-state">
             <Package size={36} />
-            <h3>No infrastructure assets found</h3>
+            <h3>{t("dashboard.infrastructureHome.noAssetsFound", "No infrastructure assets found")}</h3>
             <p>
-              Registered infrastructure assets will appear here.
+              {t("dashboard.infrastructureHome.assetsEmptyDescription", "Registered infrastructure assets will appear here.")}
             </p>
 
           </div>
@@ -677,12 +685,12 @@ const InfrastructureDashboard = () => {
             <table>
               <thead>
                 <tr>
-                  <th>Asset</th>
-                  <th>Asset Tag</th>
-                  <th>Category</th>
-                  <th>Location</th>
-                  <th>Status</th>
-                  <th>Registered</th>
+                  <th>{t("dashboard.infrastructureHome.asset", "Asset")}</th>
+                  <th>{t("dashboard.infrastructureHome.assetTag", "Asset Tag")}</th>
+                  <th>{t("dashboard.infrastructureHome.category", "Category")}</th>
+                  <th>{t("dashboard.infrastructureHome.location", "Location")}</th>
+                  <th>{t("dashboard.infrastructureHome.status", "Status")}</th>
+                  <th>{t("dashboard.infrastructureHome.registered", "Registered")}</th>
                 </tr>
               </thead>
 
@@ -699,12 +707,12 @@ const InfrastructureDashboard = () => {
                           <strong>
                             {asset.name ||
                               asset.asset_name ||
-                              "Unnamed Asset"}
+                              t("dashboard.infrastructureHome.unnamedAsset", "Unnamed Asset")}
                           </strong>
 
                           {asset.serial_number && (
                             <span>
-                              SN: {asset.serial_number}
+                              {t("dashboard.infrastructureHome.serialNumberPrefix", "SN")}: {asset.serial_number}
                             </span>
                           )}
                         </div>
@@ -758,15 +766,15 @@ const InfrastructureDashboard = () => {
       <section className="panel table-panel">
         <div className="panel-header">
           <div>
-            <h2>Recent Work Orders</h2>
-            <p>Latest infrastructure maintenance activities</p>
+            <h2>{t("dashboard.infrastructureHome.recentWorkOrders", "Recent Work Orders")}</h2>
+            <p>{t("dashboard.infrastructureHome.latestMaintenanceActivities", "Latest infrastructure maintenance activities")}</p>
           </div>
 
           <Link
             to="/infrastructure/work-orders"
             className="view-all"
           >
-            View All
+            {t("dashboard.infrastructureHome.viewAll", "View All")}
             <ArrowRight size={15} />
           </Link>
         </div>
@@ -774,17 +782,16 @@ const InfrastructureDashboard = () => {
         {recentWorkOrders.length === 0 ? (
           <div className="empty-state">
             <ClipboardList size={36} />
-            <h3>No work orders found</h3>
+            <h3>{t("dashboard.infrastructureHome.noWorkOrdersFound", "No work orders found")}</h3>
             <p>
-              Infrastructure work orders will appear here when
-              created.
+              {t("dashboard.infrastructureHome.workOrdersEmptyDescription", "Infrastructure work orders will appear here when created.")}
             </p>
 
             <Link
               to="/infrastructure/work-orders"
               className="empty-action"
             >
-              Manage Work Orders
+              {t("dashboard.infrastructureHome.manageWorkOrders", "Manage Work Orders")}
             </Link>
           </div>
         ) : (
@@ -792,12 +799,12 @@ const InfrastructureDashboard = () => {
             <table>
               <thead>
                 <tr>
-                  <th>Work Order</th>
-                  <th>Title</th>
-                  <th>Priority</th>
-                  <th>Status</th>
-                  <th>Assigned To</th>
-                  <th>Date</th>
+                  <th>{t("dashboard.infrastructureHome.workOrder", "Work Order")}</th>
+                  <th>{t("dashboard.infrastructureHome.titleColumn", "Title")}</th>
+                  <th>{t("dashboard.infrastructureHome.priority", "Priority")}</th>
+                  <th>{t("dashboard.infrastructureHome.status", "Status")}</th>
+                  <th>{t("dashboard.infrastructureHome.assignedTo", "Assigned To")}</th>
+                  <th>{t("dashboard.infrastructureHome.date", "Date")}</th>
                 </tr>
               </thead>
 
@@ -848,7 +855,7 @@ const InfrastructureDashboard = () => {
                     <td>
                       {workOrder.assigned_to ||
                         workOrder.assigned_name ||
-                        "Unassigned"}
+                        t("dashboard.infrastructureHome.unassigned", "Unassigned")}
                     </td>
 
                     <td>
@@ -869,11 +876,11 @@ const InfrastructureDashboard = () => {
       <div className="dashboard-footer">
         <div>
           <ShieldCheck size={16} />
-          <span>Infrastructure Management System</span>
+          <span>{t("dashboard.infrastructureHome.managementSystem", "Infrastructure Management System")}</span>
         </div>
 
         <span>
-          Data displayed from the university asset database
+          {t("dashboard.infrastructureHome.databaseDisclaimer", "Data displayed from the university asset database")}
         </span>
       </div>
     </div>

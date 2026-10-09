@@ -22,6 +22,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
+import { useTranslation } from "../../contexts/UiContext";
 
 const INITIAL_FILTERS = {
   dateFrom: "",
@@ -91,7 +92,7 @@ function formatNumber(value) {
   );
 }
 
-function getLabel(item) {
+function getLabel(item, translate) {
   return String(
     firstValue(
       item?.name,
@@ -104,7 +105,7 @@ function getLabel(item) {
       item?.financial_year,
       item?.month,
       item?.period,
-      "Unknown"
+      translate("chart.unknown", "Unknown")
     )
   );
 }
@@ -165,18 +166,18 @@ function EmptyChart({ message }) {
   );
 }
 
-function BarChart({ data }) {
+function BarChart({ data, translate }) {
   const rows = asArray(data);
 
   if (!rows.length) {
     return (
-      <EmptyChart message="No department data available." />
+      <EmptyChart message={translate("chart.noDepartmentData", "No department data available.")} />
     );
   }
 
   const normalized = rows
     .map((item) => ({
-      label: getLabel(item),
+      label: getLabel(item, translate),
       value: getValue(item),
     }))
     .filter((item) => item.value >= 0)
@@ -222,18 +223,18 @@ function BarChart({ data }) {
   );
 }
 
-function DonutChart({ data }) {
+function DonutChart({ data, translate }) {
   const rows = asArray(data);
 
   if (!rows.length) {
     return (
-      <EmptyChart message="No category data available." />
+      <EmptyChart message={translate("chart.noCategoryData", "No category data available.")} />
     );
   }
 
   const normalized = rows
     .map((item) => ({
-      label: getLabel(item),
+      label: getLabel(item, translate),
       value: getValue(item),
     }))
     .filter((item) => item.value >= 0)
@@ -246,7 +247,7 @@ function DonutChart({ data }) {
 
   if (total <= 0) {
     return (
-      <EmptyChart message="No category values available." />
+      <EmptyChart message={translate("chart.noCategoryValues", "No category values available.")} />
     );
   }
 
@@ -290,7 +291,7 @@ function DonutChart({ data }) {
             {formatETB(total)}
           </strong>
 
-          <span>Total Value</span>
+          <span>{translate("chart.totalValue", "Total Value")}</span>
         </div>
       </div>
 
@@ -324,18 +325,18 @@ function DonutChart({ data }) {
   );
 }
 
-function StatusChart({ data }) {
+function StatusChart({ data, translate }) {
   const rows = asArray(data);
 
   if (!rows.length) {
     return (
-      <EmptyChart message="No status data available." />
+      <EmptyChart message={translate("chart.noStatusData", "No status data available.")} />
     );
   }
 
   const normalized = rows
     .map((item) => ({
-      label: getLabel(item),
+      label: getLabel(item, translate),
       value: getValue(item),
     }))
     .filter((item) => item.value >= 0)
@@ -382,18 +383,18 @@ function StatusChart({ data }) {
   );
 }
 
-function TrendChart({ data }) {
+function TrendChart({ data, translate }) {
   const rows = asArray(data);
 
   if (!rows.length) {
     return (
-      <EmptyChart message="No value trend data available." />
+      <EmptyChart message={translate("chart.noValueTrendData", "No value trend data available.")} />
     );
   }
 
   const normalized = rows
     .map((item) => ({
-      label: getLabel(item),
+      label: getLabel(item, translate),
       value: getValue(item),
     }))
     .filter((item) => item.value >= 0)
@@ -401,7 +402,7 @@ function TrendChart({ data }) {
 
   if (!normalized.length) {
     return (
-      <EmptyChart message="No value trend data available." />
+      <EmptyChart message={translate("chart.noValueTrendData", "No value trend data available.")} />
     );
   }
 
@@ -517,6 +518,10 @@ function TrendChart({ data }) {
 }
 
 export default function FinanceDashboard() {
+  const { t } = useTranslation();
+  const translate = (key, fallback) =>
+    t(`dashboard.financeHome.${key}`, fallback);
+
   const [filters, setFilters] =
     useState(INITIAL_FILTERS);
 
@@ -618,8 +623,8 @@ export default function FinanceDashboard() {
         if ([401, 403].includes(err?.response?.status)) {
           setError(
             err.response.status === 401
-              ? "Your session has expired. Please sign in again."
-              : "You are not authorized to view Finance Dashboard filters."
+              ? { translationKey: "errors.sessionExpired" }
+              : { translationKey: "errors.filtersUnauthorized" }
           );
         }
       }
@@ -724,7 +729,7 @@ export default function FinanceDashboard() {
 
         setError(
           err?.response?.data?.message ||
-            "Unable to load Finance Dashboard data."
+            { translationKey: "errors.loadFailed" }
         );
       } finally {
         setLoading(false);
@@ -847,7 +852,7 @@ export default function FinanceDashboard() {
       XLSX.writeFile(workbook, `finance-dashboard-${new Date().toISOString().slice(0, 10)}.xlsx`);
 
       setSuccess(
-        "Finance dashboard exported successfully."
+        "dashboard.financeHome.messages.exportSuccess"
       );
     } catch (err) {
       console.error(
@@ -857,7 +862,7 @@ export default function FinanceDashboard() {
 
       setError(
         err?.response?.data?.message ||
-          "Unable to export Finance Dashboard."
+          { translationKey: "errors.exportFailed" }
       );
     }
   };
@@ -1670,14 +1675,11 @@ export default function FinanceDashboard() {
 
             <div>
               <h1>
-                Welcome, Finance Manager 👋
+                {translate("welcome", "Welcome, Finance Manager 👋")}
               </h1>
 
               <p>
-                Monitor university asset
-                financial performance,
-                valuation, depreciation,
-                and financial status.
+                {translate("description", "Monitor university asset financial performance, valuation, depreciation, and financial status.")}
               </p>
             </div>
           </div>
@@ -1701,7 +1703,7 @@ export default function FinanceDashboard() {
                     : ""
                 }
               />
-              Refresh
+              {translate("refresh", "Refresh")}
             </button>
 
             <button
@@ -1711,7 +1713,7 @@ export default function FinanceDashboard() {
             >
               <FileSpreadsheet size={14} />
 
-              Export to Excel
+              {translate("exportToExcel", "Export to Excel")}
             </button>
           </div>
         </div>
@@ -1719,7 +1721,11 @@ export default function FinanceDashboard() {
         {error && (
           <div className="alert alert-error">
             <AlertCircle size={16} />
-            <span>{error}</span>
+            <span>
+              {typeof error === "object" && error.translationKey
+                ? translate(error.translationKey, "")
+                : error}
+            </span>
 
             <button
               type="button"
@@ -1731,7 +1737,7 @@ export default function FinanceDashboard() {
               onClick={loadDashboard}
             >
               <RefreshCw size={13} />
-              Retry
+              {translate("retry", "Retry")}
             </button>
           </div>
         )}
@@ -1739,7 +1745,11 @@ export default function FinanceDashboard() {
         {success && (
           <div className="alert alert-success">
             <CheckCircle2 size={16} />
-            <span>{success}</span>
+            <span>
+              {success.startsWith("dashboard.financeHome.")
+                ? translate(success.slice("dashboard.financeHome.".length), "")
+                : success}
+            </span>
           </div>
         )}
 
@@ -1747,7 +1757,7 @@ export default function FinanceDashboard() {
           <div className="filters-header">
             <div className="filters-title">
               <Search size={15} />
-              Dashboard Filters
+              {translate("filters.title", "Dashboard Filters")}
             </div>
 
             <button
@@ -1769,8 +1779,8 @@ export default function FinanceDashboard() {
                 }}
               />
               {showFilters
-                ? "Hide"
-                : "Show"}
+                ? translate("filters.hide", "Hide")
+                : translate("filters.show", "Show")}
             </button>
           </div>
 
@@ -1778,7 +1788,7 @@ export default function FinanceDashboard() {
             <div className="filters-grid">
               <div className="field">
                 <label>
-                  Date From
+                  {translate("filters.dateFrom", "Date From")}
                 </label>
 
                 <input
@@ -1798,7 +1808,7 @@ export default function FinanceDashboard() {
 
               <div className="field">
                 <label>
-                  Date To
+                  {translate("filters.dateTo", "Date To")}
                 </label>
 
                 <input
@@ -1818,7 +1828,7 @@ export default function FinanceDashboard() {
 
               <div className="field">
                 <label>
-                  Department
+                  {translate("filters.department", "Department")}
                 </label>
 
                 <div className="select-wrap">
@@ -1835,7 +1845,7 @@ export default function FinanceDashboard() {
                     }
                   >
                     <option value="">
-                      All Departments
+                      {translate("filters.allDepartments", "All Departments")}
                     </option>
 
                     {departments.map(
@@ -1883,7 +1893,7 @@ export default function FinanceDashboard() {
 
               <div className="field">
                 <label>
-                  Category
+                  {translate("filters.category", "Category")}
                 </label>
 
                 <div className="select-wrap">
@@ -1900,7 +1910,7 @@ export default function FinanceDashboard() {
                     }
                   >
                     <option value="">
-                      All Categories
+                      {translate("filters.allCategories", "All Categories")}
                     </option>
 
                     {categories.map(
@@ -1948,7 +1958,7 @@ export default function FinanceDashboard() {
 
               <div className="field">
                 <label>
-                  Status
+                  {translate("filters.status", "Status")}
                 </label>
 
                 <div className="select-wrap">
@@ -1965,7 +1975,7 @@ export default function FinanceDashboard() {
                     }
                   >
                     <option value="">
-                      All Statuses
+                      {translate("filters.allStatuses", "All Statuses")}
                     </option>
 
                     {statuses.map(
@@ -2000,7 +2010,7 @@ export default function FinanceDashboard() {
 
               <div className="field">
                 <label>
-                  Financial Year
+                  {translate("filters.financialYear", "Financial Year")}
                 </label>
 
                 <div className="select-wrap">
@@ -2017,7 +2027,7 @@ export default function FinanceDashboard() {
                     }
                   >
                     <option value="">
-                      All Years
+                      {translate("filters.allYears", "All Years")}
                     </option>
 
                     {financialYears.map(
@@ -2074,7 +2084,7 @@ export default function FinanceDashboard() {
                     onClick={clearFilters}
                   >
                     <X size={13} />
-                    Clear Filters
+                    {translate("filters.clear", "Clear Filters")}
                   </button>
                 </div>
               )}
@@ -2085,41 +2095,41 @@ export default function FinanceDashboard() {
         <div className="stats-grid">
           <StatCard
             icon={CircleDollarSign}
-            title="Total Asset Cost"
+            title={translate("stats.totalAssetCost", "Total Asset Cost")}
             value={formatETB(
               stats.totalAssetCost
             )}
-            subtitle="Original recorded cost"
+            subtitle={translate("stats.originalRecordedCost", "Original recorded cost")}
             tone="blue"
           />
 
           <StatCard
             icon={TrendingUp}
-            title="Current Book Value"
+            title={translate("stats.currentBookValue", "Current Book Value")}
             value={formatETB(
               stats.currentBookValue
             )}
-            subtitle="Current financial value"
+            subtitle={translate("stats.currentFinancialValue", "Current financial value")}
             tone="green"
           />
 
           <StatCard
             icon={TrendingDown}
-            title="Accumulated Depreciation"
+            title={translate("stats.accumulatedDepreciation", "Accumulated Depreciation")}
             value={formatETB(
               stats.accumulatedDepreciation
             )}
-            subtitle="Depreciation to date"
+            subtitle={translate("stats.depreciationToDate", "Depreciation to date")}
             tone="orange"
           />
 
           <StatCard
             icon={Package}
-            title="Total Assets"
+            title={translate("stats.totalAssets", "Total Assets")}
             value={formatNumber(
               stats.totalAssets
             )}
-            subtitle="Financially tracked assets"
+            subtitle={translate("stats.financiallyTrackedAssets", "Financially tracked assets")}
             tone="cyan"
           />
         </div>
@@ -2127,41 +2137,41 @@ export default function FinanceDashboard() {
         <div className="stats-grid secondary">
           <StatCard
             icon={CheckCircle2}
-            title="Active Assets"
+            title={translate("stats.activeAssets", "Active Assets")}
             value={formatNumber(
               stats.activeAssets
             )}
-            subtitle="Currently active"
+            subtitle={translate("stats.currentlyActive", "Currently active")}
             tone="green"
           />
 
           <StatCard
             icon={Wrench}
-            title="Under Maintenance"
+            title={translate("stats.underMaintenance", "Under Maintenance")}
             value={formatNumber(
               stats.underMaintenance
             )}
-            subtitle="Currently under maintenance"
+            subtitle={translate("stats.currentlyUnderMaintenance", "Currently under maintenance")}
             tone="orange"
           />
 
           <StatCard
             icon={Trash2}
-            title="Disposed"
+            title={translate("stats.disposed", "Disposed")}
             value={formatNumber(
               stats.disposed
             )}
-            subtitle="Disposed assets"
+            subtitle={translate("stats.disposedAssets", "Disposed assets")}
             tone="red"
           />
 
           <StatCard
             icon={AlertCircle}
-            title="Requiring Valuation"
+            title={translate("stats.requiringValuation", "Requiring Valuation")}
             value={formatNumber(
               stats.requiringValuation
             )}
-            subtitle="Needs financial valuation"
+            subtitle={translate("stats.needsFinancialValuation", "Needs financial valuation")}
             tone="purple"
           />
         </div>
@@ -2175,11 +2185,11 @@ export default function FinanceDashboard() {
                     size={16}
                     color="var(--color-primary)"
                   />
-                  Assets by Department
+                  {translate("charts.assetsByDepartment", "Assets by Department")}
                 </div>
 
                 <div className="chart-subtitle">
-                  Asset financial value by department
+                  {translate("charts.departmentValueSubtitle", "Asset financial value by department")}
                 </div>
               </div>
             </div>
@@ -2189,6 +2199,7 @@ export default function FinanceDashboard() {
                 data={
                   dashboard.byDepartment
                 }
+                translate={translate}
               />
             </div>
           </div>
@@ -2201,11 +2212,11 @@ export default function FinanceDashboard() {
                     size={16}
                     color="var(--color-info)"
                   />
-                  Assets by Category
+                  {translate("charts.assetsByCategory", "Assets by Category")}
                 </div>
 
                 <div className="chart-subtitle">
-                  Distribution of asset financial value
+                  {translate("charts.categoryDistributionSubtitle", "Distribution of asset financial value")}
                 </div>
               </div>
             </div>
@@ -2215,6 +2226,7 @@ export default function FinanceDashboard() {
                 data={
                   dashboard.byCategory
                 }
+                translate={translate}
               />
             </div>
           </div>
@@ -2227,11 +2239,11 @@ export default function FinanceDashboard() {
                     size={16}
                     color="var(--color-success)"
                   />
-                  Assets by Status
+                  {translate("charts.assetsByStatus", "Assets by Status")}
                 </div>
 
                 <div className="chart-subtitle">
-                  Current financial asset status
+                  {translate("charts.statusSubtitle", "Current financial asset status")}
                 </div>
               </div>
             </div>
@@ -2241,6 +2253,7 @@ export default function FinanceDashboard() {
                 data={
                   dashboard.byStatus
                 }
+                translate={translate}
               />
             </div>
           </div>
@@ -2253,11 +2266,11 @@ export default function FinanceDashboard() {
                     size={16}
                     color="var(--color-primary)"
                   />
-                  Asset Value Trend
+                  {translate("charts.assetValueTrend", "Asset Value Trend")}
                 </div>
 
                 <div className="chart-subtitle">
-                  Asset value over the selected period
+                  {translate("charts.trendSubtitle", "Asset value over the selected period")}
                 </div>
               </div>
             </div>
@@ -2267,6 +2280,7 @@ export default function FinanceDashboard() {
                 data={
                   dashboard.valueTrend
                 }
+                translate={translate}
               />
             </div>
           </div>
@@ -2278,7 +2292,7 @@ export default function FinanceDashboard() {
             className="quick-link"
           >
             <FileSpreadsheet size={16} />
-            Invoices
+            {translate("links.invoices", "Invoices")}
           </Link>
 
           <Link
@@ -2288,7 +2302,7 @@ export default function FinanceDashboard() {
             <CircleDollarSign
               size={16}
             />
-            Asset Valuation
+            {translate("links.assetValuation", "Asset Valuation")}
           </Link>
 
           <Link
@@ -2296,7 +2310,7 @@ export default function FinanceDashboard() {
             className="quick-link"
           >
             <TrendingDown size={16} />
-            Depreciation
+            {translate("links.depreciation", "Depreciation")}
           </Link>
 
           <Link
@@ -2304,7 +2318,7 @@ export default function FinanceDashboard() {
             className="quick-link"
           >
             <BarChart3 size={16} />
-            Budget Management
+            {translate("links.budgetManagement", "Budget Management")}
           </Link>
 
           <Link
@@ -2312,7 +2326,7 @@ export default function FinanceDashboard() {
             className="quick-link"
           >
             <Activity size={16} />
-            Transactions
+            {translate("links.transactions", "Transactions")}
           </Link>
 
           <Link
@@ -2322,7 +2336,7 @@ export default function FinanceDashboard() {
             <FileSpreadsheet
               size={16}
             />
-            Financial Reports
+            {translate("links.financialReports", "Financial Reports")}
           </Link>
 
         </div>
@@ -2335,7 +2349,7 @@ export default function FinanceDashboard() {
               size={18}
               className="spin"
             />
-            Loading Finance Dashboard...
+            {translate("loading", "Loading Finance Dashboard...")}
           </div>
         </div>
       )}

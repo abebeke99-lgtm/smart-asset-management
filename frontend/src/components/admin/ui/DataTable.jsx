@@ -4,8 +4,10 @@ import Pagination from './Pagination';
 import EmptyState from './EmptyState';
 import ErrorState from './ErrorState';
 import Skeleton from './Skeleton';
+import { useTranslation } from '../../../contexts/UiContext';
 
-export default function DataTable({ columns = [], rows = [], rowKey = 'id', loading = false, error, emptyMessage = 'No records found.', page = 1, pageSize = 10, total = rows.length, onPageChange, onPageSizeChange, onSort, className = '' }) {
+export default function DataTable({ columns = [], rows = [], rowKey = 'id', loading = false, error, emptyMessage, page = 1, pageSize = 10, total = rows.length, onPageChange, onPageSizeChange, onSort, className = '' }) {
+  const { t } = useTranslation();
   const [localSort, setLocalSort] = useState({ key: '', direction: 'asc' });
   const sortState = localSort;
   const visibleRows = useMemo(() => {
@@ -23,8 +25,8 @@ export default function DataTable({ columns = [], rows = [], rowKey = 'id', load
 
   return (
     <section className={`admin-ui-table-card ${className}`} aria-busy={loading}>
-      {error ? <ErrorState message={typeof error === 'string' ? error : 'Unable to load records.'} /> : (
-        <div className="admin-ui-table-scroll" role="region" aria-label="Data table" tabIndex="0">
+      {error ? <ErrorState message={typeof error === 'string' ? error : t('adminUi.tableLoadError')} /> : (
+        <div className="admin-ui-table-scroll" role="region" aria-label={t('adminUi.dataTable')} tabIndex="0">
           <table className="admin-ui-table">
             <thead><tr>{columns.map((column) => {
               const currentSort = sortState.key === column.key ? sortState.direction : 'none';
@@ -33,7 +35,7 @@ export default function DataTable({ columns = [], rows = [], rowKey = 'id', load
               </th>;
             })}</tr></thead>
             <tbody>
-              {loading ? Array.from({ length: Math.min(pageSize, 6) }, (_, rowIndex) => <tr key={`loading-${rowIndex}`}>{columns.map((column) => <td key={column.key}><Skeleton height={16} /></td>)}</tr>) : visibleRows.length ? visibleRows.map((row, index) => <tr key={row[rowKey] ?? index}>{columns.map((column) => <td key={column.key}>{column.render ? column.render(row[column.key], row) : row[column.key] ?? '—'}</td>)}</tr>) : <tr><td colSpan={columns.length}><EmptyState message={emptyMessage} /></td></tr>}
+              {loading ? Array.from({ length: Math.min(pageSize, 6) }, (_, rowIndex) => <tr key={`loading-${rowIndex}`}>{columns.map((column) => <td key={column.key}><Skeleton height={16} /></td>)}</tr>) : visibleRows.length ? visibleRows.map((row, index) => <tr key={row[rowKey] ?? index}>{columns.map((column) => <td key={column.key}>{column.render ? column.render(row[column.key], row) : row[column.key] ?? '—'}</td>)}</tr>) : <tr><td colSpan={columns.length}><EmptyState message={emptyMessage || t('adminUi.noRecords')} /></td></tr>}
             </tbody>
           </table>
         </div>

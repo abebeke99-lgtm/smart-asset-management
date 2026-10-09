@@ -799,7 +799,7 @@ const resetPasswordWithOtp = async (req, res) => {
   try {
     const token = String(req.body.resetToken || req.body.token || '').trim();
     const password = String(req.body.newPassword || req.body.password || '');
-    const confirmPassword = String(req.body.confirmPassword || req.body.confirmPassword || '');
+    const confirmPassword = String(req.body.confirmPassword || req.body.confirm_password || '');
     const failReset = async (status, message, userId = recoveryUserId) => {
       await recordRecoveryEvent({ userId, event: 'PASSWORD_RESET_FAILED', result: 'Failure', req });
       return res.status(status).json({ success: false, message });

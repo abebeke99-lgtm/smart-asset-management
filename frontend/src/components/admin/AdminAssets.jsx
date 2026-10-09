@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowLeftRight, Building2, Check, ChevronLeft, ChevronRi
 import { toast } from 'react-toastify';
 import apiClient, { getApiErrorMessage } from '../../services/apiClient';
 import { Can } from '../../hooks/usePermission';
+import { useTranslation } from '../../contexts/UiContext';
 import './AdminAssets.css';
 
 const normalizeStatusText = (value) => {
@@ -136,6 +137,9 @@ export const getRegistrationChecks = (form = {}) => [
 ];
 
 function AllAssets() {
+  const { t } = useTranslation();
+  const translationRef = useRef(t);
+  translationRef.current = t;
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const initialStatus = searchParams.get('status') || 'All';
@@ -214,10 +218,10 @@ function AllAssets() {
       setAssets([]);
       const statusCode = requestError?.response?.status;
       setError(statusCode === 401
-        ? 'Your session has expired. Sign in again to view assets.'
+        ? translationRef.current('admin.assets.sessionExpired', 'Your session has expired. Sign in again to view assets.')
         : statusCode === 403
-          ? 'Your account does not have permission to view all assets.'
-          : getApiErrorMessage(requestError, 'Unable to load assets.'));
+          ? translationRef.current('admin.assets.permissionError', 'Your account does not have permission to view all assets.')
+          : getApiErrorMessage(requestError, translationRef.current('admin.assets.loadError', 'Unable to load assets.')));
     } finally {
       if (requestControllerRef.current === controller) setLoading(false);
     }
@@ -259,7 +263,7 @@ function AllAssets() {
     const failedLookups = lookupResults.filter(([, result]) => result.status === 'rejected');
     failedLookups.forEach(([name, result]) => console.error(`Asset ${name} lookup loading error:`, result.reason));
     setLookupError(failedLookups.length
-      ? `Unable to load registration data: ${failedLookups.map(([name]) => name).join(', ')}.`
+      ? translationRef.current('admin.assets.lookupError', 'Unable to load registration data: {lookups}.', { lookups: failedLookups.map(([name]) => name).join(', ') })
       : '');
   }, []);
 
@@ -323,7 +327,7 @@ function AllAssets() {
       const detail = response?.data?.data || response?.data?.asset || asset.raw || asset;
       setSelectedAsset(normalizeAssetRecord(detail));
     } catch (requestError) {
-      toast.error(getApiErrorMessage(requestError, 'Unable to load asset details.'));
+      toast.error(getApiErrorMessage(requestError, translationRef.current('admin.assets.detailError', 'Unable to load asset details.')));
     }
   }, []);
 
@@ -335,7 +339,7 @@ function AllAssets() {
       setHistoryRows(getRows(response?.data, ['data', 'history']));
     } catch (requestError) {
       setHistoryRows([]);
-      toast.error(getApiErrorMessage(requestError, 'Unable to load asset history.'));
+      toast.error(getApiErrorMessage(requestError, translationRef.current('admin.assets.historyError', 'Unable to load asset history.')));
     }
   }, []);
 
@@ -362,7 +366,7 @@ function AllAssets() {
       const response = await apiClient.get(`/api/assets/${asset.id}/documents`);
       const documents = getRows(response?.data, ['data', 'documents']);
       const manual = documents.find((document) => document.documentType === 'manual' && document.status === 'active');
-      if (!manual) { previewWindow?.close(); toast.info('No manual is attached to this asset.'); return; }
+      if (!manual) { previewWindow?.close(); toast.info(t('admin.assets.noManualToast', 'No manual is attached to this asset.')); return; }
       const fileResponse = await apiClient.get(`/api/assets/${asset.id}/documents/${manual.id}/file`, { responseType: 'blob' });
       const fileUrl = URL.createObjectURL(fileResponse.data);
       if (previewWindow) previewWindow.location.replace(fileUrl);
@@ -375,24 +379,24 @@ function AllAssets() {
       window.setTimeout(() => URL.revokeObjectURL(fileUrl), 60_000);
     } catch (requestError) {
       previewWindow?.close();
-      toast.error(getApiErrorMessage(requestError, 'Unable to load equipment manual.'));
+      toast.error(getApiErrorMessage(requestError, t('admin.assets.manualError', 'Unable to load equipment manual.')));
     }
   };
 
   const handleAction = async (action, asset) => {
     if (['delete', 'retire', 'dispose', 'completeDisposal'].includes(action)) {
       const copy = {
-        delete: ['Delete asset', `Delete ${asset.name}? This will soft-delete the asset and record an audit event.`, 'Delete asset'],
-        retire: ['Retire asset', `Retire ${asset.name}? This will keep the asset record and mark it as retired.`, 'Retire asset'],
-        dispose: ['Dispose asset', `Dispose ${asset.name}? This will update its status and record the disposal event.`, 'Dispose asset'],
-        completeDisposal: ['Complete disposal', `Mark ${asset.name} as disposed? Its disposal record and history will be retained.`, 'Complete disposal'],
+        delete: [t('admin.assets.confirmDeleteTitle', 'Delete asset'), t('admin.assets.confirmDeleteMessage', 'Delete {name}? This will soft-delete the asset and record an audit event.', { name: asset.name }), t('admin.assets.confirmDeleteTitle', 'Delete asset')],
+        retire: [t('admin.assets.confirmRetireTitle', 'Retire asset'), t('admin.assets.confirmRetireMessage', 'Retire {name}? This will keep the asset record and mark it as retired.', { name: asset.name }), t('admin.assets.confirmRetireTitle', 'Retire asset')],
+        dispose: [t('admin.assets.confirmDisposeTitle', 'Dispose asset'), t('admin.assets.confirmDisposeMessage', 'Dispose {name}? This will update its status and record the disposal event.', { name: asset.name }), t('admin.assets.confirmDisposeTitle', 'Dispose asset')],
+        completeDisposal: [t('admin.assets.confirmCompleteDisposalTitle', 'Complete disposal'), t('admin.assets.confirmCompleteDisposalMessage', 'Mark {name} as disposed? Its disposal record and history will be retained.', { name: asset.name }), t('admin.assets.confirmCompleteDisposalTitle', 'Complete disposal')],
       }[action];
       setConfirmation({ action, asset, title: copy[0], message: copy[1], label: copy[2] });
       return;
     }
     if (action === 'restore') {
-      try { await apiClient.post(`/api/assets/${asset.id}/restore`); toast.success('Asset restored successfully.'); await fetchAssetRows(page, pageSize); }
-      catch (requestError) { toast.error(getApiErrorMessage(requestError, 'Unable to restore asset.')); }
+      try { await apiClient.post(`/api/assets/${asset.id}/restore`); toast.success(t('admin.assets.restoreSuccess', 'Asset restored successfully.')); await fetchAssetRows(page, pageSize); }
+      catch (requestError) { toast.error(getApiErrorMessage(requestError, t('admin.assets.restoreError', 'Unable to restore asset.'))); }
     } else if (action === 'viewManual') await openViewManual(asset);
     else if (action === 'viewHistory') await openAssetHistory(asset);
     else if (action === 'viewQr') openQrModal(asset);
@@ -421,10 +425,10 @@ function AllAssets() {
         if (action === 'retire' && disposalId) await apiClient.post(`/api/disposals/${disposalId}/retire`);
         if (action === 'dispose') await apiClient.put(`/api/assets/${asset.id}`, { status: 'pending-disposal' });
       }
-      toast.success(action === 'delete' ? 'Asset deleted successfully.' : action === 'completeDisposal' ? `${asset.name} marked as disposed.` : `${asset.name} ${action === 'retire' ? 'retired' : 'disposal requested'}.`);
+      toast.success(action === 'delete' ? t('admin.assets.deleteSuccess', 'Asset deleted successfully.') : action === 'completeDisposal' ? t('admin.assets.disposalComplete', '{name} marked as disposed.', { name: asset.name }) : action === 'retire' ? t('admin.assets.retireSuccessForAsset', '{name} retired successfully.', { name: asset.name }) : t('admin.assets.disposeRequested', 'Disposal requested for {name}.', { name: asset.name }));
       setConfirmation(null);
       await fetchAssetRows(page, pageSize);
-    } catch (requestError) { toast.error(getApiErrorMessage(requestError, `Unable to ${action} asset.`)); }
+    } catch (requestError) { toast.error(getApiErrorMessage(requestError, t('admin.assets.actionError', 'Unable to {action} asset.', { action }))); }
     finally { setSaving(false); }
   };
 
@@ -434,8 +438,8 @@ function AllAssets() {
     setSaving(true);
     try {
       await apiClient.put(`/api/assets/${selectedAsset.id}`, { name: editForm.name, category: editForm.category, serialNumber: editForm.serialNumber, status: editForm.status, quantity: Number(editForm.quantity || 1), department: editForm.department, location: editForm.location, purchaseDate: editForm.purchaseDate || null });
-      toast.success('Asset updated successfully.'); closeModal(); await fetchAssetRows(page, pageSize);
-    } catch (requestError) { toast.error(getApiErrorMessage(requestError, 'Unable to update asset.')); }
+      toast.success(t('admin.assets.updateSuccess', 'Asset updated successfully.')); closeModal(); await fetchAssetRows(page, pageSize);
+    } catch (requestError) { toast.error(getApiErrorMessage(requestError, t('admin.assets.updateError', 'Unable to update asset.'))); }
     finally { setSaving(false); }
   };
 
@@ -474,11 +478,11 @@ function AllAssets() {
       });
       const created = response?.data?.data || response?.data?.asset || {};
       setRegistrationResult(created);
-      toast.success('Asset registered successfully.');
+      toast.success(t('admin.assets.registrationSuccess', 'Asset registered successfully.'));
       setPage(1);
       await fetchAssetRows(1, pageSize);
     } catch (requestError) {
-      toast.error(getApiErrorMessage(requestError, 'Unable to register asset. Check the required fields.'));
+      toast.error(getApiErrorMessage(requestError, t('admin.assets.registrationError', 'Unable to register asset. Check the required fields.')));
     } finally { setSaving(false); }
   };
 
@@ -488,8 +492,8 @@ function AllAssets() {
     setSaving(true);
     try {
       await apiClient.post('/api/assignments', { asset_id: selectedAsset.id, assigned_to: assignForm.userId, department_id: assignForm.departmentId || selectedAsset.raw?.departmentId, location: assignForm.location || selectedAsset.raw?.location || '', condition_at_assignment: assignForm.condition || 'Good', assigned_date: assignForm.date || undefined, notes: JSON.stringify({ notes: assignForm.notes || '', laboratoryId: assignForm.laboratoryId || null }) });
-      toast.success('Asset assigned successfully.'); closeModal(); await fetchAssetRows(page, pageSize);
-    } catch (requestError) { toast.error(getApiErrorMessage(requestError, 'Unable to assign asset.')); }
+      toast.success(t('admin.assets.assignSuccess', 'Asset assigned successfully.')); closeModal(); await fetchAssetRows(page, pageSize);
+    } catch (requestError) { toast.error(getApiErrorMessage(requestError, t('admin.assets.assignError', 'Unable to assign asset.'))); }
     finally { setSaving(false); }
   };
 
@@ -504,8 +508,8 @@ function AllAssets() {
       const laboratoryName = laboratoryOptions.find((item) => String(item.id) === String(transferForm.laboratoryId))?.name;
       const destination = [campusName, collegeName, departmentName, laboratoryName, transferForm.location].filter(Boolean).join(' / ');
       await apiClient.post('/api/transfers', { asset_id: selectedAsset.id, destination_department_id: transferForm.departmentId, new_location: destination, reason: transferForm.reason, notes: JSON.stringify({ condition: transferForm.condition || 'Good', campusId: transferForm.campusId || null, laboratoryId: transferForm.laboratoryId || null }) });
-      toast.success('Asset transfer recorded successfully.'); closeModal(); await fetchAssetRows(page, pageSize);
-    } catch (requestError) { toast.error(getApiErrorMessage(requestError, 'Unable to transfer asset.')); }
+      toast.success(t('admin.assets.transferSuccess', 'Asset transfer recorded successfully.')); closeModal(); await fetchAssetRows(page, pageSize);
+    } catch (requestError) { toast.error(getApiErrorMessage(requestError, t('admin.assets.transferError', 'Unable to transfer asset.'))); }
     finally { setSaving(false); }
   };
 
@@ -515,8 +519,8 @@ function AllAssets() {
     setSaving(true);
     try {
       await apiClient.post('/api/maintenance', { asset_id: selectedAsset.id, title: maintenanceForm.title || `${selectedAsset.name} maintenance`, problem: maintenanceForm.title || `${selectedAsset.name} maintenance`, description: maintenanceForm.description || 'Maintenance requested from asset management workflow.', priority: maintenanceForm.priority });
-      toast.success('Maintenance request created successfully.'); closeModal(); await fetchAssetRows(page, pageSize);
-    } catch (requestError) { toast.error(getApiErrorMessage(requestError, 'Unable to create maintenance request.')); }
+      toast.success(t('admin.assets.maintenanceSuccess', 'Maintenance request created successfully.')); closeModal(); await fetchAssetRows(page, pageSize);
+    } catch (requestError) { toast.error(getApiErrorMessage(requestError, t('admin.assets.maintenanceError', 'Unable to create maintenance request.'))); }
     finally { setSaving(false); }
   };
 
@@ -535,37 +539,37 @@ function AllAssets() {
     setPage(1);
   };
   const activeFilters = [
-    ...(search ? [['Search', search, () => { setSearch(''); setPage(1); }]] : []),
-    ...(initialStatus !== 'All' ? [['Status', initialStatus, () => clearQueryFilter('status')]] : []),
-    ...(initialCategory !== 'All' ? [['Category', initialCategory, () => clearQueryFilter('category')]] : []),
+    ...(search ? [[t('admin.assets.filterSearch', 'Search'), search, () => { setSearch(''); setPage(1); }]] : []),
+    ...(initialStatus !== 'All' ? [[t('admin.assets.filterStatus', 'Status'), initialStatus, () => clearQueryFilter('status')]] : []),
+    ...(initialCategory !== 'All' ? [[t('admin.assets.filterCategory', 'Category'), initialCategory, () => clearQueryFilter('category')]] : []),
   ];
 
   return (
     <div className="admin-assets">
       <main className="aa-content">
-        <header className="aa-page-header"><div><div className="aa-eyebrow">Asset Governance</div><h1 className="aa-page-title">All Assets</h1><p className="aa-subtitle">Manage every university asset, its location, warranty and lifecycle</p></div><div className="aa-header-actions"><button type="button" className="aa-button" onClick={() => fetchAssetRows(page, pageSize)} aria-label="Refresh assets" disabled={loading}><RefreshCw size={16} className={loading ? 'aa-spinning' : ''} />Refresh</button><button type="button" className="aa-button aa-button-primary" onClick={openRegisterModal} aria-label="Register asset"><Plus size={16} />Register Asset</button></div></header>
-        {error && <div className="aa-alert" role="alert"><div className="aa-alert-message"><AlertTriangle size={18} /><div><strong>Unable to load assets</strong><div>{error}</div></div></div><button type="button" className="aa-button" onClick={() => fetchAssetRows(page, pageSize)} aria-label="Retry loading assets">Retry</button></div>}
-        {lookupError && <div className="aa-alert" role="alert"><div className="aa-alert-message"><AlertTriangle size={18} /><div><strong>Registration data unavailable</strong><div>{lookupError}</div></div></div><button type="button" className="aa-button" onClick={fetchLookups} aria-label="Retry loading registration data">Retry</button></div>}
-        <section className="aa-toolbar" aria-label="Asset filters">
-          <label className="aa-filter-search"><Search size={16} aria-hidden="true" /><input ref={searchInputRef} aria-label="Filter assets" value={search} onChange={(event) => { setPage(1); setSearch(event.target.value); }} placeholder="Search assets, serial numbers, locations..." />{search && <button type="button" className="aa-clear-search" onClick={() => { setPage(1); setSearch(''); }} aria-label="Clear search"><X size={16} /></button>}</label>
+        <header className="aa-page-header"><div><div className="aa-eyebrow">{t('admin.assets.eyebrow', 'Asset Governance')}</div><h1 className="aa-page-title">{t('admin.assets.title', 'All Assets')}</h1><p className="aa-subtitle">{t('admin.assets.subtitle', 'Manage every university asset, its location, warranty and lifecycle')}</p></div><div className="aa-header-actions"><button type="button" className="aa-button" onClick={() => fetchAssetRows(page, pageSize)} aria-label={t('admin.assets.refresh', 'Refresh assets')} disabled={loading}><RefreshCw size={16} className={loading ? 'aa-spinning' : ''} />{t('admin.assets.refresh', 'Refresh')}</button><button type="button" className="aa-button aa-button-primary" onClick={openRegisterModal} aria-label={t('admin.assets.registerAsset', 'Register asset')}><Plus size={16} />{t('admin.assets.registerAsset', 'Register Asset')}</button></div></header>
+        {error && <div className="aa-alert" role="alert"><div className="aa-alert-message"><AlertTriangle size={18} /><div><strong>{t('admin.assets.loadErrorTitle', 'Unable to load assets')}</strong><div>{error}</div></div></div><button type="button" className="aa-button" onClick={() => fetchAssetRows(page, pageSize)} aria-label={t('admin.assets.retryLoadingAssets', 'Retry loading assets')}>{t('admin.assets.retry', 'Retry')}</button></div>}
+        {lookupError && <div className="aa-alert" role="alert"><div className="aa-alert-message"><AlertTriangle size={18} /><div><strong>{t('admin.assets.lookupErrorTitle', 'Registration data unavailable')}</strong><div>{lookupError}</div></div></div><button type="button" className="aa-button" onClick={fetchLookups} aria-label={t('admin.assets.retryLookups', 'Retry loading registration data')}>{t('admin.assets.retry', 'Retry')}</button></div>}
+        <section className="aa-toolbar" aria-label={t('admin.assets.filters', 'Asset filters')}>
+          <label className="aa-filter-search"><Search size={16} aria-hidden="true" /><input ref={searchInputRef} aria-label={t('admin.assets.filterAssets', 'Filter assets')} value={search} onChange={(event) => { setPage(1); setSearch(event.target.value); }} placeholder={t('admin.assets.searchPlaceholder', 'Search assets, serial numbers, locations...')} />{search && <button type="button" className="aa-clear-search" onClick={() => { setPage(1); setSearch(''); }} aria-label={t('admin.assets.clearSearch', 'Clear search')}><X size={16} /></button>}</label>
         </section>
-        {activeFilters.length > 0 && <div className="aa-active-filters" aria-label="Active filters">{activeFilters.map(([label, value, remove]) => <button type="button" className="aa-filter-chip" key={`${label}-${value}`} onClick={remove} aria-label={`Remove ${label} filter ${value}`}>{label}: {value}<X size={13} /></button>)}</div>}
-        <section className="aa-summary" aria-label="Asset summary">
-          <SummaryCard icon={<Package size={21} />} label="Total assets" value={pagination.total ?? assets.length} />
-          <SummaryCard icon={<Layers3 size={21} />} label="Current page" value={`${page} of ${pageCount}`} />
-          <SummaryCard icon={<Building2 size={21} />} label="Visible assets" value={assets.length} />
-          {assetSummary.maintenance !== undefined && <SummaryCard icon={<Wrench size={21} />} label="Under maintenance" value={assetSummary.maintenance} />}
-          {assetSummary.retired !== undefined && <SummaryCard icon={<Shield size={21} />} label="Retired" value={assetSummary.retired} />}
+        {activeFilters.length > 0 && <div className="aa-active-filters" aria-label={t('admin.assets.activeFilters', 'Active filters')}>{activeFilters.map(([label, value, remove]) => <button type="button" className="aa-filter-chip" key={`${label}-${value}`} onClick={remove} aria-label={t('admin.assets.removeFilter', 'Remove {label} filter {value}', { label, value })}>{label}: {value}<X size={13} /></button>)}</div>}
+        <section className="aa-summary" aria-label={t('admin.assets.summary', 'Asset summary')}>
+          <SummaryCard icon={<Package size={21} />} label={t('admin.assets.totalAssets', 'Total assets')} value={pagination.total ?? assets.length} />
+          <SummaryCard icon={<Layers3 size={21} />} label={t('admin.assets.currentPage', 'Current page')} value={t('admin.assets.pageOf', '{page} of {total}', { page, total: pageCount })} />
+          <SummaryCard icon={<Building2 size={21} />} label={t('admin.assets.visibleAssets', 'Visible assets')} value={assets.length} />
+          {assetSummary.maintenance !== undefined && <SummaryCard icon={<Wrench size={21} />} label={t('admin.assets.underMaintenance', 'Under maintenance')} value={assetSummary.maintenance} />}
+          {assetSummary.retired !== undefined && <SummaryCard icon={<Shield size={21} />} label={t('admin.assets.retired', 'Retired')} value={assetSummary.retired} />}
         </section>
-        <section className="aa-table-card" aria-label="All university assets"><div className="aa-table-scroll"><table className="aa-table">
-          <thead><tr><th scope="col">Asset ID</th><th scope="col">Asset Name</th><th scope="col">Category</th><th scope="col">Serial Number</th><th scope="col">Quantity</th><th scope="col">Purchase Date</th><th scope="col">Status</th><th scope="col">Campus</th><th scope="col">College</th><th scope="col">Department</th><th scope="col">Laboratory</th><th scope="col">Building</th><th scope="col">Room</th><th scope="col">QR Code</th><th scope="col">Research Grant</th><th scope="col">Warranty</th><th scope="col">Equipment Manual</th><th scope="col">Actions</th></tr></thead>
-          <tbody>{loading ? Array.from({ length: 7 }, (_, index) => <tr className="aa-skeleton-row" key={`skeleton-${index}`} aria-hidden="true">{Array.from({ length: 18 }, (_, cell) => <td key={cell}><span className="aa-skeleton" /></td>)}</tr>) : assets.length === 0 && !error ? <tr><td colSpan="18"><div className="aa-empty"><span className="aa-empty-icon"><Package size={25} /></span><strong>No assets found</strong><span>Try changing filters or refresh</span><button type="button" className="aa-button aa-button-primary" onClick={() => fetchAssetRows(page, pageSize)} aria-label="Refresh asset list"><RefreshCw size={15} />Refresh</button></div></td></tr> : error ? <tr><td colSpan="18"><div className="aa-empty"><strong>Asset list unavailable</strong><button type="button" className="aa-button aa-button-primary" onClick={() => fetchAssetRows(page, pageSize)} aria-label="Retry loading asset list"><RefreshCw size={15} />Retry</button></div></td></tr> : assets.map((asset) => <AssetTableRow key={asset.id} asset={asset} recoveryDays={recoveryDays} onAction={handleAction} onQr={openQrModal} onManual={openViewManual} />)}</tbody>
+        <section className="aa-table-card" aria-label={t('admin.assets.tableTitle', 'All university assets')}><div className="aa-table-scroll"><table className="aa-table">
+          <thead><tr>{[['assetId', 'Asset ID'], ['assetName', 'Asset Name'], ['category', 'Category'], ['serialNumber', 'Serial Number'], ['quantity', 'Quantity'], ['purchaseDate', 'Purchase Date'], ['status', 'Status'], ['campus', 'Campus'], ['college', 'College'], ['department', 'Department'], ['laboratory', 'Laboratory'], ['building', 'Building'], ['room', 'Room'], ['qrCode', 'QR Code'], ['researchGrant', 'Research Grant'], ['warranty', 'Warranty'], ['manual', 'Equipment Manual'], ['actions', 'Actions']].map(([key, label]) => <th scope="col" key={key}>{t(`admin.assets.column.${key}`, label)}</th>)}</tr></thead>
+          <tbody>{loading ? Array.from({ length: 7 }, (_, index) => <tr className="aa-skeleton-row" key={`skeleton-${index}`} aria-hidden="true">{Array.from({ length: 18 }, (_, cell) => <td key={cell}><span className="aa-skeleton" /></td>)}</tr>) : assets.length === 0 && !error ? <tr><td colSpan="18"><div className="aa-empty"><span className="aa-empty-icon"><Package size={25} /></span><strong>{t('admin.assets.emptyTitle', 'No assets found')}</strong><span>{t('admin.assets.emptyHelp', 'Try changing filters or refresh')}</span><button type="button" className="aa-button aa-button-primary" onClick={() => fetchAssetRows(page, pageSize)} aria-label={t('admin.assets.refreshAssetList', 'Refresh asset list')}><RefreshCw size={15} />{t('admin.assets.refresh', 'Refresh')}</button></div></td></tr> : error ? <tr><td colSpan="18"><div className="aa-empty"><strong>{t('admin.assets.unavailable', 'Asset list unavailable')}</strong><button type="button" className="aa-button aa-button-primary" onClick={() => fetchAssetRows(page, pageSize)} aria-label={t('admin.assets.retryAssetList', 'Retry loading asset list')}>{t('admin.assets.retry', 'Retry')}</button></div></td></tr> : assets.map((asset) => <AssetTableRow key={asset.id} asset={asset} recoveryDays={recoveryDays} onAction={handleAction} onQr={openQrModal} onManual={openViewManual} />)}</tbody>
         </table></div></section>
-        <nav className="aa-pagination" aria-label="Asset pagination"><span>Showing {firstResult}–{lastResult} of {pagination.total ?? assets.length}</span><div className="aa-pagination-controls">
-          <button type="button" className="aa-button" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}><ChevronLeft size={16} />Previous</button>
-          <div className="aa-page-numbers">{pageButtons.map((value, index) => <React.Fragment key={value}>{index > 0 && value - pageButtons[index - 1] > 1 && <span aria-hidden="true">…</span>}<button type="button" className="aa-page-number" aria-label={`Page ${value}`} aria-current={page === value ? 'page' : undefined} onClick={() => setPage(value)}>{value}</button></React.Fragment>)}</div>
-          <span>Page {page} of {pageCount}</span><button type="button" className="aa-button" aria-label="Next page" disabled={page >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))}>Next<ChevronRight size={16} /></button>
-          <select aria-label="Assets per page" className="aa-select" value={pageSize} onChange={(event) => { setPage(1); setPageSize(Number(event.target.value)); }}><option value={10}>10 / page</option><option value={25}>25 / page</option><option value={50}>50 / page</option></select>
+        <nav className="aa-pagination" aria-label={t('admin.assets.pagination', 'Asset pagination')}><span>{t('admin.assets.showingRange', 'Showing {start}–{end} of {total}', { start: firstResult, end: lastResult, total: pagination.total ?? assets.length })}</span><div className="aa-pagination-controls">
+          <button type="button" className="aa-button" aria-label={t('admin.assets.previousPage', 'Previous page')} disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}><ChevronLeft size={16} />{t('admin.assets.previous', 'Previous')}</button>
+          <div className="aa-page-numbers">{pageButtons.map((value, index) => <React.Fragment key={value}>{index > 0 && value - pageButtons[index - 1] > 1 && <span aria-hidden="true">…</span>}<button type="button" className="aa-page-number" aria-label={t('admin.assets.pageNumber', 'Page {page}', { page: value })} aria-current={page === value ? 'page' : undefined} onClick={() => setPage(value)}>{value}</button></React.Fragment>)}</div>
+          <span>{t('admin.assets.pageOf', 'Page {page} of {total}', { page, total: pageCount })}</span><button type="button" className="aa-button" aria-label={t('admin.assets.nextPage', 'Next page')} disabled={page >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))}>{t('admin.assets.next', 'Next')}<ChevronRight size={16} /></button>
+          <select aria-label={t('admin.assets.assetsPerPage', 'Assets per page')} className="aa-select" value={pageSize} onChange={(event) => { setPage(1); setPageSize(Number(event.target.value)); }}><option value={10}>{t('admin.assets.perPage', '10 / page', { count: 10 })}</option><option value={25}>{t('admin.assets.perPage', '25 / page', { count: 25 })}</option><option value={50}>{t('admin.assets.perPage', '50 / page', { count: 50 })}</option></select>
         </div></nav>
       </main>
       {modalType && (selectedAsset || modalType === 'register') && <AssetModal type={modalType} asset={selectedAsset || {}} qrAsset={qrAsset} historyRows={historyRows} users={users} departments={departments} colleges={colleges} locations={locations} buildings={buildings} rooms={rooms} categories={categoryOptions} campusOptions={campusOptions} laboratoryOptions={laboratoryOptions} saving={saving} modalRef={modalRef} onClose={closeModal} onEdit={handleSubmitEdit} onAssign={handleAssignSubmit} onTransfer={handleTransferSubmit} onMaintenance={handleMaintenanceSubmit} onRegister={handleSubmitRegistration} editForm={editForm} setEditForm={setEditForm} assignForm={assignForm} setAssignForm={setAssignForm} transferForm={transferForm} setTransferForm={setTransferForm} maintenanceForm={maintenanceForm} setMaintenanceForm={setMaintenanceForm} registrationForm={registrationForm} setRegistrationForm={setRegistrationForm} registrationResult={registrationResult} manualFile={manualFile} setManualFile={setManualFile} />}
@@ -579,33 +583,34 @@ function SummaryCard({ icon, label, value }) {
 }
 
 function AssetTableRow({ asset, recoveryDays, onAction, onQr, onManual }) {
+  const { t } = useTranslation();
   const warrantyEnd = asset.warrantyExpiry ? new Date(asset.warrantyExpiry) : null;
   const warrantyExpired = warrantyEnd && warrantyEnd < new Date();
   const warrantyExpiring = warrantyEnd && !warrantyExpired && warrantyEnd.getTime() - Date.now() < 30 * 86400000;
   const warrantyClass = !asset.warrantyExpiry ? 'aa-neutral' : warrantyExpired ? 'aa-danger' : warrantyExpiring ? 'aa-warning' : 'aa-success';
-  const warrantyLabel = !asset.warrantyExpiry ? 'No Warranty' : warrantyExpired ? 'Expired' : warrantyExpiring ? 'Expiring' : 'Valid';
+  const warrantyLabel = !asset.warrantyExpiry ? t('admin.assets.noWarranty', 'No Warranty') : warrantyExpired ? t('admin.assets.expired', 'Expired') : warrantyExpiring ? t('admin.assets.expiring', 'Expiring') : t('admin.assets.valid', 'Valid');
   const deletedAt = asset.raw?.deletedAt || asset.raw?.deleted_at;
   const recoveryDaysLeft = deletedAt ? Math.max(0, recoveryDays - Math.floor((Date.now() - new Date(deletedAt).getTime()) / 86400000)) : 0;
   const isRecoverable = Boolean(deletedAt) && recoveryDaysLeft > 0;
   const isTerminal = ['retired', 'disposed', 'pending-disposal'].includes(String(asset.rawStatus || '').toLowerCase());
   return <tr>
     <td><span className="aa-asset-code">{asset.assetId}</span></td>
-    <td><div className="aa-primary-text">{asset.name}</div>{deletedAt && <div className="aa-secondary-text">Deleted on {formatDate(deletedAt)} / {isRecoverable ? `${recoveryDaysLeft} days left to restore` : 'Recovery period expired'}</div>}</td>
+    <td><div className="aa-primary-text">{asset.name}</div>{deletedAt && <div className="aa-secondary-text">{t('admin.assets.deletedOn', 'Deleted on {date}', { date: formatDate(deletedAt) })} / {isRecoverable ? t('admin.assets.daysLeftToRestore', '{count} days left to restore', { count: recoveryDaysLeft }) : t('admin.assets.recoveryExpired', 'Recovery period expired')}</div>}</td>
     <td>{asset.category}</td>
     <td>{asset.serialNumber}</td>
     <td>{asset.quantity}</td>
     <td>{formatDate(asset.purchaseDate)}</td>
-    <td><span className={`aa-status aa-${getStatusStyle(asset.status)}`}>{asset.status}</span></td>
+    <td><span className={`aa-status aa-${getStatusStyle(asset.status)}`}>{t(`admin.assets.status.${String(asset.status).toLowerCase().replace(/[^a-z]+/g, '')}`, asset.status)}</span></td>
     <td>{asset.campus}</td>
     <td>{asset.college}</td>
     <td>{asset.departmentValue}</td>
     <td>{asset.laboratory}</td>
     <td>{asset.building}</td>
     <td>{asset.room}</td>
-    <td>{asset.qrReady ? <button type="button" className="aa-qr-thumbnail" onClick={() => onQr(asset)} aria-label={`View QR code for ${asset.name}`} title="Open larger QR code"><QRCodeSVG value={String(asset.qrValue)} size={36} includeMargin={false} aria-hidden="true" /></button> : <span className="aa-secondary-text">No QR</span>}</td>
+    <td>{asset.qrReady ? <button type="button" className="aa-qr-thumbnail" onClick={() => onQr(asset)} aria-label={t('admin.assets.viewQrFor', 'View QR code for {name}', { name: asset.name })} title={t('admin.assets.openLargerQr', 'Open larger QR code')}><QRCodeSVG value={String(asset.qrValue)} size={36} includeMargin={false} aria-hidden="true" /></button> : <span className="aa-secondary-text">{t('admin.assets.noQr', 'No QR')}</span>}</td>
     <td><span className={`aa-chip ${asset.researchGrant === 'No Grant' ? 'aa-chip-muted' : ''}`}>{asset.researchGrant}</span></td>
     <td><div className="aa-warranty"><span className={`aa-status ${warrantyClass}`}>{warrantyLabel}</span><span className="aa-secondary-text">{asset.warrantyExpiry ? formatDate(asset.warrantyExpiry) : '—'}</span></div></td>
-    <td>{asset.hasManual ? <button type="button" className="aa-button" onClick={() => onManual(asset)} aria-label={`View equipment manual for ${asset.name}`}><FileText size={15} />View Manual</button> : <span className="aa-secondary-text">No Manual</span>}</td>
+    <td>{asset.hasManual ? <button type="button" className="aa-button" onClick={() => onManual(asset)} aria-label={t('admin.assets.viewManualFor', 'View equipment manual for {name}', { name: asset.name })}><FileText size={15} />{t('admin.assets.viewManual', 'View Manual')}</button> : <span className="aa-secondary-text">{t('admin.assets.noManual', 'No Manual')}</span>}</td>
     <td><div className="aa-action-group">
       <ActionButton label={`View ${asset.name}`} title="View asset" onClick={() => onAction('view', asset)}><Eye size={16} /></ActionButton>
       {!deletedAt && <Can permission={['assets.update', 'ict.assets.update', 'college.assets.update']}><ActionButton label={`Edit ${asset.name}`} title="Edit asset" onClick={() => onAction('edit', asset)}><Pencil size={16} /></ActionButton></Can>}

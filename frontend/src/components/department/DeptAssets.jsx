@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { useLanguage } from '../../contexts/UiContext';
+import { useLanguage, useTranslation } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import { getAllAssets } from '../../services/assetApi';
@@ -50,7 +50,8 @@ const formatCalendarDate = (value) => {
 
 const DeptAssets = () => {
   const { user } = useAuth();
-  const { language, theme } = useLanguage();
+  const { theme } = useLanguage();
+  const { language, t: translate } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -85,7 +86,12 @@ const DeptAssets = () => {
   const [downloadingDocumentId, setDownloadingDocumentId] = useState(null);
 
   const isDark = theme === 'dark';
-  const t = language === 'en' ? englishTranslations : amharicTranslations;
+  const t = useMemo(() => Object.fromEntries(
+    Object.entries(language === 'am' ? amharicTranslations : englishTranslations)
+      .map(([key, fallback]) => [key, translate(`department.assets.${key}`, fallback)]),
+  ), [language, translate]);
+  const translationsRef = useRef(t);
+  translationsRef.current = t;
   const isAssignmentView = location.pathname.includes('/assignments');
   const historyBasePath = location.pathname.startsWith('/college') ? '/college/history' : '/department-head/history';
   const verificationPath = location.pathname.startsWith('/college') ? '/college/verification' : '/department-head/verification';
@@ -129,12 +135,12 @@ const DeptAssets = () => {
       })));
     } catch (error) {
       console.error('Department assets fetch error:', error);
-      setLoadError(t.fetchError || 'Failed to load assets');
-      toast.error(t.fetchError || 'Failed to load assets');
+      setLoadError(translationsRef.current.fetchError || 'Failed to load assets');
+      toast.error(translationsRef.current.fetchError || 'Failed to load assets');
     } finally {
       setLoading(false);
     }
-  }, [t.fetchError]);
+  }, []);
 
   const fetchAssignmentAssets = useCallback(async () => {
     setLoading(true);
@@ -153,12 +159,12 @@ const DeptAssets = () => {
       setAssets(normalizeAssignmentRows(rows));
     } catch (error) {
       console.error('Department assignments fetch error:', error);
-      toast.error(t.fetchError || 'Failed to load assignments');
+      toast.error(translationsRef.current.fetchError || 'Failed to load assignments');
       setAssets([]);
     } finally {
       setLoading(false);
     }
-  }, [filterCategory, filterCondition, filterEmployee, filterLocation, filterMaintenance, filterStatus, normalizeAssignmentRows, search, t.fetchError]);
+  }, [filterCategory, filterCondition, filterEmployee, filterLocation, filterMaintenance, filterStatus, normalizeAssignmentRows, search]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -325,10 +331,10 @@ const DeptAssets = () => {
         axios.get(`/api/assets/${asset.id}/documents`),
       ]);
       const detail = detailResponse.data?.asset || detailResponse.data?.data;
-      if (!detail) throw new Error('The asset detail API returned an invalid response.');
+      if (!detail) throw new Error(t.invalidAssetDetails);
       const history = Array.isArray(historyResponse.data?.history) ? historyResponse.data.history : [];
       const documents = documentResponse.data?.documents || documentResponse.data?.data;
-      if (!Array.isArray(documents)) throw new Error('The asset documents API returned an invalid response.');
+      if (!Array.isArray(documents)) throw new Error(t.invalidAssetDocuments);
       setSelectedAsset({
         ...asset,
         ...detail,
@@ -348,7 +354,7 @@ const DeptAssets = () => {
       setMaintenanceHistory(history.filter((item) => String(item.type || '').toLowerCase() === 'maintained'));
       setAssetDocuments(documents);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Unable to load authorized asset details.');
+      toast.error(error.response?.data?.message || t.unableToLoadDetails);
     } finally {
       setDetailLoading(false);
     }
@@ -362,7 +368,7 @@ const DeptAssets = () => {
     try {
       const response = await axios.get(`/api/assets/scan/${encodeURIComponent(identifier)}`);
       const asset = response.data?.data || response.data?.asset;
-      if (!asset?.id) throw new Error('The QR lookup did not return a valid asset.');
+      if (!asset?.id) throw new Error(t.invalidQrResult);
       await handleAssetClick({
         ...asset,
         asset_tag: asset.asset_tag || asset.assetCode || asset.asset_code || '',
@@ -373,8 +379,8 @@ const DeptAssets = () => {
       setQrIdentifier('');
     } catch (error) {
       setQrError(error.response?.status === 404
-        ? 'No asset with that QR identifier is available in your department.'
-        : error.response?.data?.message || 'Unable to identify this QR code.');
+        ? t.identifyQrNotFound
+        : error.response?.data?.message || t.unableToIdentifyQr);
     }
   };
 
@@ -389,7 +395,7 @@ const DeptAssets = () => {
       link.click();
       URL.revokeObjectURL(objectUrl);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Unable to download this asset document.');
+      toast.error(error.response?.data?.message || t.unableToDownloadDocument);
     } finally {
       setDownloadingDocumentId(null);
     }
@@ -416,7 +422,7 @@ const DeptAssets = () => {
     try {
       if (actionType === 'request_maintenance') {
         if (!actionData.description?.trim()) {
-          toast.error('Please describe the maintenance problem.');
+          toast.error(t.pleaseDescribeMaintenance);
           return;
         }
         await axios.post('/api/department-head/maintenance-requests', {
@@ -426,7 +432,7 @@ const DeptAssets = () => {
           priority: actionData.priority || 'medium',
         });
       } else {
-        throw new Error('This asset action is not available in the Department Head workflow.');
+        throw new Error(t.actionUnavailable);
       }
       toast.success(t.actionSuccess || 'Action completed successfully');
       setShowActionModal(false);
@@ -439,7 +445,7 @@ const DeptAssets = () => {
 
   const exportToExcel = () => {
     if (!canExport) {
-      toast.error('You do not have permission to export department assets.');
+      toast.error(t.unauthorizedExport);
       return;
     }
     const data = filteredAssets.map((a) => ({
@@ -885,7 +891,7 @@ const DeptAssets = () => {
         <div role="alert" style={{ ...styles.emptyState, border: `1px solid ${isDark ? '#7f1d1d' : '#fecaca'}`, borderRadius: '16px', background: isDark ? '#2a1720' : '#fff7f7' }}>
           <div>{t.fetchError || 'Unable to load department assets.'}</div>
           <button type="button" style={{ ...styles.buttonPrimary, marginTop: '16px' }} onClick={fetchDepartmentAssets}>
-            Retry
+            {t.retry}
           </button>
         </div>
       </div>
@@ -897,7 +903,7 @@ const DeptAssets = () => {
     { label: t.inUse, value: summaryStats.inUse, icon: CheckCircle2, accent: '#34d399' },
     { label: t.available, value: summaryStats.available, icon: ShieldCheck, accent: '#38bdf8' },
     { label: t.underMaintenance, value: summaryStats.maintenance, icon: Wrench, accent: '#D97706' },
-    { label: 'Total Asset Value', value: summaryStats.totalValue ? `$${summaryStats.totalValue.toLocaleString()}` : 'Not recorded', icon: Package2, accent: '#a78bfa' },
+    { label: t.totalAssetValue, value: summaryStats.totalValue ? `$${summaryStats.totalValue.toLocaleString()}` : t.notRecorded, icon: Package2, accent: '#a78bfa' },
   ];
 
   return (
@@ -1007,13 +1013,13 @@ const DeptAssets = () => {
         <div style={styles.header}>
           <div>
             <div className="section-tag">
-              <Sparkles size={14} /> {isAssignmentView ? 'Assignments' : t.assets}
+              <Sparkles size={14} /> {isAssignmentView ? t.assignments : t.assets}
             </div>
-            <h1 style={styles.title}>{isAssignmentView ? 'Asset Assignments' : t.assets}</h1>
+            <h1 style={styles.title}>{isAssignmentView ? t.assetAssignments : t.assets}</h1>
             <p style={styles.subtitle}>
-              {isAssignmentView ? 'Department assignment records for' : t.departmentAssets} <strong>{user?.department || 'Department'}</strong>
+              {isAssignmentView ? t.assignmentRecordsFor : t.departmentAssets} <strong>{user?.department || t.departmentName}</strong>
               <span style={{ marginLeft: '12px', fontSize: '0.85rem', color: isDark ? '#a7bad4' : '#5a6f8d' }}>
-                {assets.length} {isAssignmentView ? 'records' : t.totalAssets}
+                {assets.length} {isAssignmentView ? t.records : t.totalAssets}
               </span>
             </p>
           </div>
@@ -1021,10 +1027,10 @@ const DeptAssets = () => {
             {!isAssignmentView && (
               <>
                 <button type="button" style={styles.buttonSecondary} onClick={fetchDepartmentAssets} disabled={loading}>
-                  <RefreshCw size={15} /> Refresh
+                  <RefreshCw size={15} /> {t.refresh}
                 </button>
                 <button type="submit" form="department-asset-identifier" style={styles.buttonSecondary}>
-                  <QrCode size={15} /> Identify Asset
+                  <QrCode size={15} /> {t.identifyAsset}
                 </button>
                 <button type="button" style={styles.buttonPrimary} onClick={() => navigate('/department-head/requests')}>
                   Request Asset
@@ -1054,9 +1060,9 @@ const DeptAssets = () => {
             <QrCode size={18} aria-hidden="true" />
             <input
               type="search"
-              aria-label="QR identifier"
+            aria-label={t.qrIdentifier}
               style={styles.input}
-              placeholder="Identify by QR code or asset tag"
+            placeholder={t.identifyByQrPlaceholder}
               value={qrIdentifier}
               onChange={(event) => setQrIdentifier(event.target.value)}
             />
@@ -1078,7 +1084,7 @@ const DeptAssets = () => {
             />
           </div>
 
-          <select aria-label="Category filter" style={styles.select} value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+          <select aria-label={t.categoryFilter} style={styles.select} value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
             <option value="">{t.allCategories}</option>
             {uniqueCategories.map((cat) => (
               <option key={cat} value={cat}>{cat}</option>
@@ -1086,13 +1092,13 @@ const DeptAssets = () => {
           </select>
 
           {!isAssignmentView && (
-            <select aria-label="Asset type filter" style={styles.select} value={filterAssetType} onChange={(e) => setFilterAssetType(e.target.value)}>
-              <option value="">All Asset Types</option>
+            <select aria-label={t.assetTypeFilter} style={styles.select} value={filterAssetType} onChange={(e) => setFilterAssetType(e.target.value)}>
+              <option value="">{t.allAssetTypes}</option>
               {uniqueAssetTypes.map((type) => <option key={type} value={type}>{type}</option>)}
             </select>
           )}
 
-          <select aria-label="Condition filter" style={styles.select} value={filterCondition} onChange={(e) => setFilterCondition(e.target.value)}>
+          <select aria-label={t.conditionFilter} style={styles.select} value={filterCondition} onChange={(e) => setFilterCondition(e.target.value)}>
             <option value="">{t.allConditions}</option>
             <option value="Good">{t.good}</option>
             <option value="Fair">{t.fair}</option>
@@ -1100,7 +1106,7 @@ const DeptAssets = () => {
             <option value="Damaged">{t.damaged}</option>
           </select>
 
-          <select aria-label="Location filter" style={styles.select} value={filterLocation} onChange={(e) => setFilterLocation(e.target.value)}>
+          <select aria-label={t.locationFilter} style={styles.select} value={filterLocation} onChange={(e) => setFilterLocation(e.target.value)}>
             <option value="">{t.allLocations}</option>
             {uniqueLocations.map((loc) => (
               <option key={loc} value={loc}>{loc}</option>
@@ -1108,35 +1114,35 @@ const DeptAssets = () => {
           </select>
 
           {!isAssignmentView && (
-            <select aria-label="Laboratory filter" style={styles.select} value={filterLaboratory} onChange={(e) => setFilterLaboratory(e.target.value)}>
-              <option value="">All Laboratories</option>
-              <option value="__unassigned__">Unassigned / No Laboratory</option>
+            <select aria-label={t.laboratoryFilter} style={styles.select} value={filterLaboratory} onChange={(e) => setFilterLaboratory(e.target.value)}>
+              <option value="">{t.allLaboratories}</option>
+              <option value="__unassigned__">{t.unassignedNoLaboratory}</option>
               {uniqueLaboratories.map((laboratory) => (
                 <option key={laboratory} value={laboratory}>{laboratory}</option>
               ))}
             </select>
           )}
 
-          <select aria-label="Assignment filter" style={styles.select} value={filterEmployee} onChange={(e) => setFilterEmployee(e.target.value)}>
+          <select aria-label={t.assignmentFilter} style={styles.select} value={filterEmployee} onChange={(e) => setFilterEmployee(e.target.value)}>
             <option value="">{t.allEmployees}</option>
-            <option value="Unassigned">Unassigned</option>
+            <option value="Unassigned">{t.unassigned}</option>
             {uniqueEmployees.map((emp) => (
               <option key={emp} value={emp}>{emp}</option>
             ))}
           </select>
 
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: isDark ? '#a7bad4' : '#5a6f8d', fontWeight: 600 }}>
-            Sort by
-            <select aria-label="Sort assets by" style={styles.select} value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-              <option value="asset_tag">Asset Tag</option>
-              <option value="category">Category</option>
-              <option value="status">Status</option>
-              <option value="location">Location</option>
-              {uniqueAssetTypes.length > 0 && <option value="asset_type">Asset Type</option>}
+            {t.sortBy}
+            <select aria-label={t.sortAssetsBy} style={styles.select} value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="asset_tag">{t.assetTag}</option>
+              <option value="category">{t.category}</option>
+              <option value="status">{t.status}</option>
+              <option value="location">{t.location}</option>
+              {uniqueAssetTypes.length > 0 && <option value="asset_type">{t.assetType}</option>}
             </select>
           </label>
-          <button type="button" style={styles.clearButton} aria-label={`Sort ${sortDirection === 'asc' ? 'descending' : 'ascending'}`} onClick={() => setSortDirection((direction) => direction === 'asc' ? 'desc' : 'asc')}>
-            {sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+          <button type="button" style={styles.clearButton} aria-label={sortDirection === 'asc' ? t.sortDescending : t.sortAscending} onClick={() => setSortDirection((direction) => direction === 'asc' ? 'desc' : 'asc')}>
+            {sortDirection === 'asc' ? t.ascending : t.descending}
           </button>
 
           <button style={styles.clearButton} onClick={clearFilters}>
@@ -1175,7 +1181,7 @@ const DeptAssets = () => {
                 <th style={styles.th}>{t.assetTag}</th>
                 <th style={styles.th}>{t.name}</th>
                 <th style={styles.th}>{t.category}</th>
-                {!isAssignmentView && <th style={styles.th}>Asset Type</th>}
+                {!isAssignmentView && <th style={styles.th}>{t.assetType}</th>}
                 <th style={styles.th}>{t.status}</th>
                 <th style={styles.th}>{t.condition}</th>
                 <th style={styles.th}>{t.location}</th>
@@ -1191,11 +1197,11 @@ const DeptAssets = () => {
                   <td colSpan={isAssignmentView ? 10 : 11} style={{ ...styles.td, textAlign: 'center', padding: '30px' }}>
                     {assets.length === 0 ? (
                       <div>
-                        <strong>No Department Assets</strong>
-                        <p>There are currently no assets associated with your department.</p>
-                        <button type="button" style={styles.buttonPrimary} onClick={() => navigate('/department-head/requests')}>Request Asset</button>
+                        <strong>{t.noDepartmentAssets}</strong>
+                        <p>{t.emptyDepartmentAssets}</p>
+                        <button type="button" style={styles.buttonPrimary} onClick={() => navigate('/department-head/requests')}>{t.requestAsset}</button>
                       </div>
-                    ) : 'No assets match the selected filters.'}
+                    ) : t.noMatchingAssets}
                   </td>
                 </tr>
               ) : (
@@ -1214,12 +1220,12 @@ const DeptAssets = () => {
                     <td style={styles.td}><span style={styles.assetTag}>{asset.asset_tag}</span></td>
                     <td style={styles.td}>{asset.name}</td>
                     <td style={styles.td}>{asset.category_name || '-'}</td>
-                    {!isAssignmentView && <td style={styles.td}>{assetTypeOf(asset) || 'Not recorded'}</td>}
+                    {!isAssignmentView && <td style={styles.td}>{assetTypeOf(asset) || t.notRecorded}</td>}
                     <td style={styles.td}>
                       <span style={styles.statusBadge(displayStatus(asset.status))}>{displayStatus(asset.status)}</span>
                     </td>
                     <td style={styles.td}>
-                      <span style={styles.conditionBadge(asset.condition)}>{asset.condition || 'Unknown'}</span>
+                      <span style={styles.conditionBadge(asset.condition)}>{asset.condition || t.unknown}</span>
                     </td>
                     <td style={styles.td}>{asset.location || '-'}</td>
                     <td style={styles.td}>
@@ -1278,9 +1284,9 @@ const DeptAssets = () => {
           </table>
           {filteredAssets.length > pageSize && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', padding: '12px 0' }}>
-              <span aria-live="polite">Page {currentPage} of {pageCount} · {filteredAssets.length} assets</span>
-              <button type="button" style={styles.buttonSecondary} disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Previous</button>
-              <button type="button" style={styles.buttonSecondary} disabled={currentPage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Next</button>
+              <span aria-live="polite">{t.page} {currentPage} {t.of} {pageCount} · {filteredAssets.length} {t.assetsCount}</span>
+              <button type="button" style={styles.buttonSecondary} disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{t.previous}</button>
+              <button type="button" style={styles.buttonSecondary} disabled={currentPage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>{t.next}</button>
             </div>
           )}
         </div>
@@ -1296,15 +1302,15 @@ const DeptAssets = () => {
                   {selectedAsset.category_name} • {selectedAsset.department_name}
                 </div>
               </div>
-              <button type="button" aria-label="Close asset details" style={styles.modalClose} onClick={() => setShowDetailModal(false)}><X size={18} /></button>
+              <button type="button" aria-label={t.closeAssetDetails} style={styles.modalClose} onClick={() => setShowDetailModal(false)}><X size={18} /></button>
             </div>
 
-            {detailLoading && <p role="status">Loading authorized asset details...</p>}
+            {detailLoading && <p role="status">{t.loadingAssetDetails}</p>}
             <div style={styles.detailGrid}>
               <div style={styles.detailItem}>
-                <div style={styles.detailLabel}>Asset ID</div>
+                <div style={styles.detailLabel}>{t.assetId}</div>
                 <div style={styles.detailValue}>
-                  {selectedAsset.asset_tag || selectedAsset.assetTag || selectedAsset.assetCode || selectedAsset.asset_code || 'Not recorded'}
+                  {selectedAsset.asset_tag || selectedAsset.assetTag || selectedAsset.assetCode || selectedAsset.asset_code || t.notRecorded}
                 </div>
               </div>
               <div style={styles.detailItem}>
@@ -1313,48 +1319,48 @@ const DeptAssets = () => {
               </div>
               <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>{t.condition}</div>
-                <div style={styles.detailValue}><span style={styles.conditionBadge(selectedAsset.condition)}>{selectedAsset.condition || 'Unknown'}</span></div>
+                <div style={styles.detailValue}><span style={styles.conditionBadge(selectedAsset.condition)}>{selectedAsset.condition || t.unknown}</span></div>
               </div>
               <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>{t.location}</div>
                 <div style={styles.detailValue}>
                   {selectedAsset.location || '-'}
-                  {selectedAsset.BuildingRecord?.buildingName && <div>Building: {selectedAsset.BuildingRecord.buildingName}</div>}
-                  {selectedAsset.BuildingRecord?.floor && <div>Floor: {selectedAsset.BuildingRecord.floor}</div>}
-                  {selectedAsset.RoomRecord?.roomName && <div>Room: {selectedAsset.RoomRecord.roomName}</div>}
+                  {selectedAsset.BuildingRecord?.buildingName && <div>{t.building}: {selectedAsset.BuildingRecord.buildingName}</div>}
+                  {selectedAsset.BuildingRecord?.floor && <div>{t.floor}: {selectedAsset.BuildingRecord.floor}</div>}
+                  {selectedAsset.RoomRecord?.roomName && <div>{t.room}: {selectedAsset.RoomRecord.roomName}</div>}
                 </div>
               </div>
               <div style={styles.detailItem}>
-                <div style={styles.detailLabel}>Laboratory</div>
+                <div style={styles.detailLabel}>{t.laboratory}</div>
                 <div style={styles.detailValue}>{selectedAsset.laboratory_name || selectedAsset.laboratoryName || '-'}</div>
               </div>
               <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>{t.serialNumber}</div>
-                <div style={styles.detailValue}>{selectedAsset.serial_number || '-'}</div>
+                <div style={styles.detailValue}>{selectedAsset.serial_number || t.notRecorded}</div>
               </div>
               <div style={styles.detailItem}>
-                <div style={styles.detailLabel}>Quantity</div>
-                <div style={styles.detailValue}>{selectedAsset.quantity ?? 'Not recorded'} {selectedAsset.unit || ''}</div>
+                <div style={styles.detailLabel}>{t.quantity}</div>
+                <div style={styles.detailValue}>{selectedAsset.quantity ?? t.notRecorded} {selectedAsset.unit || ''}</div>
               </div>
               <div style={styles.detailItem}>
-                <div style={styles.detailLabel}>Digital ID</div>
-                <div style={styles.detailValue}>{selectedAsset.digitalId || selectedAsset.digital_id || 'Not recorded'}</div>
+                <div style={styles.detailLabel}>{t.digitalId}</div>
+                <div style={styles.detailValue}>{selectedAsset.digitalId || selectedAsset.digital_id || t.notRecorded}</div>
               </div>
               <div style={styles.detailItem}>
-                <div style={styles.detailLabel}>QR Code</div>
-                <div style={styles.detailValue}>{selectedAsset.qrCode || selectedAsset.qr_code || 'Not recorded'}</div>
+                <div style={styles.detailLabel}>{t.qrCode}</div>
+                <div style={styles.detailValue}>{selectedAsset.qrCode || selectedAsset.qr_code || t.notRecorded}</div>
               </div>
               <div style={styles.detailItem}>
-                <div style={styles.detailLabel}>RFID</div>
-                <div style={styles.detailValue}>{selectedAsset.rfidTag || selectedAsset.rfid_tag || 'Not recorded'}</div>
+                <div style={styles.detailLabel}>{t.rfid}</div>
+                <div style={styles.detailValue}>{selectedAsset.rfidTag || selectedAsset.rfid_tag || t.notRecorded}</div>
               </div>
               <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>{t.assignedTo}</div>
                 <div style={styles.detailValue}>
-                  {selectedAsset.assigned_to_name || 'Not assigned'}
+                  {selectedAsset.assigned_to_name || t.notAssigned}
                   {selectedAsset.assignment_date && (
                     <div style={{ fontSize: '0.8rem', color: isDark ? '#9bb5d5' : '#5a6f8d', marginTop: '4px' }}>
-                      Since {new Date(selectedAsset.assignment_date).toLocaleDateString()}
+                      {t.since} {new Date(selectedAsset.assignment_date).toLocaleDateString()}
                     </div>
                   )}
                 </div>
@@ -1364,20 +1370,20 @@ const DeptAssets = () => {
                 <div style={styles.detailValue}>{valueDisplay(selectedAsset)}</div>
               </div>
               <div style={styles.detailItem}>
-                <div style={styles.detailLabel}>Purchase Date</div>
+                <div style={styles.detailLabel}>{t.purchaseDate}</div>
                 <div style={styles.detailValue}>
                   {selectedAsset.purchaseDate || selectedAsset.purchase_date
                     ? formatCalendarDate(selectedAsset.purchaseDate || selectedAsset.purchase_date)
-                    : 'Not recorded'}
+                    : t.notRecorded}
                 </div>
               </div>
               <div style={styles.detailItem}>
-                <div style={styles.detailLabel}>Funding source</div>
-                <div style={styles.detailValue}>{selectedAsset.fundingSource || selectedAsset.funding_source || 'Not recorded'}</div>
+                <div style={styles.detailLabel}>{t.fundingSource}</div>
+                <div style={styles.detailValue}>{selectedAsset.fundingSource || selectedAsset.funding_source || t.notRecorded}</div>
               </div>
               <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>{t.lastMaintenance}</div>
-                <div style={styles.detailValue}>{selectedAsset.last_maintenance_date ? new Date(selectedAsset.last_maintenance_date).toLocaleDateString() : 'Never'}</div>
+                <div style={styles.detailValue}>{selectedAsset.last_maintenance_date ? new Date(selectedAsset.last_maintenance_date).toLocaleDateString() : t.never}</div>
               </div>
               <div style={styles.detailItem}>
                 <div style={styles.detailLabel}>{t.maintenanceStatus}</div>
@@ -1388,8 +1394,8 @@ const DeptAssets = () => {
                 </div>
               </div>
               <div style={styles.detailItem}>
-                <div style={styles.detailLabel}>Warranty</div>
-                <div style={styles.detailValue}>{selectedAsset.warranty_expiry || selectedAsset.warrantyExpiry ? formatCalendarDate(selectedAsset.warranty_expiry || selectedAsset.warrantyExpiry) : 'Not recorded'}</div>
+                <div style={styles.detailLabel}>{t.warranty}</div>
+                <div style={styles.detailValue}>{selectedAsset.warranty_expiry || selectedAsset.warrantyExpiry ? formatCalendarDate(selectedAsset.warranty_expiry || selectedAsset.warrantyExpiry) : t.notRecorded}</div>
               </div>
             </div>
 
@@ -1397,26 +1403,26 @@ const DeptAssets = () => {
               {canRequestTransfer && <button style={styles.actionButton('#48bb78')} onClick={() => handleAction('request_transfer', selectedAsset)}><Building2 size={15} /> {t.requestTransfer}</button>}
               <button style={styles.actionButton('#ed8936')} onClick={() => handleAction('request_maintenance', selectedAsset)}><Wrench size={15} /> {t.requestMaintenance}</button>
               <button style={styles.actionButton('#805ad5')} onClick={() => handleAction('request_asset', selectedAsset)}><MapPin size={15} /> {t.requestAsset}</button>
-              {canViewHistory && <button style={styles.actionButton('#2b6cb0')} onClick={() => navigate(`${historyBasePath}/${selectedAsset.id}`)}><History size={15} /> Full history</button>}
-              <button style={styles.actionButton('#0f766e')} onClick={() => navigate(verificationPath)}><ClipboardCheck size={15} /> Physical verification</button>
+              {canViewHistory && <button style={styles.actionButton('#2b6cb0')} onClick={() => navigate(`${historyBasePath}/${selectedAsset.id}`)}><History size={15} /> {t.fullHistory}</button>}
+              <button style={styles.actionButton('#0f766e')} onClick={() => navigate(verificationPath)}><ClipboardCheck size={15} /> {t.physicalVerification}</button>
             </div>
 
             <div style={{ marginBottom: '16px' }}>
-              <h4 style={{ color: isDark ? '#eaf3ff' : '#12263f', marginBottom: '8px' }}>Warranty and manual documents</h4>
+              <h4 style={{ color: isDark ? '#eaf3ff' : '#12263f', marginBottom: '8px' }}>{t.warrantyDocuments}</h4>
               {assetDocuments.length === 0 ? (
-                <div style={{ color: isDark ? '#9bb5d5' : '#5a6f8d', padding: '8px 0' }}>No warranty or manual documents available.</div>
+                <div style={{ color: isDark ? '#9bb5d5' : '#5a6f8d', padding: '8px 0' }}>{t.noWarrantyDocuments}</div>
               ) : assetDocuments.map((document) => (
                 <div key={document.id} style={{ ...styles.historyItem, justifyContent: 'flex-start' }}>
                   <FileText size={16} />
-                  <span>{document.originalName || document.original_name || document.documentType || 'Asset document'}</span>
-                  <span style={{ color: isDark ? '#9bb5d5' : '#5a6f8d' }}>{document.documentType || document.document_type || 'document'}</span>
+                  <span>{document.originalName || document.original_name || document.documentType || t.assetDocument}</span>
+                  <span style={{ color: isDark ? '#9bb5d5' : '#5a6f8d' }}>{document.documentType || document.document_type || t.document}</span>
                   <button
                     type="button"
                     style={styles.buttonSecondary}
                     disabled={downloadingDocumentId === document.id}
                     onClick={() => downloadAssetDocument(document)}
                   >
-                    {downloadingDocumentId === document.id ? 'Downloading...' : 'Download'}
+                    {downloadingDocumentId === document.id ? t.downloading : t.download}
                   </button>
                 </div>
               ))}
@@ -1431,7 +1437,7 @@ const DeptAssets = () => {
                   <div key={index} style={styles.historyItem}>
                     <div>
                       <span style={{ fontWeight: 700 }}>{item.employee || item.user || item.description || 'Unknown'}</span>
-                      <span style={{ color: isDark ? '#9bb5d5' : '#5a6f8d', marginLeft: '8px' }}>{item.action || 'Updated'}</span>
+                      <span style={{ color: isDark ? '#9bb5d5' : '#5a6f8d', marginLeft: '8px' }}>{item.action || t.updated}</span>
                     </div>
                     <div style={{ color: isDark ? '#9bb5d5' : '#5a6f8d' }}>{item.date ? new Date(item.date).toLocaleDateString() : '-'}</div>
                   </div>
@@ -1447,7 +1453,7 @@ const DeptAssets = () => {
                 ) : maintenanceHistory.map((item, index) => (
                   <div key={index} style={styles.historyItem}>
                     <div>
-                      <span style={{ fontWeight: 700 }}>{item.action || item.title || 'Maintenance'}</span>
+                      <span style={{ fontWeight: 700 }}>{item.action || item.title || t.maintenance}</span>
                       <span style={{ ...styles.statusBadge(item.status || item.newValue), background: `${getMaintenanceStatusColor(item.status || item.newValue)}22`, color: getMaintenanceStatusColor(item.status || item.newValue), marginLeft: '8px' }}>{item.status || item.newValue || ''}</span>
                     </div>
                     <div style={{ color: isDark ? '#9bb5d5' : '#5a6f8d' }}>{item.date ? new Date(item.date).toLocaleDateString() : '-'}</div>
@@ -1457,15 +1463,15 @@ const DeptAssets = () => {
             </div>
 
             <div>
-              <h4 style={{ color: isDark ? '#eaf3ff' : '#12263f', marginBottom: '8px' }}>Asset history</h4>
+              <h4 style={{ color: isDark ? '#eaf3ff' : '#12263f', marginBottom: '8px' }}>{t.assetHistory}</h4>
               {assetHistory.length === 0 ? (
-                <div style={{ color: isDark ? '#9bb5d5' : '#5a6f8d', padding: '8px 0' }}>No history records found.</div>
+                <div style={{ color: isDark ? '#9bb5d5' : '#5a6f8d', padding: '8px 0' }}>{t.noHistoryRecords}</div>
               ) : (
                 <div style={styles.historyList}>
                   {assetHistory.map((item, index) => (
                     <div key={`${item.date || item.type}-${index}`} style={styles.historyItem}>
                       <div>
-                        <span style={{ fontWeight: 700 }}>{item.action || item.type || 'Asset updated'}</span>
+                        <span style={{ fontWeight: 700 }}>{item.action || item.type || t.updated}</span>
                         <span style={{ color: isDark ? '#9bb5d5' : '#5a6f8d', marginLeft: '8px' }}>{item.description || ''}</span>
                       </div>
                       <div style={{ color: isDark ? '#9bb5d5' : '#5a6f8d' }}>{item.date ? new Date(item.date).toLocaleDateString() : '-'}</div>
@@ -1509,11 +1515,11 @@ const DeptAssets = () => {
                   <textarea style={styles.formTextarea} placeholder={t.maintenanceDescriptionPlaceholder} value={actionData.description || ''} onChange={(e) => setActionData({ ...actionData, description: e.target.value })} />
                 </div>
                 <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Priority</label>
+                  <label style={styles.formLabel}>{t.priority}</label>
                   <select style={styles.formInput} value={actionData.priority || 'medium'} onChange={(e) => setActionData({ ...actionData, priority: e.target.value })}>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
+                    <option value="low">{t.low}</option>
+                    <option value="medium">{t.medium}</option>
+                    <option value="high">{t.high}</option>
                     <option value="critical">Critical</option>
                   </select>
                 </div>
@@ -1610,6 +1616,88 @@ const englishTranslations = {
   actionSuccess: 'Action completed successfully',
   actionError: 'Failed to perform action',
   enterEmployeeName: 'Enter employee name...'
+  ,
+  allAssetTypes: 'All Asset Types',
+  allLaboratories: 'All Laboratories',
+  unassignedNoLaboratory: 'Unassigned / No Laboratory',
+  unassigned: 'Unassigned',
+  sortBy: 'Sort by',
+  assetType: 'Asset Type',
+  ascending: 'Ascending',
+  descending: 'Descending',
+  sortDescending: 'Sort descending',
+  sortAscending: 'Sort ascending',
+  noDepartmentAssets: 'No Department Assets',
+  emptyDepartmentAssets: 'There are currently no assets associated with your department.',
+  noMatchingAssets: 'No assets match the selected filters.',
+  totalAssetValue: 'Total Asset Value',
+  records: 'records',
+  identifyAsset: 'Identify Asset',
+  identifyByQrPlaceholder: 'Identify by QR code or asset tag',
+  qrIdentifier: 'QR identifier',
+  categoryFilter: 'Category filter',
+  assetTypeFilter: 'Asset type filter',
+  conditionFilter: 'Condition filter',
+  locationFilter: 'Location filter',
+  laboratoryFilter: 'Laboratory filter',
+  assignmentFilter: 'Assignment filter',
+  sortAssetsBy: 'Sort assets by',
+  page: 'Page',
+  of: 'of',
+  assetsCount: 'assets',
+  previous: 'Previous',
+  next: 'Next',
+  retry: 'Retry',
+  closeAssetDetails: 'Close asset details',
+  loadingAssetDetails: 'Loading authorized asset details...',
+  assetId: 'Asset ID',
+  building: 'Building',
+  floor: 'Floor',
+  room: 'Room',
+  laboratory: 'Laboratory',
+  quantity: 'Quantity',
+  digitalId: 'Digital ID',
+  qrCode: 'QR Code',
+  rfid: 'RFID',
+  notRecorded: 'Not recorded',
+  notAssigned: 'Not assigned',
+  unknown: 'Unknown',
+  since: 'Since',
+  purchaseDate: 'Purchase Date',
+  fundingSource: 'Funding source',
+  never: 'Never',
+  warranty: 'Warranty',
+  fullHistory: 'Full history',
+  physicalVerification: 'Physical verification',
+  warrantyDocuments: 'Warranty and manual documents',
+  noWarrantyDocuments: 'No warranty or manual documents available.',
+  assetDocument: 'Asset document',
+  document: 'document',
+  downloading: 'Downloading...',
+  download: 'Download',
+  assetHistory: 'Asset history',
+  noHistoryRecords: 'No history records found.',
+  updated: 'Updated',
+  maintenance: 'Maintenance',
+  priority: 'Priority',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  pleaseDescribeMaintenance: 'Please describe the maintenance problem.',
+  unauthorizedExport: 'You do not have permission to export department assets.',
+  unableToLoadDetails: 'Unable to load authorized asset details.',
+  unableToDownloadDocument: 'Unable to download this asset document.',
+  identifyQrNotFound: 'No asset with that QR identifier is available in your department.',
+  unableToIdentifyQr: 'Unable to identify this QR code.',
+  actionUnavailable: 'This asset action is not available in the Department Head workflow.',
+  invalidAssetDetails: 'The asset detail API returned an invalid response.',
+  invalidAssetDocuments: 'The asset documents API returned an invalid response.',
+  invalidQrResult: 'The QR lookup did not return a valid asset.',
+  assignments: 'Assignments',
+  assetAssignments: 'Asset Assignments',
+  assignmentRecordsFor: 'Department assignment records for',
+  departmentName: 'Department',
+  refresh: 'Refresh'
 };
 
 const amharicTranslations = {
@@ -1690,6 +1778,87 @@ const amharicTranslations = {
   actionSuccess: 'ተግባር በተሳካ ሁኔታ ተጠናቋል',
   actionError: 'ተግባሩን ማከናወን አልተቻለም',
   enterEmployeeName: 'የሰራተኛ ስም ያስገቡ...'
+  ,
+  allAssetTypes: 'ሁሉም የንብረት ዓይነቶች',
+  allLaboratories: 'ሁሉም ላቦራቶሪዎች',
+  unassignedNoLaboratory: 'ያልተመደበ / ላቦራቶሪ የሌለው',
+  unassigned: 'ያልተመደበ',
+  sortBy: 'ደርድር በ',
+  assetType: 'የንብረት ዓይነት',
+  ascending: 'እየጨመረ ቅደም ተከተል',
+  descending: 'እየቀነሰ ቅደም ተከተል',
+  sortDescending: 'በመቀነስ ደርድር',
+  sortAscending: 'በመጨመር ደርድር',
+  noDepartmentAssets: 'የክፍል ንብረቶች የሉም',
+  emptyDepartmentAssets: 'በአሁኑ ጊዜ ከክፍልዎ ጋር የተያያዙ ንብረቶች የሉም።',
+  noMatchingAssets: 'ከተመረጡት ማጣሪያዎች ጋር የሚዛመዱ ንብረቶች የሉም።',
+  totalAssetValue: 'ጠቅላላ የንብረት ዋጋ',
+  records: 'መዝገቦች',
+  identifyAsset: 'ንብረት መለየት',
+  identifyByQrPlaceholder: 'በQR ኮድ ወይም በንብረት መለያ ይለዩ',
+  qrIdentifier: 'የQR መለያ',
+  categoryFilter: 'የምድብ ማጣሪያ',
+  assetTypeFilter: 'የንብረት ዓይነት ማጣሪያ',
+  conditionFilter: 'የሁኔታ ማጣሪያ',
+  locationFilter: 'የቦታ ማጣሪያ',
+  laboratoryFilter: 'የላቦራቶሪ ማጣሪያ',
+  assignmentFilter: 'የምደባ ማጣሪያ',
+  sortAssetsBy: 'ንብረቶችን ደርድር በ',
+  page: 'ገጽ',
+  of: 'ከ',
+  assetsCount: 'ንብረቶች',
+  previous: 'ቀዳሚ',
+  next: 'ቀጣይ',
+  retry: 'እንደገና ሞክር',
+  closeAssetDetails: 'የንብረት ዝርዝሮችን ዝጋ',
+  loadingAssetDetails: 'የተፈቀዱ የንብረት ዝርዝሮችን በመጫን ላይ...',
+  assetId: 'የንብረት መለያ',
+  building: 'ሕንፃ',
+  floor: 'ወለል',
+  room: 'ክፍል',
+  laboratory: 'ላቦራቶሪ',
+  quantity: 'ብዛት',
+  digitalId: 'ዲጂታል መለያ',
+  qrCode: 'QR ኮድ',
+  rfid: 'RFID',
+  notRecorded: 'አልተመዘገበም',
+  notAssigned: 'አልተመደበም',
+  unknown: 'ያልታወቀ',
+  since: 'ከ',
+  purchaseDate: 'የግዢ ቀን',
+  fundingSource: 'የገንዘብ ምንጭ',
+  never: 'በፍጹም',
+  warranty: 'ዋስትና',
+  fullHistory: 'ሙሉ ታሪክ',
+  physicalVerification: 'አካላዊ ማረጋገጫ',
+  warrantyDocuments: 'የዋስትና እና የመመሪያ ሰነዶች',
+  noWarrantyDocuments: 'የዋስትና ወይም የመመሪያ ሰነዶች የሉም።',
+  assetDocument: 'የንብረት ሰነድ',
+  document: 'ሰነድ',
+  downloading: 'በማውረድ ላይ...',
+  download: 'አውርድ',
+  assetHistory: 'የንብረት ታሪክ',
+  noHistoryRecords: 'የታሪክ መዝገቦች አልተገኙም።',
+  updated: 'ተዘምኗል',
+  priority: 'ቅድሚያ',
+  low: 'ዝቅተኛ',
+  medium: 'መካከለኛ',
+  high: 'ከፍተኛ',
+  pleaseDescribeMaintenance: 'እባክዎ የጥገናውን ችግር ይግለጹ።',
+  unauthorizedExport: 'የክፍል ንብረቶችን ወደ ውጭ ለመላክ ፈቃድ የለዎትም።',
+  unableToLoadDetails: 'የተፈቀዱ የንብረት ዝርዝሮችን መጫን አልተቻለም።',
+  unableToDownloadDocument: 'ይህን የንብረት ሰነድ ማውረድ አልተቻለም።',
+  identifyQrNotFound: 'በዚያ QR መለያ የሚገኝ ንብረት በክፍልዎ ውስጥ የለም።',
+  unableToIdentifyQr: 'ይህን QR ኮድ መለየት አልተቻለም።',
+  actionUnavailable: 'ይህ የንብረት እርምጃ በክፍል ኃላፊ የሥራ ሂደት ውስጥ አይገኝም።',
+  invalidAssetDetails: 'የንብረት ዝርዝር API ትክክል ያልሆነ ምላሽ ሰጥቷል።',
+  invalidAssetDocuments: 'የንብረት ሰነዶች API ትክክል ያልሆነ ምላሽ ሰጥቷል።',
+  invalidQrResult: 'የQR ፍለጋው ትክክለኛ ንብረት አላገኘም።',
+  assignments: 'ምደባዎች',
+  assetAssignments: 'የንብረት ምደባዎች',
+  assignmentRecordsFor: 'የክፍል ምደባ መዝገቦች ለ',
+  departmentName: 'ክፍል',
+  refresh: 'አድስ'
 };
 
 export default DeptAssets;

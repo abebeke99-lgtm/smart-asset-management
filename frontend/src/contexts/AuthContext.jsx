@@ -156,15 +156,17 @@ export const AuthProvider = ({ children }) => {
       }
       return { success: false, error: response.data.message || 'Login failed' };
     } catch (err) {
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: err.code === 'NETWORK_ERROR'
           ? 'Unable to connect to server. Please try again.'
           : err.status === 401
             ? 'Invalid email or password.'
             : err.status === 403
               ? err.message || 'Account is deactivated.'
-              : err.message || 'Unable to connect to server. Please try again.'
+              : err.status >= 500
+                ? 'Unable to complete login. Please try again later.'
+                : err.message || 'Unable to connect to server. Please try again.'
       };
     }
   };

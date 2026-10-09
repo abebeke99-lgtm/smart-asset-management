@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardList, History, Plus, RefreshCw, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTranslation } from '../../contexts/UiContext';
 import { apiClient, getApiErrorMessage } from '../../utils/api';
 import './DeptAssignments.css';
 
@@ -28,14 +29,21 @@ const fetchAllPages = async (path, params = {}) => {
 
 const assignmentDate = (record) => record.assigned_date || record.assignedDate || record.createdAt;
 const expectedDate = (record) => record.expected_return_date || record.expectedReturnDate;
-const displayDate = (value) => {
-  if (!value) return 'Not specified';
+const displayDate = (value, notSpecified) => {
+  if (!value) return notSpecified;
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Not specified' : date.toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? notSpecified : date.toLocaleDateString();
 };
 
 const DeptAssignments = () => {
   const { hasPermission } = useAuth();
+  const { language, t: translate } = useTranslation();
+  const t = (key, english, amharic) => translate(
+    `department.assignments.${key}`,
+    language === 'am' ? amharic : english,
+  );
+  const translateRef = useRef(t);
+  translateRef.current = t;
   const canCreate = hasPermission('assets.assign');
   const [assignments, setAssignments] = useState([]);
   const [history, setHistory] = useState([]);
@@ -70,7 +78,7 @@ const DeptAssignments = () => {
       setStaff(staffRows.filter((person) => person.active !== false && String(person.status || 'active').toLowerCase() === 'active'));
       setLocations(locationRows.filter((location) => String(location.status || 'active').toLowerCase() === 'active'));
     } catch (loadError) {
-      setError(getApiErrorMessage(loadError, 'Unable to load department assignments.'));
+      setError(getApiErrorMessage(loadError, translateRef.current('loadError', 'Unable to load department assignments.', 'የክፍሉን የንብረት ምደባዎች መጫን አልተቻለም።')));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -100,15 +108,15 @@ const DeptAssignments = () => {
     const assignedOn = new Date(`${form.assignedDate}T00:00:00`);
     const expectedOn = form.expectedReturnDate ? new Date(`${form.expectedReturnDate}T00:00:00`) : null;
     if (Number.isNaN(assignedOn.getTime())) {
-      setFormError('Enter a valid assignment date.');
+      setFormError(t('validDateError', 'Enter a valid assignment date.', 'ትክክለኛ የምደባ ቀን ያስገቡ።'));
       return;
     }
     if (assignedOn > new Date()) {
-      setFormError('Assignment date cannot be in the future.');
+      setFormError(t('futureDateError', 'Assignment date cannot be in the future.', 'ምደባው የወደፊት ቀን ሊሆን አይችልም።'));
       return;
     }
     if (expectedOn && (Number.isNaN(expectedOn.getTime()) || expectedOn < assignedOn)) {
-      setFormError('Expected return must be on or after the assignment date.');
+      setFormError(t('returnDateError', 'Expected return must be on or after the assignment date.', 'የሚጠበቀው የመመለሻ ቀን ከምደባው ቀን ጋር እኩል ወይም ከዚያ በኋላ መሆን አለበት።'));
       return;
     }
 
@@ -124,10 +132,10 @@ const DeptAssignments = () => {
       });
       setShowForm(false);
       setForm({ ...EMPTY_FORM, assignedDate: new Date().toISOString().slice(0, 10) });
-      setSuccess('Asset assignment created and added to assignment history.');
+      setSuccess(t('createSuccess', 'Asset assignment created and added to assignment history.', 'የንብረት ምደባው ተፈጥሯል እና ወደ ምደባ ታሪክ ታክሏል።'));
       await loadData();
     } catch (saveError) {
-      setFormError(getApiErrorMessage(saveError, 'Unable to create this assignment.'));
+      setFormError(getApiErrorMessage(saveError, t('createError', 'Unable to create this assignment.', 'ይህን ምደባ መፍጠር አልተቻለም።')));
     } finally {
       setSaving(false);
     }
@@ -144,13 +152,13 @@ const DeptAssignments = () => {
     <main className="dept-assignments">
       <header className="dept-assignments__heading">
         <div>
-          <span className="dept-assignments__eyebrow"><ClipboardList size={16} /> Department workspace</span>
-          <h1>Asset Assignments</h1>
-          <p>Assign department assets to authorized staff and review assignment history.</p>
+          <span className="dept-assignments__eyebrow"><ClipboardList size={16} /> {t('workspace', 'Department workspace', 'የክፍል የሥራ ቦታ')}</span>
+          <h1>{t('title', 'Asset Assignments', 'የንብረት ምደባዎች')}</h1>
+          <p>{t('subtitle', 'Assign department assets to authorized staff and review assignment history.', 'የክፍሉን ንብረቶች ለተፈቀደላቸው ሠራተኞች ይመድቡ እና የምደባ ታሪክን ይመልከቱ።')}</p>
         </div>
         <div className="dept-assignments__actions">
           <button type="button" className="dept-assignments__button dept-assignments__button--secondary" onClick={() => loadData()} disabled={refreshing}>
-            <RefreshCw size={16} className={refreshing ? 'dept-assignments__spin' : ''} /> Refresh
+            <RefreshCw size={16} className={refreshing ? 'dept-assignments__spin' : ''} /> {refreshing ? t('refreshing', 'Refreshing...', 'በማደስ ላይ...') : t('refresh', 'Refresh', 'አድስ')}
           </button>
           {canCreate && (
             <button type="button" className="dept-assignments__button" onClick={openForm}>
@@ -167,97 +175,99 @@ const DeptAssignments = () => {
         <section className="dept-assignments__form-card" aria-labelledby="assignment-form-title">
           <div className="dept-assignments__form-heading">
             <div>
-              <span className="dept-assignments__eyebrow">Controlled action</span>
-              <h2 id="assignment-form-title">Create assignment</h2>
+              <span className="dept-assignments__eyebrow">{t('controlledAction', 'Controlled action', 'ቁጥጥር ያለው እርምጃ')}</span>
+              <h2 id="assignment-form-title">{t('createTitle', 'Create assignment', 'ምደባ ፍጠር')}</h2>
             </div>
-            <button type="button" className="dept-assignments__icon-button" aria-label="Close assignment form" onClick={() => setShowForm(false)} disabled={saving}>
+            <button type="button" className="dept-assignments__icon-button" aria-label={t('closeForm', 'Close assignment form', 'የምደባ ቅጹን ዝጋ')} onClick={() => setShowForm(false)} disabled={saving}>
               <X size={18} />
             </button>
           </div>
           <form onSubmit={createAssignment} className="dept-assignments__form">
             <label>
-              Asset
+              {t('asset', 'Asset', 'ንብረት')}
               <select name="assetId" value={form.assetId} onChange={updateForm} required>
-                <option value="">Select an available department asset</option>
+                <option value="">{t('selectAsset', 'Select an available department asset', 'ያለውን የክፍል ንብረት ይምረጡ')}</option>
                 {assets.map((asset) => (
                   <option key={asset.id} value={asset.id}>{asset.assetCode || asset.asset_code} - {asset.name}</option>
                 ))}
               </select>
-              {assets.length === 0 && <small>No available assets are currently assignable.</small>}
+              {assets.length === 0 && <small>{t('noAvailableAssets', 'No available assets are currently assignable.', 'በአሁኑ ጊዜ ሊመደቡ የሚችሉ ንብረቶች የሉም።')}</small>}
             </label>
             <label>
-              Recipient
+              {t('recipient', 'Recipient', 'ተቀባይ')}
               <select name="recipientId" value={form.recipientId} onChange={updateForm} required>
-                <option value="">Select active department staff</option>
+                <option value="">{t('selectStaff', 'Select active department staff', 'ንቁ የክፍሉን ሠራተኛ ይምረጡ')}</option>
                 {staff.map((person) => (
                   <option key={person.id} value={person.id}>{person.fullName || person.username}</option>
                 ))}
               </select>
-              {staff.length === 0 && <small>No active staff members are available.</small>}
+              {staff.length === 0 && <small>{t('noActiveStaff', 'No active staff members are available.', 'ንቁ ሠራተኞች የሉም።')}</small>}
             </label>
             <label>
-              Location
+              {t('location', 'Location', 'ቦታ')}
               <input name="location" value={form.location} onChange={updateForm} list="department-assignment-locations" maxLength={255} required />
               <datalist id="department-assignment-locations">
                 {locations.map((location) => <option key={`${location.recordType || location.type}-${location.id}`} value={location.name} />)}
               </datalist>
             </label>
             <label>
-              Assignment date
+              {t('assignmentDate', 'Assignment date', 'የምደባ ቀን')}
               <input type="date" name="assignedDate" value={form.assignedDate} onChange={updateForm} max={new Date().toISOString().slice(0, 10)} required />
             </label>
             <label>
-              Expected return
+              {t('expectedReturn', 'Expected return', 'የሚጠበቀው መመለሻ')}
               <input type="date" name="expectedReturnDate" value={form.expectedReturnDate} onChange={updateForm} min={form.assignedDate} />
             </label>
             {formError && <div className="dept-assignments__alert dept-assignments__form-error" role="alert">{formError}</div>}
             <div className="dept-assignments__form-actions">
-              <button type="button" className="dept-assignments__button dept-assignments__button--secondary" onClick={() => setShowForm(false)} disabled={saving}>Cancel</button>
+              <button type="button" className="dept-assignments__button dept-assignments__button--secondary" onClick={() => setShowForm(false)} disabled={saving}>{t('cancel', 'Cancel', 'ሰርዝ')}</button>
               <button type="submit" className="dept-assignments__button" disabled={saving || assets.length === 0 || staff.length === 0}>
-                {saving ? 'Saving...' : 'Create assignment'}
+                {saving ? t('saving', 'Saving...', 'በማስቀመጥ ላይ...') : t('createTitle', 'Create assignment', 'ምደባ ፍጠር')}
               </button>
             </div>
           </form>
         </section>
       )}
 
-      <section className="dept-assignments__card" aria-label="Department assignments">
-        <div className="dept-assignments__tabs" role="tablist" aria-label="Assignment views">
+      <section className="dept-assignments__card" aria-label={t('sectionLabel', 'Department assignments', 'የክፍል ምደባዎች')}>
+        <div className="dept-assignments__tabs" role="tablist" aria-label={t('viewsLabel', 'Assignment views', 'የምደባ እይታዎች')}>
           <button type="button" role="tab" aria-selected={activeTab === 'current'} className={activeTab === 'current' ? 'is-active' : ''} onClick={() => setActiveTab('current')}>
-            Active assignments <span>{activeAssignments.length}</span>
+            {t('activeTab', 'Active assignments', 'ንቁ ምደባዎች')} <span>{activeAssignments.length}</span>
           </button>
           <button type="button" role="tab" aria-selected={activeTab === 'history'} className={activeTab === 'history' ? 'is-active' : ''} onClick={() => setActiveTab('history')}>
-            <History size={15} /> Assignment history <span>{history.length}</span>
+            <History size={15} /> {t('historyTab', 'Assignment history', 'የምደባ ታሪክ')} <span>{history.length}</span>
           </button>
         </div>
         {loading ? (
-          <div className="dept-assignments__empty" role="status">Loading assignments...</div>
+          <div className="dept-assignments__empty" role="status">{t('loading', 'Loading assignments...', 'ምደባዎችን በመጫን ላይ...')}</div>
         ) : rows.length === 0 ? (
           <div className="dept-assignments__empty">
-            {activeTab === 'history' ? 'No assignment history is available yet.' : 'There are no active assignments for this department.'}
+            {activeTab === 'history'
+              ? t('noHistory', 'No assignment history is available yet.', 'እስካሁን የምደባ ታሪክ የለም።')
+              : t('noActiveAssignments', 'There are no active assignments for this department.', 'ለዚህ ክፍል ንቁ ምደባዎች የሉም።')}
           </div>
         ) : (
           <div className="dept-assignments__table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Asset</th>
-                  <th>Recipient</th>
-                  <th>Location</th>
-                  <th>Assigned</th>
-                  <th>Expected return</th>
-                  <th>Status</th>
+                  <th>{t('asset', 'Asset', 'ንብረት')}</th>
+                  <th>{t('recipient', 'Recipient', 'ተቀባይ')}</th>
+                  <th>{t('location', 'Location', 'ቦታ')}</th>
+                  <th>{t('assigned', 'Assigned', 'የተመደበበት ቀን')}</th>
+                  <th>{t('expectedReturn', 'Expected return', 'የሚጠበቀው መመለሻ')}</th>
+                  <th>{t('status', 'Status', 'ሁኔታ')}</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((assignment) => (
                   <tr key={assignment.id}>
-                    <td><strong>{assignment.asset_name || assignment.assetName || `Asset #${assignment.asset_id || assignment.assetId}`}</strong><small>{assignment.asset_tag || assignment.assetCode || ''}</small></td>
-                    <td>{assignment.assigned_to_name || assignment.assignedToName || 'Not recorded'}</td>
-                    <td>{assignment.location || 'Not recorded'}</td>
-                    <td>{displayDate(assignmentDate(assignment))}</td>
-                    <td>{displayDate(expectedDate(assignment))}</td>
-                    <td><span className={`dept-assignments__status dept-assignments__status--${String(assignment.status || 'active').toLowerCase()}`}>{assignment.status || 'Active'}</span></td>
+                    <td><strong>{assignment.asset_name || assignment.assetName || `${t('asset', 'Asset', 'ንብረት')} #${assignment.asset_id || assignment.assetId}`}</strong><small>{assignment.asset_tag || assignment.assetCode || ''}</small></td>
+                    <td>{assignment.assigned_to_name || assignment.assignedToName || t('notRecorded', 'Not recorded', 'አልተመዘገበም')}</td>
+                    <td>{assignment.location || t('notRecorded', 'Not recorded', 'አልተመዘገበም')}</td>
+                    <td>{displayDate(assignmentDate(assignment), t('notSpecified', 'Not specified', 'አልተገለጸም'))}</td>
+                    <td>{displayDate(expectedDate(assignment), t('notSpecified', 'Not specified', 'አልተገለጸም'))}</td>
+                    <td><span className={`dept-assignments__status dept-assignments__status--${String(assignment.status || 'active').toLowerCase()}`}>{assignment.status || t('activeStatus', 'Active', 'ንቁ')}</span></td>
                   </tr>
                 ))}
               </tbody>

@@ -1,10 +1,32 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import MaintDashboard from './MaintDashboard';
 import { getMaintenanceDashboard } from '../../services/maintenanceApi';
+import { UiProvider, useLanguage } from '../../contexts/UiContext';
 
 jest.mock('../../services/maintenanceApi', () => ({ getMaintenanceDashboard: jest.fn() }));
+jest.mock('../../i18n/messages', () => ({
+  translateMessage: (language, key, fallback) => {
+    if (language !== 'am') return fallback || key;
+
+    const amharic = {
+      'dashboard.maintenanceHome.title': 'የጥገና ዳሽቦርድ',
+      'dashboard.maintenanceHome.totalRequests': 'ጠቅላላ የጥገና ጥያቄዎች',
+      'dashboard.maintenanceHome.quickActions': 'ፈጣን እርምጃዎች',
+    };
+    return amharic[key] || fallback || key;
+  },
+}));
+
+function LanguageSwitch() {
+  const { language, setLanguage } = useLanguage();
+  return (
+    <button type="button" onClick={() => setLanguage(language === 'en' ? 'am' : 'en')}>
+      Switch language
+    </button>
+  );
+}
 
 const dashboardData = {
   summary: {
@@ -31,6 +53,7 @@ const dashboardData = {
 };
 
 beforeEach(() => {
+  localStorage.setItem('language', 'en');
   getMaintenanceDashboard.mockReset();
   getMaintenanceDashboard.mockResolvedValue(dashboardData);
 });
@@ -76,4 +99,26 @@ test('shows a connection error instead of presenting zero-valued metrics', async
   expect(await screen.findByRole('alert')).toHaveTextContent('database offline');
   expect(screen.getByRole('button', { name: 'Try Again' })).toBeInTheDocument();
   expect(errorLog).toHaveBeenCalledWith('Maintenance dashboard error:', expect.any(Error));
+});
+
+test('switches dashboard text to Amharic without requesting dashboard data again', async () => {
+  render(
+    <UiProvider>
+      <MemoryRouter>
+        <LanguageSwitch />
+        <MaintDashboard />
+      </MemoryRouter>
+    </UiProvider>
+  );
+
+  expect(await screen.findByRole('heading', { name: 'Maintenance Dashboard' })).toBeInTheDocument();
+  expect(screen.getByText('Total Maintenance Requests')).toBeInTheDocument();
+  expect(getMaintenanceDashboard).toHaveBeenCalledTimes(1);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Switch language' }));
+
+  expect(await screen.findByRole('heading', { name: 'የጥገና ዳሽቦርድ' })).toBeInTheDocument();
+  expect(screen.getByText('ጠቅላላ የጥገና ጥያቄዎች')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'ፈጣን እርምጃዎች' })).toBeInTheDocument();
+  expect(getMaintenanceDashboard).toHaveBeenCalledTimes(1);
 });

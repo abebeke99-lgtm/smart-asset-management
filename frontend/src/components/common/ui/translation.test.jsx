@@ -4,6 +4,7 @@ import { UIProvider, useLanguage } from '../../../contexts/UiContext';
 import EmptyState from './EmptyState';
 import ErrorState from './ErrorState';
 import StatusBadge from './StatusBadge';
+import UserAvatar from '../UserAvatar';
 
 const LanguageControl = () => {
   const { language, setLanguage } = useLanguage();
@@ -24,18 +25,21 @@ describe('shared UI translations', () => {
         <EmptyState />
         <ErrorState onRetry={() => {}} />
         <StatusBadge status="in_progress" />
+        <UserAvatar user={{}} />
       </UIProvider>
     );
 
     expect(screen.getByText('Nothing to show')).toBeInTheDocument();
     expect(screen.getByText('Retry')).toBeInTheDocument();
     expect(screen.getByText('In progress')).toBeInTheDocument();
+    expect(screen.getByLabelText('User avatar')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Switch language' }));
 
     expect(screen.getByText('ምንም የሚታይ ነገር የለም')).toBeInTheDocument();
     expect(screen.getByText('እንደገና ሞክር')).toBeInTheDocument();
     expect(screen.getByText('በሂደት ላይ')).toBeInTheDocument();
+    expect(screen.getByLabelText('የተጠቃሚ መገለጫ ምስል')).toBeInTheDocument();
     expect(document.documentElement.lang).toBe('am');
     expect(document.documentElement.dir).toBe('ltr');
   });

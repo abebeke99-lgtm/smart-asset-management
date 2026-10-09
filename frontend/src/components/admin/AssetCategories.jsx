@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { apiBase } from "../../utils/api";
+import { useTranslation } from "../../contexts/UiContext";
 
 const API_BASE = `${apiBase()}/api/asset-categories`;
 
@@ -129,6 +130,7 @@ function getStatusClass(status) {
 }
 
 export default function AssetCategories() {
+  const { t } = useTranslation();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -159,7 +161,7 @@ export default function AssetCategories() {
 
       setCategories(normalized);
     } catch (err) {
-      setError(err.message || "Unable to load asset categories.");
+      setError(err.message || t("admin.assetCategories.loadError", "Unable to load asset categories."));
     } finally {
       setLoading(false);
     }
@@ -261,7 +263,7 @@ export default function AssetCategories() {
     event.preventDefault();
 
     if (!form.name.trim()) {
-      setError("Category name is required.");
+      setError(t("admin.assetCategories.nameRequired", "Category name is required."));
       return;
     }
 
@@ -295,7 +297,7 @@ export default function AssetCategories() {
       closeForm();
       await loadCategories();
     } catch (err) {
-      setError(err.message || "Unable to save category.");
+      setError(err.message || t("admin.assetCategories.saveError", "Unable to save category."));
     } finally {
       setSaving(false);
     }
@@ -308,7 +310,7 @@ export default function AssetCategories() {
     const nextStatus = isActive ? "Inactive" : "Active";
 
     const confirmed = window.confirm(
-      `${nextStatus === "Active" ? "Activate" : "Deactivate"} "${
+      `${nextStatus === "Active" ? t("admin.assetCategories.activate", "Activate") : t("admin.assetCategories.deactivate", "Deactivate")} "${
         category.name
       }"?`
     );
@@ -334,20 +336,20 @@ export default function AssetCategories() {
 
       await loadCategories();
     } catch (err) {
-      setError(err.message || "Unable to update category status.");
+      setError(err.message || t("admin.assetCategories.statusError", "Unable to update category status."));
     }
   };
 
   const deleteCategory = async (category) => {
     if (Number(category.assetCount || 0) > 0) {
       window.alert(
-        "This category contains assets and cannot be deleted until those assets are reassigned."
+        t("admin.assetCategories.deleteWithAssets", "This category contains assets and cannot be deleted until those assets are reassigned.")
       );
       return;
     }
 
     const confirmed = window.confirm(
-      `Delete "${category.name}"? This action cannot be undone.`
+      `${t("admin.assetCategories.deleteConfirm", "Delete")} "${category.name}"? ${t("admin.assetCategories.deleteWarning", "This action cannot be undone.")}`
     );
 
     if (!confirmed) return;
@@ -364,7 +366,7 @@ export default function AssetCategories() {
 
       await loadCategories();
     } catch (err) {
-      setError(err.message || "Unable to delete category.");
+      setError(err.message || t("admin.assetCategories.deleteError", "Unable to delete category."));
     }
   };
 
@@ -391,7 +393,7 @@ export default function AssetCategories() {
       setCategoryAssets(assets);
     } catch (err) {
       setAssetError(
-        err.message || "Unable to load assets in this category."
+        err.message || t("admin.assetCategories.assetsError", "Unable to load assets in this category.")
       );
     } finally {
       setLoadingAssets(false);
@@ -826,9 +828,9 @@ export default function AssetCategories() {
       <div className="categories-container">
         <div className="page-header">
           <div>
-            <h1 className="page-title">Asset Categories</h1>
+            <h1 className="page-title">{t("admin.assetCategories.title", "Asset Categories")}</h1>
             <p className="page-subtitle">
-              Manage university asset categories and their classification.
+              {t("admin.assetCategories.subtitle", "Manage university asset categories and their classification.")}
             </p>
           </div>
 
@@ -837,7 +839,7 @@ export default function AssetCategories() {
             className="primary-button"
             onClick={openCreateForm}
           >
-            + Add Category
+            + {t("admin.assetCategories.add", "Add Category")}
           </button>
         </div>
 
@@ -849,21 +851,21 @@ export default function AssetCategories() {
 
         <div className="summary-grid">
           <div className="summary-card">
-            <div className="summary-label">Total Categories</div>
+            <div className="summary-label">{t("admin.assetCategories.total", "Total Categories")}</div>
             <div className="summary-value">
               {categories.length}
             </div>
           </div>
 
           <div className="summary-card">
-            <div className="summary-label">Active Categories</div>
+            <div className="summary-label">{t("admin.assetCategories.active", "Active Categories")}</div>
             <div className="summary-value">
               {activeCount}
             </div>
           </div>
 
           <div className="summary-card">
-            <div className="summary-label">Assets in Categories</div>
+            <div className="summary-label">{t("admin.assetCategories.assetsCount", "Assets in Categories")}</div>
             <div className="summary-value">
               {totalAssets}
             </div>
@@ -874,7 +876,8 @@ export default function AssetCategories() {
           <input
             type="search"
             className="search-input"
-            placeholder="Search category name, code or description..."
+            aria-label={t("admin.assetCategories.search", "Search categories")}
+            placeholder={t("admin.assetCategories.searchPlaceholder", "Search category name, code or description...")}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -886,9 +889,9 @@ export default function AssetCategories() {
               setStatusFilter(event.target.value)
             }
           >
-            <option value="All">All Statuses</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
+            <option value="All">{t("admin.assetCategories.allStatuses", "All Statuses")}</option>
+            <option value="Active">{t("admin.assetCategories.statusActive", "Active")}</option>
+            <option value="Inactive">{t("admin.assetCategories.statusInactive", "Inactive")}</option>
           </select>
 
           <button
@@ -897,14 +900,14 @@ export default function AssetCategories() {
             onClick={loadCategories}
             disabled={loading}
           >
-            {loading ? "Loading..." : "Refresh"}
+            {loading ? t("admin.assetCategories.loading", "Loading...") : t("admin.assetCategories.refresh", "Refresh")}
           </button>
         </div>
 
         <div className="table-card">
           {loading ? (
             <div className="loading-state">
-              Loading asset categories...
+              {t("admin.assetCategories.loadingCategories", "Loading asset categories...")}
             </div>
           ) : filteredCategories.length === 0 ? (
             <div className="empty-state">
@@ -914,14 +917,14 @@ export default function AssetCategories() {
 
               <strong>
                 {search || statusFilter !== "All"
-                  ? "No matching categories"
-                  : "No asset categories found"}
+                  ? t("admin.assetCategories.noMatches", "No matching categories")
+                  : t("admin.assetCategories.emptyTitle", "No asset categories found")}
               </strong>
 
               <div style={{ marginTop: 7 }}>
                 {search || statusFilter !== "All"
-                  ? "Try changing your search or filter."
-                  : "Create the first asset category to get started."}
+                  ? t("admin.assetCategories.noMatchesHelp", "Try changing your search or filter.")
+                  : t("admin.assetCategories.emptyHelp", "Create the first asset category to get started.")}
               </div>
             </div>
           ) : (
@@ -929,13 +932,13 @@ export default function AssetCategories() {
               <table className="categories-table">
                 <thead>
                   <tr>
-                    <th>Category</th>
-                    <th>Code</th>
-                    <th>Description</th>
-                    <th>Assets</th>
-                    <th>Status</th>
-                    <th>Updated</th>
-                    <th>Actions</th>
+                    <th>{t("admin.assetCategories.columnCategory", "Category")}</th>
+                    <th>{t("admin.assetCategories.columnCode", "Code")}</th>
+                    <th>{t("admin.assetCategories.columnDescription", "Description")}</th>
+                    <th>{t("admin.assetCategories.columnAssets", "Assets")}</th>
+                    <th>{t("admin.assetCategories.columnStatus", "Status")}</th>
+                    <th>{t("admin.assetCategories.columnUpdated", "Updated")}</th>
+                    <th>{t("admin.assetCategories.columnActions", "Actions")}</th>
                   </tr>
                 </thead>
 
@@ -944,7 +947,7 @@ export default function AssetCategories() {
                     <tr key={category.id}>
                       <td>
                         <div className="category-name">
-                          {category.name || "Unnamed Category"}
+                          {category.name || t("admin.assetCategories.unnamed", "Unnamed Category")}
                         </div>
                       </td>
 
@@ -960,7 +963,7 @@ export default function AssetCategories() {
 
                       <td>
                         <div className="category-description">
-                          {category.description || "No description"}
+                          {category.description || t("admin.assetCategories.noDescription", "No description")}
                         </div>
                       </td>
 
@@ -976,7 +979,11 @@ export default function AssetCategories() {
                             category.status
                           )}`}
                         >
-                          {category.status}
+                          {String(category.status).toLowerCase() === "active"
+                            ? t("admin.assetCategories.statusActive", "Active")
+                            : String(category.status).toLowerCase() === "inactive"
+                            ? t("admin.assetCategories.statusInactive", "Inactive")
+                            : category.status}
                         </span>
                       </td>
 
@@ -993,7 +1000,7 @@ export default function AssetCategories() {
                             className="action-button primary"
                             onClick={() => viewAssets(category)}
                           >
-                            Assets
+                            {t("admin.assetCategories.viewAssets", "Assets")}
                           </button>
 
                           <button
@@ -1001,7 +1008,7 @@ export default function AssetCategories() {
                             className="action-button"
                             onClick={() => openEditForm(category)}
                           >
-                            Edit
+                            {t("admin.assetCategories.edit", "Edit")}
                           </button>
 
                           <button
@@ -1011,8 +1018,8 @@ export default function AssetCategories() {
                           >
                             {String(category.status).toLowerCase() ===
                             "active"
-                              ? "Deactivate"
-                              : "Activate"}
+                              ? t("admin.assetCategories.deactivate", "Deactivate")
+                              : t("admin.assetCategories.activate", "Activate")}
                           </button>
 
                           <button
@@ -1020,7 +1027,7 @@ export default function AssetCategories() {
                             className="action-button danger"
                             onClick={() => deleteCategory(category)}
                           >
-                            Delete
+                            {t("admin.assetCategories.delete", "Delete")}
                           </button>
                         </div>
                       </td>
@@ -1039,10 +1046,9 @@ export default function AssetCategories() {
             fontSize: 13,
           }}
         >
-          Showing {filteredCategories.length} of{" "}
-          {categories.length} categories
+          {t("admin.assetCategories.showing", "Showing {filtered} of {total} categories", { filtered: filteredCategories.length, total: categories.length })}
           {inactiveCount > 0
-            ? ` • ${inactiveCount} inactive`
+            ? ` • ${t("admin.assetCategories.inactiveCount", "{count} inactive", { count: inactiveCount })}`
             : ""}
         </div>
       </div>
@@ -1060,8 +1066,8 @@ export default function AssetCategories() {
             <div className="modal-header">
               <h2 className="modal-title">
                 {editingCategory
-                  ? "Edit Asset Category"
-                  : "Add Asset Category"}
+                  ? t("admin.assetCategories.editTitle", "Edit Asset Category")
+                  : t("admin.assetCategories.addTitle", "Add Asset Category")}
               </h2>
 
               <button
@@ -1070,7 +1076,7 @@ export default function AssetCategories() {
                 onClick={closeForm}
                 disabled={saving}
               >
-                ×
+                <span aria-label={t("admin.assetCategories.close", "Close")}>×</span>
               </button>
             </div>
 
@@ -1078,7 +1084,7 @@ export default function AssetCategories() {
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">
-                    Category Name *
+                    {t("admin.assetCategories.name", "Category Name")} *
                   </label>
 
                   <input
@@ -1087,14 +1093,14 @@ export default function AssetCategories() {
                     className="form-input"
                     value={form.name}
                     onChange={handleChange}
-                    placeholder="e.g. Laboratory Equipment"
+                    placeholder={t("admin.assetCategories.namePlaceholder", "e.g. Laboratory Equipment")}
                     required
                   />
                 </div>
 
                 <div className="form-group">
                   <label className="form-label">
-                    Category Code
+                    {t("admin.assetCategories.code", "Category Code")}
                   </label>
 
                   <input
@@ -1103,14 +1109,14 @@ export default function AssetCategories() {
                     className="form-input"
                     value={form.code}
                     onChange={handleChange}
-                    placeholder="e.g. LAB-EQP"
+                    placeholder={t("admin.assetCategories.codePlaceholder", "e.g. LAB-EQP")}
                   />
                 </div>
               </div>
 
               <div className="form-group">
                 <label className="form-label">
-                  Description
+                  {t("admin.assetCategories.description", "Description")}
                 </label>
 
                 <textarea
@@ -1118,13 +1124,13 @@ export default function AssetCategories() {
                   className="form-textarea"
                   value={form.description}
                   onChange={handleChange}
-                  placeholder="Describe the category..."
+                  placeholder={t("admin.assetCategories.descriptionPlaceholder", "Describe the category...")}
                 />
               </div>
 
               <div className="form-group">
                 <label className="form-label">
-                  Status
+                  {t("admin.assetCategories.status", "Status")}
                 </label>
 
                 <select
@@ -1133,8 +1139,8 @@ export default function AssetCategories() {
                   value={form.status}
                   onChange={handleChange}
                 >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
+                  <option value="Active">{t("admin.assetCategories.statusActive", "Active")}</option>
+                  <option value="Inactive">{t("admin.assetCategories.statusInactive", "Inactive")}</option>
                 </select>
               </div>
 
@@ -1145,7 +1151,7 @@ export default function AssetCategories() {
                   onClick={closeForm}
                   disabled={saving}
                 >
-                  Cancel
+                  {t("admin.assetCategories.cancel", "Cancel")}
                 </button>
 
                 <button
@@ -1154,10 +1160,10 @@ export default function AssetCategories() {
                   disabled={saving}
                 >
                   {saving
-                    ? "Saving..."
+                    ? t("admin.assetCategories.saving", "Saving...")
                     : editingCategory
-                    ? "Save Changes"
-                    : "Create Category"}
+                    ? t("admin.assetCategories.saveChanges", "Save Changes")
+                    : t("admin.assetCategories.create", "Create Category")}
                 </button>
               </div>
             </form>
@@ -1188,7 +1194,7 @@ export default function AssetCategories() {
                     fontSize: 13,
                   }}
                 >
-                  Assets assigned to this category
+                  {t("admin.assetCategories.assignedAssets", "Assets assigned to this category")}
                 </div>
               </div>
 
@@ -1197,14 +1203,14 @@ export default function AssetCategories() {
                 className="close-button"
                 onClick={closeAssets}
               >
-                ×
+                <span aria-label={t("admin.assetCategories.close", "Close")}>×</span>
               </button>
             </div>
 
             <div className="asset-list">
               {loadingAssets ? (
                 <div className="loading-state">
-                  Loading category assets...
+                  {t("admin.assetCategories.loadingAssets", "Loading category assets...")}
                 </div>
               ) : assetError ? (
                 <div className="error-box">
@@ -1212,18 +1218,18 @@ export default function AssetCategories() {
                 </div>
               ) : categoryAssets.length === 0 ? (
                 <div className="empty-state">
-                  No assets are currently assigned to this category.
+                  {t("admin.assetCategories.noAssignedAssets", "No assets are currently assigned to this category.")}
                 </div>
               ) : (
                 <div className="table-wrapper">
                   <table className="asset-table">
                     <thead>
                       <tr>
-                        <th>Asset ID</th>
-                        <th>Name</th>
-                        <th>Serial Number</th>
-                        <th>Status</th>
-                        <th>Location</th>
+                        <th>{t("admin.assetCategories.assetId", "Asset ID")}</th>
+                        <th>{t("admin.assetCategories.assetName", "Name")}</th>
+                        <th>{t("admin.assetCategories.serialNumber", "Serial Number")}</th>
+                        <th>{t("admin.assetCategories.columnStatus", "Status")}</th>
+                        <th>{t("admin.assetCategories.location", "Location")}</th>
                       </tr>
                     </thead>
 
@@ -1279,7 +1285,7 @@ export default function AssetCategories() {
                 className="secondary-button"
                 onClick={closeAssets}
               >
-                Close
+                {t("admin.assetCategories.close", "Close")}
               </button>
             </div>
           </div>

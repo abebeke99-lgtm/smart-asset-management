@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getMaintenanceDashboard } from "../../services/maintenanceApi";
+import { useTranslation } from "../../contexts/UiContext";
 
 /**
  * Maintenance Coordinator Dashboard
@@ -31,42 +32,49 @@ const KPI_CONFIG = [
   {
     key: "totalRequests",
     title: "Total Maintenance Requests",
+    titleKey: "totalRequests",
     icon: "📋",
     type: "number",
   },
   {
     key: "newRequests",
     title: "New Requests",
+    titleKey: "newRequests",
     icon: "🆕",
     type: "number",
   },
   {
     key: "scheduledRepairs",
     title: "Scheduled Repairs",
+    titleKey: "scheduledRepairs",
     icon: "📅",
     type: "number",
   },
   {
     key: "inProgressRepairs",
     title: "In-Progress Repairs",
+    titleKey: "inProgressRepairs",
     icon: "🔧",
     type: "number",
   },
   {
     key: "completedRepairs",
     title: "Completed Repairs",
+    titleKey: "completedRepairs",
     icon: "✅",
     type: "number",
   },
   {
     key: "assetsUnderMaintenance",
     title: "Assets Under Maintenance",
+    titleKey: "assetsUnderMaintenance",
     icon: "🛠️",
     type: "number",
   },
   {
     key: "overdueMaintenance",
     title: "Overdue Maintenance",
+    titleKey: "overdueMaintenance",
     icon: "⚠️",
     type: "number",
     danger: true,
@@ -74,12 +82,14 @@ const KPI_CONFIG = [
   {
     key: "preventiveMaintenanceDue",
     title: "Preventive Maintenance Due",
+    titleKey: "preventiveMaintenanceDue",
     icon: "🔄",
     type: "number",
   },
   {
     key: "criticalRepairs",
     title: "Critical Repairs",
+    titleKey: "criticalRepairs",
     icon: "🚨",
     type: "number",
     danger: true,
@@ -87,12 +97,14 @@ const KPI_CONFIG = [
   {
     key: "availableTechnicians",
     title: "Available Technicians",
+    titleKey: "availableTechnicians",
     icon: "👨‍🔧",
     type: "number",
   },
   {
     key: "lowSpareParts",
     title: "Low Spare Parts",
+    titleKey: "lowSpareParts",
     icon: "📦",
     type: "number",
     danger: true,
@@ -100,6 +112,7 @@ const KPI_CONFIG = [
   {
     key: "pendingQualityChecks",
     title: "Pending Quality Checks",
+    titleKey: "pendingQualityChecks",
     icon: "🔍",
     type: "number",
   },
@@ -261,6 +274,7 @@ function getCardClass(item, value) {
 }
 
 function Dashboard() {
+  const { t } = useTranslation();
   const [dashboard, setDashboard] = useState(DEFAULT_DATA);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -296,10 +310,7 @@ function Dashboard() {
     } catch (err) {
       console.error("Maintenance dashboard error:", err);
 
-      setError(
-        err?.message ||
-          "Unable to load maintenance dashboard."
-      );
+      setError(err?.message || true);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -365,21 +376,31 @@ function Dashboard() {
       <header className="maintenance-dashboard-header">
         <div>
           <div className="maintenance-breadcrumb">
-            Maintenance / Dashboard
+            {t(
+              "dashboard.maintenanceHome.breadcrumb",
+              "Maintenance / Dashboard"
+            )}
           </div>
 
-          <h1>Maintenance Dashboard</h1>
+          <h1>
+            {t(
+              "dashboard.maintenanceHome.title",
+              "Maintenance Dashboard"
+            )}
+          </h1>
 
           <p>
-            Real-time overview of university maintenance
-            activities and operational status.
+            {t(
+              "dashboard.maintenanceHome.subtitle",
+              "Real-time overview of university maintenance activities and operational status."
+            )}
           </p>
         </div>
 
         <div className="maintenance-header-actions">
           {lastUpdated && (
             <span className="maintenance-last-updated">
-              Updated{" "}
+              {t("dashboard.maintenanceHome.updated", "Updated")}{" "}
               {lastUpdated.toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -393,7 +414,9 @@ function Dashboard() {
             onClick={handleRefresh}
             disabled={refreshing}
           >
-            {refreshing ? "Refreshing..." : "Refresh"}
+            {refreshing
+              ? t("dashboard.maintenanceHome.refreshing", "Refreshing...")
+              : t("dashboard.maintenanceHome.refresh", "Refresh")}
           </button>
         </div>
       </header>
@@ -408,15 +431,27 @@ function Dashboard() {
           role="alert"
         >
           <div>
-            <strong>Unable to load dashboard</strong>
-            <p>{error}</p>
+            <strong>
+              {t(
+                "dashboard.maintenanceHome.unableToLoadDashboard",
+                "Unable to load dashboard"
+              )}
+            </strong>
+            <p>
+              {typeof error === "string"
+                ? error
+                : t(
+                    "dashboard.maintenanceHome.loadError",
+                    "Unable to load maintenance dashboard."
+                  )}
+            </p>
           </div>
 
           <button
             type="button"
             onClick={() => loadDashboard()}
           >
-            Try Again
+            {t("dashboard.maintenanceHome.tryAgain", "Try Again")}
           </button>
         </div>
       )}
@@ -428,11 +463,18 @@ function Dashboard() {
       {!error && hasCriticalItems && (
         <div className="maintenance-alert maintenance-alert-warning">
           <div>
-            <strong>Maintenance attention required</strong>
+            <strong>
+              {t(
+                "dashboard.maintenanceHome.maintenanceAttentionRequired",
+                "Maintenance attention required"
+              )}
+            </strong>
 
             <p>
-              One or more maintenance items require
-              coordinator attention.
+              {t(
+                "dashboard.maintenanceHome.attentionDescription",
+                "One or more maintenance items require coordinator attention."
+              )}
             </p>
           </div>
 
@@ -446,7 +488,7 @@ function Dashboard() {
                   )
                 }
               >
-                Overdue
+                {t("dashboard.maintenanceHome.overdue", "Overdue")}
               </button>
             )}
 
@@ -459,7 +501,7 @@ function Dashboard() {
                   )
                 }
               >
-                Critical
+                {t("dashboard.maintenanceHome.critical", "Critical")}
               </button>
             )}
 
@@ -472,7 +514,7 @@ function Dashboard() {
                   )
                 }
               >
-                Low Stock
+                {t("dashboard.maintenanceHome.lowStock", "Low Stock")}
               </button>
             )}
 
@@ -485,7 +527,10 @@ function Dashboard() {
                   )
                 }
               >
-                Quality Checks
+                {t(
+                  "dashboard.maintenanceHome.qualityChecks",
+                  "Quality Checks"
+                )}
               </button>
             )}
           </div>
@@ -498,7 +543,10 @@ function Dashboard() {
 
       <section
         className="maintenance-kpi-grid"
-        aria-label="Maintenance KPIs"
+        aria-label={t(
+          "dashboard.maintenanceHome.kpis",
+          "Maintenance KPIs"
+        )}
       >
         {KPI_CONFIG.map((item) => {
           const value = dashboard[item.key];
@@ -519,7 +567,10 @@ function Dashboard() {
               </div>
 
               <div className="maintenance-kpi-title">
-                {item.title}
+                {t(
+                  `dashboard.maintenanceHome.${item.titleKey}`,
+                  item.title
+                )}
               </div>
 
               <div className="maintenance-kpi-value">
@@ -536,7 +587,11 @@ function Dashboard() {
                     )
                   }
                 >
-                  View requests →
+                  {t(
+                    "dashboard.maintenanceHome.viewRequests",
+                    "View requests"
+                  )}{" "}
+                  →
                 </button>
               )}
 
@@ -550,7 +605,11 @@ function Dashboard() {
                     )
                   }
                 >
-                  View schedule →
+                  {t(
+                    "dashboard.maintenanceHome.viewSchedule",
+                    "View schedule"
+                  )}{" "}
+                  →
                 </button>
               )}
 
@@ -564,7 +623,11 @@ function Dashboard() {
                     )
                   }
                 >
-                  View work orders →
+                  {t(
+                    "dashboard.maintenanceHome.viewWorkOrders",
+                    "View work orders"
+                  )}{" "}
+                  →
                 </button>
               )}
 
@@ -578,7 +641,8 @@ function Dashboard() {
                     )
                   }
                 >
-                  View assets →
+                  {t("dashboard.maintenanceHome.viewAssets", "View assets")}{" "}
+                  →
                 </button>
               )}
 
@@ -592,7 +656,11 @@ function Dashboard() {
                     )
                   }
                 >
-                  View preventive →
+                  {t(
+                    "dashboard.maintenanceHome.viewPreventive",
+                    "View preventive"
+                  )}{" "}
+                  →
                 </button>
               )}
 
@@ -606,7 +674,11 @@ function Dashboard() {
                     )
                   }
                 >
-                  View spare parts →
+                  {t(
+                    "dashboard.maintenanceHome.viewSpareParts",
+                    "View spare parts"
+                  )}{" "}
+                  →
                 </button>
               )}
 
@@ -620,7 +692,11 @@ function Dashboard() {
                     )
                   }
                 >
-                  Review quality →
+                  {t(
+                    "dashboard.maintenanceHome.reviewQuality",
+                    "Review quality"
+                  )}{" "}
+                  →
                 </button>
               )}
             </article>
@@ -635,9 +711,14 @@ function Dashboard() {
       <section className="maintenance-section">
         <div className="maintenance-section-header">
           <div>
-            <h2>Quick Actions</h2>
+            <h2>
+              {t("dashboard.maintenanceHome.quickActions", "Quick Actions")}
+            </h2>
             <p>
-              Common maintenance coordinator operations.
+              {t(
+                "dashboard.maintenanceHome.quickActionsDescription",
+                "Common maintenance coordinator operations."
+              )}
             </p>
           </div>
         </div>
@@ -650,8 +731,18 @@ function Dashboard() {
             }
           >
             <span>📋</span>
-            <strong>Maintenance Requests</strong>
-            <small>Review and manage requests</small>
+            <strong>
+              {t(
+                "dashboard.maintenanceHome.maintenanceRequests",
+                "Maintenance Requests"
+              )}
+            </strong>
+            <small>
+              {t(
+                "dashboard.maintenanceHome.reviewManageRequests",
+                "Review and manage requests"
+              )}
+            </small>
           </button>
 
           <button
@@ -661,8 +752,15 @@ function Dashboard() {
             }
           >
             <span>🔧</span>
-            <strong>Work Orders</strong>
-            <small>Coordinate maintenance work</small>
+            <strong>
+              {t("dashboard.maintenanceHome.workOrders", "Work Orders")}
+            </strong>
+            <small>
+              {t(
+                "dashboard.maintenanceHome.coordinateMaintenanceWork",
+                "Coordinate maintenance work"
+              )}
+            </small>
           </button>
 
           <button
@@ -672,8 +770,13 @@ function Dashboard() {
             }
           >
             <span>🛠️</span>
-            <strong>Repairs</strong>
-            <small>Monitor repair activities</small>
+            <strong>{t("dashboard.maintenanceHome.repairs", "Repairs")}</strong>
+            <small>
+              {t(
+                "dashboard.maintenanceHome.monitorRepairActivities",
+                "Monitor repair activities"
+              )}
+            </small>
           </button>
 
           <button
@@ -683,8 +786,18 @@ function Dashboard() {
             }
           >
             <span>🔄</span>
-            <strong>Preventive Maintenance</strong>
-            <small>Manage maintenance plans</small>
+            <strong>
+              {t(
+                "dashboard.maintenanceHome.preventiveMaintenance",
+                "Preventive Maintenance"
+              )}
+            </strong>
+            <small>
+              {t(
+                "dashboard.maintenanceHome.manageMaintenancePlans",
+                "Manage maintenance plans"
+              )}
+            </small>
           </button>
 
           <button
@@ -694,8 +807,15 @@ function Dashboard() {
             }
           >
             <span>✓</span>
-            <strong>Quality Control</strong>
-            <small>Review completed maintenance</small>
+            <strong>
+              {t("dashboard.maintenanceHome.qualityControl", "Quality Control")}
+            </strong>
+            <small>
+              {t(
+                "dashboard.maintenanceHome.reviewCompletedMaintenance",
+                "Review completed maintenance"
+              )}
+            </small>
           </button>
 
           <button
@@ -705,8 +825,13 @@ function Dashboard() {
             }
           >
             <span>📊</span>
-            <strong>Reports</strong>
-            <small>View maintenance analytics</small>
+            <strong>{t("dashboard.maintenanceHome.reports", "Reports")}</strong>
+            <small>
+              {t(
+                "dashboard.maintenanceHome.viewMaintenanceAnalytics",
+                "View maintenance analytics"
+              )}
+            </small>
           </button>
         </div>
       </section>
@@ -719,35 +844,59 @@ function Dashboard() {
         <div className="maintenance-summary-card">
           <div className="maintenance-summary-header">
             <div>
-              <h2>Maintenance Status</h2>
-              <p>Current operational indicators</p>
+              <h2>
+                {t(
+                  "dashboard.maintenanceHome.maintenanceStatus",
+                  "Maintenance Status"
+                )}
+              </h2>
+              <p>
+                {t(
+                  "dashboard.maintenanceHome.currentIndicators",
+                  "Current operational indicators"
+                )}
+              </p>
             </div>
           </div>
 
           <div className="maintenance-status-list">
             <div>
-              <span>New Requests</span>
+              <span>
+                {t("dashboard.maintenanceHome.newRequests", "New Requests")}
+              </span>
               <strong>
                 {formatNumber(dashboard.newRequests)}
               </strong>
             </div>
 
             <div>
-              <span>Scheduled Repairs</span>
+              <span>
+                {t(
+                  "dashboard.maintenanceHome.scheduledRepairs",
+                  "Scheduled Repairs"
+                )}
+              </span>
               <strong>
                 {formatNumber(dashboard.scheduledRepairs)}
               </strong>
             </div>
 
             <div>
-              <span>In Progress</span>
+              <span>
+                {t("dashboard.maintenanceHome.inProgress", "In Progress")}
+              </span>
               <strong>
                 {formatNumber(dashboard.inProgressRepairs)}
               </strong>
             </div>
 
             <div>
-              <span>Completed Repairs</span>
+              <span>
+                {t(
+                  "dashboard.maintenanceHome.completedRepairs",
+                  "Completed Repairs"
+                )}
+              </span>
               <strong>
                 {formatNumber(dashboard.completedRepairs)}
               </strong>
@@ -758,14 +907,29 @@ function Dashboard() {
         <div className="maintenance-summary-card">
           <div className="maintenance-summary-header">
             <div>
-              <h2>Attention Required</h2>
-              <p>Items requiring coordinator action</p>
+              <h2>
+                {t(
+                  "dashboard.maintenanceHome.attentionRequired",
+                  "Attention Required"
+                )}
+              </h2>
+              <p>
+                {t(
+                  "dashboard.maintenanceHome.itemsRequiringAction",
+                  "Items requiring coordinator action"
+                )}
+              </p>
             </div>
           </div>
 
           <div className="maintenance-status-list">
             <div>
-              <span>Overdue Maintenance</span>
+              <span>
+                {t(
+                  "dashboard.maintenanceHome.overdueMaintenance",
+                  "Overdue Maintenance"
+                )}
+              </span>
               <strong className="danger-value">
                 {formatNumber(
                   dashboard.overdueMaintenance
@@ -774,21 +938,33 @@ function Dashboard() {
             </div>
 
             <div>
-              <span>Critical Repairs</span>
+              <span>
+                {t(
+                  "dashboard.maintenanceHome.criticalRepairs",
+                  "Critical Repairs"
+                )}
+              </span>
               <strong className="danger-value">
                 {formatNumber(dashboard.criticalRepairs)}
               </strong>
             </div>
 
             <div>
-              <span>Low Spare Parts</span>
+              <span>
+                {t("dashboard.maintenanceHome.lowSpareParts", "Low Spare Parts")}
+              </span>
               <strong className="danger-value">
                 {formatNumber(dashboard.lowSpareParts)}
               </strong>
             </div>
 
             <div>
-              <span>Pending Quality Checks</span>
+              <span>
+                {t(
+                  "dashboard.maintenanceHome.pendingQualityChecks",
+                  "Pending Quality Checks"
+                )}
+              </span>
               <strong className="danger-value">
                 {formatNumber(
                   dashboard.pendingQualityChecks
