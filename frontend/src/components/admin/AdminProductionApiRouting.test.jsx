@@ -3,6 +3,9 @@ import { render, waitFor } from '@testing-library/react';
 import Departments from './AdminDepartmentManagement';
 import Settings from './AdminSettings';
 import Backup from './AdminBackup';
+import Locations from './Locations';
+import AssetCategories from './AssetCategories';
+import Colleges from './AdminCollegeManagement';
 
 jest.mock('../../utils/api', () => ({
   apiBase: () => 'https://api.example',
@@ -13,6 +16,7 @@ const jsonResponse = (data = {}) => ({
   ok: true,
   status: 200,
   statusText: 'OK',
+  headers: { get: () => 'application/json' },
   json: jest.fn().mockResolvedValue(data),
   text: jest.fn().mockResolvedValue(JSON.stringify(data)),
 });
@@ -116,6 +120,52 @@ describe('admin page API routing', () => {
           method: 'GET',
           credentials: 'include',
           headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+        }),
+      );
+    });
+  });
+
+  test('loads locations from the configured API origin', async () => {
+    render(<Locations />);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://api.example/api/locations',
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({ Authorization: expect.stringMatching(/^Bearer /) }),
+        }),
+      );
+    });
+  });
+
+  test('loads asset categories from the configured API origin', async () => {
+    render(<AssetCategories />);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://api.example/api/asset-categories',
+        expect.objectContaining({
+          headers: expect.objectContaining({ Authorization: expect.stringMatching(/^Bearer /) }),
+        }),
+      );
+    });
+  });
+
+  test('loads colleges and campuses from the configured API origin', async () => {
+    render(<Colleges />);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://api.example/api/admin/colleges?limit=100',
+        expect.objectContaining({
+          headers: expect.objectContaining({ Authorization: expect.stringMatching(/^Bearer /) }),
+        }),
+      );
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://api.example/api/locations/campuses?status=active&limit=500',
+        expect.objectContaining({
+          headers: expect.objectContaining({ Authorization: expect.stringMatching(/^Bearer /) }),
         }),
       );
     });

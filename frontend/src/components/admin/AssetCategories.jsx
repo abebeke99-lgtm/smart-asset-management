@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { apiBase } from "../../utils/api";
 
-const API_BASE = "/api/asset-categories";
+const API_BASE = `${apiBase()}/api/asset-categories`;
 
 const EMPTY_FORM = {
   name: "",

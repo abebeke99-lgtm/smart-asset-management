@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { apiBase } from "../../utils/api";
 
-const API_URL = "/api/locations";
+const API_URL = `${apiBase()}/api/locations`;
 
 const getToken = () =>
   localStorage.getItem("token") ||

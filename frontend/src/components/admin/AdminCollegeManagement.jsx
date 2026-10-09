@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { apiBase } from "../../utils/api";
 
-const COLLEGES_API = "/api/admin/colleges";
-const CAMPUSES_API = "/api/locations/campuses";
+const COLLEGES_API = `${apiBase()}/api/admin/colleges`;
+const CAMPUSES_API = `${apiBase()}/api/locations/campuses`;
 
 const EMPTY_FORM = {
   name: "",
