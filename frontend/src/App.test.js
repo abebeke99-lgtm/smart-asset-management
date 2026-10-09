@@ -218,6 +218,12 @@ describe('Administrator route wiring', () => {
     expect(appSource).toContain('<Route path="analytics" element={<Navigate to="/admin/analytics/system" replace />} />');
     expect(appSource).not.toContain('<Route path="system-analytics" element={<AdminAnalyticsCenter system />} />');
   });
+
+  it('keeps the authenticated shell component identity stable across renders', () => {
+    expect(appSource).not.toContain('const AuthenticatedLayout = ({ children }) => (');
+    expect(appSource).toContain('stableLayoutRef.current = function AuthenticatedLayout');
+    expect(appSource).toContain('const AuthenticatedLayout = stableLayoutRef.current;');
+  });
 });
 
 describe('Finance dashboard route wiring', () => {

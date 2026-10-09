@@ -2800,6 +2800,15 @@ function AppContent() {
     navigate(destination, { replace: true });
   };
 
+  const layoutRenderRef = useRef(null);
+  const stableLayoutRef = useRef(null);
+  if (!stableLayoutRef.current) {
+    stableLayoutRef.current = function AuthenticatedLayout({ children }) {
+      return layoutRenderRef.current ? layoutRenderRef.current(children) : null;
+    };
+  }
+  const AuthenticatedLayout = stableLayoutRef.current;
+
   if (authLoading) {
     return <LoadingFallback />;
   }
@@ -3047,7 +3056,7 @@ function AppContent() {
 
   const dashboardHeaderVisible = shouldShowDashboardHeader(location.pathname);
 
-  const AuthenticatedLayout = ({ children }) => (
+  layoutRenderRef.current = (children) => (
     <div className="App">
       <DashboardLayout
         className="role-dashboard-layout"
