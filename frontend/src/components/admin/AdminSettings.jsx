@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { apiClient } from '../../utils/api';
+import { apiBase, apiClient } from '../../utils/api';
 
-const API_URL = "/api/settings";
+const API_URL = `${apiBase()}/api/settings`;
 
 const getToken = () =>
   localStorage.getItem("token") ||
@@ -155,6 +155,7 @@ export default function Settings() {
         API_URL,
         {
           method: "GET",
+          credentials: "include",
           headers: getHeaders(),
         }
       );
@@ -233,6 +234,7 @@ export default function Settings() {
         API_URL,
         {
           method: "PUT",
+          credentials: "include",
           headers: getHeaders(true),
           body: JSON.stringify(payload),
         }

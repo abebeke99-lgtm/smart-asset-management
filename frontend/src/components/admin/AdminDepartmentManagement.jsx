@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { apiBase } from "../../utils/api";
 
-const API_URL = "/api/departments";
+const API_URL = `${apiBase()}/api/departments`;
+const COLLEGES_API_URL = `${apiBase()}/api/colleges`;
 
 const getToken = () =>
   localStorage.getItem("token") ||
@@ -107,6 +109,7 @@ export default function Departments() {
 
       const response = await fetch(API_URL, {
         method: "GET",
+        credentials: "include",
         headers: getHeaders(),
       });
 
@@ -128,8 +131,9 @@ export default function Departments() {
 
   const loadColleges = async () => {
     try {
-      const response = await fetch("/api/colleges", {
+      const response = await fetch(COLLEGES_API_URL, {
         method: "GET",
+        credentials: "include",
         headers: getHeaders(),
       });
 
@@ -312,6 +316,7 @@ export default function Departments() {
 
       const response = await fetch(url, {
         method: isEditing ? "PUT" : "POST",
+        credentials: "include",
         headers: getHeaders(true),
         body: JSON.stringify(payload),
       });
@@ -382,6 +387,7 @@ export default function Departments() {
 
       const response = await fetch(`${API_URL}/${departmentId}`, {
         method: "PUT",
+        credentials: "include",
         headers: getHeaders(true),
         body: JSON.stringify({
           ...department,
@@ -451,6 +457,7 @@ export default function Departments() {
         `${API_URL}/${departmentId}`,
         {
           method: "DELETE",
+          credentials: "include",
           headers: getHeaders(),
         }
       );

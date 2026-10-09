@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { apiBase } from "../../utils/api";
 
-const API_URL = "/api/admin/backups";
+const API_URL = `${apiBase()}/api/admin/backups`;
 
 const getToken = () =>
   localStorage.getItem("token") ||
@@ -183,6 +184,7 @@ export default function Backup() {
         API_URL,
         {
           method: "GET",
+          credentials: "include",
           headers: getHeaders(),
         }
       );
@@ -277,6 +279,7 @@ export default function Backup() {
         API_URL,
         {
           method: "POST",
+          credentials: "include",
           headers: getHeaders(true),
           body: JSON.stringify({
             type: backupType,
@@ -350,6 +353,7 @@ export default function Backup() {
         `${API_URL}/download/${encodeURIComponent(filename)}`,
         {
           method: "GET",
+          credentials: "include",
           headers: getHeaders(),
         }
       );
@@ -441,6 +445,7 @@ export default function Backup() {
         `${API_URL}/restore/${encodeURIComponent(filename)}`,
         {
           method: "POST",
+          credentials: "include",
           headers: getHeaders(true),
           body: JSON.stringify({
             backupId: getBackupId(backup),
@@ -522,6 +527,7 @@ export default function Backup() {
         `${API_URL}/${encodeURIComponent(filename)}`,
         {
           method: "DELETE",
+          credentials: "include",
           headers: getHeaders(),
         }
       );
