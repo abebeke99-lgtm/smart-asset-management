@@ -22,7 +22,6 @@ const createSmtpTimeoutError = (label, timeoutMs) => {
 
 const withHardTimeout = (operation, label, timeoutMs) => new Promise((resolve, reject) => {
   const timer = setTimeout(() => reject(createSmtpTimeoutError(label, timeoutMs)), timeoutMs);
-  if (typeof timer.unref === 'function') timer.unref();
 
   Promise.resolve()
     .then(operation)
