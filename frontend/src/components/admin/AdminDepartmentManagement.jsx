@@ -138,7 +138,7 @@ export default function Departments() {
       });
 
       if (!response.ok) {
-        return;
+        throw new Error(`Unable to load colleges (${response.status})`);
       }
 
       const data = await response.json();

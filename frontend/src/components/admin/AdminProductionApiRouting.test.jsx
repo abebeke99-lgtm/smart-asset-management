@@ -20,6 +20,7 @@ const jsonResponse = (data = {}) => ({
 describe('admin page API routing', () => {
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem('token', 'test-token');
     global.fetch = jest.fn().mockResolvedValue(jsonResponse());
   });
 
@@ -33,11 +34,59 @@ describe('admin page API routing', () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
         'https://api.example/api/departments',
-        expect.objectContaining({ method: 'GET', credentials: 'include' }),
+        expect.objectContaining({
+          method: 'GET',
+          credentials: 'include',
+          headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+        }),
       );
       expect(global.fetch).toHaveBeenCalledWith(
         'https://api.example/api/colleges',
-        expect.objectContaining({ method: 'GET', credentials: 'include' }),
+        expect.objectContaining({
+          method: 'GET',
+          credentials: 'include',
+          headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+        }),
+      );
+    });
+  });
+
+  test('reports a college API failure instead of silently ignoring it', async () => {
+    const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    global.fetch.mockImplementation((url) => Promise.resolve(
+      url === 'https://api.example/api/colleges'
+        ? { ok: false, status: 503 }
+        : jsonResponse({ departments: [] }),
+    ));
+
+    render(<Departments />);
+
+    await waitFor(() => {
+      expect(warning).toHaveBeenCalledWith(
+        'College list could not be loaded:',
+        expect.objectContaining({ message: 'Unable to load colleges (503)' }),
+      );
+    });
+  });
+
+  test('reports an HTML response parse failure from the colleges API', async () => {
+    const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    global.fetch.mockImplementation((url) => Promise.resolve(
+      url === 'https://api.example/api/colleges'
+        ? {
+          ok: true,
+          status: 200,
+          json: jest.fn().mockRejectedValue(new SyntaxError('Unexpected token < in JSON')),
+        }
+        : jsonResponse({ departments: [] }),
+    ));
+
+    render(<Departments />);
+
+    await waitFor(() => {
+      expect(warning).toHaveBeenCalledWith(
+        'College list could not be loaded:',
+        expect.objectContaining({ message: 'Unexpected token < in JSON' }),
       );
     });
   });
@@ -48,7 +97,11 @@ describe('admin page API routing', () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
         'https://api.example/api/settings',
-        expect.objectContaining({ method: 'GET', credentials: 'include' }),
+        expect.objectContaining({
+          method: 'GET',
+          credentials: 'include',
+          headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+        }),
       );
     });
   });
@@ -59,7 +112,11 @@ describe('admin page API routing', () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
         'https://api.example/api/admin/backups',
-        expect.objectContaining({ method: 'GET', credentials: 'include' }),
+        expect.objectContaining({
+          method: 'GET',
+          credentials: 'include',
+          headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+        }),
       );
     });
   });
