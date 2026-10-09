@@ -65,7 +65,7 @@ const Home = () => {
   return (
   <main className="uam-home-page">
     <section className="uam-hero" aria-labelledby="home-title">
-      <div className="uam-hero-media" aria-hidden="true">
+      <div className="uam-hero-media">
         {heroImages.map((image, index) => (
           <img
             key={image}
@@ -74,11 +74,14 @@ const Home = () => {
             alt=""
           />
         ))}
+        <div className="uam-hero-title-backdrop" aria-hidden="true" />
+        <h1 id="home-title" className="uam-hero-image-title">
+          {language === 'en' ? <>University<br />Asset Management</> : text.systemTitle}
+        </h1>
       </div>
       <div className="uam-hero-shell">
         <div className="uam-hero-copy">
           <span className="uam-eyebrow">{text.heroEyebrow}</span>
-          <h1 id="home-title">{language === 'en' ? <>University<br />Asset Management</> : text.systemTitle}</h1>
           <p className="uam-lead">
             {text.lead}
           </p>
@@ -138,6 +141,32 @@ const Home = () => {
         background: #0F2942;
       }
 
+      .uam-hero-title-backdrop {
+        position: absolute;
+        z-index: 1;
+        inset: 48% 0 0;
+        background: linear-gradient(0deg, rgba(7, 24, 45, 0.66), rgba(7, 24, 45, 0));
+        pointer-events: none;
+      }
+
+      .uam-hero-image-title {
+        position: absolute;
+        z-index: 2;
+        right: 24px;
+        bottom: clamp(34px, 8vh, 82px);
+        left: 24px;
+        max-width: 1000px;
+        margin: 0 auto;
+        color: #FFFFFF;
+        font-size: clamp(2.5rem, 6.5vw, 5.25rem);
+        font-weight: 800;
+        line-height: 1.04;
+        letter-spacing: 0;
+        text-align: center;
+        text-shadow: 0 3px 14px rgba(0, 0, 0, 0.72);
+        text-wrap: balance;
+      }
+
       .uam-hero-image {
         position: absolute;
         inset: 0;
@@ -182,17 +211,6 @@ const Home = () => {
         font-weight: 800;
         letter-spacing: 0.12em;
         text-transform: uppercase;
-      }
-
-      .uam-hero-copy h1 {
-        max-width: 720px;
-        margin: 0;
-        color: #1F2937;
-        font-size: clamp(3rem, 5vw, 4.5rem);
-        line-height: 1.06;
-        letter-spacing: 0;
-        text-wrap: balance;
-        animation: uam-enter 500ms ease both;
       }
 
       .uam-lead {
@@ -358,7 +376,7 @@ const Home = () => {
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .uam-hero-copy h1,
+        .uam-hero-image-title,
         .uam-lead,
         .uam-supporting-text,
         .uam-highlight-list,
@@ -418,7 +436,6 @@ const Home = () => {
 
       @media (max-width: 960px) {
         .uam-hero-shell { grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr); gap: 32px; }
-        .uam-hero-copy h1 { font-size: clamp(2.75rem, 5vw, 3.65rem); }
         .uam-highlight-list { column-gap: 12px; }
         .uam-benefit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .uam-workflow-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -427,7 +444,8 @@ const Home = () => {
 
       @media (max-width: 640px) {
         .uam-hero-shell { width: min(100% - 32px, 560px); grid-template-columns: 1fr; gap: 36px; padding: 58px 0 64px; }
-        .uam-hero-copy h1 { font-size: clamp(2.35rem, 10vw, 3rem); }
+        .uam-hero-image-title { right: 18px; bottom: 34px; left: 18px; font-size: clamp(2.2rem, 9vw, 3.25rem); }
+        .uam-hero-title-backdrop { inset: 42% 0 0; }
         .uam-lead { margin-top: 18px; font-size: 1.03rem; }
         .uam-supporting-text { margin-bottom: 23px; font-size: 0.94rem; }
         .uam-highlight-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; margin-bottom: 26px; }

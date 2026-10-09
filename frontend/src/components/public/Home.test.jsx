@@ -35,7 +35,7 @@ describe('Home', () => {
     expect(screen.getByRole('link', { name: 'Explore System' })).toHaveAttribute('href', '/about');
   });
 
-  it('places the unchanged hero copy immediately below the rotating image area', () => {
+  it('overlays the single accessible page heading on the rotating hero image', () => {
     const { container } = render(
       <MemoryRouter>
         <UIProvider><Home /></UIProvider>
@@ -44,12 +44,23 @@ describe('Home', () => {
     const hero = container.querySelector('.uam-hero');
     const imageArea = hero.querySelector('.uam-hero-media');
     const content = hero.querySelector('.uam-hero-shell');
+    const imageTitle = screen.getByRole('heading', { name: 'University Asset Management', level: 1 });
+    const homeStyles = container.querySelector('style').textContent;
 
     expect(imageArea.nextElementSibling).toBe(content);
     expect(imageArea.querySelectorAll('.uam-hero-image')).toHaveLength(3);
+    expect(imageArea).toContainElement(imageTitle);
+    expect(imageTitle).toHaveClass('uam-hero-image-title');
+    expect(imageArea.querySelector('.uam-hero-title-backdrop')).toBeInTheDocument();
+    expect(content.querySelector('h1')).toBeNull();
     expect(content.querySelector('.uam-hero-copy')).toBeInTheDocument();
     expect(content.querySelector('.uam-hero-panel')).toBeInTheDocument();
     expect(content).toHaveTextContent('Manage, track, assign, maintain, and monitor every university asset from one centralized platform.');
+    expect(homeStyles).toContain('position: absolute');
+    expect(homeStyles).toContain('color: #FFFFFF');
+    expect(homeStyles).toContain('text-shadow: 0 3px 14px');
+    expect(homeStyles).toContain('@media (max-width: 640px)');
+    expect(homeStyles).toContain('.uam-hero-image-title { right: 18px; bottom: 34px; left: 18px;');
   });
 
   it('shows the active hero image at full opacity and keeps the smooth responsive image treatment', () => {
