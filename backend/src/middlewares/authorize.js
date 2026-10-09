@@ -59,7 +59,6 @@ const matchesAssignmentScope = (assignment, grant, target, userId) => {
   }
   const targetScopeId = targetScopes[grantScope];
   if (targetScopeId === undefined || targetScopeId === null) return false;
-  if (assignmentScope === 'system') return true;
   return assignmentScope === grantScope && Number(assignment.scopeId) === Number(targetScopeId);
 };
 
@@ -74,9 +73,10 @@ const getDatabasePermissionKeys = async (user) => {
     return grants
       .filter((grant) => {
         const assignment = roles.find(({ role }) => role.id === grant.roleId);
-        return assignment && (grant.scopeType === 'system' && !grant.limited
-          || assignment.scopeType === 'system'
-          || assignment.scopeType === grant.scopeType);
+        return assignment
+          && grant.scopeType === 'system'
+          && !grant.limited
+          && assignment.scopeType === 'system';
       })
       .map((grant) => grant.Permission.key);
   } catch (error) {

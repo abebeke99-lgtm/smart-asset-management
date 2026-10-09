@@ -1,23 +1,36 @@
 const express = require('express');
 const { Op } = require('sequelize');
 const { sequelize, Role, Permission, RolePermission, UserRole, User } = require('../models');
-const { requireAuth } = require('../middlewares/auth');
+const { requireAuth, requireRole } = require('../middlewares/auth');
 const { authorize } = require('../middlewares/authorize');
 const { createAuditLog } = require('../services/auditLogService');
 const { getAdministratorAssignmentError } = require('../services/roleGovernanceService');
+const { ROLE_NAMES } = require('../constants/rolePermissions');
 
 const router = express.Router();
 const SCOPES = new Set(['system', 'college', 'department', 'store', 'location', 'own']);
 router.use(requireAuth);
 
 const requireModuleAction = (action) => [
+  requireRole('admin'),
   authorize('roles_permissions.configure'),
   authorize(`roles_permissions.${action}`),
 ];
 
+const getAssignedUserCount = async (role, transaction) => {
+  const [users, assignments] = await Promise.all([
+    User.findAll({ where: { role: role.name }, attributes: ['id'], ...(transaction ? { transaction } : {}) }),
+    UserRole.findAll({ where: { roleId: role.id }, attributes: ['userId'], ...(transaction ? { transaction } : {}) }),
+  ]);
+  return new Set([
+    ...users.map((user) => Number(user.id)),
+    ...assignments.map((assignment) => Number(assignment.userId)),
+  ]).size;
+};
+
 const serializeRole = async (role) => {
   const [userCount, permissions] = await Promise.all([
-    UserRole.count({ where: { roleId: role.id } }),
+    getAssignedUserCount(role),
     RolePermission.findAll({
       where: { roleId: role.id },
       include: [{ model: Permission, required: true }],
@@ -160,16 +173,20 @@ router.delete('/roles/:roleId', ...requireModuleAction('delete'), async (req, re
   try {
     const role = await Role.findByPk(req.params.roleId);
     if (!role) return res.status(404).json({ success: false, message: 'Role not found.' });
-    if (role.isSystem) {
+    if (role.isSystem || ROLE_NAMES.includes(role.name)) {
       await auditDenied(req, 'DELETE_ROLE', `role:${role.id}`, { reason: 'system roles cannot be deleted' });
       return res.status(409).json({ success: false, message: 'System roles cannot be deleted. Deactivate the role instead.' });
     }
-    const count = await UserRole.count({ where: { roleId: role.id } });
-    if (count) {
-      await auditDenied(req, 'DELETE_ROLE', `role:${role.id}`, { reason: 'role is assigned', userCount: count });
+    const assignedUserCount = await getAssignedUserCount(role);
+    if (assignedUserCount) {
+      await auditDenied(req, 'DELETE_ROLE', `role:${role.id}`, {
+        reason: 'role is assigned',
+        userCount: assignedUserCount,
+      });
       return res.status(409).json({ success: false, message: 'Remove all user assignments before deleting this role.' });
     }
     await sequelize.transaction(async (transaction) => {
+      await RolePermission.destroy({ where: { roleId: role.id }, transaction });
       await role.destroy({ transaction });
       await auditChange(req, 'DELETE_ROLE', `role:${role.id}`, { name: role.name }, null, transaction);
     });
@@ -210,7 +227,10 @@ router.put('/roles/:roleId/permissions', ...requireModuleAction('edit'), async (
         transaction,
       });
       if (role.name === 'admin' && adminCount > 0
-        && !nextGrants.some((grant) => Number(grant.permissionId) === permissions.find((permission) => permission.action === 'configure')?.id)) {
+        && !nextGrants.some((grant) => (
+          Number(grant.permissionId) === permissions.find((permission) => permission.action === 'configure')?.id
+          && grant.state === 'full'
+        ))) {
         await auditDenied(req, 'CHANGE_PERMISSION', `role:${role.id}`, { reason: 'last Administrator would lose configure permission' });
         const error = new Error('The active Administrator role must retain Configure permission.');
         error.status = 409;

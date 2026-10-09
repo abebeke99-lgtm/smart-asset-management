@@ -62,7 +62,12 @@ test('database permission lookup uses user-role scope columns and direct role as
       userRoleQuery = options;
       return [{ Role: { id: 1 }, scopeType: 'system', scopeId: null }];
     } }],
-    [RolePermission, { findAll: async () => [{ roleId: 1, Permission: { key: 'assets.view' } }] }],
+    [RolePermission, { findAll: async () => [{
+      roleId: 1,
+      scopeType: 'system',
+      limited: false,
+      Permission: { key: 'assets.view' },
+    }] }],
   ], async () => {
     const permissions = await getDatabasePermissionKeys({ id: 7, role: 'admin' });
     assert.deepEqual(permissions, ['assets.view']);
@@ -71,6 +76,21 @@ test('database permission lookup uses user-role scope columns and direct role as
   assert.deepEqual(userRoleQuery.attributes, ['id', 'userId', 'roleId', 'scopeType', 'scopeId']);
   assert.deepEqual(userRoleQuery.include[0].attributes, ['id', 'name', 'active']);
   assert.equal(userRoleQuery.include[0].through, undefined);
+});
+
+test('scoped assignments and limited grants are not flattened into system-wide permissions', async () => {
+  await withMocks([
+    [UserRole, { findAll: async () => [
+      { Role: { id: 1 }, scopeType: 'college', scopeId: 12 },
+    ] }],
+    [RolePermission, { findAll: async () => [
+      { roleId: 1, scopeType: 'system', limited: false, Permission: { key: 'assets.view' } },
+      { roleId: 1, scopeType: 'college', limited: true, Permission: { key: 'assets.delete' } },
+    ] }],
+  ], async () => {
+    const permissions = await getDatabasePermissionKeys({ id: 7, role: 'staff' });
+    assert.deepEqual(permissions, []);
+  });
 });
 
 test('missing role-permission tables fall back to the configured legacy permission matrix', async () => {
@@ -117,6 +137,18 @@ test('limited permissions reject out-of-scope and allow matching targets only', 
   const grant = { scopeType: 'college', limited: true };
   assert.equal(matchesAssignmentScope(assignment, grant, { scopes: { college: 13 } }, 7), false);
   assert.equal(matchesAssignmentScope(assignment, grant, { scopes: { college: 12 } }, 7), true);
+});
+
+test('a system-wide role assignment cannot satisfy a limited organization grant', () => {
+  assert.equal(
+    matchesAssignmentScope(
+      { scopeType: 'system', scopeId: null },
+      { scopeType: 'college', limited: true },
+      { scopes: { college: 12 } },
+      7,
+    ),
+    false,
+  );
 });
 
 test('a scoped user does not become system-wide through a full permission grant', () => {

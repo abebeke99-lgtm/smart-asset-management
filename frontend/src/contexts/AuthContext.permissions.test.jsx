@@ -23,12 +23,13 @@ jest.mock("../utils/api", () => ({
 }));
 
 const AuthorizationState = () => {
-  const { user, hasPermission, loading } = useAuth();
+  const { user, hasPermission, loading, login } = useAuth();
   return (
     <div>
       <span>{loading ? "Restoring session" : "Session restored"}</span>
       <span>{user ? `Signed in as ${user.role}` : "Signed out"}</span>
       <span>{hasPermission("users.view") ? "users.view granted" : "users.view denied"}</span>
+      <button type="button" onClick={() => login("administrator", "valid-password")}>Sign in as administrator</button>
     </div>
   );
 };
@@ -120,6 +121,70 @@ describe("AuthContext permission refresh", () => {
     expect(() => rejectResponse(staleRequestError)).toThrow("Server error occurred (401)");
     expect(localStorage.getItem("token")).toBe("new-current-token");
     expect(localStorage.getItem("user")).not.toBeNull();
+  });
+
+  it("does not clear a newer login when an older session-restore request fails", async () => {
+    let rejectRestoreRequest;
+    apiClient.get.mockReturnValue(new Promise((_resolve, reject) => {
+      rejectRestoreRequest = reject;
+    }));
+    const newToken = `new-header.${btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }))}.signature`;
+    apiClient.post.mockResolvedValue({
+      data: {
+        success: true,
+        token: newToken,
+        user: { id: 8, role: "admin", permissions: ["users.view"] },
+      },
+    });
+
+    render(
+      <AuthProvider>
+        <AuthorizationState />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith("/api/users/profile"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign in as administrator" }));
+    expect(await screen.findByText("Signed in as admin")).toBeInTheDocument();
+
+    rejectRestoreRequest(new Error("Stale session restore failed"));
+
+    await waitFor(() => expect(localStorage.getItem("token")).toBe(newToken));
+    expect(localStorage.getItem("user")).toContain('"role":"admin"');
+    expect(screen.getByText("Signed in as admin")).toBeInTheDocument();
+  });
+
+  it("does not replace a newer login when an older session-restore request succeeds", async () => {
+    let resolveRestoreRequest;
+    apiClient.get.mockReturnValue(new Promise((resolve) => {
+      resolveRestoreRequest = resolve;
+    }));
+    const newToken = `new-header.${btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }))}.signature`;
+    apiClient.post.mockResolvedValue({
+      data: {
+        success: true,
+        token: newToken,
+        user: { id: 8, role: "admin", permissions: ["users.view"] },
+      },
+    });
+
+    render(
+      <AuthProvider>
+        <AuthorizationState />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith("/api/users/profile"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign in as administrator" }));
+    expect(await screen.findByText("Signed in as admin")).toBeInTheDocument();
+
+    resolveRestoreRequest({
+      data: { data: { id: 7, role: "ict_officer", permissions: ["assets.view"] } },
+    });
+
+    await waitFor(() => expect(localStorage.getItem("token")).toBe(newToken));
+    expect(localStorage.getItem("user")).toContain('"role":"admin"');
+    expect(screen.getByText("Signed in as admin")).toBeInTheDocument();
   });
 
   it("clears the session when the current token receives a 401", async () => {

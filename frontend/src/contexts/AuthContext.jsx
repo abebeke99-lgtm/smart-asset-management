@@ -202,14 +202,18 @@ export const AuthProvider = ({ children }) => {
       try {
         axios.defaults.headers.common.Authorization = `Bearer ${token}`;
         const response = await api.get('/api/users/profile');
+        if (sanitizeAuthToken(localStorage.getItem('token')) !== token) return;
         const currentUser = response.data?.data || response.data?.user;
         if (!currentUser) throw new Error('Invalid session response');
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(normalizeUser(currentUser)));
         if (mounted) setUser(normalizeUser(currentUser));
       } catch (error) {
-        clearStoredAuth();
-        if (mounted) setUser(null);
+        const currentToken = sanitizeAuthToken(localStorage.getItem('token'));
+        if (currentToken === token) {
+          clearStoredAuth();
+          if (mounted) setUser(null);
+        }
       } finally {
         if (mounted) setLoading(false);
       }

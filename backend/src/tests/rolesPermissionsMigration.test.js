@@ -1,6 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { getDefaultGrant, getLegacyScope } = require('../scripts/migrations/rolesPermissions');
+const { ROLE_NAMES, DEFAULT_ROLE_PERMISSIONS } = require('../constants/rolePermissions');
+
+test('Teaching Assistant is a supported least-privilege system role', () => {
+  assert.ok(ROLE_NAMES.includes('teaching_assistant'));
+  assert.deepEqual(DEFAULT_ROLE_PERMISSIONS.teaching_assistant, []);
+});
 
 test('default permission grants implement the specified role matrix', () => {
   const actions = ['view', 'create', 'edit', 'delete', 'approve', 'assign', 'transfer', 'maintain', 'report', 'configure'];

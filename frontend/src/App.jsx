@@ -3609,7 +3609,7 @@ function AppContent() {
             <Route path="settings" element={<Navigate to="/admin/settings" replace />} />
           </Route>
 
-          <Route path="/admin/roles-permissions" element={<ProtectedRoute allowedPermissions={['roles_permissions.configure']}><AdminRolesPermissions /></ProtectedRoute>} />
+          <Route path="/admin/roles-permissions" element={<ProtectedRoute allowedRoles={['admin']} allowedPermissions={['roles_permissions.configure']}><AdminRolesPermissions /></ProtectedRoute>} />
 
           {/* ADMIN ROUTES - canonical administrator module */}
           <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminLayout /></ProtectedRoute>}>

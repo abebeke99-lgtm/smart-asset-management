@@ -48,6 +48,7 @@ const ROLE_NAMES = [
   'store_manager',
   'maintenance',
   'infrastructure',
+  'teaching_assistant',
   'staff',
   'student',
 ];
@@ -101,6 +102,7 @@ const DEFAULT_ROLE_PERMISSIONS = {
   store_manager: ['assets.view', 'assets.create', 'assets.update', 'assets.assign', 'assets.transfer', 'inventory.view', 'inventory.stock_in', 'inventory.stock_out', 'inventory.stock_movement', 'rfid.view', 'reports.view'],
   maintenance: ['assets.view', 'maintenance.view', 'maintenance.request.create', 'maintenance.technician.assign', 'maintenance.update', 'maintenance.complete', 'reports.view'],
   infrastructure: ['assets.view', 'reports.view'],
+  teaching_assistant: [],
   staff: ['assets.view'],
   student: ['assets.view'],
 };

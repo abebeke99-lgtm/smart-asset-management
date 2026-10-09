@@ -18,7 +18,7 @@ test('backup service resolves a stable dump configuration', () => {
     DB_TEST_PORT: '3306',
     DB_TEST_NAME: 'smart_asset_db_test',
     DB_TEST_USER: 'test_user',
-    DB_TEST_PASSWORD: '',
+    DB_TEST_PASSWORD: 'unit-test-only-password',
   });
   assert.ok(config.database);
   assert.ok(config.host || config.hostname);

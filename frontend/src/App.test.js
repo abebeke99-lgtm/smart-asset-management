@@ -43,6 +43,7 @@ jest.mock('axios', () => ({
 
 jest.mock('./contexts/UiContext', () => ({
   useLanguage: () => ({ language: 'en' }),
+  useTranslation: () => ({ language: 'en', t: (_key, fallback) => fallback }),
 }));
 
 jest.mock('./contexts/AuthContext', () => ({
@@ -197,7 +198,7 @@ describe('Administrator route wiring', () => {
 
   it('registers all documented paths in the sidebar and renders their owning page under admin RBAC', () => {
     expect(appSource).toContain('<Route path="/admin" element={<ProtectedRoute allowedRoles={[\'admin\']}><AdminLayout /></ProtectedRoute>}>');
-    expect(appSource).toContain('<Route path="/admin/roles-permissions" element={<ProtectedRoute allowedPermissions={[\'roles_permissions.configure\']}><AdminRolesPermissions /></ProtectedRoute>} />');
+    expect(appSource).toContain('<Route path="/admin/roles-permissions" element={<ProtectedRoute allowedRoles={[\'admin\']} allowedPermissions={[\'roles_permissions.configure\']}><AdminRolesPermissions /></ProtectedRoute>} />');
     for (const [route, nestedPath, component] of documentedRoutes) {
       if (nestedPath) {
         if (nestedPath !== 'roles-permissions') {
