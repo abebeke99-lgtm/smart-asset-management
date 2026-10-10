@@ -44,10 +44,9 @@ async function resetDemoPasswords({
         user.role !== EXPECTED_ROLES[user.username]
         || !isAccountActive(user.active)
         || ['inactive', 'suspended'].includes(String(user.status || '').toLowerCase())
-        || (user.lockoutUntil && new Date(user.lockoutUntil) > new Date())
       ))
     ) {
-      throw new Error('Demo accounts are missing, inactive, locked, or have unexpected roles.');
+      throw new Error('Demo accounts are missing, inactive, or have unexpected roles.');
     }
 
     const permissionsBefore = await Promise.all(
@@ -56,14 +55,14 @@ async function resetDemoPasswords({
     const passwordHash = await bcrypt.hash(password, 10);
     const userIds = accounts.map((user) => user.id);
     const [updatedCount] = await userModel.update(
-      { password: passwordHash },
+      { password: passwordHash, failedLoginAttempts: 0, lockoutUntil: null },
       { where: { id: { [Op.in]: userIds } }, transaction }
     );
     if (updatedCount !== usernames.length) throw new Error('Not all demo account passwords were updated.');
 
     const updatedUsers = await userModel.findAll({
       where: { id: { [Op.in]: userIds } },
-      attributes: ['username', 'role', 'active', 'status', 'password'],
+      attributes: ['username', 'role', 'active', 'status', 'password', 'failedLoginAttempts', 'lockoutUntil'],
       transaction,
     });
     const usersByName = new Map(updatedUsers.map((user) => [user.username, user]));
@@ -75,6 +74,8 @@ async function resetDemoPasswords({
           && user.role === EXPECTED_ROLES[username]
           && isAccountActive(user.active)
           && !['inactive', 'suspended'].includes(String(user.status || '').toLowerCase())
+          && Number(user.failedLoginAttempts || 0) === 0
+          && user.lockoutUntil === null
           && await bcrypt.compare(password, user.password)
         );
       })
@@ -82,9 +83,11 @@ async function resetDemoPasswords({
     const permissionsAfter = await Promise.all(
       usernames.map(async (username) => [username, await getRolePermissions(EXPECTED_ROLES[username])])
     );
+    const resetAccounts = new Set(updatedUsers.map((user) => user.username));
 
     if (
       updatedUsers.length !== usernames.length
+      || usernames.some((username) => !resetAccounts.has(username))
       || authenticationChecks.some((valid) => !valid)
       || JSON.stringify(permissionsAfter) !== JSON.stringify(permissionsBefore)
     ) {

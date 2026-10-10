@@ -90,4 +90,23 @@ describe('DeptAssignments', () => {
     })));
     expect(await screen.findByRole('status')).toHaveTextContent(/added to assignment history/i);
   });
+
+  test('uses the local calendar day for the assignment date near the UTC date boundary', async () => {
+    const originalTimezone = process.env.TZ;
+    render(<DeptAssignments />);
+    await screen.findByRole('button', { name: /new assignment/i });
+
+    try {
+      process.env.TZ = 'America/Los_Angeles';
+      jest.useFakeTimers().setSystemTime(new Date('2024-01-01T01:00:00.000Z'));
+      fireEvent.click(screen.getByRole('button', { name: /new assignment/i }));
+
+      expect(screen.getByLabelText('Assignment date')).toHaveValue('2023-12-31');
+      expect(screen.getByLabelText('Assignment date')).toHaveAttribute('max', '2023-12-31');
+    } finally {
+      jest.useRealTimers();
+      if (originalTimezone === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTimezone;
+    }
+  });
 });

@@ -22,8 +22,8 @@
     "xlsx": "^0.18.5"
   },
   "scripts": {
-    "start": "craco start --host localhost --port 3000",
-    "dev": "craco start --host localhost --port 3000",
+    "start": "craco start",
+    "dev": "craco start",
     "build": "craco build",
     "test": "craco test --watch=false",
     "eject": "react-scripts eject"
@@ -39,7 +39,7 @@
       "html"
     ]
   },
-  "proxy": "http://localhost:5000",
+  "proxy": "http://127.0.0.1:5000",
   "eslintConfig": {
     "extends": [
       "react-app"

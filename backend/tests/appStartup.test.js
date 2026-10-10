@@ -32,6 +32,23 @@ test('both health endpoints return a request ID header', async () => {
   }
 });
 
+test('health endpoints report database unavailability when the connectivity query fails', async () => {
+  const originalQuery = sequelize.query;
+  sequelize.query = async () => {
+    throw new Error('database unavailable');
+  };
+
+  try {
+    for (const endpoint of ['/health', '/api/health']) {
+      const response = await request(app).get(endpoint);
+      assert.equal(response.status, 503);
+      assert.deepEqual(response.body, { status: 'error', database: 'unavailable' });
+    }
+  } finally {
+    sequelize.query = originalQuery;
+  }
+});
+
 test('app startup initializes the backup service dependency required for server boot', () => {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/app.js'), 'utf8');
   assert.match(source, /const backupService = require\('\.\/services\/backupService'\);/);

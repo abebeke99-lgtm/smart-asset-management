@@ -1678,7 +1678,6 @@ const englishTranslations = {
   assetHistory: 'Asset history',
   noHistoryRecords: 'No history records found.',
   updated: 'Updated',
-  maintenance: 'Maintenance',
   priority: 'Priority',
   low: 'Low',
   medium: 'Medium',

@@ -307,7 +307,10 @@ const cleanString = (value) => String(value ?? '').trim();
 const parseDate = (value) => {
   if (value === null || value === undefined || value === '') return { value: null };
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return { value: value.toISOString().slice(0, 10) };
+    const year = value.getUTCFullYear();
+    const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(value.getUTCDate()).padStart(2, '0');
+    return { value: `${year}-${month}-${day}` };
   }
   const input = cleanString(value);
   const iso = input.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -336,6 +339,21 @@ const parseDate = (value) => {
   return { error: 'must be a valid date in YYYY-MM-DD or MM/DD/YYYY format' };
 };
 
+const parseExcelDateSerial = (value, date1904) => {
+  const serial = Math.round(value);
+  const parts = XLSX.SSF.parse_date_code(serial, { date1904 });
+  if (!parts) return null;
+
+  const date = new Date(Date.UTC(parts.y, parts.m - 1, parts.d));
+  if (
+    date.getUTCFullYear() !== parts.y
+    || date.getUTCMonth() !== parts.m - 1
+    || date.getUTCDate() !== parts.d
+  ) return null;
+
+  return date.toISOString().slice(0, 10);
+};
+
 const lookupByIdOrName = (values, input, nameField) => {
   const value = cleanString(input);
   if (!value) return null;
@@ -346,7 +364,7 @@ const lookupByIdOrName = (values, input, nameField) => {
 
 const readSpreadsheetRows = (file) => {
   try {
-    const workbook = XLSX.read(file.buffer, { type: 'buffer', cellDates: true });
+    const workbook = XLSX.read(file.buffer, { type: 'buffer', cellDates: false, raw: true });
     const sheetName = workbook.SheetNames[0];
     if (!sheetName) {
       const error = new Error('The uploaded spreadsheet does not contain a worksheet');
@@ -362,7 +380,17 @@ const readSpreadsheetRows = (file) => {
       error.statusCode = 400;
       throw error;
     }
-    return rows;
+    const date1904 = Boolean(workbook.Workbook?.WBProps?.date1904);
+    return rows.map((row) => {
+      for (const field of ['purchaseDate', 'expiryDate', 'warrantyExpiry']) {
+        const aliases = FIELD_ALIASES[field];
+        const key = Object.keys(row).find((candidate) => aliases.includes(normalizeHeader(candidate)));
+        if (key !== undefined && typeof row[key] === 'number') {
+          row[key] = parseExcelDateSerial(row[key], date1904) ?? row[key];
+        }
+      }
+      return row;
+    });
   } catch (error) {
     if (error.statusCode) throw error;
     const invalidFile = new Error('The uploaded file is not a readable Excel or CSV inventory spreadsheet');

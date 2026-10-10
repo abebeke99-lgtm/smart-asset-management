@@ -1,4 +1,6 @@
 ﻿import React from 'react';
+import fs from 'node:fs';
+import path from 'node:path';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -111,6 +113,13 @@ describe('Department Assets', () => {
       }
       return Promise.reject(new Error(`Unexpected request: ${url}`));
     });
+  });
+
+  it('defines the maintenance translation only once in the English catalog', () => {
+    const source = fs.readFileSync(path.resolve(__dirname, 'DeptAssets.jsx'), 'utf8');
+    const englishCatalog = source.split('const englishTranslations = {')[1].split('const amharicTranslations = {')[0];
+
+    expect(englishCatalog.match(/^\s*maintenance:/gm)).toHaveLength(1);
   });
 
   it('loads real department assets and supports search and status filters', async () => {

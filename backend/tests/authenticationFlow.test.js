@@ -5,7 +5,6 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { User, Config, AuditLog, UserActivityLog, UserRole, Role, RolePermission } = require('../src/models');
 const { login } = require('../src/controllers/authController');
-const { getJwtSecret } = require('../src/config/jwt');
 const verificationController = require('../src/controllers/verificationController');
 const { initializeInitialAdmin } = require('../src/services/initialAdminService');
 const { repairExistingAdminPassword } = require('../src/scripts/repairExistingAdminPassword');
@@ -87,14 +86,32 @@ test('valid login returns a JWT and the authentication query includes the passwo
   assert.equal(queryOptions.attributes, undefined);
 });
 
-test('jwt secret falls back to a stable development value when no explicit secret is configured', async () => {
+test('jwt secret falls back to a stable development value when no explicit secret is configured', () => {
   const previousSecret = process.env.JWT_SECRET;
-  delete process.env.JWT_SECRET;
-  try {
-    assert.equal(getJwtSecret(), 'dev-smart-asset-management-secret-2026-10-01');
-  } finally {
+  const previousDevSecret = process.env.JWT_DEV_SECRET;
+  const jwtConfigPath = require.resolve('../src/config/jwt');
+
+  const restore = () => {
+    delete require.cache[jwtConfigPath];
     if (previousSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previousSecret;
+    if (previousDevSecret === undefined) delete process.env.JWT_DEV_SECRET;
+    else process.env.JWT_DEV_SECRET = previousDevSecret;
+  };
+
+  try {
+    delete require.cache[jwtConfigPath];
+    delete process.env.JWT_SECRET;
+    process.env.JWT_DEV_SECRET = '';
+    const { getJwtSecret: fallbackGetJwtSecret } = require('../src/config/jwt');
+    assert.equal(fallbackGetJwtSecret(), 'dev-smart-asset-management-secret-2026-10-01');
+
+    delete require.cache[jwtConfigPath];
+    process.env.JWT_DEV_SECRET = 'configured-dev-secret';
+    const { getJwtSecret: configuredGetJwtSecret } = require('../src/config/jwt');
+    assert.equal(configuredGetJwtSecret(), 'configured-dev-secret');
+  } finally {
+    restore();
   }
 });
 

@@ -44,7 +44,7 @@ const previewImport = async (buffer) => {
   return response;
 };
 
-test('preserves a leap day from CSV and Excel date cells without database writes', async () => {
+test('preserves valid leap days from CSV and Excel while rejecting non-leap-year dates', async () => {
   Category.findAll = async () => [{ id: 1, name: 'Computing' }];
   Department.findAll = async () => [{ id: 1, name: 'ICT', collegeId: 1 }];
   College.findAll = async () => [{ id: 1, collegeName: 'Science', campusId: 1 }];
@@ -52,13 +52,15 @@ test('preserves a leap day from CSV and Excel date cells without database writes
   Asset.findAll = async () => [];
 
   const csv = Buffer.from(
-    'name,category,department,location,purchaseDate\nLaptop,Computing,ICT,Room 1,02/29/2024',
+    'name,category,department,location,purchaseDate\nLaptop,Computing,ICT,Room 1,02/29/2024\nDesktop,Computing,ICT,Room 2,02/29/2023',
     'utf8',
   );
   const csvResponse = await previewImport(csv);
   assert.equal(csvResponse.statusCode, 200);
   assert.equal(csvResponse.body.results[0].valid, true);
   assert.equal(csvResponse.body.results[0].record.purchaseDate, '2024-02-29');
+  assert.equal(csvResponse.body.results[1].valid, false);
+  assert.ok(csvResponse.body.results[1].errors.some((error) => error.field === 'purchaseDate'));
 
   const originalTimezone = process.env.TZ;
   process.env.TZ = 'America/Sao_Paulo';
@@ -66,18 +68,21 @@ test('preserves a leap day from CSV and Excel date cells without database writes
     const worksheet = XLSX.utils.aoa_to_sheet([
       ['name', 'category', 'department', 'location', 'purchaseDate'],
       ['Laptop', 'Computing', 'ICT', 'Room 1', new Date(2024, 1, 29)],
+      ['Desktop', 'Computing', 'ICT', 'Room 2', '02/29/2023'],
     ]);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventory');
     const excel = XLSX.write(workbook, {
       type: 'buffer',
       bookType: 'xlsx',
-      cellDates: true,
+      cellDates: false,
     });
     const excelResponse = await previewImport(excel);
     assert.equal(excelResponse.statusCode, 200);
     assert.equal(excelResponse.body.results[0].valid, true);
     assert.equal(excelResponse.body.results[0].record.purchaseDate, '2024-02-29');
+    assert.equal(excelResponse.body.results[1].valid, false);
+    assert.ok(excelResponse.body.results[1].errors.some((error) => error.field === 'purchaseDate'));
   } finally {
     if (originalTimezone === undefined) delete process.env.TZ;
     else process.env.TZ = originalTimezone;

@@ -30,9 +30,7 @@ const createResetHarness = (overrides = {}) => {
     },
     update: async (values, options) => {
       calls.updates.push({ values, options });
-      accounts.forEach((account) => {
-        account.password = values.password;
-      });
+      accounts.forEach((account) => Object.assign(account, values));
       return [accounts.length];
     },
   };
@@ -102,13 +100,31 @@ test('password reset updates only password and verifies all eight account roles,
   assert.equal(harness.calls.authenticate, 1);
   assert.equal(harness.calls.transaction, 1);
   assert.equal(harness.calls.updates.length, 1);
-  assert.deepEqual(Object.keys(harness.calls.updates[0].values), ['password']);
+  assert.deepEqual(Object.keys(harness.calls.updates[0].values), ['password', 'failedLoginAttempts', 'lockoutUntil']);
   assert.equal(harness.accounts.every((account) => account.role === EXPECTED_ROLES[account.username]), true);
   assert.equal(harness.accounts.every((account) => account.active && account.status === 'active'), true);
+  assert.equal(harness.accounts.every((account) => account.failedLoginAttempts === 0 && account.lockoutUntil === null), true);
   assert.equal(
     await Promise.all(harness.accounts.map((account) => bcrypt.compare('test-only-password', account.password))).then((checks) => checks.every(Boolean)),
     true
   );
+});
+
+test('password reset clears lockouts for the listed demo accounts without changing account status', async () => {
+  const harness = createResetHarness();
+  harness.accounts[0].failedLoginAttempts = 4;
+  harness.accounts[0].lockoutUntil = new Date(Date.now() + 60000);
+  harness.accounts[1].failedLoginAttempts = 2;
+
+  await resetDemoPasswords({
+    password: 'test-only-password',
+    database: harness.database,
+    userModel: harness.userModel,
+    getRolePermissions: async () => [],
+  });
+
+  assert.equal(harness.accounts.every((account) => account.failedLoginAttempts === 0 && account.lockoutUntil === null), true);
+  assert.equal(harness.accounts.every((account) => account.active && account.status === 'active'), true);
 });
 
 test('password reset aborts before updates if an account is inactive or has a changed role', async () => {
@@ -124,7 +140,7 @@ test('password reset aborts before updates if an account is inactive or has a ch
       database: harness.database,
       userModel: harness.userModel,
       getRolePermissions: async () => [],
-    }), /missing, inactive, locked, or have unexpected roles/);
+    }), /missing, inactive, or have unexpected roles/);
     assert.equal(harness.calls.updates.length, 0);
   }
 });

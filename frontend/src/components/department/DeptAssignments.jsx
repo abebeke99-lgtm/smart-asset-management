@@ -5,13 +5,20 @@ import { useTranslation } from '../../contexts/UiContext';
 import { apiClient, getApiErrorMessage } from '../../utils/api';
 import './DeptAssignments.css';
 
-const EMPTY_FORM = {
+const localDateInputValue = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const createEmptyForm = () => ({
   assetId: '',
   recipientId: '',
   location: '',
-  assignedDate: new Date().toISOString().slice(0, 10),
+  assignedDate: localDateInputValue(),
   expectedReturnDate: '',
-};
+});
 
 const fetchAllPages = async (path, params = {}) => {
   const records = [];
@@ -56,7 +63,7 @@ const DeptAssignments = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(createEmptyForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -131,7 +138,7 @@ const DeptAssignments = () => {
         expected_return_date: form.expectedReturnDate || null,
       });
       setShowForm(false);
-      setForm({ ...EMPTY_FORM, assignedDate: new Date().toISOString().slice(0, 10) });
+      setForm(createEmptyForm());
       setSuccess(t('createSuccess', 'Asset assignment created and added to assignment history.', 'የንብረት ምደባው ተፈጥሯል እና ወደ ምደባ ታሪክ ታክሏል።'));
       await loadData();
     } catch (saveError) {
@@ -142,7 +149,7 @@ const DeptAssignments = () => {
   };
 
   const openForm = () => {
-    setForm({ ...EMPTY_FORM, assignedDate: new Date().toISOString().slice(0, 10) });
+    setForm(createEmptyForm());
     setFormError('');
     setSuccess('');
     setShowForm(true);
@@ -212,7 +219,7 @@ const DeptAssignments = () => {
             </label>
             <label>
               {t('assignmentDate', 'Assignment date', 'የምደባ ቀን')}
-              <input type="date" name="assignedDate" value={form.assignedDate} onChange={updateForm} max={new Date().toISOString().slice(0, 10)} required />
+              <input type="date" name="assignedDate" value={form.assignedDate} onChange={updateForm} max={localDateInputValue()} required />
             </label>
             <label>
               {t('expectedReturn', 'Expected return', 'የሚጠበቀው መመለሻ')}

@@ -352,16 +352,6 @@ function buildSampleAssetRow(index, collegeId, departmentId, locationId) {
   return asset;
 }
 
-const getCandidateUniqueValues = (valueSet = {}) => {
-  const conditions = [];
-  for (const [key, value] of Object.entries(valueSet)) {
-    if (value === undefined || value === null || value === '') continue;
-    if (typeof value === 'object' && !(value instanceof Date)) continue;
-    conditions.push({ [key]: value });
-  }
-  return conditions;
-};
-
 const findMatchingRecord = async (model, where) => {
   if (!model || typeof model.findOne !== 'function') return null;
   if (where && typeof where === 'object' && where[Op.or]) {
@@ -374,10 +364,31 @@ const findMatchingRecord = async (model, where) => {
   return model.findOne({ where });
 };
 
+const IDENTITY_ALIAS_KEYS = {
+  collegeName: ['collegeCode'],
+  name: ['code'],
+  digitalId: ['assetCode', 'rfidTag', 'serialNumber'],
+  assetCode: ['digitalId', 'rfidTag', 'serialNumber'],
+  rfidTag: ['digitalId', 'assetCode', 'serialNumber'],
+  serialNumber: ['digitalId', 'assetCode', 'rfidTag'],
+};
+
 const findDuplicateCandidate = async (model, where = {}, defaults = {}) => {
-  const uniqueCandidates = getCandidateUniqueValues({ ...where, ...defaults });
-  if (!uniqueCandidates.length) return null;
-  return findMatchingRecord(model, { [Op.or]: uniqueCandidates });
+  const explicitKeys = Object.keys(where || {}).filter((key) => key !== 'Op.or');
+  const candidateKeys = new Set(explicitKeys);
+  for (const key of explicitKeys) {
+    for (const alias of IDENTITY_ALIAS_KEYS[key] || []) candidateKeys.add(alias);
+  }
+  const source = { ...where, ...defaults };
+  const uniqueConditions = [];
+  for (const key of candidateKeys) {
+    const value = source[key];
+    if (value === undefined || value === null || value === '') continue;
+    if (typeof value === 'object' && !(value instanceof Date)) continue;
+    uniqueConditions.push({ [key]: value });
+  }
+  if (!uniqueConditions.length) return null;
+  return findMatchingRecord(model, { [Op.or]: uniqueConditions });
 };
 
 const isDuplicateConstraintError = (error) => error?.name === 'SequelizeUniqueConstraintError' || error?.parent?.code === 'ER_DUP_ENTRY';

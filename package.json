@@ -7,6 +7,8 @@
   },
   "scripts": {
     "start": "npm --prefix backend start",
+    "start:all": "node scripts/start-all.js",
+    "dev:all": "node scripts/start-all.js --dev",
     "test": "npm --prefix backend test",
     "test:backend:dashboard": "npm --prefix backend run test:dashboard",
     "test:frontend:dashboard": "npm --prefix frontend test -- --runInBand --coverage --watchAll=false --runTestsByPath src/components/department/DeptDashboard.test.jsx src/__tests__/authFlow.test.js",

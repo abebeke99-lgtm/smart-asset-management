@@ -24,17 +24,22 @@ To seed the demo `admin` and `ict_officer` accounts, set `USER_MANAGEMENT_SEED_P
 npm --prefix backend run seed:user-management
 ```
 
-Open two terminals from the project root and run the backend and frontend separately:
+After MySQL is running and `backend/.env` is configured, start both the backend and frontend from the project root:
+
+```powershell
+npm run dev:all
+```
+
+The launcher waits until the backend health endpoint confirms its MySQL connection before starting the frontend. Open `http://localhost:3000`; the API is at `http://localhost:5000`. Use `npm run start:all` to start the backend without development auto-reload. The frontend sends API requests through its `/api` development proxy to the backend; database access is handled by the backend.
+
+To run either service separately, use:
 
 ```powershell
 npm --prefix backend run dev
-```
-
-```powershell
 npm --prefix frontend start
 ```
 
-The app is available at `http://localhost:3000`; the API is at `http://localhost:5000`. The root `npm start` command starts the backend only.
+The root `npm start` command continues to start the backend only.
 
 User-management API endpoints are under `/api/users` and require an authenticated administrator for management actions. The list supports `search`, `status`, `role`, `collegeId`, `page`, and `limit`. Roles are available at `/api/roles`, college departments at `/api/colleges/:id/departments`, and activity is retained in `user_activity_logs`.
 
