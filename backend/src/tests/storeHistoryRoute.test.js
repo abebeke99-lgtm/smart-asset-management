@@ -10,7 +10,7 @@ const returnWorkflowRoutes = require('../routes/returnWorkflowRoutes');
 const { createReceipt, createStockAdjustment } = require('../controllers/inventoryController');
 const { getInventory, getHistory, getDashboard, getLowStock, getStockAdjustments } = require('../controllers/storeController');
 const { processStoreReturn } = require('../controllers/returnWorkflowController');
-const { Approval, Asset, AssetMovement, AssetReturn, College, Department, Inventory, InventoryTransaction, Maintenance, Transfer, VerificationItem, VerificationSession, sequelize } = require('../models');
+const { Approval, Asset, Assignment, AssetMovement, AssetReturn, AuditLog, College, Department, Inventory, InventoryTransaction, Maintenance, Transfer, VerificationItem, VerificationSession, sequelize } = require('../models');
 
 test('store routes expose a store manager movement history endpoint', () => {
   const historyRoute = storeRoutes.stack.find((layer) => layer.route && layer.route.path === '/history' && layer.route.methods.get);
@@ -223,6 +223,124 @@ test('Store transfer endpoints enforce Store Manager role and College scope', ()
   }
 });
 
+test('approved-request fulfillment is protected by the Store Manager assignment route', () => {
+  const route = assignmentRoutes.stack.find((layer) => layer.route?.path === '/fulfill-request/:id' && layer.route.methods.post);
+  assert.ok(route, 'expected a Store Manager request-fulfillment endpoint');
+  assert.equal(route.route.stack.length, 4);
+  const response = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json() {} };
+  let called = false;
+  route.route.stack[1].handle({ user: { role: 'admin' } }, response, () => { called = true; });
+  assert.equal(response.statusCode, 403);
+  assert.equal(called, false);
+});
+
+test('approved-request fulfillment consumes the reserved quantity and records assignment history', async () => {
+  const originals = {
+    transaction: sequelize.transaction,
+    approvalFindByPk: Approval.findByPk,
+    inventoryFindOne: Inventory.findOne,
+    assetFindOne: Asset.findOne,
+    assignmentCreate: Assignment.create,
+    inventoryUpdate: Inventory.update,
+    assetUpdate: Asset.update,
+    inventoryTransactionCreate: InventoryTransaction.create,
+    movementCreate: AssetMovement.create,
+    auditCreate: AuditLog.create,
+  };
+  const transaction = {
+    LOCK: { UPDATE: 'UPDATE' },
+    finished: false,
+    async commit() { this.finished = 'commit'; },
+    async rollback() { this.finished = 'rollback'; },
+  };
+  const inventory = {
+    id: 18,
+    availableQuantity: 1,
+    reservedQuantity: 3,
+    location: 'Main Store',
+    async update(values, options) {
+      Object.assign(this, values);
+      assert.equal(options.transaction, transaction);
+    },
+  };
+  const approval = {
+    id: 25,
+    assetId: 3,
+    departmentId: 12,
+    type: 'asset_issue',
+    status: 'approved',
+    quantity: 2,
+    reason: 'Department equipment request',
+    fulfilledAt: null,
+    Asset: { id: 3, collegeId: 1, serialNumber: null },
+    Department: { id: 12, collegeId: 1 },
+    async update(values, options) {
+      Object.assign(this, values);
+      assert.equal(options.transaction, transaction);
+    },
+  };
+  const asset = { id: 3, collegeId: 1, serialNumber: null, location: 'Main Store', condition: 'Good' };
+  let assignmentValues;
+  let transactionValues;
+  let assetUpdateValues;
+  sequelize.transaction = async () => transaction;
+  Approval.findByPk = async (id, options) => {
+    assert.equal(id, '25');
+    assert.equal(options.transaction, transaction);
+    return approval;
+  };
+  Inventory.findOne = async () => inventory;
+  Asset.findOne = async () => asset;
+  Assignment.create = async (values, options) => {
+    assignmentValues = values;
+    assert.equal(options.transaction, transaction);
+    return { id: 73, ...values, toJSON() { return { id: this.id, ...values }; } };
+  };
+  Asset.update = async (values, options) => {
+    assetUpdateValues = values;
+    assert.equal(options.transaction, transaction);
+  };
+  InventoryTransaction.create = async (values, options) => {
+    transactionValues = values;
+    assert.equal(options.transaction, transaction);
+    return { id: 111, ...values };
+  };
+  AssetMovement.create = async (values, options) => { assert.equal(options.transaction, transaction); return values; };
+  AuditLog.create = async (values, options) => { assert.equal(options.transaction, transaction); return values; };
+
+  try {
+    const route = assignmentRoutes.stack.find((layer) => layer.route?.path === '/fulfill-request/:id' && layer.route.methods.post);
+    const handler = route.route.stack[3].handle;
+    const response = { statusCode: 200, body: null, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
+    await handler({
+      params: { id: '25' },
+      user: { id: 9, role: 'store_manager' },
+      organizationScope: { collegeId: 1 },
+    }, response, (error) => { throw error; });
+    assert.equal(response.statusCode, 201);
+    assert.equal(assignmentValues.approvalId, 25);
+    assert.equal(assignmentValues.quantity, 2);
+    assert.equal(assignmentValues.assignedToType, 'department');
+    assert.equal(inventory.reservedQuantity, 1);
+    assert.equal(transactionValues.type, 'issue');
+    assert.equal(transactionValues.quantity, 2);
+    assert.equal(assetUpdateValues.status, 'available');
+    assert.ok(approval.fulfilledAt instanceof Date);
+    assert.equal(transaction.finished, 'commit');
+  } finally {
+    sequelize.transaction = originals.transaction;
+    Approval.findByPk = originals.approvalFindByPk;
+    Inventory.findOne = originals.inventoryFindOne;
+    Asset.findOne = originals.assetFindOne;
+    Assignment.create = originals.assignmentCreate;
+    Inventory.update = originals.inventoryUpdate;
+    Asset.update = originals.assetUpdate;
+    InventoryTransaction.create = originals.inventoryTransactionCreate;
+    AssetMovement.create = originals.movementCreate;
+    AuditLog.create = originals.auditCreate;
+  }
+});
+
 test('Store return writes reject invalid input before opening a database transaction', async (context) => {
   const cases = [
     [{}, 'A valid assigned asset and return location are required'],
@@ -241,13 +359,117 @@ test('Store return writes reject invalid input before opening a database transac
   }
 });
 
+test('Store return restores the complete quantity from a fulfilled assignment', async () => {
+  const originals = {
+    transaction: sequelize.transaction,
+    assetFindOne: Asset.findOne,
+    assetUpdate: Asset.update,
+    assignmentFindOne: Assignment.findOne,
+    inventoryFindOne: Inventory.findOne,
+    assetReturnCreate: AssetReturn.create,
+    inventoryTransactionCreate: InventoryTransaction.create,
+    movementCreate: AssetMovement.create,
+    auditCreate: AuditLog.create,
+  };
+  const transaction = {
+    LOCK: { UPDATE: 'UPDATE' },
+    finished: false,
+    async commit() { this.finished = 'commit'; },
+    async rollback() { this.finished = 'rollback'; },
+  };
+  const assignment = {
+    id: 72,
+    assetId: 5,
+    assignedTo: null,
+    quantity: 4,
+    async update(values, options) { Object.assign(this, values); this.updateOptions = options; },
+  };
+  const inventory = {
+    id: 18,
+    availableQuantity: 1,
+    reservedQuantity: 0,
+    damagedQuantity: 0,
+    location: 'Old Store',
+    async update(values, options) { Object.assign(this, values); this.updateOptions = options; },
+  };
+  let returnValues;
+  let transactionValues;
+  let assetUpdateValues;
+  sequelize.transaction = async () => transaction;
+  Asset.findOne = async () => ({
+    id: 5,
+    collegeId: 1,
+    departmentId: 12,
+    status: 'assigned',
+    condition: 'Good',
+    _previousDataValues: { status: 'assigned' },
+    async update(values, options) {
+      assetUpdateValues = values;
+      Object.assign(this, values);
+      assert.equal(options.transaction, transaction);
+    },
+  });
+  Assignment.findOne = async () => assignment;
+  Inventory.findOne = async () => inventory;
+  AssetReturn.create = async (values, options) => {
+    returnValues = values;
+    assert.equal(options.transaction, transaction);
+    return { id: 91, ...values, toJSON() { return { id: this.id, ...values }; } };
+  };
+  InventoryTransaction.create = async (values, options) => {
+    transactionValues = values;
+    assert.equal(options.transaction, transaction);
+    return { id: 111, ...values };
+  };
+  AssetMovement.create = async (values, options) => { assert.equal(options.transaction, transaction); return values; };
+  AuditLog.create = async (values, options) => { assert.equal(options.transaction, transaction); return values; };
+
+  try {
+    const response = { statusCode: 200, body: null, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
+    await processStoreReturn({
+      body: { asset_id: 5, location: 'Store Room', return_date: '2026-10-09', condition: 'Good' },
+      organizationScope: { collegeId: 1 },
+      user: { id: 7, collegeId: 1 },
+    }, response, (error) => { throw error; });
+    assert.equal(response.statusCode, 201);
+    assert.equal(returnValues.quantity, 4);
+    assert.equal(inventory.availableQuantity, 5);
+    assert.equal(inventory.location, 'Store Room');
+    assert.equal(transactionValues.quantity, 4);
+    assert.equal(assetUpdateValues.status, 'available');
+    assert.equal(transaction.finished, 'commit');
+  } finally {
+    sequelize.transaction = originals.transaction;
+    Asset.findOne = originals.assetFindOne;
+    Asset.update = originals.assetUpdate;
+    Assignment.findOne = originals.assignmentFindOne;
+    Inventory.findOne = originals.inventoryFindOne;
+    AssetReturn.create = originals.assetReturnCreate;
+    InventoryTransaction.create = originals.inventoryTransactionCreate;
+    AssetMovement.create = originals.movementCreate;
+    AuditLog.create = originals.auditCreate;
+  }
+});
+
 test('receipt writes reject invalid required fields before opening a database transaction', async (context) => {
+  const validReceipt = {
+    reference: 'GRN-1',
+    submission_id: 'stock-1234567890-abc1234',
+    asset_id: 1,
+    quantity: 2,
+    to_location: 'Store',
+    received_date: '2026-10-10',
+  };
   const cases = [
-    [{}, 'A receiving reference is required'],
-    [{ reference: 'GRN-1' }, 'A valid inventory item is required'],
-    [{ reference: 'GRN-1', asset_id: 1 }, 'A positive receiving quantity is required'],
-    [{ reference: 'GRN-1', asset_id: 1, quantity: 2 }, 'A receiving location is required'],
-    [{ reference: 'GRN-1', asset_id: 1, quantity: 2, to_location: 'Store', condition: 'Unknown' }, 'A valid received condition is required'],
+    [{ ...validReceipt, reference: '' }, 'A receiving reference between 1 and 100 characters is required'],
+    [{ ...validReceipt, submission_id: '' }, 'A valid receipt submission ID is required'],
+    [{ ...validReceipt, asset_id: 0 }, 'A valid inventory item is required'],
+    [{ ...validReceipt, quantity: 0 }, 'A positive receiving quantity is required'],
+    [{ ...validReceipt, to_location: '' }, 'A receiving location between 1 and 255 characters is required'],
+    [{ ...validReceipt, condition: 'Unknown' }, 'A valid received condition is required'],
+    [{ ...validReceipt, received_date: '2026-02-30' }, 'A valid received date is required'],
+    [{ ...validReceipt, expiry_date: '2026-10-09', batch_number: 'BATCH-1' }, 'Expiry date cannot be before the received date'],
+    [{ ...validReceipt, expiry_date: '2026-10-11' }, 'A batch number is required for stock with an expiry date'],
   ];
 
   for (const [body, expectedMessage] of cases) {

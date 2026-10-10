@@ -99,10 +99,6 @@ const findCollegeScopeForUser = async (user) => {
     if (colleges.length === 1) {
       return { collegeId: colleges[0].id, college: colleges[0] };
     }
-
-    if (normalizeCollegeRole(candidateUser.role) === 'store_manager' && activeColleges.length > 0) {
-      return { collegeId: activeColleges[0].id, college: activeColleges[0] };
-    }
   } catch (error) { return null; }
 
   if (normalizeCollegeRole(candidateUser.role) === 'college_manager') {

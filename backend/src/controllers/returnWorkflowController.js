@@ -162,17 +162,19 @@ const processStoreReturn = async (req, res, next) => {
     if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found in your store scope' }); }
     const assignment = await Assignment.findOne({ where: { assetId, status: 'active' }, transaction, lock: transaction.LOCK.UPDATE });
     if (!assignment) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'This asset is not currently assigned or has already been returned' }); }
+    const quantity = Number(assignment.quantity || 1);
+    if (!Number.isSafeInteger(quantity) || quantity <= 0) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'The assigned quantity is invalid and cannot be returned safely' }); }
     const inventory = await Inventory.findOne({ where: { assetId }, transaction, lock: transaction.LOCK.UPDATE });
     if (!inventory) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Inventory record not found' }); }
     const damaged = isDamagedCondition(condition);
-    const row = await AssetReturn.create({ returnNumber: number(), assetId, collegeId: asset.collegeId, departmentId: asset.departmentId, sourceUserId: assignment.assignedTo, requestedBy: req.user.id, receivedBy: req.user.id, receivedAt: new Date(), returnDate, evidenceUrl: evidenceUrl || null, reason, condition, notes, status: 'Received', outcome: damaged ? 'Maintenance Required' : 'Accepted' }, { transaction });
+    const row = await AssetReturn.create({ returnNumber: number(), assetId, quantity, collegeId: asset.collegeId, departmentId: asset.departmentId, sourceUserId: assignment.assignedTo, requestedBy: req.user.id, receivedBy: req.user.id, receivedAt: new Date(), returnDate, evidenceUrl: evidenceUrl || null, reason, condition, notes, status: 'Received', outcome: damaged ? 'Maintenance Required' : 'Accepted' }, { transaction });
     if (damaged) await createDamageMaintenance({ asset, returnRecord: row, userId: req.user.id, transaction });
     await assignment.update({ status: 'returned' }, { transaction });
-    await inventory.update({ availableQuantity: damaged ? inventory.availableQuantity : inventory.availableQuantity + 1, damagedQuantity: damaged ? inventory.damagedQuantity + 1 : inventory.damagedQuantity, location }, { transaction });
-    await asset.update({ status: damaged ? 'damaged' : 'available', condition, location }, { transaction });
-    await InventoryTransaction.create({ inventoryId: inventory.id, assetId, userId: req.user.id, type: 'return', quantity: 1, toLocation: location, reason, notes }, { transaction });
+    await inventory.update({ availableQuantity: damaged ? inventory.availableQuantity : inventory.availableQuantity + quantity, damagedQuantity: damaged ? inventory.damagedQuantity + quantity : inventory.damagedQuantity, location }, { transaction });
+    await asset.update({ status: damaged ? 'damaged' : inventory.availableQuantity + quantity > 0 ? 'available' : 'assigned', condition, location }, { transaction });
+    await InventoryTransaction.create({ inventoryId: inventory.id, assetId, userId: req.user.id, type: 'return', quantity, toLocation: location, reason, notes }, { transaction });
     await AssetMovement.create({ assetId, movementType: 'return', sourceType: 'user', sourceId: assignment.assignedTo, destinationType: 'store', destinationId: null, referenceType: 'return', referenceId: row.id, performedBy: req.user.id, notes }, { transaction });
-    await AuditLog.create({ userId: req.user.id, action: 'STORE_ASSET_RETURNED', entity: `return:${row.id}`, details: JSON.stringify({ assetId, assignmentId: assignment.id, returnNumber: row.returnNumber, previousStatus: asset._previousDataValues.status || asset.status, newStatus: damaged ? 'damaged' : 'available', condition, location, reason }) }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: 'STORE_ASSET_RETURNED', entity: `return:${row.id}`, details: JSON.stringify({ assetId, assignmentId: assignment.id, returnNumber: row.returnNumber, quantity, previousStatus: asset._previousDataValues.status || asset.status, newStatus: damaged ? 'damaged' : 'available', condition, location, reason }) }, { transaction });
     await transaction.commit();
     return res.status(201).json({ success: true, message: 'Asset returned successfully', data: normalize(row) });
   } catch (error) { await transaction.rollback(); return next(error); }

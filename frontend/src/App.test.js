@@ -263,9 +263,52 @@ describe('Store Manager dashboard route wiring', () => {
   const appSource = fs.readFileSync(path.resolve(__dirname, 'App.jsx'), 'utf8');
 
   it('registers the Store Dashboard at the role redirect path inside Store Manager RBAC', () => {
-    expect(getDashboardRoute('store_manager')).toBe('/store/dashboard');
+    expect(getDashboardRoute('store_manager')).toBe('/store');
     expect(appSource).toContain('<Route path="/store" element={<ProtectedRoute allowedRoles={[\'store_manager\']}><RoleLayout /></ProtectedRoute>}>');
+    expect(appSource).toContain('<Route index element={<StoreDashboard />} />');
     expect(appSource).toContain('<Route path="dashboard" element={<StoreDashboard />} />');
+  });
+
+  it('keeps only the approved Store Manager sidebar routes and sections', () => {
+    const sidebarMatch = appSource.match(/'store_manager': \[([\s\S]*?)\],\s*'maintenance':/);
+    const sidebarItems = [...(sidebarMatch?.[1] || '').matchAll(/\{ path: '([^']+)', label: ([^,]+), section: '([^']+)' \}/g)]
+      .map(([, route, label, section]) => ({ route, label, section }));
+    expect(sidebarItems).toEqual([
+      { route: '/store', label: "'📊 ' + t.dashboard", section: 'Dashboard' },
+      { route: '/store/inventory', label: "'📦 Inventory'", section: 'INVENTORY MANAGEMENT' },
+      { route: '/store/available-assets', label: "'📦 Available Assets'", section: 'INVENTORY MANAGEMENT' },
+      { route: '/store/low-stock', label: "'⚠️ Low Stock'", section: 'INVENTORY MANAGEMENT' },
+      { route: '/store/stock-adjustments', label: "'⚙️ Stock Adjustments'", section: 'INVENTORY MANAGEMENT' },
+      { route: '/store/receive', label: "'📥 Receive'", section: 'ASSET OPERATIONS' },
+      { route: '/store/issue', label: "'📤 Issue'", section: 'ASSET OPERATIONS' },
+      { route: '/store/returns', label: "'↩️ Returns'", section: 'ASSET OPERATIONS' },
+      { route: '/store/transfers', label: "'🔄 Transfers'", section: 'ASSET OPERATIONS' },
+      { route: '/store/requests', label: "'📝 Requests'", section: 'ASSET OPERATIONS' },
+      { route: '/store/notifications', label: "'🔔 ' + t.notifications", section: 'Notifications' },
+    ]);
+    expect(appSource).toContain("['INVENTORY MANAGEMENT', 'ASSET OPERATIONS'].map((sectionName) =>");
+  });
+
+  it('maps every approved Store Manager sidebar route to a page in the protected route tree', () => {
+    const storeRouteTree = appSource.slice(
+      appSource.indexOf('<Route path="/store"'),
+      appSource.indexOf('{/* MAINTENANCE ROUTES'),
+    );
+    expect(storeRouteTree).toContain('<Route index element={<StoreDashboard />} />');
+    for (const route of [
+      ['inventory', 'StoreInventory'],
+      ['available-assets', 'StoreAssets'],
+      ['low-stock', 'StoreLowStock'],
+      ['stock-adjustments', 'StoreAdjustments'],
+      ['receive', 'StoreReceivePage'],
+      ['issue', 'StoreIssuePage'],
+      ['returns', 'StoreReturnsPage'],
+      ['transfers', 'StoreTransfers'],
+      ['requests', 'StoreAssetRequests'],
+      ['notifications', 'StoreNotifications'],
+    ]) {
+      expect(storeRouteTree).toContain(`<Route path="${route[0]}" element={<${route[1]} />} />`);
+    }
   });
 });
 

@@ -299,15 +299,19 @@ const getInventory = async (req, res, next) => {
     const allScopeRows = await Inventory.findAll({ where: inventoryWhere, include: [{ model: Asset, attributes: ['status', 'collegeId', 'category', 'condition', 'location'], required: true, where: assetWhere }], attributes: ['quantity', 'availableQuantity', 'reservedQuantity', 'damagedQuantity', 'minimumQuantity', 'location'] });
     const summary = allScopeRows.reduce((stats, item) => {
       const status = String(item.Asset?.status || item.status || '').toLowerCase();
+      const availableQuantity = Number(item.availableQuantity || 0);
+      const minimumQuantity = Number(item.minimumQuantity || 0);
       stats.total += Number(item.quantity || 0);
-      stats.available += ['available', 'in_store'].includes(status) ? Number(item.availableQuantity || 0) : 0;
+      stats.available += ['available', 'in_store'].includes(status) ? availableQuantity : 0;
       stats.reserved += Number(item.reservedQuantity || 0);
       stats.assigned += ['assigned', 'issued'].includes(status) ? Math.max(0, Number(item.quantity || 0) - Number(item.availableQuantity || 0)) : 0;
       stats.damaged += Number(item.damagedQuantity || 0) + (status === 'damaged' ? Number(item.quantity || 0) : 0);
       stats.missing += ['missing', 'lost'].includes(status) ? Number(item.quantity || 0) : 0;
-      stats.lowStock += Number(item.availableQuantity || 0) <= Number(item.minimumQuantity || 0) ? 1 : 0;
+      stats.lowStock += availableQuantity <= minimumQuantity ? 1 : 0;
+      stats.normalStock += availableQuantity > minimumQuantity ? 1 : 0;
+      stats.criticalStock += availableQuantity <= 0 ? 1 : 0;
       return stats;
-    }, { total: 0, available: 0, reserved: 0, assigned: 0, damaged: 0, missing: 0, lowStock: 0 });
+    }, { total: 0, available: 0, reserved: 0, assigned: 0, damaged: 0, missing: 0, lowStock: 0, normalStock: 0, criticalStock: 0 });
     return res.json({
       success: true,
       data: items,
@@ -330,7 +334,13 @@ const buildInventoryQuery = (req) => {
   if (req.query.status) assetWhere.status = String(req.query.status).toLowerCase();
   if (req.query.category) assetWhere.category = String(req.query.category);
   if (req.query.condition) assetWhere.condition = String(req.query.condition);
-  if (req.query.location) inventoryWhere.location = String(req.query.location);
+  if (req.query.location) {
+    const location = String(req.query.location);
+    inventoryWhere[Op.or] = [
+      { location },
+      Sequelize.where(Sequelize.col('Asset.location'), Op.eq, location),
+    ];
+  }
   const inventoryIdSearch = search.match(/^INV-(\d+)$/i);
   if (inventoryIdSearch) inventoryWhere.id = Number(inventoryIdSearch[1]);
   else if (search) assetWhere[Op.or] = ['assetCode', 'name', 'category', 'subcategory', 'serialNumber', 'rfidTag', 'digitalId', 'supplier', 'batchLot'].map((field) => ({ [field]: { [Op.like]: `%${search}%` } }));
@@ -430,7 +440,18 @@ const getAvailableAssets = async (req, res, next) => {
     if (req.query.category) assetWhere.category = String(req.query.category);
     if (req.query.location) assetWhere.location = String(req.query.location);
     if (req.query.condition) assetWhere.condition = String(req.query.condition);
-    if (search) assetWhere[Op.or] = ['assetCode', 'name', 'category', 'location', 'serialNumber', 'rfidTag'].map((field) => ({ [field]: { [Op.like]: `%${search}%` } }));
+    if (req.query.department) {
+      const departmentId = Number(req.query.department);
+      if (!Number.isSafeInteger(departmentId) || departmentId <= 0) return res.status(400).json({ success: false, message: 'A valid department filter is required' });
+      assetWhere.departmentId = departmentId;
+    }
+    const assetType = String(req.query.assetType || '').toLowerCase();
+    if (assetType === 'serialized') assetWhere.serialNumber = { [Op.ne]: '' };
+    else if (assetType === 'bulk') assetWhere.serialNumber = { [Op.or]: [{ [Op.is]: null }, { [Op.eq]: '' }] };
+    else if (assetType) return res.status(400).json({ success: false, message: 'Asset type must be serialized or bulk' });
+    const numericSearch = search.match(/^\d+$/);
+    if (numericSearch) assetWhere.id = Number(numericSearch);
+    else if (search) assetWhere[Op.or] = ['assetCode', 'name', 'category', 'location', 'serialNumber', 'rfidTag', 'digitalId'].map((field) => ({ [field]: { [Op.like]: `%${search}%` } }));
 
     const [assigned, transferred, maintained] = await Promise.all([
       Assignment.findAll({ where: { status: 'active' }, include: [{ model: Asset, required: true, attributes: [], where: scope }], attributes: ['assetId'], raw: true }),
@@ -438,22 +459,40 @@ const getAvailableAssets = async (req, res, next) => {
       Maintenance.findAll({ where: { status: { [Op.in]: ['pending', 'approved', 'assigned', 'in-progress', 'under maintenance'] } }, include: [{ model: Asset, required: true, attributes: [], where: scope }], attributes: ['assetId'], raw: true }),
     ]);
     const blockedAssetIds = [...new Set([...assigned, ...transferred, ...maintained].map((row) => row.assetId).filter(Boolean))];
-    const inventoryWhere = { availableQuantity: { [Op.gt]: 0 }, reservedQuantity: 0, damagedQuantity: 0 };
+    const inventoryWhere = { availableQuantity: { [Op.gt]: 0 } };
+    const availability = String(req.query.availability || 'in_stock').toLowerCase();
+    if (availability === 'reserved') inventoryWhere.reservedQuantity = { [Op.gt]: 0 };
+    else if (availability !== 'in_stock') return res.status(400).json({ success: false, message: 'Availability must be in_stock or reserved' });
     if (blockedAssetIds.length) inventoryWhere.assetId = { [Op.notIn]: blockedAssetIds };
-    const sortFields = new Set(['assetCode', 'name', 'category', 'location', 'condition', 'updatedAt']);
+    const sortFields = new Set(['assetCode', 'name', 'category', 'location', 'condition', 'updatedAt', 'quantity', 'availableQuantity']);
     const sortBy = sortFields.has(req.query.sortBy) ? req.query.sortBy : 'name';
     const sortOrder = String(req.query.sortOrder || 'asc').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
     const order = sortBy === 'updatedAt' ? [['updatedAt', sortOrder]] : [[Asset, sortBy, sortOrder]];
-    const include = [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'category', 'status', 'condition', 'location', 'serialNumber', 'rfidTag', 'collegeId'], required: true, where: assetWhere }];
-    const result = await Inventory.findAndCountAll({ where: inventoryWhere, include, order, limit: pageSize, offset: (page - 1) * pageSize, distinct: true });
+    const include = [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'category', 'status', 'condition', 'location', 'serialNumber', 'digitalId', 'rfidTag', 'collegeId', 'departmentId', 'unit'], required: true, where: assetWhere }];
+    const scopeInclude = [{ model: Asset, attributes: ['id', 'category', 'condition', 'location', 'serialNumber', 'departmentId', 'unit'], required: true, where: scope }];
+    const [scopeRows, result] = await Promise.all([
+      Inventory.findAll({ where: { availableQuantity: { [Op.gt]: 0 } }, include: scopeInclude, attributes: ['id', 'availableQuantity', 'location'] }),
+      Inventory.findAndCountAll({ where: inventoryWhere, include, order, limit: pageSize, offset: (page - 1) * pageSize, distinct: true }),
+    ]);
+    const departmentIds = [...new Set(scopeRows.map((row) => row.Asset?.departmentId || row.departmentId).filter(Number.isInteger).filter((id) => id > 0))];
+    const departmentRows = departmentIds.length ? await Department.findAll({ where: { id: { [Op.in]: departmentIds } }, attributes: ['id', 'name', 'code'], raw: true }) : [];
+    const filters = {
+      categories: [...new Set(scopeRows.map((row) => row.Asset?.category).filter(Boolean))].sort(),
+      locations: [...new Set(scopeRows.map((row) => row.Asset?.location || row.location).filter(Boolean))].sort(),
+      conditions: [...new Set(scopeRows.map((row) => row.Asset?.condition).filter(Boolean))].sort(),
+      departments: departmentRows.map((department) => ({ id: department.id, name: department.name || department.code || `Department ${department.id}` })),
+      assetTypes: [...new Set(scopeRows.map((row) => (String(row.Asset?.serialNumber || '').trim() ? 'serialized' : 'bulk')))],
+    };
+    const itemAssetType = (asset) => (String(asset?.serialNumber || '').trim() ? 'serialized' : 'bulk');
+    const items = result.rows.map((row) => ({ id: row.assetId, assetId: row.assetId, assetCode: row.Asset?.assetCode, name: row.Asset?.name, category: row.Asset?.category, status: 'Available', condition: row.Asset?.condition, location: row.Asset?.location || row.location, serialNumber: row.Asset?.serialNumber, rfidTag: row.Asset?.rfidTag, availableQuantity: Number(row.availableQuantity || 0), reservedQuantity: Number(row.reservedQuantity || 0), damagedQuantity: Number(row.damagedQuantity || 0), quantity: Number(row.quantity || 0), unit: row.Asset?.unit || 'unit', departmentId: row.Asset?.departmentId || row.departmentId || null, assetType: itemAssetType(row.Asset), inventoryStatus: row.status }));
     const today = dateStart();
     const [availableToday, awaitingIssue, lowStock] = await Promise.all([
       InventoryTransaction.count({ where: { type: 'receive', createdAt: { [Op.gte]: today } }, include }),
       Approval.count({ where: { status: 'approved', type: { [Op.in]: ['issue', 'asset_issue', 'request'] } }, include }),
       Inventory.count({ where: Sequelize.where(Sequelize.col('available_quantity'), Op.lte, Sequelize.col('minimum_quantity')), include }),
     ]);
-    const items = result.rows.map((row) => ({ id: row.assetId, assetId: row.assetId, assetCode: row.Asset?.assetCode, name: row.Asset?.name, category: row.Asset?.category, status: 'Available', condition: row.Asset?.condition, location: row.Asset?.location || row.location, serialNumber: row.Asset?.serialNumber, rfidTag: row.Asset?.rfidTag, availableQuantity: row.availableQuantity, quantity: row.quantity, inventoryStatus: row.status }));
-    return res.json({ success: true, data: { items, total: result.count, summary: { totalAvailable: result.count, availableToday, awaitingIssue, lowStock }, pagination: { page, pageSize, total: result.count, totalPages: Math.ceil(result.count / pageSize) } } });
+    const summary = { totalAvailable: scopeRows.reduce((sum, row) => sum + Number(row.availableQuantity || 0), 0), availableToday, awaitingIssue, lowStock };
+    return res.json({ success: true, data: { items, total: result.count, summary, filters, pagination: { page, pageSize, total: result.count, totalPages: Math.ceil(result.count / pageSize) } } });
   } catch (error) {
     return next(error);
   }
@@ -493,11 +532,14 @@ const getReceipts = async (req, res, next) => {
     const where = { type: 'receive' };
     const assetWhere = { ...scope };
     const search = String(req.query.search || '').trim();
-    if (search) assetWhere[Op.or] = ['assetCode', 'name', 'category', 'serialNumber'].map((field) => ({ [field]: { [Op.like]: `%${search}%` } }));
+    if (search) where[Op.or] = [
+      { notes: { [Op.like]: `%${search}%` } },
+      ...['assetCode', 'name', 'category', 'serialNumber'].map((field) => ({ [`$Asset.${field}$`]: { [Op.like]: `%${search}%` } })),
+    ];
     if (req.query.dateFrom || req.query.dateTo) where.createdAt = { ...(req.query.dateFrom ? { [Op.gte]: new Date(req.query.dateFrom) } : {}), ...(req.query.dateTo ? { [Op.lte]: new Date(`${req.query.dateTo}T23:59:59.999Z`) } : {}) };
-    const include = [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'category', 'location', 'serialNumber', 'collegeId'], required: true, where: assetWhere }, { model: User, attributes: ['id', 'fullName', 'username'] }];
+    const include = [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'category', 'unit', 'location', 'serialNumber', 'collegeId'], required: true, where: assetWhere }, { model: User, attributes: ['id', 'fullName', 'username'] }];
     const result = await InventoryTransaction.findAndCountAll({ where, include, order: [['createdAt', 'DESC']], limit: pageSize, offset: (page - 1) * pageSize, distinct: true });
-    const rows = result.rows.map((row) => { let details = {}; try { details = JSON.parse(row.notes || '{}'); } catch { details = { notes: row.notes || '' }; } return { id: row.id, receiptNumber: details.reference || `RCV-${String(row.id).padStart(6, '0')}`, date: details.receivedDate || row.createdAt, asset: row.Asset?.name || 'Inventory Item', assetId: row.assetId, assetCode: row.Asset?.assetCode || '', category: row.Asset?.category || '', quantity: Number(row.quantity || 0), location: row.toLocation || row.Asset?.location || '', condition: details.condition || '', supplier: details.supplier || row.Asset?.supplier || '', purchaseOrder: details.purchaseOrder || '', invoice: details.invoice || '', deliveryNote: details.deliveryNote || '', notes: details.notes || '', receivedBy: row.User?.fullName || row.User?.username || 'Store Manager', status: 'Received' }; });
+    const rows = result.rows.map((row) => { let details = {}; try { details = JSON.parse(row.notes || '{}'); } catch { details = { notes: row.notes || '' }; } return { id: row.id, receiptNumber: details.reference || `RCV-${String(row.id).padStart(6, '0')}`, date: details.receivedDate || row.createdAt, asset: row.Asset?.name || 'Inventory Item', assetId: row.assetId, assetCode: row.Asset?.assetCode || '', category: details.category || row.Asset?.category || '', unit: details.unit || row.Asset?.unit || 'unit', quantity: Number(row.quantity || 0), location: row.toLocation || row.Asset?.location || '', condition: details.condition || '', supplier: details.supplier || row.Asset?.supplier || '', purchaseOrder: details.purchaseOrder || '', invoice: details.invoice || '', deliveryNote: details.deliveryNote || '', unitPrice: details.unitPrice ?? null, totalCost: details.totalCost ?? null, batchNumber: details.batchNumber || '', expiryDate: details.expiryDate || null, notes: details.notes || '', receivedBy: row.User?.fullName || row.User?.username || 'Store Manager', status: 'Received' }; });
     const today = dateStart(); const month = new Date(); month.setDate(1); month.setHours(0, 0, 0, 0);
     let todayQuantity; let monthQuantity;
     try {

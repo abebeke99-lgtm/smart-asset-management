@@ -1,4 +1,4 @@
-const { sequelize, Approval, Asset, Department, User, AuditLog, AssetRegistrationRequest } = require('../models');
+const { sequelize, Approval, Asset, Department, User, AuditLog, AssetRegistrationRequest, Inventory, AssetMovement } = require('../models');
 const { Op } = require('sequelize');
 const { createFinanceNotification, createBulkNotification } = require('../services/notificationService');
 const { getCollegeScopeId } = require('../middlewares/organizationScope');
@@ -23,6 +23,8 @@ const approvalBelongsToCollege = (record, collegeId) => {
   if (record.assetId && Number(record.Asset?.collegeId) !== collegeId) return false;
   return Boolean(record.departmentId || record.assetId);
 };
+const isReservableAssetRequest = (record) => Boolean(record.assetId)
+  && String(record.type || '').toLowerCase().includes('issue');
 
 const listApprovals = async (req, res, next) => {
   try {
@@ -57,12 +59,19 @@ const createApproval = async (req, res, next) => {
   try {
     const { type, asset_id, department_id, item, quantity = 1, priority = 'medium', reason } = req.body;
     if (!type || !reason || !Number.isInteger(Number(quantity)) || Number(quantity) <= 0) return res.status(400).json({ success: false, message: 'Type, reason, and positive quantity are required' });
+    const storeManager = isStoreManager(req);
+    const collegeId = storeManager ? getCollegeScopeId(req) : null;
+    if (storeManager && !collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+    if (storeManager && (!asset_id || !department_id)) return res.status(400).json({ success: false, message: 'A valid asset and department are required' });
     const asset = asset_id ? await Asset.findByPk(asset_id) : null;
     if (asset_id && !asset) return res.status(404).json({ success: false, message: 'Asset not found' });
+    if (storeManager && Number(asset.collegeId) !== collegeId) return res.status(404).json({ success: false, message: 'Asset not found' });
+    const department = storeManager ? await Department.findByPk(department_id) : null;
+    if (storeManager && (!department || Number(department.collegeId) !== collegeId)) return res.status(404).json({ success: false, message: 'Department not found' });
     if (req.user.role === 'college' && asset && asset.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department authorization required' });
     const authenticatedDepartment = req.user.department_id || req.user.departmentId || (Number.isInteger(Number(req.user.department)) ? Number(req.user.department) : null);
     if (req.user.role === 'college' && department_id && String(department_id) !== String(authenticatedDepartment) && String(department_id) !== String(req.user.department)) return res.status(403).json({ success: false, message: 'Department authorization required' });
-    const record = await Approval.create({ type, assetId: asset_id || null, requestedBy: req.user.id, departmentId: authenticatedDepartment || department_id || null, item: item || '', quantity, priority, reason });
+    const record = await Approval.create({ type, assetId: asset_id || null, requestedBy: req.user.id, departmentId: storeManager ? department.id : authenticatedDepartment || department_id || null, item: item || '', quantity, priority, reason });
     await AuditLog.create({ userId: req.user.id, action: 'REQUEST_SUBMITTED', entity: `approval:${record.id}`, details: JSON.stringify({ requestId: record.id, type: record.type, departmentId: record.departmentId }) });
     if (String(type).toLowerCase().includes('purchase')) await createFinanceNotification({ event: 'finance_purchase_request_submitted', eventKey: `finance_purchase_request_submitted:${record.id}`, entityId: record.id, senderId: req.user.id, type: 'procurement', title: 'Purchase request awaiting approval', message: `Purchase request REQ-${String(record.id).padStart(6, '0')} requires approval.` });
     res.status(201).json({ success: true, request: normalize(record) });
@@ -96,17 +105,96 @@ const decideApproval = async (req, res, next) => {
         return res.status(404).json({ success: false, message: 'Approval not found' });
       }
     }
-    if (record.status !== 'pending') {
+    const cancellingApprovedRequest = status === 'cancelled' && record.status === 'approved';
+    if (record.status !== 'pending' && !cancellingApprovedRequest) {
       await transaction.rollback();
       transactionFinished = true;
       return res.status(409).json({ success: false, message: 'Only pending requests can be decided' });
     }
-    if (record.requestedBy === req.user.id) {
+    if (cancellingApprovedRequest && record.fulfilledAt) {
+      await transaction.rollback();
+      transactionFinished = true;
+      return res.status(409).json({ success: false, message: 'A fulfilled request cannot be cancelled' });
+    }
+    if (status === 'approved' && record.requestedBy === req.user.id) {
       await transaction.rollback();
       transactionFinished = true;
       return res.status(403).json({ success: false, message: 'A requester cannot approve their own request' });
     }
     const comment = String(req.body.comment || req.body.reason || '').trim();
+    let reservationAudit = null;
+    if (status === 'approved' && isReservableAssetRequest(record)) {
+      const quantity = Number(record.quantity);
+      const inventory = await Inventory.findOne({
+        where: { assetId: record.assetId },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+      if (!Number.isSafeInteger(quantity) || quantity <= 0 || !inventory || !Number.isSafeInteger(Number(inventory.availableQuantity)) || !Number.isSafeInteger(Number(inventory.reservedQuantity)) || inventory.availableQuantity < quantity) {
+        await transaction.rollback();
+        transactionFinished = true;
+        return res.status(409).json({ success: false, message: 'Insufficient available inventory to approve this request' });
+      }
+      const before = { availableQuantity: inventory.availableQuantity, reservedQuantity: inventory.reservedQuantity };
+      await inventory.update({
+        availableQuantity: inventory.availableQuantity - quantity,
+        reservedQuantity: inventory.reservedQuantity + quantity,
+      }, { transaction });
+      await AssetMovement.create({
+        assetId: record.assetId,
+        movementType: 'reserved',
+        sourceType: 'store',
+        sourceId: null,
+        destinationType: 'department',
+        destinationId: record.departmentId,
+        referenceType: 'approval',
+        referenceId: record.id,
+        performedBy: req.user.id,
+        notes: JSON.stringify({ quantity, reason: record.reason || '' }),
+      }, { transaction });
+      reservationAudit = {
+        action: 'reserved',
+        quantity,
+        before,
+        after: { availableQuantity: inventory.availableQuantity, reservedQuantity: inventory.reservedQuantity },
+      };
+    }
+    if (cancellingApprovedRequest && isReservableAssetRequest(record)) {
+      const quantity = Number(record.quantity);
+      const inventory = await Inventory.findOne({
+        where: { assetId: record.assetId },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+      if (!Number.isSafeInteger(quantity) || quantity <= 0 || !inventory || !Number.isSafeInteger(Number(inventory.availableQuantity)) || !Number.isSafeInteger(Number(inventory.reservedQuantity)) || inventory.reservedQuantity < quantity) {
+        await transaction.rollback();
+        transactionFinished = true;
+        return res.status(409).json({ success: false, message: 'The request reservation could not be released safely' });
+      }
+      const before = { availableQuantity: inventory.availableQuantity, reservedQuantity: inventory.reservedQuantity };
+      await inventory.update({
+        availableQuantity: inventory.availableQuantity + quantity,
+        reservedQuantity: inventory.reservedQuantity - quantity,
+      }, { transaction });
+      await AssetMovement.create({
+        assetId: record.assetId,
+        movementType: 'released',
+        sourceType: 'department',
+        sourceId: record.departmentId,
+        destinationType: 'store',
+        destinationId: null,
+        referenceType: 'approval',
+        referenceId: record.id,
+        performedBy: req.user.id,
+        notes: JSON.stringify({ quantity, reason: comment }),
+      }, { transaction });
+      reservationAudit = {
+        action: 'released',
+        quantity,
+        before,
+        after: { availableQuantity: inventory.availableQuantity, reservedQuantity: inventory.reservedQuantity },
+      };
+    }
     await record.update({ status, reviewedBy: req.user.id, comment: req.body.comment || req.body.reason || '' }, { transaction });
     if (String(record.type || '').toLowerCase().includes('purchase')) {
       const registrationStatus = status === 'approved' ? 'Approved' : status === 'rejected' ? 'Rejected' : 'Cancelled';
@@ -115,7 +203,7 @@ const decideApproval = async (req, res, next) => {
         { where: { approvalId: record.id }, transaction },
       );
     }
-    await AuditLog.create({ userId: req.user.id, action: `REQUEST_${status.toUpperCase()}`, entity: `approval:${record.id}`, details: JSON.stringify({ requestId: record.id, beforeStatus: 'pending', afterStatus: status, comment }) }, { transaction });
+    await AuditLog.create({ userId: req.user.id, action: `REQUEST_${status.toUpperCase()}`, entity: `approval:${record.id}`, details: JSON.stringify({ requestId: record.id, beforeStatus: cancellingApprovedRequest ? 'approved' : 'pending', afterStatus: status, comment, reservation: reservationAudit }) }, { transaction });
     await transaction.commit();
     transactionFinished = true;
     try {

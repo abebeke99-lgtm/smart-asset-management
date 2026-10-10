@@ -268,7 +268,7 @@ export const getDashboardRoute = (role) => {
     college: '/college/dashboard',
     department_head: '/department-head/dashboard',
     finance: '/finance/dashboard',
-    store_manager: '/store/dashboard',
+    store_manager: '/store',
     maintenance: '/maintenance/dashboard',
     infrastructure: '/infrastructure/dashboard',
     staff: '/department',
@@ -3155,8 +3155,9 @@ function AppContent() {
               )}
               {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'store_manager' && (
                 <>
-                  {['Overview', 'INVENTORY MANAGEMENT', 'ASSET OPERATIONS', 'TRACKING', 'MAINTENANCE', 'REPORTING', 'SYSTEM'].map((sectionName) => {
-                    const visibleItems = sidebarItems.filter((item) => item.section === sectionName || (sectionName === 'Overview' && item.path === '/store'));
+                  {renderSidebarLink(sidebarItems.find((item) => item.path === '/store'))}
+                  {['INVENTORY MANAGEMENT', 'ASSET OPERATIONS'].map((sectionName) => {
+                    const visibleItems = sidebarItems.filter((item) => item.section === sectionName);
                     if (!visibleItems.length) return null;
                     return (
                       <React.Fragment key={sectionName}>
@@ -3165,6 +3166,7 @@ function AppContent() {
                       </React.Fragment>
                     );
                   })}
+                  {renderSidebarLink(sidebarItems.find((item) => item.path === '/store/notifications'))}
                 </>
               )}
               {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'maintenance' && (
@@ -3343,26 +3345,17 @@ function AppContent() {
         { path: '/finance/notifications', label: '🔔 Notifications', section: 'CONTROL' }
       ],
       'store_manager': [
-        { path: '/store', label: '📊 ' + t.dashboard, section: 'Overview' },
+        { path: '/store', label: '📊 ' + t.dashboard, section: 'Dashboard' },
         { path: '/store/inventory', label: '📦 Inventory', section: 'INVENTORY MANAGEMENT' },
         { path: '/store/available-assets', label: '📦 Available Assets', section: 'INVENTORY MANAGEMENT' },
-        { path: '/store/low-stock', label: '⚠️ Low Stock Alerts', section: 'INVENTORY MANAGEMENT' },
+        { path: '/store/low-stock', label: '⚠️ Low Stock', section: 'INVENTORY MANAGEMENT' },
         { path: '/store/stock-adjustments', label: '⚙️ Stock Adjustments', section: 'INVENTORY MANAGEMENT' },
-        { path: '/store/receive', label: '📥 Receive Assets', section: 'ASSET OPERATIONS' },
-        { path: '/store/issue', label: '📤 Issue Assets', section: 'ASSET OPERATIONS' },
+        { path: '/store/receive', label: '📥 Receive', section: 'ASSET OPERATIONS' },
+        { path: '/store/issue', label: '📤 Issue', section: 'ASSET OPERATIONS' },
         { path: '/store/returns', label: '↩️ Returns', section: 'ASSET OPERATIONS' },
         { path: '/store/transfers', label: '🔄 Transfers', section: 'ASSET OPERATIONS' },
-        { path: '/store/requests', label: '📝 Asset Requests', section: 'ASSET OPERATIONS' },
-        { path: '/store/tracking', label: '📡 RFID / QR Tracking', section: 'TRACKING' },
-        { path: '/store/history', label: '📜 Asset Movement History', section: 'TRACKING' },
-        { path: '/store/verification', label: '✅ Asset Verification', section: 'TRACKING' },
-        { path: '/store/maintenance', label: '🔧 Send to Maintenance', section: 'MAINTENANCE' },
-        { path: '/store/maintenance/status', label: '📋 Maintenance Status', section: 'MAINTENANCE' },
-        { path: '/store/reports/inventory', label: '📊 Inventory Reports', section: 'REPORTING' },
-        { path: '/store/reports/issues', label: '📝 Issue Reports', section: 'REPORTING' },
-        { path: '/store/reports/returns', label: '↩️ Return Reports', section: 'REPORTING' },
-        { path: '/store/reports/movements', label: '🔄 Movement Reports', section: 'REPORTING' },
-        { path: '/store/notifications', label: '🔔 ' + t.notifications, section: 'SYSTEM' }
+        { path: '/store/requests', label: '📝 Requests', section: 'ASSET OPERATIONS' },
+        { path: '/store/notifications', label: '🔔 ' + t.notifications, section: 'Notifications' }
       ],
       'maintenance': [
         { path: '/maintenance', label: '📊 ' + t.dashboard, section: 'Dashboard' },

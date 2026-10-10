@@ -13,6 +13,8 @@ const InventoryTransaction = sequelize.define('InventoryTransaction', {
   toLocation: { type: DataTypes.STRING(255), defaultValue: '' },
   reason: { type: DataTypes.STRING(255), defaultValue: '' },
   notes: { type: DataTypes.TEXT, defaultValue: '' },
+  submissionId: { type: DataTypes.STRING(100), allowNull: true, field: 'submission_id' },
+  referenceKey: { type: DataTypes.STRING(100), allowNull: true, field: 'reference_key' },
 }, { tableName: 'inventory_transactions', timestamps: true });
 
 module.exports = InventoryTransaction;

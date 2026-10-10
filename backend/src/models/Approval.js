@@ -14,6 +14,7 @@ const Approval = sequelize.define('Approval', {
   status: { type: DataTypes.ENUM('pending', 'approved', 'rejected', 'cancelled'), defaultValue: 'pending' },
   reason: { type: DataTypes.TEXT, defaultValue: '' },
   comment: { type: DataTypes.TEXT, defaultValue: '' },
+  fulfilledAt: { type: DataTypes.DATE, allowNull: true, field: 'fulfilled_at' },
 }, { tableName: 'approvals', timestamps: true });
 
 module.exports = Approval;

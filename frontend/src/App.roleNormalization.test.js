@@ -29,7 +29,7 @@ describe('normalizeRole', () => {
       college_manager: '/college/dashboard',
       department_head: '/department-head/dashboard',
       finance: '/finance/dashboard',
-      store_manager: '/store/dashboard',
+      store_manager: '/store',
       maintenance: '/maintenance/dashboard',
       infrastructure: '/infrastructure/dashboard',
       staff: '/department',

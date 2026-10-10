@@ -58,6 +58,7 @@ const modelMethods = [
   [models.Assignment, 'create'],
   [models.Assignment, 'findByPk'],
   [models.InventoryTransaction, 'create'],
+  [models.AssetMovement, 'create'],
   [models.AuditLog, 'create'],
 ];
 
@@ -183,6 +184,7 @@ test('creation uses a transaction and records the assignment, date, inventory is
     }],
     [models.Assignment, 'findByPk', async () => assignment],
     [models.InventoryTransaction, 'create', async (values) => { inventoryTransaction = values; }],
+    [models.AssetMovement, 'create', async () => {}],
     [models.AuditLog, 'create', async () => {}],
   ];
 

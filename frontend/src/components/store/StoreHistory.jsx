@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '../../utils/api';
 
 const getDateRange = (preset) => {
@@ -51,6 +52,8 @@ const formatMovementType = (value) => {
 };
 
 const StoreHistory = () => {
+  const [searchParams] = useSearchParams();
+  const assetId = searchParams.get('assetId') || '';
   const [items, setItems] = useState([]);
   const [summary, setSummary] = useState({ totalMovements: 0, today: 0, thisMonth: 0, transfers: 0, issues: 0, returns: 0 });
   const [filtersMeta, setFiltersMeta] = useState({ movementTypes: [], locations: [], departments: [] });
@@ -78,13 +81,14 @@ const StoreHistory = () => {
     if (movementType) params.movementType = movementType;
     if (locationFilter) params.location = locationFilter;
     if (departmentFilter) params.department = departmentFilter;
+    if (assetId) params.assetId = assetId;
 
     const dateRange = datePreset === 'custom' ? { from: customFrom, to: customTo } : getDateRange(datePreset);
     if (dateRange.from) params.dateFrom = dateRange.from;
     if (dateRange.to) params.dateTo = dateRange.to;
 
     return params;
-  }, [page, pageSize, search, movementType, locationFilter, departmentFilter, datePreset, customFrom, customTo]);
+  }, [page, pageSize, search, movementType, locationFilter, departmentFilter, assetId, datePreset, customFrom, customTo]);
 
   const loadHistory = async () => {
     setLoading(true);

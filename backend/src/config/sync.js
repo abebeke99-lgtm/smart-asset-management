@@ -208,6 +208,19 @@ async function syncDatabase() {
     const queryInterface = sequelize.getQueryInterface();
     await ensureColumn('asset_returns', 'return_date', { type: require('sequelize').DataTypes.DATEONLY, allowNull: true });
     await ensureColumn('asset_returns', 'evidence_url', { type: require('sequelize').DataTypes.STRING(1000), allowNull: true });
+    await ensureColumn('approvals', 'fulfilled_at', { type: require('sequelize').DataTypes.DATE, allowNull: true });
+    await ensureColumn('assignments', 'approval_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
+    await ensureColumn('assignments', 'quantity', { type: require('sequelize').DataTypes.INTEGER, allowNull: false, defaultValue: 1 });
+    await ensureColumn('asset_returns', 'quantity', { type: require('sequelize').DataTypes.INTEGER, allowNull: false, defaultValue: 1 });
+    await ensureColumn('inventory_transactions', 'submission_id', { type: require('sequelize').DataTypes.STRING(100), allowNull: true });
+    await ensureColumn('inventory_transactions', 'reference_key', { type: require('sequelize').DataTypes.STRING(100), allowNull: true });
+    const inventoryTransactionIndexes = await queryInterface.showIndex('inventory_transactions');
+    if (!inventoryTransactionIndexes.some((index) => index.name === 'inventory_transactions_submission_id_unique')) {
+      await queryInterface.addIndex('inventory_transactions', ['submission_id'], { name: 'inventory_transactions_submission_id_unique', unique: true });
+    }
+    if (!inventoryTransactionIndexes.some((index) => index.name === 'inventory_transactions_asset_reference_unique')) {
+      await queryInterface.addIndex('inventory_transactions', ['asset_id', 'reference_key'], { name: 'inventory_transactions_asset_reference_unique', unique: true });
+    }
     const assignmentColumns = await queryInterface.describeTable('assignments');
     await ensureColumn('transfers', 'expected_return_date', { type: require('sequelize').DataTypes.DATE, allowNull: true });
     if (assignmentColumns.assigned_to && assignmentColumns.assigned_to.allowNull === false) {

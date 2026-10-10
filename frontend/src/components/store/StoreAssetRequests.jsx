@@ -1,14 +1,12 @@
 /* eslint-disable no-unused-vars, no-dupe-keys, no-template-curly-in-string */
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
 import { toast } from 'react-toastify';
-import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
 import { getDepartmentLabel } from '../../utils/department';
+import { apiClient } from '../../utils/api';
 
 const StoreAssetRequests = () => {
-  const { user } = useAuth();
   const { language, theme } = useLanguage();
 
   const isDark = theme === 'dark';
@@ -20,6 +18,7 @@ const StoreAssetRequests = () => {
   const [departments, setDepartments] = useState([]);
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [processing, setProcessing] = useState(false);
 
   const [activeTab, setActiveTab] = useState('new');
@@ -85,9 +84,17 @@ const StoreAssetRequests = () => {
         noRequests: 'ምንም ጥያቄ አልተገኘም',
         loading: 'በመጫን ላይ...',
         success: 'የንብረት ጥያቄ በተሳካ ሁኔታ ተፈጥሯል',
+        retry: 'እንደገና ይሞክሩ',
         approveSuccess: 'ጥያቄው ጸድቋል',
         rejectSuccess: 'ጥያቄው ተከልክሏል',
+        fulfill: 'ማሟላት',
+        fulfilled: 'ተሟልቷል',
+        fulfillSuccess: 'ጥያቄው ተሟልቷል',
+        cancelRequest: 'ጥያቄ ሰርዝ',
+        cancelReason: 'ምክንያት ያስገቡ...',
+        cancelSuccess: 'ጥያቄው ተሰርዟል',
         error: 'ሂደቱ አልተሳካም',
+        loadFailed: 'የጥያቄ መረጃን መጫን አልተቻለም። እንደገና ይሞክሩ።',
         reason: 'ምክንያት',
         rejectionReason: 'የመከልከያ ምክንያት',
         enterReason: 'ምክንያት ያስገቡ...',
@@ -139,9 +146,17 @@ const StoreAssetRequests = () => {
         noRequests: 'No requests found',
         loading: 'Loading...',
         success: 'Asset request created successfully',
+        retry: 'Retry',
         approveSuccess: 'Request approved successfully',
         rejectSuccess: 'Request rejected',
+        fulfill: 'Fulfill',
+        fulfilled: 'Fulfilled',
+        fulfillSuccess: 'Request fulfilled successfully',
+        cancelRequest: 'Cancel Request',
+        cancelReason: 'Cancellation reason',
+        cancelSuccess: 'Request cancelled successfully',
         error: 'Operation failed',
+        loadFailed: 'Unable to load request data. Please try again.',
         reason: 'Reason',
         rejectionReason: 'Rejection Reason',
         enterReason: 'Enter reason...',
@@ -164,55 +179,30 @@ const StoreAssetRequests = () => {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
 
     try {
-      const results = await Promise.allSettled([
-        axios.get('/api/approvals'),
-        axios.get('/api/assets', {
+      const [requestsRes, assetsRes, usersRes, departmentsRes] = await Promise.all([
+        apiClient.get('/api/approvals'),
+        apiClient.get('/api/assets', {
           params: { limit: 500 }
         }),
-        axios.get('/api/users', {
+        apiClient.get('/api/users', {
           params: { limit: 500 }
         }),
-        axios.get('/api/departments')
+        apiClient.get('/api/departments')
       ]);
 
-      const [requestsRes, assetsRes, usersRes, departmentsRes] = results;
-
-      if (requestsRes.status === 'fulfilled') {
-        setRequests(normalizeRequests(requestsRes.value.data));
-      } else {
-        setRequests([]);
-      }
-
-      if (assetsRes.status === 'fulfilled') {
-        const assetData =
-          assetsRes.value.data?.assets ||
-          assetsRes.value.data?.data ||
-          [];
-
-        setAssets(Array.isArray(assetData) ? assetData : []);
-      }
-
-      if (usersRes.status === 'fulfilled') {
-        const userData =
-          usersRes.value.data?.users ||
-          usersRes.value.data?.data ||
-          [];
-
-        setUsers(Array.isArray(userData) ? userData : []);
-      }
-
-      if (departmentsRes.status === 'fulfilled') {
-        const deptData =
-          departmentsRes.value.data?.departments ||
-          departmentsRes.value.data?.data ||
-          [];
-
-        setDepartments(Array.isArray(deptData) ? deptData : []);
-      }
+      setRequests(normalizeRequests(requestsRes.data));
+      const assetData = assetsRes.data?.assets || assetsRes.data?.data || [];
+      setAssets(Array.isArray(assetData) ? assetData : []);
+      const userData = usersRes.data?.users || usersRes.data?.data || [];
+      setUsers(Array.isArray(userData) ? userData : []);
+      const deptData = departmentsRes.data?.departments || departmentsRes.data?.data || [];
+      setDepartments(Array.isArray(deptData) ? deptData : []);
     } catch (error) {
       console.error('Asset request loading error:', error);
+      setLoadError(true);
       toast.error(t.error);
     } finally {
       setLoading(false);
@@ -410,7 +400,7 @@ const StoreAssetRequests = () => {
         (asset) => String(asset.id) === String(form.assetId)
       );
 
-      await axios.post('/api/approvals', {
+      await apiClient.post('/api/approvals', {
         type: 'asset_issue',
         asset_id: form.assetId,
         item: selectedAsset?.name || selectedAsset?.asset_name || 'Asset Request',
@@ -446,7 +436,7 @@ const StoreAssetRequests = () => {
     setProcessing(true);
 
     try {
-      await axios.patch(`/api/approvals/${id}`, {
+      await apiClient.patch(`/api/approvals/${id}`, {
         status: 'approved',
         comment: request?.approval_comment || request?.comment || 'Approved by Store Manager'
       });
@@ -487,7 +477,7 @@ const StoreAssetRequests = () => {
     setProcessing(true);
 
     try {
-      await axios.patch(`/api/approvals/${id}`, {
+      await apiClient.patch(`/api/approvals/${id}`, {
         status: 'rejected',
         reason: reason.trim(),
         comment: reason.trim()
@@ -502,6 +492,63 @@ const StoreAssetRequests = () => {
     } catch (error) {
       console.error('Reject request error:', error);
 
+      toast.error(
+        error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          t.error
+      );
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleFulfill = async (request) => {
+    const id = getRequestId(request);
+    if (!id) return;
+
+    setProcessing(true);
+    try {
+      await apiClient.post(`/api/assignments/fulfill-request/${id}`);
+      toast.success(t.fulfillSuccess);
+      setShowDetails(false);
+      setSelectedRequest(null);
+      await fetchData();
+    } catch (error) {
+      console.error('Fulfill request error:', error);
+      toast.error(
+        error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          t.error
+      );
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleCancelApproved = async (request) => {
+    const id = getRequestId(request);
+    if (!id) return;
+
+    const reason = window.prompt(t.cancelReason);
+    if (reason === null) return;
+    if (!reason.trim()) {
+      toast.error(t.enterReason);
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      await apiClient.patch(`/api/approvals/${id}`, {
+        status: 'cancelled',
+        reason: reason.trim(),
+        comment: reason.trim()
+      });
+      toast.success(t.cancelSuccess);
+      setShowDetails(false);
+      setSelectedRequest(null);
+      await fetchData();
+    } catch (error) {
+      console.error('Cancel approved request error:', error);
       toast.error(
         error?.response?.data?.message ||
           error?.response?.data?.error ||
@@ -748,6 +795,13 @@ const StoreAssetRequests = () => {
           ➕ {t.newRequests}
         </button>
       </div>
+
+      {loadError && (
+        <div role="alert" style={{ ...cardStyle, marginBottom: 18, padding: 16, color: '#b91c1c' }}>
+          <span>{t.loadFailed}</span>
+          <button type="button" onClick={fetchData} style={{ marginLeft: 12 }}>{t.retry}</button>
+        </div>
+      )}
 
       {/* SUMMARY */}
       <div
@@ -1306,6 +1360,9 @@ const StoreAssetRequests = () => {
 
                     const status =
                       getStatus(request);
+                    const isAssetIssueRequest =
+                      String(request?.type || '').toLowerCase().includes('issue') &&
+                      Boolean(request?.assetId || request?.asset_id);
 
                     return (
                       <tr
@@ -1506,6 +1563,54 @@ const StoreAssetRequests = () => {
                                   ✕ {t.reject}
                                 </button>
                               </>
+                            )}
+                            {status === 'Approved' && isAssetIssueRequest && (
+                              request.fulfilledAt || request.fulfilled_at ? (
+                                <span
+                                  style={{
+                                    padding: '6px 10px',
+                                    color: '#15803d',
+                                    fontWeight: 700
+                                  }}
+                                >
+                                  {t.fulfilled}
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={processing}
+                                    onClick={() => handleFulfill(request)}
+                                    style={{
+                                      border: 'none',
+                                      borderRadius: 6,
+                                      padding: '6px 10px',
+                                      background: '#7c3aed',
+                                      color: '#fff',
+                                      cursor: processing ? 'wait' : 'pointer',
+                                      fontWeight: 700
+                                    }}
+                                  >
+                                    {t.fulfill}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={processing}
+                                    onClick={() => handleCancelApproved(request)}
+                                    style={{
+                                      border: 'none',
+                                      borderRadius: 6,
+                                      padding: '6px 10px',
+                                      background: '#dc2626',
+                                      color: '#fff',
+                                      cursor: processing ? 'wait' : 'pointer',
+                                      fontWeight: 700
+                                    }}
+                                  >
+                                    {t.cancelRequest}
+                                  </button>
+                                </>
+                              )
                             )}
                           </div>
                         </td>

@@ -12,7 +12,7 @@ import './StoreDashboard.css';
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend);
 
 const emptyData = { kpis: {}, status: {}, today: {}, inventoryHealth: {}, inventoryByStatus: {}, categories: {}, stockMovement: {}, monthlyMovements: [], pendingTransactions: [], recentActivities: [], recentMovements: [], recentTransactions: [], lowStockAlerts: [], verification: {}, maintenance: {}, health: {} };
-const icons = { totalInventory: Boxes, totalAssets: Boxes, availableAssets: PackageCheck, assignedAssets: ClipboardCheck, damagedItems: PackageX, pendingRequests: ClipboardList, pendingReceipts: PackagePlus, pendingIssues: PackageOpen, pendingReturns: PackageX, pendingTransfers: Truck, lowStock: TriangleAlert };
+const icons = { totalInventory: Boxes, totalAssets: Boxes, availableAssets: PackageCheck, assignedAssets: ClipboardCheck, damagedItems: PackageX, pendingReceipts: PackagePlus, pendingIssues: PackageOpen, pendingReturns: PackageX, lowStock: TriangleAlert };
 const routes = { Inventory: '/store/inventory', Available: '/store/available-assets', LowStock: '/store/low-stock', Receive: '/store/receive', Issue: '/store/issue', Return: '/store/returns', Transfer: '/store/transfers', Verification: '/store/verification', Maintenance: '/store/maintenance' };
 const english = { title: 'Store Manager', subtitle: 'Physical Asset Movement & Inventory Control', online: 'Online', offline: 'Offline', loading: 'Loading dashboard...', error: 'Unable to load Store dashboard', forbidden: 'You are not authorized to access this page.', retry: 'Retry', noActivity: 'No store activity yet', totalAssets: 'Total Store Assets', availableAssets: 'Available Assets', pendingRequests: 'Pending Requests', pendingReceipts: 'Pending Receipts', pendingIssues: 'Pending Issues', pendingReturns: 'Pending Returns', pendingTransfers: 'Pending Transfers', lowStock: 'Low Stock', operational: 'Operational Status', inMaintenance: 'In Maintenance', awaitingVerification: 'Awaiting Verification', discrepancies: 'Verification Discrepancies', inventoryHealth: 'Inventory Health', pending: 'Pending Transactions', recent: 'Recent Asset Movements', alerts: 'Low Stock Alerts', verification: 'Asset Verification', today: "Today's Store Activity", view: 'View', viewLowStock: 'View Low Stock', receive: 'Assets Received', issue: 'Assets Issued', return: 'Assets Returned', transfer: 'Assets Transferred', adjustment: 'Stock Adjustments', scans: 'Verification Scans', verified: 'Verified', missing: 'Missing', damaged: 'Damaged', unverified: 'Unverified', noSession: 'No verification session yet' };
 const amharic = { ...english, title: 'የመጋዘን አስተዳዳሪ', subtitle: 'የንብረት እንቅስቃሴ እና የእቃ ቁጥጥር', online: 'በመስመር ላይ', offline: 'ከመስመር ውጭ', loading: 'ዳሽቦርዱ በመጫን ላይ...', error: 'የመጋዘን ዳሽቦርዱ መጫን አልተቻለም', retry: 'እንደገና ሞክር', noActivity: 'እስካሁን የመጋዘን እንቅስቃሴ የለም', totalAssets: 'የመጋዘን ንብረቶች', availableAssets: 'ዝግጁ ንብረቶች', lowStock: 'ዝቅተኛ ክምችት' };
@@ -95,8 +95,6 @@ export default function StoreDashboard() {
     ['pendingReturns', data.kpis.pendingReturns],
     ['lowStock', data.kpis.lowStock],
     ['damagedItems', data.kpis.damagedItems],
-    ['pendingRequests', data.kpis.pendingRequests],
-    ['pendingTransfers', data.kpis.pendingTransfers],
   ];
   const statusRows = [
     ['available', t.availableAssets], ['reserved', t.reserved], ['assigned', t.assigned], ['issued', t.issued],

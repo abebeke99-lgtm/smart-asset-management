@@ -5,6 +5,7 @@ module.exports = sequelize.define('AssetReturn', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   returnNumber: { type: DataTypes.STRING(40), allowNull: true, unique: true, field: 'return_number' },
   assetId: { type: DataTypes.INTEGER, allowNull: false, field: 'asset_id' },
+  quantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
   collegeId: { type: DataTypes.INTEGER, allowNull: true, field: 'college_id' },
   departmentId: { type: DataTypes.INTEGER, allowNull: true, field: 'department_id' },
   sourceUserId: { type: DataTypes.INTEGER, allowNull: true, field: 'source_user_id' },

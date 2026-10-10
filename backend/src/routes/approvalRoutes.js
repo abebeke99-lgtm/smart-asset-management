@@ -6,7 +6,7 @@ const { resolveCollegeScope } = require('../middlewares/organizationScope');
 const router = express.Router();
 const resolveStoreManagerCollegeScope = (req, res, next) => req.user?.role === 'store_manager' ? resolveCollegeScope(req, res, next) : next();
 router.get('/', requireAuth, resolveStoreManagerCollegeScope, listApprovals);
-router.post('/', requireAuth, createApproval);
+router.post('/', requireAuth, resolveStoreManagerCollegeScope, createApproval);
 router.get('/:id', requireAuth, resolveStoreManagerCollegeScope, getApprovalById);
 router.patch('/:id', requireAuth, resolveStoreManagerCollegeScope, decideApproval);
 router.put('/:id', requireAuth, resolveStoreManagerCollegeScope, decideApproval);

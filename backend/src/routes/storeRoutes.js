@@ -1,10 +1,9 @@
 const express = require('express');
 const { getDashboard, getHistory, getInventory, getInventoryDetail, exportInventory, getLowStock, getAvailableAssets, getStockAdjustments, getReceipts } = require('../controllers/storeController');
-const { createStockAdjustment, createReceipt, getReceiptSuppliers } = require('../controllers/inventoryController');
+const { createStockAdjustment, createStockAddition, createReceipt, getReceiptSuppliers } = require('../controllers/inventoryController');
 const verification = require('../controllers/verificationController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const { findCollegeScopeForUser } = require('../middlewares/organizationScope');
-const College = require('../models/College');
 
 const router = express.Router();
 
@@ -12,15 +11,7 @@ const ensureStoreScope = async (req, res, next) => {
   if (!req.user) return res.status(401).json({ success: false, message: 'Authentication required' });
   try {
     const scope = await findCollegeScopeForUser(req.user);
-    let collegeId = Number(scope?.collegeId ?? req.user.collegeId ?? req.user.college_id ?? null);
-
-    if (!Number.isSafeInteger(collegeId) || collegeId <= 0) {
-      const colleges = await College.findAll({ attributes: ['id'], where: { status: 'active' }, order: [['id', 'ASC']] });
-      if (colleges.length === 0) {
-        return res.status(403).json({ success: false, message: 'Store Manager college scope is not configured' });
-      }
-      collegeId = Number(colleges[0].id);
-    }
+    const collegeId = Number(scope?.collegeId ?? req.user.collegeId ?? req.user.college_id ?? null);
 
     if (!Number.isSafeInteger(collegeId) || collegeId <= 0) {
       return res.status(403).json({ success: false, message: 'Store Manager college scope is not configured' });
@@ -43,6 +34,7 @@ router.get('/available-assets', requireAuth, requireRole('store_manager'), ensur
 router.get('/low-stock', requireAuth, requireRole('store_manager'), ensureStoreScope, getLowStock);
 router.get('/stock-adjustments', requireAuth, requireRole('store_manager'), ensureStoreScope, getStockAdjustments);
 router.post('/stock-adjustments', requireAuth, requireRole('store_manager'), ensureStoreScope, createStockAdjustment);
+router.post('/stock-additions', requireAuth, requireRole('store_manager'), ensureStoreScope, createStockAddition);
 router.get('/receive', requireAuth, requireRole('store_manager'), ensureStoreScope, getReceipts);
 router.get('/receive/suppliers', requireAuth, requireRole('store_manager'), ensureStoreScope, getReceiptSuppliers);
 router.post('/receive', requireAuth, requireRole('store_manager'), ensureStoreScope, createReceipt);

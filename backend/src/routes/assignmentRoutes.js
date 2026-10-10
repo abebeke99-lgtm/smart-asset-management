@@ -1,5 +1,5 @@
 const express = require('express');
-const { sequelize, Assignment, Asset, User, Department, Room, Inventory, InventoryTransaction } = require('../models');
+const { sequelize, Assignment, Asset, User, Department, Room, Inventory, InventoryTransaction, Approval, AssetMovement } = require('../models');
 const { requireAuth, requireRole, requirePermission } = require('../middlewares/auth');
 const { createDepartmentEventNotification, createEventNotification } = require('../services/notificationService');
 const { Op } = require('sequelize');
@@ -291,6 +291,141 @@ router.get('/history/:assetId', requireAuth, requireRole('admin', 'ict_officer',
   }
 });
 
+router.post('/fulfill-request/:id', requireAuth, requireRole('store_manager'), resolveAssignmentOrganizationScope, async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const collegeId = Number(req.organizationScope?.collegeId);
+    if (!Number.isSafeInteger(collegeId) || collegeId <= 0) {
+      await transaction.rollback();
+      return res.status(403).json({ success: false, message: 'Store Manager college scope is not configured' });
+    }
+    const approval = await Approval.findByPk(req.params.id, {
+      include: [{ model: Asset }, { model: Department }],
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!approval || Number(approval.Asset?.collegeId) !== collegeId || Number(approval.Department?.collegeId) !== collegeId) {
+      await transaction.rollback();
+      return res.status(404).json({ success: false, message: 'Approved request not found in your store scope' });
+    }
+    if (String(approval.status).toLowerCase() !== 'approved' || !String(approval.type).toLowerCase().includes('issue')) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'Only approved asset issue requests can be fulfilled' });
+    }
+    if (approval.fulfilledAt) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'This request has already been fulfilled' });
+    }
+
+    const quantity = Number(approval.quantity);
+    if (!Number.isSafeInteger(quantity) || quantity <= 0) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'The approved request quantity is invalid' });
+    }
+    const inventory = await Inventory.findOne({
+      where: { assetId: approval.assetId },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!inventory || inventory.reservedQuantity < quantity) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'Reserved stock is no longer available for this request' });
+    }
+
+    const asset = await Asset.findOne({
+      where: { id: approval.assetId, collegeId },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!asset) {
+      await transaction.rollback();
+      return res.status(404).json({ success: false, message: 'Requested asset not found in your store scope' });
+    }
+    if (String(asset.serialNumber || '').trim() && quantity !== 1) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'Serialized assets can only be fulfilled one unit per request' });
+    }
+    if (String(asset.serialNumber || '').trim()) {
+      const activeAssignment = await Assignment.findOne({
+        where: { assetId: asset.id, status: 'active' },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+      if (activeAssignment) {
+        await transaction.rollback();
+        return res.status(409).json({ success: false, message: 'This serialized asset already has an active assignment' });
+      }
+    }
+
+    const availableQuantity = inventory.availableQuantity;
+    const reservedQuantity = inventory.reservedQuantity;
+    await inventory.update({
+      reservedQuantity: inventory.reservedQuantity - quantity,
+    }, { transaction });
+    const assignment = await Assignment.create({
+      assetId: asset.id,
+      approvalId: approval.id,
+      quantity,
+      assignedTo: null,
+      assignedToType: 'department',
+      assignedToId: approval.departmentId,
+      assignedBy: req.user.id,
+      status: 'active',
+      workflowStatus: 'assigned',
+      assignedDate: new Date(),
+      departmentId: approval.departmentId,
+      location: asset.location || inventory.location || '',
+      conditionAtAssignment: asset.condition || 'Good',
+      notes: JSON.stringify({ approvalId: approval.id, requestId: approval.id, reason: approval.reason || '' }),
+    }, { transaction });
+    await Asset.update(
+      { status: availableQuantity > 0 ? 'available' : reservedQuantity > 0 ? 'reserved' : 'assigned' },
+      { where: { id: asset.id }, transaction },
+    );
+    const stockTransaction = await InventoryTransaction.create({
+      inventoryId: inventory.id,
+      assetId: asset.id,
+      userId: req.user.id,
+      departmentId: approval.departmentId,
+      type: 'issue',
+      quantity,
+      fromLocation: inventory.location || '',
+      toLocation: asset.location || inventory.location || '',
+      reason: `Approved request REQ-${String(approval.id).padStart(6, '0')}`,
+      notes: approval.reason || '',
+    }, { transaction });
+    await AssetMovement.create({
+      assetId: asset.id,
+      movementType: 'issue',
+      sourceType: 'store',
+      sourceId: null,
+      destinationType: 'department',
+      destinationId: approval.departmentId,
+      referenceType: 'approval',
+      referenceId: approval.id,
+      performedBy: req.user.id,
+      notes: JSON.stringify({ quantity, assignmentId: assignment.id, inventoryTransactionId: stockTransaction.id }),
+    }, { transaction });
+    await approval.update({ fulfilledAt: new Date() }, { transaction });
+    await createAuditLog({
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'STORE_REQUEST_FULFILLED',
+      entity: `approval:${approval.id}`,
+      entityId: approval.id,
+      oldValue: { reservedQuantity: inventory.reservedQuantity + quantity, availableQuantity },
+      newValue: { reservedQuantity: inventory.reservedQuantity, availableQuantity, quantity, assignmentId: assignment.id },
+      details: { approvalId: approval.id, assetId: asset.id, departmentId: approval.departmentId, quantity },
+      transaction,
+    });
+    await transaction.commit();
+    return res.status(201).json({ success: true, assignment: toAssignmentResponse(assignment), message: 'Approved request fulfilled successfully' });
+  } catch (error) {
+    if (!transaction.finished) await transaction.rollback();
+    return next(error);
+  }
+});
+
 router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.assign'), resolveAssignmentOrganizationScope, async (req, res, next) => {
   const {
     asset_id,
@@ -506,6 +641,19 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
       notes: notes || remarks || '',
     }, { transaction });
 
+    await AssetMovement.create({
+      assetId,
+      movementType: 'issue',
+      sourceType: 'store',
+      sourceId: null,
+      destinationType: assignedToType,
+      destinationId: assignedToId,
+      referenceType: 'assignment',
+      referenceId: assignment.id,
+      performedBy: actorId,
+      notes: JSON.stringify({ quantity: 1, departmentId: effectiveDepartmentId || null, purpose: purpose || '' }),
+    }, { transaction });
+
     await createAuditLog({
       userId: actorId,
       role: req.user.role,
@@ -557,9 +705,8 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
     const assignmentResponse = toAssignmentResponse(populatedAssignment);
     res.status(201).json({ success: true, message: 'Asset assigned successfully', data: assignmentResponse, assignment: assignmentResponse });
   } catch (error) {
-    console.error('Assignment creation failed:', error);
     if (!transaction.finished) await transaction.rollback();
-    res.status(500).json({ success: false, message: 'Unable to save assignment. Please verify the selected asset and user.' });
+    return next(error);
   }
 });
 
@@ -600,6 +747,18 @@ router.post('/:id/return', ...canManageAssignments, resolveAssignmentOrganizatio
     await inventory.update({ availableQuantity: inventory.availableQuantity + 1 }, { transaction });
     await asset.update({ status: 'available' }, { transaction });
     await InventoryTransaction.create({ inventoryId: inventory.id, assetId: assignment.assetId, userId: req.user.id, type: 'return', quantity: 1, reason: 'Asset returned', notes: req.body.notes || '' }, { transaction });
+    await AssetMovement.create({
+      assetId: assignment.assetId,
+      movementType: 'return',
+      sourceType: String(assignment.assignedToType || 'user').toLowerCase(),
+      sourceId: assignment.assignedToId || assignment.assignedTo || null,
+      destinationType: 'store',
+      destinationId: null,
+      referenceType: 'assignment',
+      referenceId: assignment.id,
+      performedBy: req.user.id,
+      notes: JSON.stringify({ quantity: 1 }),
+    }, { transaction });
     await createAuditLog({
       userId: req.user.id,
       role: req.user.role,

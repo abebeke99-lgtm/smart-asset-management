@@ -1,0 +1,236 @@
+.inventory-row-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.inventory-row-actions .detail-button,
+.sort-heading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+  color: #334155;
+  padding: 6px;
+  cursor: pointer;
+}
+
+.sort-heading {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+}
+
+.inventory-error-message {
+  margin: 0 0 12px;
+  color: #991b1b;
+}
+
+.inventory-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(15 23 42 / 55%);
+}
+
+.inventory-modal {
+  width: min(900px, 100%);
+  max-height: min(90vh, 900px);
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #172554;
+  box-shadow: 0 20px 55px rgb(15 23 42 / 25%);
+}
+
+.modal-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.modal-heading h2 {
+  margin: 5px 0 0;
+}
+
+.modal-heading button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.inventory-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 24px;
+}
+
+.inventory-detail-grid > div {
+  min-width: 0;
+  padding: 10px;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.inventory-detail-grid dt {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.inventory-detail-grid dd {
+  overflow-wrap: anywhere;
+  margin: 5px 0 0;
+  color: #172554;
+  font-size: 0.88rem;
+}
+
+.inventory-modal h3,
+.inventory-history-item strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.inventory-modal h3 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+
+.inventory-history-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid #eef2f7;
+  font-size: 0.84rem;
+}
+
+.inventory-history-item span {
+  color: #64748b;
+}
+
+.inventory-success-message {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.inventory-form-note {
+  padding: 9px 11px;
+  border-radius: 6px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.85rem;
+}
+
+.add-stock-modal {
+  width: min(620px, 100%);
+}
+
+.add-stock-form,
+.add-stock-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.add-stock-form {
+  gap: 15px;
+}
+
+.add-stock-form label {
+  color: #334155;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.add-stock-form input,
+.add-stock-form select,
+.add-stock-form textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+  color: #172554;
+  font: inherit;
+}
+
+.add-stock-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.add-stock-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.add-stock-actions button {
+  padding: 9px 13px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.add-stock-actions .primary-action {
+  border-color: #3074B3;
+  background: #3074B3;
+  color: #fff;
+}
+
+.add-stock-actions button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+@media (max-width: 650px) {
+  .inventory-modal {
+    padding: 16px;
+  }
+
+  .inventory-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .inventory-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .add-stock-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-history-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
