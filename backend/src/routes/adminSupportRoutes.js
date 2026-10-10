@@ -3,8 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const { Asset, User, Assignment, Maintenance, MaintenanceCost, RFIDLog, RfidDevice, Category, College, Department, Campus, Notification, AuditLog, AuditLogArchive, Config, SettingsVersion, MfaSetting, Transfer, Inventory, InventoryTransaction, Approval, FinancialRecord, DisposalRequest, sequelize } = require('../models');
-const { requireAuth, requireRole, requirePermission } = require('../middlewares/auth');
+const { Asset, User, Assignment, Maintenance, MaintenanceCost, RFIDLog, RfidDevice, Category, College, Department, Campus, Notification, NotificationDelivery, AuditLog, AuditLogArchive, Config, SettingsVersion, MfaSetting, Transfer, Inventory, InventoryTransaction, Approval, FinancialRecord, DisposalRequest, sequelize } = require('../models');
+const { requireAuth, requireRole, requirePermission, requireAnyPermission } = require('../middlewares/auth');
 const { Op, Sequelize } = require('sequelize');
 const speakeasy = require('speakeasy');
 const maintenanceController = require('../controllers/maintenanceController');
@@ -12,6 +12,7 @@ const backupService = require('../services/backupService');
 const { getDashboardAnalytics } = require('../services/dashboardService');
 const { getJwtSecret } = require('../config/jwt');
 const { createAuditLog } = require('../services/auditLogService');
+const { buildNotificationVisibilityWhere } = require('../services/notificationService');
 const { ROLE_NAMES, normalizeRoleForStorage } = require('../constants/rolePermissions');
 
 const router = express.Router();
@@ -1483,54 +1484,127 @@ router.delete(['/categories/:id', '/asset-categories/:id'], ...requireAdmin, req
   }
 });
 
-router.get('/notifications', requireAuth, async (req, res, next) => {
+const notificationReadAccess = [requireAuth, requireAnyPermission('notifications.view', 'notifications.manage')];
+const notificationDeleteAccess = [requireAuth, requireAnyPermission('notifications.delete', 'notifications.manage')];
+const parseNotificationId = (value) => {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+};
+const serializeNotification = (notification) => {
+  const value = notification.toJSON();
+  return {
+    id: value.id,
+    title: value.title,
+    message: value.message,
+    type: value.type,
+    priority: value.priority,
+    status: value.status,
+    read: Boolean(value.read),
+    is_read: Boolean(value.read),
+    createdAt: value.createdAt,
+    created_at: value.createdAt,
+    readAt: value.readAt,
+    read_at: value.readAt,
+    actionUrl: value.actionUrl,
+    action_url: value.actionUrl,
+  };
+};
+
+router.get('/notifications', ...notificationReadAccess, async (req, res, next) => {
   try {
     const notifications = await Notification.findAll({
-      where: { [require('sequelize').Op.or]: [{ userId: null }, { userId: req.user.id }] },
+      where: buildNotificationVisibilityWhere(req.user),
       order: [['createdAt', 'DESC']],
     });
-    const normalized = notifications.map((notification) => ({
-      ...notification.toJSON(),
-      is_read: notification.read,
-      created_at: notification.createdAt,
-    }));
+    const normalized = notifications.map(serializeNotification);
     res.json({ success: true, data: normalized, notifications: normalized });
   } catch (error) { next(error); }
 });
 
-router.put('/notifications/:id/read', requireAuth, async (req, res, next) => {
+router.put('/notifications/:id/read', ...notificationReadAccess, async (req, res, next) => {
   try {
-    const notification = await Notification.findOne({ where: { id: req.params.id, userId: req.user.id } });
+    const id = parseNotificationId(req.params.id);
+    if (!id) return res.status(400).json({ success: false, message: 'Notification ID must be a positive integer' });
+    const notification = await Notification.findOne({
+      where: { [Op.and]: [{ id }, buildNotificationVisibilityWhere(req.user)] },
+    });
     if (!notification) return res.status(404).json({ success: false, message: 'Notification not found' });
-    await notification.update({ read: true });
+    await notification.update({ read: true, readAt: new Date() });
     res.json({ success: true });
   } catch (error) { next(error); }
 });
 
-router.put('/notifications/read-all', requireAuth, async (req, res, next) => {
+router.put('/notifications/read-all', ...notificationReadAccess, async (req, res, next) => {
   try {
-    await Notification.update({ read: true }, {
-      where: { [require('sequelize').Op.or]: [{ userId: null }, { userId: req.user.id }] },
-    });
+    await Notification.update(
+      { read: true, readAt: new Date() },
+      { where: { [Op.and]: [buildNotificationVisibilityWhere(req.user), { read: false }] } },
+    );
     res.json({ success: true });
   } catch (error) { next(error); }
 });
 
 router.delete('/notifications/all', requireAuth, requireRole('admin'), async (req, res, next) => {
+  let transaction;
   try {
-    await Notification.destroy({
-      where: { [require('sequelize').Op.or]: [{ userId: null }, { userId: req.user.id }] },
+    transaction = await sequelize.transaction();
+    const where = { [Op.or]: [{ userId: null }, { userId: req.user.id }] };
+    const notifications = await Notification.findAll({ where, attributes: ['id'], transaction });
+    const ids = notifications.map((notification) => notification.id);
+    const deliveryRecordsDeleted = ids.length
+      ? await NotificationDelivery.destroy({ where: { notificationId: { [Op.in]: ids } }, transaction })
+      : 0;
+    const deletedCount = ids.length
+      ? await Notification.destroy({ where: { id: { [Op.in]: ids } }, transaction })
+      : 0;
+    await createAuditLog({
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'NOTIFICATIONS_BULK_DELETED',
+      entity: 'notifications:all',
+      details: { deletedCount, deliveryRecordsDeleted },
+      transaction,
     });
+    await transaction.commit();
     res.json({ success: true });
-  } catch (error) { next(error); }
+  } catch (error) {
+    if (transaction) await transaction.rollback();
+    next(error);
+  }
 });
 
-router.delete('/notifications/:id', requireAuth, async (req, res, next) => {
+router.delete('/notifications/:id', ...notificationDeleteAccess, async (req, res, next) => {
+  let transaction;
   try {
-    const deleted = await Notification.destroy({ where: { id: req.params.id, userId: req.user.id } });
-    if (!deleted) return res.status(404).json({ success: false, message: 'Notification not found' });
+    const id = parseNotificationId(req.params.id);
+    if (!id) return res.status(400).json({ success: false, message: 'Notification ID must be a positive integer' });
+    transaction = await sequelize.transaction();
+    const notification = await Notification.findOne({
+      where: { [Op.and]: [{ id }, buildNotificationVisibilityWhere(req.user)] },
+      transaction,
+    });
+    if (!notification) {
+      await transaction.rollback();
+      return res.status(404).json({ success: false, message: 'Notification not found or not authorized' });
+    }
+    const deliveryRecordsDeleted = await NotificationDelivery.destroy({ where: { notificationId: id }, transaction });
+    await notification.destroy({ transaction });
+    await createAuditLog({
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'NOTIFICATION_DELETED',
+      entity: `notification:${id}`,
+      entityId: id,
+      oldValue: { title: notification.title, type: notification.type, priority: notification.priority, scope: notification.scope },
+      details: { deliveryRecordsDeleted },
+      transaction,
+    });
+    await transaction.commit();
     res.json({ success: true });
-  } catch (error) { next(error); }
+  } catch (error) {
+    if (transaction) await transaction.rollback();
+    next(error);
+  }
 });
 
 const normalizeAuditDetails = (details) => {

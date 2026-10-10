@@ -4,6 +4,8 @@ import { Bell, CheckCheck, ChevronLeft, ChevronRight, Loader2, RefreshCw, Search
 import { toast } from 'react-toastify';
 import apiClient from '../../services/apiClient';
 import { useLanguage } from '../../contexts/UiContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { canDeleteNotifications } from '../../utils/notificationPermissions';
 
 const PAGE_SIZE = 10;
 
@@ -33,6 +35,8 @@ const normalizeNotification = (item = {}, language = 'en') => ({
 
 const CollegeNotifications = () => {
   const { language } = useLanguage();
+  const { user } = useAuth() || {};
+  const showDelete = canDeleteNotifications(user);
   const translate = (value) => language === 'am' ? AMHARIC_COPY[value] || AMHARIC_COPY[String(value).toLowerCase()] || value : value;
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -208,7 +212,7 @@ const CollegeNotifications = () => {
                     <td>
                       <div className="admin-row-actions">
                         {!notification.read && <button className="icon-button" type="button" aria-label={translate('Mark as read')} title={translate('Mark as read')} onClick={() => markRead(notification.id)}><CheckCheck size={15} /></button>}
-                        <button className="icon-button danger" type="button" aria-label={translate('Delete notification')} title={translate('Delete notification')} onClick={() => removeNotification(notification.id)}><Trash2 size={15} /></button>
+                        {showDelete && <button className="icon-button danger" type="button" aria-label={translate('Delete notification')} title={translate('Delete notification')} onClick={() => removeNotification(notification.id)}><Trash2 size={15} /></button>}
                       </div>
                     </td>
                   </tr>

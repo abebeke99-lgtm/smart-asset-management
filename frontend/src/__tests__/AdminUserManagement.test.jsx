@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Users from '../components/admin/AdminUserManagement';
 import apiClient from '../services/apiClient';
@@ -22,6 +22,7 @@ const roleNames = [
   'infrastructure',
   'staff',
   'student',
+  'technical_assistant',
 ];
 
 let usersResponse = [];
@@ -36,7 +37,10 @@ const respondToApiRequests = () => {
     if (url.endsWith('/activity')) return Promise.resolve({ data: { logs: [{ id: 7, action: 'CREATE_USER', entity: 'user:7', userId: 1, createdAt: '2026-10-02T12:00:00.000Z' }] } });
     if (url.startsWith('/api/users?')) return Promise.resolve({ data: { users: usersResponse, pagination: { total: usersResponse.length, pages: 1 } } });
     if (url === '/api/users/stats') return Promise.resolve({ data: { data: { total: usersResponse.length, active: usersResponse.length, inactive: 0, suspended: 0 } } });
-    if (url === '/api/roles') return Promise.resolve({ data: { roles: roleNames.map((name) => ({ name, displayName: name })) } });
+    if (url === '/api/roles') return Promise.resolve({ data: { roles: roleNames.map((name) => ({
+      name,
+      displayName: ({ staff: 'Staff', student: 'Student', technical_assistant: 'Technical Assistant' })[name] || name,
+    })) } });
     if (/^\/api\/colleges\/\d+\/departments$/.test(url)) return Promise.resolve({ data: { departments: [{ id: 8, name: 'Computer Science' }] } });
     if (url.startsWith('/api/colleges')) return Promise.resolve({ data: { colleges: [{ id: 3, collegeName: 'College of Engineering' }] } });
     return Promise.resolve({ data: { departments: [] } });
@@ -47,14 +51,14 @@ const openCreateForm = async () => {
   render(<Users />);
   fireEvent.click(await screen.findByRole('button', { name: /add user/i }));
   await screen.findByLabelText('Password *');
-  await screen.findAllByRole('option', { name: 'staff' });
+  await screen.findAllByRole('option', { name: 'ict_officer' });
 };
 
 const fillValidNewUser = () => {
   fireEvent.change(screen.getByLabelText(/Full Name/), { target: { value: 'New User' } });
   fireEvent.change(screen.getByLabelText('Username *'), { target: { value: 'new.user' } });
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new.user@example.edu' } });
-  fireEvent.change(screen.getByLabelText('Role *'), { target: { value: 'staff' } });
+  fireEvent.change(screen.getByLabelText('Role *'), { target: { value: 'ict_officer' } });
   fireEvent.change(screen.getByLabelText('Password *'), { target: { value: 'ManageMe#42' } });
   fireEvent.change(screen.getByLabelText('Confirm Password *'), { target: { value: 'ManageMe#42' } });
 };
@@ -69,11 +73,19 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-test('shows required passwords, exact role options, and independent visibility controls', async () => {
+test('hides college and department on add, filters only the three excluded roles, and retains password controls', async () => {
   await openCreateForm();
 
+  expect(screen.queryByLabelText('College')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Department')).not.toBeInTheDocument();
   const roleSelect = document.querySelector('[name="roleId"]');
-  expect(Array.from(roleSelect.options).slice(1).map((option) => option.value)).toEqual(roleNames);
+  const visibleRoleNames = Array.from(roleSelect.options).slice(1).map((option) => option.value);
+  expect(visibleRoleNames).toEqual(roleNames.filter((name) => !['staff', 'student', 'technical_assistant'].includes(name)));
+  expect(visibleRoleNames).toContain('admin');
+  expect(visibleRoleNames).toContain('ict_officer');
+  expect(within(roleSelect).queryByRole('option', { name: 'Staff' })).not.toBeInTheDocument();
+  expect(within(roleSelect).queryByRole('option', { name: 'Student' })).not.toBeInTheDocument();
+  expect(within(roleSelect).queryByRole('option', { name: 'Technical Assistant' })).not.toBeInTheDocument();
 
   const password = screen.getByLabelText('Password *');
   const confirmPassword = screen.getByLabelText('Confirm Password *');
@@ -95,7 +107,7 @@ test('rejects mismatched passwords without submitting', async () => {
   fireEvent.change(document.querySelector('[name="name"]'), { target: { value: 'New User' } });
   fireEvent.change(document.querySelector('[name="username"]'), { target: { value: 'new.user' } });
   fireEvent.change(document.querySelector('[name="email"]'), { target: { value: 'new.user@example.edu' } });
-  fireEvent.change(document.querySelector('[name="roleId"]'), { target: { value: 'staff' } });
+  fireEvent.change(document.querySelector('[name="roleId"]'), { target: { value: 'ict_officer' } });
   fireEvent.change(screen.getByLabelText('Password *'), { target: { value: 'ManageMe#42' } });
   fireEvent.change(screen.getByLabelText('Confirm Password *'), { target: { value: 'Different#42' } });
 
@@ -116,7 +128,7 @@ test('validates required fields, email format, and password policy before submit
   fireEvent.change(screen.getByLabelText(/Full Name/), { target: { value: 'New User' } });
   fireEvent.change(screen.getByLabelText('Username *'), { target: { value: 'new.user' } });
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'invalid-email' } });
-  fireEvent.change(screen.getByLabelText('Role *'), { target: { value: 'staff' } });
+  fireEvent.change(screen.getByLabelText('Role *'), { target: { value: 'ict_officer' } });
   fireEvent.change(screen.getByLabelText('Password *'), { target: { value: 'weakpass' } });
   fireEvent.change(screen.getByLabelText('Confirm Password *'), { target: { value: 'weakpass' } });
   fireEvent.submit(document.querySelector('form'));
@@ -129,9 +141,6 @@ test('validates required fields, email format, and password policy before submit
 test('submits the add-user form, closes it, and refreshes the visible user list', async () => {
   await openCreateForm();
   fillValidNewUser();
-  fireEvent.change(screen.getByLabelText('College'), { target: { value: '3' } });
-  await screen.findByRole('option', { name: 'Computer Science' });
-  fireEvent.change(screen.getByLabelText('Department'), { target: { value: '8' } });
 
   fireEvent.submit(document.querySelector('form'));
 
@@ -141,17 +150,46 @@ test('submits the add-user form, closes it, and refreshes the visible user list'
     data: expect.objectContaining({
       username: 'new.user',
       email: 'new.user@example.edu',
-      role: 'staff',
-      collegeId: '3',
-      departmentId: '8',
+      role: 'ict_officer',
       password: 'ManageMe#42',
     }),
   })));
 
   const createRequest = apiClient.request.mock.calls.find(([request]) => request.method === 'POST')[0];
   expect(createRequest.data.confirmPassword).toBe('ManageMe#42');
+  expect(createRequest.data).not.toHaveProperty('collegeId');
+  expect(createRequest.data).not.toHaveProperty('departmentId');
   await waitFor(() => expect(screen.queryByLabelText('Password *')).not.toBeInTheDocument());
   expect(await screen.findByText('new.user@example.edu')).toBeInTheDocument();
+});
+
+test('keeps college, department, and existing roles available when editing a user', async () => {
+  usersResponse = [{
+    id: 17,
+    fullName: 'Existing User',
+    username: 'existing.user',
+    email: 'existing@example.edu',
+    role: 'staff',
+    collegeId: 3,
+    departmentId: 8,
+    active: true,
+  }];
+  render(<Users />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit Existing User' }));
+
+  expect(await screen.findByLabelText('College')).toHaveValue('3');
+  await screen.findByRole('option', { name: 'Computer Science' });
+  expect(screen.getByLabelText('Department')).toHaveValue('8');
+  expect(Array.from(document.querySelector('[name="roleId"]').options).map((option) => option.value)).toContain('staff');
+
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Save Changes' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+  await waitFor(() => expect(apiClient.request).toHaveBeenCalledWith(expect.objectContaining({
+    url: '/api/users/17',
+    method: 'PUT',
+    data: expect.objectContaining({ collegeId: 3, departmentId: 8, role: 'staff' }),
+  })));
 });
 
 test('keeps the add-user form open and shows the API error when user creation is rejected', async () => {
@@ -159,9 +197,6 @@ test('keeps the add-user form open and shows the API error when user creation is
   fillValidNewUser();
   fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '+251 911 234 567' } });
   fireEvent.change(screen.getByLabelText('Account Status'), { target: { value: 'Inactive' } });
-  fireEvent.change(screen.getByLabelText('College'), { target: { value: '3' } });
-  await screen.findByRole('option', { name: 'Computer Science' });
-  fireEvent.change(screen.getByLabelText('Department'), { target: { value: '8' } });
   apiClient.request.mockImplementation(({ url, method }) => {
     if (method === 'POST' && url === '/api/users') {
       return Promise.resolve({
@@ -183,9 +218,9 @@ test('keeps the add-user form open and shows the API error when user creation is
   expect(screen.getByLabelText('Username *')).toHaveValue('new.user');
   expect(screen.getByLabelText('Email')).toHaveValue('new.user@example.edu');
   expect(screen.getByLabelText('Phone')).toHaveValue('+251 911 234 567');
-  expect(screen.getByLabelText('Role *')).toHaveValue('staff');
-  expect(screen.getByLabelText('College')).toHaveValue('3');
-  expect(screen.getByLabelText('Department')).toHaveValue('8');
+  expect(screen.getByLabelText('Role *')).toHaveValue('ict_officer');
+  expect(screen.queryByLabelText('College')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Department')).not.toBeInTheDocument();
   expect(screen.getByLabelText('Account Status')).toHaveValue('Inactive');
   expect(screen.getByLabelText('Password *')).toHaveValue('ManageMe#42');
   expect(screen.getByLabelText('Confirm Password *')).toHaveValue('ManageMe#42');

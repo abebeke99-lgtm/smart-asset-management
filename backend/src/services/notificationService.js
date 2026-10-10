@@ -3,6 +3,7 @@ const { sequelize, Notification, NotificationDelivery, User, Config } = require(
 const { sendNotificationEmail, validateEmailConfiguration } = require('./emailService');
 const { sendSMS } = require('./smsService');
 const { createAuditLog } = require('./auditLogService');
+const { normalizeRoleForStorage } = require('../constants/rolePermissions');
 
 const allowedTypes = new Set(['system', 'maintenance', 'assignment', 'transfer', 'missing_asset', 'warranty', 'rfid', 'security', 'alert', 'report', 'reminder', 'approval', 'inventory', 'procurement', 'financial', 'verification', 'disposal', 'custom']);
 const allowedPriorities = new Set(['low', 'medium', 'high', 'urgent']);
@@ -41,7 +42,7 @@ const buildNotificationVisibilityWhere = (user = {}) => {
   const clauses = [];
   if (user.id != null) clauses.push({ userId: user.id }, { recipientId: user.id });
   clauses.push({ scope: 'GLOBAL' });
-  const role = user.role ? String(user.role).trim().toLowerCase() : '';
+  const role = user.role ? normalizeRoleForStorage(user.role) : '';
   const collegeId = Number(user.collegeId ?? user.college_id ?? 0);
   const departmentId = Number(user.departmentId ?? user.department_id ?? 0);
   const organizationId = Number(user.organizationId ?? user.organization_id ?? 0);
@@ -70,8 +71,19 @@ const normalizeChannels = (channels) => {
 const resolveRecipients = async (payload) => {
   const type = String(payload.recipientType || payload.recipient_type || (payload.userId || payload.recipient_id ? 'users' : '')).toLowerCase();
   const where = { active: true };
-  if (type === 'users' || type === 'user') where.id = { [Op.in]: (payload.userIds || payload.user_ids || [payload.userId || payload.recipient_id]).map(Number).filter(Number.isInteger) };
-  else if (type === 'role') where.role = { [Op.in]: (payload.roles || []).map(String) };
+  if (type === 'users' || type === 'user') {
+    const userIds = payload.userIds || payload.user_ids || [payload.userId || payload.recipient_id];
+    if (!Array.isArray(userIds) || !userIds.length || userIds.some((id) => !Number.isSafeInteger(Number(id)) || Number(id) < 1)) {
+      throw Object.assign(new Error('Select one or more valid user recipients'), { statusCode: 400 });
+    }
+    where.id = { [Op.in]: [...new Set(userIds.map(Number))] };
+  }
+  else if (type === 'role') {
+    if (!Array.isArray(payload.roles) || !payload.roles.length || payload.roles.some((role) => typeof role !== 'string' || !role.trim())) {
+      throw Object.assign(new Error('Select one or more valid role recipients'), { statusCode: 400 });
+    }
+    where.role = { [Op.in]: [...new Set(payload.roles.map((role) => role.trim().toLowerCase()))] };
+  }
   else if (type === 'college') {
     const collegeId = Number(payload.collegeId || payload.college_id);
     if (!Number.isInteger(collegeId) || collegeId < 1) throw Object.assign(new Error('A valid college is required'), { statusCode: 400 });
@@ -88,10 +100,10 @@ const resolveRecipients = async (payload) => {
 };
 
 const buildNotification = (payload, senderId, recipient, status) => ({
-  title: String(payload.title || '').trim(),
-  message: String(payload.message || '').trim(),
-  type: allowedTypes.has(String(payload.type || '').toLowerCase()) ? String(payload.type).toLowerCase() : 'custom',
-  priority: allowedPriorities.has(String(payload.priority || '').toLowerCase()) ? String(payload.priority).toLowerCase() : 'medium',
+  title: payload.title.trim(),
+  message: payload.message.trim(),
+  type: String(payload.type || 'system').toLowerCase(),
+  priority: String(payload.priority || 'medium').toLowerCase(),
   channel: normalizeChannels(payload.channels || payload.channel).join(','),
   status,
   senderId,
@@ -191,13 +203,28 @@ const deliver = async (notification, recipient, channels, transaction) => {
 };
 
 const createBulkNotification = async (payload, senderId, senderRole = null) => {
-  if (!payload.title || !payload.message) throw Object.assign(new Error('Notification title and message are required'), { statusCode: 400 });
+  if (!payload || typeof payload.title !== 'string' || !payload.title.trim() || payload.title.trim().length > 255) {
+    throw Object.assign(new Error('Title must contain 1 to 255 characters'), { statusCode: 400 });
+  }
+  if (typeof payload.message !== 'string' || !payload.message.trim()) {
+    throw Object.assign(new Error('Notification message is required'), { statusCode: 400 });
+  }
+  const type = String(payload.type || 'system').trim().toLowerCase();
+  if (!allowedTypes.has(type)) throw Object.assign(new Error('Notification type is invalid'), { statusCode: 400 });
+  const priority = String(payload.priority || 'medium').trim().toLowerCase();
+  if (!allowedPriorities.has(priority)) throw Object.assign(new Error('Notification priority is invalid'), { statusCode: 400 });
   const channels = normalizeChannels(payload.channels || payload.channel);
   if (!channels.length) throw Object.assign(new Error('At least one valid delivery channel is required'), { statusCode: 400 });
   const recipients = await resolveRecipients(payload);
   if (!recipients.length) throw Object.assign(new Error('No active recipients match the selected audience'), { statusCode: 400 });
   const scheduled = payload.scheduledAt || payload.scheduled_at;
+  if (scheduled && Number.isNaN(new Date(scheduled).getTime())) {
+    throw Object.assign(new Error('Scheduled date is invalid'), { statusCode: 400 });
+  }
   const status = scheduled && new Date(scheduled) > new Date() ? 'scheduled' : 'sent';
+  const sender = senderRole || !senderId
+    ? null
+    : await User.findByPk(senderId, { attributes: ['id', 'role'] });
   const transaction = await sequelize.transaction();
   try {
     const created = [];
@@ -206,8 +233,6 @@ const createBulkNotification = async (payload, senderId, senderRole = null) => {
       const deliveries = status === 'scheduled' ? channels.map((channel) => ({ channel, status: 'pending' })) : await deliver(notification, recipient, channels, transaction);
       created.push({ notification, recipient, deliveries });
     }
-    await transaction.commit();
-    const sender = senderRole || !senderId ? null : await User.findByPk(senderId, { attributes: ['id', 'role'] });
     await createAuditLog({
       userId: senderId,
       role: senderRole || sender?.role,
@@ -217,7 +242,9 @@ const createBulkNotification = async (payload, senderId, senderRole = null) => {
       oldValue: null,
       newValue: { title: created[0].notification.title, type: created[0].notification.type, priority: created[0].notification.priority, status },
       details: { recipientCount: recipients.length, channels, legacyAction: recipients.length > 1 ? 'BULK_NOTIFICATION_SENT' : 'NOTIFICATION_CREATED' },
+      transaction,
     });
+    await transaction.commit();
     return { notifications: created.map((item) => item.notification), recipientCount: recipients.length, channels, status };
   } catch (error) {
     await transaction.rollback();

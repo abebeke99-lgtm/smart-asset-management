@@ -96,7 +96,7 @@ test('mark-as-read addresses only a notification visible to the logged-in recipi
     params: { id: '55' },
   }, response, (error) => { throw error; });
 
-  assert.deepEqual(query.where[Op.and][0], { id: '55' });
+  assert.deepEqual(query.where[Op.and][0], { id: 55 });
   const clauses = query.where[Op.and][1][Op.or];
   assert.deepEqual(clauses, [
     { userId: 8 },

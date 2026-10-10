@@ -1,5 +1,5 @@
 import Notifications from '../shared/Notifications';
 
-const DeptNotifications = () => <Notifications allowDelete={false} />;
+const DeptNotifications = () => <Notifications />;
 
 export default DeptNotifications;

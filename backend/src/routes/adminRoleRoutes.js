@@ -58,6 +58,7 @@ const defaultRoleDescriptions = {
   store_manager: 'Inventory, receiving, issue, and stock control',
   maintenance: 'Maintenance coordination and technical service management',
   infrastructure: 'Infrastructure and building asset management',
+  teaching_assistant: 'Teaching assistant access and limited academic support',
   staff: 'Standard staff access for routine operational tasks',
   student: 'Student access for learning and limited asset visibility',
 };
@@ -166,7 +167,7 @@ const ensureRoleGovernancePermissions = (role, permissions) => {
 };
 
 const validateRolePayload = (roleName, payload = {}) => {
-  const name = String(payload.name || roleName || '').trim();
+  const name = String(payload.name || roleName || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
   const description = String(payload.description || '').trim();
   const status = ensureValidStatus(payload.status || 'active');
 
@@ -255,10 +256,6 @@ router.post('/roles', ...requireAdminPermission('roles.manage'), async (req, res
       return res.status(400).json({ success: false, message: payload.message });
     }
 
-    if (!CORE_ROLES.includes(payload.name)) {
-      return res.status(409).json({ success: false, message: 'A role with this name already exists.' });
-    }
-
     const registry = await readRoleRegistry();
     const statuses = await readRoleStatusMap();
     const existing = registry[payload.name] || {};
@@ -323,7 +320,7 @@ router.patch('/roles/:role/status', ...requireAdminPermission('roles.manage'), a
       return res.status(404).json({ success: false, message: 'Role not found.' });
     }
 
-    const nextStatus = ensureValidStatus(req.body.status || req.body.active === false ? 'inactive' : 'active');
+    const nextStatus = ensureValidStatus(req.body.status || (req.body.active === false ? 'inactive' : 'active'));
     const registry = await readRoleRegistry();
     const statuses = await readRoleStatusMap();
     const existing = registry[normalizedRole] || {};

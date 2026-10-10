@@ -20,20 +20,39 @@ const AssetDetails = () => {
   const t = language === 'en' ? englishTranslations : amharicTranslations;
 
   useEffect(() => {
+    let active = true;
     const fetchAsset = async () => {
       setLoading(true);
+      setAsset(null);
+      setHistory([]);
       try {
         const response = await axios.get(`/api/assets/${id}`);
-        setAsset(response.data.asset);
-        const historyResponse = await axios.get(`/api/assets/${id}/history`);
-        setHistory(historyResponse.data.history || []);
+        if (!active) return;
+        const assetData = response.data?.asset || response.data?.data;
+        if (!assetData) throw new Error('Asset detail response did not include an asset');
+        setAsset(assetData);
       } catch (error) {
+        if (!active) return;
         toast.error('Failed to load asset details');
         navigate('/assets');
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+
+      try {
+        const historyResponse = await axios.get(`/api/assets/${id}/history`);
+        if (active) setHistory(historyResponse.data.history || []);
+      } catch (error) {
+        if (active) {
+          setHistory([]);
+          toast.error('Failed to load asset history');
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
     };
     fetchAsset();
+    return () => { active = false; };
   }, [id, navigate]);
 
   const getStatusColor = (status) => {
@@ -199,5 +218,4 @@ const amharicTranslations = {
 };
 
 export default AssetDetails;
-
 

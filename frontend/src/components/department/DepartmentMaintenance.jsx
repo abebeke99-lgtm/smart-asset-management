@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Building2, CalendarDays, CheckCircle2, CircleX, Clock3, Eye, FileText, Flag, LifeBuoy, LoaderCircle, MapPin, Package, Plus, RefreshCw, Search, SlidersHorizontal, UserRound, Wrench, X } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -38,14 +38,21 @@ const DepartmentMaintenance = () => {
   const [processingId, setProcessingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState('');
-  const [serviceForm, setServiceForm] = useState({ title: '', category: 'Facilities', priority: 'medium', description: '' });
+  const [serviceForm, setServiceForm] = useState({ title: '', category: 'Facilities', priority: 'medium', description: '', responsibleRole: '', assignedTo: '' });
   const [serviceEvidence, setServiceEvidence] = useState([]);
+  const [serviceRoutingOptions, setServiceRoutingOptions] = useState({ categories: [], roles_by_category: {} });
+  const [serviceRoutingLoading, setServiceRoutingLoading] = useState(false);
+  const [serviceRoutingError, setServiceRoutingError] = useState('');
+  const [serviceAssignees, setServiceAssignees] = useState([]);
+  const [serviceAssigneesLoading, setServiceAssigneesLoading] = useState(false);
+  const [serviceAssigneesError, setServiceAssigneesError] = useState('');
   const [serviceSummary, setServiceSummary] = useState({ total: 0, submitted: 0, scheduled: 0, 'in-progress': 0, completed: 0, escalated: 0, cancelled: 0 });
   const [serviceTechnicians, setServiceTechnicians] = useState([]);
   const [serviceFeedback, setServiceFeedback] = useState({ rating: 5, feedback: '' });
   const [serviceLoading, setServiceLoading] = useState(true);
   const [serviceSubmitting, setServiceSubmitting] = useState(false);
   const [serviceError, setServiceError] = useState('');
+  const serviceSubmitLock = useRef(false);
 
   const canCreate = ['department_head'].includes(role);
   const canCancel = (record) => record?.requestedBy === user?.id && ['pending', 'approved'].includes(record?.status);
@@ -98,6 +105,48 @@ const DepartmentMaintenance = () => {
     }
   }, [canAssignServiceRequests, filters.priority, filters.search, filters.status]);
 
+  const loadServiceRoutingOptions = useCallback(async () => {
+    setServiceRoutingLoading(true);
+    setServiceRoutingError('');
+    try {
+      const response = await apiClient.get('/api/service-requests/routing-options');
+      const data = response.data?.data || {};
+      const categories = Array.isArray(data.categories) ? data.categories : [];
+      const rolesByCategory = data.roles_by_category && typeof data.roles_by_category === 'object' ? data.roles_by_category : {};
+      setServiceRoutingOptions({ categories, roles_by_category: rolesByCategory });
+      setServiceForm((current) => {
+        const options = rolesByCategory[current.category] || [];
+        const selected = options.some((item) => item.name === current.responsibleRole) ? current.responsibleRole : options[0]?.name || '';
+        return { ...current, responsibleRole: selected, assignedTo: '' };
+      });
+    } catch (loadError) {
+      setServiceRoutingError(loadError.response?.data?.message || 'Unable to load active request roles. Retry to continue.');
+    } finally {
+      setServiceRoutingLoading(false);
+    }
+  }, []);
+
+  const loadServiceAssignees = useCallback(async (category, responsibleRole) => {
+    if (!category || !responsibleRole) {
+      setServiceAssignees([]);
+      setServiceAssigneesError('');
+      return;
+    }
+    setServiceAssigneesLoading(true);
+    setServiceAssigneesError('');
+    try {
+      const response = await apiClient.get('/api/service-requests/eligible-assignees', {
+        params: { category, role: responsibleRole },
+      });
+      setServiceAssignees(Array.isArray(response.data?.data) ? response.data.data : []);
+    } catch (loadError) {
+      setServiceAssignees([]);
+      setServiceAssigneesError(loadError.response?.data?.message || 'Unable to load eligible users.');
+    } finally {
+      setServiceAssigneesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (isServiceRequestRoute) {
       loadServiceRequests();
@@ -105,6 +154,11 @@ const DepartmentMaintenance = () => {
     }
     loadRecords();
   }, [filters.search, filters.status, filters.priority, isServiceRequestRoute, loadRecords, loadServiceRequests]);
+
+  useEffect(() => {
+    if (!showForm || !serviceForm.responsibleRole) return;
+    loadServiceAssignees(serviceForm.category, serviceForm.responsibleRole);
+  }, [loadServiceAssignees, serviceForm.category, serviceForm.responsibleRole, showForm]);
 
   const visibleRecords = useMemo(() => records, [records]);
 
@@ -127,6 +181,18 @@ const DepartmentMaintenance = () => {
 
   const submitServiceRequest = async (event) => {
     event.preventDefault();
+    if (serviceSubmitLock.current) return;
+    if (!serviceForm.title.trim() || !serviceForm.description.trim() || !serviceForm.responsibleRole) {
+      setServiceError('Title, details, and responsible role are required.');
+      return;
+    }
+    const selectedRole = (serviceRoutingOptions.roles_by_category[serviceForm.category] || [])
+      .find((item) => item.name === serviceForm.responsibleRole);
+    if (!selectedRole) {
+      setServiceError('Select an active responsible role for this request category.');
+      return;
+    }
+    serviceSubmitLock.current = true;
     setServiceSubmitting(true);
     setServiceError('');
     try {
@@ -137,6 +203,8 @@ const DepartmentMaintenance = () => {
         priority: serviceForm.priority,
         category: serviceForm.category,
         requestType: 'maintenance',
+        responsibleRoleId: Number(selectedRole.id),
+        ...(serviceForm.assignedTo ? { assignedTo: Number(serviceForm.assignedTo) } : {}),
         attachments: serviceEvidence.map((item) => ({
           data: item.data,
           fileName: item.name,
@@ -144,17 +212,39 @@ const DepartmentMaintenance = () => {
           attachmentType: 'photo',
         })),
       };
-      await apiClient.post('/api/service-requests', payload);
-      toast.success('Service request created.');
-      setServiceForm({ title: '', category: 'Facilities', priority: 'medium', description: '' });
+      const response = await apiClient.post('/api/service-requests', payload);
+      if (response.data?.notificationStatus === 'failed') {
+        toast.error(response.data.warning || 'Request saved, but its notification could not be delivered.');
+      } else {
+        toast.success(`Service request ${response.data?.data?.requestCode || ''} created and routed to ${selectedRole.displayName}.`.trim());
+      }
+      setServiceForm({ title: '', category: 'Facilities', priority: 'medium', description: '', responsibleRole: '', assignedTo: '' });
       setServiceEvidence([]);
       setShowForm(false);
       await loadServiceRequests();
     } catch (submitError) {
       setServiceError(submitError.response?.data?.message || submitError.message || 'Unable to create the service request.');
     } finally {
+      serviceSubmitLock.current = false;
       setServiceSubmitting(false);
     }
+  };
+
+  const openServiceRequestForm = () => {
+    setServiceForm({ title: '', category: serviceRoutingOptions.categories[0] || 'Facilities', priority: 'medium', description: '', responsibleRole: '', assignedTo: '' });
+    setServiceEvidence([]);
+    setShowForm(true);
+    loadServiceRoutingOptions();
+  };
+
+  const updateServiceRequestCategory = (category) => {
+    const roles = serviceRoutingOptions.roles_by_category[category] || [];
+    setServiceForm((current) => ({
+      ...current,
+      category,
+      responsibleRole: roles[0]?.name || '',
+      assignedTo: '',
+    }));
   };
 
   const openDetails = async (record) => {
@@ -162,9 +252,19 @@ const DepartmentMaintenance = () => {
     setLoadingDetails(true);
     try {
       const response = isServiceRequestRoute ? await apiClient.get(`/api/service-requests/${record.id}`) : await apiClient.get(`/api/department/maintenance/${record.id}`);
-      setSelected(response.data?.data || record);
+      const details = response.data?.data || record;
+      setSelected(details);
       if (isServiceRequestRoute && response.data?.feedback) {
         setServiceFeedback({ rating: response.data.feedback.rating || 5, feedback: response.data.feedback.feedback || response.data.feedback.comment || '' });
+      }
+      if (isServiceRequestRoute && details.responsible_role) {
+        const assigneeResponse = await apiClient.get('/api/service-requests/eligible-assignees', {
+          params: { category: details.category || details.requestType, role: details.responsible_role },
+        });
+        setServiceTechnicians(Array.isArray(assigneeResponse.data?.data) ? assigneeResponse.data.data : []);
+      } else if (isServiceRequestRoute && canAssignServiceRequests) {
+        const technicianResponse = await apiClient.get('/api/service-requests/technicians');
+        setServiceTechnicians(Array.isArray(technicianResponse.data?.data) ? technicianResponse.data.data : []);
       }
     } catch (detailError) {
       toast.error(detailError.response?.data?.message || 'Unable to load details.');
@@ -197,6 +297,7 @@ const DepartmentMaintenance = () => {
         start: '/start',
         complete: '/complete',
         cancel: '/cancel',
+        cancelled: '/cancel',
       };
       const endpoint = statusMap[status];
       if (endpoint) {
@@ -250,7 +351,7 @@ const DepartmentMaintenance = () => {
           </div>
           <div className="maintenance-header-actions">
             <button className="maintenance-button secondary" type="button" onClick={loadServiceRequests} disabled={serviceLoading}><RefreshCw size={16} aria-hidden="true" /> Refresh</button>
-            {canCreate && <button className="maintenance-button primary" type="button" onClick={() => setShowForm((visible) => !visible)}><Plus size={17} aria-hidden="true" /> New request</button>}
+            {canCreate && <button className="maintenance-button primary" type="button" onClick={openServiceRequestForm}><Plus size={17} aria-hidden="true" /> New request</button>}
           </div>
         </header>
 
@@ -272,10 +373,26 @@ const DepartmentMaintenance = () => {
               <button className="icon-button" type="button" onClick={() => setShowForm(false)} aria-label="Close request form" title="Close"><X size={18} /></button>
             </div>
             <div className="form-grid">
-              <label className="full-width">Title<input required value={serviceForm.title} onChange={(event) => setServiceForm({ ...serviceForm, title: event.target.value })} placeholder="Brief description of the issue" /></label>
-              <label>Category<select value={serviceForm.category} onChange={(event) => setServiceForm({ ...serviceForm, category: event.target.value })}>{['Facilities', 'ICTD', 'Other'].map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
-              <label>Priority<select value={serviceForm.priority} onChange={(event) => setServiceForm({ ...serviceForm, priority: event.target.value })}>{['low', 'medium', 'high', 'critical'].map((priority) => <option key={priority} value={priority}>{displayPriority(priority)}</option>)}</select></label>
-              <label className="full-width">Details<textarea required rows="4" value={serviceForm.description} onChange={(event) => setServiceForm({ ...serviceForm, description: event.target.value })} placeholder="Describe the issue, impact, and any relevant context" /></label>
+              <label className="full-width">Title<input aria-label="Request title" required value={serviceForm.title} onChange={(event) => setServiceForm({ ...serviceForm, title: event.target.value })} placeholder="Brief description of the issue" /></label>
+              <label>Category<select aria-label="Request category" required disabled={serviceRoutingLoading || serviceRoutingOptions.categories.length === 0} value={serviceForm.category} onChange={(event) => updateServiceRequestCategory(event.target.value)}>{serviceRoutingOptions.categories.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
+              <label>Priority<select aria-label="Request priority" value={serviceForm.priority} onChange={(event) => setServiceForm({ ...serviceForm, priority: event.target.value })}>{['low', 'medium', 'high', 'critical'].map((priority) => <option key={priority} value={priority}>{displayPriority(priority)}</option>)}</select></label>
+              <label className="full-width">Responsible role
+                <select aria-label="Responsible role" required disabled={serviceRoutingLoading || Boolean(serviceRoutingError)} value={serviceForm.responsibleRole} onChange={(event) => setServiceForm({ ...serviceForm, responsibleRole: event.target.value, assignedTo: '' })}>
+                  {(serviceRoutingOptions.roles_by_category[serviceForm.category] || []).map((option) => <option key={option.id} value={option.name}>{option.displayName} — {option.description}</option>)}
+                </select>
+                {serviceRoutingLoading && <small>Loading active roles...</small>}
+                {serviceRoutingError && <small role="alert">{serviceRoutingError} <button type="button" className="maintenance-link-button" onClick={loadServiceRoutingOptions}>Retry</button></small>}
+              </label>
+              <label className="full-width">Responsible user (optional)
+                <select aria-label="Responsible user" disabled={!serviceForm.responsibleRole || serviceAssigneesLoading || Boolean(serviceAssigneesError)} value={serviceForm.assignedTo} onChange={(event) => setServiceForm({ ...serviceForm, assignedTo: event.target.value })}>
+                  <option value="">Assign to the selected role</option>
+                  {serviceAssignees.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+                </select>
+                {serviceAssigneesLoading && <small>Loading eligible users...</small>}
+                {serviceAssigneesError && <small role="alert">{serviceAssigneesError} <button type="button" className="maintenance-link-button" onClick={() => loadServiceAssignees(serviceForm.category, serviceForm.responsibleRole)}>Retry</button></small>}
+                {!serviceAssigneesLoading && !serviceAssigneesError && serviceForm.responsibleRole && serviceAssignees.length === 0 && <small>No eligible users are available in your organization; this request will remain assigned to the role.</small>}
+              </label>
+              <label className="full-width">Details<textarea aria-label="Request details" required rows="4" value={serviceForm.description} onChange={(event) => setServiceForm({ ...serviceForm, description: event.target.value })} placeholder="Describe the issue, impact, and any relevant context" /></label>
               <label className="full-width">Evidence / photos<input type="file" accept="image/*" multiple onChange={(event) => {
                 const attachments = Array.from(event.target.files || []).map((file) => new Promise((resolve, reject) => {
                   const reader = new FileReader();
@@ -288,8 +405,8 @@ const DepartmentMaintenance = () => {
               {serviceEvidence.length > 0 && <div className="asset-preview full-width"><span><Package size={15} aria-hidden="true" /> Attached evidence</span><small>{serviceEvidence.map((file) => file.name).join(', ')}</small></div>}</label>
             </div>
             <div className="form-actions">
-              <button className="maintenance-button secondary" type="button" onClick={() => setShowForm(false)}>Cancel</button>
-              <button className="maintenance-button primary" type="submit" disabled={serviceSubmitting}>{serviceSubmitting ? <LoaderCircle className="spin" size={16} /> : <CheckCircle2 size={16} />} {serviceSubmitting ? 'Submitting...' : 'Submit request'}</button>
+              <button className="maintenance-button secondary" type="button" onClick={() => setShowForm(false)} disabled={serviceSubmitting}>Cancel</button>
+              <button className="maintenance-button primary" type="submit" disabled={serviceSubmitting || serviceRoutingLoading || Boolean(serviceRoutingError) || !serviceForm.responsibleRole}>{serviceSubmitting ? <LoaderCircle className="spin" size={16} /> : <CheckCircle2 size={16} />} {serviceSubmitting ? 'Submitting...' : 'Submit request'}</button>
             </div>
           </form>
         )}
@@ -304,7 +421,7 @@ const DepartmentMaintenance = () => {
         </div>
 
         <div className="maintenance-table-wrap">
-          {serviceLoading ? <LoadingState /> : visibleRecords.length === 0 ? <EmptyState canCreate={false} onCreate={() => setShowForm(true)} /> : <table className="maintenance-table"><thead><tr><th>Request</th><th>Category</th><th>Priority</th><th>Status</th><th>Technician</th><th>Created</th><th>Actions</th></tr></thead><tbody>{visibleRecords.map((record) => <tr key={record.id}><td><strong>{record.requestCode || `SR-${String(record.id).padStart(3, '0')}`}</strong><span>{record.title || record.description || '-'}</span></td><td><strong>{record.category || record.routed_to_label || 'Unassigned'}</strong><span>{record.routed_to_label || 'Not routed'}</span></td><td><span className={`priority-badge priority-${(record.priority || 'medium').toLowerCase()}`}>{displayPriority(record.priority)}</span></td><td><span className={`status-badge status-${(record.status || 'submitted').toLowerCase()}`}><StatusIcon status={(record.status || 'submitted').toLowerCase()} /> {displayStatus(record.status)}</span></td><td><strong>{record.assignee_name || record.Assignee?.fullName || 'Not assigned'}</strong><span>{record.assigned_to ? `Technician #${record.assigned_to}` : 'Awaiting assignment'}</span></td><td>{formatDate(record.created_at || record.createdAt)}</td><td><div className="row-actions"><button className="icon-button" type="button" onClick={() => openDetails(record)} title="View request details" aria-label={`View service request ${record.id}`}><Eye size={17} /></button></div></td></tr>)}</tbody></table>}
+          {serviceLoading ? <LoadingState /> : visibleRecords.length === 0 ? <EmptyState canCreate={false} onCreate={openServiceRequestForm} /> : <table className="maintenance-table"><thead><tr><th>Request</th><th>Category</th><th>Priority</th><th>Status</th><th>Responsible</th><th>Created</th><th>Actions</th></tr></thead><tbody>{visibleRecords.map((record) => <tr key={record.id}><td><strong>{record.requestCode || `SR-${String(record.id).padStart(3, '0')}`}</strong><span>{record.title || record.description || '-'}</span></td><td><strong>{record.category || record.routed_to_label || 'Unassigned'}</strong><span>{record.routed_to_label || 'Not routed'}</span></td><td><span className={`priority-badge priority-${(record.priority || 'medium').toLowerCase()}`}>{displayPriority(record.priority)}</span></td><td><span className={`status-badge status-${(record.status || 'submitted').toLowerCase()}`}><StatusIcon status={(record.status || 'submitted').toLowerCase()} /> {displayStatus(record.status)}</span></td><td><strong>{record.assignee_name || record.Assignee?.fullName || record.responsible_role_label || 'Not assigned'}</strong><span>{record.assigned_to ? `User #${record.assigned_to}` : `Role: ${record.responsible_role_label || 'Not assigned'}`}</span></td><td>{formatDate(record.created_at || record.createdAt)}</td><td><div className="row-actions"><button className="icon-button" type="button" onClick={() => openDetails(record)} title="View request details" aria-label={`View service request ${record.id}`}><Eye size={17} /></button></div></td></tr>)}</tbody></table>}
         </div>
 
         {selected && (
@@ -326,23 +443,25 @@ const DepartmentMaintenance = () => {
                   <Detail label="Title" value={selected.title || '-'} icon={FileText} />
                   <Detail label="Category" value={selected.category || selected.routed_to_label || 'Uncategorized'} icon={Package} />
                   <Detail label="Priority" value={displayPriority(selected.priority)} icon={Flag} />
-                  <Detail label="Technician" value={selected.assignee_name || selected.Assignee?.fullName || 'Not assigned'} icon={UserRound} />
+                  <Detail label="Responsible role" value={selected.responsible_role_label || selected.routed_to_label || 'Unassigned'} icon={UserRound} />
+                  <Detail label="Assigned user" value={selected.assignee_name || selected.Assignee?.fullName || 'Role queue'} icon={UserRound} />
                   <Detail label="Created" value={formatDate(selected.created_at || selected.createdAt, true)} icon={CalendarDays} />
                   <Detail label="Updated" value={formatDate(selected.updated_at || selected.updatedAt, true)} icon={RefreshCw} />
                   <div className="detail-field full-width"><span>Description</span><p>{selected.description || '-'}</p></div>
                   {selected.RequestAttachments?.length > 0 && <div className="detail-field full-width"><span>Evidence</span>{selected.RequestAttachments.map((attachment) => <p key={attachment.id}>{attachment.originalName}</p>)}</div>}
                 </div>
                 <div className="dialog-actions">
-                  {canAssignServiceRequests && serviceTechnicians.length > 0 && (
+                  {selected.can_process && serviceTechnicians.length > 0 && (
                     <select value={selected.assigned_to || ''} onChange={(event) => assignServiceTechnician(selected.id, event.target.value)} aria-label="Assign technician">
-                      <option value="">Assign technician</option>
-                      {serviceTechnicians.map((technician) => <option key={technician.id} value={technician.id}>{technician.fullName || technician.username}</option>)}
+                      <option value="">Assign to responsible role</option>
+                      {serviceTechnicians.map((technician) => <option key={technician.id} value={technician.id}>{technician.name || technician.fullName || technician.username}</option>)}
                     </select>
                   )}
-                  {selected.status === 'submitted' && canAssignServiceRequests && <button className="maintenance-button primary" type="button" onClick={() => updateServiceStatus('scheduled')}>Acknowledge</button>}
-                  {selected.status === 'scheduled' && canAssignServiceRequests && <button className="maintenance-button primary" type="button" onClick={() => updateServiceStatus('in-progress')}>Start</button>}
-                  {selected.status === 'in-progress' && canAssignServiceRequests && <button className="maintenance-button primary" type="button" onClick={() => updateServiceStatus('completed')}>Complete</button>}
-                  {canAssignServiceRequests && selected.status !== 'cancelled' && <button className="maintenance-button secondary" type="button" onClick={() => updateServiceStatus('cancelled')}>Cancel</button>}
+                  {selected.status === 'submitted' && selected.can_process && <button className="maintenance-button primary" type="button" onClick={() => updateServiceStatus('scheduled')}>Acknowledge</button>}
+                  {selected.status === 'scheduled' && selected.can_process && <button className="maintenance-button primary" type="button" onClick={() => updateServiceStatus('in-progress')}>Start</button>}
+                  {selected.status === 'in-progress' && selected.can_process && <button className="maintenance-button primary" type="button" onClick={() => updateServiceStatus('completed')}>Complete</button>}
+                  {selected.can_process && selected.status !== 'cancelled' && <button className="maintenance-button secondary" type="button" onClick={() => updateServiceStatus('cancelled')}>Cancel</button>}
+                  {!selected.can_process && selected.can_cancel && <button className="maintenance-button secondary" type="button" onClick={() => updateServiceStatus('cancelled')}>Cancel request</button>}
                 </div>
                 {selected.status === 'completed' && (
                   <div className="maintenance-request-form" style={{ marginTop: 16 }}>

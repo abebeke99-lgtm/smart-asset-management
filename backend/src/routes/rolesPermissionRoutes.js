@@ -221,12 +221,7 @@ router.put('/roles/:roleId/permissions', ...requireModuleAction('edit'), async (
     const nextGrants = [...deduplicated.values()].filter((grant) => grant.state !== 'none');
     await sequelize.transaction(async (transaction) => {
       const previous = await RolePermission.findAll({ where: { roleId: role.id }, transaction });
-      const adminCount = await UserRole.count({
-        where: { roleId: role.id },
-        include: [{ model: Role, required: true, where: { name: 'admin' } }],
-        transaction,
-      });
-      if (role.name === 'admin' && adminCount > 0
+      if (role.name === 'admin'
         && !nextGrants.some((grant) => (
           Number(grant.permissionId) === permissions.find((permission) => permission.action === 'configure')?.id
           && grant.state === 'full'
@@ -288,15 +283,8 @@ router.put('/matrix', ...requireModuleAction('edit'), async (req, res, next) => 
     await sequelize.transaction(async (transaction) => {
       for (const [roleId, grants] of requested) {
         const role = roleById.get(roleId);
-        const activeAssignments = await UserRole.findAll({
-          where: { roleId },
-          attributes: ['userId'],
-          transaction,
-        });
-        const affectedUsers = [...new Set(activeAssignments.map((assignment) => Number(assignment.userId)))];
         const nextConfigure = configurePermission && grants.get(configurePermission.id);
-        if (role.name === 'admin' && affectedUsers.length
-          && (!nextConfigure || nextConfigure.state !== 'full')) {
+        if (role.name === 'admin' && (!nextConfigure || nextConfigure.state !== 'full')) {
           await auditDenied(req, 'CHANGE_PERMISSION', `role:${role.id}`, { reason: 'last Administrator would lose configure permission' });
           const error = new Error('The Administrator role must retain Configure permission.');
           error.status = 409;
@@ -386,6 +374,14 @@ router.put('/users/:userId/roles', ...requireModuleAction('assign'), async (req,
           scopeType: item.scopeType,
           scopeId: item.scopeType === 'system' || item.scopeType === 'own' ? null : Number(item.scopeId),
         })), { transaction });
+      }
+      const primaryRoleId = req.body.assignments.length ? Number(req.body.assignments[0].roleId) : null;
+      const primaryRole = primaryRoleId ? roles.find((role) => role.id === primaryRoleId) : null;
+      const nextLegacyRole = primaryRole && ROLE_NAMES.includes(primaryRole.name)
+        ? primaryRole.name
+        : 'student';
+      if (targetUser.role !== nextLegacyRole) {
+        await targetUser.update({ role: nextLegacyRole }, { transaction });
       }
       await auditChange(req, 'ASSIGN_USER_ROLE', `user:${targetUser.id}`, existing, req.body.assignments, transaction);
     });

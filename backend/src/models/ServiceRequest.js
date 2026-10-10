@@ -14,6 +14,7 @@ const ServiceRequest = sequelize.define('ServiceRequest', {
   priority: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'medium' },
   status: { type: DataTypes.STRING(50), allowNull: false, defaultValue: 'submitted' },
   routedTo: { type: DataTypes.STRING(50), allowNull: true, field: 'routed_to' },
+  responsibleRole: { type: DataTypes.STRING(100), allowNull: true, field: 'responsible_role' },
   assignedTo: { type: DataTypes.INTEGER, allowNull: true, field: 'assigned_to' },
   reportedBy: { type: DataTypes.INTEGER, allowNull: false, field: 'reported_by' },
   departmentId: { type: DataTypes.INTEGER, allowNull: true, field: 'department_id' },
@@ -43,7 +44,7 @@ const ServiceRequest = sequelize.define('ServiceRequest', {
 }, {
   tableName: 'service_requests',
   timestamps: true,
-  indexes: [{ fields: ['status'] }, { fields: ['request_type'] }, { fields: ['routed_to'] }, { fields: ['reported_by'] }, { fields: ['asset_id'] }, { fields: ['priority'] }, { fields: ['due_date'] }],
+  indexes: [{ fields: ['status'] }, { fields: ['request_type'] }, { fields: ['routed_to'] }, { fields: ['responsible_role'] }, { fields: ['reported_by'] }, { fields: ['asset_id'] }, { fields: ['priority'] }, { fields: ['due_date'] }],
 });
 
 module.exports = ServiceRequest;

@@ -87,7 +87,11 @@ test('session profile refresh returns the current database role and role permiss
     user.role = 'finance';
     const refreshed = await makeRequest();
     assert.equal(refreshed.body.data.role, 'finance');
-    assert.deepEqual(refreshed.body.data.permissions, ['financial.view']);
+    assert.deepEqual(refreshed.body.data.permissions, [
+      'financial.view',
+      'notifications.view',
+      'notifications.delete',
+    ]);
   } finally {
     models.User.findByPk = originalFindByPk;
     models.Config.findByPk = originalConfigFindByPk;

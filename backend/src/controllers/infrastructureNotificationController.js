@@ -1,26 +1,38 @@
 const { Op } = require('sequelize');
-const { Notification } = require('../models');
+const { Notification, NotificationDelivery, sequelize } = require('../models');
+const { createAuditLog } = require('../services/auditLogService');
+const { buildNotificationVisibilityWhere } = require('../services/notificationService');
 
-const notificationScope = (req) => ({
-  [Op.or]: [
-    { userId: req.user.id },
-    { userId: null },
-  ],
-});
+const notificationScope = (req) => buildNotificationVisibilityWhere(req.user || {});
 
 const normalizeNotification = (notification) => {
   const value = notification.toJSON ? notification.toJSON() : notification;
   return {
-    ...value,
+    id: value.id,
+    title: value.title,
+    message: value.message,
+    type: value.type,
+    priority: value.priority,
     status: value.read ? 'read' : 'unread',
     isRead: Boolean(value.read),
+    read: Boolean(value.read),
+    scope: value.scope || 'USER',
     createdAt: value.createdAt || value.created_at || null,
     readAt: value.readAt || value.read_at || null,
   };
 };
 
-const findScopedNotification = (req) => Notification.findOne({
-  where: { id: req.params.id, ...notificationScope(req) },
+const getNotificationId = (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1) {
+    res.status(400).json({ success: false, message: 'Notification ID must be a positive integer' });
+    return null;
+  }
+  return id;
+};
+
+const findScopedNotification = (req, id) => Notification.findOne({
+  where: { [Op.and]: [{ id }, notificationScope(req)] },
 });
 
 const listInfrastructureNotifications = async (req, res, next) => {
@@ -66,7 +78,9 @@ const listInfrastructureNotifications = async (req, res, next) => {
 
 const markInfrastructureNotificationRead = async (req, res, next) => {
   try {
-    const notification = await findScopedNotification(req);
+    const id = getNotificationId(req, res);
+    if (!id) return;
+    const notification = await findScopedNotification(req, id);
     if (!notification) return res.status(404).json({ success: false, message: 'Notification not found' });
     await notification.update({ read: true, readAt: new Date() });
     return res.json({ success: true, data: normalizeNotification(notification) });
@@ -75,7 +89,9 @@ const markInfrastructureNotificationRead = async (req, res, next) => {
 
 const markInfrastructureNotificationUnread = async (req, res, next) => {
   try {
-    const notification = await findScopedNotification(req);
+    const id = getNotificationId(req, res);
+    if (!id) return;
+    const notification = await findScopedNotification(req, id);
     if (!notification) return res.status(404).json({ success: false, message: 'Notification not found' });
     await notification.update({ read: false, readAt: null });
     return res.json({ success: true, data: normalizeNotification(notification) });
@@ -94,9 +110,36 @@ const markAllInfrastructureNotificationsRead = async (req, res, next) => {
 
 const deleteInfrastructureNotification = async (req, res, next) => {
   try {
-    const notification = await findScopedNotification(req);
-    if (!notification) return res.status(404).json({ success: false, message: 'Notification not found' });
-    await notification.destroy();
+    const id = getNotificationId(req, res);
+    if (!id) return;
+    const transaction = await sequelize.transaction();
+    try {
+      const notification = await Notification.findOne({
+        where: { [Op.and]: [{ id }, notificationScope(req)] },
+        transaction,
+      });
+      if (!notification) {
+        await transaction.rollback();
+        return res.status(404).json({ success: false, message: 'Notification not found or not authorized' });
+      }
+      const oldValue = { title: notification.title, type: notification.type, scope: notification.scope };
+      const deliveryRecordsDeleted = await NotificationDelivery.destroy({ where: { notificationId: id }, transaction });
+      await notification.destroy({ transaction });
+      await createAuditLog({
+        userId: req.user.id,
+        role: req.user.role,
+        action: 'NOTIFICATION_DELETED',
+        entity: `notification:${id}`,
+        entityId: id,
+        oldValue,
+        details: { deliveryRecordsDeleted },
+        transaction,
+      });
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
     return res.json({ success: true });
   } catch (error) { return next(error); }
 };

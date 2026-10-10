@@ -55,7 +55,7 @@ test('college role receives only its own configured permissions', async () => {
   }
 });
 
-test('explicit department-head permission matrices revoke permissions outside the saved list', async () => {
+test('explicit department-head permission matrices retain notification policy grants', async () => {
   const originalFindByPk = Config.findByPk;
   Config.findByPk = async (key) => {
     if (key !== 'role_permissions') return originalFindByPk.call(Config, key);
@@ -64,7 +64,14 @@ test('explicit department-head permission matrices revoke permissions outside th
 
   try {
     const permissions = await getConfiguredRolePermissions('department_head');
-    assert.deepEqual(permissions, ['assets.view', 'assets.assign', 'users.view', 'reports.view']);
+    assert.deepEqual(permissions, [
+      'assets.view',
+      'assets.assign',
+      'users.view',
+      'reports.view',
+      'notifications.view',
+      'notifications.delete',
+    ]);
   } finally {
     Config.findByPk = originalFindByPk;
   }

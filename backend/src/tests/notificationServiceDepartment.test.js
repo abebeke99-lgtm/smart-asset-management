@@ -26,6 +26,7 @@ test('department-head notification creation persists the scoped recipient, entit
   const { User, Config, Notification, NotificationDelivery, sequelize } = models;
   const originals = {
     userFindAll: User.findAll,
+    userFindByPk: User.findByPk,
     configFindByPk: Config.findByPk,
     notificationFindOne: Notification.findOne,
     notificationCreate: Notification.create,
@@ -40,6 +41,7 @@ test('department-head notification creation persists the scoped recipient, entit
     if (where.id?.[Op.in]) return [head];
     return [];
   };
+  User.findByPk = async () => ({ id: 5, role: 'department_head' });
   Config.findByPk = async () => ({ value: JSON.stringify({ enabled: true, inAppEnabled: true }) });
   Notification.findOne = async () => null;
   Notification.create = async (values) => {
@@ -50,6 +52,7 @@ test('department-head notification creation persists the scoped recipient, entit
   sequelize.transaction = async () => ({ commit: async () => {}, rollback: async () => {} });
   t.after(() => {
     User.findAll = originals.userFindAll;
+    User.findByPk = originals.userFindByPk;
     Config.findByPk = originals.configFindByPk;
     Notification.findOne = originals.notificationFindOne;
     Notification.create = originals.notificationCreate;

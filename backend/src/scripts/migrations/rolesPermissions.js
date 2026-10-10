@@ -11,6 +11,9 @@ const ROLE_SEEDS = [
   ['department_head', 'Department Head', 'Department leadership'],
   ['teaching_assistant', 'Teaching Assistant', 'Teaching assistant access'],
   ['finance', 'Finance', 'Financial review and accounting'],
+  ['college', 'College', 'College-level operational management'],
+  ['staff', 'Staff', 'Standard staff access'],
+  ['student', 'Student', 'Student access'],
 ];
 const ACTIONS = ['view', 'create', 'edit', 'delete', 'approve', 'assign', 'transfer', 'maintain', 'report', 'configure'];
 const LIMITED = {
@@ -28,10 +31,11 @@ const DENIED = {
   department_head: ['delete', 'configure'],
   finance: ['delete', 'assign', 'transfer', 'maintain', 'configure'],
 };
-const LEGACY_ROLE_NAMES = { college: 'college_manager', maint: 'maintenance' };
+const OUTSIDE_MODULE_ROLES = ['teaching_assistant', 'college', 'staff', 'student'];
+const LEGACY_ROLE_NAMES = { administrator: 'admin', maint: 'maintenance' };
 
 const getDefaultGrant = (roleName, action) => {
-  if (roleName === 'teaching_assistant') return null;
+  if (OUTSIDE_MODULE_ROLES.includes(roleName)) return null;
   if (DENIED[roleName]?.includes(action)) return null;
   const scopeType = LIMITED[roleName]?.[action];
   return { limited: Boolean(scopeType), scopeType: scopeType || 'system' };

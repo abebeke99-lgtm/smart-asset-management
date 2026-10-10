@@ -164,6 +164,7 @@ async function ensureUserRoleEnum() {
     'store_manager',
     'maintenance',
     'infrastructure',
+    'teaching_assistant',
     'staff',
     'student',
   ];
@@ -420,7 +421,12 @@ async function syncDatabase() {
       sla_status: { type: require('sequelize').DataTypes.STRING(30), allowNull: true },
       support_team: { type: require('sequelize').DataTypes.STRING(120), allowNull: true },
       support_location: { type: require('sequelize').DataTypes.STRING(255), allowNull: true },
+      responsible_role: { type: require('sequelize').DataTypes.STRING(100), allowNull: true },
     })) await ensureColumn('service_requests', column, definition);
+    const serviceRequestIndexes = await sequelize.getQueryInterface().showIndex('service_requests');
+    if (!serviceRequestIndexes.some((index) => index.name === 'service_requests_responsible_role_idx')) {
+      await sequelize.getQueryInterface().addIndex('service_requests', ['responsible_role'], { name: 'service_requests_responsible_role_idx' });
+    }
     await ensureColumn('departments', 'college_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
     await ensureColumn('departments', 'location_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
     await ensureColumn('departments', 'phone', { type: require('sequelize').DataTypes.STRING(50), allowNull: true });

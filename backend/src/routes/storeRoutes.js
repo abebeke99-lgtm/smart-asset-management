@@ -1,6 +1,6 @@
 const express = require('express');
 const { getDashboard, getHistory, getInventory, getInventoryDetail, exportInventory, getLowStock, getAvailableAssets, getStockAdjustments, getReceipts } = require('../controllers/storeController');
-const { createStockAdjustment, createReceipt } = require('../controllers/inventoryController');
+const { createStockAdjustment, createReceipt, getReceiptSuppliers } = require('../controllers/inventoryController');
 const verification = require('../controllers/verificationController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const { findCollegeScopeForUser } = require('../middlewares/organizationScope');
@@ -44,6 +44,7 @@ router.get('/low-stock', requireAuth, requireRole('store_manager'), ensureStoreS
 router.get('/stock-adjustments', requireAuth, requireRole('store_manager'), ensureStoreScope, getStockAdjustments);
 router.post('/stock-adjustments', requireAuth, requireRole('store_manager'), ensureStoreScope, createStockAdjustment);
 router.get('/receive', requireAuth, requireRole('store_manager'), ensureStoreScope, getReceipts);
+router.get('/receive/suppliers', requireAuth, requireRole('store_manager'), ensureStoreScope, getReceiptSuppliers);
 router.post('/receive', requireAuth, requireRole('store_manager'), ensureStoreScope, createReceipt);
 router.get('/verification', requireAuth, requireRole('store_manager'), ensureStoreScope, verification.listSessions);
 router.post('/verification', requireAuth, requireRole('store_manager'), ensureStoreScope, verification.createSession);

@@ -9,8 +9,9 @@ const routes = read('../routes/storeRoutes.js');
 const storeController = read('../controllers/storeController.js');
 const inventoryController = read('../controllers/inventoryController.js');
 const assetController = read('../controllers/assetController.js');
-const { InventoryTransaction } = require('../models');
+const { InventoryTransaction, Inventory, AssetMovement, AuditLog, Supplier, sequelize } = require('../models');
 const { getReceipts } = require('../controllers/storeController');
+const { createReceipt, getReceiptSuppliers } = require('../controllers/inventoryController');
 const assetModel = read('../models/Asset.js');
 const sync = read('../config/sync.js');
 const page = read('../../../frontend/src/components/store/StoreInventory.jsx');
@@ -51,6 +52,7 @@ test('inventory page exposes sorting, both export formats, details, and all stoc
   for (const route of ['/store/requests', '/store/receive', '/store/issue', '/store/returns', '/store/transfers', '/store/stock-adjustments']) {
     assert.ok(page.includes(route), `missing inventory action route ${route}`);
   }
+  assert.match(page, /navigate\('\/store\/receive\?addStock=true'\)/);
 });
 
 test('receipt records remain available when optional summary aggregation fails', async () => {
@@ -89,5 +91,110 @@ test('receipt records remain available when optional summary aggregation fails',
     InventoryTransaction.findAndCountAll = originalFindAndCountAll;
     InventoryTransaction.sum = originalSum;
     console.error = originalConsoleError;
+  }
+});
+
+test('stock receipt accepts optional metadata and atomically increments inventory with ledger and audit records', async () => {
+  const originals = {
+    transaction: sequelize.transaction,
+    findOne: Inventory.findOne,
+    findByPk: Inventory.findByPk,
+    inventoryTransactionCreate: InventoryTransaction.create,
+    assetMovementCreate: AssetMovement.create,
+    auditLogCreate: AuditLog.create,
+  };
+  const stored = { quantity: 5, availableQuantity: 4, damagedQuantity: 1, location: 'Store A' };
+  const calls = { committed: false, rolledBack: false, ledger: null, movement: null, audit: null };
+  const transaction = {
+    LOCK: { UPDATE: 'UPDATE' },
+    commit: async () => { calls.committed = true; },
+    rollback: async () => { calls.rolledBack = true; },
+  };
+  const item = {
+    id: 8,
+    assetId: 22,
+    departmentId: 4,
+    quantity: 5,
+    availableQuantity: 4,
+    damagedQuantity: 1,
+    Asset: { id: 22, assetCode: 'P-22', name: 'Printer paper', collegeId: 9, serialNumber: '' },
+    update: async (values) => { Object.assign(stored, values); Object.assign(item, values); },
+    toJSON: () => ({ id: 8, assetId: 22, quantity: stored.quantity, availableQuantity: stored.availableQuantity, damagedQuantity: stored.damagedQuantity }),
+  };
+  let responseBody;
+  let responseStatus;
+  sequelize.transaction = async () => transaction;
+  Inventory.findOne = async () => item;
+  Inventory.findByPk = async () => item;
+  InventoryTransaction.create = async (values) => { calls.ledger = values; return { id: 77, ...values }; };
+  AssetMovement.create = async (values) => { calls.movement = values; };
+  AuditLog.create = async (values) => { calls.audit = values; };
+
+  try {
+    await createReceipt(
+      {
+        user: { id: 3, role: 'store_manager', collegeId: 9 },
+        organizationScope: { collegeId: 9 },
+        body: { asset_id: 22, quantity: 3, unit_price: '', supplier_id: '', condition: 'Good', notes: 'Restock' },
+      },
+      {
+        status: (status) => { responseStatus = status; return { json: (body) => { responseBody = body; } }; },
+      },
+      (error) => { throw error; },
+    );
+
+    assert.equal(responseStatus, 201);
+    assert.equal(responseBody.success, true);
+    assert.equal(stored.quantity, 8);
+    assert.equal(stored.availableQuantity, 7);
+    assert.equal(calls.ledger.quantity, 3);
+    assert.equal(calls.ledger.departmentId, 4);
+    assert.equal(JSON.parse(calls.ledger.notes).unitPrice, null);
+    assert.equal(calls.movement.referenceId, 77);
+    assert.equal(calls.audit.action, 'STORE_STOCK_ADDED');
+    assert.equal(calls.committed, true);
+    assert.equal(calls.rolledBack, false);
+  } finally {
+    sequelize.transaction = originals.transaction;
+    Inventory.findOne = originals.findOne;
+    Inventory.findByPk = originals.findByPk;
+    InventoryTransaction.create = originals.inventoryTransactionCreate;
+    AssetMovement.create = originals.assetMovementCreate;
+    AuditLog.create = originals.auditLogCreate;
+  }
+});
+
+test('stock receipt rejects invalid quantities before opening a database transaction', async () => {
+  const originalTransaction = sequelize.transaction;
+  let responseStatus;
+  sequelize.transaction = async () => { throw new Error('transaction should not start'); };
+  try {
+    await createReceipt(
+      { user: { id: 3, role: 'store_manager' }, body: { asset_id: 22, quantity: -1 } },
+      { status: (status) => { responseStatus = status; return { json: () => {} }; } },
+      (error) => { throw error; },
+    );
+    assert.equal(responseStatus, 400);
+  } finally {
+    sequelize.transaction = originalTransaction;
+  }
+});
+
+test('supplier choices are loaded from active database records behind the scoped store route', async () => {
+  const originalFindAll = Supplier.findAll;
+  let options;
+  let responseBody;
+  Supplier.findAll = async (queryOptions) => {
+    options = queryOptions;
+    return [{ id: 5, supplierCode: 'SUP-5', supplierName: 'Campus Supplies' }];
+  };
+  try {
+    await getReceiptSuppliers({}, { json: (body) => { responseBody = body; } }, (error) => { throw error; });
+    assert.deepEqual(options.where, { status: 'active' });
+    assert.deepEqual(options.attributes, ['id', 'supplierCode', 'supplierName']);
+    assert.equal(responseBody.data[0].supplierName, 'Campus Supplies');
+    assert.match(routes, /router\.get\('\/receive\/suppliers', requireAuth, requireRole\('store_manager'\), ensureStoreScope, getReceiptSuppliers\)/);
+  } finally {
+    Supplier.findAll = originalFindAll;
   }
 });

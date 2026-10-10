@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { Op } = require('sequelize');
 const router = require('../src/routes/adminSupportRoutes');
-const { MaintenanceCost, Notification } = require('../src/models');
+const { MaintenanceCost, Notification, NotificationDelivery, AuditLog, sequelize } = require('../src/models');
 
 const handlerFor = (method, path) => {
   const layer = router.stack.find((entry) => entry.route && entry.route.path === path && entry.route.methods[method]);
@@ -55,11 +55,30 @@ test('maintenance cost list serializes records without throwing', async (t) => {
   assert.equal(item.approved_by_user.username, 'admin');
 });
 
-test('delete-all notifications is scoped to the caller and broadcast rows', async (t) => {
-  const original = Notification.destroy;
-  let captured;
-  Notification.destroy = async (arg) => { captured = arg; return 3; };
-  t.after(() => { Notification.destroy = original; });
+test('delete-all notifications is scoped, transactional, and audited', async (t) => {
+  const originalFindAll = Notification.findAll;
+  const originalDestroy = Notification.destroy;
+  const originalDeliveryDestroy = NotificationDelivery.destroy;
+  const originalAuditCreate = AuditLog.create;
+  const originalTransaction = sequelize.transaction;
+  let findQuery;
+  let destroyQuery;
+  let auditRecord;
+  Notification.findAll = async (options) => {
+    findQuery = options;
+    return [{ id: 2 }, { id: 3 }];
+  };
+  Notification.destroy = async (options) => { destroyQuery = options; return 2; };
+  NotificationDelivery.destroy = async () => 4;
+  AuditLog.create = async (record) => { auditRecord = record; return record; };
+  sequelize.transaction = async () => ({ commit: async () => {}, rollback: async () => {} });
+  t.after(() => {
+    Notification.findAll = originalFindAll;
+    Notification.destroy = originalDestroy;
+    NotificationDelivery.destroy = originalDeliveryDestroy;
+    AuditLog.create = originalAuditCreate;
+    sequelize.transaction = originalTransaction;
+  });
 
   const handler = handlerFor('delete', '/notifications/all');
   assert.equal(handler.length, 3);
@@ -67,8 +86,10 @@ test('delete-all notifications is scoped to the caller and broadcast rows', asyn
   await handler({ user: { id: 7, role: 'admin' } }, res, (error) => { throw error; });
 
   assert.equal(res.statusCode, 200);
-  assert.ok(captured && captured.where && captured.where[Op.or], 'expected scoped destroy where clause');
-  assert.notDeepEqual(captured.where, {});
+  assert.ok(findQuery && findQuery.where && findQuery.where[Op.or], 'expected scoped query');
+  assert.notDeepEqual(findQuery.where, {});
+  assert.equal(destroyQuery.where.id[Op.in].length, 2);
+  assert.equal(auditRecord.action, 'NOTIFICATIONS_BULK_DELETED');
 });
 
 test('notification read routes forward failures to the error handler', async (t) => {

@@ -70,6 +70,9 @@ UPDATE roles SET display_name = CASE name
   WHEN 'department_head' THEN 'Department Head'
   WHEN 'teaching_assistant' THEN 'Teaching Assistant'
   WHEN 'finance' THEN 'Finance'
+  WHEN 'college' THEN 'College'
+  WHEN 'staff' THEN 'Staff'
+  WHEN 'student' THEN 'Student'
   ELSE display_name
 END,
 is_system = 1,
@@ -84,11 +87,14 @@ description = CASE
     WHEN 'department_head' THEN 'Department leadership'
     WHEN 'teaching_assistant' THEN 'Teaching assistant access'
     WHEN 'finance' THEN 'Financial review and accounting'
+    WHEN 'college' THEN 'College-level operational management'
+    WHEN 'staff' THEN 'Standard staff access'
+    WHEN 'student' THEN 'Student access'
     ELSE description
   END
   ELSE description
 END
-WHERE name IN ('admin', 'ict_officer', 'college_manager', 'store_manager', 'maintenance', 'infrastructure', 'department_head', 'teaching_assistant', 'finance');
+WHERE name IN ('admin', 'ict_officer', 'college_manager', 'store_manager', 'maintenance', 'infrastructure', 'department_head', 'teaching_assistant', 'finance', 'college', 'staff', 'student');
 
 INSERT INTO roles (name, display_name, description, is_system, active, created_at, updated_at)
 VALUES
@@ -100,7 +106,10 @@ VALUES
   ('infrastructure', 'Infrastructure / Facilities', 'Infrastructure and facilities management', 1, 1, NOW(), NOW()),
   ('department_head', 'Department Head', 'Department leadership', 1, 1, NOW(), NOW()),
   ('teaching_assistant', 'Teaching Assistant', 'Teaching assistant access', 1, 1, NOW(), NOW()),
-  ('finance', 'Finance', 'Financial review and accounting', 1, 1, NOW(), NOW())
+  ('finance', 'Finance', 'Financial review and accounting', 1, 1, NOW(), NOW()),
+  ('college', 'College', 'College-level operational management', 1, 1, NOW(), NOW()),
+  ('staff', 'Staff', 'Standard staff access', 1, 1, NOW(), NOW()),
+  ('student', 'Student', 'Student access', 1, 1, NOW(), NOW())
 ON DUPLICATE KEY UPDATE display_name = VALUES(display_name), is_system = 1;
 
 INSERT INTO user_roles (user_id, role_id, scope_type, scope_id, created_at, updated_at)
@@ -122,7 +131,7 @@ SELECT u.id, r.id,
 FROM users u
 JOIN roles r ON r.name = CASE LOWER(REPLACE(REPLACE(u.role, ' ', '_'), '-', '_'))
   WHEN 'administrator' THEN 'admin'
-  WHEN 'college' THEN 'college_manager'
+  WHEN 'college' THEN 'college'
   WHEN 'maint' THEN 'maintenance'
   WHEN 'teaching_assistant' THEN 'teaching_assistant'
   ELSE LOWER(REPLACE(REPLACE(u.role, ' ', '_'), '-', '_'))

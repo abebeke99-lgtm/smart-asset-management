@@ -451,6 +451,21 @@ test('admin user creation validates database-backed role and organization IDs an
   assert.equal(Object.hasOwn(response.payload.data, 'password'), false);
   assert.equal(Object.hasOwn(response.payload.data, 'passwordHash'), false);
 
+  const userWithoutOrganizationResponse = makeResponse();
+  await userController.createUser({
+    ...validRequest,
+    body: {
+      ...validRequest.body,
+      username: 'new.staff.without.organization',
+      collegeId: undefined,
+      departmentId: undefined,
+    },
+  }, userWithoutOrganizationResponse);
+  assert.equal(userWithoutOrganizationResponse.statusCode, 201);
+  assert.equal(createValues.collegeId, null);
+  assert.equal(createValues.departmentId, null);
+  assert.equal(createValues.department, '');
+
   const invalidCollege = makeResponse();
   await userController.createUser({
     ...validRequest,

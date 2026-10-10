@@ -1,5 +1,10 @@
 const { Config } = require('../models');
-const { PERMISSIONS, DEFAULT_ROLE_PERMISSIONS, normalizeRoleForStorage } = require('../constants/rolePermissions');
+const {
+  PERMISSIONS,
+  DEFAULT_ROLE_PERMISSIONS,
+  NOTIFICATION_DEFAULT_PERMISSIONS,
+  normalizeRoleForStorage,
+} = require('../constants/rolePermissions');
 
 const getRolePermissionMatrix = async () => {
   const record = await Config.findByPk('role_permissions');
@@ -21,7 +26,10 @@ const getConfiguredRolePermissions = async (role) => {
   const normalizedRole = normalizeRoleForStorage(role);
   const matrix = await getRolePermissionMatrix();
   const permissions = matrix[normalizedRole];
-  return Array.isArray(permissions) ? [...new Set(permissions.map(String))] : [];
+  return [...new Set([
+    ...(Array.isArray(permissions) ? permissions.map(String) : []),
+    ...(NOTIFICATION_DEFAULT_PERMISSIONS[normalizedRole] || []),
+  ])];
 };
 
 module.exports = { DEFAULT_ROLE_PERMISSIONS, getConfiguredRolePermissions, getRolePermissionMatrix };

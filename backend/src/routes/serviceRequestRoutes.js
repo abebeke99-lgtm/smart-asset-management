@@ -14,16 +14,18 @@ const {
   listFeedback,
   createFeedback,
   listTechnicianCandidates,
+  listEligibleAssignees,
   getRoutingOptions,
 } = require('../controllers/serviceRequestController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 
 const router = express.Router();
 
-const serviceManagerRoles = ['admin', 'maintenance', 'ict_officer', 'infrastructure'];
+const serviceManagerRoles = ['admin', 'maintenance', 'ict_officer', 'infrastructure', 'college_manager', 'department_head', 'finance', 'store_manager'];
 
 router.get('/', requireAuth, listServiceRequests);
 router.get('/routing-options', requireAuth, getRoutingOptions);
+router.get('/eligible-assignees', requireAuth, listEligibleAssignees);
 router.get('/technicians', requireAuth, requireRole(...serviceManagerRoles), listTechnicianCandidates);
 router.post('/', requireAuth, createServiceRequest);
 router.get('/escalate/run', requireAuth, requireRole('admin'), escalateTickets);

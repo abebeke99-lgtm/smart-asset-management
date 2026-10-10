@@ -11,7 +11,7 @@ test('role enum synchronization skips ALTER when the canonical roles already exi
 
   queryInterface.describeTable = async () => ({
     role: {
-      type: "ENUM('admin','ict_officer','college','college_manager','department_head','finance','store_manager','maintenance','infrastructure','staff','student')",
+      type: "ENUM('admin','ict_officer','college','college_manager','department_head','finance','store_manager','maintenance','infrastructure','teaching_assistant','staff','student')",
     },
   });
   sequelize.query = async (sql) => {

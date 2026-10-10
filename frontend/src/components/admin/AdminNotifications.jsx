@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Archive,
   AlertTriangle,
   Bell,
   BellRing,
@@ -9,6 +10,7 @@ import {
   Eye,
   Filter,
   RefreshCw,
+  Save,
   Search,
   Trash2,
   X,
@@ -27,6 +29,18 @@ const DEFAULT_FILTERS = {
   dateTo: '',
   page: 1,
   limit: 20,
+};
+
+const EMPTY_FORM = {
+  title: '',
+  message: '',
+  type: 'system',
+  priority: 'medium',
+  channels: ['in_app'],
+  recipientType: 'users',
+  userIds: [],
+  roles: [],
+  scheduledAt: '',
 };
 
 const formatDate = (value) => {
@@ -67,6 +81,14 @@ const AdminNotifications = () => {
   const [error, setError] = useState('');
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [formMode, setFormMode] = useState('');
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [formError, setFormError] = useState('');
+  const [savingForm, setSavingForm] = useState(false);
+  const [recipientSearch, setRecipientSearch] = useState('');
+  const [recipientOptions, setRecipientOptions] = useState([]);
+  const [recipientRoles, setRecipientRoles] = useState([]);
+  const [recipientLoading, setRecipientLoading] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
     setLoading(true);
@@ -197,6 +219,117 @@ const AdminNotifications = () => {
     }
   }, [fetchNotifications]);
 
+  const loadRecipients = useCallback(async (search) => {
+    setRecipientLoading(true);
+    try {
+      const response = await apiClient.get('/api/admin/notifications/recipients', {
+        params: { search: search || undefined, page: 1, limit: 100 },
+      });
+      setRecipientOptions(Array.isArray(response?.data?.data) ? response.data.data : []);
+      setRecipientRoles(Array.isArray(response?.data?.roles) ? response.data.roles : []);
+    } catch (requestError) {
+      setFormError(requestError?.response?.data?.message || 'Unable to load notification recipients.');
+    } finally {
+      setRecipientLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (formMode !== 'create') return undefined;
+    const timer = setTimeout(() => loadRecipients(recipientSearch.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [formMode, loadRecipients, recipientSearch]);
+
+  const openCreateForm = () => {
+    setForm(EMPTY_FORM);
+    setRecipientSearch('');
+    setFormError('');
+    setFormMode('create');
+  };
+
+  const openEditForm = (notification) => {
+    setForm({
+      ...EMPTY_FORM,
+      id: notification.id,
+      title: notification.title || '',
+      message: notification.message || '',
+      type: notification.type || 'system',
+      priority: notification.priority || 'medium',
+      channels: String(notification.channel || 'in_app').split(',').filter(Boolean),
+    });
+    setFormError('');
+    setFormMode('edit');
+  };
+
+  const saveNotification = async (event) => {
+    event.preventDefault();
+    setFormError('');
+    if (!form.title.trim() || !form.message.trim()) {
+      setFormError('Title and message are required.');
+      return;
+    }
+    if (formMode === 'create' && form.recipientType === 'users' && !form.userIds.length) {
+      setFormError('Select at least one user recipient.');
+      return;
+    }
+    if (formMode === 'create' && form.recipientType === 'role' && !form.roles.length) {
+      setFormError('Select at least one role recipient.');
+      return;
+    }
+    if (!form.channels.length) {
+      setFormError('Select at least one delivery channel.');
+      return;
+    }
+
+    setSavingForm(true);
+    try {
+      if (formMode === 'edit') {
+        await apiClient.put(`/api/admin/notifications/${form.id}`, {
+          title: form.title,
+          message: form.message,
+          type: form.type,
+          priority: form.priority,
+          channels: form.channels,
+        });
+        toast.success('Notification updated.');
+      } else {
+        const payload = {
+          title: form.title,
+          message: form.message,
+          type: form.type,
+          priority: form.priority,
+          channels: form.channels,
+          recipientType: form.recipientType,
+          ...(form.recipientType === 'users' ? { userIds: form.userIds } : { roles: form.roles }),
+          ...(form.scheduledAt ? { scheduledAt: new Date(form.scheduledAt).toISOString() } : {}),
+        };
+        await apiClient.post('/api/admin/notifications/bulk', payload);
+        toast.success(form.scheduledAt ? 'Notification scheduled.' : 'Notification sent.');
+      }
+      setFormMode('');
+      await fetchNotifications();
+    } catch (requestError) {
+      const message = requestError?.response?.data?.message || 'Unable to save notification.';
+      setFormError(message);
+      toast.error(message);
+    } finally {
+      setSavingForm(false);
+    }
+  };
+
+  const deleteNotification = useCallback(async (notificationId) => {
+    if (!window.confirm('Permanently delete this notification and its delivery records?')) return;
+    try {
+      await apiClient.delete(`/api/admin/notifications/${notificationId}`);
+      toast.success('Notification deleted.');
+      if (Number(selectedNotification?.id) === Number(notificationId)) setSelectedNotification(null);
+      await fetchNotifications();
+    } catch (requestError) {
+      const message = requestError?.response?.data?.message || 'Unable to delete notification.';
+      toast.error(message);
+    }
+  }, [fetchNotifications, selectedNotification]);
+
   const applyFilters = () => {
     fetchNotifications();
   };
@@ -223,6 +356,9 @@ const AdminNotifications = () => {
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="admin-primary-button" onClick={openCreateForm} type="button">
+            Create Notification
+          </button>
           <button className="admin-secondary-button" onClick={() => fetchNotifications()} disabled={loading} type="button">
             <RefreshCw size={16} className={loading ? 'spin' : ''} />
             Refresh
@@ -394,6 +530,11 @@ const AdminNotifications = () => {
                           <button className="admin-secondary-button" type="button" onClick={() => openDetails(notification.id)}>
                             <Eye size={14} /> View Details
                           </button>
+                          {['draft', 'scheduled'].includes(String(notification.status || '').toLowerCase()) && (
+                            <button className="admin-secondary-button" type="button" onClick={() => openEditForm(notification)}>
+                              Edit
+                            </button>
+                          )}
                           {isRead ? (
                             <button className="admin-secondary-button" type="button" onClick={() => updateReadState(notification.id, false)}>
                               Mark as Unread
@@ -403,8 +544,11 @@ const AdminNotifications = () => {
                               Mark as Read
                             </button>
                           )}
-                          <button className="admin-secondary-button" type="button" onClick={() => archiveNotification(notification.id)} style={{ borderColor: '#fecaca', color: '#b91c1c' }}>
-                            <Trash2 size={14} /> Archive
+                          <button className="admin-secondary-button" type="button" onClick={() => archiveNotification(notification.id)}>
+                            <Archive size={14} /> Archive
+                          </button>
+                          <button className="admin-secondary-button" type="button" onClick={() => deleteNotification(notification.id)} style={{ borderColor: '#fecaca', color: '#b91c1c' }}>
+                            <Trash2 size={14} /> Delete
                           </button>
                         </div>
                       </td>
@@ -451,6 +595,94 @@ const AdminNotifications = () => {
               </select>
             </div>
           </div>
+        </div>
+      )}
+
+      {formMode && (
+        <div className="admin-modal-backdrop" role="presentation" onClick={() => setFormMode('')}>
+          <form className="admin-modal" role="dialog" aria-modal="true" aria-labelledby="notification-form-title" onSubmit={saveNotification} onClick={(event) => event.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h2 id="notification-form-title">{formMode === 'create' ? 'Create Notification' : 'Edit Notification'}</h2>
+              <button className="icon-button" type="button" onClick={() => setFormMode('')} aria-label="Close notification form">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="admin-modal-body">
+              <label className="admin-form-field">
+                <span>Title</span>
+                <input aria-label="Notification title" maxLength={255} required value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} />
+              </label>
+              <label className="admin-form-field">
+                <span>Message</span>
+                <textarea aria-label="Notification message" required rows={4} value={form.message} onChange={(event) => setForm((current) => ({ ...current, message: event.target.value }))} />
+              </label>
+              <div className="admin-form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+                <label className="admin-form-field">
+                  <span>Type</span>
+                  <select aria-label="Notification type" value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}>
+                    {['system', 'maintenance', 'assignment', 'transfer', 'security', 'alert', 'reminder', 'approval', 'inventory', 'financial', 'custom'].map((type) => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                </label>
+                <label className="admin-form-field">
+                  <span>Priority</span>
+                  <select aria-label="Notification priority" value={form.priority} onChange={(event) => setForm((current) => ({ ...current, priority: event.target.value }))}>
+                    {['low', 'medium', 'high', 'urgent'].map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+                  </select>
+                </label>
+                {formMode === 'create' && (
+                  <>
+                    <label className="admin-form-field">
+                      <span>Recipient type</span>
+                      <select aria-label="Recipient type" value={form.recipientType} onChange={(event) => setForm((current) => ({ ...current, recipientType: event.target.value, userIds: [], roles: [] }))}>
+                        <option value="users">Selected users</option>
+                        <option value="role">Role(s)</option>
+                      </select>
+                    </label>
+                    <label className="admin-form-field">
+                      <span>Schedule (optional)</span>
+                      <input aria-label="Schedule notification" type="datetime-local" value={form.scheduledAt} onChange={(event) => setForm((current) => ({ ...current, scheduledAt: event.target.value }))} />
+                    </label>
+                  </>
+                )}
+              </div>
+              {formMode === 'create' && form.recipientType === 'users' && (
+                <div className="admin-form-field">
+                  <label htmlFor="notification-recipient-search">Find active users</label>
+                  <input id="notification-recipient-search" type="search" value={recipientSearch} onChange={(event) => setRecipientSearch(event.target.value)} placeholder="Search name, username, or email" />
+                  <label htmlFor="notification-recipients">Recipients {recipientLoading ? '(loading...)' : ''}</label>
+                  <select id="notification-recipients" aria-label="Select notification recipients" multiple size={6} value={form.userIds.map(String)} onChange={(event) => setForm((current) => ({ ...current, userIds: Array.from(event.target.selectedOptions, (option) => Number(option.value)) }))}>
+                    {recipientOptions.map((recipient) => <option key={recipient.id} value={recipient.id}>{recipient.fullName || recipient.username} · {recipient.role} · {recipient.email}</option>)}
+                  </select>
+                </div>
+              )}
+              {formMode === 'create' && form.recipientType === 'role' && (
+                <label className="admin-form-field">
+                  <span>Recipient roles</span>
+                  <select aria-label="Select notification roles" multiple size={6} value={form.roles} onChange={(event) => setForm((current) => ({ ...current, roles: Array.from(event.target.selectedOptions, (option) => option.value) }))}>
+                    {recipientRoles.map((role) => <option key={role} value={role}>{role.replace(/_/g, ' ')}</option>)}
+                  </select>
+                </label>
+              )}
+              <fieldset className="admin-form-field">
+                <legend>Delivery channels</legend>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  {['in_app', 'email', 'sms'].map((channel) => (
+                    <label key={channel} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <input type="checkbox" checked={form.channels.includes(channel)} onChange={(event) => setForm((current) => ({ ...current, channels: event.target.checked ? [...current.channels, channel] : current.channels.filter((value) => value !== channel) }))} />
+                      {channel.replace('_', ' ')}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              {formError && <div className="admin-error-state" role="alert">{formError}</div>}
+            </div>
+            <div className="admin-modal-footer">
+              <button className="admin-secondary-button" type="button" onClick={() => setFormMode('')}>Cancel</button>
+              <button className="admin-primary-button" type="submit" disabled={savingForm}>
+                <Save size={15} /> {savingForm ? 'Saving...' : formMode === 'create' ? 'Publish Notification' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

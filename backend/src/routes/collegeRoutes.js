@@ -10,7 +10,9 @@ const { listAssetDocuments, uploadAssetDocument, deleteAssetDocument, downloadAs
 
 const router = express.Router();
 const { Op } = require('sequelize');
-const { Notification } = require('../models');
+const { Notification, NotificationDelivery, sequelize } = require('../models');
+const { createAuditLog } = require('../services/auditLogService');
+const { normalizeRoleForStorage } = require('../constants/rolePermissions');
 
 const normalizeNotification = (notification) => {
   const value = notification && typeof notification.toJSON === 'function' ? notification.toJSON() : notification || {};
@@ -25,9 +27,6 @@ const normalizeNotification = (notification) => {
     isRead: Boolean(value.read),
     createdAt: value.createdAt || value.created_at || null,
     readAt: value.readAt || value.read_at || null,
-    userId: value.userId ?? null,
-    collegeId: value.collegeId ?? null,
-    departmentId: value.departmentId ?? null,
     referenceId: value.referenceId ?? value.reference_id ?? null,
     referenceType: value.referenceType ?? value.reference_type ?? null,
     actionUrl: value.actionUrl ?? value.action_url ?? null,
@@ -37,8 +36,15 @@ const normalizeNotification = (notification) => {
 const buildCollegeNotificationScope = (req) => ({
   [Op.or]: [
     { userId: req.user.id },
-    { collegeId: req.organizationScope.collegeId },
-    { userId: null, collegeId: { [Op.or]: [null, req.organizationScope.collegeId] } },
+    { recipientId: req.user.id },
+    { scope: 'GLOBAL' },
+    { scope: 'COLLEGE', collegeId: req.organizationScope.collegeId },
+    { scope: 'ROLE', role: normalizeRoleForStorage(req.user.role) },
+    {
+      userId: null,
+      recipientId: null,
+      collegeId: { [Op.or]: [null, req.organizationScope.collegeId] },
+    },
   ],
 });
 
@@ -142,15 +148,12 @@ router.get('/notifications', requirePermission('college.notifications.view'), as
 
 router.patch('/notifications/:id/read', requirePermission('college.notifications.view'), async (req, res, next) => {
   try {
+    const id = Number(req.params.id);
+    if (!Number.isSafeInteger(id) || id < 1) {
+      return res.status(400).json({ success: false, message: 'Notification ID must be a positive integer' });
+    }
     const notification = await Notification.findOne({
-      where: {
-        id: req.params.id,
-        [Op.or]: [
-          { userId: req.user.id },
-          { collegeId: req.organizationScope.collegeId },
-          { userId: null, collegeId: { [Op.or]: [null, req.organizationScope.collegeId] } },
-        ],
-      },
+      where: { [Op.and]: [{ id }, buildCollegeNotificationScope(req)] },
     });
     if (!notification) {
       return res.status(404).json({ success: false, message: 'Notification not found or not authorized for this college.' });
@@ -166,12 +169,7 @@ router.patch('/notifications/:id/read', requirePermission('college.notifications
 router.patch('/notifications/read-all', requirePermission('college.notifications.view'), async (req, res, next) => {
   try {
     const where = {
-      read: false,
-      [Op.or]: [
-        { userId: req.user.id },
-        { collegeId: req.organizationScope.collegeId },
-        { userId: null, collegeId: { [Op.or]: [null, req.organizationScope.collegeId] } },
-      ],
+      [Op.and]: [{ read: false }, buildCollegeNotificationScope(req)],
     };
     const result = await Notification.update({ read: true, readAt: new Date() }, { where });
     return res.json({ success: true, updated: result[0] || 0 });
@@ -180,23 +178,41 @@ router.patch('/notifications/read-all', requirePermission('college.notifications
   }
 });
 
-router.delete('/notifications/:id', requirePermission('college.notifications.view'), async (req, res, next) => {
+router.delete('/notifications/:id', requirePermission('notifications.delete'), async (req, res, next) => {
   try {
+    const id = Number(req.params.id);
+    if (!Number.isSafeInteger(id) || id < 1) {
+      return res.status(400).json({ success: false, message: 'Notification ID must be a positive integer' });
+    }
+    const transaction = await sequelize.transaction();
+    try {
     const notification = await Notification.findOne({
-      where: {
-        id: req.params.id,
-        [Op.or]: [
-          { userId: req.user.id },
-          { collegeId: req.organizationScope.collegeId },
-          { userId: null, collegeId: { [Op.or]: [null, req.organizationScope.collegeId] } },
-        ],
-      },
+      where: { [Op.and]: [{ id }, buildCollegeNotificationScope(req)] },
+      transaction,
     });
     if (!notification) {
+      await transaction.rollback();
       return res.status(404).json({ success: false, message: 'Notification not found or not authorized for this college.' });
     }
-    await notification.destroy();
+    const oldValue = { title: notification.title, type: notification.type, scope: notification.scope };
+    const deliveryRecordsDeleted = await NotificationDelivery.destroy({ where: { notificationId: id }, transaction });
+    await notification.destroy({ transaction });
+    await createAuditLog({
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'NOTIFICATION_DELETED',
+      entity: `notification:${id}`,
+      entityId: id,
+      oldValue,
+      details: { deliveryRecordsDeleted },
+      transaction,
+    });
+    await transaction.commit();
     return res.json({ success: true, message: 'Notification deleted.' });
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
   } catch (error) {
     return next(error);
   }

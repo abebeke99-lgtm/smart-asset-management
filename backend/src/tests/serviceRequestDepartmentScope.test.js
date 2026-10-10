@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { sequelize, Asset, ServiceRequest } = require('../models');
+const { sequelize, Asset, ServiceRequest, Role } = require('../models');
 const controller = require('../controllers/serviceRequestController');
 
 const response = () => ({
@@ -43,15 +43,20 @@ test('Department Head without configured scope is forbidden and does not query r
 });
 
 test('Department Head cannot create a request for an asset in another department', async (t) => {
-  const originals = { transaction: sequelize.transaction, findAsset: Asset.findByPk };
+  const originals = { transaction: sequelize.transaction, findAsset: Asset.findByPk, findRoles: Role.findAll };
   let rolledBack = false;
   sequelize.transaction = async () => ({ rollback: async () => { rolledBack = true; } });
   Asset.findByPk = async () => ({ id: 55, departmentId: 99, category: 'Network' });
-  t.after(() => { sequelize.transaction = originals.transaction; Asset.findByPk = originals.findAsset; });
+  Role.findAll = async () => [{ id: 5, name: 'ict_officer', displayName: 'ICT Officer' }];
+  t.after(() => {
+    sequelize.transaction = originals.transaction;
+    Asset.findByPk = originals.findAsset;
+    Role.findAll = originals.findRoles;
+  });
   const res = response();
   await controller.createServiceRequest({
     user: { id: 7, role: 'department_head', departmentId: 12 },
-    body: { title: 'Repair', description: 'Network issue', justification: 'Needed for teaching', assetId: 55 },
+    body: { title: 'Repair', description: 'Network issue', justification: 'Needed for teaching', requestType: 'ict', assetId: 55 },
   }, res, (err) => { throw err; });
   assert.equal(res.statusCode, 403);
   assert.match(res.payload.message, /outside your department/);
@@ -85,10 +90,12 @@ test('Department Head cancellation lookup remains inside its department', async 
 });
 
 test('Department Head cannot submit feedback for a request in another department', async (t) => {
-  const original = ServiceRequest.findByPk;
-  ServiceRequest.findByPk = async () => ({ id: 44, status: 'completed', departmentId: 99 });
-  t.after(() => { ServiceRequest.findByPk = original; });
+  const original = ServiceRequest.findOne;
+  let where;
+  ServiceRequest.findOne = async (options) => { where = options.where; return null; };
+  t.after(() => { ServiceRequest.findOne = original; });
   const res = response();
   await controller.createFeedback({ user: { id: 7, role: 'department_head', departmentId: 12 }, params: { id: 44 }, body: { rating: 5 } }, res, (err) => { throw err; });
+  assert.deepEqual(where, { id: 44, departmentId: 12 });
   assert.equal(res.statusCode, 404);
 });

@@ -326,6 +326,11 @@ export default function Users() {
   }, [showForm, form.collegeId]);
 
   const filteredUsers = useMemo(() => users, [users]);
+  const formRoles = editingUser
+    ? roles
+    : roles.filter((role) => !['staff', 'student', 'technical_assistant'].includes(
+      String(role.name).trim().toLowerCase().replace(/[\s-]+/g, '_'),
+    ));
 
   const openCreateForm = () => {
     setEditingUser(null);
@@ -426,10 +431,13 @@ export default function Users() {
         email: form.email.trim() || null,
         phone: form.phone.trim(),
         role: form.roleId,
-        collegeId: form.collegeId || null,
-        departmentId: form.departmentId || null,
         status: form.status.toLowerCase(),
       };
+
+      if (editingUser) {
+        payload.collegeId = form.collegeId || null;
+        payload.departmentId = form.departmentId || null;
+      }
 
       if (form.password) {
         payload.password = form.password;
@@ -1434,7 +1442,7 @@ export default function Users() {
               onSubmit={saveUser}
               noValidate
             >
-              {loading && <div role="status">Loading roles and colleges...</div>}
+              {loading && <div role="status">{editingUser ? "Loading roles and colleges..." : "Loading roles..."}</div>}
               {error && <div className="error-box" role="alert">{error}</div>}
               {!loading && roles.length === 0 && (
                 !error && <div className="error-box" role="alert">Role options are unavailable. Please refresh and try again.</div>
@@ -1608,7 +1616,7 @@ export default function Users() {
                       Select role
                     </option>
 
-                    {roles.map((role) => (
+                    {formRoles.map((role) => (
                       <option
                         key={role.id}
                         value={role.id}
@@ -1621,7 +1629,7 @@ export default function Users() {
                 </div>
               </div>
 
-              <div className="form-row">
+              {editingUser && <div className="form-row">
                 <div className="form-group">
                   <label className="form-label" htmlFor="new-user-college">
                     College
@@ -1685,7 +1693,7 @@ export default function Users() {
                   {fieldErrors.departmentId && <div className="field-error">{fieldErrors.departmentId}</div>}
                   {departmentsLoading && <div role="status">Loading departments...</div>}
                 </div>
-              </div>
+              </div>}
 
               <div className="form-group">
                 <label className="form-label" htmlFor="new-user-status">

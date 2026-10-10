@@ -8,7 +8,8 @@ const PERMISSIONS = [
   'assets.view', 'assets.create', 'assets.update', 'assets.delete', 'assets.assign', 'assets.transfer', 'assets.transfer.approve', 'assets.return', 'assets.dispose',
   'inventory.view', 'inventory.stock_in', 'inventory.stock_out', 'inventory.stock_movement',
   'colleges.view', 'colleges.manage', 'departments.view', 'departments.manage', 'locations.view', 'locations.manage',
-  'notifications.view', 'notifications.manage', 'reports.view', 'reports.generate', 'reports.export', 'reports.print',
+  'notifications.view', 'notifications.create', 'notifications.update', 'notifications.delete', 'notifications.manage',
+  'reports.view', 'reports.generate', 'reports.export', 'reports.print',
   'audit.view', 'audit.export',
   'settings.view', 'settings.manage', 'system.monitor', 'backup.manage', 'backup.restore',
   'financial.view', 'maintenance.view', 'maintenance.request.create', 'maintenance.technician.assign', 'maintenance.update', 'maintenance.complete', 'rfid.view',
@@ -78,6 +79,9 @@ const normalizeRoleForStorage = (role) => {
     store_manager: 'store_manager',
     maintenance: 'maintenance',
     maint: 'maintenance',
+    'maintenance coordinator': 'maintenance',
+    'maintenance-coordinator': 'maintenance',
+    maintenance_coordinator: 'maintenance',
     infrastructure: 'infrastructure',
     'infrastructure director': 'infrastructure',
     'infrastructure-director': 'infrastructure',
@@ -85,6 +89,10 @@ const normalizeRoleForStorage = (role) => {
     'infrastructure-directorate': 'infrastructure',
     infrastructure_directorate: 'infrastructure',
     infra: 'infrastructure',
+    facilities: 'infrastructure',
+    'infrastructure / facilities': 'infrastructure',
+    'infrastructure-facilities': 'infrastructure',
+    infrastructure_facilities: 'infrastructure',
     staff: 'staff',
     student: 'student',
   };
@@ -94,17 +102,27 @@ const normalizeRoleForStorage = (role) => {
 
 const DEFAULT_ROLE_PERMISSIONS = {
   admin: PERMISSIONS,
-  ict_officer: ['ict.dashboard.view', 'ict.assets.view', 'ict.assets.create', 'ict.assets.update', 'ict.assets.assign', 'ict.assets.transfer', 'ict.assets.qr', 'ict.assets.rfid', 'ict.assets.retire', 'ict.assets.export', 'ict.inventory.view', 'ict.inventory.import', 'ict.maintenance.view', 'ict.maintenance.create', 'ict.devicehealth.view', 'ict.devicehealth.manage', 'ict.tracking.view', 'ict.history.view', 'ict.analytics.view', 'ict.reports.view', 'ict.reports.export', 'ict.network.view', 'ict.network.manage', 'ict.softwarelicenses.view', 'ict.softwarelicenses.manage', 'ict.support.view', 'ict.support.manage', 'ict.incidents.view', 'ict.incidents.manage', 'ict.notifications.view'],
+  ict_officer: ['ict.dashboard.view', 'ict.assets.view', 'ict.assets.create', 'ict.assets.update', 'ict.assets.assign', 'ict.assets.transfer', 'ict.assets.qr', 'ict.assets.rfid', 'ict.assets.retire', 'ict.assets.export', 'ict.inventory.view', 'ict.inventory.import', 'ict.maintenance.view', 'ict.maintenance.create', 'ict.devicehealth.view', 'ict.devicehealth.manage', 'ict.tracking.view', 'ict.history.view', 'ict.analytics.view', 'ict.reports.view', 'ict.reports.export', 'ict.network.view', 'ict.network.manage', 'ict.softwarelicenses.view', 'ict.softwarelicenses.manage', 'ict.support.view', 'ict.support.manage', 'ict.incidents.view', 'ict.incidents.manage', 'ict.notifications.view', 'notifications.view', 'notifications.delete'],
   college: ['college.dashboard.view', 'college.assets.view', 'college.requests.view', 'college.assignments.view', 'college.notifications.view'],
-  college_manager: ['college.dashboard.view', 'college.profile.view', 'college.profile.update', 'college.staff.view', 'college.locations.view', 'college.locations.manage', 'college.departments.view', 'college.departments.manage', 'college.assets.view', 'college.assets.create', 'college.assets.update', 'college.assets.export', 'college.assets.delete', 'college.assets.restore', 'college.documents.manage', 'college.history.view', 'college.grants.view', 'college.inventory.view', 'college.chemicals.view', 'college.requests.view', 'college.requests.review', 'college.approvals.view', 'college.approvals.approve', 'college.approvals.reject', 'college.approvals.request_changes', 'college.approvals.escalate', 'college.assignments.view', 'college.assignments.manage', 'college.transfers.view', 'college.transfers.manage', 'assets.transfer.approve', 'college.returns.view', 'college.returns.manage', 'college.maintenance.view', 'college.service.view', 'college.rfid.view', 'college.verification.view', 'college.verification.manage', 'college.reports.view', 'college.reports.export', 'college.analytics.view', 'college.notifications.view'],
-  department_head: ['assets.view', 'assets.assign', 'assets.transfer', 'users.view', 'reports.view', 'department.profile.view', 'department.profile.update', 'department_head.history.view', 'department_head.analytics.view', 'department_head.reports.view', 'department_head.notifications.create', 'department_head.maintenance.view', 'department_head.approvals.review', 'department_head.approvals.approve', 'department_head.approvals.reject', 'department_head.approvals.request_changes', 'department_head.approvals.escalate', 'department_head.tickets.view', 'department_head.tickets.follow_up', 'department_head.returns.view', 'department_head.returns.manage'],
-  finance: ['assets.view', 'financial.view', 'reports.view', 'reports.generate', 'reports.export', 'reports.print'],
-  store_manager: ['assets.view', 'assets.create', 'assets.update', 'assets.assign', 'assets.transfer', 'inventory.view', 'inventory.stock_in', 'inventory.stock_out', 'inventory.stock_movement', 'rfid.view', 'reports.view'],
-  maintenance: ['assets.view', 'maintenance.view', 'maintenance.request.create', 'maintenance.technician.assign', 'maintenance.update', 'maintenance.complete', 'reports.view'],
-  infrastructure: ['assets.view', 'reports.view'],
+  college_manager: ['college.dashboard.view', 'college.profile.view', 'college.profile.update', 'college.staff.view', 'college.locations.view', 'college.locations.manage', 'college.departments.view', 'college.departments.manage', 'college.assets.view', 'college.assets.create', 'college.assets.update', 'college.assets.export', 'college.assets.delete', 'college.assets.restore', 'college.documents.manage', 'college.history.view', 'college.grants.view', 'college.inventory.view', 'college.chemicals.view', 'college.requests.view', 'college.requests.review', 'college.approvals.view', 'college.approvals.approve', 'college.approvals.reject', 'college.approvals.request_changes', 'college.approvals.escalate', 'college.assignments.view', 'college.assignments.manage', 'college.transfers.view', 'college.transfers.manage', 'assets.transfer.approve', 'college.returns.view', 'college.returns.manage', 'college.maintenance.view', 'college.service.view', 'college.rfid.view', 'college.verification.view', 'college.verification.manage', 'college.reports.view', 'college.reports.export', 'college.analytics.view', 'college.notifications.view', 'notifications.view', 'notifications.delete'],
+  department_head: ['assets.view', 'assets.assign', 'assets.transfer', 'users.view', 'reports.view', 'department.profile.view', 'department.profile.update', 'department_head.history.view', 'department_head.analytics.view', 'department_head.reports.view', 'department_head.notifications.create', 'department_head.maintenance.view', 'department_head.approvals.review', 'department_head.approvals.approve', 'department_head.approvals.reject', 'department_head.approvals.request_changes', 'department_head.approvals.escalate', 'department_head.tickets.view', 'department_head.tickets.follow_up', 'department_head.returns.view', 'department_head.returns.manage', 'notifications.view', 'notifications.delete'],
+  finance: ['assets.view', 'financial.view', 'reports.view', 'reports.generate', 'reports.export', 'reports.print', 'notifications.view', 'notifications.delete'],
+  store_manager: ['assets.view', 'assets.create', 'assets.update', 'assets.assign', 'assets.transfer', 'inventory.view', 'inventory.stock_in', 'inventory.stock_out', 'inventory.stock_movement', 'rfid.view', 'reports.view', 'notifications.view', 'notifications.delete'],
+  maintenance: ['assets.view', 'maintenance.view', 'maintenance.request.create', 'maintenance.technician.assign', 'maintenance.update', 'maintenance.complete', 'reports.view', 'notifications.view', 'notifications.delete'],
+  infrastructure: ['assets.view', 'reports.view', 'notifications.view', 'notifications.delete'],
   teaching_assistant: [],
   staff: ['assets.view'],
   student: ['assets.view'],
 };
 
-module.exports = { PERMISSIONS, ROLE_NAMES, DEFAULT_ROLE_PERMISSIONS, normalizeRoleForStorage };
+const NOTIFICATION_DEFAULT_PERMISSIONS = {
+  ict_officer: ['notifications.view', 'notifications.delete'],
+  college_manager: ['college.notifications.view', 'notifications.view', 'notifications.delete'],
+  department_head: ['notifications.view', 'notifications.delete'],
+  finance: ['notifications.view', 'notifications.delete'],
+  store_manager: ['notifications.view', 'notifications.delete'],
+  maintenance: ['notifications.view', 'notifications.delete'],
+  infrastructure: ['notifications.view', 'notifications.delete'],
+};
+
+module.exports = { PERMISSIONS, ROLE_NAMES, DEFAULT_ROLE_PERMISSIONS, NOTIFICATION_DEFAULT_PERMISSIONS, normalizeRoleForStorage };
