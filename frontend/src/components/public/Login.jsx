@@ -175,7 +175,7 @@ const Login = () => {
           padding: 32px 28px;
           border: 1px solid var(--color-border);
           border-radius: 22px;
-          background: rgba(255, 255, 255, 0.96);
+          background: #fff;
           box-shadow: var(--shadow-lg);
         }
         .login-back-link {
@@ -300,10 +300,16 @@ const Login = () => {
           .login-card { padding: 24px 18px; }
         }
       `}</style>
-      <div className="login-page">
+      <div
+        className="login-page"
+        style={{
+          backgroundImage: "linear-gradient(rgba(13, 36, 71, 0.24), rgba(13, 36, 71, 0.24)), url('/images/login-background.jpg')",
+          backgroundPosition: 'center',
+          backgroundSize: 'cover',
+        }}
+      >
         <section className="login-panel">
           <section className="login-card" aria-labelledby="login-page-title">
-            <img className="login-logo" src="/assets/mekdela-amba-university-logo.png" alt="Mekdela Amba University logo" />
             <div className="login-heading"><h2 id="login-page-title">{t.title}</h2><p>{t.subtitle}</p></div>
             <div className="login-status"><span className={`status-dot ${backendStatus === 'online' ? 'status-online' : backendStatus === 'offline' ? 'status-offline' : ''}`} /><Activity size={15} aria-hidden="true" /> {t.systemStatus}: {t[backendStatus]}</div>
             {error && <div className="login-error" role="alert"><ShieldCheck size={17} aria-hidden="true" /> <span>{error}</span></div>}

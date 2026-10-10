@@ -32,6 +32,17 @@ describe('Login error feedback', () => {
     jest.clearAllMocks();
   });
 
+  test('uses the provided university photo as the login page background', () => {
+    const { container } = renderLogin();
+    const loginPage = container.querySelector('.login-page');
+
+    expect(loginPage).toHaveStyle({
+      backgroundImage: expect.stringContaining('/images/login-background.jpg'),
+      backgroundPosition: 'center',
+      backgroundSize: 'cover',
+    });
+  });
+
   test('shows the authentication error returned by the backend', async () => {
     mockLogin.mockResolvedValue({
       success: false,

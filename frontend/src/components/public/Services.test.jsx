@@ -55,16 +55,17 @@ describe('Services page', () => {
     expect(screen.queryByText(/^0[1-8]$/)).not.toBeInTheDocument();
     expect(container.querySelector('.services-card-number')).toBeNull();
     expect(screen.getAllByRole('button', { name: /^View Details:/ })).toHaveLength(8);
-    expect(screen.queryAllByRole('link')).toHaveLength(0);
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: 'Open Asset Registration' })).toHaveAttribute('href', '/admin/assets/create');
 
     const cardImages = container.querySelectorAll('.services-card-image-frame img');
     expect(cardImages).toHaveLength(8);
     expect(new Set(Array.from(cardImages, (image) => image.getAttribute('src'))).size).toBe(8);
     cardImages.forEach((image) => expect(image).toHaveAttribute('alt', expect.stringMatching(/\S/)));
+    expect(cardImages[0]).toHaveAttribute('src', '/images/assets/asset-registration.jpg');
 
-    expect(container.querySelector('.services-hero-image')).toHaveAttribute('src', '/images/hero/4-1.jpg');
-    expect(container.querySelector('.services-hero-overlay')).toBeInTheDocument();
-    expect(container.querySelector('.services-hero')).toHaveStyle({ background: '#419fd9' });
+    expect(container.querySelector('.services-hero')).not.toBeInTheDocument();
+    expect(container.querySelectorAll('.services-card-image-frame img')).toHaveLength(8);
     expect(container.querySelector('style').textContent).toContain('object-fit: cover');
   });
 
@@ -110,11 +111,11 @@ describe('Services page', () => {
 
   it('shows an accessible fallback when a service image fails to load', () => {
     renderServices();
-    const image = screen.getByRole('img', { name: 'Illustration of a computer-based university asset registration form' });
+    const image = screen.getByRole('img', { name: 'Asset registration form and image preview' });
 
     fireEvent.error(image);
 
-    expect(screen.getByRole('img', { name: 'Illustration of a computer-based university asset registration form' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Asset registration form and image preview' })).toBeInTheDocument();
   });
 
   it('retains responsive layout and honors reduced-motion preferences', () => {

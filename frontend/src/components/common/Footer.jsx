@@ -1,11 +1,10 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BarChart3, Building2, ClipboardList, FileText, LifeBuoy, LockKeyhole, Mail, MapPin, Package, Phone, Radio, Scale, ShieldCheck, Wrench } from 'lucide-react';
+import { BarChart3, Building2, ClipboardList, LockKeyhole, Mail, MapPin, Package, Phone, Radio, Scale, ShieldCheck, Wrench } from 'lucide-react';
 
 const publicLinks = [
   { to: '/home', key: 'home' },
   { to: '/about', key: 'about' },
-  { to: '/help', key: 'help' },
   { to: '/contact', key: 'contact' }
 ];
 
@@ -89,8 +88,6 @@ const Footer = ({ t, organization, role, onPublicNavigation }) => {
 
         <nav className="footer-section" aria-label={t.footerSupport}>
           <h3>{t.footerSupport}</h3>
-          {renderLink({ to: '/help', label: t.footerHelpCenter, icon: LifeBuoy }, true)}
-          {renderLink({ to: '/help', label: t.footerFaq, icon: FileText }, true)}
           {renderLink({ to: '/contact', label: t.footerContactSupport, icon: Mail }, true)}
         </nav>
 

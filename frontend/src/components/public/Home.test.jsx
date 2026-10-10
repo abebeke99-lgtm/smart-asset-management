@@ -31,8 +31,8 @@ describe('Home', () => {
     expect(screen.queryByRole('heading', { name: 'Trusted by Mekdela Amba University' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Quick Links' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Ready to Get Started?' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Login to System' })).toHaveAttribute('href', '/login');
-    expect(screen.getByRole('link', { name: 'Explore System' })).toHaveAttribute('href', '/about');
+    expect(screen.queryByRole('link', { name: 'Login to System' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Explore System' })).not.toBeInTheDocument();
   });
 
   it('overlays the single accessible page heading on the rotating hero image', () => {
@@ -57,10 +57,15 @@ describe('Home', () => {
     expect(content.querySelector('.uam-hero-panel')).toBeInTheDocument();
     expect(content).toHaveTextContent('Manage, track, assign, maintain, and monitor every university asset from one centralized platform.');
     expect(homeStyles).toContain('position: absolute');
-    expect(homeStyles).toContain('color: #FFFFFF');
-    expect(homeStyles).toContain('text-shadow: 0 3px 14px');
+    expect(homeStyles).toContain('place-items: center');
+    expect(homeStyles).toContain('animation: uam-title-neon 6s ease-in-out infinite');
+    expect(homeStyles).toContain('@keyframes uam-title-neon');
+    expect(homeStyles).toContain('color: #60A5FA');
+    expect(homeStyles).toContain('color: #67E8F9');
+    expect(homeStyles).toContain('color: #C4B5FD');
+    expect(homeStyles).toContain('text-shadow: 0 0 10px');
     expect(homeStyles).toContain('@media (max-width: 640px)');
-    expect(homeStyles).toContain('.uam-hero-image-title { right: 18px; bottom: 34px; left: 18px;');
+    expect(homeStyles).toContain('.uam-hero-image-title { width: calc(100% - 36px);');
   });
 
   it('shows the active hero image at full opacity and keeps the smooth responsive image treatment', () => {
@@ -131,7 +136,7 @@ describe('Home', () => {
     const quickLinks = within(footerContent.getByRole('navigation', { name: 'Quick Links' }));
     expect(quickLinks.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/home');
     expect(quickLinks.getByRole('link', { name: 'About Us' })).toHaveAttribute('href', '/about');
-    expect(quickLinks.getByRole('link', { name: 'Help' })).toHaveAttribute('href', '/help');
+    expect(quickLinks.queryByRole('link', { name: 'Help' })).not.toBeInTheDocument();
     expect(quickLinks.getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '/contact');
 
     const systemLinks = within(footerContent.getByRole('navigation', { name: 'System' }));
@@ -139,8 +144,8 @@ describe('Home', () => {
     expect(systemLinks.getByRole('link', { name: 'Inventory' })).toHaveAttribute('href', '/services');
 
     const supportLinks = within(footerContent.getByRole('navigation', { name: 'Support' }));
-    expect(supportLinks.getByRole('link', { name: 'Help Center' })).toHaveAttribute('href', '/help');
-    expect(supportLinks.getByRole('link', { name: 'FAQ' })).toHaveAttribute('href', '/help');
+    expect(supportLinks.queryByRole('link', { name: 'Help Center' })).not.toBeInTheDocument();
+    expect(supportLinks.queryByRole('link', { name: 'FAQ' })).not.toBeInTheDocument();
     expect(supportLinks.getByRole('link', { name: 'Contact Support' })).toHaveAttribute('href', '/contact');
 
     expect(footerContent.getByRole('heading', { name: /Support/i })).toBeInTheDocument();

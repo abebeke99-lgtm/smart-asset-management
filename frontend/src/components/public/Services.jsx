@@ -129,10 +129,10 @@ const servicesByLanguage = {
 
 const serviceMedia = [
   {
-    src: '/images/assets/asset-management.svg',
+    src: '/images/assets/asset-registration.jpg',
     alt: {
-      en: 'Illustration of a computer-based university asset registration form',
-      am: 'በኮምፒውተር የዩኒቨርሲቲ ንብረት ምዝገባ ቅጽ ምሳሌ'
+      en: 'Asset registration form and image preview',
+      am: 'የንብረት ምዝገባ ቅጽና የምስል ቅድመ እይታ'
     }
   },
   {
@@ -390,15 +390,6 @@ const Services = () => {
 
   return (
     <div className={`services-page${theme === 'dark' ? ' services-page-dark' : ''}`}>
-      <header className="services-hero">
-        <img
-          className="services-hero-image"
-          src="/images/hero/4-1.jpg"
-          alt="Mekdela Amba University campus"
-        />
-        <div className="services-hero-overlay" aria-hidden="true" />
-      </header>
-
       <section className="services-section services-shell" aria-labelledby="services-section-title">
         <h2 id="services-section-title" className="services-visually-hidden">{content.systemTitle}</h2>
         <div className="services-grid">
@@ -407,7 +398,13 @@ const Services = () => {
             return (
               <article className="services-card" key={title} style={{ '--services-card-index': index }}>
                 <div className="services-card-image-frame">
-                  <ServiceImage service={service} imageAlt={service.alt[language] || service.alt.en} className="services-card-image" />
+                  {index === 0 ? (
+                    <Link to={to} className="services-card-image-link" aria-label={`Open ${title}`}>
+                      <ServiceImage service={service} imageAlt={service.alt[language] || service.alt.en} className="services-card-image" />
+                    </Link>
+                  ) : (
+                    <ServiceImage service={service} imageAlt={service.alt[language] || service.alt.en} className="services-card-image" />
+                  )}
                 </div>
                 <span className="services-card-icon" aria-hidden="true">
                   <Icon size={26} strokeWidth={1.8} />
@@ -508,34 +505,6 @@ const Services = () => {
           margin-inline: auto;
         }
 
-        .services-hero {
-          position: relative;
-          display: flex;
-          min-height: clamp(110px, 16vw, 160px);
-          align-items: center;
-          overflow: hidden;
-          background: #419fd9;
-          isolation: isolate;
-        }
-
-        .services-hero-image,
-        .services-hero-overlay {
-          position: absolute;
-          z-index: -1;
-          inset: 0;
-          width: 100%;
-          height: 100%;
-        }
-
-        .services-hero-image {
-          object-fit: cover;
-          object-position: center 48%;
-        }
-
-        .services-hero-overlay {
-          background: linear-gradient(90deg, rgba(30, 111, 166, 0.88), rgba(50, 139, 194, 0.82) 56%, rgba(65, 159, 217, 0.72));
-        }
-
         .services-visually-hidden {
           position: absolute;
           width: 1px;
@@ -587,6 +556,12 @@ const Services = () => {
           width: 100%;
           height: 138px;
           margin-bottom: 20px;
+        }
+
+        .services-card-image-link {
+          display: block;
+          width: 100%;
+          height: 100%;
         }
 
         .services-card-image,

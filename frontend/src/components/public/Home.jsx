@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useLanguage } from '../../contexts/UiContext';
 import { homepageImages } from '../../config/homepageImages';
 import {
@@ -93,10 +92,6 @@ const Home = () => {
             ))}
           </ul>
 
-          <div className="uam-cta-row">
-            <Link className="uam-primary-button" to="/login">{text.login}</Link>
-            <Link className="uam-secondary-button" to="/about">{text.learnMore}</Link>
-          </div>
         </div>
 
         <aside className="uam-hero-panel" aria-label={text.overview}>
@@ -152,18 +147,20 @@ const Home = () => {
       .uam-hero-image-title {
         position: absolute;
         z-index: 2;
-        right: 24px;
-        bottom: clamp(34px, 8vh, 82px);
-        left: 24px;
+        inset: 0;
+        display: grid;
+        place-items: center;
         max-width: 1000px;
-        margin: 0 auto;
-        color: #FFFFFF;
+        width: calc(100% - 48px);
+        margin: auto;
+        color: #67E8F9;
+        animation: uam-title-neon 6s ease-in-out infinite;
         font-size: clamp(2.5rem, 6.5vw, 5.25rem);
         font-weight: 800;
         line-height: 1.04;
         letter-spacing: 0;
         text-align: center;
-        text-shadow: 0 3px 14px rgba(0, 0, 0, 0.72);
+        text-shadow: 0 0 10px rgba(34, 211, 238, 0.85), 0 0 28px rgba(34, 211, 238, 0.65), 0 3px 14px rgba(0, 0, 0, 0.72);
         text-wrap: balance;
       }
 
@@ -375,6 +372,21 @@ const Home = () => {
         to { opacity: 1; transform: translate(0, 0); }
       }
 
+      @keyframes uam-title-neon {
+        0%, 100% {
+          color: #60A5FA;
+          text-shadow: 0 0 10px rgba(59, 130, 246, 0.9), 0 0 28px rgba(59, 130, 246, 0.7), 0 3px 14px rgba(0, 0, 0, 0.72);
+        }
+        33% {
+          color: #67E8F9;
+          text-shadow: 0 0 10px rgba(34, 211, 238, 0.9), 0 0 30px rgba(34, 211, 238, 0.75), 0 3px 14px rgba(0, 0, 0, 0.72);
+        }
+        66% {
+          color: #C4B5FD;
+          text-shadow: 0 0 10px rgba(167, 139, 250, 0.9), 0 0 30px rgba(167, 139, 250, 0.75), 0 3px 14px rgba(0, 0, 0, 0.72);
+        }
+      }
+
       @media (prefers-reduced-motion: reduce) {
         .uam-hero-image-title,
         .uam-lead,
@@ -444,7 +456,7 @@ const Home = () => {
 
       @media (max-width: 640px) {
         .uam-hero-shell { width: min(100% - 32px, 560px); grid-template-columns: 1fr; gap: 36px; padding: 58px 0 64px; }
-        .uam-hero-image-title { right: 18px; bottom: 34px; left: 18px; font-size: clamp(2.2rem, 9vw, 3.25rem); }
+        .uam-hero-image-title { width: calc(100% - 36px); font-size: clamp(2.2rem, 9vw, 3.25rem); }
         .uam-hero-title-backdrop { inset: 42% 0 0; }
         .uam-lead { margin-top: 18px; font-size: 1.03rem; }
         .uam-supporting-text { margin-bottom: 23px; font-size: 0.94rem; }

@@ -13,7 +13,7 @@ import './styles/admin/index.css';
 import './components/ict/ICTModuleThemes.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, Folder, GitBranch, House, Info, Languages, Layers, LayoutDashboard, LifeBuoy, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, QrCode, Radio, Search, Settings, ShieldCheck, Sun, TrendingUp, Undo2, UserCircle, UserRound, Users, Wrench, X } from 'lucide-react';
+import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, Folder, GitBranch, House, Info, Layers, LayoutDashboard, LifeBuoy, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, QrCode, Radio, Search, Settings, ShieldCheck, Sun, TrendingUp, Undo2, UserCircle, UserRound, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 import CollegeDepartments from './pages/college/CollegeDepartments';
@@ -2833,7 +2833,6 @@ function AppContent() {
     { to: '/home', label: t.home, icon: House },
     { to: '/about', label: t.about, icon: Info },
     { to: '/services', label: t.services, icon: BriefcaseBusiness },
-    { to: '/help', label: t.help, icon: CircleHelp },
     { to: '/contact', label: t.contact, icon: Mail }
   ];
 
@@ -2873,7 +2872,6 @@ function AppContent() {
         aria-label={t.switchLanguage}
         className={`public-language-toggle${variant ? ` ${variant}` : ''}`}
       >
-        <Languages size={16} strokeWidth={2} aria-hidden="true" />
         <button type="button" onClick={() => setLanguage('en')} aria-pressed={language === 'en'} aria-label={t.languageEnglish}>EN</button>
         <span aria-hidden="true">|</span>
         <button type="button" onClick={() => setLanguage('am')} aria-pressed={language === 'am'} aria-label={t.languageAmharic}>AM</button>
