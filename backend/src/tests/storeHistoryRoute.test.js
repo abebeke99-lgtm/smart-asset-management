@@ -5,10 +5,11 @@ const { Op } = require('sequelize');
 const storeRoutes = require('../routes/storeRoutes');
 const assignmentRoutes = require('../routes/assignmentRoutes');
 const userRoutes = require('../routes/userRoutes');
+const notificationRoutes = require('../routes/notificationRoutes');
 const departmentRoutes = require('../routes/departmentRoutes');
 const returnWorkflowRoutes = require('../routes/returnWorkflowRoutes');
 const { createReceipt, createStockAdjustment } = require('../controllers/inventoryController');
-const { getInventory, getHistory, getDashboard, getLowStock, updateReorderLevel, getStockAdjustments } = require('../controllers/storeController');
+const { getInventory, getHistory, getDashboard, getLowStock, updateReorderLevel, getStockAdjustments, getReceipts } = require('../controllers/storeController');
 const { processStoreReturn } = require('../controllers/returnWorkflowController');
 const { Approval, Asset, Assignment, AssetMovement, AssetReturn, AuditLog, College, Department, Inventory, InventoryTransaction, Maintenance, Transfer, VerificationItem, VerificationSession, sequelize } = require('../models');
 
@@ -23,6 +24,36 @@ test('store routes expose a store manager movement history endpoint', () => {
   assert.match(dashboardRoute.route.stack[2].handle.name, /ensureStoreScope/);
 });
 
+test('low-stock route requires authentication and Store Manager role before resolving College scope', () => {
+  const route = storeRoutes.stack.find((layer) => layer.route && layer.route.path === '/low-stock' && layer.route.methods.get);
+  assert.ok(route, 'expected GET /low-stock route');
+  assert.equal(route.route.stack[0].handle.name, 'noStore');
+  assert.equal(route.route.stack[1].handle.name, 'requireAuth');
+
+  const requireStoreManager = route.route.stack[2].handle;
+  for (const [user, expectedStatus] of [[null, 401], [{ role: 'admin' }, 403]]) {
+    let responseStatus;
+    const response = {
+      status(code) { responseStatus = code; return this; },
+      json() { return this; },
+    };
+    requireStoreManager({ user }, response, () => assert.fail('unauthorized user must not reach the handler'));
+    assert.equal(responseStatus, expectedStatus);
+  }
+});
+
+test('profile and notification unread counters opt out of conditional response caching', () => {
+  const profileRoute = userRoutes.stack.find((layer) => layer.route && layer.route.path === '/profile' && layer.route.methods.get);
+  const unreadRoute = notificationRoutes.stack.find((layer) => layer.route && layer.route.path === '/notifications/unread-count' && layer.route.methods.get);
+  const unreadAliasRoute = notificationRoutes.stack.find((layer) => layer.route && layer.route.path === '/notifications/unread/count' && layer.route.methods.get);
+  assert.ok(profileRoute);
+  assert.ok(unreadRoute);
+  assert.ok(unreadAliasRoute);
+  assert.equal(profileRoute.route.stack[0].handle.name, 'noStore');
+  assert.equal(unreadRoute.route.stack[0].handle.name, 'noStore');
+  assert.equal(unreadAliasRoute.route.stack[0].handle.name, 'noStore');
+});
+
 test('store dashboard, low-stock, and adjustment routes reject unresolved college scope', async () => {
   const originalFindAll = College.findAll;
   College.findAll = async () => [];
@@ -32,7 +63,7 @@ test('store dashboard, low-stock, and adjustment routes reject unresolved colleg
     for (const [path, method] of routes) {
       const route = storeRoutes.stack.find((layer) => layer.route && layer.route.path === path && layer.route.methods[method]);
       assert.ok(route, `expected ${method.toUpperCase()} ${path}`);
-      const ensureStoreScope = route.route.stack[2].handle;
+      const ensureStoreScope = route.route.stack[path === '/low-stock' ? 3 : 2].handle;
       const response = { statusCode: 200, body: null, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
       await ensureStoreScope({ user: { role: 'store_manager', collegeId: null, college_id: null } }, response, () => assert.fail(`${method.toUpperCase()} ${path} must reject unresolved scope`));
       assert.equal(response.statusCode, 403);
@@ -50,6 +81,47 @@ test('store dashboard, low-stock, and adjustment handlers fail closed without co
     await handler({ user: { collegeId: null, college_id: null }, query: {} }, response, (caught) => { error = caught; });
     assert.equal(error.statusCode, 403);
   }
+});
+
+test('store adjustment and receipt query errors are logged and returned as message-only 500s', async (t) => {
+  const originalFindAndCountAll = InventoryTransaction.findAndCountAll;
+  const originalConsoleError = console.error;
+  const databaseError = Object.assign(new Error('Unknown inventory column'), {
+    name: 'SequelizeDatabaseError',
+    original: { code: 'ER_BAD_FIELD_ERROR', sqlMessage: "Unknown column 'missing_column'" },
+    sql: 'SELECT missing_column FROM inventory_transactions',
+  });
+  const logs = [];
+  InventoryTransaction.findAndCountAll = async () => { throw databaseError; };
+  console.error = (...args) => logs.push(args);
+  t.after(() => {
+    InventoryTransaction.findAndCountAll = originalFindAndCountAll;
+    console.error = originalConsoleError;
+  });
+
+  for (const [handler, expectedMessage] of [
+    [getStockAdjustments, 'Failed to load stock adjustments'],
+    [getReceipts, 'Failed to load receipts'],
+  ]) {
+    const response = {
+      statusCode: 200,
+      body: null,
+      status(code) { this.statusCode = code; return this; },
+      json(body) { this.body = body; return this; },
+    };
+    await handler({ organizationScope: { collegeId: 7 }, user: {}, query: {} }, response, (error) => { throw error; });
+    assert.equal(response.statusCode, 500);
+    assert.deepEqual(response.body, { message: expectedMessage });
+  }
+
+  assert.equal(logs.length, 2);
+  assert.deepEqual(logs[0][1], {
+    name: 'SequelizeDatabaseError',
+    message: 'Unknown inventory column',
+    code: 'ER_BAD_FIELD_ERROR',
+    sqlMessage: "Unknown column 'missing_column'",
+    sql: 'SELECT missing_column FROM inventory_transactions',
+  });
 });
 
 test('store dashboard queries include only assets from the resolved College', async () => {
@@ -79,6 +151,13 @@ test('store dashboard queries include only assets from the resolved College', as
       else if (model === VerificationItem) assert.equal(options.include[0].where.collegeId, 7);
       else assert.equal(options.include.find((entry) => entry.model === Asset).where.collegeId, 7);
     }
+    const stockCountQueries = queries.filter(({ model, method }) => model === Inventory && method === 'count');
+    assert.equal(stockCountQueries.length, 2);
+    const outOfStockQuery = stockCountQueries.find(({ options }) => options.where[Op.and]);
+    assert.ok(outOfStockQuery);
+    assert.equal(outOfStockQuery.options.where[Op.and][0].attribute.col, 'available_quantity');
+    assert.equal(outOfStockQuery.options.where[Op.and][1].availableQuantity[Op.lte], 0);
+    assert.ok(outOfStockQuery.options.include[0].where[Op.and].some((condition) => condition.attribute.fn === 'LOWER'));
     const aggregateQueries = queries
       .filter(({ model, method }) => model === InventoryTransaction && method === 'findAll')
       .filter(({ options }) => options.attributes.some((attribute) => attribute[1] === 'quantity'));
@@ -115,6 +194,7 @@ test('low-stock and adjustment listings return and query only own-College assets
     assert.equal(lowStock.data.items[0].reorderLevel, 3);
     assert.equal(lowStock.data.items[0].severity, 'CRITICAL');
     assert.equal(lowStock.data.items[0].available, 1);
+    assert.deepEqual(lowStock.data.filters, { categories: ['Own College'], locations: ['Store'] });
     for (const options of inventoryQueries) assert.equal(options.include[0].where.collegeId, 7);
     let stockAdjustments;
     await getStockAdjustments({ organizationScope: { collegeId: 7 }, user: {}, query: {} }, { json(body) { stockAdjustments = body; } }, (error) => { throw error; });
@@ -159,8 +239,111 @@ test('low-stock uses the configured default for legacy zero thresholds and repor
   }
 });
 
+test('low-stock includes balances exactly at threshold and sorts using effective severity and threshold', async () => {
+  const originals = [Inventory.findAndCountAll, Inventory.findAll];
+  const item = {
+    id: 6, assetId: 61, quantity: 10, availableQuantity: 5, reservedQuantity: 2, damagedQuantity: 1, minimumQuantity: 5,
+    location: 'Warehouse B', updatedAt: new Date(),
+    Asset: { id: 61, name: 'Gloves', assetCode: 'G-61', category: 'Safety', location: '', status: 'available', condition: 'Good', unit: 'box', collegeId: 7 },
+  };
+  let listQuery;
+  let responseBody;
+  Inventory.findAndCountAll = async (options) => { listQuery = options; return { rows: [item], count: 1 }; };
+  Inventory.findAll = async () => [item];
+  try {
+    await getLowStock(
+      { organizationScope: { collegeId: 7 }, user: {}, query: { location: 'Warehouse B', sortBy: 'severity', sortOrder: 'desc' } },
+      { json(body) { responseBody = body; } },
+      (error) => { throw error; },
+    );
+    assert.equal(responseBody.data.items[0].available, 5);
+    assert.equal(responseBody.data.items[0].reserved, 2);
+    assert.equal(responseBody.data.items[0].assigned, 2);
+    assert.equal(responseBody.data.items[0].severity, 'LOW');
+    assert.deepEqual(responseBody.data.filters.locations, ['Warehouse B']);
+    assert.equal(listQuery.where[Op.and][0].attribute.col, 'available_quantity');
+    assert.equal(listQuery.order[0][0].val.includes('CASE WHEN available_quantity <= 0'), true);
+
+    await getLowStock(
+      { organizationScope: { collegeId: 7 }, user: {}, query: { sortBy: 'reorderLevel' } },
+      { json(body) { responseBody = body; } },
+      (error) => { throw error; },
+    );
+    assert.match(listQuery.order[0][0].val, /CASE WHEN minimum_quantity > 0 THEN minimum_quantity ELSE/);
+  } finally {
+    [Inventory.findAndCountAll, Inventory.findAll] = originals;
+  }
+});
+
+test('low-stock filter choices cover all eligible rows and use the displayed inventory location fallback', async () => {
+  const originals = [Inventory.findAndCountAll, Inventory.findAll];
+  const rows = [
+    {
+      id: 8, assetId: 81, quantity: 12, availableQuantity: 4, reservedQuantity: 2, damagedQuantity: 0, minimumQuantity: 5,
+      location: 'Warehouse B', Asset: { id: 81, name: 'Gloves', category: 'Equipment', location: '', status: 'available', condition: 'Good', collegeId: 7 },
+    },
+    {
+      id: 9, assetId: 91, quantity: 7, availableQuantity: 2, reservedQuantity: 1, damagedQuantity: 0, minimumQuantity: 4,
+      location: 'Main Store', Asset: { id: 91, name: 'Masks', category: 'Supplies', location: 'Main Store', status: 'available', condition: 'Good', collegeId: 7 },
+    },
+  ];
+  let listQuery;
+  let responseBody;
+  Inventory.findAndCountAll = async (options) => { listQuery = options; return { rows: [rows[0]], count: 1 }; };
+  Inventory.findAll = async () => rows;
+  try {
+    await getLowStock(
+      { organizationScope: { collegeId: 7 }, user: {}, query: { category: 'Equipment', location: 'Warehouse B' } },
+      { json(body) { responseBody = body; } },
+      (error) => { throw error; },
+    );
+    assert.deepEqual(responseBody.data.filters, {
+      categories: ['Equipment', 'Supplies'],
+      locations: ['Main Store', 'Warehouse B'],
+    });
+    assert.equal(listQuery.include[0].where.category, 'Equipment');
+    assert.equal(listQuery.where[Op.and][1].attribute.fn, 'COALESCE');
+  } finally {
+    [Inventory.findAndCountAll, Inventory.findAll] = originals;
+  }
+});
+
+test('low-stock reports invalid balances instead of coercing them to zero', async () => {
+  const originals = [Inventory.findAndCountAll, Inventory.findAll];
+  const item = {
+    id: 7, assetId: 71, quantity: null, availableQuantity: null, reservedQuantity: 0, damagedQuantity: 0, minimumQuantity: 4,
+    Asset: { id: 71, name: 'Unknown balance', assetCode: 'U-71', category: 'Safety', location: 'Store', status: 'available', condition: 'Good', collegeId: 7 },
+  };
+  let responseBody;
+  Inventory.findAndCountAll = async () => ({ rows: [item], count: 1 });
+  Inventory.findAll = async () => [item];
+  try {
+    await getLowStock(
+      { organizationScope: { collegeId: 7 }, user: {}, query: {} },
+      { json(body) { responseBody = body; } },
+      (error) => { throw error; },
+    );
+    assert.equal(responseBody.data.items[0].available, null);
+    assert.equal(responseBody.data.items[0].onHand, null);
+    assert.equal(responseBody.data.items[0].assigned, null);
+    assert.equal(responseBody.data.items[0].shortage, null);
+    assert.equal(responseBody.data.items[0].severity, 'DATA_ERROR');
+    assert.equal(responseBody.data.items[0].dataIntegrityError, true);
+    assert.equal(responseBody.data.summary.dataIntegrityErrors, 1);
+  } finally {
+    [Inventory.findAndCountAll, Inventory.findAll] = originals;
+  }
+});
+
 test('low-stock rejects invalid pagination and sort selectors', async () => {
-  for (const query of [{ page: '-1' }, { pageSize: '101' }, { sortBy: 'createdAt' }, { sortOrder: 'sideways' }]) {
+  for (const query of [
+    { page: '-1' },
+    { pageSize: '101' },
+    { sortBy: 'createdAt' },
+    { sortOrder: 'sideways' },
+    { search: 'x'.repeat(101) },
+    { category: ['multiple', 'values'] },
+  ]) {
     let statusCode;
     let responseBody;
     await getLowStock(
@@ -170,6 +353,23 @@ test('low-stock rejects invalid pagination and sort selectors', async () => {
     );
     assert.equal(statusCode, 400);
     assert.equal(responseBody.success, false);
+  }
+});
+
+test('low-stock database failures are forwarded to the application error handler', async () => {
+  const originalFindAll = Inventory.findAll;
+  const databaseError = new Error('Inventory database query failed');
+  Inventory.findAll = async () => { throw databaseError; };
+  try {
+    let forwardedError;
+    await getLowStock(
+      { organizationScope: { collegeId: 7 }, user: {}, query: {} },
+      { json() { assert.fail('database failure must not return a success-shaped response'); } },
+      (error) => { forwardedError = error; },
+    );
+    assert.equal(forwardedError, databaseError);
+  } finally {
+    Inventory.findAll = originalFindAll;
   }
 });
 

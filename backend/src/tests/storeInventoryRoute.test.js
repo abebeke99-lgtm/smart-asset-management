@@ -148,12 +148,20 @@ test('stock addition route is authenticated, Store Manager-only, and College-sco
   assert.equal(denied.statusCode, 403);
 });
 
-test('receipt records remain available when optional summary aggregation fails', async () => {
+test('receipt summary query failures are logged and returned as a message-only 500', async () => {
   const originalFindAndCountAll = InventoryTransaction.findAndCountAll;
   const originalSum = InventoryTransaction.sum;
   const originalConsoleError = console.error;
   let responseBody;
+  let responseStatus = 200;
+  let logged;
   let queryOptions;
+  const aggregateFields = [];
+  const databaseError = Object.assign(new Error('summary query unavailable'), {
+    name: 'SequelizeDatabaseError',
+    original: { code: 'ER_BAD_FIELD_ERROR', sqlMessage: "Unknown column 'quantity'" },
+    sql: 'SELECT SUM(quantity) FROM inventory_transactions',
+  });
   InventoryTransaction.findAndCountAll = async (options) => {
     queryOptions = options;
     return {
@@ -166,27 +174,33 @@ test('receipt records remain available when optional summary aggregation fails',
       count: 1,
     };
   };
-  InventoryTransaction.sum = async () => { throw new Error('summary query unavailable'); };
-  console.error = () => {};
+  InventoryTransaction.sum = async (field) => { aggregateFields.push(field); throw databaseError; };
+  console.error = (...args) => { logged = args; };
 
   try {
     await getReceipts(
       { organizationScope: { collegeId: 9 }, user: { id: 3 }, query: { page: '1', pageSize: '25', search: 'Paper' } },
-      { json: (body) => { responseBody = body; } },
+      {
+        status(code) { responseStatus = code; return this; },
+        json(body) { responseBody = body; return this; },
+      },
       (error) => { throw error; },
     );
     assert.equal(queryOptions.include[0].where.collegeId, 9);
     assert.equal(queryOptions.where[Op.or].length, 5);
-    assert.equal(responseBody.success, true);
-    assert.equal(responseBody.data.items[0].receiptNumber, 'GRN-12');
-    assert.equal(responseBody.data.items[0].category, 'Supplies');
-    assert.equal(responseBody.data.items[0].unit, 'pack');
-    assert.equal(responseBody.data.items[0].unitPrice, 2.5);
-    assert.equal(responseBody.data.items[0].totalCost, 5);
-    assert.equal(responseBody.data.items[0].batchNumber, 'B-12');
-    assert.equal(responseBody.data.items[0].expiryDate, '2027-09-30');
-    assert.equal(responseBody.data.summary.receivedToday, null);
-    assert.equal(responseBody.data.summary.receivedThisMonth, null);
+    assert.ok(queryOptions.where[Op.or].some((condition) => Object.hasOwn(condition, '$Asset.asset_code$')));
+    assert.ok(queryOptions.where[Op.or].some((condition) => Object.hasOwn(condition, '$Asset.serial_number$')));
+    assert.deepEqual(aggregateFields, ['InventoryTransaction.quantity', 'InventoryTransaction.quantity']);
+    assert.equal(responseStatus, 500);
+    assert.deepEqual(responseBody, { message: 'Failed to load receipts' });
+    assert.equal(logged[0], 'Failed to load store receipts:');
+    assert.deepEqual(logged[1], {
+      name: 'SequelizeDatabaseError',
+      message: 'summary query unavailable',
+      code: 'ER_BAD_FIELD_ERROR',
+      sqlMessage: "Unknown column 'quantity'",
+      sql: 'SELECT SUM(quantity) FROM inventory_transactions',
+    });
   } finally {
     InventoryTransaction.findAndCountAll = originalFindAndCountAll;
     InventoryTransaction.sum = originalSum;

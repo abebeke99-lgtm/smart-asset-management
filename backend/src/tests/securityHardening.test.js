@@ -7,13 +7,13 @@ const { ROLE_NAMES, normalizeRoleForStorage } = require('../constants/rolePermis
 
 const read = (file) => fs.readFileSync(path.join(__dirname, file), 'utf8');
 
-test('production JWT signing fails fast without JWT_SECRET and uses only its environment value', () => {
+test('JWT signing fails fast without JWT_SECRET in every environment and uses only its environment value', () => {
   const previousNodeEnvironment = process.env.NODE_ENV;
   const previousJwtSecret = process.env.JWT_SECRET;
   try {
-    process.env.NODE_ENV = 'production';
+    process.env.NODE_ENV = 'development';
     delete process.env.JWT_SECRET;
-    assert.throws(getJwtSecret, /JWT_SECRET must be configured in production/);
+    assert.throws(getJwtSecret, /JWT_SECRET must be configured before starting the server/);
     process.env.JWT_SECRET = 'test-only-env-secret';
     assert.equal(getJwtSecret(), 'test-only-env-secret');
   } finally {
@@ -135,5 +135,9 @@ test('assignment reassign validates typed targets and closes the previous histor
 test('backend error middleware never serializes internal 500 details to clients', () => {
   const source = read('../app.js');
   assert.match(source, /message:\s*status >= 500 \|\| process\.env\.NODE_ENV === 'production' \? 'Internal server error'/);
+  assert.match(source, /name:\s*err\.name/);
+  assert.match(source, /code:\s*err\.original\?\.code/);
+  assert.match(source, /sqlMessage:\s*err\.original\?\.sqlMessage/);
+  assert.match(source, /sql:\s*err\.sql/);
   assert.match(source, /status < 500 && err\.errors/);
 });

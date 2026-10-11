@@ -5,6 +5,7 @@ const { requireAuth, requireRole, requireAnyPermission } = require('../middlewar
 const { Notification, NotificationDelivery, User, Config, sequelize } = require('../models');
 const { buildNotificationVisibilityWhere, normalizeNotificationScope } = require('../services/notificationService');
 const { createAuditLog } = require('../services/auditLogService');
+const noStore = require('../middlewares/noStore');
 
 const notificationAccess = [requireAuth, requireAnyPermission('notifications.view', 'notifications.manage')];
 const notificationPreferenceAccess = [requireAuth];
@@ -156,7 +157,7 @@ router.get('/notifications/count', ...notificationAccess, async (req, res, next)
   }
 });
 
-router.get('/notifications/unread-count', ...notificationAccess, async (req, res, next) => {
+router.get('/notifications/unread-count', noStore, ...notificationAccess, async (req, res, next) => {
   try {
     const where = buildNotificationFilters(req);
     const unreadCount = await Notification.count({ where: { [Op.and]: [where, { read: false }] } });
@@ -166,7 +167,7 @@ router.get('/notifications/unread-count', ...notificationAccess, async (req, res
   }
 });
 
-router.get('/notifications/unread/count', ...notificationAccess, async (req, res, next) => {
+router.get('/notifications/unread/count', noStore, ...notificationAccess, async (req, res, next) => {
   try {
     const where = buildNotificationFilters(req);
     const unreadCount = await Notification.count({ where: { [Op.and]: [where, { read: false }] } });

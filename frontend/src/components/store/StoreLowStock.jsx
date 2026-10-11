@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, AlertTriangle, ChevronLeft, ChevronRight, Download, MapPin, PackageOpen, PackagePlus, PackageSearch, RefreshCw, Search, Tag, Truck, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -14,14 +14,14 @@ const english = {
   critical: 'Critical', outOfStock: 'Out of Stock', shortage: 'Total Shortage', categories: 'Categories Affected',
   locations: 'Locations Affected', item: 'Item / Asset', code: 'Asset Tag', current: 'On-hand', available: 'Available',
   reserved: 'Reserved', assigned: 'Assigned', reorder: 'Reorder Level', severityCol: 'Severity', updated: 'Last Updated',
-  action: 'Actions', addStock: 'Add Stock', receive: 'Receive', details: 'History', setReorder: 'Set Reorder Level',
+  action: 'Actions', addStock: 'Add Stock', receive: 'Receive', details: 'View Details', setReorder: 'Set Reorder Level',
   low: 'LOW', out: 'OUT OF STOCK', loading: 'Loading low-stock alerts...', error: 'Unable to load low-stock alerts.',
   forbidden: 'You do not have permission to view low-stock alerts.', retry: 'Retry', empty: 'No low-stock items',
   emptyText: 'All monitored inventory is currently above its reorder threshold.', filtered: 'No matching low-stock items',
   filteredText: 'Try changing your filters or search.', previous: 'Previous', next: 'Next', of: 'of',
   notRegistered: 'Not registered', thresholdTitle: 'Set Reorder Level', thresholdHint: 'Set to 0 to use the configured system default.',
   save: 'Save', cancel: 'Cancel', saving: 'Saving...', invalidThreshold: 'Enter a whole number from 0 to 1,000,000.',
-  thresholdSaved: 'Reorder level updated.', saveFailed: 'Unable to update the reorder level.',
+  thresholdSaved: 'Reorder level updated.', saveFailed: 'Unable to update the reorder level.', dataError: 'DATA ERROR',
   integrity: 'Negative available stock detected; investigate this inventory balance.',
 };
 const amharic = { ...english, title: 'የዝቅተኛ ክምችት ማስጠንቀቂያዎች', subtitle: 'መሙላት የሚያስፈልጋቸውን እቃዎች ይከታተሉ።', refresh: 'አድስ', export: 'ላክ', inventory: 'እቃዎችን ይመልከቱ', search: 'እቃ፣ መለያ ወይም ተከታታይ ፈልግ...', severity: 'አስቸኳይነት', category: 'ምድብ', location: 'ቦታ', all: 'ሁሉም', clear: 'ማጣሪያ አጽዳ', lowStock: 'ጠቅላላ ዝቅተኛ', critical: 'አስቸኳይ', outOfStock: 'ከክምችት ውጭ', shortage: 'ጠቅላላ እጥረት', loading: 'የዝቅተኛ ክምችት ማስጠንቀቂያዎች በመጫን ላይ...', error: 'ማስጠንቀቂያዎችን መጫን አልተቻለም።', retry: 'እንደገና ሞክር', empty: 'ዝቅተኛ ክምችት የለም', filtered: 'የሚዛመድ ዝቅተኛ ክምችት የለም', addStock: 'እቃ ጨምር', receive: 'ተቀበል', save: 'አስቀምጥ', cancel: 'ዝጋ' };
@@ -33,6 +33,34 @@ const formatQuantity = (value, unit) => {
   return unit ? `${parsed} ${unit}` : String(parsed);
 };
 const initialSummary = { lowStock: 0, critical: 0, outOfStock: 0, totalShortage: 0, categoriesAffected: 0, locationsAffected: 0, dataIntegrityErrors: 0 };
+const normalizeLowStockPayload = (responseData) => {
+  let payload = responseData?.data ?? responseData;
+  if (Array.isArray(payload)) payload = { items: payload };
+  if (!Array.isArray(payload?.items) && Array.isArray(responseData?.items)) {
+    payload = { ...responseData, items: responseData.items };
+  }
+  if (!Array.isArray(payload?.items)) {
+    throw new Error('The low-stock response did not include an item list.');
+  }
+
+  const total = Number.isSafeInteger(Number(payload.total)) ? Number(payload.total) : payload.items.length;
+  return {
+    items: payload.items,
+    summary: { ...initialSummary, ...(payload.summary || {}) },
+    filters: {
+      categories: Array.isArray(payload.filters?.categories) ? payload.filters.categories : [],
+      locations: Array.isArray(payload.filters?.locations) ? payload.filters.locations : [],
+    },
+    pagination: {
+      page: Number(payload.pagination?.page) || 1,
+      pageSize: Number(payload.pagination?.pageSize) || 25,
+      total: Number.isSafeInteger(Number(payload.pagination?.total)) ? Number(payload.pagination.total) : total,
+      totalPages: Number.isSafeInteger(Number(payload.pagination?.totalPages))
+        ? Number(payload.pagination.totalPages)
+        : Math.ceil(total / 25),
+    },
+  };
+};
 
 export default function StoreLowStock() {
   const { language } = useLanguage();
@@ -41,6 +69,7 @@ export default function StoreLowStock() {
   const t = language === 'en' ? english : amharic;
   const [items, setItems] = useState([]);
   const [summary, setSummary] = useState(initialSummary);
+  const [filterOptions, setFilterOptions] = useState({ categories: [], locations: [] });
   const [pagination, setPagination] = useState({ page: 1, pageSize: 25, total: 0, totalPages: 0 });
   const [filters, setFilters] = useState(() => ({
     search: '',
@@ -54,24 +83,44 @@ export default function StoreLowStock() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
   const [editing, setEditing] = useState(null);
   const [reorderValue, setReorderValue] = useState('');
   const [saving, setSaving] = useState(false);
+  const payloadCache = useRef(new Map());
 
   const load = async (page = 1, refresh = false) => {
     refresh ? setRefreshing(true) : setLoading(true);
     setError('');
+    const params = { ...filters, page, pageSize: 25, sortBy, sortOrder };
+    const cacheKey = JSON.stringify(params);
     try {
       const response = await apiClient.get('/api/store/low-stock', {
-        params: { ...filters, page, pageSize: 25, sortBy, sortOrder },
+        params,
+        validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
       });
-      const payload = response.data?.data;
-      if (!payload || !Array.isArray(payload.items) || !payload.pagination || !payload.summary) {
-        throw new Error('The low-stock response did not include the required data.');
+      if (response.status === 304) {
+        const cachedPayload = payloadCache.current.get(cacheKey);
+        if (!cachedPayload) throw new Error('The server returned 304 without a matching cached low-stock response.');
+        setItems(cachedPayload.items);
+        setSummary(cachedPayload.summary);
+        setFilterOptions(cachedPayload.filters);
+        setPagination(cachedPayload.pagination);
+        return;
       }
-      setItems(payload.items);
-      setSummary({ ...initialSummary, ...payload.summary });
-      setPagination({ page, pageSize: 25, ...payload.pagination });
+
+      const payload = normalizeLowStockPayload(response.data);
+      const data = {
+        items: payload.items,
+        summary: payload.summary,
+        filters: payload.filters,
+        pagination: { page, pageSize: 25, ...payload.pagination },
+      };
+      payloadCache.current.set(cacheKey, data);
+      setItems(data.items);
+      setSummary(data.summary);
+      setFilterOptions(data.filters);
+      setPagination(data.pagination);
     } catch (requestError) {
       setItems([]);
       setError(requestError.response?.status === 403 ? 'forbidden' : requestError.response?.data?.message || requestError.message || 'error');
@@ -82,10 +131,6 @@ export default function StoreLowStock() {
   };
 
   useEffect(() => { load(1); }, [filters, sortBy, sortOrder]);
-  const options = useMemo(() => ({
-    categories: [...new Set(items.map((item) => item.category).filter(Boolean))].sort(),
-    locations: [...new Set(items.map((item) => item.location).filter(Boolean))].sort(),
-  }), [items]);
   const setFilter = (name, value) => setFilters((current) => ({ ...current, [name]: value }));
   const clearFilters = () => setFilters({ search: '', severity: '', category: '', location: '' });
   const openThreshold = (item) => {
@@ -102,9 +147,11 @@ export default function StoreLowStock() {
     }
     setSaving(true);
     setActionError('');
+    setActionSuccess('');
     try {
       await apiClient.patch(`/api/store/inventory/${editing.id}/reorder-level`, { reorderLevel: parsed });
       setEditing(null);
+      setActionSuccess(t.thresholdSaved);
       await load(pagination.page, true);
     } catch (requestError) {
       setActionError(requestError.response?.data?.message || t.saveFailed);
@@ -150,7 +197,7 @@ export default function StoreLowStock() {
       setActionError(requestError.response?.data?.message || requestError.message || t.error);
     }
   };
-  const severityLabel = (severity) => severity === 'OUT_OF_STOCK' ? t.out : severity === 'CRITICAL' ? t.critical : t.low;
+  const severityLabel = (severity) => severity === 'OUT_OF_STOCK' ? t.out : severity === 'CRITICAL' ? t.critical : severity === 'LOW' ? t.low : t.dataError;
   const formatTimestamp = (value) => {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
@@ -164,12 +211,13 @@ export default function StoreLowStock() {
       <header className="low-stock-header">
         <div><p className="low-stock-eyebrow">Store Inventory</p><h1>{t.title}</h1><p>{t.subtitle}</p></div>
         <div className="low-stock-actions">
-          <button type="button" onClick={() => load(pagination.page, true)} disabled={refreshing}><RefreshCw size={17} className={refreshing ? 'spin' : ''} /> {t.refresh}</button>
-          <button type="button" onClick={exportItems}><Download size={17} /> {t.export}</button>
-          <button className="low-stock-primary" type="button" onClick={() => navigate('/store/inventory')}><PackageSearch size={17} /> {t.inventory}</button>
+          <button type="button" onClick={() => load(pagination.page, true)} disabled={refreshing}><RefreshCw size={16} className={refreshing ? 'spin' : ''} /> {t.refresh}</button>
+          <button type="button" onClick={exportItems}><Download size={16} /> {t.export}</button>
+          <button className="low-stock-primary" type="button" onClick={() => navigate('/store/inventory')}><PackageSearch size={16} /> {t.inventory}</button>
         </div>
       </header>
       {actionError && !editing && <p className="low-stock-action-error" role="alert">{actionError}</p>}
+      {actionSuccess && <p className="low-stock-action-success" role="status">{actionSuccess}</p>}
       <section className="low-stock-kpis">
         {[[PackageOpen, summary.lowStock, t.lowStock], [AlertTriangle, summary.critical, t.critical], [AlertCircle, summary.outOfStock, t.outOfStock], [Tag, summary.totalShortage, t.shortage], [PackageSearch, summary.categoriesAffected, t.categories], [MapPin, summary.locationsAffected, t.locations]]
           .map(([Icon, value, label]) => <div className="low-stock-kpi" key={label}><span><Icon size={18} /></span><strong>{number(value)}</strong><small>{label}</small></div>)}
@@ -178,8 +226,8 @@ export default function StoreLowStock() {
       <section className="low-stock-panel low-stock-filters">
         <div className="low-stock-search"><Search size={17} /><input aria-label={t.search} value={filters.search} onChange={(event) => setFilter('search', event.target.value)} placeholder={t.search} /></div>
         <select aria-label={t.severity} value={filters.severity} onChange={(event) => setFilter('severity', event.target.value)}><option value="">{t.all} {t.severity}</option><option value="out_of_stock">{t.out}</option><option value="critical">{t.critical}</option><option value="low">{t.low}</option></select>
-        <select aria-label={t.category} value={filters.category} onChange={(event) => setFilter('category', event.target.value)}><option value="">{t.all} {t.category}</option>{options.categories.map((item) => <option key={item}>{item}</option>)}</select>
-        <select aria-label={t.location} value={filters.location} onChange={(event) => setFilter('location', event.target.value)}><option value="">{t.all} {t.location}</option>{options.locations.map((item) => <option key={item}>{item}</option>)}</select>
+        <select aria-label={t.category} value={filters.category} onChange={(event) => setFilter('category', event.target.value)}><option value="">{t.all} {t.category}</option>{filterOptions.categories.map((item) => <option key={item}>{item}</option>)}</select>
+        <select aria-label={t.location} value={filters.location} onChange={(event) => setFilter('location', event.target.value)}><option value="">{t.all} {t.location}</option>{filterOptions.locations.map((item) => <option key={item}>{item}</option>)}</select>
         <select aria-label={t.sort} value={`${sortBy}:${sortOrder}`} onChange={(event) => { const [field, order] = event.target.value.split(':'); setSortBy(field); setSortOrder(order); }}>
           <option value="severity:desc">Severity</option><option value="available:asc">Available: low to high</option><option value="available:desc">Available: high to low</option><option value="reorderLevel:desc">Threshold: high to low</option><option value="reorderLevel:asc">Threshold: low to high</option><option value="name:asc">Item name: A-Z</option><option value="name:desc">Item name: Z-A</option>
         </select>
@@ -194,12 +242,12 @@ export default function StoreLowStock() {
               <td>{item.assetCode || t.notRegistered}</td>
               <td>{formatQuantity(item.onHand, item.unit)}</td><td>{formatQuantity(item.available, item.unit)}</td><td>{formatQuantity(item.reserved, item.unit)}</td><td>{formatQuantity(item.assigned, item.unit)}</td>
               <td>{formatQuantity(item.reorderLevel, item.unit)}{item.thresholdSource === 'system_default' ? ' *' : ''}</td><td className="shortage-value">{formatQuantity(item.shortage, item.unit)}</td>
-              <td><span className={`severity-badge severity-${item.severity.toLowerCase()}`}>{item.severity === 'OUT_OF_STOCK' ? <AlertCircle size={14} /> : <AlertTriangle size={14} />} {severityLabel(item.severity)}</span></td>
+              <td><span className={`severity-badge severity-${String(item.severity || 'DATA_ERROR').toLowerCase()}`}>{item.severity === 'OUT_OF_STOCK' ? <AlertCircle size={14} /> : <AlertTriangle size={14} />} {severityLabel(item.severity)}</span></td>
               <td>{item.college || '-'}</td><td>{item.department || '-'}</td><td>{item.location || '-'}</td><td>{formatTimestamp(item.lastUpdated)}</td>
               <td><span className="low-stock-row-actions">
                 <button className="low-stock-action" type="button" onClick={() => navigate(`/store/inventory?addStock=true&assetId=${item.assetId}`)}><PackagePlus size={15} /> {t.addStock}</button>
                 <button className="low-stock-action" type="button" onClick={() => navigate(`/store/receive?assetId=${item.assetId}`)}><Truck size={15} /> {t.receive}</button>
-                <button className="low-stock-action" type="button" onClick={() => navigate(`/store/history?assetId=${item.assetId}`)}><PackageSearch size={15} /> {t.details}</button>
+                <button className="low-stock-action" type="button" onClick={() => navigate(`/store/inventory?details=${item.id}&assetId=${item.assetId}`)}><PackageSearch size={15} /> {t.details}</button>
                 <button className="low-stock-action" type="button" onClick={() => openThreshold(item)}><Tag size={15} /> {t.setReorder}</button>
               </span></td>
             </tr>)}</tbody>

@@ -2535,8 +2535,8 @@ const AdminHeader = ({ userName, roleLabel, unreadCount, onLogout, adminTheme, s
           {unreadCount > 0 && <span className="dashboard-notification-count">{unreadCount > 99 ? '99+' : unreadCount}</span>}
         </button>
         <div className="dashboard-language-switch" role="group" aria-label={t.switchLanguage}>
-          <button type="button" className="dashboard-language-button" onClick={() => setLanguage('en')} aria-pressed={language === 'en'} aria-label={t.languageEnglish}>EN</button>
-          <button type="button" className="dashboard-language-button" onClick={() => setLanguage('am')} aria-pressed={language === 'am'} aria-label={t.languageAmharic}>AM</button>
+          <button type="button" className="dashboard-language-button" onClick={() => setLanguage('en')} aria-pressed={language === 'en'} aria-label={t.languageEnglish} title={t.languageEnglish}>EN</button>
+          <button type="button" className="dashboard-language-button" onClick={() => setLanguage('am')} aria-pressed={language === 'am'} aria-label={t.languageAmharic} title={t.languageAmharic}>AM</button>
         </div>
         <div className="admin-profile-menu">
           <button type="button" className="dashboard-profile-button" onClick={() => setMenuOpen((current) => !current)} aria-expanded={menuOpen} aria-haspopup="menu" aria-label={`Account menu for ${userName}`}>
@@ -2872,9 +2872,9 @@ function AppContent() {
         aria-label={t.switchLanguage}
         className={`public-language-toggle${variant ? ` ${variant}` : ''}`}
       >
-        <button type="button" onClick={() => setLanguage('en')} aria-pressed={language === 'en'} aria-label={t.languageEnglish}>EN</button>
+        <button type="button" onClick={() => setLanguage('en')} aria-pressed={language === 'en'} aria-label={t.languageEnglish} title={t.languageEnglish}>EN</button>
         <span aria-hidden="true">|</span>
-        <button type="button" onClick={() => setLanguage('am')} aria-pressed={language === 'am'} aria-label={t.languageAmharic}>AM</button>
+        <button type="button" onClick={() => setLanguage('am')} aria-pressed={language === 'am'} aria-label={t.languageAmharic} title={t.languageAmharic}>AM</button>
       </div>
     );
 
@@ -3010,6 +3010,7 @@ function AppContent() {
               className="dashboard-language-button"
               onClick={() => setLanguage('en')}
               aria-label={t.languageEnglish}
+              title={t.languageEnglish}
               aria-pressed={language === 'en'}
               style={{ borderRadius: '7px 0 0 7px' }}
             >
@@ -3020,6 +3021,7 @@ function AppContent() {
               className="dashboard-language-button"
               onClick={() => setLanguage('am')}
               aria-label={t.languageAmharic}
+              title={t.languageAmharic}
               aria-pressed={language === 'am'}
               style={{ borderLeft: 0, borderRadius: '0 7px 7px 0' }}
             >

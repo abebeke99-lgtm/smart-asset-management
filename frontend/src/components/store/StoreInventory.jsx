@@ -166,6 +166,7 @@ export default function StoreInventory() {
   const [addStockSupplierError, setAddStockSupplierError] = useState('');
   const addStockLock = useRef(false);
   const addStockSubmissionId = useRef('');
+  const openedDetailQuery = useRef('');
 
   const loadInventory = useCallback(async (page = 1, refresh = false) => {
     setError('');
@@ -324,6 +325,20 @@ export default function StoreInventory() {
     }
     setHistoryLoading(false);
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const inventoryId = Number(params.get('details'));
+    const assetId = Number(params.get('assetId'));
+    if (!Number.isSafeInteger(inventoryId) || inventoryId <= 0 || !Number.isSafeInteger(assetId) || assetId <= 0) {
+      openedDetailQuery.current = '';
+      return;
+    }
+    const queryKey = `${inventoryId}:${assetId}`;
+    if (openedDetailQuery.current === queryKey) return;
+    openedDetailQuery.current = queryKey;
+    openDetails({ id: inventoryId, asset_id: assetId });
+  }, [location.search]);
 
   const value = (item, camel, snake) => asNumber(item[camel] ?? item[snake]);
   const status = (item) => String(item.assetStatus || item.status || '').replace(/_/g, ' ');

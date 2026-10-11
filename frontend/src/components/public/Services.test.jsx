@@ -31,6 +31,17 @@ const serviceTitles = [
   'Reports & Analytics'
 ];
 
+const serviceImagePaths = [
+  '/images/assets/asset-registration.jpg',
+  '/images/hero/imagefs.jpg',
+  '/images/workflow/asset-workflow.svg',
+  '/images/assets/asset-transfer.svg',
+  '/images/maintenance/maintenance-management.svg',
+  '/images/technology/rfid-tracking.svg',
+  '/images/security/asset-security.svg',
+  '/images/analytics/asset-analytics.svg'
+];
+
 const renderServices = (children = <Services />) => render(
   <MemoryRouter>
     <UIProvider>{children}</UIProvider>
@@ -61,8 +72,8 @@ describe('Services page', () => {
     const cardImages = container.querySelectorAll('.services-card-image-frame img');
     expect(cardImages).toHaveLength(8);
     expect(new Set(Array.from(cardImages, (image) => image.getAttribute('src'))).size).toBe(8);
+    expect(Array.from(cardImages, (image) => image.getAttribute('src'))).toEqual(serviceImagePaths);
     cardImages.forEach((image) => expect(image).toHaveAttribute('alt', expect.stringMatching(/\S/)));
-    expect(cardImages[0]).toHaveAttribute('src', '/images/assets/asset-registration.jpg');
 
     expect(container.querySelector('.services-hero')).not.toBeInTheDocument();
     expect(container.querySelectorAll('.services-card-image-frame img')).toHaveLength(8);

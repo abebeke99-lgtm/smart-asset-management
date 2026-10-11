@@ -8,23 +8,31 @@ const isStoreManager = (req) => normalizeRoleValue(req.user?.role) === 'store_ma
 
 const normalize = (item) => {
   const data = item.toJSON();
-  return { ...data, request_id: `REQ-${String(data.id).padStart(6, '0')}`, requested_by: item.Requester?.fullName || item.Requester?.username, requested_by_id: data.requestedBy, department: item.Department?.name, approved_by: item.Reviewer?.fullName || item.Reviewer?.username, created_at: data.createdAt, updated_at: data.updatedAt, approval_comment: data.comment };
+  return { ...data, request_id: `REQ-${String(data.id).padStart(6, '0')}`, requested_by: item.Requester?.fullName || item.Requester?.username, requested_by_id: data.requestedBy, requested_for: data.requestedFor, requested_for_name: item.Beneficiary?.fullName || item.Beneficiary?.username, required_date: data.requiredDate, purpose: data.reason, remarks: data.comment, department: item.Department?.name, approved_by: item.Reviewer?.fullName || item.Reviewer?.username, created_at: data.createdAt, updated_at: data.updatedAt, approval_comment: data.comment };
 };
-const include = [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'department', 'collegeId'] }, { model: Department, attributes: ['id', 'name', 'collegeId'] }, { model: User, as: 'Requester', attributes: ['id', 'username', 'fullName', 'department'] }, { model: User, as: 'Reviewer', attributes: ['id', 'username', 'fullName'] }];
+const include = [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'department', 'collegeId'] }, { model: Department, attributes: ['id', 'name', 'collegeId'] }, { model: User, as: 'Requester', attributes: ['id', 'username', 'fullName', 'department'] }, { model: User, as: 'Beneficiary', attributes: ['id', 'username', 'fullName', 'collegeId'] }, { model: User, as: 'Reviewer', attributes: ['id', 'username', 'fullName'] }];
 
 const buildStoreApprovalPredicates = (collegeId) => [
-  { [Op.or]: [{ departmentId: null }, { '$Department.collegeId$': collegeId }] },
-  { [Op.or]: [{ assetId: null }, { '$Asset.collegeId$': collegeId }] },
-  { [Op.or]: [{ '$Department.collegeId$': collegeId }, { '$Asset.collegeId$': collegeId }] },
+  { [Op.or]: [{ departmentId: null }, { '$Department.college_id$': collegeId }] },
+  { [Op.or]: [{ assetId: null }, { '$Asset.college_id$': collegeId }] },
+  { [Op.or]: [{ '$Department.college_id$': collegeId }, { '$Asset.college_id$': collegeId }] },
+  { [Op.or]: [{ requestedFor: null }, { '$Beneficiary.college_id$': collegeId }] },
 ];
 
 const approvalBelongsToCollege = (record, collegeId) => {
   if (record.departmentId && Number(record.Department?.collegeId) !== collegeId) return false;
   if (record.assetId && Number(record.Asset?.collegeId) !== collegeId) return false;
+  if (record.requestedFor && Number(record.Beneficiary?.collegeId) !== collegeId) return false;
   return Boolean(record.departmentId || record.assetId);
 };
 const isReservableAssetRequest = (record) => Boolean(record.assetId)
   && String(record.type || '').toLowerCase().includes('issue');
+const isValidDateOnly = (value) => {
+  if (value == null || value === '') return true;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
 
 const listApprovals = async (req, res, next) => {
   try {
@@ -39,7 +47,16 @@ const listApprovals = async (req, res, next) => {
     if (req.query.requested_by) where.requestedBy = req.query.requested_by;
     const result = await Approval.findAll({ where, include, order: [['createdAt', 'DESC']] });
     res.json({ success: true, requests: result.map(normalize), approvals: result.map(normalize), total: result.length });
-  } catch (error) { next(error); }
+  } catch (error) {
+    console.error('Failed to list approvals:', {
+      name: error.name,
+      message: error.message,
+      code: error.original?.code,
+      sqlMessage: error.original?.sqlMessage,
+      sql: error.sql,
+    });
+    return res.status(500).json({ message: 'Failed to load approvals' });
+  }
 };
 
 const getApprovalById = async (req, res, next) => {
@@ -57,8 +74,12 @@ const getApprovalById = async (req, res, next) => {
 
 const createApproval = async (req, res, next) => {
   try {
-    const { type, asset_id, department_id, item, quantity = 1, priority = 'medium', reason } = req.body;
+    const { type, asset_id, department_id, requested_for, required_date, item, quantity = 1, priority = 'medium', reason, comment } = req.body;
     if (!type || !reason || !Number.isInteger(Number(quantity)) || Number(quantity) <= 0) return res.status(400).json({ success: false, message: 'Type, reason, and positive quantity are required' });
+    const requestedForId = requested_for === undefined || requested_for === null || requested_for === '' ? null : Number(requested_for);
+    if ((requestedForId !== null && (!Number.isSafeInteger(requestedForId) || requestedForId <= 0)) || !isValidDateOnly(required_date)) {
+      return res.status(400).json({ success: false, message: 'Requested-for user or required date is invalid' });
+    }
     const storeManager = isStoreManager(req);
     const collegeId = storeManager ? getCollegeScopeId(req) : null;
     if (storeManager && !collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
@@ -68,10 +89,13 @@ const createApproval = async (req, res, next) => {
     if (storeManager && Number(asset.collegeId) !== collegeId) return res.status(404).json({ success: false, message: 'Asset not found' });
     const department = storeManager ? await Department.findByPk(department_id) : null;
     if (storeManager && (!department || Number(department.collegeId) !== collegeId)) return res.status(404).json({ success: false, message: 'Department not found' });
+    const beneficiary = requestedForId ? await User.findByPk(requestedForId) : null;
+    if (requestedForId && !beneficiary) return res.status(404).json({ success: false, message: 'Requested-for user not found' });
+    if (storeManager && beneficiary && Number(beneficiary.collegeId) !== collegeId) return res.status(404).json({ success: false, message: 'Requested-for user not found' });
     if (req.user.role === 'college' && asset && asset.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department authorization required' });
     const authenticatedDepartment = req.user.department_id || req.user.departmentId || (Number.isInteger(Number(req.user.department)) ? Number(req.user.department) : null);
     if (req.user.role === 'college' && department_id && String(department_id) !== String(authenticatedDepartment) && String(department_id) !== String(req.user.department)) return res.status(403).json({ success: false, message: 'Department authorization required' });
-    const record = await Approval.create({ type, assetId: asset_id || null, requestedBy: req.user.id, departmentId: storeManager ? department.id : authenticatedDepartment || department_id || null, item: item || '', quantity, priority, reason });
+    const record = await Approval.create({ type, assetId: asset_id || null, requestedBy: req.user.id, requestedFor: requestedForId, departmentId: storeManager ? department.id : authenticatedDepartment || department_id || null, item: item || '', quantity, priority, reason, comment: String(comment || '').trim(), requiredDate: required_date || null });
     await AuditLog.create({ userId: req.user.id, action: 'REQUEST_SUBMITTED', entity: `approval:${record.id}`, details: JSON.stringify({ requestId: record.id, type: record.type, departmentId: record.departmentId }) });
     if (String(type).toLowerCase().includes('purchase')) await createFinanceNotification({ event: 'finance_purchase_request_submitted', eventKey: `finance_purchase_request_submitted:${record.id}`, entityId: record.id, senderId: req.user.id, type: 'procurement', title: 'Purchase request awaiting approval', message: `Purchase request REQ-${String(record.id).padStart(6, '0')} requires approval.` });
     res.status(201).json({ success: true, request: normalize(record) });

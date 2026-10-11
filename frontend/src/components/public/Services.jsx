@@ -129,7 +129,7 @@ const servicesByLanguage = {
 
 const serviceMedia = [
   {
-    src: '/images/assets/Asset Registration.jpg',
+    src: '/images/assets/asset-registration.jpg',
     alt: {
       en: 'Asset registration form and image preview',
       am: 'የንብረት ምዝገባ ቅጽና የምስል ቅድመ እይታ'
@@ -143,42 +143,42 @@ const serviceMedia = [
     }
   },
   {
-    src: '/images/workflow/Asset Assignment.jpg',
+    src: '/images/workflow/asset-workflow.svg',
     alt: {
       en: 'Illustration of an asset assignment workflow',
       am: 'የንብረት ምደባ የሥራ ሂደት ምሳሌ'
     }
   },
   {
-    src: '/images/assets/Asset Transfer.jpg',
+    src: '/images/assets/asset-transfer.svg',
     alt: {
       en: 'Illustration of tagged university equipment moving between buildings',
       am: 'መለያ ያለው የዩኒቨርሲቲ መሳሪያ በሕንፃዎች መካከል ሲዘዋወር የሚያሳይ ምሳሌ'
     }
   },
   {
-    src: '/images/maintenance/Maintenance.jpg',
+    src: '/images/maintenance/maintenance-management.svg',
     alt: {
       en: 'Illustration of equipment maintenance and repair records',
       am: 'የመሳሪያ ጥገናና የጥገና መዝገቦች ምሳሌ'
     }
   },
   {
-    src: '/images/technology/QR-RFID.jpg',
+    src: '/images/technology/rfid-tracking.svg',
     alt: {
       en: 'Illustration of QR and RFID asset identification',
       am: 'የQR እና RFID ንብረት መለያ ምሳሌ'
     }
   },
   {
-    src: '/images/security/Asset Verification.jpg',
+    src: '/images/security/asset-security.svg',
     alt: {
       en: 'Illustration of a verified asset checklist and records',
       am: 'የተረጋገጠ የንብረት ዝርዝርና መዝገቦች ምሳሌ'
     }
   },
   {
-    src: '/images/analytics/Reports & Analytics.jpg',
+    src: '/images/analytics/asset-analytics.svg',
     alt: {
       en: 'Illustration of asset analytics charts and reporting cards',
       am: 'የንብረት ትንታኔ ገበታዎችና ሪፖርት ካርዶች ምሳሌ'

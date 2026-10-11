@@ -88,7 +88,16 @@ const listReturns = async (req, res, next) => {
     const result = await AssetReturn.findAndCountAll({ where, include, order: [['createdAt', 'DESC']], limit: pageSize, offset: (page - 1) * pageSize, distinct: true });
     const rows = result.rows.map(normalize);
     res.json({ success: true, data: rows, returns: rows, pagination: { page, pageSize, total: result.count, totalPages: Math.ceil(result.count / pageSize) } });
-  } catch (error) { next(error); }
+  } catch (error) {
+    console.error('Failed to list asset returns:', {
+      name: error.name,
+      message: error.message,
+      code: error.original?.code,
+      sqlMessage: error.original?.sqlMessage,
+      sql: error.sql,
+    });
+    return res.status(500).json({ message: 'Failed to load asset returns' });
+  }
 };
 const getReturn = async (req, res, next) => { try { const row = await AssetReturn.findOne({ where: { id: req.params.id, ...scopeWhere(req) }, include: returnInclude }); if (!row) return res.status(404).json({ success: false, message: 'Return not found in your scope' }); res.json({ success: true, data: normalize(row) }); } catch (error) { next(error); } };
 

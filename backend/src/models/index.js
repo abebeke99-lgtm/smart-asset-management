@@ -161,6 +161,8 @@ Department.hasMany(Approval, { foreignKey: 'departmentId' });
 Approval.belongsTo(Department, { foreignKey: 'departmentId' });
 User.hasMany(Approval, { foreignKey: 'requestedBy', as: 'RequestedApprovals' });
 Approval.belongsTo(User, { foreignKey: 'requestedBy', as: 'Requester' });
+User.hasMany(Approval, { foreignKey: 'requestedFor', as: 'BeneficiaryApprovals' });
+Approval.belongsTo(User, { foreignKey: 'requestedFor', as: 'Beneficiary' });
 User.hasMany(Approval, { foreignKey: 'reviewedBy', as: 'ReviewedApprovals' });
 Approval.belongsTo(User, { foreignKey: 'reviewedBy', as: 'Reviewer' });
 Department.hasMany(DepartmentAssetRequest, { foreignKey: 'departmentId' });

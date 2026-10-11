@@ -4,6 +4,7 @@ const { createStockAdjustment, createStockAddition, createReceipt, getReceiptSup
 const verification = require('../controllers/verificationController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const { findCollegeScopeForUser } = require('../middlewares/organizationScope');
+const noStore = require('../middlewares/noStore');
 
 const router = express.Router();
 
@@ -31,7 +32,7 @@ router.get('/inventory/export', requireAuth, requireRole('store_manager'), ensur
 router.get('/inventory', requireAuth, requireRole('store_manager'), ensureStoreScope, getInventory);
 router.get('/inventory/:id', requireAuth, requireRole('store_manager'), ensureStoreScope, getInventoryDetail);
 router.get('/available-assets', requireAuth, requireRole('store_manager'), ensureStoreScope, getAvailableAssets);
-router.get('/low-stock', requireAuth, requireRole('store_manager'), ensureStoreScope, getLowStock);
+router.get('/low-stock', noStore, requireAuth, requireRole('store_manager'), ensureStoreScope, getLowStock);
 router.patch('/inventory/:id/reorder-level', requireAuth, requireRole('store_manager'), ensureStoreScope, updateReorderLevel);
 router.get('/stock-adjustments', requireAuth, requireRole('store_manager'), ensureStoreScope, getStockAdjustments);
 router.post('/stock-adjustments', requireAuth, requireRole('store_manager'), ensureStoreScope, createStockAdjustment);

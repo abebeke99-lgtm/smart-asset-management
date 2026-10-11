@@ -174,14 +174,14 @@ router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'
     if (search) {
       andClauses.push({
         [Op.or]: [
-          sequelize.where(sequelize.col('Asset.assetCode'), 'LIKE', `%${search}%`),
+          sequelize.where(sequelize.col('Asset.asset_code'), 'LIKE', `%${search}%`),
           sequelize.where(sequelize.col('Asset.name'), 'LIKE', `%${search}%`),
-          sequelize.where(sequelize.col('Asset.serialNumber'), 'LIKE', `%${search}%`),
-          sequelize.where(sequelize.col('User.fullName'), 'LIKE', `%${search}%`),
+          sequelize.where(sequelize.col('Asset.serial_number'), 'LIKE', `%${search}%`),
+          sequelize.where(sequelize.col('User.full_name'), 'LIKE', `%${search}%`),
           sequelize.where(sequelize.col('User.username'), 'LIKE', `%${search}%`),
           sequelize.where(sequelize.col('User.email'), 'LIKE', `%${search}%`),
           sequelize.where(sequelize.col('AssignedDepartment.name'), 'LIKE', `%${search}%`),
-          sequelize.where(sequelize.col('AssignedLaboratory.roomName'), 'LIKE', `%${search}%`),
+          sequelize.where(sequelize.col('AssignedLaboratory.room_name'), 'LIKE', `%${search}%`),
           sequelize.where(sequelize.col('Asset.department'), 'LIKE', `%${search}%`),
           { notes: { [Op.like]: `%${search}%` } },
         ],
@@ -249,7 +249,14 @@ router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'
       },
     });
   } catch (error) {
-    next(error);
+    console.error('Failed to list assignments:', {
+      name: error.name,
+      message: error.message,
+      code: error.original?.code,
+      sqlMessage: error.original?.sqlMessage,
+      sql: error.sql,
+    });
+    return res.status(500).json({ message: 'Failed to load assignments' });
   }
 });
 

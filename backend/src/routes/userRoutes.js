@@ -4,6 +4,7 @@ const { getAllUsers, getUserStats, getRoles, getUserById, createUser, updateUser
 const { AuditLog, User } = require('../models');
 const { requireAuth, requireRole, requirePermission } = require('../middlewares/auth');
 const { validateProfilePhoto } = require('../utils/uploadUtils');
+const noStore = require('../middlewares/noStore');
 
 const router = express.Router();
 const profilePhotoUpload = multer({
@@ -29,7 +30,7 @@ router.get('/', requireAuth, requireRole('admin', 'college', 'store_manager', 'i
 router.get('/stats', requireAuth, requireRole('admin'), getUserStats);
 router.get('/roles', requireAuth, requireRole('admin'), getRoles);
 router.get('/technicians', requireAuth, requireRole('admin', 'maintenance', 'ict_officer'), getAllUsers);
-router.get('/profile', requireAuth, getCurrentUserProfile);
+router.get('/profile', noStore, requireAuth, getCurrentUserProfile);
 router.put('/profile', requireAuth, updateProfile);
 router.post('/profile/photo', requireAuth, profilePhotoUpload.single('photo'), updateCurrentUserProfilePhoto);
 router.delete('/profile/photo', requireAuth, removeCurrentUserProfilePhoto);

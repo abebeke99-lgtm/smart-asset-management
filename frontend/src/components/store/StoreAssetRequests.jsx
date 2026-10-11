@@ -27,6 +27,27 @@ const fetchAssets = async () => {
   ];
 };
 
+const fetchUsers = async () => {
+  const firstPage = await apiClient.get('/api/users', {
+    params: { page: 1, limit: 100 }
+  });
+  const extractUsers = (data) => {
+    const userData = data?.users || data?.data || [];
+    return Array.isArray(userData) ? userData : [];
+  };
+  const pages = Number(firstPage.data?.pagination?.pages) || 1;
+  const remainingPages = await Promise.all(
+    Array.from({ length: Math.max(0, pages - 1) }, (_, index) => apiClient.get('/api/users', {
+      params: { page: index + 2, limit: 100 }
+    }))
+  );
+
+  return [
+    ...extractUsers(firstPage.data),
+    ...remainingPages.flatMap((response) => extractUsers(response.data))
+  ];
+};
+
 const StoreAssetRequests = () => {
   const { language, theme } = useLanguage();
 
@@ -202,29 +223,29 @@ const StoreAssetRequests = () => {
     setLoading(true);
     setLoadError(false);
 
-    try {
-      const [requestsRes, assetsRes, usersRes, departmentsRes] = await Promise.all([
-        apiClient.get('/api/approvals'),
-        fetchAssets(),
-        apiClient.get('/api/users', {
-          params: { limit: 500 }
-        }),
-        apiClient.get('/api/departments')
-      ]);
+    const [requestsRes, assetsRes, usersRes, departmentsRes] = await Promise.allSettled([
+      Promise.resolve().then(() => apiClient.get('/api/approvals')),
+      Promise.resolve().then(fetchAssets),
+      Promise.resolve().then(fetchUsers),
+      Promise.resolve().then(() => apiClient.get('/api/departments'))
+    ]);
 
-      setRequests(normalizeRequests(requestsRes.data));
-      setAssets(assetsRes);
-      const userData = usersRes.data?.users || usersRes.data?.data || [];
-      setUsers(Array.isArray(userData) ? userData : []);
-      const deptData = departmentsRes.data?.departments || departmentsRes.data?.data || [];
-      setDepartments(Array.isArray(deptData) ? deptData : []);
-    } catch (error) {
-      console.error('Asset request loading error:', error);
+    if (requestsRes.status === 'fulfilled') {
+      setRequests(normalizeRequests(requestsRes.value.data));
+    } else {
+      setRequests([]);
       setLoadError(true);
       toast.error(t.error);
-    } finally {
-      setLoading(false);
     }
+
+    if (assetsRes.status === 'fulfilled') setAssets(assetsRes.value);
+    if (usersRes.status === 'fulfilled') setUsers(usersRes.value);
+    if (departmentsRes.status === 'fulfilled') {
+      const deptData = departmentsRes.value.data?.departments || departmentsRes.value.data?.data || [];
+      setDepartments(Array.isArray(deptData) ? deptData : []);
+    }
+
+    setLoading(false);
   }, [t.error]);
 
   useEffect(() => {
@@ -402,7 +423,8 @@ const StoreAssetRequests = () => {
       return;
     }
 
-    if (Number(form.quantity) <= 0) {
+    const quantity = Number(form.quantity);
+    if (!Number.isSafeInteger(quantity) || quantity <= 0) {
       toast.error(
         isAmharic
           ? 'እባክዎ ትክክለኛ ብዛት ያስገቡ'
@@ -422,9 +444,11 @@ const StoreAssetRequests = () => {
         type: 'asset_issue',
         asset_id: form.assetId,
         item: selectedAsset?.name || selectedAsset?.asset_name || 'Asset Request',
-        quantity: Number(form.quantity),
+        quantity,
         department_id: form.departmentId,
+        requested_for: form.requestedFor || null,
         priority: String(form.priority || 'Normal').toLowerCase(),
+        required_date: form.requiredDate || null,
         reason: (form.purpose || form.remarks || 'Asset request').trim(),
         comment: form.remarks || ''
       });
@@ -434,8 +458,6 @@ const StoreAssetRequests = () => {
       await fetchData();
       setActiveTab('pending');
     } catch (error) {
-      console.error('Create request error:', error);
-
       toast.error(
         error?.response?.data?.message ||
           error?.response?.data?.error ||
@@ -466,8 +488,6 @@ const StoreAssetRequests = () => {
 
       await fetchData();
     } catch (error) {
-      console.error('Approve request error:', error);
-
       toast.error(
         error?.response?.data?.message ||
           error?.response?.data?.error ||
@@ -508,8 +528,6 @@ const StoreAssetRequests = () => {
 
       await fetchData();
     } catch (error) {
-      console.error('Reject request error:', error);
-
       toast.error(
         error?.response?.data?.message ||
           error?.response?.data?.error ||
@@ -532,7 +550,6 @@ const StoreAssetRequests = () => {
       setSelectedRequest(null);
       await fetchData();
     } catch (error) {
-      console.error('Fulfill request error:', error);
       toast.error(
         error?.response?.data?.message ||
           error?.response?.data?.error ||
@@ -566,7 +583,6 @@ const StoreAssetRequests = () => {
       setSelectedRequest(null);
       await fetchData();
     } catch (error) {
-      console.error('Cancel approved request error:', error);
       toast.error(
         error?.response?.data?.message ||
           error?.response?.data?.error ||
@@ -1003,6 +1019,7 @@ const StoreAssetRequests = () => {
                 <input
                   type="number"
                   min="1"
+                  step="1"
                   value={form.quantity}
                   onChange={(e) =>
                     setForm({
@@ -1740,6 +1757,14 @@ const StoreAssetRequests = () => {
                   getRequesterName(
                     selectedRequest
                   )
+                ],
+                [
+                  t.requestedFor,
+                  selectedRequest.requested_for_name ||
+                    users.find(
+                      (user) => String(user.id) === String(selectedRequest.requested_for || selectedRequest.requestedFor)
+                    )?.full_name ||
+                    '-'
                 ],
                 [
                   t.department,

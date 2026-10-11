@@ -66,6 +66,7 @@ jest.mock('../services/apiClient', () => ({
 describe('Authenticated shell identity across re-renders', () => {
   beforeEach(() => {
     window.history.pushState({}, '', '/admin/users');
+    localStorage.setItem('language', 'en');
   });
 
   it('keeps the Create User form open with typed values when the shell re-renders via language switch', async () => {
@@ -78,9 +79,26 @@ describe('Authenticated shell identity across re-renders', () => {
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'persist@example.edu' } });
     expect(screen.getByLabelText('Username *')).toHaveValue('persist.user');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Switch language to Amharic' }));
+    const englishButton = screen.getByRole('button', { name: 'EN — English (እንግሊዝኛ)' });
+    const amharicButton = screen.getByRole('button', { name: 'AM — Amharic (አማርኛ)' });
+    expect(englishButton).toHaveAttribute('aria-pressed', 'true');
+    expect(amharicButton).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(amharicButton);
 
     expect(screen.getByLabelText('Username *')).toHaveValue('persist.user');
     expect(screen.getByLabelText('Email')).toHaveValue('persist@example.edu');
+    expect(screen.getByRole('button', { name: 'AM — Amharic (አማርኛ)' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'EN — English (እንግሊዝኛ)' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText('ዳሽቦርድ')).toBeInTheDocument();
+    expect(localStorage.getItem('language')).toBe('am');
+    expect(window.location.pathname).toBe('/admin/users');
+
+    fireEvent.click(screen.getByRole('button', { name: 'EN — English (እንግሊዝኛ)' }));
+    expect(screen.getByRole('button', { name: 'EN — English (እንግሊዝኛ)' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'AM — Amharic (አማርኛ)' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+    expect(localStorage.getItem('language')).toBe('en');
+    expect(screen.getByLabelText('Username *')).toHaveValue('persist.user');
   });
 });

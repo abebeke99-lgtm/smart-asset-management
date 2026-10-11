@@ -165,6 +165,25 @@ test('loads details by inventory ID and movement history by asset ID including m
   });
 });
 
+test('opens the inventory detail dialog when navigated from a low-stock row', async () => {
+  apiClient.get.mockImplementation((url) => {
+    if (url === '/api/store/inventory/5') {
+      return Promise.resolve({ data: { data: { ...item, description: 'Low-stock item details' } } });
+    }
+    if (url === '/api/store/history') return Promise.resolve({ data: { data: { items: [] } } });
+    return Promise.resolve(inventoryResponse());
+  });
+
+  renderInventory('/store/inventory?details=5&assetId=17');
+
+  expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  expect(await screen.findByText('Low-stock item details')).toBeInTheDocument();
+  expect(apiClient.get).toHaveBeenCalledWith('/api/store/inventory/5');
+  expect(apiClient.get).toHaveBeenCalledWith('/api/store/history', {
+    params: { assetId: 17, pageSize: 100 },
+  });
+});
+
 test('shows an explicit history error while retaining loaded item details', async () => {
   apiClient.get.mockImplementation((url) => {
     if (url === '/api/store/inventory/5') {

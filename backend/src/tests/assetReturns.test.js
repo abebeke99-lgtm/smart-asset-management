@@ -198,3 +198,33 @@ test('return history queries only the department and normalizes linked asset and
     restore();
   }
 });
+
+test('return list query errors are logged and returned as a message-only 500', async () => {
+  const originalFindAndCountAll = AssetReturn.findAndCountAll;
+  const originalConsoleError = console.error;
+  const databaseError = Object.assign(new Error('Return query failed'), {
+    name: 'SequelizeDatabaseError',
+    original: { code: 'ER_BAD_FIELD_ERROR', sqlMessage: "Unknown column 'asset_returns.createdAt'" },
+    sql: 'SELECT asset_returns.createdAt FROM asset_returns',
+  });
+  let logged;
+  AssetReturn.findAndCountAll = async () => { throw databaseError; };
+  console.error = (...args) => { logged = args; };
+  try {
+    const res = response();
+    await listReturns({ organizationScope: { departmentId: 7 }, query: {} }, res, (error) => { throw error; });
+    assert.equal(res.statusCode, 500);
+    assert.deepEqual(res.body, { message: 'Failed to load asset returns' });
+    assert.equal(logged[0], 'Failed to list asset returns:');
+    assert.deepEqual(logged[1], {
+      name: 'SequelizeDatabaseError',
+      message: 'Return query failed',
+      code: 'ER_BAD_FIELD_ERROR',
+      sqlMessage: "Unknown column 'asset_returns.createdAt'",
+      sql: 'SELECT asset_returns.createdAt FROM asset_returns',
+    });
+  } finally {
+    AssetReturn.findAndCountAll = originalFindAndCountAll;
+    console.error = originalConsoleError;
+  }
+});

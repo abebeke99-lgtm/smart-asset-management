@@ -23,6 +23,8 @@ describe('UiProvider language', () => {
     act(() => result.current.setLanguage('am'));
     expect(result.current.language).toBe('am');
     expect(result.current.t('auth.signIn')).toBe('ግባ');
+    expect(result.current.t('appearance.languageEnglish')).toBe('EN — English (እንግሊዝኛ)');
+    expect(result.current.t('appearance.languageAmharic')).toBe('AM — Amharic (አማርኛ)');
     expect(localStorage.getItem('language')).toBe('am');
     expect(document.documentElement.lang).toBe('am');
     expect(document.documentElement.dir).toBe('ltr');
@@ -30,6 +32,8 @@ describe('UiProvider language', () => {
     act(() => result.current.setLanguage('en'));
     expect(result.current.language).toBe('en');
     expect(result.current.t('auth.signIn')).toBe('Sign In');
+    expect(result.current.t('appearance.languageEnglish')).toBe('EN — English (እንግሊዝኛ)');
+    expect(result.current.t('appearance.languageAmharic')).toBe('AM — Amharic (አማርኛ)');
     expect(localStorage.getItem('language')).toBe('en');
     expect(document.documentElement.lang).toBe('en');
 

@@ -209,6 +209,8 @@ async function syncDatabase() {
     await ensureColumn('asset_returns', 'return_date', { type: require('sequelize').DataTypes.DATEONLY, allowNull: true });
     await ensureColumn('asset_returns', 'evidence_url', { type: require('sequelize').DataTypes.STRING(1000), allowNull: true });
     await ensureColumn('approvals', 'fulfilled_at', { type: require('sequelize').DataTypes.DATE, allowNull: true });
+    await ensureColumn('approvals', 'requested_for', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
+    await ensureColumn('approvals', 'required_date', { type: require('sequelize').DataTypes.DATEONLY, allowNull: true });
     await ensureColumn('assignments', 'approval_id', { type: require('sequelize').DataTypes.INTEGER, allowNull: true });
     await ensureColumn('assignments', 'quantity', { type: require('sequelize').DataTypes.INTEGER, allowNull: false, defaultValue: 1 });
     await ensureColumn('asset_returns', 'quantity', { type: require('sequelize').DataTypes.INTEGER, allowNull: false, defaultValue: 1 });

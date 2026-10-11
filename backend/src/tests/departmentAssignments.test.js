@@ -129,6 +129,66 @@ test('department-head assignment list uses a database-column-mapped department f
   assert.doesNotMatch(sql, /`Asset`\.`departmentId`/);
 });
 
+test('assignment list query errors are logged and returned as a message-only 500', async () => {
+  const handler = getHandler(getRoute(assignmentRoutes, 'get', '/'));
+  const originalFindAndCountAll = models.Assignment.findAndCountAll;
+  const originalConsoleError = console.error;
+  const databaseError = Object.assign(new Error('Assignment query failed'), {
+    name: 'SequelizeDatabaseError',
+    original: { code: 'ER_BAD_FIELD_ERROR', sqlMessage: "Unknown column 'assignments.createdAt'" },
+    sql: 'SELECT assignments.createdAt FROM assignments',
+  });
+  let logged;
+  models.Assignment.findAndCountAll = async () => { throw databaseError; };
+  console.error = (...args) => { logged = args; };
+  try {
+    const response = makeResponse();
+    await handler(request(), response, (error) => { throw error; });
+    assert.equal(response.statusCode, 500);
+    assert.deepEqual(response.body, { message: 'Failed to load assignments' });
+    assert.equal(logged[0], 'Failed to list assignments:');
+    assert.deepEqual(logged[1], {
+      name: 'SequelizeDatabaseError',
+      message: 'Assignment query failed',
+      code: 'ER_BAD_FIELD_ERROR',
+      sqlMessage: "Unknown column 'assignments.createdAt'",
+      sql: 'SELECT assignments.createdAt FROM assignments',
+    });
+  } finally {
+    models.Assignment.findAndCountAll = originalFindAndCountAll;
+    console.error = originalConsoleError;
+  }
+});
+
+test('assignment search uses database column names for included model fields', async (t) => {
+  const handler = getHandler(getRoute(assignmentRoutes, 'get', '/'));
+  const originalFindAndCountAll = models.Assignment.findAndCountAll;
+  let queryOptions;
+  models.Assignment.findAndCountAll = async (options) => {
+    queryOptions = options;
+    return { count: 0, rows: [] };
+  };
+  t.after(() => { models.Assignment.findAndCountAll = originalFindAndCountAll; });
+
+  const req = request();
+  req.query.search = 'projector';
+  const response = makeResponse();
+  await handler(req, response, (error) => { throw error; });
+
+  queryOptions.model = models.Assignment;
+  models.Assignment._validateIncludedElements(queryOptions);
+  const sql = models.sequelize.dialect.queryGenerator.selectQuery(
+    models.Assignment.getTableName(),
+    queryOptions,
+    models.Assignment,
+  );
+  assert.match(sql, /`Asset`\.`asset_code`/);
+  assert.match(sql, /`Asset`\.`serial_number`/);
+  assert.match(sql, /`User`\.`full_name`/);
+  assert.match(sql, /`AssignedLaboratory`\.`room_name`/);
+  assert.doesNotMatch(sql, /`Asset`\.`assetCode`|`Asset`\.`serialNumber`|`User`\.`fullName`|`AssignedLaboratory`\.`roomName`/);
+});
+
 test('assignment validation rejects malformed dates before opening a transaction', async () => {
   const handler = getHandler(getRoute(assignmentRoutes, 'post', '/'));
   const originalTransaction = models.sequelize.transaction;

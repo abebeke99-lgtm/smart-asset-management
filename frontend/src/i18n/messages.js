@@ -1002,8 +1002,8 @@ export const messages = {
       footerDevelopedBy: 'Developed by'
     },
     appearance: {
-      languageEnglish: 'Switch language to English',
-      languageAmharic: 'Switch language to Amharic',
+      languageEnglish: 'EN — English (እንግሊዝኛ)',
+      languageAmharic: 'AM — Amharic (አማርኛ)',
       light: 'Light',
       dark: 'Dark',
       language: 'Language',
@@ -2041,8 +2041,8 @@ export const messages = {
       footerDevelopedBy: 'በ'
     },
     appearance: {
-      languageEnglish: 'ቋንቋን ወደ እንግሊዝኛ ቀይር',
-      languageAmharic: 'ቋንቋን ወደ አማርኛ ቀይር',
+      languageEnglish: 'EN — English (እንግሊዝኛ)',
+      languageAmharic: 'AM — Amharic (አማርኛ)',
       light: 'ብርሃን',
       dark: 'ጨለማ',
       language: 'ቋንቋ',

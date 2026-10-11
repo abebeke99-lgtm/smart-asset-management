@@ -222,7 +222,17 @@ app.use((err, req, res, next) => {
     });
   }
 
-  console.error(err.stack);
+  console.error('Server Error:', {
+    name: err.name,
+    message: err.message,
+    code: err.original?.code || err.parent?.code || err.code,
+    sqlMessage: err.original?.sqlMessage || err.parent?.sqlMessage,
+    sql: err.sql || err.original?.sql,
+    stack: err.stack,
+    url: req.originalUrl,
+    method: req.method,
+    ip: req.ip,
+  });
   res.status(status).json({
     success: false,
     message: status >= 500 || process.env.NODE_ENV === 'production' ? 'Internal server error' : (err.message || 'Request failed'),

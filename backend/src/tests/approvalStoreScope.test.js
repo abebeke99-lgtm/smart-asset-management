@@ -8,7 +8,7 @@ const notificationService = require('../services/notificationService');
 
 notificationService.createBulkNotification = async () => {};
 
-const { sequelize, Approval, Asset, Department, AuditLog, Inventory, AssetMovement } = models;
+const { sequelize, Approval, Asset, Department, User, AuditLog, Inventory, AssetMovement } = models;
 const { listApprovals, getApprovalById, createApproval, decideApproval } = require('../controllers/approvalController');
 const routeSource = fs.readFileSync(path.resolve(__dirname, '../routes/approvalRoutes.js'), 'utf8');
 
@@ -51,12 +51,14 @@ test('store-manager approval list query is limited to own College department and
     const response = makeResponse();
     await listApprovals(storeRequest({ query: { collegeId: '2', requested_by: '42' } }), response, (error) => { throw error; });
     const scopePredicates = queryOptions.where[Op.and];
-    assert.equal(scopePredicates[0][Op.or][1]['$Department.collegeId$'], 1);
-    assert.equal(scopePredicates[1][Op.or][1]['$Asset.collegeId$'], 1);
-    assert.equal(scopePredicates[2][Op.or][0]['$Department.collegeId$'], 1);
-    assert.equal(scopePredicates[2][Op.or][1]['$Asset.collegeId$'], 1);
+    assert.equal(scopePredicates[0][Op.or][1]['$Department.college_id$'], 1);
+    assert.equal(scopePredicates[1][Op.or][1]['$Asset.college_id$'], 1);
+    assert.equal(scopePredicates[2][Op.or][0]['$Department.college_id$'], 1);
+    assert.equal(scopePredicates[2][Op.or][1]['$Asset.college_id$'], 1);
+    assert.equal(scopePredicates[3][Op.or][1]['$Beneficiary.college_id$'], 1);
     assert.equal(queryOptions.include[0].attributes.includes('collegeId'), true);
     assert.equal(queryOptions.include[1].attributes.includes('collegeId'), true);
+    assert.equal(queryOptions.include.find((association) => association.as === 'Beneficiary').attributes.includes('collegeId'), true);
     assert.equal(queryOptions.where.requestedBy, '42');
     assert.equal(response.statusCode, 200);
     assert.equal(response.body.total, 0);
@@ -65,18 +67,51 @@ test('store-manager approval list query is limited to own College department and
   }
 });
 
+test('approval list logs database details and returns a JSON 500 response', async () => {
+  const originalFindAll = Approval.findAll;
+  const originalConsoleError = console.error;
+  const databaseError = Object.assign(new Error('Approval database query failed'), {
+    name: 'SequelizeDatabaseError',
+    original: {
+      code: 'ER_BAD_FIELD_ERROR',
+      sqlMessage: "Unknown column 'missing_column' in 'field list'",
+    },
+    sql: 'SELECT missing_column FROM approvals',
+  });
+  let logged;
+  Approval.findAll = async () => { throw databaseError; };
+  console.error = (...args) => { logged = args; };
+  try {
+    const response = makeResponse();
+    await listApprovals(storeRequest(), response, (error) => { throw error; });
+    assert.equal(response.statusCode, 500);
+    assert.deepEqual(response.body, { message: 'Failed to load approvals' });
+    assert.equal(logged[0], 'Failed to list approvals:');
+    assert.deepEqual(logged[1], {
+      name: 'SequelizeDatabaseError',
+      message: 'Approval database query failed',
+      code: 'ER_BAD_FIELD_ERROR',
+      sqlMessage: "Unknown column 'missing_column' in 'field list'",
+      sql: 'SELECT missing_column FROM approvals',
+    });
+  } finally {
+    Approval.findAll = originalFindAll;
+    console.error = originalConsoleError;
+  }
+});
+
 test('store manager cannot read or decide an approval linked to another College', async () => {
   const originals = { findByPk: Approval.findByPk, transaction: sequelize.transaction };
-  const foreignRecord = approvalRecord({ collegeId: 2, departmentId: 22 });
+  let record = approvalRecord({ collegeId: 2, departmentId: 22 });
   let updateCalls = 0;
   let rollbackCalls = 0;
-  Approval.findByPk = async () => foreignRecord;
+  Approval.findByPk = async () => record;
   sequelize.transaction = async () => ({
     LOCK: { UPDATE: 'UPDATE' },
     rollback: async () => { rollbackCalls += 1; },
     commit: async () => {},
   });
-  foreignRecord.update = async () => { updateCalls += 1; };
+  record.update = async () => { updateCalls += 1; };
   try {
     const detailResponse = makeResponse();
     await getApprovalById(storeRequest(), detailResponse, (error) => { throw error; });
@@ -87,6 +122,19 @@ test('store manager cannot read or decide an approval linked to another College'
     assert.equal(decisionResponse.statusCode, 404);
     assert.equal(updateCalls, 0);
     assert.equal(rollbackCalls, 1);
+
+    record = approvalRecord();
+    record.requestedFor = 52;
+    record.Beneficiary = { id: 52, collegeId: 2 };
+    const beneficiaryResponse = makeResponse();
+    await getApprovalById(storeRequest(), beneficiaryResponse, (error) => { throw error; });
+    assert.equal(beneficiaryResponse.statusCode, 404);
+
+    const beneficiaryDecisionResponse = makeResponse();
+    await decideApproval(storeRequest(), beneficiaryDecisionResponse, (error) => { throw error; });
+    assert.equal(beneficiaryDecisionResponse.statusCode, 404);
+    assert.equal(updateCalls, 0);
+    assert.equal(rollbackCalls, 2);
   } finally {
     Approval.findByPk = originals.findByPk;
     sequelize.transaction = originals.transaction;
@@ -238,12 +286,18 @@ test('Store Manager request creation requires and resolves asset and department 
   const originals = {
     assetFindByPk: Asset.findByPk,
     departmentFindByPk: Department.findByPk,
+    userFindByPk: User.findByPk,
     approvalCreate: Approval.create,
     auditCreate: AuditLog.create,
   };
   const createdValues = [];
   Asset.findByPk = async (id) => Number(id) === 3 ? { id: 3, collegeId: 1, name: 'Asset' } : { id: Number(id), collegeId: 2, name: 'Foreign asset' };
   Department.findByPk = async (id) => Number(id) === 12 ? { id: 12, collegeId: 1 } : { id: Number(id), collegeId: 2 };
+  User.findByPk = async (id) => Number(id) === 43
+    ? { id: 43, collegeId: 1 }
+    : Number(id) === 44
+      ? { id: 44, collegeId: 2 }
+      : null;
   Approval.create = async (values) => {
     createdValues.push(values);
     return { ...values, id: 81, status: 'pending', toJSON() { return { ...this }; } };
@@ -252,10 +306,17 @@ test('Store Manager request creation requires and resolves asset and department 
   try {
     await context.test('creates a request using the validated College department', async () => {
       const response = makeResponse();
-      await createApproval(storeRequest({ body: { type: 'asset_issue', asset_id: 3, department_id: 12, quantity: 1, reason: 'Need equipment' } }), response, (error) => { throw error; });
+      await createApproval(storeRequest({ body: { type: 'asset_issue', asset_id: 3, department_id: 12, requested_for: 43, required_date: '2026-11-01', quantity: 1, reason: 'Need equipment', comment: 'Needed for the lab' } }), response, (error) => { throw error; });
       assert.equal(response.statusCode, 201);
       assert.equal(createdValues[0].assetId, 3);
       assert.equal(createdValues[0].departmentId, 12);
+      assert.equal(createdValues[0].requestedFor, 43);
+      assert.equal(createdValues[0].requiredDate, '2026-11-01');
+      assert.equal(createdValues[0].comment, 'Needed for the lab');
+      assert.equal(response.body.request.requested_for, 43);
+      assert.equal(response.body.request.required_date, '2026-11-01');
+      assert.equal(response.body.request.purpose, 'Need equipment');
+      assert.equal(response.body.request.remarks, 'Needed for the lab');
     });
 
     await context.test('rejects a cross-College asset without creating a request', async () => {
@@ -271,9 +332,24 @@ test('Store Manager request creation requires and resolves asset and department 
       assert.equal(response.statusCode, 404);
       assert.equal(createdValues.length, 1);
     });
+
+    await context.test('rejects a requested-for user from another College', async () => {
+      const response = makeResponse();
+      await createApproval(storeRequest({ body: { type: 'asset_issue', asset_id: 3, department_id: 12, requested_for: 44, quantity: 1, reason: 'Need equipment' } }), response, (error) => { throw error; });
+      assert.equal(response.statusCode, 404);
+      assert.equal(createdValues.length, 1);
+    });
+
+    await context.test('rejects an invalid required date before creating a request', async () => {
+      const response = makeResponse();
+      await createApproval(storeRequest({ body: { type: 'asset_issue', asset_id: 3, department_id: 12, required_date: '2026-02-30', quantity: 1, reason: 'Need equipment' } }), response, (error) => { throw error; });
+      assert.equal(response.statusCode, 400);
+      assert.equal(createdValues.length, 1);
+    });
   } finally {
     Asset.findByPk = originals.assetFindByPk;
     Department.findByPk = originals.departmentFindByPk;
+    User.findByPk = originals.userFindByPk;
     Approval.create = originals.approvalCreate;
     AuditLog.create = originals.auditCreate;
   }
