@@ -138,6 +138,7 @@ describe('Services page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Switch language' }));
 
+    expect(screen.getByRole('img', { name: 'የንብረት ምዝገባ ቅጽና የምስል ቅድመ እይታ' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'አገልግሎቶች', level: 1 })).not.toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument();
     expect(screen.queryByText('ለዩኒቨርሲቲ ንብረቶች ምዝገባ፣ ክትትል፣ ምደባ፣ ጥገና፣ ማረጋገጫና ሪፖርት የዲጂታል አገልግሎቶች።')).not.toBeInTheDocument();

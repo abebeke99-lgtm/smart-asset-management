@@ -11,6 +11,7 @@ const {
   Transfer,
   User,
 } = require('../models');
+const { effectiveReorderLevel } = require('../utils/inventoryStock');
 
 const countBy = async (Model, field, where, options = {}) => {
   const rows = await Model.findAll({
@@ -120,7 +121,7 @@ const getDepartmentAnalytics = async (departmentId, dateRange = {}) => {
       summary.available += Number(row.availableQuantity || 0);
       summary.reserved += Number(row.reservedQuantity || 0);
       summary.damaged += Number(row.damagedQuantity || 0);
-      if (Number(row.availableQuantity || 0) <= Number(row.minimumQuantity || 0)) summary.lowStock += 1;
+      if (Number(row.availableQuantity || 0) <= effectiveReorderLevel(row)) summary.lowStock += 1;
       return summary;
     }, { totalItems: 0, quantity: 0, available: 0, reserved: 0, damaged: 0, lowStock: 0 }),
     approvals: approvalStatuses,

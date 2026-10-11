@@ -2,6 +2,18 @@ const { DataTypes } = require('sequelize');
 const crypto = require('node:crypto');
 const { sequelize } = require('../config/database');
 
+const stockAlertRelevantChange = Symbol('stockAlertRelevantChange');
+const reconcileAssetStockAlert = (asset, options) => {
+  const run = () => {
+    const { reconcileInventoryStockAlertForAsset } = require('../services/inventoryStockAlertService');
+    reconcileInventoryStockAlertForAsset(asset.id).catch((error) => {
+      console.error('Asset stock alert reconciliation failed:', error.message);
+    });
+  };
+  if (options.transaction?.afterCommit) options.transaction.afterCommit(run);
+  else run();
+};
+
 const Asset = sequelize.define('Asset', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   name: { type: DataTypes.STRING(255), allowNull: false },
@@ -68,6 +80,12 @@ const Asset = sequelize.define('Asset', {
       if (typeof asset.digitalId === 'string') asset.digitalId = asset.digitalId.trim().toUpperCase() || null;
       if (typeof asset.rfidTag === 'string') asset.rfidTag = asset.rfidTag.trim().toUpperCase() || null;
       if (typeof asset.serialNumber === 'string') asset.serialNumber = asset.serialNumber.trim() || null;
+    },
+    beforeUpdate(asset, options) {
+      options[stockAlertRelevantChange] = ['status', 'condition', 'expiryDate', 'serialNumber', 'collegeId'].some((field) => asset.changed(field));
+    },
+    afterUpdate(asset, options) {
+      if (options[stockAlertRelevantChange]) reconcileAssetStockAlert(asset, options);
     },
   },
   paranoid: true,

@@ -145,7 +145,25 @@ test('assignment validation rejects malformed dates before opening a transaction
   }
 });
 
-test('creation uses a transaction and records the assignment, date, inventory issue, and asset status', async () => {
+test('assignment validation rejects non-positive or fractional stock quantities before opening a transaction', async () => {
+  const handler = getHandler(getRoute(assignmentRoutes, 'post', '/'));
+  const originalTransaction = models.sequelize.transaction;
+  let transactionStarted = false;
+  models.sequelize.transaction = async () => { transactionStarted = true; throw new Error('unexpected transaction'); };
+  try {
+    for (const quantity of [0, -1, 1.5]) {
+      const response = makeResponse();
+      await handler(request(assignmentBody({ quantity })), response, (error) => { throw error; });
+      assert.equal(response.statusCode, 400);
+      assert.match(response.body.message, /positive whole-number quantity/i);
+    }
+    assert.equal(transactionStarted, false);
+  } finally {
+    models.sequelize.transaction = originalTransaction;
+  }
+});
+
+test('bulk creation decrements only the issued quantity and records it in assignment and movement history', async () => {
   const handler = getHandler(getRoute(assignmentRoutes, 'post', '/'));
   const assignedDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const expectedReturnDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -155,7 +173,7 @@ test('creation uses a transaction and records the assignment, date, inventory is
     async commit() { this.finished = 'commit'; },
     async rollback() { this.finished = 'rollback'; },
   };
-  const inventory = { id: 2, availableQuantity: 1, async update(value) { Object.assign(this, value); } };
+  const inventory = { id: 2, availableQuantity: 4, async update(value) { Object.assign(this, value); } };
   const asset = {
     id: 45, status: 'available', departmentId: 7, collegeId: 3, condition: 'Good',
     async update(value) { Object.assign(this, value); },
@@ -164,6 +182,7 @@ test('creation uses a transaction and records the assignment, date, inventory is
   const department = { id: 7, name: 'Authorized Department', collegeId: 3, status: 'active' };
   let createdAssignment;
   let inventoryTransaction;
+  let assetMovement;
   let createdAssignmentRecord;
   const assignment = {
     id: 99,
@@ -184,26 +203,102 @@ test('creation uses a transaction and records the assignment, date, inventory is
     }],
     [models.Assignment, 'findByPk', async () => assignment],
     [models.InventoryTransaction, 'create', async (values) => { inventoryTransaction = values; }],
-    [models.AssetMovement, 'create', async () => {}],
+    [models.AssetMovement, 'create', async (values) => { assetMovement = values; }],
     [models.AuditLog, 'create', async () => {}],
   ];
 
   await withModelStubs(stubs, async () => {
     const response = makeResponse();
     await handler(request(assignmentBody({
+      quantity: 3,
       assigned_date: assignedDate.toISOString(),
       expected_return_date: expectedReturnDate.toISOString(),
     })), response, (error) => { throw error; });
 
     assert.equal(response.statusCode, 201);
     assert.equal(transaction.finished, 'commit');
-    assert.equal(inventory.availableQuantity, 0);
-    assert.equal(asset.status, 'assigned');
+    assert.equal(inventory.availableQuantity, 1);
+    assert.equal(asset.status, 'available');
     assert.equal(createdAssignment.assignedDate.toISOString(), assignedDate.toISOString());
     assert.equal(new Date(createdAssignment.expectedReturnDate).toISOString(), expectedReturnDate.toISOString());
     assert.equal(createdAssignment.status, 'active');
+    assert.equal(createdAssignment.quantity, 3);
     assert.equal(inventoryTransaction.type, 'issue');
+    assert.equal(inventoryTransaction.quantity, 3);
+    assert.match(assetMovement.notes, /"quantity":3/);
     assert.equal(response.body.assignment.id, 99);
+  });
+});
+
+test('bulk assignment rejects quantities greater than available stock without writing movements', async () => {
+  const handler = getHandler(getRoute(assignmentRoutes, 'post', '/'));
+  const transaction = {
+    LOCK: { UPDATE: 'UPDATE' },
+    finished: null,
+    async commit() { this.finished = 'commit'; },
+    async rollback() { this.finished = 'rollback'; },
+  };
+  const stubs = [
+    [models.sequelize, 'transaction', async () => transaction],
+    [models.Inventory, 'findOne', async () => ({ id: 2, availableQuantity: 2 })],
+    [models.Asset, 'findByPk', async () => ({ id: 45, status: 'available', departmentId: 7, collegeId: 3 })],
+    [models.User, 'findByPk', async () => ({ id: 81, active: true, status: 'active', departmentId: 7, collegeId: 3 })],
+    [models.Department, 'findByPk', async () => ({ id: 7, name: 'Authorized Department', collegeId: 3, status: 'active' })],
+    [models.Room, 'findByPk', async () => null],
+    [models.Assignment, 'findOne', async () => null],
+    [models.Assignment, 'create', async () => assert.fail('insufficient stock must not create an assignment')],
+  ];
+
+  await withModelStubs(stubs, async () => {
+    const response = makeResponse();
+    await handler(request(assignmentBody({ quantity: 3 })), response, (error) => { throw error; });
+    assert.equal(response.statusCode, 409);
+    assert.match(response.body.message, /insufficient available inventory/i);
+    assert.equal(transaction.finished, 'rollback');
+  });
+});
+
+test('bulk assignment return restores its recorded quantity without exceeding total stock', async () => {
+  const handler = getHandler(getRoute(assignmentRoutes, 'post', '/:id/return'));
+  const transaction = {
+    LOCK: { UPDATE: 'UPDATE' },
+    finished: null,
+    async commit() { this.finished = 'commit'; },
+    async rollback() { this.finished = 'rollback'; },
+  };
+  const assignment = {
+    id: 99, assetId: 45, quantity: 3, status: 'active', assignedToType: 'department', assignedToId: 7,
+    departmentId: 7, async update(values) { Object.assign(this, values); },
+    toJSON() { return { ...this }; },
+  };
+  const inventory = {
+    id: 2, quantity: 10, availableQuantity: 1, reservedQuantity: 2, damagedQuantity: 1,
+    async update(values) { Object.assign(this, values); },
+  };
+  const asset = { id: 45, status: 'assigned', departmentId: 7, collegeId: 3, name: 'Gloves', async update(values) { Object.assign(this, values); } };
+  let stockMovement;
+  const stubs = [
+    [models.sequelize, 'transaction', async () => transaction],
+    [models.Assignment, 'findByPk', async () => assignment],
+    [models.Inventory, 'findOne', async () => inventory],
+    [models.Asset, 'findByPk', async () => asset],
+    [models.InventoryTransaction, 'create', async (values) => { stockMovement = values; }],
+    [models.AssetMovement, 'create', async () => {}],
+    [models.AuditLog, 'create', async () => {}],
+  ];
+
+  await withModelStubs(stubs, async () => {
+    const response = makeResponse();
+    const req = request({ notes: 'Restocked returned units' });
+    req.params.id = '99';
+    await handler(req, response, (error) => { throw error; });
+    assert.equal(transaction.finished, 'commit');
+    assert.equal(inventory.availableQuantity, 4);
+    assert.equal(asset.status, 'available');
+    assert.equal(assignment.status, 'returned');
+    assert.equal(stockMovement.type, 'return');
+    assert.equal(stockMovement.quantity, 3);
+    assert.equal(response.body.assignment.quantity, 3);
   });
 });
 

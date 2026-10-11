@@ -93,6 +93,19 @@ test('Add Stock query parameters do not open or substitute for the Receive workf
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
+test('selected low-stock items open the separate receipt workflow preselected', async () => {
+  render(
+    <UiProvider>
+      <MemoryRouter initialEntries={['/store/receive?assetId=22']}>
+        <StoreReceivePage />
+      </MemoryRouter>
+    </UiProvider>,
+  );
+
+  expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  expect(screen.getByLabelText('Product')).toHaveValue('22');
+});
+
 test('rejects invalid stock values and cancellation does not submit', async () => {
   renderPage();
   fireEvent.click((await screen.findAllByRole('button', { name: 'Receive Delivery' }))[0]);

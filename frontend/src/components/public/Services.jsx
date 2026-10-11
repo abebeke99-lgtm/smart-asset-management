@@ -129,7 +129,7 @@ const servicesByLanguage = {
 
 const serviceMedia = [
   {
-    src: '/images/assets/asset-registration.jpg',
+    src: '/images/assets/Asset Registration.jpg',
     alt: {
       en: 'Asset registration form and image preview',
       am: 'የንብረት ምዝገባ ቅጽና የምስል ቅድመ እይታ'
@@ -143,48 +143,53 @@ const serviceMedia = [
     }
   },
   {
-    src: '/images/workflow/asset-workflow.svg',
+    src: '/images/workflow/Asset Assignment.jpg',
     alt: {
       en: 'Illustration of an asset assignment workflow',
       am: 'የንብረት ምደባ የሥራ ሂደት ምሳሌ'
     }
   },
   {
-    src: '/images/assets/asset-transfer.svg',
+    src: '/images/assets/Asset Transfer.jpg',
     alt: {
       en: 'Illustration of tagged university equipment moving between buildings',
       am: 'መለያ ያለው የዩኒቨርሲቲ መሳሪያ በሕንፃዎች መካከል ሲዘዋወር የሚያሳይ ምሳሌ'
     }
   },
   {
-    src: '/images/maintenance/maintenance-management.svg',
+    src: '/images/maintenance/Maintenance.jpg',
     alt: {
       en: 'Illustration of equipment maintenance and repair records',
       am: 'የመሳሪያ ጥገናና የጥገና መዝገቦች ምሳሌ'
     }
   },
   {
-    src: '/images/technology/rfid-tracking.svg',
+    src: '/images/technology/QR-RFID.jpg',
     alt: {
       en: 'Illustration of QR and RFID asset identification',
       am: 'የQR እና RFID ንብረት መለያ ምሳሌ'
     }
   },
   {
-    src: '/images/security/asset-security.svg',
+    src: '/images/security/Asset Verification.jpg',
     alt: {
       en: 'Illustration of a verified asset checklist and records',
       am: 'የተረጋገጠ የንብረት ዝርዝርና መዝገቦች ምሳሌ'
     }
   },
   {
-    src: '/images/analytics/asset-analytics.svg',
+    src: '/images/analytics/Reports & Analytics.jpg',
     alt: {
       en: 'Illustration of asset analytics charts and reporting cards',
       am: 'የንብረት ትንታኔ ገበታዎችና ሪፖርት ካርዶች ምሳሌ'
     }
   }
 ];
+
+const getLocalizedServiceMedia = (language) => serviceMedia.map(({ src, alt }) => ({
+  src,
+  alt: alt[language] || alt.en
+}));
 
 const serviceDetails = {
   en: {
@@ -344,6 +349,7 @@ const Services = () => {
   const { theme } = useTheme();
   const content = servicesByLanguage[language] || servicesByLanguage.en;
   const details = serviceDetails[language] || serviceDetails.en;
+  const localizedServiceMedia = getLocalizedServiceMedia(language);
   const [selectedService, setSelectedService] = useState(null);
   const closeButtonRef = useRef(null);
   const detailTriggerRef = useRef(null);
@@ -394,16 +400,16 @@ const Services = () => {
         <h2 id="services-section-title" className="services-visually-hidden">{content.systemTitle}</h2>
         <div className="services-grid">
           {content.services.map(({ title, description, to, icon: Icon, secondaryIcon: SecondaryIcon }, index) => {
-            const service = serviceMedia[index];
+            const service = localizedServiceMedia[index];
             return (
               <article className="services-card" key={title} style={{ '--services-card-index': index }}>
                 <div className="services-card-image-frame">
                   {index === 0 ? (
                     <Link to={to} className="services-card-image-link" aria-label={`Open ${title}`}>
-                      <ServiceImage service={service} imageAlt={service.alt[language] || service.alt.en} className="services-card-image" />
+                      <ServiceImage service={service} imageAlt={service.alt} className="services-card-image" />
                     </Link>
                   ) : (
-                    <ServiceImage service={service} imageAlt={service.alt[language] || service.alt.en} className="services-card-image" />
+                    <ServiceImage service={service} imageAlt={service.alt} className="services-card-image" />
                   )}
                 </div>
                 <span className="services-card-icon" aria-hidden="true">
@@ -451,8 +457,8 @@ const Services = () => {
             </button>
             <div className="services-detail-image-frame">
               <ServiceImage
-                service={serviceMedia[selectedService.index]}
-                imageAlt={serviceMedia[selectedService.index].alt[language] || serviceMedia[selectedService.index].alt.en}
+                service={localizedServiceMedia[selectedService.index]}
+                imageAlt={localizedServiceMedia[selectedService.index].alt}
                 className="services-detail-image"
               />
             </div>

@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Eye, FilePlus2, LoaderCircle, PackagePlus, RefreshCw, Search, X } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
 import './StoreReceivePage.css';
@@ -14,6 +15,8 @@ const labels = { en: { receipt: 'Receipt', noInventory: 'No inventory items are 
 
 export default function StoreReceivePage() {
   const { language } = useLanguage();
+  const [searchParams] = useSearchParams();
+  const presetAssetId = searchParams.get('assetId') || '';
   const submitLock = useRef(false);
   const submissionId = useRef('');
   const [records, setRecords] = useState([]); const [inventory, setInventory] = useState([]); const [suppliers, setSuppliers] = useState([]); const [inventoryLoading, setInventoryLoading] = useState(false); const [supplierLoading, setSupplierLoading] = useState(false); const [summary, setSummary] = useState({ receivedToday: 0, receivedThisMonth: 0, pendingInspection: null }); const [page, setPage] = useState({ page: 1, pageSize: 25, total: 0, totalPages: 0 }); const [search, setSearch] = useState(''); const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false); const [saving, setSaving] = useState(false); const [error, setError] = useState(''); const [formError, setFormError] = useState(''); const [success, setSuccess] = useState(''); const [form, setForm] = useState(initialForm); const [showForm, setShowForm] = useState(false); const [detail, setDetail] = useState(null);
@@ -23,7 +26,8 @@ export default function StoreReceivePage() {
   const loadSuppliers = async () => { setSupplierLoading(true); try { const response = await apiClient.get('/api/store/receive/suppliers'); setSuppliers(Array.isArray(response.data?.data) ? response.data.data : []); } finally { setSupplierLoading(false); } };
   useEffect(() => { load(1); }, [search]);
   const update = (name, value) => setForm((current) => ({ ...current, [name]: value }));
-  const openForm = async () => { submissionId.current = createSubmissionId(); setForm(initialForm); setFormError(''); setSuccess(''); setShowForm(true); try { await Promise.all([loadInventory(), loadSuppliers()]); } catch { setFormError(t.failed); } };
+  const openForm = async (assetId = '') => { submissionId.current = createSubmissionId(); setForm({ ...initialForm(), assetId: String(assetId || '') }); setFormError(''); setSuccess(''); setShowForm(true); try { await Promise.all([loadInventory(), loadSuppliers()]); } catch { setFormError(t.failed); } };
+  useEffect(() => { if (presetAssetId) openForm(presetAssetId); }, [presetAssetId]);
   const submit = async (event) => {
     event.preventDefault();
     if (submitLock.current) return;

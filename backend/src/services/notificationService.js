@@ -31,6 +31,7 @@ const defaultEventRules = {
   finance_payment_submitted: { enabled: true, inApp: true, email: false, recipientRule: 'Finance', priority: 'high' },
   finance_transaction_failed: { enabled: true, inApp: true, email: false, recipientRule: 'Finance', priority: 'urgent' },
   finance_invoice_overdue: { enabled: true, inApp: true, email: false, recipientRule: 'Finance', priority: 'high' },
+  inventory_stock_alert: { enabled: true, inApp: true, email: false, recipientRule: 'College Store Managers and Administrators', priority: 'high' },
 };
 
 const normalizeNotificationScope = (value) => {

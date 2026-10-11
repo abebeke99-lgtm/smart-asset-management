@@ -65,6 +65,11 @@ afterEach(() => {
 test('fulfills an approved request and refreshes its status', async () => {
   render(<StoreAssetRequests />);
 
+  await waitFor(() => {
+    expect(apiClient.get).toHaveBeenCalledWith('/api/assets', {
+      params: { page: 1, limit: 50 }
+    });
+  });
   fireEvent.click(await screen.findByRole('button', { name: /Approved Requests/ }));
   fireEvent.click(await screen.findByRole('button', { name: 'Fulfill' }));
 
@@ -73,6 +78,41 @@ test('fulfills an approved request and refreshes its status', async () => {
   });
   await waitFor(() => expect(apiClient.get).toHaveBeenCalledTimes(8));
   expect(await screen.findByText('Fulfilled')).toBeInTheDocument();
+});
+
+test('loads assets across the supported paginated API instead of requesting an invalid limit', async () => {
+  apiClient.get.mockImplementation((url, options) => {
+    if (url === '/api/assets') {
+      if (options.params.page === 1) {
+        return Promise.resolve({
+          data: {
+            assets: [{ id: 3, name: 'Laptop' }],
+            pagination: { pages: 2 },
+          },
+        });
+      }
+      return Promise.resolve({ data: { assets: [{ id: 4, name: 'Projector' }] } });
+    }
+    if (url === '/api/approvals') return Promise.resolve({ data: { requests: [] } });
+    if (url === '/api/users') return Promise.resolve({ data: { users: [] } });
+    if (url === '/api/departments') return Promise.resolve({ data: { departments: [] } });
+    return Promise.resolve({ data: {} });
+  });
+
+  render(<StoreAssetRequests />);
+
+  await waitFor(() => {
+    expect(apiClient.get).toHaveBeenCalledWith('/api/assets', {
+      params: { page: 2, limit: 50 }
+    });
+  });
+  expect(apiClient.get).toHaveBeenCalledWith('/api/assets', {
+    params: { page: 1, limit: 50 }
+  });
+  await waitFor(() => {
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Unable to load request data. Please try again.')).not.toBeInTheDocument();
+  });
 });
 
 test('shows the server error when approved request fulfillment fails', async () => {

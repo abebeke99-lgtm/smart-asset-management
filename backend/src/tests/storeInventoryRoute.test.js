@@ -11,8 +11,8 @@ const storeRouter = require('../routes/storeRoutes');
 const storeController = read('../controllers/storeController.js');
 const inventoryController = read('../controllers/inventoryController.js');
 const assetController = read('../controllers/assetController.js');
-const { InventoryTransaction, Inventory, AssetMovement, AuditLog, Supplier, sequelize } = require('../models');
-const { getInventory, getReceipts } = require('../controllers/storeController');
+const { InventoryTransaction, Inventory, AssetMovement, AuditLog, Supplier, Assignment, Transfer, Maintenance, Approval, sequelize } = require('../models');
+const { getInventory, getReceipts, getAvailableAssets } = require('../controllers/storeController');
 const { createReceipt, createStockAddition, getReceiptSuppliers } = require('../controllers/inventoryController');
 const assetModel = read('../models/Asset.js');
 const inventoryTransactionModel = read('../models/InventoryTransaction.js');
@@ -48,6 +48,80 @@ test('inventory spec fields use additive schema changes and serialized assets st
   assert.match(inventoryController, /String\(item\.Asset\?\.serialNumber \|\| ''\)\.trim\(\) && next\.quantity > 1/);
   assert.match(inventoryTransactionModel, /referenceKey:.*field: 'reference_key'/);
   assert.match(sync, /inventory_transactions_asset_reference_unique/);
+});
+
+test('store workflow migration adds assignment and return columns required by Sequelize models', () => {
+  const migration = read('../../database/migrations/20261010_store_workflow_columns.sql');
+  for (const [table, column] of [
+    ['assignments', 'approval_id'],
+    ['assignments', 'quantity'],
+    ['asset_returns', 'quantity'],
+  ]) {
+    assert.match(migration, new RegExp(`TABLE_NAME = '${table}'[\\s\\S]*?COLUMN_NAME = '${column}'`));
+  }
+  assert.doesNotMatch(migration, /DROP TABLE|DROP COLUMN|TRUNCATE/i);
+});
+
+test('available-assets list returns scoped stock balances and related college and department names', async () => {
+  const originals = {
+    findAll: Inventory.findAll,
+    findAndCountAll: Inventory.findAndCountAll,
+    assignments: Assignment.findAll,
+    transfers: Transfer.findAll,
+    maintenance: Maintenance.findAll,
+    transactionCount: InventoryTransaction.count,
+    approvalCount: Approval.count,
+    inventoryCount: Inventory.count,
+  };
+  const asset = {
+    id: 12, assetCode: 'BULK-12', name: 'Gloves', category: 'Safety', status: 'assigned',
+    condition: 'Good', location: 'Main Store', serialNumber: null, collegeId: 9, departmentId: 4,
+    unit: 'box', quantity: 10, department: 'Health', College: { collegeName: 'Health College' },
+    DepartmentRecord: { id: 4, name: 'Nursing', code: 'NUR' },
+  };
+  const inventory = {
+    id: 2, assetId: 12, quantity: 10, availableQuantity: 6, reservedQuantity: 2, damagedQuantity: 1,
+    location: 'Main Store', status: 'available', Asset: asset,
+  };
+  let listOptions;
+  let filterOptions;
+  Inventory.findAll = async (options) => { filterOptions = options; return [inventory]; };
+  Inventory.findAndCountAll = async (options) => { listOptions = options; return { rows: [inventory], count: 1 }; };
+  Assignment.findAll = async () => [{ assetId: 12 }];
+  Transfer.findAll = async () => [];
+  Maintenance.findAll = async () => [];
+  InventoryTransaction.count = async () => 3;
+  Approval.count = async () => 2;
+  Inventory.count = async () => 1;
+  try {
+    let responseBody;
+    await getAvailableAssets({
+      organizationScope: { collegeId: 9 }, user: {}, query: { search: 'Gloves', page: '2', pageSize: '5', sortBy: 'availableQuantity', sortOrder: 'desc' },
+    }, { json(body) { responseBody = body; } }, (error) => { throw error; });
+    assert.equal(responseBody.success, true);
+    assert.equal(responseBody.data.items[0].totalQuantity, 10);
+    assert.equal(responseBody.data.items[0].availableQuantity, 6);
+    assert.equal(responseBody.data.items[0].issuedQuantity, 1);
+    assert.equal(responseBody.data.items[0].collegeName, 'Health College');
+    assert.equal(responseBody.data.items[0].departmentName, 'Nursing');
+    assert.equal(responseBody.data.summary.totalAvailable, 6);
+    assert.equal(responseBody.data.pagination.page, 2);
+    assert.equal(listOptions.limit, 5);
+    assert.equal(listOptions.offset, 5);
+    assert.deepEqual(listOptions.order, [['availableQuantity', 'DESC']]);
+    assert.equal(filterOptions.include[0].where.collegeId, 9);
+    assert.equal(filterOptions.where.availableQuantity[Op.gt], 0);
+    assert.ok(listOptions.include[0].where[Op.and].some((clause) => clause[Op.or]));
+  } finally {
+    Inventory.findAll = originals.findAll;
+    Inventory.findAndCountAll = originals.findAndCountAll;
+    Assignment.findAll = originals.assignments;
+    Transfer.findAll = originals.transfers;
+    Maintenance.findAll = originals.maintenance;
+    InventoryTransaction.count = originals.transactionCount;
+    Approval.count = originals.approvalCount;
+    Inventory.count = originals.inventoryCount;
+  }
 });
 
 test('inventory page exposes sorting, both export formats, details, and all stock workflows', () => {

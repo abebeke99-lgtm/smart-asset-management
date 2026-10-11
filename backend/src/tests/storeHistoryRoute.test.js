@@ -8,7 +8,7 @@ const userRoutes = require('../routes/userRoutes');
 const departmentRoutes = require('../routes/departmentRoutes');
 const returnWorkflowRoutes = require('../routes/returnWorkflowRoutes');
 const { createReceipt, createStockAdjustment } = require('../controllers/inventoryController');
-const { getInventory, getHistory, getDashboard, getLowStock, getStockAdjustments } = require('../controllers/storeController');
+const { getInventory, getHistory, getDashboard, getLowStock, updateReorderLevel, getStockAdjustments } = require('../controllers/storeController');
 const { processStoreReturn } = require('../controllers/returnWorkflowController');
 const { Approval, Asset, Assignment, AssetMovement, AssetReturn, AuditLog, College, Department, Inventory, InventoryTransaction, Maintenance, Transfer, VerificationItem, VerificationSession, sequelize } = require('../models');
 
@@ -26,7 +26,7 @@ test('store routes expose a store manager movement history endpoint', () => {
 test('store dashboard, low-stock, and adjustment routes reject unresolved college scope', async () => {
   const originalFindAll = College.findAll;
   College.findAll = async () => [];
-  const routes = [['/dashboard', 'get'], ['/low-stock', 'get'], ['/stock-adjustments', 'get'], ['/stock-adjustments', 'post']];
+  const routes = [['/dashboard', 'get'], ['/low-stock', 'get'], ['/inventory/:id/reorder-level', 'patch'], ['/stock-adjustments', 'get'], ['/stock-adjustments', 'post']];
 
   try {
     for (const [path, method] of routes) {
@@ -112,6 +112,9 @@ test('low-stock and adjustment listings return and query only own-College assets
     let lowStock;
     await getLowStock({ organizationScope: { collegeId: 7 }, user: {}, query: {} }, { json(body) { lowStock = body; } }, (error) => { throw error; });
     assert.equal(lowStock.data.items[0].item, 'Own item');
+    assert.equal(lowStock.data.items[0].reorderLevel, 3);
+    assert.equal(lowStock.data.items[0].severity, 'CRITICAL');
+    assert.equal(lowStock.data.items[0].available, 1);
     for (const options of inventoryQueries) assert.equal(options.include[0].where.collegeId, 7);
     let stockAdjustments;
     await getStockAdjustments({ organizationScope: { collegeId: 7 }, user: {}, query: {} }, { json(body) { stockAdjustments = body; } }, (error) => { throw error; });
@@ -119,6 +122,87 @@ test('low-stock and adjustment listings return and query only own-College assets
     for (const options of adjustmentQueries) assert.equal(options.include[0].where.collegeId, 7);
   } finally {
     [Inventory.findAndCountAll, Inventory.findAll, InventoryTransaction.findAndCountAll, InventoryTransaction.findAll] = originals;
+  }
+});
+
+test('low-stock uses the configured default for legacy zero thresholds and reports negative balances', async () => {
+  const originals = [Inventory.findAndCountAll, Inventory.findAll];
+  const item = {
+    id: 5, assetId: 51, quantity: 8, availableQuantity: -1, reservedQuantity: 1, damagedQuantity: 0, minimumQuantity: 0,
+    updatedAt: new Date(), Asset: { id: 51, name: 'Gloves', assetCode: 'G-51', category: 'Safety', location: 'Store', status: 'available', condition: 'Good', unit: 'box', collegeId: 7 },
+  };
+  let listQuery;
+  let responseBody;
+  Inventory.findAndCountAll = async (options) => { listQuery = options; return { rows: [item], count: 1 }; };
+  Inventory.findAll = async () => [item];
+  try {
+    await getLowStock(
+      { organizationScope: { collegeId: 7 }, user: {}, query: { severity: 'out_of_stock', sortBy: 'available', sortOrder: 'asc' } },
+      { json(body) { responseBody = body; } },
+      (error) => { throw error; },
+    );
+    assert.equal(responseBody.data.items[0].reorderLevel, responseBody.data.defaultReorderLevel);
+    assert.equal(responseBody.data.items[0].thresholdSource, 'system_default');
+    assert.equal(responseBody.data.items[0].severity, 'OUT_OF_STOCK');
+    assert.equal(responseBody.data.items[0].dataIntegrityError, true);
+    assert.equal(responseBody.data.summary.dataIntegrityErrors, 1);
+    assert.equal(listQuery.order[0][0], 'availableQuantity');
+    assert.equal(listQuery.order[0][1], 'ASC');
+    assert.ok(listQuery.include[0].where[Op.and]);
+    const statusFilter = listQuery.include[0].where[Op.and][0];
+    assert.equal(statusFilter.attribute.fn, 'LOWER');
+    assert.equal(statusFilter.attribute.args[0].fn, 'REPLACE');
+    assert.equal(statusFilter.attribute.args[0].args[0].fn, 'REPLACE');
+    assert.ok(statusFilter.logic[Op.notIn].includes('under maintenance'));
+  } finally {
+    [Inventory.findAndCountAll, Inventory.findAll] = originals;
+  }
+});
+
+test('low-stock rejects invalid pagination and sort selectors', async () => {
+  for (const query of [{ page: '-1' }, { pageSize: '101' }, { sortBy: 'createdAt' }, { sortOrder: 'sideways' }]) {
+    let statusCode;
+    let responseBody;
+    await getLowStock(
+      { organizationScope: { collegeId: 7 }, user: {}, query },
+      { status(code) { statusCode = code; return this; }, json(body) { responseBody = body; return body; } },
+      (error) => { throw error; },
+    );
+    assert.equal(statusCode, 400);
+    assert.equal(responseBody.success, false);
+  }
+});
+
+test('Store Manager reorder-level writes are college-scoped, transactional, and audited', async () => {
+  const originals = {
+    transaction: sequelize.transaction,
+    findOne: Inventory.findOne,
+    auditCreate: AuditLog.create,
+  };
+  const transaction = { LOCK: { UPDATE: 'UPDATE' }, finished: null, async commit() { this.finished = 'commit'; }, async rollback() { this.finished = 'rollback'; } };
+  const inventory = { id: 9, assetId: 91, minimumQuantity: 2, Asset: { id: 91, collegeId: 7 }, async update(values) { Object.assign(this, values); } };
+  let findOptions;
+  let audit;
+  sequelize.transaction = async () => transaction;
+  Inventory.findOne = async (options) => { findOptions = options; return inventory; };
+  AuditLog.create = async (values, options) => { audit = { values, options }; };
+  try {
+    let responseBody;
+    await updateReorderLevel(
+      { params: { id: '9' }, body: { reorderLevel: 4 }, organizationScope: { collegeId: 7 }, user: { id: 3 } },
+      { status() { return this; }, json(body) { responseBody = body; } },
+      (error) => { throw error; },
+    );
+    assert.equal(responseBody.data.reorderLevel, 4);
+    assert.equal(inventory.minimumQuantity, 4);
+    assert.equal(transaction.finished, 'commit');
+    assert.equal(findOptions.include[0].where.collegeId, 7);
+    assert.equal(audit.values.action, 'Inventory Reorder Level Updated');
+    assert.equal(audit.options.transaction, transaction);
+  } finally {
+    sequelize.transaction = originals.transaction;
+    Inventory.findOne = originals.findOne;
+    AuditLog.create = originals.auditCreate;
   }
 });
 
@@ -166,6 +250,11 @@ test('receipt endpoints enforce authentication, Store Manager role, and organiza
 
 test('Store issue form data routes retain College scope middleware', () => {
   const availableAssets = storeRoutes.stack.find((layer) => layer.route && layer.route.path === '/available-assets' && layer.route.methods.get);
+  assert.equal(availableAssets.route.stack[0].handle.name, 'requireAuth');
+  assert.equal(typeof availableAssets.route.stack[1].handle, 'function');
+  const denied = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json() { return this; } };
+  availableAssets.route.stack[1].handle({ user: { role: 'admin' } }, denied, () => assert.fail('admin must not pass Store Manager RBAC'));
+  assert.equal(denied.statusCode, 403);
   assert.match(availableAssets.route.stack[2].handle.name, /ensureStoreScope/);
 
   for (const route of [

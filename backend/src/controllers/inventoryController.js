@@ -1,12 +1,15 @@
 const { sequelize, Asset, Department, Inventory, InventoryTransaction, User, Maintenance, AssetMovement, AuditLog, Supplier } = require('../models');
 const { Op, Sequelize } = require('sequelize');
 const { isCollegeScopedRole, getCollegeScopeId } = require('../middlewares/organizationScope');
+const { effectiveReorderLevel, effectiveReorderLevelSql } = require('../utils/inventoryStock');
 
 const roles = ['admin', 'store_manager', 'ict_officer'];
 const canManage = (user) => user && roles.includes(user.role);
 
 const normalizeInventory = (item) => {
   const data = item.toJSON();
+  const reorderLevel = effectiveReorderLevel(data);
+  const lowStock = Number(data.availableQuantity) <= reorderLevel;
   return {
     ...data,
     asset_id: data.assetId,
@@ -40,8 +43,8 @@ const normalizeInventory = (item) => {
     reserved_quantity: data.reservedQuantity,
     damaged_quantity: data.damagedQuantity,
     min_stock: data.minimumQuantity,
-    is_low_stock: data.availableQuantity <= data.minimumQuantity,
-    stock_status: data.damagedQuantity > 0 ? 'Damaged' : data.availableQuantity <= data.minimumQuantity ? 'Low Stock' : 'Normal',
+    is_low_stock: lowStock,
+    stock_status: data.damagedQuantity > 0 ? 'Damaged' : Number(data.availableQuantity) <= 0 ? 'Out of Stock' : lowStock ? 'Low Stock' : 'Normal',
     last_updated: data.updatedAt,
   };
 };
@@ -79,13 +82,13 @@ const getInventory = async (req, res, next) => {
     if (search) assetWhere[Op.or] = ['assetCode', 'name', 'category', 'serialNumber', 'rfidTag', 'supplier'].map((field) => ({ [field]: { [Op.like]: `%${search}%` } }));
     if (stockLevel === 'available') {
       where[Op.and] = [
-        Sequelize.where(Sequelize.col('available_quantity'), Op.gt, Sequelize.col('minimum_quantity')),
+        Sequelize.where(Sequelize.col('available_quantity'), Op.gt, Sequelize.literal(effectiveReorderLevelSql())),
       ];
     }
     if (stockLevel === 'low') {
       where[Op.and] = [
         Sequelize.where(Sequelize.col('available_quantity'), Op.gt, 0),
-        Sequelize.where(Sequelize.col('available_quantity'), Op.lte, Sequelize.col('minimum_quantity')),
+        Sequelize.where(Sequelize.col('available_quantity'), Op.lte, Sequelize.literal(effectiveReorderLevelSql())),
       ];
     }
     if (stockLevel === 'out') {
@@ -99,7 +102,7 @@ const getInventory = async (req, res, next) => {
     const allItems = await Inventory.findAll({ where, include: [{ model: Asset, attributes: ['status'], where: assetWhere, required: true }] });
     const summary = allItems.reduce((stats, item) => {
       const available = Number(item.availableQuantity || 0);
-      const minimum = Number(item.minimumQuantity || 0);
+      const minimum = effectiveReorderLevel(item);
       stats.totalItems += 1;
       stats.totalQuantity += Number(item.quantity || 0);
       stats.availableQuantity += available;

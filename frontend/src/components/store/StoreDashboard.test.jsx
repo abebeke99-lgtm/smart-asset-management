@@ -65,7 +65,8 @@ describe('Store Manager dashboard', () => {
     expect(await screen.findByRole('heading', { name: 'Physical Asset Movement & Inventory Control' })).toBeInTheDocument();
     expect(apiClient.get).toHaveBeenCalledWith('/api/store/dashboard', { timeout: 10000 });
     expect(screen.getByRole('button', { name: /25.*Available Assets/i })).toBeInTheDocument();
-    expect(document.querySelectorAll('.store-kpi')).toHaveLength(8);
+    expect(document.querySelectorAll('.store-kpi')).toHaveLength(9);
+    expect(screen.getByRole('button', { name: /Out of Stock/i })).toBeInTheDocument();
     expect(screen.queryByText('Pending Requests')).not.toBeInTheDocument();
     expect(screen.queryByText('Pending Transfers')).not.toBeInTheDocument();
     expect(screen.getAllByTestId('bar-chart')).toHaveLength(3);

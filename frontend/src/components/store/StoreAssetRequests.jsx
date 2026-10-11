@@ -6,6 +6,27 @@ import { useLanguage } from '../../contexts/UiContext';
 import { getDepartmentLabel } from '../../utils/department';
 import { apiClient } from '../../utils/api';
 
+const fetchAssets = async () => {
+  const firstPage = await apiClient.get('/api/assets', {
+    params: { page: 1, limit: 50 }
+  });
+  const extractAssets = (data) => {
+    const assetData = data?.assets || data?.data || [];
+    return Array.isArray(assetData) ? assetData : [];
+  };
+  const pages = Number(firstPage.data?.pagination?.pages) || 1;
+  const remainingPages = await Promise.all(
+    Array.from({ length: Math.max(0, pages - 1) }, (_, index) => apiClient.get('/api/assets', {
+      params: { page: index + 2, limit: 50 }
+    }))
+  );
+
+  return [
+    ...extractAssets(firstPage.data),
+    ...remainingPages.flatMap((response) => extractAssets(response.data))
+  ];
+};
+
 const StoreAssetRequests = () => {
   const { language, theme } = useLanguage();
 
@@ -184,9 +205,7 @@ const StoreAssetRequests = () => {
     try {
       const [requestsRes, assetsRes, usersRes, departmentsRes] = await Promise.all([
         apiClient.get('/api/approvals'),
-        apiClient.get('/api/assets', {
-          params: { limit: 500 }
-        }),
+        fetchAssets(),
         apiClient.get('/api/users', {
           params: { limit: 500 }
         }),
@@ -194,8 +213,7 @@ const StoreAssetRequests = () => {
       ]);
 
       setRequests(normalizeRequests(requestsRes.data));
-      const assetData = assetsRes.data?.assets || assetsRes.data?.data || [];
-      setAssets(Array.isArray(assetData) ? assetData : []);
+      setAssets(assetsRes);
       const userData = usersRes.data?.users || usersRes.data?.data || [];
       setUsers(Array.isArray(userData) ? userData : []);
       const deptData = departmentsRes.data?.departments || departmentsRes.data?.data || [];

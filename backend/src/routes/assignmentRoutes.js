@@ -438,6 +438,7 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
     college_id,
     laboratory_id,
     location,
+    quantity: requestedQuantity = 1,
     expected_return_date,
     condition_at_assignment,
     purpose,
@@ -446,6 +447,7 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
     expectedReturnDate: expectedReturnDateInput,
   } = req.body;
   const assetId = Number(asset_id);
+  const quantity = Number(requestedQuantity);
   const assignedToType = String(assigned_to_type || req.body.assignedToType || 'user').trim().toLowerCase();
   const assignedToId = Number(assigned_to_id ?? assigned_to ?? req.body.assignedToId);
   const departmentId = Number(department_id || (assignedToType === 'department' ? assignedToId : 0)) || null;
@@ -458,6 +460,7 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
   const requestedExpectedReturnDate = expected_return_date ?? expectedReturnDateInput;
 
   if (!Number.isInteger(assetId) || assetId <= 0) return res.status(400).json({ success: false, message: 'A valid asset ID is required' });
+  if (!Number.isSafeInteger(quantity) || quantity <= 0) return res.status(400).json({ success: false, message: 'A positive whole-number quantity is required.' });
   if (!allowedRecipientTypes.has(assignedToType)) return res.status(400).json({ success: false, message: 'Assigned To type must be User, Department or Laboratory.' });
   if (!Number.isInteger(assignedToId) || assignedToId <= 0) return res.status(400).json({ success: false, message: 'Select a valid Assigned To record.' });
   if (assignedToType === 'laboratory' && !departmentId) return res.status(400).json({ success: false, message: 'Select the parent department for this laboratory.' });
@@ -576,21 +579,28 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
       return res.status(403).json({ success: false, message: 'Department is outside your organization scope' });
     }
 
-    const activeAssignment = await Assignment.findOne({ where: { assetId, status: 'active' }, transaction, lock: transaction.LOCK.UPDATE });
-    if (activeAssignment) {
-      await transaction.rollback();
-      return res.status(409).json({ success: false, message: 'Asset is already assigned' });
-    }
-
     const currentStatus = String(asset.status || '').toLowerCase().replace(/[_ ]/g, '-');
-    if (currentStatus !== 'available') {
+    const serializedAsset = Boolean(String(asset.serialNumber || '').trim());
+    if (!['available', 'in-store', 'active', 'assigned', 'reserved', 'in-use', 'issued'].includes(currentStatus)) {
       await transaction.rollback();
       return res.status(409).json({ success: false, message: `Asset cannot be assigned while its status is ${asset.status}` });
     }
 
-    if (inventory.availableQuantity < 1) {
+    if (serializedAsset && quantity !== 1) {
       await transaction.rollback();
-      return res.status(409).json({ success: false, message: 'Asset is not available in inventory' });
+      return res.status(409).json({ success: false, message: 'Serialized assets can only be assigned one unit at a time.' });
+    }
+    if (serializedAsset) {
+      const activeAssignment = await Assignment.findOne({ where: { assetId, status: 'active' }, transaction, lock: transaction.LOCK.UPDATE });
+      if (activeAssignment) {
+        await transaction.rollback();
+        return res.status(409).json({ success: false, message: 'Asset is already assigned' });
+      }
+    }
+
+    if (Number(inventory.availableQuantity) < quantity) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'Insufficient available inventory quantity.' });
     }
 
     const effectiveDepartmentId = departmentId || (assignedToType === 'user' ? assignee?.departmentId || null : null);
@@ -607,9 +617,10 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
       purpose: purpose || '',
     });
 
-    await inventory.update({ availableQuantity: inventory.availableQuantity - 1 }, { transaction });
+    const remainingAvailableQuantity = Number(inventory.availableQuantity) - quantity;
+    await inventory.update({ availableQuantity: remainingAvailableQuantity }, { transaction });
     await asset.update({
-      status: 'assigned',
+      status: remainingAvailableQuantity > 0 ? 'available' : 'assigned',
       ...(assignmentLocation ? { location: assignmentLocation } : {}),
       ...(effectiveDepartmentId ? { departmentId: effectiveDepartmentId } : {}),
       ...(laboratory ? { roomId: laboratory.id } : {}),
@@ -617,6 +628,7 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
 
     const assignment = await Assignment.create({
       assetId,
+      quantity,
       assignedTo: assignedToType === 'user' ? assignedToId : null,
       assignedToType,
       assignedToId,
@@ -636,7 +648,7 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
       assetId,
       userId: actorId,
       type: 'issue',
-      quantity: 1,
+      quantity,
       reason: 'Asset assignment',
       notes: notes || remarks || '',
     }, { transaction });
@@ -651,7 +663,7 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
       referenceType: 'assignment',
       referenceId: assignment.id,
       performedBy: actorId,
-      notes: JSON.stringify({ quantity: 1, departmentId: effectiveDepartmentId || null, purpose: purpose || '' }),
+      notes: JSON.stringify({ quantity, departmentId: effectiveDepartmentId || null, purpose: purpose || '' }),
     }, { transaction });
 
     await createAuditLog({
@@ -661,14 +673,14 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
       entity: `asset:${assetId}`,
       entityId: assetId,
       oldValue: { status: currentStatus, holder: null },
-      newValue: { status: 'assigned', assignment: assignment.toJSON() },
+      newValue: { status: remainingAvailableQuantity > 0 ? 'available' : 'assigned', assignment: assignment.toJSON() },
       details: {
         assignmentId: assignment.id,
         assetId,
         ip: req.ip,
         sessionId: req.sessionID || null,
         previousStatus: currentStatus,
-        newStatus: 'assigned',
+        newStatus: remainingAvailableQuantity > 0 ? 'available' : 'assigned',
         assignedTo: { type: assignedToType, id: assignedToId },
         departmentId: effectiveDepartmentId,
         location: assignmentLocation,
@@ -741,12 +753,22 @@ router.post('/:id/return', ...canManageAssignments, resolveAssignmentOrganizatio
       await transaction.rollback();
       return res.status(409).json({ success: false, message: 'Only an active assignment can be returned.' });
     }
+    const returnQuantity = Number(assignment.quantity || 1);
+    if (!Number.isSafeInteger(returnQuantity) || returnQuantity <= 0
+      || Number(inventory.availableQuantity || 0) + Number(inventory.reservedQuantity || 0) + Number(inventory.damagedQuantity || 0) + returnQuantity > Number(inventory.quantity || 0)) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'The assignment quantity cannot be returned without exceeding recorded inventory.' });
+    }
     const returnedAt = new Date();
     const previousValue = assignment.toJSON();
     await assignment.update({ status: 'returned', workflowStatus: 'returned', returnedAt }, { transaction });
-    await inventory.update({ availableQuantity: inventory.availableQuantity + 1 }, { transaction });
-    await asset.update({ status: 'available' }, { transaction });
-    await InventoryTransaction.create({ inventoryId: inventory.id, assetId: assignment.assetId, userId: req.user.id, type: 'return', quantity: 1, reason: 'Asset returned', notes: req.body.notes || '' }, { transaction });
+    const availableQuantity = Number(inventory.availableQuantity) + returnQuantity;
+    await inventory.update({ availableQuantity }, { transaction });
+    const assetStatus = ['disposed', 'deleted', 'archived', 'quarantined', 'damaged', 'retired', 'missing', 'lost'].includes(String(asset.status || '').toLowerCase())
+      ? asset.status
+      : availableQuantity > 0 ? 'available' : 'assigned';
+    await asset.update({ status: assetStatus }, { transaction });
+    await InventoryTransaction.create({ inventoryId: inventory.id, assetId: assignment.assetId, userId: req.user.id, type: 'return', quantity: returnQuantity, reason: 'Asset returned', notes: req.body.notes || '' }, { transaction });
     await AssetMovement.create({
       assetId: assignment.assetId,
       movementType: 'return',
@@ -757,7 +779,7 @@ router.post('/:id/return', ...canManageAssignments, resolveAssignmentOrganizatio
       referenceType: 'assignment',
       referenceId: assignment.id,
       performedBy: req.user.id,
-      notes: JSON.stringify({ quantity: 1 }),
+      notes: JSON.stringify({ quantity: returnQuantity }),
     }, { transaction });
     await createAuditLog({
       userId: req.user.id,
@@ -766,7 +788,7 @@ router.post('/:id/return', ...canManageAssignments, resolveAssignmentOrganizatio
       entity: `assignment:${assignment.id}`,
       entityId: assignment.id,
       oldValue: previousValue,
-      newValue: { ...assignment.toJSON(), assetStatus: 'available' },
+      newValue: { ...assignment.toJSON(), assetStatus },
       details: { assetId: assignment.assetId, ip: req.ip, sessionId: req.sessionID || null },
       transaction,
     });

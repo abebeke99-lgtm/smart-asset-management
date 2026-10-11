@@ -1,5 +1,5 @@
 const express = require('express');
-const { getDashboard, getHistory, getInventory, getInventoryDetail, exportInventory, getLowStock, getAvailableAssets, getStockAdjustments, getReceipts } = require('../controllers/storeController');
+const { getDashboard, getHistory, getInventory, getInventoryDetail, exportInventory, getLowStock, updateReorderLevel, getAvailableAssets, getStockAdjustments, getReceipts } = require('../controllers/storeController');
 const { createStockAdjustment, createStockAddition, createReceipt, getReceiptSuppliers } = require('../controllers/inventoryController');
 const verification = require('../controllers/verificationController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
@@ -32,6 +32,7 @@ router.get('/inventory', requireAuth, requireRole('store_manager'), ensureStoreS
 router.get('/inventory/:id', requireAuth, requireRole('store_manager'), ensureStoreScope, getInventoryDetail);
 router.get('/available-assets', requireAuth, requireRole('store_manager'), ensureStoreScope, getAvailableAssets);
 router.get('/low-stock', requireAuth, requireRole('store_manager'), ensureStoreScope, getLowStock);
+router.patch('/inventory/:id/reorder-level', requireAuth, requireRole('store_manager'), ensureStoreScope, updateReorderLevel);
 router.get('/stock-adjustments', requireAuth, requireRole('store_manager'), ensureStoreScope, getStockAdjustments);
 router.post('/stock-adjustments', requireAuth, requireRole('store_manager'), ensureStoreScope, createStockAdjustment);
 router.post('/stock-additions', requireAuth, requireRole('store_manager'), ensureStoreScope, createStockAddition);
