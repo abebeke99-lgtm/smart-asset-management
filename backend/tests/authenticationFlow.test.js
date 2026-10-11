@@ -3,17 +3,19 @@ const assert = require('node:assert/strict');
 const { randomBytes } = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { Op } = require('sequelize');
 const { User, Config, AuditLog, UserActivityLog, UserRole, Role, RolePermission } = require('../src/models');
 const { login } = require('../src/controllers/authController');
 const verificationController = require('../src/controllers/verificationController');
 const { initializeInitialAdmin } = require('../src/services/initialAdminService');
 const { repairExistingAdminPassword } = require('../src/scripts/repairExistingAdminPassword');
+const { getJwtSecret } = require('../src/config/jwt');
 
-const makeTestPassword = () => `Test-${randomBytes(24).toString('hex')}!Aa1`;
+const makeTestPassword = () => `Test${randomBytes(5).toString('hex')}1!`;
 const testPassword = makeTestPassword();
 const jwtSecret = 'test-only-jwt-secret';
 
-const makeUser = async ({ password = testPassword, active = true } = {}) => ({
+const makeUser = async ({ password = testPassword, active = true, status = 'active' } = {}) => ({
   id: 7,
   username: 'admin',
   email: 'admin@bekelei.com',
@@ -22,12 +24,13 @@ const makeUser = async ({ password = testPassword, active = true } = {}) => ({
   role: 'admin',
   department: 'Administration',
   active,
+  status,
   sessionVersion: 0,
   update: async function update(values) { Object.assign(this, values); },
 });
 
-const invokeLogin = async (user) => {
-  let queryOptions;
+const invokeLogin = async (user, credentials = {}, findOne = async () => user) => {
+  const queryCalls = [];
   const previous = {
     findOne: User.findOne,
     findByPk: Config.findByPk,
@@ -40,8 +43,8 @@ const invokeLogin = async (user) => {
   };
 
   User.findOne = async (options) => {
-    queryOptions = options;
-    return user;
+    queryCalls.push(options);
+    return findOne(options);
   };
   Config.findByPk = async () => null;
   AuditLog.create = async () => ({});
@@ -59,8 +62,8 @@ const invokeLogin = async (user) => {
   };
 
   try {
-    await login({ body: { username: 'admin', password: testPassword }, headers: {}, ip: '127.0.0.1' }, response);
-    return { response, queryOptions };
+    await login({ body: { username: 'admin', password: testPassword, ...credentials }, headers: {}, ip: '127.0.0.1' }, response);
+    return { response, queryOptions: queryCalls[queryCalls.length - 1], queryCalls };
   } finally {
     User.findOne = previous.findOne;
     Config.findByPk = previous.findByPk;
@@ -86,32 +89,56 @@ test('valid login returns a JWT and the authentication query includes the passwo
   assert.equal(queryOptions.attributes, undefined);
 });
 
-test('jwt secret falls back to a stable development value when no explicit secret is configured', () => {
+test('valid email login is accepted', async () => {
+  const user = await makeUser();
+  const { response, queryOptions } = await invokeLogin(user, { username: user.email });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.success, true);
+  assert.deepEqual(queryOptions.where[Op.or], [{ username: user.email }, { email: user.email }]);
+});
+
+test('login matches email case-insensitively and ignores surrounding identifier whitespace', async () => {
+  const user = await makeUser();
+  let lookupCount = 0;
+  const { response, queryCalls } = await invokeLogin(
+    user,
+    { username: ` ${user.email.toUpperCase()} ` },
+    async () => {
+      lookupCount += 1;
+      return lookupCount === 1 ? null : user;
+    },
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.success, true);
+  assert.equal(queryCalls.length, 2);
+  assert.equal(queryCalls[1].where[Op.or].length, 2);
+});
+
+test('JWT secret is required in every environment and ignores development-only fallback values', () => {
+  const previousNodeEnvironment = process.env.NODE_ENV;
   const previousSecret = process.env.JWT_SECRET;
   const previousDevSecret = process.env.JWT_DEV_SECRET;
-  const jwtConfigPath = require.resolve('../src/config/jwt');
 
-  const restore = () => {
-    delete require.cache[jwtConfigPath];
+  try {
+    process.env.NODE_ENV = 'development';
+    delete process.env.JWT_SECRET;
+    process.env.JWT_DEV_SECRET = 'configured-dev-secret';
+    assert.throws(getJwtSecret, /JWT_SECRET must be configured before starting the server/);
+
+    process.env.NODE_ENV = 'production';
+    assert.throws(getJwtSecret, /JWT_SECRET must be configured before starting the server/);
+
+    process.env.JWT_SECRET = 'test-only-configured-secret';
+    assert.equal(getJwtSecret(), 'test-only-configured-secret');
+  } finally {
+    if (previousNodeEnvironment === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnvironment;
     if (previousSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previousSecret;
     if (previousDevSecret === undefined) delete process.env.JWT_DEV_SECRET;
     else process.env.JWT_DEV_SECRET = previousDevSecret;
-  };
-
-  try {
-    delete require.cache[jwtConfigPath];
-    delete process.env.JWT_SECRET;
-    process.env.JWT_DEV_SECRET = '';
-    const { getJwtSecret: fallbackGetJwtSecret } = require('../src/config/jwt');
-    assert.equal(fallbackGetJwtSecret(), 'dev-smart-asset-management-secret-2026-10-01');
-
-    delete require.cache[jwtConfigPath];
-    process.env.JWT_DEV_SECRET = 'configured-dev-secret';
-    const { getJwtSecret: configuredGetJwtSecret } = require('../src/config/jwt');
-    assert.equal(configuredGetJwtSecret(), 'configured-dev-secret');
-  } finally {
-    restore();
   }
 });
 
@@ -156,6 +183,44 @@ test('inactive users receive 403 before password comparison', async () => {
   assert.equal(response.statusCode, 403);
 });
 
+test('accounts with inactive status receive 403 before password comparison', async () => {
+  const user = await makeUser({ status: 'suspended' });
+  const { response } = await invokeLogin(user);
+  assert.equal(response.statusCode, 403);
+});
+
+test('missing login credentials receive 400', async () => {
+  const { response } = await invokeLogin(null, { username: '', password: testPassword });
+  assert.equal(response.statusCode, 400);
+});
+
+test('database connection failures return a generic error and sanitized server diagnostics', async () => {
+  const originalError = console.error;
+  const logged = [];
+  console.error = (...args) => logged.push(args);
+
+  try {
+    const { response } = await invokeLogin(null, {}, async () => {
+      throw Object.assign(new Error('private database detail'), {
+        name: 'SequelizeConnectionError',
+        code: 'ECONNREFUSED',
+      });
+    });
+
+    assert.equal(response.statusCode, 500);
+    assert.equal(response.body.message, 'Unable to complete login. Please try again later.');
+    assert.equal(logged[0][0], 'Login database operation failed.');
+    assert.deepEqual(logged[0][1], {
+      errorType: 'SequelizeConnectionError',
+      code: 'ECONNREFUSED',
+      requestId: null,
+    });
+    assert.doesNotMatch(JSON.stringify(logged), /private database detail|admin@bekelei\.com|Test/);
+  } finally {
+    console.error = originalError;
+  }
+});
+
 test('initial admin creation stores one active admin with a bcrypt hash and is idempotent', async () => {
   const users = [];
   let createCalls = 0;
@@ -188,17 +253,18 @@ test('initial admin creation stores one active admin with a bcrypt hash and is i
   }
 
   assert.deepEqual(first, { created: true, userId: 1 });
-  assert.deepEqual(second, { created: false, userId: 1, passwordUpdated: true });
+  assert.deepEqual(second, { created: false, userId: 1, passwordUpdated: false });
   assert.equal(createCalls, 1);
   assert.equal(users.length, 1);
   assert.match(firstHash, /^\$2[aby]\$/);
-  assert.notEqual(users[0].password, firstHash);
-  assert.equal(await bcrypt.compare(updatedPassword, users[0].password), true);
+  assert.equal(users[0].password, firstHash);
+  assert.equal(await bcrypt.compare(testPassword, users[0].password), true);
+  assert.equal(await bcrypt.compare(updatedPassword, users[0].password), false);
   assert.equal(users[0].active, true);
   assert.equal(users[0].role, 'admin');
 });
 
-test('existing admin is repaired to the configured initial password when it does not match', async () => {
+test('startup initialization never changes an existing admin password', async () => {
   const configuredPassword = makeTestPassword();
   const oldPassword = makeTestPassword();
   const existingAdmin = {
@@ -223,9 +289,9 @@ test('existing admin is repaired to the configured initial password when it does
       },
     });
 
-    assert.deepEqual(result, { created: false, userId: 99, passwordUpdated: true });
-    assert.equal(await bcrypt.compare(configuredPassword, existingAdmin.password), true);
-    assert.equal(await bcrypt.compare(oldPassword, existingAdmin.password), false);
+    assert.deepEqual(result, { created: false, userId: 99, passwordUpdated: false });
+    assert.equal(await bcrypt.compare(configuredPassword, existingAdmin.password), false);
+    assert.equal(await bcrypt.compare(oldPassword, existingAdmin.password), true);
   } finally {
     if (previousPassword === undefined) delete process.env.INITIAL_ADMIN_PASSWORD;
     else process.env.INITIAL_ADMIN_PASSWORD = previousPassword;

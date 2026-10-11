@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Activity, Eye, EyeOff, KeyRound, Pencil, Power, Trash2 } from "lucide-react";
 import { toast } from "react-toastify";
 import apiClient, { getApiErrorMessage } from "../../services/apiClient";
+import { getPasswordIssue, getPasswordConfirmationIssue, PASSWORD_VALIDATION_MESSAGES } from "../../utils/passwordValidation";
 
 const USERS_API = "/api/users";
 const COLLEGES_API = "/api/colleges";
@@ -211,6 +212,8 @@ export default function Users() {
   const [colleges, setColleges] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0, suspended: 0 });
+  const [storeManagerCount, setStoreManagerCount] = useState(0);
+  const [storeManagerLimit, setStoreManagerLimit] = useState(8);
   const [page, setPage] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [totalUsers, setTotalUsers] = useState(0);
@@ -263,11 +266,12 @@ export default function Users() {
       if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
       if (statusFilter !== "All") params.set("status", statusFilter.toLowerCase());
       if (roleFilter !== "All") params.set("role", roleFilter);
-      const [usersResponse, statsResponse, collegesResponse, rolesResponse] = await Promise.all([
+      const [usersResponse, statsResponse, collegesResponse, rolesResponse, storeManagerResponse] = await Promise.all([
         apiRequest(`${USERS_API}?${params.toString()}`),
         apiRequest(`${USERS_API}/stats`),
         apiRequest(`${COLLEGES_API}?limit=100`),
         apiRequest("/api/roles"),
+        apiRequest(`${USERS_API}/store-manager-accounts`),
       ]);
 
       const userRows = extractArray(usersResponse, ["users"]).map(normalizeUser);
@@ -281,6 +285,8 @@ export default function Users() {
         id: item?.name ?? item?.role ?? `role-${index}`,
         name: item?.displayName ?? item?.name ?? item?.role ?? "",
       })));
+      setStoreManagerCount(Number(storeManagerResponse?.data?.count) || 0);
+      setStoreManagerLimit(Number(storeManagerResponse?.data?.limit) || 8);
       setColleges(extractArray(collegesResponse, ["colleges"]).map(normalizeOption));
     } catch (err) {
       setError(
@@ -326,6 +332,8 @@ export default function Users() {
   }, [showForm, form.collegeId]);
 
   const filteredUsers = useMemo(() => users, [users]);
+  const storeManagerCapacityReached = storeManagerCount >= storeManagerLimit;
+  const selectedRoleIsStoreManager = String(form.roleId).trim().toLowerCase().replace(/[\s-]+/g, "_") === "store_manager";
   const formRoles = editingUser
     ? roles
     : roles.filter((role) => !['staff', 'student', 'technical_assistant'].includes(
@@ -384,11 +392,25 @@ export default function Users() {
       [name]: value,
       ...(name === "collegeId" ? { departmentId: "" } : {}),
     }));
-    setFieldErrors((previous) => ({
-      ...previous,
-      [name]: "",
-      ...(name === "collegeId" ? { departmentId: "" } : {}),
-    }));
+    setFieldErrors((previous) => {
+      const next = { ...previous, [name]: "" };
+      if (name === "collegeId") next.departmentId = "";
+      if (name === "password" || name === "confirmPassword") {
+        const nextPassword = name === "password" ? value : form.password;
+        const nextConfirmation = name === "confirmPassword" ? value : form.confirmPassword;
+        const passwordIssue = getPasswordIssue(nextPassword);
+        if (previous.password || nextPassword) {
+          next.password = passwordIssue ? PASSWORD_VALIDATION_MESSAGES[passwordIssue] : "";
+        }
+        if (previous.confirmPassword || nextConfirmation) {
+          const confirmationIssue = getPasswordConfirmationIssue(nextPassword, nextConfirmation);
+          next.confirmPassword = confirmationIssue
+            ? PASSWORD_VALIDATION_MESSAGES[confirmationIssue === "required" ? "confirmRequired" : confirmationIssue]
+            : "";
+        }
+      }
+      return next;
+    });
     setError("");
   };
 
@@ -401,15 +423,17 @@ export default function Users() {
     else if (form.username.trim().length < 3) nextErrors.username = "Username must be at least 3 characters.";
     else if (form.username.trim().length > 100) nextErrors.username = "Username must be 100 characters or fewer.";
     if (!form.roleId) nextErrors.roleId = "Role is required.";
-    if (!editingUser && !form.password) nextErrors.password = "Password is required.";
-    if (form.password || form.confirmPassword) {
-      if (form.password.length < 8) nextErrors.password = "Password must be at least 8 characters.";
-      else if (!/[A-Z]/.test(form.password)) nextErrors.password = "Password must contain an uppercase letter.";
-      else if (!/[a-z]/.test(form.password)) nextErrors.password = "Password must contain a lowercase letter.";
-      else if (!/\d/.test(form.password)) nextErrors.password = "Password must contain a number.";
-      else if (!/[^A-Za-z0-9]/.test(form.password)) nextErrors.password = "Password must contain a special character.";
+    if (!editingUser && selectedRoleIsStoreManager && storeManagerCapacityReached) {
+      nextErrors.roleId = `The maximum of ${storeManagerLimit} Store Manager accounts has been reached.`;
     }
-    if ((form.password || form.confirmPassword) && form.password !== form.confirmPassword) nextErrors.confirmPassword = "Password and Confirm Password must match.";
+    if (!editingUser || form.password || form.confirmPassword) {
+      const passwordIssue = getPasswordIssue(form.password);
+      if (passwordIssue) nextErrors.password = PASSWORD_VALIDATION_MESSAGES[passwordIssue];
+      const confirmationIssue = getPasswordConfirmationIssue(form.password, form.confirmPassword);
+      if (confirmationIssue) {
+        nextErrors.confirmPassword = PASSWORD_VALIDATION_MESSAGES[confirmationIssue === "required" ? "confirmRequired" : confirmationIssue];
+      }
+    }
     if (form.email && form.email.length > 255) nextErrors.email = "Email must be 255 characters or fewer.";
     else if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) nextErrors.email = "Enter a valid email address.";
     const phoneDigits = form.phone.replace(/\D/g, "");
@@ -526,16 +550,11 @@ export default function Users() {
 
   const resetUserPassword = async (event) => {
     event.preventDefault();
-    if (!temporaryPassword) {
-      setResetError("Temporary password is required.");
-      return;
-    }
-    if (temporaryPassword.length < 8) {
-      setResetError("Temporary password must be at least 8 characters.");
-      return;
-    }
-    if (temporaryPassword !== confirmTemporaryPassword) {
-      setResetError("Temporary passwords must match.");
+    const passwordIssue = getPasswordIssue(temporaryPassword);
+    const confirmationIssue = getPasswordConfirmationIssue(temporaryPassword, confirmTemporaryPassword);
+    if (passwordIssue || confirmationIssue) {
+      const issue = passwordIssue || confirmationIssue;
+      setResetError(PASSWORD_VALIDATION_MESSAGES[issue === "required" && !passwordIssue ? "confirmRequired" : issue]);
       return;
     }
 
@@ -1177,6 +1196,12 @@ export default function Users() {
             </div>
           </div>
 
+          <div className="summary-card" aria-live="polite">
+            <div className="summary-label">Store Manager Accounts</div>
+            <div className="summary-value">{storeManagerCount} of {storeManagerLimit}</div>
+            <div className="summary-label">registered</div>
+          </div>
+
           <div className="summary-card">
             <div className="summary-label">
               Active Users
@@ -1528,7 +1553,8 @@ export default function Users() {
                         onChange={updateForm}
                         autoComplete="new-password"
                         required={!editingUser}
-                        minLength={editingUser ? undefined : 8}
+                        minLength={8}
+                        maxLength={16}
                         aria-invalid={Boolean(fieldErrors.password)}
                         aria-required={!editingUser}
                       />
@@ -1557,7 +1583,8 @@ export default function Users() {
                         value={form.confirmPassword}
                         onChange={updateForm}
                         autoComplete="new-password"
-                        required={!editingUser}
+                        required={!editingUser || Boolean(form.password)}
+                        maxLength={16}
                         aria-invalid={Boolean(fieldErrors.confirmPassword)}
                         aria-required={!editingUser}
                       />
@@ -1626,6 +1653,11 @@ export default function Users() {
                     ))}
                   </select>
                   {fieldErrors.roleId && <div className="field-error">{fieldErrors.roleId}</div>}
+                  {!editingUser && selectedRoleIsStoreManager && storeManagerCapacityReached && (
+                    <div className="field-error" role="alert">
+                      The maximum of {storeManagerLimit} Store Manager accounts has been reached.
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1734,7 +1766,7 @@ export default function Users() {
                 <button
                   type="submit"
                   className="primary-button"
-                  disabled={saving || loading || departmentsLoading || roles.length === 0}
+                  disabled={saving || loading || departmentsLoading || roles.length === 0 || (!editingUser && selectedRoleIsStoreManager && storeManagerCapacityReached)}
                 >
                   {saving
                     ? "Saving..."
@@ -1929,8 +1961,20 @@ export default function Users() {
                       type={showTemporaryPassword ? "text" : "password"}
                       className="form-input"
                       value={temporaryPassword}
-                      onChange={(event) => setTemporaryPassword(event.target.value)}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setTemporaryPassword(value);
+                        if (resetError || value || confirmTemporaryPassword) {
+                          const passwordIssue = getPasswordIssue(value);
+                          const confirmationIssue = getPasswordConfirmationIssue(value, confirmTemporaryPassword);
+                          const issue = passwordIssue || confirmationIssue;
+                          setResetError(issue ? PASSWORD_VALIDATION_MESSAGES[issue === "required" && !passwordIssue ? "confirmRequired" : issue] : "");
+                        }
+                      }}
                       autoComplete="new-password"
+                      required
+                      minLength={8}
+                      maxLength={16}
                       aria-required="true"
                     />
                     <button
@@ -1952,8 +1996,19 @@ export default function Users() {
                       type={showConfirmTemporaryPassword ? "text" : "password"}
                       className="form-input"
                       value={confirmTemporaryPassword}
-                      onChange={(event) => setConfirmTemporaryPassword(event.target.value)}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setConfirmTemporaryPassword(value);
+                        if (resetError || value || temporaryPassword) {
+                          const passwordIssue = getPasswordIssue(temporaryPassword);
+                          const confirmationIssue = getPasswordConfirmationIssue(temporaryPassword, value);
+                          const issue = passwordIssue || confirmationIssue;
+                          setResetError(issue ? PASSWORD_VALIDATION_MESSAGES[issue === "required" && !passwordIssue ? "confirmRequired" : issue] : "");
+                        }
+                      }}
                       autoComplete="new-password"
+                      required
+                      maxLength={16}
                       aria-required="true"
                     />
                     <button

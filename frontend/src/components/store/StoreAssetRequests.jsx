@@ -1,52 +1,86 @@
 /* eslint-disable no-unused-vars, no-dupe-keys, no-template-curly-in-string */
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Ban,
+  CheckCircle,
+  CircleX,
+  Clock,
+  Eye,
+  History,
+  LoaderCircle,
+  PlusCircle,
+  RefreshCw,
+  Search,
+  Send,
+  X,
+  XCircle
+} from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useLanguage } from '../../contexts/UiContext';
 import { getDepartmentLabel } from '../../utils/department';
 import { apiClient } from '../../utils/api';
 
-const fetchAssets = async () => {
-  const firstPage = await apiClient.get('/api/assets', {
-    params: { page: 1, limit: 50 }
+const normalizeListResponse = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.users)) return payload.users;
+  if (Array.isArray(payload?.assets)) return payload.assets;
+  if (Array.isArray(payload?.departments)) return payload.departments;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+};
+
+const fetchPages = async (url, pageSize, readItems, pageCount) => {
+  const firstPage = await apiClient.get(url, {
+    params: { page: 1, limit: pageSize, ...pageCount.firstParams }
   });
-  const extractAssets = (data) => {
-    const assetData = data?.assets || data?.data || [];
-    return Array.isArray(assetData) ? assetData : [];
-  };
-  const pages = Number(firstPage.data?.pagination?.pages) || 1;
+  const firstPayload = firstPage.data ?? firstPage;
+  const pages = Number(pageCount.pages(firstPayload)) || 1;
   const remainingPages = await Promise.all(
-    Array.from({ length: Math.max(0, pages - 1) }, (_, index) => apiClient.get('/api/assets', {
-      params: { page: index + 2, limit: 50 }
+    Array.from({ length: Math.max(0, pages - 1) }, (_, index) => apiClient.get(url, {
+      params: { page: index + 2, limit: pageSize, ...pageCount.nextParams }
     }))
   );
-
   return [
-    ...extractAssets(firstPage.data),
-    ...remainingPages.flatMap((response) => extractAssets(response.data))
+    ...readItems(firstPayload),
+    ...remainingPages.flatMap((response) => readItems(response.data ?? response))
   ];
 };
 
-const fetchUsers = async () => {
-  const firstPage = await apiClient.get('/api/users', {
-    params: { page: 1, limit: 100 }
-  });
-  const extractUsers = (data) => {
-    const userData = data?.users || data?.data || [];
-    return Array.isArray(userData) ? userData : [];
-  };
-  const pages = Number(firstPage.data?.pagination?.pages) || 1;
-  const remainingPages = await Promise.all(
-    Array.from({ length: Math.max(0, pages - 1) }, (_, index) => apiClient.get('/api/users', {
-      params: { page: index + 2, limit: 100 }
-    }))
-  );
+const fetchAssets = () => fetchPages(
+  '/api/assets',
+  50,
+  (response) => normalizeListResponse(response),
+  {
+    firstParams: {},
+    nextParams: {},
+    pages: (response) => response?.pagination?.pages || response?.data?.pagination?.pages || response?.pages || 1
+  }
+);
 
-  return [
-    ...extractUsers(firstPage.data),
-    ...remainingPages.flatMap((response) => extractUsers(response.data))
-  ];
-};
+const fetchUsers = () => fetchPages(
+  '/api/users',
+  100,
+  (response) => normalizeListResponse(response),
+  {
+    firstParams: {},
+    nextParams: {},
+    pages: (response) => response?.pagination?.pages || response?.data?.pagination?.pages || response?.pages || 1
+  }
+);
+
+const fetchDepartments = () => fetchPages(
+  '/api/departments',
+  100,
+  (response) => normalizeListResponse(response),
+  {
+    firstParams: {},
+    nextParams: {},
+    pages: (response) => response?.pagination?.pages || response?.data?.pagination?.pages || response?.pages || 1
+  }
+);
 
 const StoreAssetRequests = () => {
   const { language, theme } = useLanguage();
@@ -62,6 +96,8 @@ const StoreAssetRequests = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [formErrors, setFormErrors] = useState({});
 
   const [activeTab, setActiveTab] = useState('new');
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -123,6 +159,10 @@ const StoreAssetRequests = () => {
         approve: 'አጽድቅ',
         reject: 'ከልክል',
         close: 'ዝጋ',
+        discardConfirm: 'ያልተላኩ ለውጦችን ሳይቀመጡ መውጣት ይፈልጋሉ?',
+        previous: 'ቀዳሚ',
+        next: 'ቀጣይ',
+        page: 'ገጽ',
         noRequests: 'ምንም ጥያቄ አልተገኘም',
         loading: 'በመጫን ላይ...',
         success: 'የንብረት ጥያቄ በተሳካ ሁኔታ ተፈጥሯል',
@@ -185,6 +225,10 @@ const StoreAssetRequests = () => {
         approve: 'Approve',
         reject: 'Reject',
         close: 'Close',
+        discardConfirm: 'Discard your unsaved request changes?',
+        previous: 'Previous',
+        next: 'Next',
+        page: 'Page',
         noRequests: 'No requests found',
         loading: 'Loading...',
         success: 'Asset request created successfully',
@@ -227,7 +271,7 @@ const StoreAssetRequests = () => {
       Promise.resolve().then(() => apiClient.get('/api/approvals')),
       Promise.resolve().then(fetchAssets),
       Promise.resolve().then(fetchUsers),
-      Promise.resolve().then(() => apiClient.get('/api/departments'))
+      Promise.resolve().then(fetchDepartments)
     ]);
 
     if (requestsRes.status === 'fulfilled') {
@@ -240,10 +284,7 @@ const StoreAssetRequests = () => {
 
     if (assetsRes.status === 'fulfilled') setAssets(assetsRes.value);
     if (usersRes.status === 'fulfilled') setUsers(usersRes.value);
-    if (departmentsRes.status === 'fulfilled') {
-      const deptData = departmentsRes.value.data?.departments || departmentsRes.value.data?.data || [];
-      setDepartments(Array.isArray(deptData) ? deptData : []);
-    }
+    if (departmentsRes.status === 'fulfilled') setDepartments(departmentsRes.value);
 
     setLoading(false);
   }, [t.error]);
@@ -333,8 +374,17 @@ const StoreAssetRequests = () => {
       const status = getStatus(request);
 
       const matchesStatus =
-        statusFilter === 'all' ||
-        status.toLowerCase() === statusFilter.toLowerCase();
+        activeTab === 'history'
+          ? statusFilter === 'all' || status.toLowerCase() === statusFilter.toLowerCase()
+          : activeTab === 'pending'
+            ? status === 'Pending'
+            : activeTab === 'approved'
+              ? status === 'Approved'
+              : activeTab === 'rejected'
+                ? status === 'Rejected'
+                : activeTab === 'cancelled'
+                  ? status === 'Cancelled'
+                  : false;
 
       if (!matchesStatus) return false;
 
@@ -359,42 +409,26 @@ const StoreAssetRequests = () => {
     requests,
     search,
     statusFilter,
+    activeTab,
     assets,
     users,
     departments
   ]);
 
-  const pendingRequests = useMemo(
-    () =>
-      requests.filter(
-        (request) => getStatus(request) === 'Pending'
-      ),
-    [requests]
-  );
+  const pendingRequests = useMemo(() => requests.filter((request) => getStatus(request) === 'Pending'), [requests]);
+  const approvedRequests = useMemo(() => requests.filter((request) => getStatus(request) === 'Approved'), [requests]);
+  const rejectedRequests = useMemo(() => requests.filter((request) => getStatus(request) === 'Rejected'), [requests]);
+  const cancelledRequests = useMemo(() => requests.filter((request) => getStatus(request) === 'Cancelled'), [requests]);
 
-  const approvedRequests = useMemo(
-    () =>
-      requests.filter(
-        (request) => getStatus(request) === 'Approved'
-      ),
-    [requests]
-  );
-
-  const rejectedRequests = useMemo(
-    () =>
-      requests.filter(
-        (request) =>
-          getStatus(request) === 'Rejected'
-      ),
-    [requests]
-  );
-
-  const cancelledRequests = useMemo(
-    () =>
-      requests.filter(
-        (request) => getStatus(request) === 'Cancelled'
-      ),
-    [requests]
+  const formIsDirty = Boolean(
+    form.assetId ||
+    Number(form.quantity) !== 1 ||
+    form.departmentId ||
+    form.requestedFor ||
+    form.priority !== 'Normal' ||
+    form.requiredDate ||
+    form.purpose.trim() ||
+    form.remarks.trim()
   );
 
   const resetForm = () => {
@@ -408,38 +442,63 @@ const StoreAssetRequests = () => {
       purpose: '',
       remarks: ''
     });
+    setFormErrors({});
+  };
+
+  const changeTab = (nextTab) => {
+    if (nextTab === activeTab) return;
+    if (activeTab === 'new' && formIsDirty && !window.confirm(t.discardConfirm)) return;
+    setActiveTab(nextTab);
+    setPage(1);
+    if (activeTab === 'new') resetForm();
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'new') return undefined;
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') changeTab('history');
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [activeTab, formIsDirty, t.discardConfirm]);
+
+  const setFormField = (field, value) => {
+    setForm((current) => ({ ...current, [field]: value }));
+    setFormErrors((current) => ({ ...current, [field]: '' }));
   };
 
   const handleCreateRequest = async (event) => {
     event.preventDefault();
-
+    const errors = {};
     if (!form.assetId) {
-      toast.error(t.selectAsset);
-      return;
+      errors.assetId = t.selectAsset;
     }
-
     if (!form.departmentId) {
-      toast.error(t.selectDepartment);
-      return;
+      errors.departmentId = t.selectDepartment;
     }
-
     const quantity = Number(form.quantity);
-    if (!Number.isSafeInteger(quantity) || quantity <= 0) {
-      toast.error(
-        isAmharic
-          ? 'እባክዎ ትክክለኛ ብዛት ያስገቡ'
-          : 'Enter a valid quantity'
-      );
+    if (!Number.isFinite(quantity) || !Number.isInteger(quantity) || quantity <= 0) {
+      errors.quantity = isAmharic ? 'እባክዎ አዎንታዊ ሙሉ ቁጥር ያስገቡ' : 'Enter a valid quantity';
+    }
+    if (!form.purpose.trim()) {
+      errors.purpose = isAmharic ? 'እባክዎ ዓላማውን ያስገቡ' : 'Purpose is required';
+    }
+    const selectedAsset = assets.find((asset) => String(asset.id) === String(form.assetId));
+    const availableStock = Number(selectedAsset?.availableQuantity ?? selectedAsset?.available_quantity ?? 0);
+    if (!errors.quantity && selectedAsset && quantity > availableStock) {
+      errors.quantity = isAmharic
+        ? `ከሚገኘው ብዛት (${availableStock}) በላይ መጠየቅ አይቻልም`
+        : `Quantity exceeds available stock (${availableStock})`;
+    }
+    if (Object.values(errors).some(Boolean)) {
+      setFormErrors(errors);
+      toast.error(Object.values(errors).find(Boolean));
       return;
     }
 
     setProcessing(true);
 
     try {
-      const selectedAsset = assets.find(
-        (asset) => String(asset.id) === String(form.assetId)
-      );
-
       await apiClient.post('/api/approvals', {
         type: 'asset_issue',
         asset_id: form.assetId,
@@ -449,14 +508,15 @@ const StoreAssetRequests = () => {
         requested_for: form.requestedFor || null,
         priority: String(form.priority || 'Normal').toLowerCase(),
         required_date: form.requiredDate || null,
-        reason: (form.purpose || form.remarks || 'Asset request').trim(),
-        comment: form.remarks || ''
+        reason: form.purpose.trim(),
+        comment: form.remarks.trim()
       });
 
       toast.success(t.success);
       resetForm();
       await fetchData();
       setActiveTab('pending');
+      setPage(1);
     } catch (error) {
       toast.error(
         error?.response?.data?.message ||
@@ -582,6 +642,8 @@ const StoreAssetRequests = () => {
       setShowDetails(false);
       setSelectedRequest(null);
       await fetchData();
+      setActiveTab('cancelled');
+      setPage(1);
     } catch (error) {
       toast.error(
         error?.response?.data?.message ||
@@ -698,41 +760,23 @@ const StoreAssetRequests = () => {
   };
 
   const tabs = [
-    {
-      id: 'new',
-      label: `➕ ${t.newRequests}`,
-      count: null
-    },
-    {
-      id: 'pending',
-      label: `⏳ ${t.pending}`,
-      count: pendingRequests.length
-    },
-    {
-      id: 'approved',
-      label: `✅ ${t.approved}`,
-      count: approvedRequests.length
-    },
-    {
-      id: 'rejected',
-      label: `❌ ${t.rejected}`,
-      count: rejectedRequests.length
-    },
-    {
-      id: 'history',
-      label: `📋 ${t.history}`,
-      count: requests.length
-    }
+    { id: 'new', label: t.newRequests, shortLabel: 'New', Icon: PlusCircle, count: null },
+    { id: 'pending', label: t.pending, shortLabel: 'Pending', Icon: Clock, count: pendingRequests.length },
+    { id: 'approved', label: t.approved, shortLabel: 'Approved', Icon: CheckCircle, count: approvedRequests.length },
+    { id: 'rejected', label: t.rejected, shortLabel: 'Rejected', Icon: XCircle, count: rejectedRequests.length },
+    { id: 'cancelled', label: t.cancelled, shortLabel: 'Cancelled', Icon: Ban, count: cancelledRequests.length },
+    { id: 'history', label: t.history, shortLabel: 'History', Icon: History, count: requests.length }
   ];
 
-  const tableRequests =
-    activeTab === 'pending'
-      ? pendingRequests
-      : activeTab === 'approved'
-      ? approvedRequests
-      : activeTab === 'rejected'
-      ? rejectedRequests
-      : filteredRequests;
+  const pageSize = 10;
+  const pages = Math.max(1, Math.ceil(filteredRequests.length / pageSize));
+  const tableRequests = filteredRequests.slice((page - 1) * pageSize, page * pageSize);
+  const selectedAsset = assets.find((asset) => String(asset.id) === String(form.assetId));
+  const today = new Date().toISOString().slice(0, 10);
+
+  useEffect(() => {
+    setPage((currentPage) => Math.min(currentPage, pages));
+  }, [pages]);
 
   if (loading) {
     return (
@@ -755,7 +799,7 @@ const StoreAssetRequests = () => {
             textAlign: 'center'
           }}
         >
-          <div style={{ fontSize: 40 }}>⏳</div>
+          <LoaderCircle size={36} aria-label={t.loading} />
           <h3>{t.loading}</h3>
         </div>
       </div>
@@ -794,7 +838,7 @@ const StoreAssetRequests = () => {
               fontWeight: 800
             }}
           >
-            📝 {t.title}
+            {t.title}
           </h1>
 
           <p
@@ -811,9 +855,9 @@ const StoreAssetRequests = () => {
 
         <button
           type="button"
+          aria-label="Create new request button"
           onClick={() => {
-            setActiveTab('new');
-            resetForm();
+            changeTab('new');
           }}
           style={{
             border: 'none',
@@ -826,7 +870,7 @@ const StoreAssetRequests = () => {
             cursor: 'pointer'
           }}
         >
-          ➕ {t.newRequests}
+          <PlusCircle size={18} aria-hidden="true" /> {t.newRequests}
         </button>
       </div>
 
@@ -847,23 +891,25 @@ const StoreAssetRequests = () => {
           marginBottom: 22
         }}
       >
-        {[
-          ['📋', requests.length, t.history],
-          ['⏳', pendingRequests.length, t.pending],
-          ['✅', approvedRequests.length, t.approved],
-          ['❌', rejectedRequests.length, t.rejected],
-          ['🚫', cancelledRequests.length, t.cancelled]
-        ].map(([icon, value, label]) => (
-          <div
-            key={label}
+        {tabs.map(({ id, Icon, count, label, shortLabel }) => (
+          <button
+            key={id}
+            type="button"
+            aria-label={`${shortLabel} overview`}
+            aria-pressed={activeTab === id}
+            onClick={() => changeTab(id)}
             style={{
               ...cardStyle,
-              padding: 18
+              padding: 18,
+              display: 'block',
+              textAlign: 'left',
+              color: isDark ? '#e2e8f0' : '#1e293b',
+              cursor: 'pointer',
+              borderColor: activeTab === id ? '#3074B3' : undefined,
+              boxShadow: activeTab === id ? '0 0 0 2px rgba(48,116,179,.18)' : cardStyle.boxShadow
             }}
           >
-            <div style={{ fontSize: 24 }}>
-              {icon}
-            </div>
+            <Icon size={22} strokeWidth={2} aria-hidden="true" />
 
             <div
               style={{
@@ -872,7 +918,7 @@ const StoreAssetRequests = () => {
                 marginTop: 5
               }}
             >
-              {value}
+              {count === null ? '—' : count}
             </div>
 
             <div
@@ -885,12 +931,14 @@ const StoreAssetRequests = () => {
             >
               {label}
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
       {/* TABS */}
       <div
+        role="tablist"
+        aria-label="Request status"
         style={{
           ...cardStyle,
           padding: 6,
@@ -904,7 +952,10 @@ const StoreAssetRequests = () => {
           <button
             key={tab.id}
             type="button"
-            onClick={() => setActiveTab(tab.id)}
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            aria-label={`${tab.label} tab`}
+            onClick={() => changeTab(tab.id)}
             style={{
               border: 'none',
               borderRadius: 8,
@@ -927,6 +978,7 @@ const StoreAssetRequests = () => {
                   : '#64748b'
             }}
           >
+            <tab.Icon size={16} strokeWidth={2} aria-hidden="true" />
             {tab.label}
 
             {tab.count !== null && (
@@ -963,7 +1015,7 @@ const StoreAssetRequests = () => {
               marginBottom: 20
             }}
           >
-            ➕ {t.createRequest}
+            <PlusCircle size={20} aria-hidden="true" /> {t.createRequest}
           </h2>
 
           <form onSubmit={handleCreateRequest}>
@@ -976,18 +1028,14 @@ const StoreAssetRequests = () => {
               }}
             >
               <div>
-                <label style={labelStyle}>
+                <label htmlFor="asset-request-asset" style={labelStyle}>
                   {t.asset} *
                 </label>
 
                 <select
+                  id="asset-request-asset"
                   value={form.assetId}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      assetId: e.target.value
-                    })
-                  }
+                  onChange={(e) => setFormField('assetId', e.target.value)}
                   style={inputStyle}
                   required
                 >
@@ -996,55 +1044,46 @@ const StoreAssetRequests = () => {
                   </option>
 
                   {assets.map((asset) => (
-                    <option
-                      key={asset.id}
-                      value={asset.id}
-                    >
-                      {asset.asset_tag
-                        ? `${asset.asset_tag} - `
-                        : ''}
-                      {asset.name ||
-                        asset.asset_name ||
-                        'Unnamed Asset'}
+                    <option key={asset.id} value={asset.id}>
+                      {`#${asset.id} ${asset.assetCode || asset.asset_tag || ''} — ${asset.name || asset.asset_name || 'Unnamed Asset'} (${asset.availableQuantity ?? asset.available_quantity ?? 0} available)`}
                     </option>
                   ))}
                 </select>
+                {selectedAsset && (
+                  <small style={{ display: 'block', marginTop: 5, color: isDark ? '#94a3b8' : '#64748b' }}>
+                    {selectedAsset.availableQuantity ?? selectedAsset.available_quantity ?? 0} {t.quantity.toLowerCase()} available
+                  </small>
+                )}
+                {formErrors.assetId && <small role="alert" style={{ color: '#dc2626' }}>{formErrors.assetId}</small>}
               </div>
 
               <div>
-                <label style={labelStyle}>
+                <label htmlFor="asset-request-quantity" style={labelStyle}>
                   {t.quantity} *
                 </label>
 
                 <input
+                  id="asset-request-quantity"
                   type="number"
                   min="1"
                   step="1"
                   value={form.quantity}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      quantity: e.target.value
-                    })
-                  }
+                  onChange={(e) => setFormField('quantity', e.target.value)}
                   style={inputStyle}
                   required
                 />
+                {formErrors.quantity && <small role="alert" style={{ color: '#dc2626' }}>{formErrors.quantity}</small>}
               </div>
 
               <div>
-                <label style={labelStyle}>
+                <label htmlFor="asset-request-department" style={labelStyle}>
                   {t.department} *
                 </label>
 
                 <select
+                  id="asset-request-department"
                   value={form.departmentId}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      departmentId: e.target.value
-                    })
-                  }
+                  onChange={(e) => setFormField('departmentId', e.target.value)}
                   style={inputStyle}
                   required
                 >
@@ -1052,7 +1091,7 @@ const StoreAssetRequests = () => {
                     {t.selectDepartment}
                   </option>
 
-                  {departments.map((department) => (
+                  {departments.filter((department) => !['inactive', 'suspended', 'deleted'].includes(String(department.status || '').toLowerCase())).map((department) => (
                     <option
                       key={department.id}
                       value={department.id}
@@ -1063,21 +1102,18 @@ const StoreAssetRequests = () => {
                     </option>
                   ))}
                 </select>
+                {formErrors.departmentId && <small role="alert" style={{ color: '#dc2626' }}>{formErrors.departmentId}</small>}
               </div>
 
               <div>
-                <label style={labelStyle}>
+                <label htmlFor="asset-request-beneficiary" style={labelStyle}>
                   {t.requestedFor}
                 </label>
 
                 <select
+                  id="asset-request-beneficiary"
                   value={form.requestedFor}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      requestedFor: e.target.value
-                    })
-                  }
+                  onChange={(e) => setFormField('requestedFor', e.target.value)}
                   style={inputStyle}
                 >
                   <option value="">
@@ -1089,27 +1125,25 @@ const StoreAssetRequests = () => {
                       key={u.id}
                       value={u.id}
                     >
-                      {u.full_name ||
+                      {u.fullName ||
+                        u.full_name ||
+                        u.name ||
                         u.username ||
-                        u.name}
+                        `User #${u.id}`}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label style={labelStyle}>
+                <label htmlFor="asset-request-priority" style={labelStyle}>
                   {t.priority}
                 </label>
 
                 <select
+                  id="asset-request-priority"
                   value={form.priority}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      priority: e.target.value
-                    })
-                  }
+                  onChange={(e) => setFormField('priority', e.target.value)}
                   style={inputStyle}
                 >
                   <option value="Normal">
@@ -1125,58 +1159,51 @@ const StoreAssetRequests = () => {
               </div>
 
               <div>
-                <label style={labelStyle}>
+                <label htmlFor="asset-request-required-date" style={labelStyle}>
                   {t.requiredDate}
                 </label>
 
                 <input
+                  id="asset-request-required-date"
                   type="date"
+                  min={today}
                   value={form.requiredDate}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      requiredDate: e.target.value
-                    })
-                  }
+                  onChange={(e) => setFormField('requiredDate', e.target.value)}
                   style={inputStyle}
                 />
               </div>
             </div>
 
             <div style={{ marginTop: 18 }}>
-              <label style={labelStyle}>
+              <label htmlFor="asset-request-purpose" style={labelStyle}>
                 {t.purpose}
               </label>
 
               <textarea
+                id="asset-request-purpose"
                 value={form.purpose}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    purpose: e.target.value
-                  })
-                }
+                onChange={(e) => setFormField('purpose', e.target.value)}
+                maxLength={5000}
+                required
                 style={{
                   ...inputStyle,
                   minHeight: 90,
                   resize: 'vertical'
                 }}
               />
+              {formErrors.purpose && <small role="alert" style={{ color: '#dc2626' }}>{formErrors.purpose}</small>}
             </div>
 
             <div style={{ marginTop: 18 }}>
-              <label style={labelStyle}>
+              <label htmlFor="asset-request-remarks" style={labelStyle}>
                 {t.remarks}
               </label>
 
               <textarea
+                id="asset-request-remarks"
                 value={form.remarks}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    remarks: e.target.value
-                  })
-                }
+                onChange={(e) => setFormField('remarks', e.target.value)}
+                maxLength={5000}
                 style={{
                   ...inputStyle,
                   minHeight: 80,
@@ -1195,7 +1222,7 @@ const StoreAssetRequests = () => {
             >
               <button
                 type="button"
-                onClick={resetForm}
+                onClick={() => changeTab('history')}
                 style={{
                   padding: '11px 18px',
                   borderRadius: 8,
@@ -1212,7 +1239,7 @@ const StoreAssetRequests = () => {
                   fontWeight: 700
                 }}
               >
-                {t.close}
+                <X size={16} aria-hidden="true" /> {t.close}
               </button>
 
               <button
@@ -1234,7 +1261,7 @@ const StoreAssetRequests = () => {
               >
                 {processing
                   ? t.submitting
-                  : `📤 ${t.submit}`}
+                  : <><Send size={16} aria-hidden="true" /> {t.submit}</>}
               </button>
             </div>
           </form>
@@ -1259,14 +1286,12 @@ const StoreAssetRequests = () => {
               marginBottom: 18
             }}
           >
-            <h2 style={{ margin: 0 }}>
-              {activeTab === 'pending'
-                ? `⏳ ${t.pending}`
-                : activeTab === 'approved'
-                ? `✅ ${t.approved}`
-                : activeTab === 'rejected'
-                ? `❌ ${t.rejected}`
-                : `📋 ${t.history}`}
+            <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {(() => {
+                const currentTab = tabs.find((tab) => tab.id === activeTab);
+                const Icon = currentTab?.Icon || History;
+                return <><Icon size={20} aria-hidden="true" /> {currentTab?.label || t.history}</>;
+              })()}
             </h2>
 
             <div
@@ -1276,24 +1301,31 @@ const StoreAssetRequests = () => {
                 flexWrap: 'wrap'
               }}
             >
-              <input
-                value={search}
-                onChange={(e) =>
-                  setSearch(e.target.value)
-                }
-                placeholder={t.search}
-                style={{
-                  ...inputStyle,
-                  width: 230
-                }}
-              />
+              <label style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <Search size={16} aria-hidden="true" style={{ position: 'absolute', left: 10, color: isDark ? '#94a3b8' : '#64748b' }} />
+                <input
+                  aria-label={t.search}
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                  placeholder={t.search}
+                  style={{ ...inputStyle, width: 230, paddingLeft: 34 }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={fetchData}
+                disabled={loading}
+                aria-label={t.retry}
+                title={t.retry}
+                style={{ ...inputStyle, width: 'auto', cursor: loading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <RefreshCw size={16} aria-hidden="true" /> {t.retry}
+              </button>
 
               {activeTab === 'history' && (
                 <select
                   value={statusFilter}
-                  onChange={(e) =>
-                    setStatusFilter(e.target.value)
-                  }
+                  onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
                   style={{
                     ...inputStyle,
                     width: 150
@@ -1536,7 +1568,7 @@ const StoreAssetRequests = () => {
                                 fontWeight: 700
                               }}
                             >
-                              👁 {t.view}
+                              <Eye size={15} aria-hidden="true" /> {t.view}
                             </button>
 
                             {status ===
@@ -1567,7 +1599,7 @@ const StoreAssetRequests = () => {
                                       700
                                   }}
                                 >
-                                  ✓ {t.approve}
+                                  <CheckCircle size={15} aria-hidden="true" /> {t.approve}
                                 </button>
 
                                 <button
@@ -1595,7 +1627,7 @@ const StoreAssetRequests = () => {
                                       700
                                   }}
                                 >
-                                  ✕ {t.reject}
+                                  <XCircle size={15} aria-hidden="true" /> {t.reject}
                                 </button>
                               </>
                             )}
@@ -1642,6 +1674,7 @@ const StoreAssetRequests = () => {
                                       fontWeight: 700
                                     }}
                                   >
+                                    <CircleX size={15} aria-hidden="true" />{' '}
                                     {t.cancelRequest}
                                   </button>
                                 </>
@@ -1656,6 +1689,19 @@ const StoreAssetRequests = () => {
               </tbody>
             </table>
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 14 }}>
+            <span aria-live="polite">
+              {t.page} {page} / {pages} · {filteredRequests.length}
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" disabled={page <= 1} onClick={() => setPage((currentPage) => currentPage - 1)}>
+                {t.previous}
+              </button>
+              <button type="button" disabled={page >= pages} onClick={() => setPage((currentPage) => currentPage + 1)}>
+                {t.next}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1663,6 +1709,7 @@ const StoreAssetRequests = () => {
       {showDetails && selectedRequest && (
         <div
           role="dialog"
+          aria-labelledby="asset-request-details-title"
           aria-modal="true"
           onClick={() => {
             setShowDetails(false);
@@ -1702,12 +1749,14 @@ const StoreAssetRequests = () => {
                 marginBottom: 20
               }}
             >
-              <h2 style={{ margin: 0 }}>
-                📄 {t.requestDetails}
+              <h2 id="asset-request-details-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Eye size={19} aria-hidden="true" /> {t.requestDetails}
               </h2>
 
               <button
                 type="button"
+                aria-label={t.close}
+                title={t.close}
                 onClick={() => {
                   setShowDetails(false);
                   setSelectedRequest(null);
@@ -1727,7 +1776,7 @@ const StoreAssetRequests = () => {
                   fontSize: 18
                 }}
               >
-                ×
+                <X size={18} aria-hidden="true" />
               </button>
             </div>
 
@@ -1941,7 +1990,7 @@ const StoreAssetRequests = () => {
                     fontWeight: 800
                   }}
                 >
-                  ✕ {t.reject}
+                  <XCircle size={15} aria-hidden="true" /> {t.reject}
                 </button>
 
                 <button
@@ -1964,7 +2013,7 @@ const StoreAssetRequests = () => {
                     fontWeight: 800
                   }}
                 >
-                  ✓ {t.approve}
+                  <CheckCircle size={15} aria-hidden="true" /> {t.approve}
                 </button>
               </div>
             )}

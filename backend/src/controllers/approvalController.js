@@ -1,4 +1,4 @@
-const { sequelize, Approval, Asset, Department, User, AuditLog, AssetRegistrationRequest, Inventory, AssetMovement } = require('../models');
+const { sequelize, Approval, Asset, Department, User, AuditLog, AssetRegistrationRequest, Inventory, AssetMovement, Assignment, Transfer, Maintenance } = require('../models');
 const { Op } = require('sequelize');
 const { createFinanceNotification, createBulkNotification } = require('../services/notificationService');
 const { getCollegeScopeId } = require('../middlewares/organizationScope');
@@ -32,6 +32,17 @@ const isValidDateOnly = (value) => {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+const normalizeAssetState = (value) => String(value || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+const isEligibleAsset = (asset) => {
+  const eligibleStatuses = new Set(['available', 'in store', 'active', 'assigned', 'reserved', 'in use', 'issued']);
+  const blockedConditions = new Set(['damaged', 'broken', 'unusable', 'heavily damaged', 'non-functional', 'quarantined']);
+  const status = normalizeAssetState(asset.status);
+  const condition = normalizeAssetState(asset.condition);
+  const expiryDate = asset.expiryDate || asset.expiry_date;
+  return eligibleStatuses.has(status)
+    && !blockedConditions.has(condition)
+    && (!expiryDate || String(expiryDate).slice(0, 10) >= new Date().toISOString().slice(0, 10));
 };
 
 const listApprovals = async (req, res, next) => {
@@ -73,9 +84,26 @@ const getApprovalById = async (req, res, next) => {
 };
 
 const createApproval = async (req, res, next) => {
+  let transaction;
+  let transactionFinished = false;
   try {
     const { type, asset_id, department_id, requested_for, required_date, item, quantity = 1, priority = 'medium', reason, comment } = req.body;
-    if (!type || !reason || !Number.isInteger(Number(quantity)) || Number(quantity) <= 0) return res.status(400).json({ success: false, message: 'Type, reason, and positive quantity are required' });
+    const requestType = String(type || '').trim();
+    const requestReason = String(reason || '').trim();
+    const requestComment = String(comment || '').trim();
+    const requestItem = String(item || '').trim();
+    const normalizedPriority = String(priority || '').trim().toLowerCase();
+    const parsedQuantity = Number(quantity);
+    if (!requestType || requestType.length > 100 || !requestReason || requestReason.length > 5000
+      || !Number.isSafeInteger(parsedQuantity) || parsedQuantity <= 0) {
+      return res.status(400).json({ success: false, message: 'Type, reason (up to 5000 characters), and a positive whole-number quantity are required' });
+    }
+    if (requestComment.length > 5000 || requestItem.length > 255) {
+      return res.status(400).json({ success: false, message: 'Item must be 255 characters or fewer and remarks must be 5000 characters or fewer' });
+    }
+    if (!['low', 'normal', 'medium', 'high', 'urgent', 'critical'].includes(normalizedPriority)) {
+      return res.status(400).json({ success: false, message: 'Priority must be Normal, High, or Urgent' });
+    }
     const requestedForId = requested_for === undefined || requested_for === null || requested_for === '' ? null : Number(requested_for);
     if ((requestedForId !== null && (!Number.isSafeInteger(requestedForId) || requestedForId <= 0)) || !isValidDateOnly(required_date)) {
       return res.status(400).json({ success: false, message: 'Requested-for user or required date is invalid' });
@@ -84,31 +112,138 @@ const createApproval = async (req, res, next) => {
     const collegeId = storeManager ? getCollegeScopeId(req) : null;
     if (storeManager && !collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
     if (storeManager && (!asset_id || !department_id)) return res.status(400).json({ success: false, message: 'A valid asset and department are required' });
-    const asset = asset_id ? await Asset.findByPk(asset_id) : null;
-    if (asset_id && !asset) return res.status(404).json({ success: false, message: 'Asset not found' });
-    if (storeManager && Number(asset.collegeId) !== collegeId) return res.status(404).json({ success: false, message: 'Asset not found' });
-    const department = storeManager ? await Department.findByPk(department_id) : null;
-    if (storeManager && (!department || Number(department.collegeId) !== collegeId)) return res.status(404).json({ success: false, message: 'Department not found' });
-    const beneficiary = requestedForId ? await User.findByPk(requestedForId) : null;
-    if (requestedForId && !beneficiary) return res.status(404).json({ success: false, message: 'Requested-for user not found' });
-    if (storeManager && beneficiary && Number(beneficiary.collegeId) !== collegeId) return res.status(404).json({ success: false, message: 'Requested-for user not found' });
-    if (req.user.role === 'college' && asset && asset.department !== req.user.department) return res.status(403).json({ success: false, message: 'Department authorization required' });
+    if (requestType.toLowerCase().includes('issue') && (!asset_id || !department_id)) {
+      return res.status(400).json({ success: false, message: 'An asset and department are required for an asset issue request' });
+    }
+    transaction = await sequelize.transaction();
+    const reject = async (statusCode, message) => {
+      await transaction.rollback();
+      transactionFinished = true;
+      return res.status(statusCode).json({ success: false, message });
+    };
+    const assetId = asset_id == null || asset_id === '' ? null : Number(asset_id);
+    const departmentIdInput = department_id == null || department_id === '' ? null : Number(department_id);
+    if (assetId !== null && (!Number.isSafeInteger(assetId) || assetId < 1)) return await reject(400, 'A valid asset ID is required');
+    if (departmentIdInput !== null && (!Number.isSafeInteger(departmentIdInput) || departmentIdInput < 1)) return await reject(400, 'A valid department ID is required');
+    const asset = assetId ? await Asset.findByPk(assetId, { transaction, lock: transaction.LOCK.UPDATE }) : null;
+    if (assetId && !asset) return await reject(404, 'Asset not found');
+    if (storeManager && Number(asset.collegeId) !== collegeId) return await reject(404, 'Asset not found');
+    const department = departmentIdInput ? await Department.findByPk(departmentIdInput, { transaction }) : null;
+    if (departmentIdInput && !department) return await reject(404, 'Department not found');
+    if (department && ['inactive', 'suspended', 'deleted'].includes(normalizeAssetState(department.status))) {
+      return await reject(400, 'The selected department is inactive');
+    }
+    if (storeManager && Number(department.collegeId) !== collegeId) return await reject(404, 'Department not found');
+    const beneficiary = requestedForId ? await User.findByPk(requestedForId, { transaction }) : null;
+    if (requestedForId && (!beneficiary || beneficiary.active === false || String(beneficiary.status || '').toLowerCase() !== 'active')) {
+      return await reject(404, 'Requested-for user not found or inactive');
+    }
+    if (storeManager && beneficiary && Number(beneficiary.collegeId) !== collegeId) return await reject(404, 'Requested-for user not found');
+    if (beneficiary && department && Number(beneficiary.collegeId) !== Number(department.collegeId)) {
+      return await reject(404, 'Requested-for user not found in the selected department scope');
+    }
+    if (req.user.role === 'college' && asset && asset.department !== req.user.department) return await reject(403, 'Department authorization required');
     const authenticatedDepartment = req.user.department_id || req.user.departmentId || (Number.isInteger(Number(req.user.department)) ? Number(req.user.department) : null);
-    if (req.user.role === 'college' && department_id && String(department_id) !== String(authenticatedDepartment) && String(department_id) !== String(req.user.department)) return res.status(403).json({ success: false, message: 'Department authorization required' });
-    const record = await Approval.create({ type, assetId: asset_id || null, requestedBy: req.user.id, requestedFor: requestedForId, departmentId: storeManager ? department.id : authenticatedDepartment || department_id || null, item: item || '', quantity, priority, reason, comment: String(comment || '').trim(), requiredDate: required_date || null });
-    await AuditLog.create({ userId: req.user.id, action: 'REQUEST_SUBMITTED', entity: `approval:${record.id}`, details: JSON.stringify({ requestId: record.id, type: record.type, departmentId: record.departmentId }) });
-    if (String(type).toLowerCase().includes('purchase')) await createFinanceNotification({ event: 'finance_purchase_request_submitted', eventKey: `finance_purchase_request_submitted:${record.id}`, entityId: record.id, senderId: req.user.id, type: 'procurement', title: 'Purchase request awaiting approval', message: `Purchase request REQ-${String(record.id).padStart(6, '0')} requires approval.` });
-    res.status(201).json({ success: true, request: normalize(record) });
-  } catch (error) { next(error); }
+    if (req.user.role === 'college' && departmentIdInput && String(departmentIdInput) !== String(authenticatedDepartment) && String(departmentIdInput) !== String(req.user.department)) {
+      return await reject(403, 'Department authorization required');
+    }
+    if (asset && requestType.toLowerCase().includes('issue')) {
+      if (!isEligibleAsset(asset)) return await reject(409, 'The selected asset is inactive or otherwise ineligible for issue');
+      const inventory = await Inventory.findOne({
+        where: { assetId: asset.id },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+      if (!inventory || !Number.isSafeInteger(Number(inventory.availableQuantity)) || Number(inventory.availableQuantity) < parsedQuantity) {
+        return await reject(409, 'Insufficient available inventory for the requested quantity');
+      }
+      const normalizedSerial = String(asset.serialNumber || '').trim();
+      const [activeAssignment, activeTransfer, activeMaintenance] = await Promise.all([
+        normalizedSerial
+          ? Assignment.findOne({ where: { assetId: asset.id, status: 'active' }, transaction })
+          : Promise.resolve(null),
+        Transfer.findOne({
+          where: { assetId: asset.id, status: { [Op.in]: ['Requested', 'Approved', 'Ready', 'In Progress', 'In Transit'] } },
+          transaction,
+        }),
+        Maintenance.findOne({
+          where: { assetId: asset.id, status: { [Op.in]: ['pending', 'approved', 'assigned', 'in-progress', 'under maintenance'] } },
+          transaction,
+        }),
+      ]);
+      if (activeAssignment || activeTransfer || activeMaintenance) {
+        return await reject(409, 'The selected asset is assigned, transferring, or under maintenance');
+      }
+    }
+    const record = await Approval.create({
+      type: requestType,
+      assetId: asset?.id || null,
+      requestedBy: req.user.id,
+      requestedFor: requestedForId,
+      departmentId: storeManager ? department.id : authenticatedDepartment || departmentIdInput || null,
+      item: asset?.name || requestItem,
+      quantity: parsedQuantity,
+      priority: normalizedPriority,
+      reason: requestReason,
+      comment: requestComment,
+      requiredDate: required_date || null,
+    }, { transaction });
+    await AuditLog.create({
+      userId: req.user.id,
+      action: 'REQUEST_SUBMITTED',
+      entity: `approval:${record.id}`,
+      details: JSON.stringify({ requestId: record.id, type: record.type, departmentId: record.departmentId }),
+    }, { transaction });
+    await transaction.commit();
+    transactionFinished = true;
+    let notificationStatus = 'sent';
+    try {
+      await createBulkNotification({
+        recipientType: 'users',
+        userIds: [req.user.id],
+        title: 'Asset request received',
+        message: `Request REQ-${String(record.id).padStart(6, '0')} for ${record.item} (${record.quantity}) was received.`,
+        type: 'approval',
+        priority: record.priority === 'urgent' || record.priority === 'critical' ? 'urgent' : 'medium',
+        channel: 'in_app',
+        eventKey: `approval:${record.id}:submitted:${req.user.id}`,
+        entityType: 'approval',
+        entityId: record.id,
+      }, req.user.id);
+    } catch (notificationError) {
+      notificationStatus = 'failed';
+      console.error(`Asset request receipt notification failed for request ${record.id}:`, notificationError.message);
+    }
+    if (String(record.type).toLowerCase().includes('purchase')) {
+      try {
+        await createFinanceNotification({ event: 'finance_purchase_request_submitted', eventKey: `finance_purchase_request_submitted:${record.id}`, entityId: record.id, senderId: req.user.id, type: 'procurement', title: 'Purchase request awaiting approval', message: `Purchase request REQ-${String(record.id).padStart(6, '0')} requires approval.` });
+      } catch (notificationError) {
+        notificationStatus = 'failed';
+        console.error(`Purchase request reviewer notification failed for request ${record.id}:`, notificationError.message);
+      }
+    }
+    return res.status(201).json({ success: true, request: normalize(record), notificationStatus });
+  } catch (error) {
+    if (transaction && !transactionFinished) {
+      try {
+        await transaction.rollback();
+      } catch (rollbackError) {
+        console.error('Approval creation transaction rollback failed:', rollbackError.message);
+      }
+    }
+    return next(error);
+  }
 };
 
 const decideApproval = async (req, res, next) => {
   let transaction;
   let transactionFinished = false;
   try {
-    if (!['admin', 'college', 'finance', 'store_manager'].includes(req.user.role)) return res.status(403).json({ success: false, message: 'Approval authorization required' });
+    if (!['admin', 'college', 'college_manager', 'finance', 'store_manager'].includes(normalizeRoleValue(req.user.role))) return res.status(403).json({ success: false, message: 'Approval authorization required' });
     const status = String(req.body.status || '').toLowerCase();
     if (!['approved', 'rejected', 'cancelled'].includes(status)) return res.status(400).json({ success: false, message: 'Invalid approval status' });
+    const comment = String(req.body.comment || req.body.reason || '').trim();
+    if (status === 'rejected' && !comment) return res.status(400).json({ success: false, message: 'A rejection reason is required' });
     transaction = await sequelize.transaction();
     const record = await Approval.findByPk(req.params.id, { include, transaction, lock: transaction.LOCK.UPDATE });
     if (!record) {
@@ -140,12 +275,11 @@ const decideApproval = async (req, res, next) => {
       transactionFinished = true;
       return res.status(409).json({ success: false, message: 'A fulfilled request cannot be cancelled' });
     }
-    if (status === 'approved' && record.requestedBy === req.user.id) {
+    if (status === 'approved' && Number(record.requestedBy) === Number(req.user.id)) {
       await transaction.rollback();
       transactionFinished = true;
       return res.status(403).json({ success: false, message: 'A requester cannot approve their own request' });
     }
-    const comment = String(req.body.comment || req.body.reason || '').trim();
     let reservationAudit = null;
     if (status === 'approved' && isReservableAssetRequest(record)) {
       const quantity = Number(record.quantity);
@@ -219,7 +353,7 @@ const decideApproval = async (req, res, next) => {
         after: { availableQuantity: inventory.availableQuantity, reservedQuantity: inventory.reservedQuantity },
       };
     }
-    await record.update({ status, reviewedBy: req.user.id, comment: req.body.comment || req.body.reason || '' }, { transaction });
+    await record.update({ status, reviewedBy: req.user.id, comment }, { transaction });
     if (String(record.type || '').toLowerCase().includes('purchase')) {
       const registrationStatus = status === 'approved' ? 'Approved' : status === 'rejected' ? 'Rejected' : 'Cancelled';
       await AssetRegistrationRequest.update(

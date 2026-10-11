@@ -37,6 +37,10 @@ const respondToApiRequests = () => {
     if (url.endsWith('/activity')) return Promise.resolve({ data: { logs: [{ id: 7, action: 'CREATE_USER', entity: 'user:7', userId: 1, createdAt: '2026-10-02T12:00:00.000Z' }] } });
     if (url.startsWith('/api/users?')) return Promise.resolve({ data: { users: usersResponse, pagination: { total: usersResponse.length, pages: 1 } } });
     if (url === '/api/users/stats') return Promise.resolve({ data: { data: { total: usersResponse.length, active: usersResponse.length, inactive: 0, suspended: 0 } } });
+    if (url === '/api/users/store-manager-accounts') {
+      const storeManagerUsers = usersResponse.filter((user) => user.role === 'store_manager');
+      return Promise.resolve({ data: { data: { count: storeManagerUsers.length, limit: 8, users: storeManagerUsers } } });
+    }
     if (url === '/api/roles') return Promise.resolve({ data: { roles: roleNames.map((name) => ({
       name,
       displayName: ({ staff: 'Staff', student: 'Student', technical_assistant: 'Technical Assistant' })[name] || name,
@@ -113,7 +117,7 @@ test('rejects mismatched passwords without submitting', async () => {
 
   fireEvent.submit(document.querySelector('form'));
 
-  expect(await screen.findByText('Password and Confirm Password must match.')).toBeInTheDocument();
+  expect(await screen.findByText('Passwords do not match.')).toBeInTheDocument();
   expect(apiClient.request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'POST' }));
 });
 
@@ -134,7 +138,7 @@ test('validates required fields, email format, and password policy before submit
   fireEvent.submit(document.querySelector('form'));
 
   expect(await screen.findByText('Enter a valid email address.')).toBeInTheDocument();
-  expect(screen.getByText('Password must contain an uppercase letter.')).toBeInTheDocument();
+  expect(screen.getByText('Password must contain at least one letter and one number.')).toBeInTheDocument();
   expect(apiClient.request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'POST' }));
 });
 
@@ -161,6 +165,42 @@ test('submits the add-user form, closes it, and refreshes the visible user list'
   expect(createRequest.data).not.toHaveProperty('departmentId');
   await waitFor(() => expect(screen.queryByLabelText('Password *')).not.toBeInTheDocument());
   expect(await screen.findByText('new.user@example.edu')).toBeInTheDocument();
+});
+
+test('administrator Store Manager creation refreshes the account count from the existing API workflow', async () => {
+  await openCreateForm();
+  fillValidNewUser();
+  fireEvent.change(screen.getByLabelText('Role *'), { target: { value: 'store_manager' } });
+  fireEvent.submit(document.querySelector('form'));
+
+  expect(await screen.findByText('1 of 8')).toBeInTheDocument();
+  expect(apiClient.request).toHaveBeenCalledWith(expect.objectContaining({
+    url: '/api/users',
+    method: 'POST',
+    data: expect.objectContaining({ role: 'store_manager' }),
+  }));
+  expect(await screen.findByText('new.user@example.edu')).toBeInTheDocument();
+});
+
+test('shows the Store Manager account count and prevents an administrator from exceeding the limit in the form', async () => {
+  usersResponse = Array.from({ length: 8 }, (_, index) => ({
+    id: index + 1,
+    role: 'store_manager',
+    username: `store.manager.${index + 1}`,
+    fullName: `Store Manager ${index + 1}`,
+    status: 'active',
+  }));
+  await openCreateForm();
+
+  expect(screen.getByText('8 of 8')).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Role *'), { target: { value: 'store_manager' } });
+
+  expect(screen.getByRole('alert')).toHaveTextContent('maximum of 8 Store Manager accounts');
+  expect(screen.getByRole('button', { name: /create user/i })).toBeDisabled();
+  expect(apiClient.request).not.toHaveBeenCalledWith(expect.objectContaining({
+    url: '/api/users',
+    method: 'POST',
+  }));
 });
 
 test('keeps college, department, and existing roles available when editing a user', async () => {

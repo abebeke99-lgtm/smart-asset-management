@@ -8,7 +8,7 @@ const notificationService = require('../services/notificationService');
 
 notificationService.createBulkNotification = async () => {};
 
-const { sequelize, Approval, Asset, Department, User, AuditLog, Inventory, AssetMovement } = models;
+const { sequelize, Approval, Asset, Department, User, AuditLog, Inventory, AssetMovement, Assignment, Transfer, Maintenance } = models;
 const { listApprovals, getApprovalById, createApproval, decideApproval } = require('../controllers/approvalController');
 const routeSource = fs.readFileSync(path.resolve(__dirname, '../routes/approvalRoutes.js'), 'utf8');
 
@@ -289,14 +289,31 @@ test('Store Manager request creation requires and resolves asset and department 
     userFindByPk: User.findByPk,
     approvalCreate: Approval.create,
     auditCreate: AuditLog.create,
+    inventoryFindOne: Inventory.findOne,
+    transaction: sequelize.transaction,
+    assignmentFindOne: Assignment.findOne,
+    transferFindOne: Transfer.findOne,
+    maintenanceFindOne: Maintenance.findOne,
   };
   const createdValues = [];
-  Asset.findByPk = async (id) => Number(id) === 3 ? { id: 3, collegeId: 1, name: 'Asset' } : { id: Number(id), collegeId: 2, name: 'Foreign asset' };
+  const transaction = {
+    LOCK: { UPDATE: 'UPDATE' },
+    async commit() {},
+    async rollback() {},
+  };
+  sequelize.transaction = async () => transaction;
+  Inventory.findOne = async () => ({ availableQuantity: 5 });
+  Assignment.findOne = async () => null;
+  Transfer.findOne = async () => null;
+  Maintenance.findOne = async () => null;
+  Asset.findByPk = async (id) => Number(id) === 3
+    ? { id: 3, collegeId: 1, name: 'Asset', status: 'available' }
+    : { id: Number(id), collegeId: 2, name: 'Foreign asset', status: 'available' };
   Department.findByPk = async (id) => Number(id) === 12 ? { id: 12, collegeId: 1 } : { id: Number(id), collegeId: 2 };
   User.findByPk = async (id) => Number(id) === 43
-    ? { id: 43, collegeId: 1 }
+    ? { id: 43, collegeId: 1, active: true, status: 'active' }
     : Number(id) === 44
-      ? { id: 44, collegeId: 2 }
+      ? { id: 44, collegeId: 2, active: true, status: 'active' }
       : null;
   Approval.create = async (values) => {
     createdValues.push(values);
@@ -352,6 +369,11 @@ test('Store Manager request creation requires and resolves asset and department 
     User.findByPk = originals.userFindByPk;
     Approval.create = originals.approvalCreate;
     AuditLog.create = originals.auditCreate;
+    Inventory.findOne = originals.inventoryFindOne;
+    sequelize.transaction = originals.transaction;
+    Assignment.findOne = originals.assignmentFindOne;
+    Transfer.findOne = originals.transferFindOne;
+    Maintenance.findOne = originals.maintenanceFindOne;
   }
 });
 

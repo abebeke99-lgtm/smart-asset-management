@@ -159,17 +159,34 @@ const login = async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    if (!username || !password) {
+    if (typeof username !== 'string' || !username.trim() || typeof password !== 'string' || !password) {
       return res.status(400).json({ success: false, message: 'Username and password are required' });
     }
 
     const identity = username.trim();
+    const normalizedIdentity = normalizeUniqueLookup(identity);
     const candidateNames = resolveLoginAliases(identity);
     let user = await User.findOne({
       where: {
         [Op.or]: [{ username: identity }, { email: identity }],
       },
     });
+    if (!user) {
+      user = await User.findOne({
+        where: {
+          [Op.or]: [
+            sequelize.where(
+              sequelize.fn('LOWER', sequelize.fn('TRIM', sequelize.col('username'))),
+              normalizedIdentity,
+            ),
+            sequelize.where(
+              sequelize.fn('LOWER', sequelize.fn('TRIM', sequelize.col('email'))),
+              normalizedIdentity,
+            ),
+          ],
+        },
+      });
+    }
     if (!user && candidateNames.some((candidate) => candidate !== identity.toLowerCase())) {
       const matches = await User.findAll({
         where: {
@@ -244,14 +261,21 @@ const login = async (req, res) => {
       user: safeUser,
     });
   } catch (error) {
-    console.error('Login error:', error);
+    const errorCode = error.code || error.parent?.code || error.original?.code;
+    const isDatabaseError = String(error.name || '').startsWith('Sequelize')
+      || ['ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'ER_ACCESS_DENIED_ERROR', 'ER_BAD_DB_ERROR'].includes(errorCode);
+    console.error(isDatabaseError ? 'Login database operation failed.' : 'Login operation failed.', {
+      errorType: error.name || 'Error',
+      ...(errorCode ? { code: errorCode } : {}),
+      requestId: req.requestId || null,
+    });
     return res.status(500).json({ success: false, message: 'Unable to complete login. Please try again later.' });
   }
 };
 
 const register = async (req, res) => {
   try {
-    const { username, email, password, fullName, role = 'student', department = '' } = req.body;
+    const { username, email, password, confirmPassword, fullName, role = 'student', department = '' } = req.body;
 
     const publicRoles = ['student', 'staff'];
     if (!publicRoles.includes(String(role || 'student').toLowerCase())) {
@@ -266,6 +290,15 @@ const register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Valid email is required' });
     }
 
+    if (typeof password !== 'string' || !password) {
+      return res.status(400).json({ success: false, message: 'Password is required.' });
+    }
+    if (typeof confirmPassword !== 'string' || !confirmPassword) {
+      return res.status(400).json({ success: false, message: 'Confirm Password is required.' });
+    }
+    if (password !== confirmPassword) {
+      return res.status(400).json({ success: false, message: 'Passwords do not match.' });
+    }
     const security = await getSecuritySettings();
     const passwordError = validatePassword(password || '', security);
     if (passwordError) return res.status(400).json({ success: false, message: passwordError });
@@ -798,16 +831,17 @@ const resetPasswordWithOtp = async (req, res) => {
   let recoveryUserId = null;
   try {
     const token = String(req.body.resetToken || req.body.token || '').trim();
-    const password = String(req.body.newPassword || req.body.password || '');
-    const confirmPassword = String(req.body.confirmPassword || req.body.confirm_password || '');
+    const password = req.body.newPassword ?? req.body.password;
+    const confirmPassword = req.body.confirmPassword ?? req.body.confirm_password;
     const failReset = async (status, message, userId = recoveryUserId) => {
       await recordRecoveryEvent({ userId, event: 'PASSWORD_RESET_FAILED', result: 'Failure', req });
       return res.status(status).json({ success: false, message });
     };
 
-    if (!token || !password || password !== confirmPassword) {
-      return failReset(400, 'A valid reset token and matching passwords are required.');
-    }
+    if (!token) return failReset(400, 'A valid reset token is required.');
+    if (typeof password !== 'string' || !password) return failReset(400, 'Password is required.');
+    if (typeof confirmPassword !== 'string' || !confirmPassword) return failReset(400, 'Confirm Password is required.');
+    if (password !== confirmPassword) return failReset(400, 'Passwords do not match.');
 
     const settings = await getSecuritySettings();
     const passwordError = validatePassword(password, settings);

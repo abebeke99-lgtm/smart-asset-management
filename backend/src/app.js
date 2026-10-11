@@ -59,11 +59,13 @@ const backupService = require('./services/backupService');
 const { startAssetRetentionScheduler } = require('./services/assetRetentionService');
 const { requestMetricsMiddleware } = require('./middlewares/requestMetrics');
 const { requestContextMiddleware } = require('./middlewares/requestContext');
+const noStore = require('./middlewares/noStore');
 const { requireAuth, requireRole } = require('./middlewares/auth');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
+app.set('etag', false);
 const healthHandler = async (_req, res) => {
   try {
     await sequelize.query('SELECT 1');
@@ -149,6 +151,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(passport.initialize());
 app.use(requestContextMiddleware);
 app.use(requestMetricsMiddleware);
+app.use('/api', noStore);
 
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);

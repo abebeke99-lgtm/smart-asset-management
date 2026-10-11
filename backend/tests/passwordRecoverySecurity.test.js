@@ -710,7 +710,7 @@ test('a weak new password is refused before any database write happens', async (
 
       assert.equal(response.statusCode, 400);
       assert.equal(response.body.success, false);
-      assert.match(response.body.message, /at least 8 characters/i);
+      assert.equal(response.body.message, 'Password must be 8–16 characters long.');
     });
   } finally {
     restoreEnvironment();

@@ -15,7 +15,8 @@
     "seed:user-management": "node src/scripts/seedUserManagement.js",
     "test": "node scripts/runTests.js --test-concurrency=1",
     "test:jest": "node scripts/runTests.js --jest --config ./jest.config.js --runInBand",
-    "test:dashboard": "node scripts/runTests.js --jest --config ./jest.config.js --runInBand tests/departmentDashboard.api.jest.cjs"
+    "test:dashboard": "node scripts/runTests.js --jest --config ./jest.config.js --runInBand tests/departmentDashboard.api.jest.cjs",
+    "smoke": "node scripts/smoke.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

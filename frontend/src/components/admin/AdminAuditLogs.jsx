@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Eye } from 'lucide-react';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
 import { apiClient, apiBase } from '../../utils/api';
@@ -2226,7 +2227,7 @@ const AdminAuditLogs = () => {
                                     '0.72rem'
                                 }}
                               >
-                                👁️{' '}
+                                <Eye size={14} aria-hidden="true" />{' '}
                                 {t.view}
                               </button>
                             </td>

@@ -113,6 +113,20 @@ test('uses the matching cached page when the low-stock server responds with 304'
   }));
 });
 
+test('retries an uncached 304 response before showing a load error', async () => {
+  apiClient.get
+    .mockResolvedValueOnce({ status: 304, data: undefined })
+    .mockResolvedValueOnce(response());
+  renderPage();
+
+  expect(await screen.findByText('Medical Gloves')).toBeInTheDocument();
+  expect(apiClient.get).toHaveBeenCalledTimes(2);
+  expect(apiClient.get).toHaveBeenLastCalledWith('/api/store/low-stock', expect.objectContaining({
+    headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+  }));
+  expect(screen.queryByText(/304 without a matching cached/i)).not.toBeInTheDocument();
+});
+
 test('shows a loading state until the low-stock API responds', () => {
   apiClient.get.mockReturnValue(new Promise(() => {}));
 

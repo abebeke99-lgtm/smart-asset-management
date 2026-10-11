@@ -293,57 +293,6 @@
   font: inherit;
 }
 
-.admin-roles-matrix-scroll {
-  max-height: min(68vh, 720px);
-  overflow: auto;
-  border-top: 1px solid #edf1f5;
-}
-
-.admin-roles-matrix {
-  width: 100%;
-  min-width: 1380px;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 0.88rem;
-}
-
-.admin-roles-matrix th,
-.admin-roles-matrix td {
-  min-width: 112px;
-  padding: 11px 12px;
-  border-bottom: 1px solid #edf1f5;
-  text-align: left;
-  vertical-align: middle;
-}
-
-.admin-roles-matrix thead th {
-  position: sticky;
-  z-index: 1;
-  top: 0;
-  background: #F5F7FA;
-  color: #475569;
-  font-size: 0.76rem;
-  font-weight: 700;
-  letter-spacing: 0.035em;
-  text-transform: uppercase;
-}
-
-.admin-roles-matrix tbody th {
-  min-width: 125px;
-  background: #fff;
-  color: #475569;
-  font-weight: 600;
-}
-
-.admin-roles-matrix td code {
-  overflow-wrap: anywhere;
-  border-radius: 5px;
-  padding: 3px 6px;
-  background: #f1f5f9;
-  color: #245783;
-  font-size: 0.82rem;
-}
-
 .admin-roles-permission-toggle {
   display: inline-flex;
   min-width: 0;
@@ -426,73 +375,6 @@
 
   .admin-roles-type-filter select {
     max-width: none;
-  }
-
-  .admin-roles-matrix-scroll {
-    max-height: none;
-    overflow: visible;
-    border-top: 0;
-  }
-
-  .admin-roles-matrix,
-  .admin-roles-matrix tbody,
-  .admin-roles-matrix tr,
-  .admin-roles-matrix th,
-  .admin-roles-matrix td {
-    display: block;
-    width: 100%;
-  }
-
-  .admin-roles-matrix {
-    min-width: 0;
-  }
-
-  .admin-roles-matrix thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  .admin-roles-matrix tbody {
-    padding: 0 12px;
-  }
-
-  .admin-roles-matrix tbody tr {
-    margin: 10px 0;
-    border: 1px solid var(--roles-border);
-    border-radius: 10px;
-    padding: 4px 12px;
-    background: #fff;
-  }
-
-  .admin-roles-matrix tbody th,
-  .admin-roles-matrix td {
-    display: flex;
-    width: 100%;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 7px;
-    padding: 11px 0;
-    border-bottom: 1px solid #edf1f5;
-    text-align: left;
-  }
-
-  .admin-roles-matrix td:last-child {
-    border-bottom: 0;
-  }
-
-  .admin-roles-matrix td::before,
-  .admin-roles-matrix tbody th::before {
-    content: attr(data-label);
-    color: var(--roles-muted);
-    font-size: 0.76rem;
-    font-weight: 700;
-    letter-spacing: 0.035em;
-    text-transform: uppercase;
   }
 
   .admin-roles-permission-toggle {

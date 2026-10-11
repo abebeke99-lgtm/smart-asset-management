@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { useLanguage } from '../../contexts/UiContext';
 import { apiClient } from '../../utils/api';
 import { toast } from 'react-toastify';
+import { getPasswordIssue, getPasswordConfirmationIssue } from '../../utils/passwordValidation';
 import {
   ArrowLeft,
   CircleAlert,
@@ -12,8 +13,6 @@ import {
   LoaderCircle,
   LockKeyhole,
 } from 'lucide-react';
-
-const PASSWORD_MIN_LENGTH = 8;
 
 // Errors raised by this screen carry a message that is safe and already localised.
 const userFacingError = (message) => Object.assign(new Error(message), { isUserFacing: true });
@@ -26,16 +25,6 @@ const resolveErrorMessage = (error, fallback) => {
   if (status === 429) return fallback.rateLimitError;
   if (!status) return fallback.networkError;
   return fallback.error;
-};
-
-// Report the first unmet rule so the user knows exactly what to change.
-const describePasswordProblem = (value) => {
-  if (value.length < PASSWORD_MIN_LENGTH) return 'tooShort';
-  if (!/[A-Z]/.test(value)) return 'noUppercase';
-  if (!/[a-z]/.test(value)) return 'noLowercase';
-  if (!/\d/.test(value)) return 'noNumber';
-  if (!/[^A-Za-z0-9]/.test(value)) return 'noSpecial';
-  return '';
 };
 
 const ResetPassword = () => {
@@ -71,7 +60,7 @@ const ResetPassword = () => {
   const t = useMemo(() => (language === 'en' ? translations.en : translations.am), [language]);
 
   const passwordProblem = (value) => {
-    const problem = describePasswordProblem(value);
+    const problem = getPasswordIssue(value);
     return problem ? t.passwordRequirements[problem] : '';
   };
 
@@ -88,8 +77,9 @@ const ResetPassword = () => {
       setError(passwordError);
       return;
     }
-    if (password !== confirmPassword) {
-      setError(t.mismatch);
+    const confirmationProblem = getPasswordConfirmationIssue(password, confirmPassword);
+    if (confirmationProblem) {
+      setError(t.passwordRequirements[confirmationProblem === 'required' ? 'confirmRequired' : confirmationProblem]);
       return;
     }
 
@@ -185,9 +175,15 @@ const ResetPassword = () => {
                 className="text-input"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
-                onChange={(event) => { setPassword(event.target.value); setError(''); }}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  setError('');
+                }}
                 placeholder="••••••••"
                 autoComplete="new-password"
+                required
+                minLength={8}
+                maxLength={16}
                 disabled={loading}
               />
               <button
@@ -200,6 +196,7 @@ const ResetPassword = () => {
               </button>
             </div>
           </div>
+          {password && passwordProblem(password) && <p className="field-error">{passwordProblem(password)}</p>}
 
           <div className="field">
             <label className="field-label" htmlFor="reset-confirm-password">{t.confirm}</label>
@@ -213,10 +210,13 @@ const ResetPassword = () => {
                 onChange={(event) => { setConfirmPassword(event.target.value); setError(''); }}
                 placeholder="••••••••"
                 autoComplete="new-password"
+                required
+                maxLength={16}
                 disabled={loading}
               />
             </div>
           </div>
+          {confirmPassword && getPasswordConfirmationIssue(password, confirmPassword) === 'mismatch' && <p className="field-error">{t.passwordRequirements.mismatch}</p>}
 
           <p className="field-hint">{t.passwordHint}</p>
 
@@ -431,14 +431,14 @@ const translations = {
     confirm: 'Confirm new password',
     submit: 'Update Password',
     updating: 'Updating...',
-    mismatch: 'The passwords do not match.',
-    passwordHint: 'Use at least 8 characters with an uppercase letter, a lowercase letter, a number, and a special character.',
+    mismatch: 'Passwords do not match.',
+    passwordHint: 'Use 8–16 characters and include at least one letter and one number.',
     passwordRequirements: {
-      tooShort: 'Use at least 8 characters for the new password.',
-      noUppercase: 'The new password must contain an uppercase letter.',
-      noLowercase: 'The new password must contain a lowercase letter.',
-      noNumber: 'The new password must contain a number.',
-      noSpecial: 'The new password must contain a special character.',
+      required: 'Password is required.',
+      length: 'Password must be 8–16 characters long.',
+      composition: 'Password must contain at least one letter and one number.',
+      confirmRequired: 'Confirm Password is required.',
+      mismatch: 'Passwords do not match.',
     },
     successTitle: 'Password Reset Successfully',
     success: 'Your password has been reset. You can now sign in with your new password.',
@@ -462,13 +462,13 @@ const translations = {
     submit: 'የይለፍ ቃል አስተካክል',
     updating: 'በማስተካከል ላይ...',
     mismatch: 'የይለፍ ቃሎቹ አይመሳሰሉም።',
-    passwordHint: 'ቢያንስ 8 ቁምፊዎች፣ አቢይ ሆሄ፣ ትንሽ ሆሄ፣ ቁጥር እና ልዩ ምልክት ይጠቀሙ።',
+    passwordHint: '8–16 ቁምፊዎች ይጠቀሙ፤ ቢያንስ አንድ ፊደል እና አንድ ቁጥር ያካትቱ።',
     passwordRequirements: {
-      tooShort: 'አዲሱ የይለፍ ቃል ቢያንስ 8 ቁምፊዎች ማለት አለበት።',
-      noUppercase: 'አዲሱ የይለፍ ቃል አቢይ ሆሄ ያለ ፊደል ማስገባት አለበት።',
-      noLowercase: 'አዲሱ የይለፍ ቃል ትንሽ ሆሄ ያለ ፊደል ማስገባት አለበት።',
-      noNumber: 'አዲሱ የይለፍ ቃል ቁጥር ማስገባት አለበት።',
-      noSpecial: 'አዲሱ የይለፍ ቃል ልዩ ምልክት ማስገባት አለበት።',
+      required: 'የይለፍ ቃል ያስፈልጋል።',
+      length: 'የይለፍ ቃሉ 8–16 ቁምፊዎች መሆን አለበት።',
+      composition: 'የይለፍ ቃሉ ቢያንስ አንድ ፊደል እና አንድ ቁጥር ማካተት አለበት።',
+      confirmRequired: 'የይለፍ ቃል ማረጋገጫ ያስፈልጋል።',
+      mismatch: 'የይለፍ ቃሎቹ አይመሳሰሉም።',
     },
     successTitle: 'የይለፍ ቃል በተሳካ ሁኔታ ተቀይሯል',
     success: 'የይለፍ ቃልዎ ተቀይሯል። አሁን በአዲሱ የይለፍ ቃልዎ መግባት ይችላሉ።',

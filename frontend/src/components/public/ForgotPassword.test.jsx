@@ -354,7 +354,7 @@ describe('ForgotPassword', () => {
     fireEvent.change(screen.getByLabelText('Confirm New Password'), { target: { value: 'weak' } });
     fireEvent.click(screen.getByRole('button', { name: /Update Password/ }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/at least 8 characters/i);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Password must be 8–16 characters long.');
     expect(apiClient.post).not.toHaveBeenCalled();
   });
 
@@ -379,7 +379,7 @@ describe('ForgotPassword', () => {
     fireEvent.change(screen.getByLabelText('Confirm New Password'), { target: { value: 'Different!1' } });
     fireEvent.click(screen.getByRole('button', { name: /Update Password/ }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('The passwords do not match. Please try again.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Passwords do not match.');
     expect(apiClient.post).not.toHaveBeenCalled();
   });
 

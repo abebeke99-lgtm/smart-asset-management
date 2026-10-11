@@ -14,6 +14,7 @@ const { ROLE_NAMES, normalizeRoleForStorage } = require('../constants/rolePermis
 const { isValidUsername } = require('../utils/validators');
 
 const roles = ROLE_NAMES;
+const STORE_MANAGER_ACCOUNT_LIMIT = 8;
 const normalizeLookupValue = (value) => String(value ?? '').trim().toLowerCase();
 const isValidPhone = (value) => {
   const phone = String(value || '').trim();
@@ -54,8 +55,8 @@ const validateUserInput = async (input, { requirePassword = false } = {}) => {
   if (input.fullName !== undefined && !String(input.fullName || '').trim()) return 'Full name is required';
   if (!input.username || !String(input.username).trim()) return 'Username is required';
   if (requirePassword) {
-    const pwd = typeof input.password === 'string' ? input.password : '';
-    if (!pwd || pwd.length < 8) return 'Password must be at least 8 characters';
+    const passwordError = validatePassword(input.password);
+    if (passwordError) return passwordError;
   }
   if (input.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(input.email))) return 'Invalid email address';
   if (input.role && !roles.includes(input.role)) return 'Invalid user role';
@@ -106,6 +107,48 @@ const getUserStats = async (_req, res, next) => {
         admins: roleCounts.admin || 0,
         adminCount: roleCounts.admin || 0,
         roleCounts,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getStoreManagerAccounts = async (req, res, next) => {
+  try {
+    const allStoreManagerAccounts = { role: 'store_manager' };
+    const visibleAccounts = { ...allStoreManagerAccounts };
+    if (req.user?.role === 'store_manager') {
+      const configuredCollegeId = req.organizationScope?.collegeId ?? req.user.collegeId ?? req.user.college_id;
+      const scope = configuredCollegeId == null ? await findCollegeScopeForUser(req.user) : null;
+      const collegeId = Number(configuredCollegeId ?? scope?.collegeId);
+      if (!Number.isSafeInteger(collegeId) || collegeId <= 0) {
+        return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+      }
+      visibleAccounts.collegeId = collegeId;
+    }
+    const { count, users } = await sequelize.transaction(async (transaction) => {
+      const users = await User.findAll({
+        where: visibleAccounts,
+        attributes: ['id', 'fullName', 'username', 'email', 'status', 'createdAt', 'collegeId', 'departmentId', 'department'],
+        include: [
+          { model: College, attributes: ['id', 'collegeName'], required: false },
+          { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name'], required: false },
+        ],
+        order: [['createdAt', 'ASC'], ['id', 'ASC']],
+        transaction,
+      });
+      const count = await User.count({ where: allStoreManagerAccounts, transaction });
+      return { count, users };
+    });
+    return res.json({
+      success: true,
+      data: {
+        count,
+        limit: STORE_MANAGER_ACCOUNT_LIMIT,
+        remaining: Math.max(0, STORE_MANAGER_ACCOUNT_LIMIT - count),
+        visibleCount: users.length,
+        users,
       },
     });
   } catch (error) {
@@ -208,8 +251,8 @@ const createUser = async (req, res) => {
   try {
     const body = req.body || {};
     if (typeof body.password !== 'string' || !body.password) return res.status(400).json({ success: false, message: 'Password is required' });
-    if (typeof body.confirmPassword !== 'string' || !body.confirmPassword) return res.status(400).json({ success: false, message: 'Confirm Password is required' });
-    if (body.password !== body.confirmPassword) return res.status(400).json({ success: false, message: 'Password and Confirm Password must match' });
+    if (typeof body.confirmPassword !== 'string' || !body.confirmPassword) return res.status(400).json({ success: false, message: 'Confirm Password is required.' });
+    if (body.password !== body.confirmPassword) return res.status(400).json({ success: false, message: 'Passwords do not match.' });
     const username = String(body.username || '').trim();
     const email = String(body.email || '').trim();
     const role = normalizeRoleForStorage(body.role || body.roleId);
@@ -247,11 +290,23 @@ const createUser = async (req, res) => {
     if (passwordError) return res.status(400).json({ success: false, message: passwordError });
 
     const user = await sequelize.transaction(async (transaction) => {
-      const roleRecord = await Role.findOne({ where: { name: role, active: true }, transaction });
+      const roleRecord = await Role.findOne({
+        where: { name: role, active: true },
+        transaction,
+        ...(role === 'store_manager' ? { lock: transaction.LOCK.UPDATE } : {}),
+      });
       if (!roleRecord) {
         const error = new Error('Invalid or inactive user role');
         error.statusCode = 400;
         throw error;
+      }
+      if (role === 'store_manager') {
+        const accountCount = await User.count({ where: { role }, transaction });
+        if (accountCount >= STORE_MANAGER_ACCOUNT_LIMIT) {
+          const error = new Error(`The maximum of ${STORE_MANAGER_ACCOUNT_LIMIT} Store Manager accounts has been reached.`);
+          error.statusCode = 409;
+          throw error;
+        }
       }
 
       const collegeId = collegeResult.id;
@@ -362,8 +417,18 @@ const updateUser = async (req, res) => {
     if ((input.status !== undefined && nextStatus !== 'active') || (requestedActive !== undefined && !requestedActive)) {
       if (user.id === req.user.id) return res.status(400).json({ success: false, message: 'Administrators cannot deactivate or suspend their own account' });
     }
-    if (input.password && input.password !== input.confirmPassword) {
-      return res.status(400).json({ success: false, message: 'Password and Confirm Password must match' });
+    if (Object.prototype.hasOwnProperty.call(input, 'password')) {
+      if (typeof input.password !== 'string' || !input.password) {
+        return res.status(400).json({ success: false, message: 'Password is required.' });
+      }
+      if (typeof input.confirmPassword !== 'string' || !input.confirmPassword) {
+        return res.status(400).json({ success: false, message: 'Confirm Password is required.' });
+      }
+      if (input.password !== input.confirmPassword) {
+        return res.status(400).json({ success: false, message: 'Passwords do not match.' });
+      }
+      const passwordError = validatePassword(input.password);
+      if (passwordError) return res.status(400).json({ success: false, message: passwordError });
     }
     const updates = {
       ...(input.username ? { username: input.username } : {}),
@@ -375,21 +440,53 @@ const updateUser = async (req, res) => {
       ...(input.phone !== undefined || phone_number !== undefined ? { phone: input.phone ?? phone_number ?? '' } : {}),
       ...(nextStatus !== undefined ? { status: nextStatus, active: nextStatus === 'active' } : input.active !== undefined || is_active !== undefined ? { active: input.active ?? is_active, status: (input.active ?? is_active) ? 'active' : 'inactive' } : {})
     };
-    if (input.password) {
-      if (String(input.password).length < 8) return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
+    if (Object.prototype.hasOwnProperty.call(input, 'password')) {
       updates.password = await bcrypt.hash(input.password, 10);
     }
     if (updates.username !== user.username || updates.email !== user.email) {
       const duplicate = await findDuplicateUser({ username: updates.username || user.username, email: updates.email !== undefined ? updates.email : user.email, excludeUserId: user.id });
       if (duplicate) return res.status(409).json({ success: false, message: 'Username or email is already in use' });
     }
+    let updatedUser = user;
+    if (role === 'store_manager' && user.role !== 'store_manager') {
+      updatedUser = await sequelize.transaction(async (transaction) => {
+        const storeManagerRole = await Role.findOne({
+          where: { name: 'store_manager', active: true },
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+        if (!storeManagerRole) {
+          const error = new Error('Invalid or inactive user role');
+          error.statusCode = 400;
+          throw error;
+        }
+        const lockedUser = await User.findByPk(user.id, { transaction, lock: transaction.LOCK.UPDATE });
+        if (!lockedUser) {
+          const error = new Error('User not found');
+          error.statusCode = 404;
+          throw error;
+        }
+        if (lockedUser.role !== 'store_manager') {
+          const accountCount = await User.count({ where: { role: 'store_manager' }, transaction });
+          if (accountCount >= STORE_MANAGER_ACCOUNT_LIMIT) {
+            const error = new Error(`The maximum of ${STORE_MANAGER_ACCOUNT_LIMIT} Store Manager accounts has been reached.`);
+            error.statusCode = 409;
+            throw error;
+          }
+        }
+        await lockedUser.update(updates, { transaction });
+        return lockedUser;
+      });
+    } else {
+      await updatedUser.update(updates);
+    }
     const before = safeUser(user);
-    await user.update(updates);
-    const roleChanged = before.role !== user.role;
-    await createAuditLog({ userId: req.user.id, role: req.user.role, action: roleChanged ? 'CHANGE_ROLE' : 'UPDATE_USER', entity: `user:${user.id}`, entityId: user.id, oldValue: before, newValue: safeUser(user), details: { operation: updates.active !== undefined && updates.active !== before.active ? (updates.active ? 'activate' : 'deactivate') : 'update' } });
-    await recordUserActivity(req, user.id, `User account updated by administrator ${req.user.username}`);
-    res.json({ success: true, message: 'User updated successfully', data: safeUser(user) });
+    const roleChanged = before.role !== updatedUser.role;
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: roleChanged ? 'CHANGE_ROLE' : 'UPDATE_USER', entity: `user:${updatedUser.id}`, entityId: updatedUser.id, oldValue: before, newValue: safeUser(updatedUser), details: { operation: updates.active !== undefined && updates.active !== before.active ? (updates.active ? 'activate' : 'deactivate') : 'update' } });
+    await recordUserActivity(req, updatedUser.id, `User account updated by administrator ${req.user.username}`);
+    res.json({ success: true, message: 'User updated successfully', data: safeUser(updatedUser) });
   } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
     if (error.name === 'SequelizeUniqueConstraintError') return res.status(409).json({ success: false, message: 'Username or email is already in use' });
     console.error('User update failed:', error);
     res.status(500).json({ success: false, message: 'Unable to update user.' });
@@ -584,10 +681,19 @@ const setUserSecurityState = async (req, res, state) => {
 const resetUserPassword = async (req, res) => {
   const user = await User.findByPk(req.params.id);
   if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-  const temporaryPassword = String(req.body.password || '').trim();
-  if (temporaryPassword && temporaryPassword.length < 8) return res.status(400).json({ success: false, message: 'Temporary password must be at least 8 characters' });
-  if (req.body.confirmPassword && temporaryPassword !== req.body.confirmPassword) return res.status(400).json({ success: false, message: 'Password and Confirm Password must match' });
-  await user.update({ password: await bcrypt.hash(temporaryPassword || require('crypto').randomBytes(18).toString('base64url'), 10), forcePasswordChange: true, sessionVersion: (user.sessionVersion || 0) + 1 });
+  const temporaryPassword = req.body?.password;
+  if (typeof temporaryPassword !== 'string' || !temporaryPassword) {
+    return res.status(400).json({ success: false, message: 'Password is required.' });
+  }
+  if (typeof req.body.confirmPassword !== 'string' || !req.body.confirmPassword) {
+    return res.status(400).json({ success: false, message: 'Confirm Password is required.' });
+  }
+  if (temporaryPassword !== req.body.confirmPassword) {
+    return res.status(400).json({ success: false, message: 'Passwords do not match.' });
+  }
+  const passwordError = validatePassword(temporaryPassword);
+  if (passwordError) return res.status(400).json({ success: false, message: passwordError });
+  await user.update({ password: await bcrypt.hash(temporaryPassword, 10), forcePasswordChange: true, sessionVersion: (user.sessionVersion || 0) + 1 });
   await AuditLog.create({ userId: req.user.id, action: 'RESET_USER_PASSWORD', entity: `user:${user.id}`, details: JSON.stringify({ userId: user.id, forcePasswordChange: true }) });
   await recordUserActivity(req, user.id, `Password reset by administrator ${req.user.username}`);
   return res.json({ success: true, message: 'Password reset successfully; the user must change it at next login' });
@@ -609,4 +715,4 @@ const terminateUserSession = async (req, res) => {
   return res.json({ success: true, message: 'User sessions terminated' });
 };
 
-module.exports = { getAllUsers, getUserStats, getRoles, getUserById, createUser, updateUser, updateUserStatus, getUserActivity, deleteUser, getCurrentUserProfile, updateProfile, updateCurrentUserProfilePhoto, removeCurrentUserProfilePhoto, setUserSecurityState, resetUserPassword, forcePasswordChange, terminateUserSession, recordUserActivity };
+module.exports = { getAllUsers, getUserStats, getStoreManagerAccounts, getRoles, getUserById, createUser, updateUser, updateUserStatus, getUserActivity, deleteUser, getCurrentUserProfile, updateProfile, updateCurrentUserProfilePhoto, removeCurrentUserProfilePhoto, setUserSecurityState, resetUserPassword, forcePasswordChange, terminateUserSession, recordUserActivity };

@@ -9,6 +9,8 @@ import {
   isDashboardRoute,
   isPublicRoute,
   getDashboardRoute,
+  getActiveSidebarPath,
+  ProtectedRoute,
 } from './App';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -18,8 +20,12 @@ import AdminDashboard from './components/admin/AdminDashboard';
 import apiClient from './services/apiClient';
 import fs from 'fs';
 import path from 'path';
+import { ROUTES, getRoutesByRole } from './constants/routes';
 
 const mockLogin = jest.fn();
+let mockUser = null;
+let mockAuthLoading = false;
+const mockHasPermission = jest.fn(() => true);
 
 jest.mock('axios', () => ({
   __esModule: true,
@@ -48,7 +54,7 @@ jest.mock('./contexts/UiContext', () => ({
 }));
 
 jest.mock('./contexts/AuthContext', () => ({
-  useAuth: () => ({ login: mockLogin }),
+  useAuth: () => ({ login: mockLogin, user: mockUser, loading: mockAuthLoading, hasPermission: mockHasPermission }),
   AuthProvider: ({ children }) => <>{children}</>,
 }));
 
@@ -228,6 +234,8 @@ describe('Administrator route wiring', () => {
     for (const label of ['Dashboard', 'All Assets', 'Users', 'Maintenance Oversight', 'Settings']) {
       expect(sidebarSource).toContain(`label: '${label}'`);
     }
+    expect(sidebarSource).not.toContain("label: 'Roles & Permissions'");
+    expect(appSource).not.toContain("label: 'Roles & Permissions', icon: ShieldCheck");
     expect(appSource).toContain("path: '/maintenance/technicians'");
     expect(appSource).toContain("path: '/maintenance/history'");
     expect(appSource).toContain('<Route path="maintenance" element={<AdminMaintenance />');
@@ -271,22 +279,33 @@ describe('Store Manager dashboard route wiring', () => {
 
   it('keeps only the approved Store Manager sidebar routes and sections', () => {
     const sidebarMatch = appSource.match(/'store_manager': \[([\s\S]*?)\],\s*'maintenance':/);
-    const sidebarItems = [...(sidebarMatch?.[1] || '').matchAll(/\{ path: '([^']+)', label: ([^,]+), section: '([^']+)' \}/g)]
-      .map(([, route, label, section]) => ({ route, label, section }));
+    const sidebarItems = [...(sidebarMatch?.[1] || '').matchAll(/\{ path: (ROUTES\.(?:STORE_AVAILABLE_ASSETS|STORE_USER_REGISTRATION)|'[^']+'), label: ([^,]+), section: '([^']+)' \}/g)]
+      .map(([, route, label, section]) => ({
+        route: route === 'ROUTES.STORE_AVAILABLE_ASSETS'
+          ? ROUTES.STORE_AVAILABLE_ASSETS
+          : route === 'ROUTES.STORE_USER_REGISTRATION'
+            ? ROUTES.STORE_USER_REGISTRATION
+            : route.slice(1, -1),
+        label,
+        section,
+      }));
+    expect(sidebarMatch).not.toBeNull();
+    expect(sidebarMatch[1].match(/ROUTES\.STORE_AVAILABLE_ASSETS/g)).toHaveLength(1);
+    expect(sidebarMatch[1]).not.toContain("path: '/store'");
     expect(sidebarItems).toEqual([
-      { route: '/store', label: "'📊 ' + t.dashboard", section: 'Dashboard' },
       { route: '/store/inventory', label: "'📦 Inventory'", section: 'INVENTORY MANAGEMENT' },
-      { route: '/store/available-assets', label: "'📦 Available Assets'", section: 'INVENTORY MANAGEMENT' },
-      { route: '/store/low-stock', label: "'⚠️ Low Stock'", section: 'INVENTORY MANAGEMENT' },
+      { route: ROUTES.STORE_AVAILABLE_ASSETS, label: "'📦 Available Assets'", section: 'INVENTORY MANAGEMENT' },
       { route: '/store/stock-adjustments', label: "'⚙️ Stock Adjustments'", section: 'INVENTORY MANAGEMENT' },
       { route: '/store/receive', label: "'📥 Receive'", section: 'ASSET OPERATIONS' },
       { route: '/store/issue', label: "'📤 Issue'", section: 'ASSET OPERATIONS' },
       { route: '/store/returns', label: "'↩️ Returns'", section: 'ASSET OPERATIONS' },
       { route: '/store/transfers', label: "'🔄 Transfers'", section: 'ASSET OPERATIONS' },
       { route: '/store/requests', label: "'📝 Requests'", section: 'ASSET OPERATIONS' },
+      { route: ROUTES.STORE_USER_REGISTRATION, label: "'User Registration'", section: 'ACCOUNT MANAGEMENT' },
       { route: '/store/notifications', label: "'🔔 ' + t.notifications", section: 'Notifications' },
     ]);
-    expect(appSource).toContain("['INVENTORY MANAGEMENT', 'ASSET OPERATIONS'].map((sectionName) =>");
+    expect(appSource).not.toContain("renderSidebarLink(sidebarItems.find((item) => item.path === '/store'))");
+    expect(appSource).toContain("['INVENTORY MANAGEMENT', 'ASSET OPERATIONS', 'ACCOUNT MANAGEMENT'].map((sectionName) =>");
   });
 
   it('maps every approved Store Manager sidebar route to a page in the protected route tree', () => {
@@ -295,6 +314,8 @@ describe('Store Manager dashboard route wiring', () => {
       appSource.indexOf('{/* MAINTENANCE ROUTES'),
     );
     expect(storeRouteTree).toContain('<Route index element={<StoreDashboard />} />');
+    expect(storeRouteTree).toContain('<Route path="available-assets" element={<StoreAssets />} />');
+    expect(appSource).toContain('<Route path="/store" element={<ProtectedRoute allowedRoles={[\'store_manager\']}><RoleLayout /></ProtectedRoute>}>');
     for (const route of [
       ['inventory', 'StoreInventory'],
       ['available-assets', 'StoreAssets'],
@@ -306,9 +327,54 @@ describe('Store Manager dashboard route wiring', () => {
       ['transfers', 'StoreTransfers'],
       ['requests', 'StoreAssetRequests'],
       ['notifications', 'StoreNotifications'],
+      ['user-registration', 'StoreManagerAccounts'],
     ]) {
       expect(storeRouteTree).toContain(`<Route path="${route[0]}" element={<${route[1]} />} />`);
     }
+  });
+
+  it('uses the role route registry for the sidebar destination and excludes it from other roles', () => {
+    expect(getRoutesByRole('store_manager')).toContain(ROUTES.STORE_AVAILABLE_ASSETS);
+    for (const role of ['admin', 'ict_officer', 'finance', 'maintenance', 'student']) {
+      expect(getRoutesByRole(role)).not.toContain(ROUTES.STORE_AVAILABLE_ASSETS);
+    }
+  });
+
+  it('selects the most specific sidebar route so Available Assets is active on its page', () => {
+    const sidebarItems = [
+      { path: '/store' },
+      { path: '/store/inventory' },
+      { path: ROUTES.STORE_AVAILABLE_ASSETS },
+    ];
+    expect(getActiveSidebarPath(sidebarItems, ROUTES.STORE_AVAILABLE_ASSETS, '/store')).toBe(ROUTES.STORE_AVAILABLE_ASSETS);
+    expect(getActiveSidebarPath(sidebarItems, '/store', '/store')).toBe('/store');
+  });
+
+  it('opens the protected route for Store Managers and redirects or denies other users', () => {
+    const page = (
+      <MemoryRouter initialEntries={[ROUTES.STORE_AVAILABLE_ASSETS]}>
+        <Routes>
+          <Route path={ROUTES.STORE_AVAILABLE_ASSETS} element={
+            <ProtectedRoute allowedRoles={['store_manager']}><p>Available Assets page</p></ProtectedRoute>
+          } />
+          <Route path="/login" element={<p>Login page</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    mockUser = { role: 'store_manager' };
+    const authorized = render(page);
+    expect(screen.getByText('Available Assets page')).toBeInTheDocument();
+    authorized.unmount();
+
+    mockUser = null;
+    render(page);
+    expect(screen.getByText('Login page')).toBeInTheDocument();
+    expect(screen.queryByText('Available Assets page')).not.toBeInTheDocument();
+
+    mockUser = { role: 'admin' };
+    render(page);
+    expect(screen.getByRole('alert')).toHaveTextContent(/access denied/i);
   });
 });
 
@@ -401,15 +467,10 @@ describe('Department Head sidebar specification', () => {
     ['/department-head/assets', 'Assets'],
     ['/department-head/inventory', 'Inventory'],
     ['/department-head/requests', 'Asset Requests'],
-    ['/department-head/approval-queue', 'Approval Queue'],
     ['/department-head/assignments', 'Assignments'],
     ['/department-head/transfers', 'Transfers'],
     ['/department-head/returns', 'Returns'],
     ['/department-head/verification', 'Verification'],
-    ['/department-head/maintenance', 'Maintenance'],
-    ['/department-head/history', 'History'],
-    ['/department-head/tickets', 'Tickets'],
-    ['/department-head/tickets/escalated', 'Escalated Tickets'],
     ['/department-head/tracking', 'Tracking'],
     ['/department-head/reports', 'Reports'],
     ['/department-head/analytics', 'Analytics'],
@@ -419,10 +480,10 @@ describe('Department Head sidebar specification', () => {
   const sidebarItems = [...itemSource.matchAll(/\{ path: '([^']+)', label: '([^']+)'/g)]
     .map(([, route, label]) => [route, label]);
 
-  it('contains exactly the approved 21 items once, in the approved order and categories', () => {
+  it('contains exactly the approved 16 items once, in the approved order and categories', () => {
     expect(sidebarItems).toEqual(expectedItems);
-    expect(new Set(sidebarItems.map(([route]) => route)).size).toBe(21);
-    expect(new Set(sidebarItems.map(([, label]) => label)).size).toBe(21);
+    expect(new Set(sidebarItems.map(([route]) => route)).size).toBe(16);
+    expect(new Set(sidebarItems.map(([, label]) => label)).size).toBe(16);
     expect(sidebarItems).not.toContainEqual(['/department-head/maintenance-requests', 'Service Requests']);
 
     const sectionSource = appSource.match(/const departmentManagerSections = \[([\s\S]*?)\];/)?.[1] || '';
@@ -435,9 +496,9 @@ describe('Department Head sidebar specification', () => {
     ]);
     expect(sectionSource).toContain('departmentHeadItems.slice(0, 1)');
     expect(sectionSource).toContain('departmentHeadItems.slice(1, 5)');
-    expect(sectionSource).toContain('departmentHeadItems.slice(5, 13)');
-    expect(sectionSource).toContain('departmentHeadItems.slice(13, 18)');
-    expect(sectionSource).toContain('departmentHeadItems.slice(18)');
+    expect(sectionSource).toContain('departmentHeadItems.slice(5, 12)');
+    expect(sectionSource).toContain('departmentHeadItems.slice(12, 13)');
+    expect(sectionSource).toContain('departmentHeadItems.slice(13)');
     expect(itemSource).not.toContain("label: 'Asset History'");
     expect(appSource).toContain("sidebarRole === 'department_head' && departmentManagerSections.map");
     expect(appSource).toMatch(/sidebarRole === 'department_head'\s*\?\s*departmentHeadItems/);
@@ -467,7 +528,8 @@ describe('Department Head sidebar specification', () => {
   });
 
   it('keeps active-route matching and the approved visual/responsive styling scoped to Department Head', () => {
-    expect(appSource).toContain(".find((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))?.path");
+    expect(appSource).toContain(".find((item) => pathname === item.path || pathname.startsWith(`${item.path}/`))?.path");
+    expect(appSource).toContain('getActiveSidebarPath(navigationItems, location.pathname, getDashboardRoute(user?.role))');
     expect(appSource).toContain("sidebarRole === 'department_head' ? ' department-head-sidebar' : ''");
     expect(sidebarCss).toMatch(/\.department-head-sidebar,\s*body\.dark \.department-head-sidebar/);
     expect(sidebarCss).toContain('background: #111827 !important;');

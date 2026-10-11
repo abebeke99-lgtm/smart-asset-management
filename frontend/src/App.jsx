@@ -35,6 +35,7 @@ import { getShellTranslations, translateNavigationLabel } from './i18n/messages'
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
 import { apiClient, getApiErrorMessage } from './utils/api';
+import { ROUTES } from './constants/routes';
 import Footer from './components/common/Footer';
 import StoreTracking from './components/store/StoreTracking';
 
@@ -118,6 +119,7 @@ import StoreAssetRequests from './components/store/StoreAssetRequests';
 import StoreHistory from './components/store/StoreHistory';
 import StoreMaintenance from './components/store/StoreMaintenance';
 import StoreNotifications from './components/store/StoreNotifications';
+import StoreManagerAccounts from './components/store/StoreManagerAccounts';
 
 import MaintDashboard from './components/maintenance/MaintDashboard';
 import MaintRequests from './components/maintenance/MaintRequests';
@@ -277,6 +279,11 @@ export const getDashboardRoute = (role) => {
 
   return roleMap[normalizeRole(role)] || '/home';
 };
+
+export const getActiveSidebarPath = (items, pathname, fallback) => [...items]
+  .sort((left, right) => right.path.length - left.path.length)
+  .find((item) => pathname === item.path || pathname.startsWith(`${item.path}/`))?.path
+  || fallback;
 
 const publicPaths = ['/home', '/about', '/services', '/contact', '/contac', '/register', '/forgot-password', '/reset-password'];
 
@@ -2377,7 +2384,6 @@ const adminSidebarSections = [
     heading: 'ORGANIZATION',
     items: [
       { to: '/admin/users', label: 'Users', icon: Users },
-      { to: '/admin/roles-permissions', label: 'Roles & Permissions', icon: ShieldCheck },
       { to: '/admin/colleges', label: 'Colleges', icon: Building2 },
       { to: '/admin/departments', label: 'Departments', icon: Building2 },
       { to: '/admin/locations', label: 'Locations', icon: MapPin },
@@ -3155,8 +3161,7 @@ function AppContent() {
               )}
               {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'store_manager' && (
                 <>
-                  {renderSidebarLink(sidebarItems.find((item) => item.path === '/store'))}
-                  {['INVENTORY MANAGEMENT', 'ASSET OPERATIONS'].map((sectionName) => {
+                  {['INVENTORY MANAGEMENT', 'ASSET OPERATIONS', 'ACCOUNT MANAGEMENT'].map((sectionName) => {
                     const visibleItems = sidebarItems.filter((item) => item.section === sectionName);
                     if (!visibleItems.length) return null;
                     return (
@@ -3345,16 +3350,15 @@ function AppContent() {
         { path: '/finance/notifications', label: '🔔 Notifications', section: 'CONTROL' }
       ],
       'store_manager': [
-        { path: '/store', label: '📊 ' + t.dashboard, section: 'Dashboard' },
         { path: '/store/inventory', label: '📦 Inventory', section: 'INVENTORY MANAGEMENT' },
-        { path: '/store/available-assets', label: '📦 Available Assets', section: 'INVENTORY MANAGEMENT' },
-        { path: '/store/low-stock', label: '⚠️ Low Stock', section: 'INVENTORY MANAGEMENT' },
+        { path: ROUTES.STORE_AVAILABLE_ASSETS, label: '📦 Available Assets', section: 'INVENTORY MANAGEMENT' },
         { path: '/store/stock-adjustments', label: '⚙️ Stock Adjustments', section: 'INVENTORY MANAGEMENT' },
         { path: '/store/receive', label: '📥 Receive', section: 'ASSET OPERATIONS' },
         { path: '/store/issue', label: '📤 Issue', section: 'ASSET OPERATIONS' },
         { path: '/store/returns', label: '↩️ Returns', section: 'ASSET OPERATIONS' },
         { path: '/store/transfers', label: '🔄 Transfers', section: 'ASSET OPERATIONS' },
         { path: '/store/requests', label: '📝 Requests', section: 'ASSET OPERATIONS' },
+        { path: ROUTES.STORE_USER_REGISTRATION, label: 'User Registration', section: 'ACCOUNT MANAGEMENT' },
         { path: '/store/notifications', label: '🔔 ' + t.notifications, section: 'Notifications' }
       ],
       'maintenance': [
@@ -3466,15 +3470,10 @@ function AppContent() {
     { path: '/department-head/assets', label: 'Assets', icon: Package },
     { path: '/department-head/inventory', label: 'Inventory', icon: Layers },
     { path: '/department-head/requests', label: 'Asset Requests', icon: ClipboardList },
-    { path: '/department-head/approval-queue', label: 'Approval Queue', icon: ClipboardCheck },
     { path: '/department-head/assignments', label: 'Assignments', icon: UserRound },
     { path: '/department-head/transfers', label: 'Transfers', icon: ArrowLeftRight },
     { path: '/department-head/returns', label: 'Returns', icon: Undo2 },
     { path: '/department-head/verification', label: 'Verification', icon: Check },
-    { path: '/department-head/maintenance', label: 'Maintenance', icon: Wrench },
-    { path: '/department-head/history', label: 'History', icon: Archive },
-    { path: '/department-head/tickets', label: 'Tickets', icon: CircleHelp },
-    { path: '/department-head/tickets/escalated', label: 'Escalated Tickets', icon: ShieldCheck },
     { path: '/department-head/tracking', label: 'Tracking', icon: Radio },
     { path: '/department-head/reports', label: 'Reports', icon: BarChart3 },
     { path: '/department-head/analytics', label: 'Analytics', icon: TrendingUp },
@@ -3518,23 +3517,16 @@ function AppContent() {
   const departmentManagerSections = [
     { label: 'MAIN', items: departmentHeadItems.slice(0, 1) },
     { label: 'DEPARTMENT MANAGEMENT', items: departmentHeadItems.slice(1, 5) },
-    { label: 'ASSET MANAGEMENT', items: departmentHeadItems.slice(5, 13) },
-    { label: 'OPERATIONS', items: departmentHeadItems.slice(13, 18) },
-    { label: 'REPORTS & ANALYTICS', items: departmentHeadItems.slice(18) }
+    { label: 'ASSET MANAGEMENT', items: departmentHeadItems.slice(5, 12) },
+    { label: 'OPERATIONS', items: departmentHeadItems.slice(12, 13) },
+    { label: 'REPORTS & ANALYTICS', items: departmentHeadItems.slice(13) }
   ];
   const navigationItems = [
     ...(sidebarRole === 'department_head'
       ? departmentHeadItems
       : [...sidebarItems, ...(isDepartmentDean ? departmentDeanItems : isDepartmentStaff ? departmentStaffItems : [])]),
-    ...(hasPermission('roles_permissions.configure') && sidebarRole !== 'admin'
-      ? [{ path: '/admin/roles-permissions', label: 'Roles & Permissions', icon: ShieldCheck }]
-      : []),
   ]
-    .filter((item) => item.path !== '/admin/roles-permissions' || hasPermission('roles_permissions.configure'));
-  const currentActiveSidebar = [...navigationItems]
-    .sort((left, right) => right.path.length - left.path.length)
-    .find((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))?.path
-    || getDashboardRoute(user?.role);
+  const currentActiveSidebar = getActiveSidebarPath(navigationItems, location.pathname, getDashboardRoute(user?.role));
 
   const getNavigationIcon = (item) => {
     if (item.icon) return item.icon;
@@ -3851,6 +3843,7 @@ function AppContent() {
             <Route path="reports/returns" element={<StoreReports />} />
             <Route path="reports/movements" element={<StoreReports />} />
             <Route path="notifications" element={<StoreNotifications />} />
+            <Route path="user-registration" element={<StoreManagerAccounts />} />
             <Route path="available" element={<Navigate to="/store/available-assets" replace />} />
             <Route path="rfid" element={<Navigate to="/store/tracking" replace />} />
             <Route path="movement-history" element={<Navigate to="/store/history" replace />} />

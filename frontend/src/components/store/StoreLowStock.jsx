@@ -95,18 +95,27 @@ export default function StoreLowStock() {
     const params = { ...filters, page, pageSize: 25, sortBy, sortOrder };
     const cacheKey = JSON.stringify(params);
     try {
-      const response = await apiClient.get('/api/store/low-stock', {
+      const requestConfig = {
         params,
         validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
-      });
+      };
+      let response = await apiClient.get('/api/store/low-stock', requestConfig);
       if (response.status === 304) {
         const cachedPayload = payloadCache.current.get(cacheKey);
-        if (!cachedPayload) throw new Error('The server returned 304 without a matching cached low-stock response.');
-        setItems(cachedPayload.items);
-        setSummary(cachedPayload.summary);
-        setFilterOptions(cachedPayload.filters);
-        setPagination(cachedPayload.pagination);
-        return;
+        if (cachedPayload) {
+          setItems(cachedPayload.items);
+          setSummary(cachedPayload.summary);
+          setFilterOptions(cachedPayload.filters);
+          setPagination(cachedPayload.pagination);
+          return;
+        }
+        response = await apiClient.get('/api/store/low-stock', {
+          ...requestConfig,
+          headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+        });
+        if (response.status === 304) {
+          throw new Error('The server returned 304 without a matching cached low-stock response.');
+        }
       }
 
       const payload = normalizeLowStockPayload(response.data);

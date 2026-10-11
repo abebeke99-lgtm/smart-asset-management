@@ -69,7 +69,7 @@ test('available-assets list returns scoped stock balances and related college an
     assignments: Assignment.findAll,
     transfers: Transfer.findAll,
     maintenance: Maintenance.findAll,
-    transactionCount: InventoryTransaction.count,
+    transactionSum: InventoryTransaction.sum,
     approvalCount: Approval.count,
     inventoryCount: Inventory.count,
   };
@@ -85,18 +85,19 @@ test('available-assets list returns scoped stock balances and related college an
   };
   let listOptions;
   let filterOptions;
+  let receivedQuantityField;
   Inventory.findAll = async (options) => { filterOptions = options; return [inventory]; };
   Inventory.findAndCountAll = async (options) => { listOptions = options; return { rows: [inventory], count: 1 }; };
   Assignment.findAll = async () => [{ assetId: 12 }];
   Transfer.findAll = async () => [];
   Maintenance.findAll = async () => [];
-  InventoryTransaction.count = async () => 3;
+  InventoryTransaction.sum = async (field) => { receivedQuantityField = field; return 12; };
   Approval.count = async () => 2;
   Inventory.count = async () => 1;
   try {
     let responseBody;
     await getAvailableAssets({
-      organizationScope: { collegeId: 9 }, user: {}, query: { search: 'Gloves', page: '2', pageSize: '5', sortBy: 'availableQuantity', sortOrder: 'desc' },
+      organizationScope: { collegeId: 9 }, user: {}, query: { search: 'Gloves', location: 'Main Store', page: '2', pageSize: '5', sortBy: 'availableQuantity', sortOrder: 'desc' },
     }, { json(body) { responseBody = body; } }, (error) => { throw error; });
     assert.equal(responseBody.success, true);
     assert.equal(responseBody.data.items[0].totalQuantity, 10);
@@ -105,23 +106,45 @@ test('available-assets list returns scoped stock balances and related college an
     assert.equal(responseBody.data.items[0].collegeName, 'Health College');
     assert.equal(responseBody.data.items[0].departmentName, 'Nursing');
     assert.equal(responseBody.data.summary.totalAvailable, 6);
+    assert.equal(responseBody.data.summary.availableToday, 12);
     assert.equal(responseBody.data.pagination.page, 2);
     assert.equal(listOptions.limit, 5);
     assert.equal(listOptions.offset, 5);
-    assert.deepEqual(listOptions.order, [['availableQuantity', 'DESC']]);
+    assert.deepEqual(listOptions.order, [['availableQuantity', 'DESC'], ['assetId', 'ASC']]);
     assert.equal(filterOptions.include[0].where.collegeId, 9);
     assert.equal(filterOptions.where.availableQuantity[Op.gt], 0);
+    assert.equal(filterOptions.where[Op.and].length, 2);
+    assert.ok(filterOptions.where[Op.and].some((clause) => clause?.[Op.or]));
+    assert.equal(receivedQuantityField, 'InventoryTransaction.quantity');
     assert.ok(listOptions.include[0].where[Op.and].some((clause) => clause[Op.or]));
+
+    inventory.availableQuantity = 'invalid';
+    await assert.rejects(() => getAvailableAssets({
+      organizationScope: { collegeId: 9 }, user: {}, query: {},
+    }, { json() {} }, (error) => { throw error; }), /invalid available quantity/);
   } finally {
     Inventory.findAll = originals.findAll;
     Inventory.findAndCountAll = originals.findAndCountAll;
     Assignment.findAll = originals.assignments;
     Transfer.findAll = originals.transfers;
     Maintenance.findAll = originals.maintenance;
-    InventoryTransaction.count = originals.transactionCount;
+    InventoryTransaction.sum = originals.transactionSum;
     Approval.count = originals.approvalCount;
     Inventory.count = originals.inventoryCount;
   }
+});
+
+test('available-assets rejects malformed department filters before querying inventory', async () => {
+  let responseStatus;
+  let responseBody;
+  await getAvailableAssets({
+    organizationScope: { collegeId: 9 }, user: {}, query: { department: 'not-a-number' },
+  }, {
+    status(status) { responseStatus = status; return this; },
+    json(body) { responseBody = body; return this; },
+  }, (error) => { throw error; });
+  assert.equal(responseStatus, 400);
+  assert.match(responseBody.message, /department filter/i);
 });
 
 test('inventory page exposes sorting, both export formats, details, and all stock workflows', () => {

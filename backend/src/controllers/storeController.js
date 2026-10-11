@@ -274,7 +274,9 @@ const getHistory = async (req, res, next) => {
 
     const [summaryData, typeRows, locationRows, departmentRows] = await Promise.all([
       AssetMovement.findAll({
-        where: { ...scope, ...(req.user?.collegeId ? { createdAt: { [Op.gte]: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } } : {}) },
+        where: scope.collegeId
+          ? { createdAt: { [Op.gte]: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } }
+          : {},
         attributes: ['id', 'movementType', 'createdAt', 'referenceType'],
         include: [{ model: Asset, attributes: ['id', 'collegeId'], required: true, where: scope }],
       }),
@@ -636,7 +638,15 @@ const getAvailableAssets = async (req, res, next) => {
     const pageSize = Math.min(100, Math.max(1, Number.parseInt(req.query.pageSize || req.query.limit, 10) || 20));
     const scope = storeScope(req);
     const search = String(req.query.search || '').trim();
+    if (search.length > 200) return res.status(400).json({ success: false, message: 'Search must be 200 characters or fewer' });
+    const inventoryLocation = Sequelize.fn(
+      'COALESCE',
+      Sequelize.fn('NULLIF', Sequelize.col('Asset.location'), ''),
+      Sequelize.col('Inventory.location'),
+    );
+    const normalizedInventoryLocation = Sequelize.fn('LOWER', inventoryLocation);
     const assetWhere = { ...scope };
+    const inventoryWhere = { availableQuantity: { [Op.gt]: 0 } };
     const assetFilters = [
       Sequelize.where(Sequelize.fn('LOWER', Sequelize.col('Asset.status')), {
         [Op.in]: ['available', 'in_store', 'active', 'assigned', 'reserved', 'in use', 'issued'],
@@ -647,7 +657,14 @@ const getAvailableAssets = async (req, res, next) => {
       { [Op.or]: [{ expiryDate: null }, { expiryDate: { [Op.gte]: new Date().toISOString().slice(0, 10) } }] },
     ];
     if (req.query.category) assetWhere.category = String(req.query.category);
-    if (req.query.location) assetWhere.location = String(req.query.location);
+    if (req.query.location) {
+      const location = String(req.query.location).trim();
+      if (!location || location.length > 255) return res.status(400).json({ success: false, message: 'A valid location filter is required' });
+      inventoryWhere[Op.and] = [
+        ...(inventoryWhere[Op.and] || []),
+        Sequelize.where(normalizedInventoryLocation, location.toLowerCase()),
+      ];
+    }
     if (req.query.condition) assetFilters.push(Sequelize.where(Sequelize.fn('LOWER', Sequelize.col('Asset.condition')), String(req.query.condition).toLowerCase()));
     if (req.query.department) {
       const departmentId = Number(req.query.department);
@@ -661,9 +678,18 @@ const getAvailableAssets = async (req, res, next) => {
     else if (assetType) return res.status(400).json({ success: false, message: 'Asset type must be serialized or bulk' });
     const numericSearch = search.match(/^\d+$/);
     if (numericSearch) assetWhere.id = Number(numericSearch);
-    else if (search) assetFilters.push({
-      [Op.or]: ['assetCode', 'name', 'category', 'location', 'serialNumber', 'rfidTag', 'digitalId'].map((field) => ({ [field]: { [Op.like]: `%${search}%` } })),
-    });
+    else if (search) inventoryWhere[Op.and] = [
+      ...(inventoryWhere[Op.and] || []),
+      {
+        [Op.or]: [
+          ...['asset_code', 'name', 'category', 'location', 'serial_number', 'rfid_tag', 'digital_id']
+            .map((field) => Sequelize.where(Sequelize.fn('LOWER', Sequelize.col(`Asset.${field}`)), {
+              [Op.like]: `%${search.toLowerCase()}%`,
+            })),
+          Sequelize.where(normalizedInventoryLocation, { [Op.like]: `%${search.toLowerCase()}%` }),
+        ],
+      },
+    ];
 
     const [assigned, transferred, maintained] = await Promise.all([
       Assignment.findAll({ where: { status: 'active' }, include: [{ model: Asset, required: true, attributes: [], where: scope }], attributes: ['assetId'], raw: true }),
@@ -682,21 +708,33 @@ const getAvailableAssets = async (req, res, next) => {
       });
     }
     assetWhere[Op.and] = assetFilters;
-    const inventoryWhere = { availableQuantity: { [Op.gt]: 0 } };
     const availability = String(req.query.availability || 'in_stock').toLowerCase();
     if (availability === 'reserved') inventoryWhere.reservedQuantity = { [Op.gt]: 0 };
     else if (availability !== 'in_stock') return res.status(400).json({ success: false, message: 'Availability must be in_stock or reserved' });
     const sortFields = new Set(['id', 'assetCode', 'name', 'category', 'location', 'condition', 'updatedAt', 'quantity', 'availableQuantity']);
     const sortBy = sortFields.has(req.query.sortBy) ? req.query.sortBy : 'name';
     const sortOrder = String(req.query.sortOrder || 'asc').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
-    const order = sortBy === 'updatedAt' || sortBy === 'quantity' || sortBy === 'availableQuantity'
+    const order = sortBy === 'location'
+      ? [[inventoryLocation, sortOrder]]
+      : sortBy === 'updatedAt' || sortBy === 'quantity' || sortBy === 'availableQuantity'
       ? [[sortBy, sortOrder]]
       : sortBy === 'id' ? [['assetId', sortOrder]] : [[Asset, sortBy, sortOrder]];
+    if (sortBy !== 'id') order.push(['assetId', 'ASC']);
     const include = [{ model: Asset, attributes: ['id', 'assetCode', 'name', 'category', 'status', 'condition', 'location', 'serialNumber', 'digitalId', 'rfidTag', 'collegeId', 'departmentId', 'unit', 'quantity'], required: true, where: assetWhere, include: [{ model: College, attributes: ['id', 'collegeName'], required: false }, { model: Department, as: 'DepartmentRecord', attributes: ['id', 'name', 'code'], required: false }] }];
     const [scopeRows, result] = await Promise.all([
       Inventory.findAll({ where: inventoryWhere, include, attributes: ['id', 'assetId', 'quantity', 'availableQuantity', 'reservedQuantity', 'damagedQuantity', 'location', 'status'] }),
       Inventory.findAndCountAll({ where: inventoryWhere, include, order, limit: pageSize, offset: (page - 1) * pageSize, distinct: true }),
     ]);
+    const readQuantity = (value, field) => {
+      if (value === null || value === undefined || value === '') return 0;
+      const quantity = Number(value);
+      if (!Number.isSafeInteger(quantity) || quantity < 0) {
+        const error = new Error(`Inventory contains an invalid ${field} quantity`);
+        error.statusCode = 500;
+        throw error;
+      }
+      return quantity;
+    };
     const departmentRows = new Map(scopeRows.map((row) => row.Asset?.DepartmentRecord).filter(Boolean).map((department) => [department.id, department]));
     const filters = {
       categories: [...new Set(scopeRows.map((row) => row.Asset?.category).filter(Boolean))].sort(),
@@ -716,12 +754,12 @@ const getAvailableAssets = async (req, res, next) => {
       location: row.Asset?.location || row.location,
       serialNumber: row.Asset?.serialNumber,
       rfidTag: row.Asset?.rfidTag,
-      availableQuantity: Number(row.availableQuantity || 0),
-      reservedQuantity: Number(row.reservedQuantity || 0),
-      damagedQuantity: Number(row.damagedQuantity || 0),
-      quantity: Number(row.quantity || 0),
-      totalQuantity: Number(row.quantity || 0),
-      issuedQuantity: Math.max(0, Number(row.quantity || 0) - Number(row.availableQuantity || 0) - Number(row.reservedQuantity || 0) - Number(row.damagedQuantity || 0)),
+      availableQuantity: readQuantity(row.availableQuantity, 'available'),
+      reservedQuantity: readQuantity(row.reservedQuantity, 'reserved'),
+      damagedQuantity: readQuantity(row.damagedQuantity, 'damaged'),
+      quantity: readQuantity(row.quantity, 'total'),
+      totalQuantity: readQuantity(row.quantity, 'total'),
+      issuedQuantity: Math.max(0, readQuantity(row.quantity, 'total') - readQuantity(row.availableQuantity, 'available') - readQuantity(row.reservedQuantity, 'reserved') - readQuantity(row.damagedQuantity, 'damaged')),
       unit: row.Asset?.unit || 'unit',
       departmentId: row.Asset?.departmentId || null,
       departmentName: row.Asset?.DepartmentRecord?.name || row.Asset?.DepartmentRecord?.code || row.Asset?.department || '',
@@ -732,11 +770,16 @@ const getAvailableAssets = async (req, res, next) => {
     }));
     const today = dateStart();
     const [availableToday, awaitingIssue, lowStock] = await Promise.all([
-      InventoryTransaction.count({ where: { type: 'receive', createdAt: { [Op.gte]: today } }, include }),
+      InventoryTransaction.sum('InventoryTransaction.quantity', { where: { type: 'receive', createdAt: { [Op.gte]: today } }, include }),
       Approval.count({ where: { status: 'approved', type: { [Op.in]: ['issue', 'asset_issue', 'request'] } }, include }),
       Inventory.count({ where: { ...inventoryWhere, [Op.and]: [Sequelize.where(Sequelize.col('available_quantity'), Op.lte, Sequelize.col('minimum_quantity'))] }, include, distinct: true }),
     ]);
-    const summary = { totalAvailable: scopeRows.reduce((sum, row) => sum + Number(row.availableQuantity || 0), 0), availableToday, awaitingIssue, lowStock };
+    const summary = {
+      totalAvailable: scopeRows.reduce((sum, row) => sum + readQuantity(row.availableQuantity, 'available'), 0),
+      availableToday: Number(availableToday || 0),
+      awaitingIssue,
+      lowStock,
+    };
     return res.json({ success: true, data: { items, total: result.count, summary, filters, pagination: { page, pageSize, total: result.count, totalPages: Math.ceil(result.count / pageSize) } } });
   } catch (error) {
     return next(error);

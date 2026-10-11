@@ -2,6 +2,7 @@ const { Config } = require('../models');
 
 const DEFAULT_SECURITY_SETTINGS = {
   password_min_length: 8,
+  password_max_length: 16,
   password_require_uppercase: true,
   password_require_lowercase: true,
   password_require_numbers: true,
@@ -24,12 +25,12 @@ const getSecuritySettings = async () => {
   }
 };
 
-const validatePassword = (password, settings) => {
-  if (String(password).length < Number(settings.password_min_length)) return `Password must be at least ${settings.password_min_length} characters`;
-  if (settings.password_require_uppercase && !/[A-Z]/.test(password)) return 'Password must contain an uppercase letter';
-  if (settings.password_require_lowercase && !/[a-z]/.test(password)) return 'Password must contain a lowercase letter';
-  if (settings.password_require_numbers && !/\d/.test(password)) return 'Password must contain a number';
-  if (settings.password_require_special && !/[^A-Za-z0-9]/.test(password)) return 'Password must contain a special character';
+const validatePassword = (password) => {
+  if (typeof password !== 'string' || password.length === 0) return 'Password is required.';
+  if (password.length < 8 || password.length > 16) return 'Password must be 8–16 characters long.';
+  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+    return 'Password must contain at least one letter and one number.';
+  }
   return null;
 };
 

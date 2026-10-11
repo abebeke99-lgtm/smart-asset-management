@@ -1,4 +1,5 @@
 const fs = require('fs/promises');
+const fsSync = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
@@ -31,7 +32,7 @@ function randomSuffix() {
 }
 
 function buildTimestampLabel(date = new Date()) {
-  return date.toISOString().replace(/[:.]/g, '-');
+  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, '');
 }
 
 function getEncryptionKey() {
@@ -66,9 +67,10 @@ function resolveMysqlBinary(binaryName) {
   for (const candidate of uniqueCandidates) {
     try {
       const resolvedPath = path.resolve(candidate);
-      if (resolvedPath && (resolvedPath.endsWith(binaryName) || resolvedPath.endsWith(`${binaryName}.exe`))) {
-        return resolvedPath;
-      }
+      const directMatch = fsSync.existsSync(resolvedPath) ? resolvedPath : null;
+      if (directMatch) return directMatch;
+      const exeMatch = fsSync.existsSync(`${resolvedPath}.exe`) ? `${resolvedPath}.exe` : null;
+      if (exeMatch) return exeMatch;
     } catch (error) {
       // ignore invalid path candidates
     }
@@ -576,6 +578,7 @@ async function deleteBackup(filename) {
 module.exports = {
   BACKUP_DIRECTORY,
   getDatabaseConfig,
+  buildTimestampLabel,
   resolveMysqlDumpBinary: () => resolveMysqlBinary('mysqldump'),
   resolveMysqlBinary: () => resolveMysqlBinary('mysql'),
   ensureBackupDirectory,

@@ -70,7 +70,7 @@ test('fulfills an approved request and refreshes its status', async () => {
       params: { page: 1, limit: 50 }
     });
   });
-  fireEvent.click(await screen.findByRole('button', { name: /Approved Requests/ }));
+  fireEvent.click(await screen.findByRole('tab', { name: 'Approved Requests tab' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Fulfill' }));
 
   await waitFor(() => {
@@ -160,7 +160,7 @@ test('keeps successful form choices available when approvals fail and retries th
         ? Promise.reject(approvalError)
         : Promise.resolve({ data: { requests: [] } });
     }
-    if (url === '/api/assets') return Promise.resolve({ data: { assets: [{ id: 3, name: 'Laptop' }] } });
+    if (url === '/api/assets') return Promise.resolve({ data: { assets: [{ id: 3, name: 'Laptop', availableQuantity: 5 }] } });
     if (url === '/api/users') return Promise.resolve({ data: { users: [{ id: 42, full_name: 'Beneficiary' }] } });
     if (url === '/api/departments') return Promise.resolve({ data: { departments: [{ id: 12, name: 'IT' }] } });
     return Promise.resolve({ data: {} });
@@ -169,7 +169,7 @@ test('keeps successful form choices available when approvals fail and retries th
   render(<StoreAssetRequests />);
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load request data. Please try again.');
-  expect(await screen.findByRole('option', { name: 'Laptop' })).toBeInTheDocument();
+  expect(await screen.findByRole('option', { name: /Laptop/ })).toBeInTheDocument();
   expect(await screen.findByRole('option', { name: 'Beneficiary' })).toBeInTheDocument();
   expect(await screen.findByRole('option', { name: 'IT' })).toBeInTheDocument();
   expect(consoleError).not.toHaveBeenCalled();
@@ -194,7 +194,7 @@ test('does not show a request-load error when reference data fails but approvals
   await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(toastError).not.toHaveBeenCalled();
-  expect(screen.getByRole('button', { name: /History/ })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'History overview' })).toBeInTheDocument();
 });
 
 test('loads history and status counters from the approval response', async () => {
@@ -212,16 +212,16 @@ test('loads history and status counters from the approval response', async () =>
 
   render(<StoreAssetRequests />);
 
-  await waitFor(() => expect(screen.getByText('Request History').parentElement.children[1]).toHaveTextContent('4'));
-  expect(screen.getByText('Pending Requests').parentElement.children[1]).toHaveTextContent('1');
-  expect(screen.getByText('Approved Requests').parentElement.children[1]).toHaveTextContent('1');
-  expect(screen.getByText('Rejected Requests').parentElement.children[1]).toHaveTextContent('1');
-  expect(screen.getByText('Cancelled').parentElement.children[1]).toHaveTextContent('1');
+  await waitFor(() => expect(screen.getByRole('button', { name: 'History overview' }).children[1]).toHaveTextContent('4'));
+  expect(screen.getByRole('button', { name: 'Pending overview' }).children[1]).toHaveTextContent('1');
+  expect(screen.getByRole('button', { name: 'Approved overview' }).children[1]).toHaveTextContent('1');
+  expect(screen.getByRole('button', { name: 'Rejected overview' }).children[1]).toHaveTextContent('1');
+  expect(screen.getByRole('button', { name: 'Cancelled overview' }).children[1]).toHaveTextContent('1');
 });
 
 test('submits the requested-for user, required date, purpose, and remarks', async () => {
   apiClient.get.mockImplementation((url) => {
-    if (url === '/api/assets') return Promise.resolve({ data: { assets: [{ id: 3, name: 'Laptop' }] } });
+    if (url === '/api/assets') return Promise.resolve({ data: { assets: [{ id: 3, name: 'Laptop', availableQuantity: 5 }] } });
     if (url === '/api/departments') return Promise.resolve({ data: { departments: [{ id: 12, name: 'IT' }] } });
     if (url === '/api/users') return Promise.resolve({ data: { users: [{ id: 42, full_name: 'Beneficiary' }] } });
     if (url === '/api/approvals') return Promise.resolve({ data: { requests: [] } });
@@ -259,7 +259,7 @@ test('submits the requested-for user, required date, purpose, and remarks', asyn
 test('rejects fractional request quantities before sending them to the API', async () => {
   const toastError = jest.spyOn(require('react-toastify').toast, 'error').mockImplementation(() => {});
   apiClient.get.mockImplementation((url) => {
-    if (url === '/api/assets') return Promise.resolve({ data: { assets: [{ id: 3, name: 'Laptop' }] } });
+    if (url === '/api/assets') return Promise.resolve({ data: { assets: [{ id: 3, name: 'Laptop', availableQuantity: 5 }] } });
     if (url === '/api/departments') return Promise.resolve({ data: { departments: [{ id: 12, name: 'IT' }] } });
     if (url === '/api/approvals') return Promise.resolve({ data: { requests: [] } });
     if (url === '/api/users') return Promise.resolve({ data: { users: [] } });
@@ -286,7 +286,7 @@ test('shows the server error when approved request fulfillment fails', async () 
   const toastError = jest.spyOn(require('react-toastify').toast, 'error').mockImplementation(() => {});
   render(<StoreAssetRequests />);
 
-  fireEvent.click(await screen.findByRole('button', { name: /Approved Requests/ }));
+  fireEvent.click(await screen.findByRole('tab', { name: 'Approved Requests tab' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Fulfill' }));
 
   await waitFor(() => {
@@ -298,7 +298,7 @@ test('cancels an approved request with a reason and refreshes its status', async
   jest.spyOn(window, 'prompt').mockReturnValue('No longer needed');
   render(<StoreAssetRequests />);
 
-  fireEvent.click(await screen.findByRole('button', { name: /Approved Requests/ }));
+  fireEvent.click(await screen.findByRole('tab', { name: 'Approved Requests tab' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Cancel Request' }));
 
   await waitFor(() => {
@@ -308,5 +308,5 @@ test('cancels an approved request with a reason and refreshes its status', async
       comment: 'No longer needed',
     });
   });
-  expect(await screen.findByText('Cancelled')).toBeInTheDocument();
+  expect(await screen.findByRole('cell', { name: 'Cancelled' })).toBeInTheDocument();
 });

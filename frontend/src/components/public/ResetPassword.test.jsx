@@ -88,24 +88,19 @@ describe('ResetPassword', () => {
     fillPasswords('Ab1!', 'Ab1!');
     submitForm();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/at least 8 characters/i);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Password must be 8–16 characters long.');
     expect(apiClient.post).not.toHaveBeenCalled();
   });
 
-  it('requires an uppercase letter, a number and a special character', async () => {
+  it('requires at least one letter and one number', async () => {
     renderPage();
 
-    fillPasswords('alllowercase1!', 'alllowercase1!');
+    fillPasswords('abcdefgh', 'abcdefgh');
     submitForm();
-    expect(await screen.findByRole('alert')).toHaveTextContent(/uppercase letter/i);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Password must contain at least one letter and one number.');
 
-    fillPasswords('NoNumbers!Here', 'NoNumbers!Here');
+    fillPasswords('12345678', '12345678');
     submitForm();
-    expect(await screen.findByRole('alert')).toHaveTextContent(/must contain a number/i);
-
-    fillPasswords('NoSpecials123', 'NoSpecials123');
-    submitForm();
-    expect(await screen.findByRole('alert')).toHaveTextContent(/special character/i);
 
     expect(apiClient.post).not.toHaveBeenCalled();
   });
@@ -116,7 +111,7 @@ describe('ResetPassword', () => {
     fillPasswords('Str0ng!Pass', 'Different!1');
     submitForm();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('The passwords do not match.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Passwords do not match.');
     expect(apiClient.post).not.toHaveBeenCalled();
   });
 

@@ -141,12 +141,12 @@ test('admin user creation rejects a missing or mismatched password confirmation'
   const missingConfirmation = makeResponse();
   await userController.createUser({ body: { password: 'ManageMe#42' } }, missingConfirmation);
   assert.equal(missingConfirmation.statusCode, 400);
-  assert.equal(missingConfirmation.payload.message, 'Confirm Password is required');
+  assert.equal(missingConfirmation.payload.message, 'Confirm Password is required.');
 
   const mismatchedConfirmation = makeResponse();
   await userController.createUser({ body: { password: 'ManageMe#42', confirmPassword: 'OtherPass#42' } }, mismatchedConfirmation);
   assert.equal(mismatchedConfirmation.statusCode, 400);
-  assert.equal(mismatchedConfirmation.payload.message, 'Password and Confirm Password must match');
+  assert.equal(mismatchedConfirmation.payload.message, 'Passwords do not match.');
 });
 
 test('admin user creation requires an explicit username and role', async () => {
@@ -226,7 +226,7 @@ test('admin user creation rejects invalid email, unsupported password, and inact
   const weakPassword = makeResponse();
   await userController.createUser({ user: { id: 1, role: 'admin' }, body }, weakPassword);
   assert.equal(weakPassword.statusCode, 400);
-  assert.match(weakPassword.payload.message, /uppercase/i);
+  assert.equal(weakPassword.payload.message, 'Password must contain at least one letter and one number.');
   assert.equal(transactionCalls, 0);
 
   const inactiveRole = makeResponse();

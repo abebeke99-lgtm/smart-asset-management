@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { getAllUsers, getUserStats, getRoles, getUserById, createUser, updateUser, updateUserStatus, getUserActivity, deleteUser, getCurrentUserProfile, updateProfile, updateCurrentUserProfilePhoto, removeCurrentUserProfilePhoto, setUserSecurityState, resetUserPassword, forcePasswordChange, terminateUserSession } = require('../controllers/userController');
+const { getAllUsers, getUserStats, getStoreManagerAccounts, getRoles, getUserById, createUser, updateUser, updateUserStatus, getUserActivity, deleteUser, getCurrentUserProfile, updateProfile, updateCurrentUserProfilePhoto, removeCurrentUserProfilePhoto, setUserSecurityState, resetUserPassword, forcePasswordChange, terminateUserSession } = require('../controllers/userController');
 const { AuditLog, User } = require('../models');
 const { requireAuth, requireRole, requirePermission } = require('../middlewares/auth');
 const { validateProfilePhoto } = require('../utils/uploadUtils');
@@ -28,6 +28,7 @@ const profilePhotoUpload = multer({
 
 router.get('/', requireAuth, requireRole('admin', 'college', 'store_manager', 'ict_officer', 'maintenance'), getAllUsers);
 router.get('/stats', requireAuth, requireRole('admin'), getUserStats);
+router.get('/store-manager-accounts', noStore, requireAuth, requireRole('admin', 'store_manager'), getStoreManagerAccounts);
 router.get('/roles', requireAuth, requireRole('admin'), getRoles);
 router.get('/technicians', requireAuth, requireRole('admin', 'maintenance', 'ict_officer'), getAllUsers);
 router.get('/profile', noStore, requireAuth, getCurrentUserProfile);

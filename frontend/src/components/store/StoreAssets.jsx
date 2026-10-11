@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, ChevronLeft, ChevronRight, Download, Eye, History, MapPin, PackageCheck, QrCode, RefreshCw, Search, Tag, TriangleAlert, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { QRCodeSVG } from 'qrcode.react';
@@ -48,21 +48,35 @@ export default function StoreAssets() {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
   const [qrAsset, setQrAsset] = useState(null);
+  const requestSequence = useRef(0);
+  const requestController = useRef(null);
+  const lastRequestedPage = useRef(1);
 
   const load = async (page = 1, refresh = false) => {
+    lastRequestedPage.current = page;
+    requestController.current?.abort();
+    const controller = new AbortController();
+    requestController.current = controller;
+    const requestId = ++requestSequence.current;
     if (refresh) setRefreshing(true);
     else setLoading(true);
     setError('');
     try {
       const response = await apiClient.get('/api/store/available-assets', {
         params: { ...filters, page, pageSize, sortBy, sortOrder },
+        signal: controller.signal,
       });
-      const payload = response.data?.data || {};
-      setItems(Array.isArray(payload.items) ? payload.items : []);
+      const payload = response.data?.data;
+      if (response.data?.success !== true || !payload || !Array.isArray(payload.items)) {
+        throw new Error(response.data?.message || 'error');
+      }
+      if (requestId !== requestSequence.current) return;
+      setItems(payload.items);
       setSummary({ totalAvailable: 0, availableToday: 0, awaitingIssue: 0, lowStock: 0, ...(payload.summary || {}) });
       setPagination({ page, pageSize, ...(payload.pagination || {}) });
-      if (payload.filters) setServerFilters(payload.filters);
+      setServerFilters(payload.filters || { categories: [], locations: [], conditions: [], departments: [], assetTypes: [] });
     } catch (requestError) {
+      if (requestError.code === 'ERR_CANCELED' || requestId !== requestSequence.current) return;
       setItems([]);
       setError(requestError.response?.status === 401
         ? 'unauthorized'
@@ -70,12 +84,17 @@ export default function StoreAssets() {
           ? 'forbidden'
           : requestError.response?.data?.message || 'error');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId === requestSequence.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
-  useEffect(() => { load(1); }, [filters, sortBy, sortOrder]);
+  useEffect(() => {
+    load(1);
+    return () => requestController.current?.abort();
+  }, [filters, sortBy, sortOrder]);
 
   const options = useMemo(() => {
     const collect = (key) => [...new Set(items.map((item) => item[key]).filter(Boolean))].sort();
@@ -111,17 +130,32 @@ export default function StoreAssets() {
     try {
       const params = { ...filters, pageSize: 100, sortBy, sortOrder };
       const first = await apiClient.get('/api/store/available-assets', { params: { ...params, page: 1 } });
-      const payload = first.data?.data || {};
-      const allItems = [...(payload.items || [])];
-      const responses = await Promise.all(Array.from(
-        { length: Math.max(0, (payload.pagination?.totalPages || 1) - 1) },
-        (_, index) => apiClient.get('/api/store/available-assets', { params: { ...params, page: index + 2 } }),
-      ));
-      responses.forEach((response) => allItems.push(...(response.data?.data?.items || [])));
+      const payload = first.data?.data;
+      if (first.data?.success !== true || !payload || !Array.isArray(payload.items)) {
+        throw new Error(first.data?.message || 'error');
+      }
+      const allItems = [...payload.items];
+      const totalPages = Number(payload.pagination?.totalPages || 1);
+      if (!Number.isSafeInteger(totalPages) || totalPages < 1) throw new Error('Invalid pagination returned while exporting.');
+      for (let page = 2; page <= totalPages; page += 5) {
+        const pages = Array.from({ length: Math.min(5, totalPages - page + 1) }, (_, index) => page + index);
+        const responses = await Promise.all(pages.map((currentPage) => apiClient.get('/api/store/available-assets', {
+          params: { ...params, page: currentPage },
+        })));
+        responses.forEach((response) => {
+          const pagePayload = response.data?.data;
+          if (response.data?.success !== true || !Array.isArray(pagePayload?.items)) {
+            throw new Error(response.data?.message || 'error');
+          }
+          allItems.push(...pagePayload.items);
+        });
+      }
       const rows = allItems.map((item) => ({
         'Asset ID': item.assetId || item.id,
         'Asset Name': item.name || '',
         Category: item.category || '',
+        'Asset Type': item.assetType || '',
+        Condition: item.condition || '',
         'Total Quantity': item.totalQuantity ?? item.quantity ?? 0,
         'Available Quantity': item.availableQuantity ?? 0,
         College: item.collegeName || '',
@@ -146,7 +180,7 @@ export default function StoreAssets() {
   if (loading) return <div className="available-state"><RefreshCw size={20} /> {t.loading}</div>;
   if (error) {
     return <div className="available-state available-error"><TriangleAlert size={22} /><p>{t[error] || error}</p>
-      <button type="button" onClick={() => load(pagination.page)}><RefreshCw size={16} /> {t.retry}</button>
+      <button type="button" onClick={() => load(lastRequestedPage.current)}><RefreshCw size={16} /> {t.retry}</button>
     </div>;
   }
 
@@ -207,16 +241,18 @@ export default function StoreAssets() {
           <span>{pagination.total ? `${(pagination.page - 1) * pagination.pageSize + 1}-${Math.min(pagination.page * pagination.pageSize, pagination.total)} ${t.of} ${pagination.total}` : '0'}</span>
         </div>
         {items.length ? (
-          <div className="available-table-wrap"><table>
+          <div className="available-table-wrap" role="region" aria-label={t.title} tabIndex={0}><table>
             <thead><tr>
               <th>{sortHeading(t.id, 'id')}</th><th>{sortHeading(t.name, 'name')}</th><th>{sortHeading(t.category, 'category')}</th>
-              <th>{t.college}</th><th>{sortHeading(t.totalQuantity, 'quantity')}</th><th>{sortHeading(t.availableQuantity, 'availableQuantity')}</th>
+              <th>{t.college}</th><th>{t.assetType}</th><th>{sortHeading(t.condition, 'condition')}</th>
+              <th>{sortHeading(t.totalQuantity, 'quantity')}</th><th>{sortHeading(t.availableQuantity, 'availableQuantity')}</th>
               <th>{t.department}</th><th><MapPin size={14} /> {t.location}</th><th>{t.status}</th><th>{t.issue}</th>
             </tr></thead>
             <tbody>{items.map((item) => (
               <tr key={item.assetId || item.id}>
                 <td>{item.assetId || item.id}</td><td><strong>{item.name || '-'}</strong></td><td>{item.category || '-'}</td>
-                <td>{item.collegeName || '-'}</td><td>{item.totalQuantity ?? item.quantity ?? 0} {item.unit || ''}</td>
+                <td>{item.collegeName || '-'}</td><td>{item.assetType === 'serialized' ? t.serialized : t.bulk}</td>
+                <td>{item.condition || '-'}</td><td>{item.totalQuantity ?? item.quantity ?? 0} {item.unit || ''}</td>
                 <td>{item.availableQuantity ?? 0} {item.unit || ''}</td><td>{item.departmentName || item.department || '-'}</td>
                 <td>{item.location || '-'}</td>
                 <td><span className="available-badge"><CheckCircle2 size={14} /> {item.status || 'Available'}</span></td>

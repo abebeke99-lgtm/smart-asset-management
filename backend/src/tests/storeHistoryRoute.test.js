@@ -801,9 +801,10 @@ test('Store history scopes the selected asset to its resolved College', async ()
   const originalAssetFindAll = Asset.findAll;
   const originalDepartmentFindAll = Department.findAll;
   let query;
+  const movementQueries = [];
   let responseBody;
   AssetMovement.findAndCountAll = async (options) => { query = options; return { rows: [], count: 0 }; };
-  AssetMovement.findAll = async () => [];
+  AssetMovement.findAll = async (options) => { movementQueries.push(options); return []; };
   Asset.findAll = async () => [];
   Department.findAll = async () => [];
 
@@ -814,6 +815,9 @@ test('Store history scopes the selected asset to its resolved College', async ()
       (error) => { throw error; }
     );
     assert.deepEqual(query.include[0].where, { collegeId: 1, id: 42 });
+    assert.equal(Object.hasOwn(movementQueries[0].where, 'collegeId'), false);
+    assert.deepEqual(movementQueries[0].include[0].where, { collegeId: 1 });
+    assert.ok(movementQueries[0].where.createdAt[Op.gte] instanceof Date);
     assert.equal(responseBody.data.items.length, 0);
   } finally {
     AssetMovement.findAndCountAll = originalFindAndCountAll;

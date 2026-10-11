@@ -22,24 +22,14 @@ const validateInitialAdminPassword = (password) => {
   }
 };
 
-const verifyExistingAdmin = async (user, configuredPassword = '') => {
+const verifyExistingAdmin = async (user) => {
   const active = isAccountActive(user.active);
   const adminRole = String(user.role || '').toLowerCase() === 'admin';
+  const accountStatus = String(user.status || 'active').toLowerCase();
   const validPasswordHash = typeof user.password === 'string' && BCRYPT_HASH_PATTERN.test(user.password);
 
-  if (!active || !adminRole || !validPasswordHash) {
+  if (!active || accountStatus !== 'active' || !adminRole || !validPasswordHash) {
     throw new Error('Existing admin account failed verification. Check its active status, role, and bcrypt password hash.');
-  }
-
-  const passwordToRepair = typeof configuredPassword === 'string' ? configuredPassword.trim() : '';
-  if (passwordToRepair && !(await bcrypt.compare(passwordToRepair, user.password))) {
-    if (typeof user.update !== 'function') {
-      throw new Error('Existing admin account failed verification. Check its active status, role, and bcrypt password hash.');
-    }
-
-    const passwordHash = await bcrypt.hash(passwordToRepair, 10);
-    await user.update({ password: passwordHash, failedLoginAttempts: 0, lockoutUntil: null });
-    return { created: false, userId: user.id, passwordUpdated: true };
   }
 
   return { created: false, userId: user.id, passwordUpdated: false };
@@ -53,7 +43,7 @@ const initializeInitialAdmin = async ({ userModel = User } = {}) => {
 
   const existingAdmin = await userModel.findOne({ where: { username: ADMIN_USERNAME } });
   if (existingAdmin) {
-    return verifyExistingAdmin(existingAdmin, password);
+    return verifyExistingAdmin(existingAdmin);
   }
 
   validateInitialAdminPassword(password);
