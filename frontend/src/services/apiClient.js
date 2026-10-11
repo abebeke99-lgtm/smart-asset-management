@@ -6,21 +6,24 @@ const configuredApiUrl = [
   process.env.API_BASE_URL
 ].find((value) => typeof value === 'string' && value.trim()) || '';
 
+const stripApiSuffix = (value) => value.replace(/(?:\/api)+(?:\/+)?$/i, '').replace(/\/+$/, '');
+
 const normalizeApiBase = (value) => {
   const trimmed = String(value || '').trim();
   if (!trimmed) return '';
 
   if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed.replace(/\/api(?:\/)?$/i, '').replace(/\/+$/, '');
+    return stripApiSuffix(trimmed);
   }
 
   if (trimmed.startsWith('/')) {
-    const basePath = trimmed.replace(/\/api(?:\/)?$/i, '').replace(/\/+$/, '');
+    const basePath = stripApiSuffix(trimmed);
     const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
     return `${origin}${basePath}`;
   }
 
-  return trimmed.replace(/\/api(?:\/)?$/i, '').replace(/\/+$/, '');
+  const normalized = stripApiSuffix(trimmed);
+  return /^https?:\/\//i.test(normalized) ? normalized : `https://${normalized}`;
 };
 
 export const API_BASE_URL = normalizeApiBase(configuredApiUrl);

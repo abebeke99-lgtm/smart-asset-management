@@ -89,6 +89,8 @@ test('admin-created user stores a bcrypt password and can log in normally', asyn
     assert.equal(createdUser.username, 'new.staff');
     assert.equal(createdUser.role, 'staff');
     assert.equal(createdUser.fullName, 'New Staff Member');
+    assert.equal(createdUser.status, 'active');
+    assert.equal(createdUser.active, true);
     assert.notEqual(createdUser.password, password);
     assert.match(createdUser.password, /^\$2[aby]\$/);
     assert.equal(await bcrypt.compare(password, createdUser.password), true);
@@ -498,6 +500,23 @@ test('admin user creation validates database-backed role and organization IDs an
   }, mismatchedDepartment);
   assert.equal(mismatchedDepartment.statusCode, 400);
   assert.match(mismatchedDepartment.payload.message, /does not belong/i);
+
+  const suspendedUserResponse = makeResponse();
+  await userController.createUser({
+    ...validRequest,
+    body: {
+      ...validRequest.body,
+      username: 'suspended.staff.user',
+      status: 'suspended',
+      collegeId: undefined,
+      departmentId: undefined,
+    },
+  }, suspendedUserResponse);
+  assert.equal(suspendedUserResponse.statusCode, 201);
+  assert.equal(createValues.role, 'staff');
+  assert.equal(createValues.status, 'suspended');
+  assert.equal(createValues.active, false);
+
   assert.ok(departmentLookupCount > 0);
   assert.ok(collegeLookupCount > 0);
 });

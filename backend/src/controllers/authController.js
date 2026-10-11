@@ -439,7 +439,8 @@ const checkForOtpRateLimit = (destination, ipAddress, method = 'phone') => {
 };
 
 const getResetFrontendUrl = () => {
-  const configuredUrl = String(process.env.FRONTEND_URL || process.env.CLIENT_URL || '').trim().replace(/\/$/, '');
+  let configuredUrl = String(process.env.FRONTEND_URL || process.env.CLIENT_URL || '').trim().replace(/\/$/, '');
+  if (configuredUrl && !/^https?:\/\//i.test(configuredUrl)) configuredUrl = `https://${configuredUrl}`;
   if (process.env.NODE_ENV === 'production') {
     if (!configuredUrl || !configuredUrl.startsWith('https://')) {
       throw new Error('FRONTEND_URL must be configured with HTTPS in production');

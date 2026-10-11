@@ -13,16 +13,31 @@ services:
         value: 22.16.0
       - key: JWT_SECRET
         sync: false
-      - key: DATABASE_URL
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
         sync: false
       - key: DB_SSL
-        value: "true"
+        sync: false
       - key: DB_SSL_REJECT_UNAUTHORIZED
         value: "true"
       - key: DB_SSL_CA
         sync: false
+      - key: DB_SYNC_ON_START
+        value: "false"
+      - key: SEED_DEMO_DATA
+        value: "false"
       - key: FRONTEND_URL
-        value: https://smart-asset-management-six.vercel.app
+        fromService:
+          type: web
+          name: smart-asset-management-3
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
       - key: EMAIL_HOST
         sync: false
       - key: EMAIL_PORT
@@ -37,11 +52,14 @@ services:
     name: smart-asset-management-3
     runtime: static
     rootDir: frontend
-    buildCommand: npm ci && npm run build
-    staticPublishPath: frontend/build
+    buildCommand: 'npm ci && REACT_APP_API_URL="https://${RENDER_BACKEND_HOST}/api" npm run build'
+    staticPublishPath: build
     envVars:
-      - key: REACT_APP_API_URL
-        value: https://smart-asset-management-3-production-9258.up.railway.app/api
+      - key: RENDER_BACKEND_HOST
+        fromService:
+          type: web
+          name: smart-asset-management-2f5p
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
       - key: REACT_APP_API_TIMEOUT
         value: "30000"
     routes:

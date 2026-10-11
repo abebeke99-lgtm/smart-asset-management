@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Eye, EyeOff, KeyRound, Pencil, Power, Trash2 } from "lucide-react";
+import { Activity, Eye, EyeOff, KeyRound, LoaderCircle, Pencil, Power, Trash2 } from "lucide-react";
 import { toast } from "react-toastify";
 import apiClient, { getApiErrorMessage } from "../../services/apiClient";
 import { getPasswordIssue, getPasswordConfirmationIssue, PASSWORD_VALIDATION_MESSAGES } from "../../utils/passwordValidation";
@@ -233,6 +233,7 @@ export default function Users() {
     useState("All");
 
   const [showForm, setShowForm] = useState(false);
+  const [formClosing, setFormClosing] = useState(false);
   const [selectedUser, setSelectedUser] =
     useState(null);
 
@@ -253,8 +254,9 @@ export default function Users() {
   const [activityLogs, setActivityLogs] = useState([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState("");
+  const formCloseTimer = useRef(null);
 
-  const loadData = useCallback(async (requestedPage = page) => {
+  const loadData = useCallback(async (requestedPage = page, filters = {}) => {
     setLoading(true);
     setError("");
 
@@ -263,9 +265,12 @@ export default function Users() {
         page: String(requestedPage),
         limit: "10",
       });
-      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
-      if (statusFilter !== "All") params.set("status", statusFilter.toLowerCase());
-      if (roleFilter !== "All") params.set("role", roleFilter);
+      const currentSearch = filters.search ?? debouncedSearch;
+      const currentStatusFilter = filters.statusFilter ?? statusFilter;
+      const currentRoleFilter = filters.roleFilter ?? roleFilter;
+      if (currentSearch.trim()) params.set("search", currentSearch.trim());
+      if (currentStatusFilter !== "All") params.set("status", currentStatusFilter.toLowerCase());
+      if (currentRoleFilter !== "All") params.set("role", currentRoleFilter);
       const [usersResponse, statsResponse, collegesResponse, rolesResponse, storeManagerResponse] = await Promise.all([
         apiRequest(`${USERS_API}?${params.toString()}`),
         apiRequest(`${USERS_API}/stats`),
@@ -341,6 +346,8 @@ export default function Users() {
     ));
 
   const openCreateForm = () => {
+    window.clearTimeout(formCloseTimer.current);
+    setFormClosing(false);
     setEditingUser(null);
     setForm(EMPTY_FORM);
     setFieldErrors({});
@@ -351,6 +358,8 @@ export default function Users() {
   };
 
   const openEditForm = (user) => {
+    window.clearTimeout(formCloseTimer.current);
+    setFormClosing(false);
     setEditingUser(user);
     setFieldErrors({});
 
@@ -373,16 +382,31 @@ export default function Users() {
     setShowForm(true);
   };
 
-  const closeForm = (force = false) => {
-    if (saving && !force) return;
+  const closeForm = useCallback((force = false) => {
+    if ((saving && !force) || formClosing) return;
 
-    setShowForm(false);
-    setEditingUser(null);
-    setForm(EMPTY_FORM);
-    setShowPassword(false);
-    setShowConfirmPassword(false);
-    setFieldErrors({});
-  };
+    setFormClosing(true);
+    formCloseTimer.current = window.setTimeout(() => {
+      setShowForm(false);
+      setFormClosing(false);
+      setEditingUser(null);
+      setForm(EMPTY_FORM);
+      setShowPassword(false);
+      setShowConfirmPassword(false);
+      setFieldErrors({});
+    }, 150);
+  }, [saving, formClosing]);
+
+  useEffect(() => {
+    if (!showForm) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") closeForm();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showForm, closeForm]);
+
+  useEffect(() => () => window.clearTimeout(formCloseTimer.current), []);
 
   const updateForm = (event) => {
     const { name, value } = event.target;
@@ -486,12 +510,33 @@ export default function Users() {
       }
 
       closeForm(true);
-      toast.success(editingUser ? "User updated successfully." : "User created successfully.");
-      await loadData();
+      if (editingUser) {
+        toast.success("User updated successfully.");
+        await loadData();
+      } else {
+        toast.success("User created successfully.");
+        const nextPage = Math.max(1, Math.ceil(((Number(stats.total) || 0) + 1) / 10));
+        const refreshTriggeredByState = Boolean(
+          debouncedSearch || statusFilter !== "All" || roleFilter !== "All" || page !== nextPage
+        );
+        setSearch("");
+        setDebouncedSearch("");
+        setStatusFilter("All");
+        setRoleFilter("All");
+        setPage(nextPage);
+        if (!refreshTriggeredByState) {
+          await loadData(nextPage, { search: "", statusFilter: "All", roleFilter: "All" });
+        }
+      }
     } catch (err) {
       const message = err.message || "Unable to save user.";
       const key = /username/i.test(message) ? "username" : /email/i.test(message) ? "email" : /phone/i.test(message) ? "phone" : /role/i.test(message) ? "roleId" : "";
       if (key) setFieldErrors({ [key]: message });
+      if (!editingUser) {
+        setForm((previous) => ({ ...previous, password: "", confirmPassword: "" }));
+        setShowPassword(false);
+        setShowConfirmPassword(false);
+      }
       setError(message);
       toast.error(message);
     } finally {
@@ -969,6 +1014,199 @@ export default function Users() {
           box-shadow: 0 20px 60px rgba(15, 23, 42, .25);
         }
 
+        .users-form-backdrop {
+          z-index: 1100;
+          background: rgba(15, 23, 42, .62);
+          backdrop-filter: blur(4px);
+          animation: users-form-fade-in 160ms ease-out both;
+        }
+
+        .users-form-backdrop.is-closing {
+          pointer-events: none;
+          animation: users-form-fade-out 150ms ease-in both;
+        }
+
+        .users-form-modal {
+          width: min(820px, 100%);
+          max-height: min(90vh, 820px);
+          border: 1px solid #dbe5f0;
+          border-radius: 16px;
+          box-shadow: 0 28px 80px rgba(15, 23, 42, .3);
+          animation: users-form-rise-in 180ms cubic-bezier(.2, .8, .2, 1) both;
+        }
+
+        .users-form-backdrop.is-closing .users-form-modal {
+          animation: users-form-rise-out 150ms ease-in both;
+        }
+
+        .users-form-modal .modal-header {
+          position: sticky;
+          top: 0;
+          z-index: 1;
+          gap: 20px;
+          padding: 21px 26px 18px;
+          background: #fff;
+        }
+
+        .users-form-modal .modal-title {
+          color: #173b63;
+          font-size: 21px;
+          font-weight: 750;
+          letter-spacing: -.02em;
+        }
+
+        .users-form-description {
+          margin: 5px 0 0;
+          color: #64748b;
+          font-size: 13px;
+          line-height: 1.5;
+        }
+
+        .users-form-modal .close-button {
+          flex: 0 0 auto;
+          width: 38px;
+          height: 38px;
+          border: 1px solid #e2e8f0;
+          border-radius: 9px;
+          font-size: 24px;
+          transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
+        }
+
+        .users-form-modal .close-button:hover:not(:disabled) {
+          transform: rotate(90deg);
+          background: #eaf2fa;
+          color: #245783;
+        }
+
+        .users-form-modal .form {
+          padding: 22px 26px 0;
+        }
+
+        .users-form-row {
+          display: grid;
+          gap: 16px;
+        }
+
+        .users-form-row-identity {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .users-form-row-password,
+        .users-form-row-details {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .users-form-modal .form-group {
+          min-width: 0;
+          margin-bottom: 18px;
+        }
+
+        .users-form-modal .form-label {
+          margin-bottom: 7px;
+          color: #334155;
+          font-size: 13px;
+          line-height: 1.35;
+        }
+
+        .users-form-modal .form-input {
+          min-height: 44px;
+          border: 1px solid #cbd5e1;
+          border-radius: 9px;
+          padding: 10px 12px;
+          background: #fff;
+          color: #0f172a;
+          font: inherit;
+          font-size: 14px;
+          transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+        }
+
+        .users-form-modal .form-input:hover:not(:disabled) {
+          border-color: #94a3b8;
+        }
+
+        .users-form-modal .form-input:focus {
+          border-color: #3074b3;
+          outline: 0;
+          box-shadow: 0 0 0 3px rgba(48, 116, 179, .16);
+        }
+
+        .users-form-modal .form-input.invalid {
+          border-color: #dc2626;
+        }
+
+        .users-form-modal .field-error {
+          margin-top: 5px;
+          color: #b91c1c;
+          font-size: 12px;
+          line-height: 1.4;
+        }
+
+        .users-form-modal .password-toggle {
+          transition: color 150ms ease, background-color 150ms ease;
+        }
+
+        .users-form-modal .modal-footer {
+          position: sticky;
+          bottom: 0;
+          z-index: 1;
+          margin: 0 -26px;
+          padding: 16px 26px;
+          background: #fff;
+          box-shadow: 0 -8px 20px rgba(15, 23, 42, .035);
+        }
+
+        .users-form-modal .secondary-button,
+        .users-form-modal .primary-button {
+          min-height: 42px;
+          border-radius: 9px;
+          padding: 10px 17px;
+          transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+        }
+
+        .users-form-modal .secondary-button:hover:not(:disabled) {
+          border-color: #94a3b8;
+          background: #f8fafc;
+        }
+
+        .users-form-modal .primary-button:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 5px 14px rgba(37, 99, 167, .2);
+        }
+
+        .users-form-modal :where(button, input, select):focus-visible {
+          outline: 3px solid rgba(48, 116, 179, .28);
+          outline-offset: 2px;
+        }
+
+        .users-form-spinner {
+          flex: 0 0 auto;
+          animation: users-form-spin 900ms linear infinite;
+        }
+
+        @keyframes users-form-fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes users-form-fade-out {
+          from { opacity: 1; }
+          to { opacity: 0; }
+        }
+
+        @keyframes users-form-rise-in {
+          from { opacity: 0; transform: translateY(10px) scale(.985); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes users-form-rise-out {
+          from { opacity: 1; transform: translateY(0) scale(1); }
+          to { opacity: 0; transform: translateY(6px) scale(.99); }
+        }
+
+        @keyframes users-form-spin {
+          to { transform: rotate(360deg); }
+        }
+
         .modal-header {
           display: flex;
           align-items: center;
@@ -1146,13 +1384,69 @@ export default function Users() {
           }
 
           .summary-grid,
-          .form-row,
           .details-grid {
             grid-template-columns: 1fr;
           }
 
+          .users-form-modal {
+            max-height: calc(100dvh - 24px);
+            border-radius: 13px;
+          }
+
+          .users-form-modal .modal-header {
+            padding: 18px 18px 15px;
+          }
+
+          .users-form-modal .form {
+            padding: 18px 18px 0;
+          }
+
+          .users-form-row-identity {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .users-form-modal .modal-footer {
+            margin: 0 -18px;
+            padding: 14px 18px;
+          }
+
+          .users-form-row-password,
+          .users-form-row-details {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
           .detail-full {
             grid-column: auto;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .users-form-backdrop {
+            padding: 12px;
+          }
+
+          .users-form-row-identity,
+          .users-form-row-password,
+          .users-form-row-details {
+            grid-template-columns: minmax(0, 1fr);
+          }
+
+          .users-form-modal .modal-footer {
+            flex-direction: column-reverse;
+          }
+
+          .users-form-modal .modal-footer button {
+            width: 100%;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .users-form-backdrop,
+          .users-form-modal,
+          .users-form-spinner {
+            animation-duration: .01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: .01ms !important;
           }
         }
       `}</style>
@@ -1434,7 +1728,7 @@ export default function Users() {
 
       {showForm && (
         <div
-          className="modal-backdrop"
+          className={`modal-backdrop users-form-backdrop${formClosing ? " is-closing" : ""}`}
           onMouseDown={(event) => {
             if (
               event.target ===
@@ -1444,26 +1738,35 @@ export default function Users() {
             }
           }}
         >
-          <div className="modal">
+          <div
+            className="modal users-form-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="users-form-title"
+          >
             <div className="modal-header">
-              <h2 className="modal-title">
-                {editingUser
-                  ? "Edit User"
-                  : "Add User"}
-              </h2>
+              <div>
+                <h2 className="modal-title" id="users-form-title">
+                  {editingUser ? "Edit User" : "Add User"}
+                </h2>
+                <p className="users-form-description">
+                  {editingUser ? "Update account details and access." : "Create an account for your university system."}
+                </p>
+              </div>
 
               <button
                 type="button"
                 className="close-button"
+                aria-label="Close user form"
                 onClick={closeForm}
-                disabled={saving}
+                disabled={saving || formClosing}
               >
-                ×
+                <span aria-hidden="true">×</span>
               </button>
             </div>
 
             <form
-              className="form"
+              className="form users-form"
               onSubmit={saveUser}
               noValidate
             >
@@ -1472,7 +1775,7 @@ export default function Users() {
               {!loading && roles.length === 0 && (
                 !error && <div className="error-box" role="alert">Role options are unavailable. Please refresh and try again.</div>
               )}
-              <div className="form-row">
+              <div className="form-row users-form-row users-form-row-identity">
                 <div className="form-group">
                   <label className="form-label" htmlFor="new-user-full-name">
                     Full Name{" "}
@@ -1538,7 +1841,7 @@ export default function Users() {
                 </div>
               </div>
 
-              <div className="form-row">
+              <div className="form-row users-form-row users-form-row-password">
                   <div className="form-group">
                     <label className="form-label" htmlFor="new-user-password">
                       Password {!editingUser && <span className="required">*</span>}
@@ -1601,7 +1904,7 @@ export default function Users() {
                   </div>
                 </div>
 
-              <div className="form-row">
+              <div className="form-row users-form-row users-form-row-details">
                 <div className="form-group">
                   <label className="form-label" htmlFor="new-user-phone">
                     Phone
@@ -1758,7 +2061,7 @@ export default function Users() {
                   type="button"
                   className="secondary-button"
                   onClick={closeForm}
-                  disabled={saving}
+                  disabled={saving || formClosing}
                 >
                   Cancel
                 </button>
@@ -1766,10 +2069,10 @@ export default function Users() {
                 <button
                   type="submit"
                   className="primary-button"
-                  disabled={saving || loading || departmentsLoading || roles.length === 0 || (!editingUser && selectedRoleIsStoreManager && storeManagerCapacityReached)}
+                  disabled={saving || formClosing || loading || departmentsLoading || roles.length === 0 || (!editingUser && selectedRoleIsStoreManager && storeManagerCapacityReached)}
                 >
                   {saving
-                    ? "Saving..."
+                    ? <><LoaderCircle className="users-form-spinner" size={17} aria-hidden="true" /> {editingUser ? "Saving..." : "Creating user..."}</>
                     : editingUser
                     ? "Save Changes"
                     : "Create User"}

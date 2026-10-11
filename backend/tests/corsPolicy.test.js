@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const ALLOWED_ORIGIN = 'https://smart-asset-management-six.vercel.app';
 process.env.FRONTEND_URL = ALLOWED_ORIGIN;
+process.env.CORS_ORIGINS = 'uams-render-frontend.onrender.com';
 
 const request = require('supertest');
 const app = require('../src/app');
@@ -19,6 +20,14 @@ test('allowed production origin completes a credentialed CORS preflight with 204
   assert.equal(response.headers['access-control-allow-origin'], ALLOWED_ORIGIN);
   assert.equal(response.headers['access-control-allow-credentials'], 'true');
   assert.notEqual(response.headers['access-control-allow-origin'], '*');
+});
+
+test('a configured Render frontend hostname is normalized to its HTTPS origin', async () => {
+  const renderOrigin = 'https://uams-render-frontend.onrender.com';
+  const response = await preflight(renderOrigin);
+
+  assert.equal(response.status, 204);
+  assert.equal(response.headers['access-control-allow-origin'], renderOrigin);
 });
 
 test('disallowed origin preflight is rejected with 403 and a stable error contract', async () => {

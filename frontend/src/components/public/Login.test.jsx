@@ -19,21 +19,25 @@ jest.mock('axios', () => ({
   default: { get: jest.fn().mockResolvedValue({}) },
 }));
 
-const renderLogin = () => render(
-  <UiProvider>
-    <MemoryRouter>
-      <Login />
-    </MemoryRouter>
-  </UiProvider>
-);
+const renderLogin = async () => {
+  const view = render(
+    <UiProvider>
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>
+    </UiProvider>
+  );
+  await screen.findByText('System: online');
+  return view;
+};
 
 describe('Login error feedback', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  test('uses the provided university photo as the login page background', () => {
-    const { container } = renderLogin();
+  test('uses the provided university photo as the login page background', async () => {
+    const { container } = await renderLogin();
     const loginPage = container.querySelector('.login-page');
 
     expect(loginPage).toHaveStyle({
@@ -48,7 +52,7 @@ describe('Login error feedback', () => {
       success: false,
       error: 'Account temporarily locked. Please try again later.',
     });
-    renderLogin();
+    await renderLogin();
 
     fireEvent.change(screen.getByLabelText('Username or Email'), { target: { value: 'admin' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'not-shown' } });
@@ -59,7 +63,7 @@ describe('Login error feedback', () => {
 
   test('falls back to the localized invalid-credentials message when the API returns no error', async () => {
     mockLogin.mockResolvedValue({ success: false });
-    renderLogin();
+    await renderLogin();
 
     fireEvent.change(screen.getByLabelText('Username or Email'), { target: { value: 'admin' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'not-shown' } });

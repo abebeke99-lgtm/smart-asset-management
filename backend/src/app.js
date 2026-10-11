@@ -80,12 +80,15 @@ const configuredOrigins = [
   process.env.FRONTEND_URL,
   process.env.CLIENT_URL,
   process.env.CORS_ORIGIN,
-  process.env.CORS_ORIGINS
+  process.env.CORS_ORIGINS,
 ]
   .filter(Boolean)
   .flatMap((value) => value.split(','))
   .map((value) => value.trim())
-  .filter(Boolean);
+  .filter(Boolean)
+  .map((origin) => {
+    return /^https?:\/\//i.test(origin) ? origin : `https://${origin}`;
+  });
 const localOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',

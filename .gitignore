@@ -14,6 +14,9 @@ backend/.env
 backend/.env.*
 !backend/.env.example
 
+# Runtime database backups (dump files may contain user data)
+backend/backups/
+
 # Local logs and tooling output
 *.log
 .DS_Store

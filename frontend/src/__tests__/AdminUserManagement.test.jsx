@@ -35,8 +35,27 @@ const respondToApiRequests = () => {
     }
     if (method === 'POST') return Promise.resolve({ data: { success: true } });
     if (url.endsWith('/activity')) return Promise.resolve({ data: { logs: [{ id: 7, action: 'CREATE_USER', entity: 'user:7', userId: 1, createdAt: '2026-10-02T12:00:00.000Z' }] } });
-    if (url.startsWith('/api/users?')) return Promise.resolve({ data: { users: usersResponse, pagination: { total: usersResponse.length, pages: 1 } } });
-    if (url === '/api/users/stats') return Promise.resolve({ data: { data: { total: usersResponse.length, active: usersResponse.length, inactive: 0, suspended: 0 } } });
+    if (url.startsWith('/api/users?')) {
+      const params = new URLSearchParams(url.split('?')[1]);
+      const page = Number(params.get('page')) || 1;
+      const limit = Number(params.get('limit')) || 10;
+      const start = (page - 1) * limit;
+      return Promise.resolve({ data: {
+        users: usersResponse.slice(start, start + limit),
+        pagination: { page, limit, total: usersResponse.length, pages: Math.ceil(usersResponse.length / limit) },
+      } });
+    }
+    if (url === '/api/users/stats') {
+      const countByStatus = (status) => usersResponse.filter((user) => (
+        String(user.status || (user.active === false ? 'inactive' : 'active')).toLowerCase() === status
+      )).length;
+      return Promise.resolve({ data: { data: {
+        total: usersResponse.length,
+        active: countByStatus('active'),
+        inactive: countByStatus('inactive'),
+        suspended: countByStatus('suspended'),
+      } } });
+    }
     if (url === '/api/users/store-manager-accounts') {
       const storeManagerUsers = usersResponse.filter((user) => user.role === 'store_manager');
       return Promise.resolve({ data: { data: { count: storeManagerUsers.length, limit: 8, users: storeManagerUsers } } });
@@ -71,6 +90,14 @@ beforeEach(() => {
   apiClient.request.mockReset();
   usersResponse = [];
   respondToApiRequests();
+});
+
+test('closes the add-user dialog with Escape', async () => {
+  await openCreateForm();
+
+  fireEvent.keyDown(window, { key: 'Escape' });
+
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 });
 
 afterEach(() => {
@@ -182,6 +209,44 @@ test('administrator Store Manager creation refreshes the account count from the 
   expect(await screen.findByText('new.user@example.edu')).toBeInTheDocument();
 });
 
+test('allows creating an inactive user and refreshes the user list and status counts', async () => {
+  await openCreateForm();
+  expect(within(screen.getByLabelText('Account Status')).getByRole('option', { name: 'Inactive' })).toBeInTheDocument();
+  fillValidNewUser();
+  fireEvent.change(screen.getByLabelText('Account Status'), { target: { value: 'Inactive' } });
+
+  fireEvent.submit(document.querySelector('form'));
+
+  await waitFor(() => expect(apiClient.request).toHaveBeenCalledWith(expect.objectContaining({
+    url: '/api/users',
+    method: 'POST',
+    data: expect.objectContaining({ role: 'ict_officer', status: 'inactive' }),
+  })));
+  expect(await screen.findByText('new.user@example.edu')).toBeInTheDocument();
+  expect(screen.getByText('Inactive Users').parentElement).toHaveTextContent('1');
+  expect(screen.getByText('Inactive', { selector: '.status-badge' })).toBeInTheDocument();
+});
+
+test('shows the newly created account on its page when the user list is paginated', async () => {
+  usersResponse = Array.from({ length: 10 }, (_, index) => ({
+    id: index + 1,
+    fullName: `Existing User ${index + 1}`,
+    username: `existing.user.${index + 1}`,
+    role: 'staff',
+    status: 'active',
+  }));
+  await openCreateForm();
+  fillValidNewUser();
+
+  fireEvent.submit(document.querySelector('form'));
+
+  expect(await screen.findByText('new.user@example.edu')).toBeInTheDocument();
+  expect(screen.getByText('Page 2 of 2')).toBeInTheDocument();
+  expect(apiClient.request).toHaveBeenCalledWith(expect.objectContaining({
+    url: '/api/users?page=2&limit=10',
+  }));
+});
+
 test('shows the Store Manager account count and prevents an administrator from exceeding the limit in the form', async () => {
   usersResponse = Array.from({ length: 8 }, (_, index) => ({
     id: index + 1,
@@ -236,7 +301,7 @@ test('keeps the add-user form open and shows the API error when user creation is
   await openCreateForm();
   fillValidNewUser();
   fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '+251 911 234 567' } });
-  fireEvent.change(screen.getByLabelText('Account Status'), { target: { value: 'Inactive' } });
+  fireEvent.change(screen.getByLabelText('Account Status'), { target: { value: 'Suspended' } });
   apiClient.request.mockImplementation(({ url, method }) => {
     if (method === 'POST' && url === '/api/users') {
       return Promise.resolve({
@@ -261,9 +326,9 @@ test('keeps the add-user form open and shows the API error when user creation is
   expect(screen.getByLabelText('Role *')).toHaveValue('ict_officer');
   expect(screen.queryByLabelText('College')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Department')).not.toBeInTheDocument();
-  expect(screen.getByLabelText('Account Status')).toHaveValue('Inactive');
-  expect(screen.getByLabelText('Password *')).toHaveValue('ManageMe#42');
-  expect(screen.getByLabelText('Confirm Password *')).toHaveValue('ManageMe#42');
+  expect(screen.getByLabelText('Account Status')).toHaveValue('Suspended');
+  expect(screen.getByLabelText('Password *')).toHaveValue('');
+  expect(screen.getByLabelText('Confirm Password *')).toHaveValue('');
   expect(apiClient.request.mock.calls.filter(([request]) => request.method === 'POST' && request.url === '/api/users')).toHaveLength(1);
 });
 
@@ -286,6 +351,8 @@ test('prevents duplicate add-user submissions while the create request is pendin
   fireEvent.submit(form);
   fireEvent.submit(form);
   expect(apiClient.request.mock.calls.filter(([request]) => request.method === 'POST' && request.url === '/api/users')).toHaveLength(1);
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
 
   await waitFor(() => expect(finishCreate).toBeDefined());
   finishCreate();
