@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import apiClient from '../../services/apiClient';
+import './CollegeVerification.css';
 
 const stateLabelMap = {
   verified: 'Verified',

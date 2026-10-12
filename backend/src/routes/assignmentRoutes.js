@@ -17,6 +17,9 @@ const assignmentPermissions = {
   college: { view: 'college.assignments.view' },
   department_head: { view: 'assets.view', create: 'assets.assign', return: 'department_head.returns.manage', transfer: 'assets.transfer' },
 };
+const requireDepartmentPermission = (permission) => function requireDepartmentPermission(req, res, next) {
+  return requirePermission(permission)(req, res, next);
+};
 const requireAssignmentPermission = (action) => {
   return function requireAssignmentPermissionForRole(req, res, next) {
     const permission = assignmentPermissions[req.user?.role]?.[action];
@@ -24,6 +27,13 @@ const requireAssignmentPermission = (action) => {
     return requirePermission(permission)(req, res, next);
   };
 };
+const requireCollegeManagerAssignmentPermission = (req, res, next) => {
+  if (req.user?.role === 'college_manager') return requirePermission('college.assignments.manage')(req, res, next);
+  return requirePermission('assets.return')(req, res, next);
+};
+const requireCreateAssignmentPermission = requireAssignmentPermission('create');
+const requireReturnAssignmentPermission = requireAssignmentPermission('return');
+const requireTransferAssignmentPermission = requireAssignmentPermission('transfer');
 const resolveAssignmentOrganizationScope = (req, res, next) => ['ict_officer', 'store_manager', 'college_manager', 'college'].includes(req.user.role)
   ? resolveCollegeScope(req, res, next)
   : req.user.role === 'department_head'
@@ -112,7 +122,7 @@ const getAssignmentInclude = (req) => {
   return assignmentInclude;
 };
 
-router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college', 'college_manager', 'department_head'), requireAssignmentPermission('view'), resolveAssignmentOrganizationScope, async (req, res, next) => {
+router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'college', 'college_manager', 'department_head'), requireDepartmentPermission('assets.view'), requireAssignmentPermission('view'), resolveAssignmentOrganizationScope, async (req, res, next) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
@@ -470,7 +480,7 @@ router.post('/fulfill-request/:id', requireAuth, requireRole('store_manager'), r
   }
 });
 
-router.post('/', ...canManageCollegeAssignments, requireAssignmentPermission('create'), resolveAssignmentOrganizationScope, async (req, res, next) => {
+router.post('/', ...canManageCollegeAssignments, requireDepartmentPermission('assets.assign'), resolveAssignmentOrganizationScope, async (req, res, next) => {
   const {
     asset_id,
     assigned_to,
@@ -789,7 +799,7 @@ router.post('/', ...canManageCollegeAssignments, requireAssignmentPermission('cr
   }
 });
 
-router.post('/:id/return', ...canManageCollegeAssignments, requireAssignmentPermission('return'), resolveAssignmentOrganizationScope, async (req, res, next) => {
+router.post('/:id/return', ...canManageCollegeAssignments, requireCollegeManagerAssignmentPermission, resolveAssignmentOrganizationScope, async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
     const assignment = await Assignment.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
@@ -891,7 +901,7 @@ router.post('/:id/return', ...canManageCollegeAssignments, requireAssignmentPerm
   }
 });
 
-router.post('/:id/transfer', ...canManageAssignments, requireAssignmentPermission('transfer'), resolveAssignmentOrganizationScope, async (req, res, next) => {
+router.post('/:id/transfer', ...canManageAssignments, requireCollegeManagerAssignmentPermission, resolveAssignmentOrganizationScope, async (req, res, next) => {
   const assignedToType = String(req.body.assigned_to_type || req.body.assignedToType || 'user').trim().toLowerCase();
   const assignedToId = Number(req.body.assigned_to_id || req.body.assignedToId || req.body.new_user_id || req.body.newUserId);
   if (!['user', 'department', 'laboratory'].includes(assignedToType)) return res.status(400).json({ success: false, message: 'Assigned To type must be User, Department or Laboratory.' });
@@ -1103,5 +1113,17 @@ router.post('/:id/transfer', ...canManageAssignments, requireAssignmentPermissio
 router.delete('/:id', ...canManageAssignments, (req, res) => {
   res.status(405).json({ success: false, message: 'Assignment history is retained and cannot be deleted. Use the return action to close an active assignment.' });
 });
+
+const insertDynamicAssignmentPermission = (method, routePath, middleware) => {
+  const layer = router.stack.find((entry) => entry.route?.path === routePath && entry.route.methods[method]);
+  if (!layer) return;
+  const insertIndex = layer.route.stack.findIndex((entry) => entry.handle === resolveAssignmentOrganizationScope);
+  if (insertIndex < 0) return;
+  layer.route.stack.splice(insertIndex, 0, { handle: middleware, name: middleware.name });
+};
+
+insertDynamicAssignmentPermission('post', '/', requireCreateAssignmentPermission);
+insertDynamicAssignmentPermission('post', '/:id/return', requireReturnAssignmentPermission);
+insertDynamicAssignmentPermission('post', '/:id/transfer', requireTransferAssignmentPermission);
 
 module.exports = router;

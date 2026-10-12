@@ -288,7 +288,7 @@ export default function Users() {
       if (requestedPage > pages) setPage(pages);
       setRoles(extractArray(rolesResponse, ["roles"]).map((item, index) => ({
         id: item?.name ?? item?.role ?? `role-${index}`,
-        name: item?.displayName ?? item?.name ?? item?.role ?? "",
+        name: item?.name === "maintenance" ? "Maintenance" : item?.displayName ?? item?.name ?? item?.role ?? "",
       })));
       setStoreManagerCount(Number(storeManagerResponse?.data?.count) || 0);
       setStoreManagerLimit(Number(storeManagerResponse?.data?.limit) || 8);

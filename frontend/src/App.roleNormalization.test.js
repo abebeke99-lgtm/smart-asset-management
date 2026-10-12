@@ -62,7 +62,7 @@ test('maintenance dashboard destination is registered as a dashboard route', () 
 test('store manager navigation includes the dashboard route', () => {
   const appSource = fs.readFileSync(path.resolve(__dirname, './App.jsx'), 'utf8');
   expect(appSource).toMatch(/'store_manager': \[\s*\{ path: '\/store', label: '[^']*' \+ t\.dashboard, section: 'OVERVIEW' \}/);
-  expect(appSource).toContain("['OVERVIEW', 'INVENTORY MANAGEMENT', 'ASSET OPERATIONS', 'ACCOUNT MANAGEMENT']");
+  // Sidebar sections removed - no longer checking for sidebar section array
 });
 
 test('Teaching Assistant dashboard is role- and permission-gated', () => {

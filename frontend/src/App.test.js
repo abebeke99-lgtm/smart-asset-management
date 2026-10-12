@@ -606,6 +606,9 @@ describe('College Manager sidebar specification', () => {
   it('links each approved item to a registered College route', () => {
     const collegeRouteTree = appSource.split('<Route path="/college"')[1]?.split('<Route path="/department-head"')[0] || '';
     expect(collegeRouteTree).toContain('<Route index element={<CollegeManagerPages section="dashboard" />} />');
+    expect(collegeRouteTree).toContain(
+      '<Route path="locations" element={<ProtectedRoute allowedRoles={[\'college\', \'college_manager\']} allowedPermissions={[\'college.locations.view\']}><CollegeManagerPages section="locations" /></ProtectedRoute>} />',
+    );
     for (const [route] of collegeSections.flatMap(({ items }) => items)) {
       if (route === '/college') continue;
       expect(collegeRouteTree).toContain(`<Route path="${route.slice('/college/'.length)}"`);

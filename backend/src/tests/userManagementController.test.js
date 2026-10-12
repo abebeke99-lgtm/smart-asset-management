@@ -25,6 +25,7 @@ test('user-management models map the documented status, password and activity co
   assert.equal(User.rawAttributes.collegeId.field, 'college_id');
   assert.equal(User.rawAttributes.departmentId.field, 'department_id');
   assert.deepEqual(User.rawAttributes.status.type.values, ['active', 'inactive', 'suspended']);
+  assert.ok(User.rawAttributes.role.type.values.includes('maintenance'));
   assert.equal(User.options.paranoid, false, 'the User model uses hard deletion rather than soft deletion');
   assert.equal(User.rawAttributes.deletedAt, undefined);
   assert.equal(Role.getTableName(), 'roles');
@@ -324,6 +325,64 @@ test('Store Manager creation locks the role row, counts existing accounts transa
   assert.notEqual(creation.password, 'StorePass123');
   assert.match(creation.password, /^\$2[aby]\$/);
   assert.equal(res.payload.data.password, undefined);
+});
+
+test('Maintenance account creation accepts and persists the canonical role', async (t) => {
+  const originals = {
+    transaction: sequelize.transaction,
+    roleFindOne: Role.findOne,
+    userFindAll: User.findAll,
+    userCreate: User.create,
+    auditCreate: AuditLog.create,
+    activityCreate: UserActivityLog.create,
+    configFindByPk: Config.findByPk,
+  };
+  let creation;
+  let roleQuery;
+  const transaction = {};
+  sequelize.transaction = async (callback) => callback(transaction);
+  Role.findOne = async (query) => {
+    roleQuery = query;
+    return { id: 9, name: 'maintenance', active: true };
+  };
+  User.findAll = async () => [];
+  User.create = async (values, options) => {
+    assert.equal(options.transaction, transaction);
+    creation = values;
+    return { id: 29, ...values, toJSON() { return { id: this.id, ...values }; } };
+  };
+  AuditLog.create = async () => ({});
+  UserActivityLog.create = async () => ({});
+  Config.findByPk = async () => null;
+  t.after(() => {
+    sequelize.transaction = originals.transaction;
+    Role.findOne = originals.roleFindOne;
+    User.findAll = originals.userFindAll;
+    User.create = originals.userCreate;
+    AuditLog.create = originals.auditCreate;
+    UserActivityLog.create = originals.activityCreate;
+    Config.findByPk = originals.configFindByPk;
+  });
+
+  const res = makeResponse();
+  await createUser({
+    body: {
+      username: 'maintenance.user',
+      fullName: 'Maintenance User',
+      email: 'maintenance.user@example.edu',
+      role: 'maintenance',
+      status: 'active',
+      password: 'MaintainPass123',
+      confirmPassword: 'MaintainPass123',
+    },
+    user: { id: 1, username: 'administrator', role: 'admin' },
+    ip: '127.0.0.1',
+  }, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(roleQuery.where.name, 'maintenance');
+  assert.equal(creation.role, 'maintenance');
+  assert.equal(res.payload.data.role, 'maintenance');
 });
 
 test('concurrent Store Manager creates serialize on the role lock and cannot exceed the account limit', async (t) => {

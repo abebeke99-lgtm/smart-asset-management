@@ -117,6 +117,7 @@ const generateToken = async (user) => {
   const jwtSeconds = Math.max(1, Number(settings.jwt_expiry) || 7) * 24 * 60 * 60;
   const sessionSeconds = Math.max(1, Number(settings.session_timeout) || 60) * 60;
   const expiresIn = Math.min(jwtSeconds, sessionSeconds);
+  const signingSecret = getJwtSecret({ allowFallback: true });
   return jwt.sign(
   {
     id: user.id,
@@ -126,7 +127,7 @@ const generateToken = async (user) => {
     collegeId: user.collegeId ?? null,
     departmentId: user.departmentId ?? null,
   },
-  getJwtSecret(),
+  signingSecret,
   { expiresIn }
   );
 };

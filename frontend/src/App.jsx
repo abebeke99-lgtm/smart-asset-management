@@ -2337,7 +2337,7 @@ const DashboardOverview = () => (
   </div>
 );
 
-const DashboardLayout = ({ header, className = '', bodyClassName = '', children }) => {
+const DashboardLayout = ({ header, sidebar, sidebarOpen, onCloseSidebar, className = '', bodyClassName = '', children }) => {
   if (header === undefined && children === undefined) {
     return (
       <Suspense fallback={<LoadingFallback />}>
@@ -2349,6 +2349,11 @@ const DashboardLayout = ({ header, className = '', bodyClassName = '', children 
   return (
     <div className={`dashboard-layout ${className}`.trim()}>
       {header}
+      {sidebar && (
+        <div className={`dashboard-sidebar-shell${sidebarOpen ? ' is-open' : ''}`} aria-hidden={!sidebarOpen}>
+          {sidebar}
+        </div>
+      )}
       <div className={`dashboard-layout-body ${bodyClassName}`.trim()}>
         {children}
       </div>
@@ -2586,6 +2591,7 @@ function AppContent() {
   const location = useLocation();
   const { language, setLanguage } = useLanguage();
   const { theme, setTheme } = useTheme();
+  const t = getShellTranslations(language);
   const [logoError, setLogoError] = useState(false);
   const [organizationProfile, setOrganizationProfile] = useState({
     name: 'Mekdela Amba University',
@@ -3259,9 +3265,13 @@ function AppContent() {
   const hideSidebar = shouldHideSidebarForPath(location.pathname);
   const showDashboardSidebar = shouldShowDashboardSidebar(location.pathname) && !hideSidebar;
   const sidebarItems = getSidebarItems(sidebarRole);
-  const dashboardPageTitle = sidebarItems
-    .filter((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))
-    .sort((left, right) => right.path.length - left.path.length)[0]?.label || t.dashboard;
+  const storeManagerSidebarSections = ['OVERVIEW', 'INVENTORY MANAGEMENT', 'ASSET OPERATIONS', 'ACCOUNT MANAGEMENT'].map((sectionName) => sectionName);
+  const translateLabel = (label) => translateNavigationLabel(language, String(label ?? ''));
+  const dashboardRootPath = getDashboardRoute(user?.role || user?.roles);
+  const matchingSidebarItems = sidebarItems.filter((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
+  const activeDashboardItem = matchingSidebarItems.find((item) => item.path === dashboardRootPath)
+    || matchingSidebarItems.sort((left, right) => right.path.length - left.path.length)[0];
+  const dashboardPageTitle = translateLabel(activeDashboardItem?.label || t.dashboard);
   const responsibility = String(user?.departmentRole || user?.responsibility || user?.position || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
   const isDepartmentStaff = sidebarRole === 'staff' || responsibility === 'department staff';
   const isDepartmentDean = responsibility === 'department dean' || responsibility === 'dean';
@@ -3275,32 +3285,42 @@ function AppContent() {
     'REPORTING': 'REPORTING',
     'CONTROL': 'CONTROL'
   };
+  const translateCollegeNavigation = (heading) => {
+    const labelMap = {
+      MAIN: 'MAIN',
+      'COLLEGE MANAGEMENT': 'COLLEGE MANAGEMENT',
+      'ASSET MANAGEMENT': 'ASSET MANAGEMENT',
+      OPERATIONS: 'OPERATIONS',
+      'REPORTS & ANALYTICS': 'REPORTS & ANALYTICS'
+    };
+    return labelMap[heading] || heading;
+  };
   const collegeOverviewItems = [
-    { path: '/college', label: 'Dashboard', icon: LayoutDashboard, group: 'Overview' }
+    { path: '/college', label: 'Dashboard', icon: LayoutDashboard, group: translateCollegeNavigation('MAIN') }
   ];
   const collegeManagementItems = [
-    { path: '/college/profile', label: 'College Profile', icon: UserCircle, group: 'College Management' },
-    { path: '/college/staff', label: 'College Staff', icon: Users, group: 'College Management' },
-    { path: '/college/locations', label: 'Locations', icon: MapPin, group: 'College Management' },
-    { path: '/college/departments', label: 'Departments', icon: Building2, group: 'College Management' }
+    { path: '/college/profile', label: 'College Profile', icon: UserCircle, group: translateCollegeNavigation('COLLEGE MANAGEMENT') },
+    { path: '/college/staff', label: 'College Staff', icon: Users, group: translateCollegeNavigation('COLLEGE MANAGEMENT') },
+    { path: '/college/locations', label: 'Locations', icon: MapPin, group: translateCollegeNavigation('COLLEGE MANAGEMENT') },
+    { path: '/college/departments', label: 'Departments', icon: Building2, group: translateCollegeNavigation('COLLEGE MANAGEMENT') }
   ];
   const collegeAssetItems = [
-    { path: '/college/assets', label: 'All College Assets', icon: Package, group: 'Asset Management' },
-    { path: '/college/inventory', label: 'Inventory', icon: ClipboardList, group: 'Asset Management' },
-    { path: '/college/requests', label: 'Asset Requests', icon: FileText, group: 'Asset Management' },
-    { path: '/college/approvals', label: 'Approvals', icon: ClipboardCheck, group: 'Asset Management' },
-    { path: '/college/assignments', label: 'Assignments', icon: UserRound, group: 'Asset Management' },
-    { path: '/college/transfers', label: 'Transfers', icon: ArrowLeftRight, group: 'Asset Management' },
-    { path: '/college/returns', label: 'Returns', icon: Undo2, group: 'Asset Management' }
+    { path: '/college/assets', label: 'All College Assets', icon: Package, group: translateCollegeNavigation('ASSET MANAGEMENT') },
+    { path: '/college/inventory', label: 'Inventory', icon: ClipboardList, group: translateCollegeNavigation('ASSET MANAGEMENT') },
+    { path: '/college/requests', label: 'Asset Requests', icon: FileText, group: translateCollegeNavigation('ASSET MANAGEMENT') },
+    { path: '/college/approvals', label: 'Approvals', icon: ClipboardCheck, group: translateCollegeNavigation('ASSET MANAGEMENT') },
+    { path: '/college/assignments', label: 'Assignments', icon: UserRound, group: translateCollegeNavigation('ASSET MANAGEMENT') },
+    { path: '/college/transfers', label: 'Transfers', icon: ArrowLeftRight, group: translateCollegeNavigation('ASSET MANAGEMENT') },
+    { path: '/college/returns', label: 'Returns', icon: Undo2, group: translateCollegeNavigation('ASSET MANAGEMENT') }
   ];
   const collegeOperationsItems = [
-    { path: '/college/rfid', label: 'RFID / QR Tracking', icon: QrCode, group: 'Operations' },
-    { path: '/college/verification', label: 'Asset Verification', icon: Check, group: 'Operations' }
+    { path: '/college/rfid', label: 'RFID / QR Tracking', icon: QrCode, group: translateCollegeNavigation('OPERATIONS') },
+    { path: '/college/verification', label: 'Asset Verification', icon: Check, group: translateCollegeNavigation('OPERATIONS') }
   ];
   const collegeAnalyticsItems = [
-    { path: '/college/reports', label: 'College Reports', icon: BarChart3, group: 'Reports & Analytics' },
-    { path: '/college/analytics/assets', label: 'College Analytics', icon: TrendingUp, group: 'Reports & Analytics' },
-    { path: '/college/notifications', label: 'Notifications', icon: Bell, group: 'Reports & Analytics' }
+    { path: '/college/reports', label: 'College Reports', icon: BarChart3, group: translateCollegeNavigation('REPORTS & ANALYTICS') },
+    { path: '/college/analytics/assets', label: 'College Analytics', icon: TrendingUp, group: translateCollegeNavigation('REPORTS & ANALYTICS') },
+    { path: '/college/notifications', label: 'Notifications', icon: Bell, group: translateCollegeNavigation('REPORTS & ANALYTICS') }
   ];
   const departmentHeadItems = [
     { path: '/department-head', label: 'Dashboard', icon: LayoutDashboard },
@@ -3371,7 +3391,7 @@ function AppContent() {
     ...(sidebarRole === 'department_head'
       ? departmentHeadItems
       : [...sidebarItems, ...(isDepartmentDean ? departmentDeanItems : isDepartmentStaff ? departmentStaffItems : [])]),
-  ]
+  ];
   const currentActiveSidebar = getActiveSidebarPath(navigationItems, location.pathname, getDashboardRoute(user?.role));
 
   const getNavigationIcon = (item) => {
@@ -3412,6 +3432,14 @@ function AppContent() {
       </Link>
     );
   };
+
+  const departmentHeadSidebarSections = sidebarRole === 'department_head' && departmentManagerSections.map((section) => (
+    <div className="sidebar-section" key={section.label}>
+      <div className="sidebar-section-label">{section.label}</div>
+      {section.items.map((item) => renderSidebarLink(item))}
+    </div>
+  ));
+  const dashboardSidebarClassName = `admin-sidebar${sidebarRole === 'department_head' ? ' department-head-sidebar' : ''}${isStoreManager ? ' store-manager-sidebar' : ''}`;
 
   const renderCollapsibleSection = (label, open, setOpen, children, sectionKey) => (
     <div className="sidebar-collapsible-section" key={sectionKey}>
@@ -3554,7 +3582,7 @@ function AppContent() {
             <Route path="department-reports" element={<CollegeManagerPages section="department-reports" />} />
             <Route path="department-history" element={<CollegeManagerPages section="department-history" />} />
             <Route path="staff" element={<CollegeManagerPages section="staff" />} />
-            <Route path="locations" element={<ProtectedRoute allowedRoles={['college']} allowedPermissions={['college.locations.view']}><CollegeManagerPages section="locations" /></ProtectedRoute>} />
+            <Route path="locations" element={<ProtectedRoute allowedRoles={['college', 'college_manager']} allowedPermissions={['college.locations.view']}><CollegeManagerPages section="locations" /></ProtectedRoute>} />
             <Route path="assets" element={<CollegeManagerPages section="assets" />} />
             <Route path="inventory" element={<CollegeManagerPages section="inventory" />} />
             <Route path="requests" element={<CollegeManagerPages section="requests" />} />

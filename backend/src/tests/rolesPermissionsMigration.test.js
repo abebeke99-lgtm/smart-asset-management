@@ -9,6 +9,25 @@ test('Teaching Assistant is a supported least-privilege system role', () => {
   assert.deepEqual(DEFAULT_ROLE_PERMISSIONS.teaching_assistant, ['assets.view']);
 });
 
+test('Maintenance is a supported role with no administrator, user-management, or financial permissions', () => {
+  assert.ok(ROLE_NAMES.includes('maintenance'));
+  assert.deepEqual(DEFAULT_ROLE_PERMISSIONS.maintenance, [
+    'assets.view',
+    'maintenance.view',
+    'maintenance.request.create',
+    'maintenance.technician.assign',
+    'maintenance.update',
+    'maintenance.complete',
+    'reports.view',
+    'notifications.view',
+    'notifications.delete',
+  ]);
+  assert.equal(DEFAULT_ROLE_PERMISSIONS.maintenance.includes('users.create'), false);
+  assert.equal(DEFAULT_ROLE_PERMISSIONS.maintenance.includes('roles.manage'), false);
+  assert.equal(DEFAULT_ROLE_PERMISSIONS.maintenance.includes('financial.view'), false);
+  assert.equal(DEFAULT_ROLE_PERMISSIONS.maintenance.includes('assets.transfer'), false);
+});
+
 test('default permission grants implement the specified role matrix', () => {
   const actions = ['view', 'create', 'edit', 'delete', 'approve', 'assign', 'transfer', 'maintain', 'report', 'configure'];
   const matrix = {

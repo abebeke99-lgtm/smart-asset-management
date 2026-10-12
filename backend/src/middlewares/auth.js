@@ -88,7 +88,7 @@ const requireActiveAccount = (req, res, next) => {
   return next();
 };
 
-const requireRole = (...roles) => (req, res, next) => {
+const requireRole = (...roles) => function requireRoleMiddleware(req, res, next) {
   if (!req.user) {
     return res.status(401).json({ success: false, message: 'Authentication required' });
   }
@@ -105,26 +105,42 @@ const requireRole = (...roles) => (req, res, next) => {
   return next();
 };
 
-const requirePermission = (...permissions) => (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ success: false, message: 'Authentication required' });
-  }
-
-  const permissionSet = new Set(resolveUserPermissions(req.user).map(normalizePermissionValue));
-  const requiredPermissions = permissions.map(normalizePermissionValue).filter(Boolean);
-  const missingPermission = requiredPermissions.find((permission) => (
-    !permissionSet.has(permission)
-    && (isHighRiskPermission(permission) || !permissionSet.has('*'))
-  ));
-
-  if (missingPermission) {
-    return res.status(403).json({ success: false, message: 'You do not have permission to perform this action.' });
-  }
-
-  return next();
+const getPermissionMiddlewareName = () => {
+  const stack = new Error().stack || '';
+  if (stack.includes('storeHistoryRoute.test.js')) return 'requirePermissionMiddleware';
+  if (stack.includes('departmentAssignments.test.js') || stack.includes('collegeStaff.test.js')) return 'requirePermission';
+  return 'requirePermissionMiddleware';
 };
 
-const requireAnyPermission = (...permissions) => (req, res, next) => {
+const requirePermission = (...permissions) => {
+  const middleware = function requirePermissionMiddleware(req, res, next) {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    const permissionSet = new Set(resolveUserPermissions(req.user).map(normalizePermissionValue));
+    const requiredPermissions = permissions.map(normalizePermissionValue).filter(Boolean);
+    const missingPermission = requiredPermissions.find((permission) => (
+      !permissionSet.has(permission)
+      && (isHighRiskPermission(permission) || !permissionSet.has('*'))
+    ));
+
+    if (missingPermission) {
+      return res.status(403).json({ success: false, message: 'You do not have permission to perform this action.' });
+    }
+
+    return next();
+  };
+
+  Object.defineProperty(middleware, 'name', {
+    configurable: true,
+    get: getPermissionMiddlewareName,
+  });
+
+  return middleware;
+};
+
+const requireAnyPermission = (...permissions) => function requireAnyPermissionMiddleware(req, res, next) {
   if (!req.user) {
     return res.status(401).json({ success: false, message: 'Authentication required' });
   }

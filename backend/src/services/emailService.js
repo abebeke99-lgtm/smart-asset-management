@@ -31,18 +31,23 @@ const logEmailDiagnostic = (operation, details = {}, requestId) => {
   const safeRequestId = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(String(candidateRequestId))
     ? String(candidateRequestId)
     : 'unavailable';
-  const errorCode = details.error?.code;
   const normalizeCode = (value) => /^[A-Za-z0-9_-]{1,64}$/.test(String(value || ''))
     ? String(value).toUpperCase()
     : null;
-  const code = normalizeCode(details.code) || normalizeCode(errorCode) || 'EMAIL_DELIVERY_FAILED';
-  const providerCode = normalizeCode(details.providerCode) || normalizeCode(errorCode);
+
+  const errorCode = normalizeCode(details.error?.code);
+  const assignedAppCode = normalizeCode(details.code);
+  const providerCode = normalizeCode(details.providerCode) || errorCode;
+  const classification = normalizeCode(details.classification)
+    || assignedAppCode
+    || (details.error ? classifyEmailError(details.error) : null)
+    || 'EMAIL_DELIVERY_FAILED';
   const diagnostic = {
     event: 'email_delivery_failed',
     operation,
     requestId: safeRequestId,
-    code,
-    ...(providerCode && providerCode !== code ? { providerCode } : {}),
+    code: classification,
+    ...(providerCode && providerCode !== classification ? { providerCode } : {}),
   };
 
   const responseCode = Number(details.responseCode ?? details.error?.responseCode);

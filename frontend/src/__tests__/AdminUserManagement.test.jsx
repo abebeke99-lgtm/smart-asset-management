@@ -62,7 +62,7 @@ const respondToApiRequests = () => {
     }
     if (url === '/api/roles') return Promise.resolve({ data: { roles: roleNames.map((name) => ({
       name,
-      displayName: ({ staff: 'Staff', student: 'Student', technical_assistant: 'Technical Assistant' })[name] || name,
+      displayName: ({ staff: 'Staff', student: 'Student', technical_assistant: 'Technical Assistant', maintenance: 'Maintenance' })[name] || name,
     })) } });
     if (/^\/api\/colleges\/\d+\/departments$/.test(url)) return Promise.resolve({ data: { departments: [{ id: 8, name: 'Computer Science' }] } });
     if (url.startsWith('/api/colleges')) return Promise.resolve({ data: { colleges: [{ id: 3, collegeName: 'College of Engineering' }] } });
@@ -213,6 +213,47 @@ test('submits the add-user form, closes it, and refreshes the visible user list'
   expect(createRequest.data).not.toHaveProperty('departmentId');
   await waitFor(() => expect(screen.queryByLabelText('Password *')).not.toBeInTheDocument());
   expect(await screen.findByText('new.user@example.edu')).toBeInTheDocument();
+});
+
+test('creates and displays a Maintenance user using the canonical role identifier', async () => {
+  await openCreateForm();
+  expect(within(screen.getByLabelText('Role *')).getByRole('option', { name: 'Maintenance' })).toHaveValue('maintenance');
+
+  fillValidNewUser();
+  fireEvent.change(screen.getByLabelText('Role *'), { target: { value: 'maintenance' } });
+  fireEvent.submit(document.querySelector('form'));
+
+  await waitFor(() => expect(apiClient.request).toHaveBeenCalledWith(expect.objectContaining({
+    url: '/api/users',
+    method: 'POST',
+    data: expect.objectContaining({ role: 'maintenance' }),
+  })));
+
+  const userEmail = await screen.findByText('new.user@example.edu');
+  expect(within(userEmail.closest('tr')).getByText('Maintenance')).toBeInTheDocument();
+});
+
+test('updates an existing user to the canonical Maintenance role', async () => {
+  usersResponse = [{
+    id: 17,
+    fullName: 'Existing User',
+    username: 'existing.user',
+    email: 'existing@example.edu',
+    role: 'staff',
+    active: true,
+  }];
+  render(<Users />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit Existing User' }));
+  const roleSelect = await screen.findByLabelText('Role *');
+  fireEvent.change(roleSelect, { target: { value: 'maintenance' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+  await waitFor(() => expect(apiClient.request).toHaveBeenCalledWith(expect.objectContaining({
+    url: '/api/users/17',
+    method: 'PUT',
+    data: expect.objectContaining({ role: 'maintenance' }),
+  })));
 });
 
 test('administrator Store Manager creation refreshes the account count from the existing API workflow', async () => {

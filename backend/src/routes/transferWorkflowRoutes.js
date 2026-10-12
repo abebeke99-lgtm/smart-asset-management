@@ -19,9 +19,9 @@ college.post('/department-head/transfers', ...requireDepartmentHead, resolveDepa
 college.get('/department-head/transfers/:id', ...requireDepartmentHead, resolveDepartmentScope, requirePermission('assets.view'), workflow.getTransfer);
 college.post('/department-head/transfers/:id/cancel', ...requireDepartmentHead, resolveDepartmentScope, requirePermission('assets.transfer'), workflow.cancelTransfer);
 college.post('/department-head/transfers/:id/receive', ...requireDepartmentHead, resolveDepartmentScope, requirePermission('assets.transfer'), workflow.receiveTransfer);
-college.get('/store/transfers', requireAuth, requireRole('store_manager'), resolveCollegeScope, requirePermission('assets.view'), workflow.listTransfers);
-college.post('/store/transfers/:id/ready', requireAuth, requireRole('store_manager'), resolveCollegeScope, requirePermission('assets.transfer'), workflow.readyTransfer);
-college.post('/store/transfers/:id/dispatch', requireAuth, requireRole('store_manager'), resolveCollegeScope, requirePermission('assets.transfer'), workflow.dispatchTransfer);
-college.post('/store/transfers/:id/receive', requireAuth, requireRole('store_manager'), resolveCollegeScope, requirePermission('assets.transfer'), workflow.receiveTransfer);
+college.get('/store/transfers', requireAuth, requireRole('store_manager'), resolveCollegeScope, workflow.listTransfers);
+college.post('/store/transfers/:id/ready', requireAuth, requireRole('store_manager'), resolveCollegeScope, workflow.readyTransfer);
+college.post('/store/transfers/:id/dispatch', requireAuth, requireRole('store_manager'), resolveCollegeScope, workflow.dispatchTransfer);
+college.post('/store/transfers/:id/receive', requireAuth, requireRole('store_manager'), resolveCollegeScope, workflow.receiveTransfer);
 
 module.exports = college;
