@@ -7,6 +7,7 @@ const models = require('../models');
 const notificationService = require('../services/notificationService');
 
 notificationService.createBulkNotification = async () => {};
+notificationService.createEventNotification = async () => {};
 
 const { sequelize, Approval, Asset, Department, User, AuditLog, Inventory, AssetMovement, Assignment, Transfer, Maintenance } = models;
 const { listApprovals, getApprovalById, createApproval, decideApproval } = require('../controllers/approvalController');
@@ -44,9 +45,11 @@ const approvalRecord = ({ collegeId = 1, departmentId = 12, assetId = null } = {
 });
 
 test('store-manager approval list query is limited to own College department and asset IDs', async () => {
+  const originalFindAndCountAll = Approval.findAndCountAll;
   const originalFindAll = Approval.findAll;
   let queryOptions;
-  Approval.findAll = async (options) => { queryOptions = options; return []; };
+  Approval.findAndCountAll = async (options) => { queryOptions = options; return { rows: [], count: 0 }; };
+  Approval.findAll = async () => [];
   try {
     const response = makeResponse();
     await listApprovals(storeRequest({ query: { collegeId: '2', requested_by: '42' } }), response, (error) => { throw error; });
@@ -59,16 +62,17 @@ test('store-manager approval list query is limited to own College department and
     assert.equal(queryOptions.include[0].attributes.includes('collegeId'), true);
     assert.equal(queryOptions.include[1].attributes.includes('collegeId'), true);
     assert.equal(queryOptions.include.find((association) => association.as === 'Beneficiary').attributes.includes('collegeId'), true);
-    assert.equal(queryOptions.where.requestedBy, '42');
+    assert.equal(queryOptions.where.requestedBy, 42);
     assert.equal(response.statusCode, 200);
     assert.equal(response.body.total, 0);
   } finally {
+    Approval.findAndCountAll = originalFindAndCountAll;
     Approval.findAll = originalFindAll;
   }
 });
 
 test('approval list logs database details and returns a JSON 500 response', async () => {
-  const originalFindAll = Approval.findAll;
+  const originalFindAndCountAll = Approval.findAndCountAll;
   const originalConsoleError = console.error;
   const databaseError = Object.assign(new Error('Approval database query failed'), {
     name: 'SequelizeDatabaseError',
@@ -79,7 +83,7 @@ test('approval list logs database details and returns a JSON 500 response', asyn
     sql: 'SELECT missing_column FROM approvals',
   });
   let logged;
-  Approval.findAll = async () => { throw databaseError; };
+  Approval.findAndCountAll = async () => { throw databaseError; };
   console.error = (...args) => { logged = args; };
   try {
     const response = makeResponse();
@@ -95,8 +99,82 @@ test('approval list logs database details and returns a JSON 500 response', asyn
       sql: 'SELECT missing_column FROM approvals',
     });
   } finally {
-    Approval.findAll = originalFindAll;
+    Approval.findAndCountAll = originalFindAndCountAll;
     console.error = originalConsoleError;
+  }
+});
+
+test('approval list limits finance to purchases and validates pagination inputs', async () => {
+  const originalFindAndCountAll = Approval.findAndCountAll;
+  const originalFindAll = Approval.findAll;
+  let options;
+  Approval.findAndCountAll = async (queryOptions) => {
+    options = queryOptions;
+    return { rows: [], count: 0 };
+  };
+  Approval.findAll = async () => [];
+  try {
+    const response = makeResponse();
+    await listApprovals({
+      user: { id: 50, role: 'finance' },
+      query: { page: '2', limit: '10', type: 'purchase_request' },
+    }, response, (error) => { throw error; });
+    assert.equal(response.statusCode, 200);
+    assert.equal(options.limit, 10);
+    assert.equal(options.offset, 10);
+    assert.equal(options.distinct, true);
+    assert.equal(options.where[Op.and].some((clause) => clause.type?.[Op.like] === '%purchase%'), true);
+    assert.equal(options.where[Op.and].some((clause) => clause.type === 'purchase_request'), true);
+
+    const invalid = makeResponse();
+    await listApprovals({
+      user: { id: 50, role: 'finance' },
+      query: { page: '0', limit: '10' },
+    }, invalid, (error) => { throw error; });
+    assert.equal(invalid.statusCode, 400);
+  } finally {
+    Approval.findAndCountAll = originalFindAndCountAll;
+    Approval.findAll = originalFindAll;
+  }
+});
+
+test('requester may cancel own pending approval but cannot make an approval decision', async () => {
+  const originals = {
+    findByPk: Approval.findByPk,
+    transaction: sequelize.transaction,
+    auditCreate: AuditLog.create,
+  };
+  const record = { ...approvalRecord(), requestedBy: 42 };
+  const transaction = { LOCK: { UPDATE: 'UPDATE' }, committed: false, rolledBack: false, async commit() { this.committed = true; }, async rollback() { this.rolledBack = true; } };
+  let auditValues;
+  Approval.findByPk = async () => record;
+  sequelize.transaction = async () => transaction;
+  AuditLog.create = async (values) => { auditValues = values; };
+  try {
+    const denied = makeResponse();
+    await decideApproval({
+      user: { id: 43, role: 'department_head' },
+      params: { id: '25' },
+      body: { status: 'approved' },
+    }, denied, (error) => { throw error; });
+    assert.equal(denied.statusCode, 403);
+    assert.equal(transaction.rolledBack, true);
+
+    transaction.rolledBack = false;
+    const cancelled = makeResponse();
+    await decideApproval({
+      user: { id: 42, role: 'department_head' },
+      params: { id: '25' },
+      body: { status: 'cancelled', comment: 'No longer needed' },
+    }, cancelled, (error) => { throw error; });
+    assert.equal(cancelled.statusCode, 200);
+    assert.equal(record.status, 'cancelled');
+    assert.equal(auditValues.action, 'REQUEST_CANCELLED');
+    assert.equal(transaction.committed, true);
+  } finally {
+    Approval.findByPk = originals.findByPk;
+    sequelize.transaction = originals.transaction;
+    AuditLog.create = originals.auditCreate;
   }
 });
 
@@ -143,7 +221,7 @@ test('store manager cannot read or decide an approval linked to another College'
 
 test('same-College decision and audit row use the same transaction', async () => {
   const originals = { findByPk: Approval.findByPk, transaction: sequelize.transaction, auditCreate: AuditLog.create };
-  const record = approvalRecord();
+  const record = { ...approvalRecord(), type: 'asset_issue' };
   const transaction = { LOCK: { UPDATE: 'UPDATE' }, committed: false, rolledBack: false, async commit() { this.committed = true; }, async rollback() { this.rolledBack = true; } };
   let auditOptions;
   let auditValues;
@@ -287,6 +365,7 @@ test('Store Manager request creation requires and resolves asset and department 
     assetFindByPk: Asset.findByPk,
     departmentFindByPk: Department.findByPk,
     userFindByPk: User.findByPk,
+    userFindAll: User.findAll,
     approvalCreate: Approval.create,
     auditCreate: AuditLog.create,
     inventoryFindOne: Inventory.findOne,
@@ -315,6 +394,7 @@ test('Store Manager request creation requires and resolves asset and department 
     : Number(id) === 44
       ? { id: 44, collegeId: 2, active: true, status: 'active' }
       : null;
+  User.findAll = async () => [];
   Approval.create = async (values) => {
     createdValues.push(values);
     return { ...values, id: 81, status: 'pending', toJSON() { return { ...this }; } };
@@ -367,6 +447,7 @@ test('Store Manager request creation requires and resolves asset and department 
     Asset.findByPk = originals.assetFindByPk;
     Department.findByPk = originals.departmentFindByPk;
     User.findByPk = originals.userFindByPk;
+    User.findAll = originals.userFindAll;
     Approval.create = originals.approvalCreate;
     AuditLog.create = originals.auditCreate;
     Inventory.findOne = originals.inventoryFindOne;
@@ -379,7 +460,7 @@ test('Store Manager request creation requires and resolves asset and department 
 
 test('audit failure rolls back the approval decision', async () => {
   const originals = { findByPk: Approval.findByPk, transaction: sequelize.transaction, auditCreate: AuditLog.create };
-  const record = approvalRecord();
+  const record = { ...approvalRecord(), type: 'asset_issue' };
   const transaction = { LOCK: { UPDATE: 'UPDATE' }, committed: false, rolledBack: false, async commit() { this.committed = true; }, async rollback() { this.rolledBack = true; } };
   const auditFailure = new Error('audit unavailable');
   Approval.findByPk = async () => record;

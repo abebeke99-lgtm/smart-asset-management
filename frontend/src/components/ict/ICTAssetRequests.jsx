@@ -117,25 +117,41 @@ export default function ICTAssetRequests() {
   const loadRequests = async () => {
     setError("");
     try {
-      const response = await apiClient.get("/api/approvals", {
-        params: { status: filters.status || undefined },
-      });
-      const payload = response.data || {};
-      const rows = Array.isArray(payload.requests)
+      const params = {
+        page: 1,
+        limit: 100,
+        status: filters.status || undefined,
+        priority: filters.priority || undefined,
+        search: filters.search.trim() || undefined,
+      };
+      const firstResponse = await apiClient.get("/api/approvals", { params });
+      const payload = firstResponse.data || {};
+      const firstRows = Array.isArray(payload.requests)
         ? payload.requests
-        : Array.isArray(payload.approvals)
-          ? payload.approvals
-          : [];
+        : Array.isArray(payload.approvals) ? payload.approvals : [];
+      const pageCount = Math.max(1, Number(payload.pagination?.pages) || 1);
+      const pageResponses = await Promise.all(
+        Array.from({ length: pageCount - 1 }, (_, index) =>
+          apiClient.get("/api/approvals", {
+            params: { ...params, page: index + 2 },
+          }),
+        ),
+      );
+      const rows = [
+        ...firstRows,
+        ...pageResponses.flatMap(({ data }) =>
+          Array.isArray(data?.requests) ? data.requests : Array.isArray(data?.approvals) ? data.approvals : [],
+        ),
+      ];
       setRequests(rows.map(normalizeRequest));
       const normalizedRows = rows.map(normalizeRequest);
+      const summary = payload.summary || {};
       setSummary({
-        total: Number.isFinite(Number(payload.total))
-          ? Number(payload.total)
-          : rows.length,
-        pending: normalizedRows.filter((request) => request.status === "pending").length,
-        approved: normalizedRows.filter((request) => request.status === "approved").length,
-        rejected: normalizedRows.filter((request) => request.status === "rejected").length,
-        cancelled: normalizedRows.filter((request) => request.status === "cancelled").length,
+        total: Number.isFinite(Number(summary.total)) ? Number(summary.total) : Number(payload.total) || rows.length,
+        pending: Number.isFinite(Number(summary.pending)) ? Number(summary.pending) : normalizedRows.filter((request) => request.status === "pending").length,
+        approved: Number.isFinite(Number(summary.approved)) ? Number(summary.approved) : normalizedRows.filter((request) => request.status === "approved").length,
+        rejected: Number.isFinite(Number(summary.rejected)) ? Number(summary.rejected) : normalizedRows.filter((request) => request.status === "rejected").length,
+        cancelled: Number.isFinite(Number(summary.cancelled)) ? Number(summary.cancelled) : normalizedRows.filter((request) => request.status === "cancelled").length,
       });
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Unable to load asset requests."));
@@ -762,6 +778,28 @@ function EmptyState({ hasFilters, onCreate }) {
   );
 }
 function Details({ request, onClose }) {
+  const [details, setDetails] = useState(request);
+  const [historyError, setHistoryError] = useState("");
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [retryKey, setRetryKey] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setHistoryLoading(true);
+    setHistoryError("");
+    apiClient.get(`/api/approvals/${request.id}`)
+      .then(({ data }) => {
+        if (active) setDetails(data?.request || data?.approval || request);
+      })
+      .catch((error) => {
+        if (active) setHistoryError(getErrorMessage(error, "Unable to load request history."));
+      })
+      .finally(() => {
+        if (active) setHistoryLoading(false);
+      });
+    return () => { active = false; };
+  }, [request, retryKey]);
+
   return (
     <div
       className="ict-requests-modal-backdrop"
@@ -792,7 +830,7 @@ function Details({ request, onClose }) {
           <Detail
             icon={ClipboardList}
             title="Status"
-            value={<Status value={request.status} />}
+            value={<Status value={details.lifecycleStatus || request.status} />}
           />
           <Detail
             icon={TriangleAlert}
@@ -826,17 +864,28 @@ function Details({ request, onClose }) {
             value={request.asset?.assetCode || "Not linked"}
           />
           <Detail icon={UserRound} title="Reviewed by" value={display(request.approved_by || request.Reviewer?.fullName)} />
-          <Detail icon={MessageSquare} title="Approval comment" value={display(request.approval_comment || request.comment)} />
+          <Detail icon={MessageSquare} title="Approval comment"           value={display(details.approval_comment || details.comment)} />
         </div>
         <div className="ict-requests-description">
           <strong>Purpose and reason</strong>
           <p>{display(request.reason)}</p>
         </div>
-        <div className="ict-requests-not-available">
-          <AlertCircle size={16} /> Approval history, fulfillment, assignment,
-          inventory issue, attachments, and notification links are not exposed
-          by the current backend request architecture.
-        </div>
+        <section className="ict-requests-description" aria-label="Request history">
+          <strong>Request history</strong>
+          {historyLoading ? <p role="status">Loading request history...</p> : historyError ? (
+            <p role="alert">{historyError} <button type="button" onClick={() => setRetryKey((key) => key + 1)}>Retry</button></p>
+          ) : details.history?.length ? (
+            <ol>
+              {details.history.map((entry) => (
+                <li key={entry.id}>
+                  <strong>{label(entry.newStatus || entry.action)}</strong>
+                  <span> — {formatDate(entry.createdAt)}</span>
+                  {entry.comment && <p>{entry.comment}</p>}
+                </li>
+              ))}
+            </ol>
+          ) : <p>No status history has been recorded.</p>}
+        </section>
       </section>
     </div>
   );

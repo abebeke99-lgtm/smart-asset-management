@@ -4,8 +4,14 @@ const models = require('../models');
 const auditLogService = require('../services/auditLogService');
 const notificationService = require('../services/notificationService');
 
-auditLogService.createAuditLog = async () => {};
-notificationService.createEventNotification = async () => {};
+const auditLogEntries = [];
+let auditLogError = null;
+auditLogService.createAuditLog = async (entry) => {
+  if (auditLogError) throw auditLogError;
+  auditLogEntries.push(entry);
+};
+const eventNotifications = [];
+notificationService.createEventNotification = async (entry) => { eventNotifications.push(entry); };
 notificationService.createDepartmentEventNotification = async () => {};
 
 const assignmentRoutes = require('../routes/assignmentRoutes');
@@ -51,15 +57,20 @@ const modelMethods = [
   [models.sequelize, 'transaction'],
   [models.Inventory, 'findOne'],
   [models.Asset, 'findByPk'],
+  [models.Asset, 'findOne'],
+  [models.Asset, 'update'],
   [models.User, 'findByPk'],
   [models.Department, 'findByPk'],
   [models.Room, 'findByPk'],
   [models.Assignment, 'findOne'],
+  [models.Assignment, 'findAll'],
   [models.Assignment, 'create'],
   [models.Assignment, 'findByPk'],
+  [models.Approval, 'findByPk'],
   [models.InventoryTransaction, 'create'],
   [models.AssetMovement, 'create'],
   [models.AuditLog, 'create'],
+  [models.Department, 'findOne'],
 ];
 
 const withModelStubs = async (stubs, callback) => {
@@ -72,43 +83,66 @@ const withModelStubs = async (stubs, callback) => {
   }
 };
 
-test('department assignments are exposed under the department workspace with view permission', () => {
+test('assignment routes enforce role-specific permissions and expose department workspace routes', () => {
   assert.ok(departmentWorkspaceRoutes.stack.some((layer) => layer.name === 'router' && layer.regexp.test('/assignments')));
-  for (const method of ['get', 'post']) {
-    const route = getRoute(assignmentRoutes, method, method === 'get' ? '/' : '/');
-    const permissionMiddlewareIndex = route.stack.findIndex((layer) => layer.handle.name === 'requireDepartmentPermission');
-    assert.ok(permissionMiddlewareIndex >= 0, `${method.toUpperCase()} route must enforce department permissions`);
+  const cases = [
+    { method: 'get', path: '/', role: 'department_head', permissions: ['assets.view'], expected: 200 },
+    { method: 'post', path: '/', role: 'department_head', permissions: ['assets.assign'], expected: 200 },
+    { method: 'post', path: '/', role: 'department_head', permissions: ['assets.view'], expected: 403 },
+    { method: 'post', path: '/:id/return', role: 'department_head', permissions: ['department_head.returns.manage'], expected: 200 },
+    { method: 'post', path: '/', role: 'ict_officer', permissions: ['ict.assets.assign'], expected: 200 },
+    { method: 'get', path: '/', role: 'college', permissions: ['college.assignments.view'], expected: 200 },
+    { method: 'post', path: '/', role: 'college', permissions: ['college.assignments.view'], expected: 403 },
+    { method: 'post', path: '/', role: 'college_manager', permissions: ['college.assignments.manage'], expected: 200 },
+    { method: 'get', path: '/', role: 'admin', permissions: [], expected: 403 },
+  ];
+  for (const { method, path, role, permissions, expected } of cases) {
+    const route = getRoute(assignmentRoutes, method, path);
+    const permission = route.stack.find((layer) => layer.handle.name === 'requireAssignmentPermissionForRole');
+    assert.ok(permission, `${method.toUpperCase()} route must enforce assignment permissions`);
+    const response = makeResponse();
+    let advanced = false;
+    permission.handle({ user: { role, permissions } }, response, () => { advanced = true; });
+    assert.equal(response.statusCode, expected);
+    assert.equal(advanced, expected === 200);
   }
-});
 
-test('department-head assignment reads require assets.view and creation requires assets.assign', async () => {
-  const createRoute = getRoute(assignmentRoutes, 'post', '/');
-  const permission = createRoute.stack.find((layer) => layer.handle.name === 'requireDepartmentPermission').handle;
-  const denied = makeResponse();
-  let advanced = false;
-  permission({ user: { role: 'department_head', permissions: ['assets.view'] } }, denied, () => { advanced = true; });
-  assert.equal(denied.statusCode, 403);
-  assert.equal(advanced, false);
-
-  const allowed = makeResponse();
-  permission({ user: { role: 'department_head', permissions: ['assets.assign'] } }, allowed, () => { advanced = true; });
-  assert.equal(allowed.statusCode, 200);
-  assert.equal(advanced, true);
-
-  const genericRole = makeResponse();
-  permission({ user: { role: 'admin', permissions: [] } }, genericRole, () => { advanced = true; });
-  assert.equal(genericRole.statusCode, 200);
+  const fulfillmentRoute = getRoute(assignmentRoutes, 'post', '/fulfill-request/:id');
+  const stockOutPermission = fulfillmentRoute.stack.find((layer) => layer.handle.name === 'requirePermission')?.handle;
+  assert.ok(stockOutPermission, 'approved request fulfillment must require inventory.stock_out');
+  const deniedFulfillment = makeResponse();
+  let fulfilled = false;
+  stockOutPermission({ user: { role: 'store_manager', permissions: ['assets.assign'] } }, deniedFulfillment, () => { fulfilled = true; });
+  assert.equal(deniedFulfillment.statusCode, 403);
+  assert.equal(fulfilled, false);
+  const allowedFulfillment = makeResponse();
+  stockOutPermission({ user: { role: 'store_manager', permissions: ['inventory.stock_out'] } }, allowedFulfillment, () => { fulfilled = true; });
+  assert.equal(allowedFulfillment.statusCode, 200);
+  assert.equal(fulfilled, true);
 });
 
 test('department-head assignment list uses a database-column-mapped department filter', async (t) => {
   const handler = getHandler(getRoute(assignmentRoutes, 'get', '/'));
   const originalFindAndCountAll = models.Assignment.findAndCountAll;
+  const originalFindAll = models.Assignment.findAll;
   let queryOptions;
+  let groupedOptions;
   models.Assignment.findAndCountAll = async (options) => {
     queryOptions = options;
-    return { count: 0, rows: [] };
+    return { count: 9, rows: [] };
   };
-  t.after(() => { models.Assignment.findAndCountAll = originalFindAndCountAll; });
+  models.Assignment.findAll = async (options) => {
+    groupedOptions = options;
+    return [
+      { status: 'active', count: '6' },
+      { status: 'returned', count: '2' },
+      { status: 'pending', count: '1' },
+    ];
+  };
+  t.after(() => {
+    models.Assignment.findAndCountAll = originalFindAndCountAll;
+    models.Assignment.findAll = originalFindAll;
+  });
 
   const response = makeResponse();
   await handler(request(), response, (error) => { throw error; });
@@ -117,6 +151,8 @@ test('department-head assignment list uses a database-column-mapped department f
   const assetInclude = queryOptions.include.find((include) => include.model === models.Asset);
   assert.deepEqual(assetInclude.where, { departmentId: 7, collegeId: 3 });
   assert.equal(assetInclude.required, true);
+  assert.deepEqual(response.body.summary, { total: 9, active: 6, returned: 2, pending: 1 });
+  assert.deepEqual(groupedOptions.group, ['status']);
 
   queryOptions.model = models.Assignment;
   models.Assignment._validateIncludedElements(queryOptions);
@@ -132,6 +168,7 @@ test('department-head assignment list uses a database-column-mapped department f
 test('assignment list query errors are logged and returned as a message-only 500', async () => {
   const handler = getHandler(getRoute(assignmentRoutes, 'get', '/'));
   const originalFindAndCountAll = models.Assignment.findAndCountAll;
+  const originalFindAll = models.Assignment.findAll;
   const originalConsoleError = console.error;
   const databaseError = Object.assign(new Error('Assignment query failed'), {
     name: 'SequelizeDatabaseError',
@@ -140,6 +177,7 @@ test('assignment list query errors are logged and returned as a message-only 500
   });
   let logged;
   models.Assignment.findAndCountAll = async () => { throw databaseError; };
+  models.Assignment.findAll = async () => [];
   console.error = (...args) => { logged = args; };
   try {
     const response = makeResponse();
@@ -156,6 +194,7 @@ test('assignment list query errors are logged and returned as a message-only 500
     });
   } finally {
     models.Assignment.findAndCountAll = originalFindAndCountAll;
+    models.Assignment.findAll = originalFindAll;
     console.error = originalConsoleError;
   }
 });
@@ -163,12 +202,17 @@ test('assignment list query errors are logged and returned as a message-only 500
 test('assignment search uses database column names for included model fields', async (t) => {
   const handler = getHandler(getRoute(assignmentRoutes, 'get', '/'));
   const originalFindAndCountAll = models.Assignment.findAndCountAll;
+  const originalFindAll = models.Assignment.findAll;
   let queryOptions;
   models.Assignment.findAndCountAll = async (options) => {
     queryOptions = options;
     return { count: 0, rows: [] };
   };
-  t.after(() => { models.Assignment.findAndCountAll = originalFindAndCountAll; });
+  models.Assignment.findAll = async () => [];
+  t.after(() => {
+    models.Assignment.findAndCountAll = originalFindAndCountAll;
+    models.Assignment.findAll = originalFindAll;
+  });
 
   const req = request();
   req.query.search = 'projector';
@@ -187,6 +231,40 @@ test('assignment search uses database column names for included model fields', a
   assert.match(sql, /`User`\.`full_name`/);
   assert.match(sql, /`AssignedLaboratory`\.`room_name`/);
   assert.doesNotMatch(sql, /`Asset`\.`assetCode`|`Asset`\.`serialNumber`|`User`\.`fullName`|`AssignedLaboratory`\.`roomName`/);
+});
+
+test('college and college-manager assignment lists constrain joined assets to their resolved college', async (t) => {
+  const handler = getHandler(getRoute(assignmentRoutes, 'get', '/'));
+  const originalFindAndCountAll = models.Assignment.findAndCountAll;
+  const originalFindAll = models.Assignment.findAll;
+  const observedIncludes = [];
+  models.Assignment.findAndCountAll = async ({ include }) => {
+    observedIncludes.push(include);
+    return { count: 0, rows: [] };
+  };
+  models.Assignment.findAll = async ({ include }) => {
+    observedIncludes.push(include);
+    return [];
+  };
+  t.after(() => {
+    models.Assignment.findAndCountAll = originalFindAndCountAll;
+    models.Assignment.findAll = originalFindAll;
+  });
+
+  for (const role of ['college', 'college_manager']) {
+    const req = request();
+    req.user.role = role;
+    req.organizationScope = { collegeId: 44 };
+    const response = makeResponse();
+    await handler(req, response, (error) => { throw error; });
+  }
+
+  assert.equal(observedIncludes.length, 4);
+  for (const include of observedIncludes) {
+    const assetInclude = include.find((entry) => entry.model === models.Asset);
+    assert.deepEqual(assetInclude.where, { collegeId: 44 });
+    assert.equal(assetInclude.required, true);
+  }
 });
 
 test('assignment validation rejects malformed dates before opening a transaction', async () => {
@@ -244,6 +322,7 @@ test('bulk creation decrements only the issued quantity and records it in assign
   let inventoryTransaction;
   let assetMovement;
   let createdAssignmentRecord;
+  auditLogEntries.length = 0;
   const assignment = {
     id: 99,
     toJSON() { return createdAssignmentRecord; },
@@ -286,7 +365,128 @@ test('bulk creation decrements only the issued quantity and records it in assign
     assert.equal(inventoryTransaction.type, 'issue');
     assert.equal(inventoryTransaction.quantity, 3);
     assert.match(assetMovement.notes, /"quantity":3/);
+    assert.equal(auditLogEntries.length, 1);
+    assert.equal(auditLogEntries[0].action, 'ASSIGN_ASSET');
+    assert.equal(auditLogEntries[0].entityId, 45);
+    assert.equal(auditLogEntries[0].newValue.assignment.id, 99);
+    assert.equal(auditLogEntries[0].transaction, transaction);
     assert.equal(response.body.assignment.id, 99);
+  });
+});
+
+test('unavailable serialized assets are rejected without creating an assignment', async () => {
+  const handler = getHandler(getRoute(assignmentRoutes, 'post', '/'));
+  const transaction = {
+    LOCK: { UPDATE: 'UPDATE' },
+    finished: null,
+    async commit() { this.finished = 'commit'; },
+    async rollback() { this.finished = 'rollback'; },
+  };
+  let assignmentLookup = false;
+  const stubs = [
+    [models.sequelize, 'transaction', async () => transaction],
+    [models.Inventory, 'findOne', async () => ({ id: 2, availableQuantity: 1 })],
+    [models.Asset, 'findByPk', async () => ({ id: 45, status: 'assigned', serialNumber: 'SER-45', departmentId: 7, collegeId: 3 })],
+    [models.User, 'findByPk', async () => ({ id: 81, active: true, status: 'active', departmentId: 7, collegeId: 3 })],
+    [models.Department, 'findByPk', async () => ({ id: 7, name: 'Authorized Department', collegeId: 3, status: 'active' })],
+    [models.Room, 'findByPk', async () => null],
+    [models.Assignment, 'findOne', async () => { assignmentLookup = true; return { id: 90 }; }],
+    [models.Assignment, 'create', async () => assert.fail('unavailable asset must not create an assignment')],
+  ];
+
+  await withModelStubs(stubs, async () => {
+    const response = makeResponse();
+    await handler(request(assignmentBody()), response, (error) => { throw error; });
+    assert.equal(response.statusCode, 409);
+    assert.match(response.body.message, /cannot be assigned/i);
+    assert.equal(assignmentLookup, false);
+    assert.equal(transaction.finished, 'rollback');
+  });
+});
+
+test('serialized assets with an active assignment cannot be assigned twice', async () => {
+  const handler = getHandler(getRoute(assignmentRoutes, 'post', '/'));
+  const transaction = {
+    LOCK: { UPDATE: 'UPDATE' },
+    finished: null,
+    async commit() { this.finished = 'commit'; },
+    async rollback() { this.finished = 'rollback'; },
+  };
+  let assignmentLookup = false;
+  const stubs = [
+    [models.sequelize, 'transaction', async () => transaction],
+    [models.Inventory, 'findOne', async () => ({ id: 2, availableQuantity: 1 })],
+    [models.Asset, 'findByPk', async () => ({ id: 45, status: 'available', serialNumber: 'SER-45', departmentId: 7, collegeId: 3 })],
+    [models.User, 'findByPk', async () => ({ id: 81, active: true, status: 'active', departmentId: 7, collegeId: 3 })],
+    [models.Department, 'findByPk', async () => ({ id: 7, name: 'Authorized Department', collegeId: 3, status: 'active' })],
+    [models.Room, 'findByPk', async () => null],
+    [models.Assignment, 'findOne', async () => { assignmentLookup = true; return { id: 90, status: 'active' }; }],
+    [models.Assignment, 'create', async () => assert.fail('duplicate active assignment must not create another assignment')],
+  ];
+
+  await withModelStubs(stubs, async () => {
+    const response = makeResponse();
+    await handler(request(assignmentBody()), response, (error) => { throw error; });
+    assert.equal(response.statusCode, 409);
+    assert.match(response.body.message, /already assigned/i);
+    assert.equal(assignmentLookup, true);
+    assert.equal(transaction.finished, 'rollback');
+  });
+});
+
+test('inactive recipients are rejected without creating an assignment', async () => {
+  const handler = getHandler(getRoute(assignmentRoutes, 'post', '/'));
+  const transaction = {
+    LOCK: { UPDATE: 'UPDATE' },
+    finished: null,
+    async commit() { this.finished = 'commit'; },
+    async rollback() { this.finished = 'rollback'; },
+  };
+  const stubs = [
+    [models.sequelize, 'transaction', async () => transaction],
+    [models.Inventory, 'findOne', async () => ({ id: 2, availableQuantity: 1 })],
+    [models.Asset, 'findByPk', async () => ({ id: 45, status: 'available', departmentId: 7, collegeId: 3 })],
+    [models.User, 'findByPk', async () => ({ id: 81, active: false, status: 'inactive', departmentId: 7, collegeId: 3 })],
+    [models.Department, 'findByPk', async () => ({ id: 7, name: 'Authorized Department', collegeId: 3, status: 'active' })],
+    [models.Room, 'findByPk', async () => null],
+    [models.Assignment, 'create', async () => assert.fail('inactive recipient must not create an assignment')],
+  ];
+
+  await withModelStubs(stubs, async () => {
+    const response = makeResponse();
+    await handler(request(assignmentBody()), response, (error) => { throw error; });
+    assert.equal(response.statusCode, 409);
+    assert.match(response.body.message, /inactive user/i);
+    assert.equal(transaction.finished, 'rollback');
+  });
+});
+
+test('college managers cannot assign to recipients from another college', async () => {
+  const handler = getHandler(getRoute(assignmentRoutes, 'post', '/'));
+  const transaction = {
+    LOCK: { UPDATE: 'UPDATE' },
+    finished: null,
+    async commit() { this.finished = 'commit'; },
+    async rollback() { this.finished = 'rollback'; },
+  };
+  const stubs = [
+    [models.sequelize, 'transaction', async () => transaction],
+    [models.Inventory, 'findOne', async () => ({ id: 2, availableQuantity: 1 })],
+    [models.Asset, 'findByPk', async () => ({ id: 45, status: 'available', departmentId: 7, collegeId: 3 })],
+    [models.User, 'findByPk', async () => ({ id: 81, active: true, status: 'active', role: 'staff', departmentId: 7, collegeId: 4 })],
+    [models.Department, 'findByPk', async () => ({ id: 7, name: 'Foreign Department', collegeId: 4, status: 'active' })],
+    [models.Assignment, 'create', async () => assert.fail('cross-college assignment must not be created')],
+  ];
+
+  await withModelStubs(stubs, async () => {
+    const req = request(assignmentBody());
+    req.user.role = 'college_manager';
+    req.organizationScope = { collegeId: 3 };
+    const response = makeResponse();
+    await handler(req, response, (error) => { throw error; });
+    assert.equal(response.statusCode, 403);
+    assert.match(response.body.message, /outside your organization scope/i);
+    assert.equal(transaction.finished, 'rollback');
   });
 });
 

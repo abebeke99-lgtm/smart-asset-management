@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars, no-dupe-keys, no-template-curly-in-string */
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Ban,
   CheckCircle,
@@ -82,6 +82,17 @@ const fetchDepartments = () => fetchPages(
   }
 );
 
+const fetchApprovalRequests = () => fetchPages(
+  '/api/approvals',
+  100,
+  (response) => Array.isArray(response?.requests) ? response.requests : [],
+  {
+    firstParams: {},
+    nextParams: {},
+    pages: (response) => response?.pagination?.pages || 1
+  }
+);
+
 const StoreAssetRequests = () => {
   const { language, theme } = useLanguage();
 
@@ -102,6 +113,10 @@ const StoreAssetRequests = () => {
   const [activeTab, setActiveTab] = useState('new');
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [requestHistory, setRequestHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const selectedRequestId = useRef(null);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -268,14 +283,14 @@ const StoreAssetRequests = () => {
     setLoadError(false);
 
     const [requestsRes, assetsRes, usersRes, departmentsRes] = await Promise.allSettled([
-      Promise.resolve().then(() => apiClient.get('/api/approvals')),
+      Promise.resolve().then(fetchApprovalRequests),
       Promise.resolve().then(fetchAssets),
       Promise.resolve().then(fetchUsers),
       Promise.resolve().then(fetchDepartments)
     ]);
 
     if (requestsRes.status === 'fulfilled') {
-      setRequests(normalizeRequests(requestsRes.value.data));
+      setRequests(normalizeRequests(requestsRes.value));
     } else {
       setRequests([]);
       setLoadError(true);
@@ -655,9 +670,26 @@ const StoreAssetRequests = () => {
     }
   };
 
-  const openDetails = (request) => {
+  const openDetails = async (request) => {
+    selectedRequestId.current = request.id;
     setSelectedRequest(request);
+    setRequestHistory([]);
+    setHistoryError('');
+    setHistoryLoading(true);
     setShowDetails(true);
+    try {
+      const response = await apiClient.get(`/api/approvals/${request.id}`);
+      if (selectedRequestId.current !== request.id) return;
+      const detail = response.data?.request || response.data?.approval;
+      setRequestHistory(Array.isArray(detail?.history) ? detail.history : []);
+      if (detail) setSelectedRequest((current) => current?.id === request.id ? { ...current, ...detail } : current);
+    } catch (error) {
+      if (selectedRequestId.current === request.id) {
+        setHistoryError(error?.response?.data?.message || t.loadFailed);
+      }
+    } finally {
+      if (selectedRequestId.current === request.id) setHistoryLoading(false);
+    }
   };
 
   const formatDate = (date) => {
@@ -1833,7 +1865,9 @@ const StoreAssetRequests = () => {
                 ],
                 [
                   t.status,
-                  getStatus(
+                  selectedRequest.lifecycleStatus === 'fulfilled'
+                    ? t.fulfilled
+                    : getStatus(
                     selectedRequest
                   )
                 ],
@@ -1930,6 +1964,30 @@ const StoreAssetRequests = () => {
                   '-'}
               </div>
             </div>
+
+            <section style={{ marginTop: 18 }} aria-label={t.history}>
+              <div style={labelStyle}>{t.history}</div>
+              {historyLoading ? (
+                <p role="status">{t.loading}</p>
+              ) : historyError ? (
+                <div role="alert">
+                  <p>{historyError}</p>
+                  <button type="button" onClick={() => openDetails(selectedRequest)}>{t.retry}</button>
+                </div>
+              ) : requestHistory.length ? (
+                <ol>
+                  {requestHistory.map((entry) => (
+                    <li key={entry.id} style={{ marginBottom: 8 }}>
+                      <strong>{entry.newStatus || entry.action || 'Updated'}</strong>
+                      {' — '}{formatDate(entry.createdAt)}
+                      {entry.comment && <div>{entry.comment}</div>}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p>No request history has been recorded.</p>
+              )}
+            </section>
 
             {getStatus(
               selectedRequest

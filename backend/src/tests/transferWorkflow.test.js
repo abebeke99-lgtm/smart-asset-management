@@ -204,9 +204,18 @@ test('destination confirmation records receipt and only then updates asset owner
     assetFindByPk: Asset.findByPk,
     departmentFindOne: Department.findOne,
     assignmentFindOne: Assignment.findOne,
+    assignmentCreate: Assignment.create,
     movementCreate: AssetMovement.create,
     auditCreate: AuditLog.create,
     notificationBulkCreate: Notification.bulkCreate,
+  };
+  const assignment = {
+    id: 92, assetId: 18, approvalId: 80, quantity: 2, assignedTo: 44, assignedToType: 'user',
+    assignedToId: 44, assignedBy: 7, status: 'active', workflowStatus: 'assigned',
+    assignedDate: new Date('2026-01-01'), expectedReturnDate: new Date('2027-01-01'),
+    departmentId: 12, location: 'Physics Room', conditionAtAssignment: 'Good', notes: '{}',
+    async update(values) { Object.assign(this, values); },
+    toJSON() { return { ...this }; },
   };
   const transaction = makeTransaction();
   const row = {
@@ -223,14 +232,20 @@ test('destination confirmation records receipt and only then updates asset owner
     toJSON() { return { ...this }; },
   };
   let movement;
+  let nextAssignment;
+  const auditRecords = [];
   sequelize.transaction = async () => transaction;
   Transfer.findOne = async () => row;
   Transfer.findByPk = async () => row;
   Asset.findByPk = async () => asset;
   Department.findOne = async () => ({ id: 13, collegeId: 5, name: 'Chemistry' });
-  Assignment.findOne = async () => null;
+  Assignment.findOne = async () => assignment;
+  Assignment.create = async (values) => {
+    nextAssignment = { id: 93, ...values, toJSON() { return { id: this.id, ...values }; } };
+    return nextAssignment;
+  };
   AssetMovement.create = async (values) => { movement = values; };
-  AuditLog.create = async () => ({});
+  AuditLog.create = async (values) => { auditRecords.push(values); return {}; };
   Notification.bulkCreate = async () => [];
   t.after(() => {
     sequelize.transaction = originals.transaction;
@@ -239,6 +254,7 @@ test('destination confirmation records receipt and only then updates asset owner
     Asset.findByPk = originals.assetFindByPk;
     Department.findOne = originals.departmentFindOne;
     Assignment.findOne = originals.assignmentFindOne;
+    Assignment.create = originals.assignmentCreate;
     AssetMovement.create = originals.movementCreate;
     AuditLog.create = originals.auditCreate;
     Notification.bulkCreate = originals.notificationBulkCreate;
@@ -259,6 +275,14 @@ test('destination confirmation records receipt and only then updates asset owner
   assert.equal(asset.departmentId, 13);
   assert.equal(asset.location, 'Chemistry Lab');
   assert.equal(asset.status, 'available');
+  assert.equal(assignment.status, 'closed');
+  assert.equal(assignment.workflowStatus, 'reassigned');
+  assert.equal(nextAssignment.assignedToId, 44);
+  assert.equal(nextAssignment.departmentId, 13);
+  assert.equal(nextAssignment.location, 'Chemistry Lab');
+  assert.equal(nextAssignment.quantity, 2);
+  assert.equal(nextAssignment.approvalId, 80);
+  assert.ok(auditRecords.some((record) => record.action === 'REASSIGN_ASSET'));
   assert.equal(movement.referenceType, 'transfer');
   assert.equal(movement.referenceId, 91);
   assert.equal(transaction.finished, 'commit');

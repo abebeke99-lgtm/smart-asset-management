@@ -88,8 +88,13 @@ router.post('/assets/registration-requests', departmentAssets.createAssetRequest
 router.post('/assets/requests', departmentAssets.createAssetRequest);
 router.get('/assets', departmentAssets.listAssets);
 router.get('/assets/:id', departmentAssets.getAsset);
-router.patch('/assets/:id', departmentAssets.updateAsset);
-router.put('/assets/:id', departmentAssets.updateAsset);
+const requireAssignmentPermissionForAssetUpdate = (req, res, next) => (
+  Object.hasOwn(req.body || {}, 'assignedUserId')
+    ? requirePermission('assets.assign')(req, res, next)
+    : next()
+);
+router.patch('/assets/:id', requireAssignmentPermissionForAssetUpdate, departmentAssets.updateAsset);
+router.put('/assets/:id', requireAssignmentPermissionForAssetUpdate, departmentAssets.updateAsset);
 router.get('/locations', (req, res, next) => {
   if (String(req.query.export || '').toLowerCase() !== 'true') return next();
   return requirePermission('reports.export')(req, res, next);

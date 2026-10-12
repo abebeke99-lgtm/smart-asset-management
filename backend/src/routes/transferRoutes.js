@@ -575,7 +575,36 @@ router.patch('/:id', requireAuth, requireRole(...transferRoles), requireTransfer
       }, { transaction });
       const assignment = await Assignment.findOne({ where: { assetId: asset.id, status: 'active' }, transaction, lock: transaction.LOCK.UPDATE });
       if (assignment) {
-        await assignment.update({ departmentId: destinationDepartment.id, location: transfer.newLocation }, { transaction });
+        const previousAssignment = assignment.toJSON();
+        await assignment.update({ status: 'closed', workflowStatus: 'reassigned' }, { transaction });
+        const nextAssignment = await Assignment.create({
+          assetId: assignment.assetId,
+          approvalId: assignment.approvalId || null,
+          quantity: Number(assignment.quantity || 1),
+          assignedTo: assignment.assignedTo || null,
+          assignedToType: assignment.assignedToType || 'user',
+          assignedToId: assignment.assignedToId || assignment.assignedTo || null,
+          assignedBy: req.user.id,
+          status: 'active',
+          workflowStatus: 'assigned',
+          assignedDate: now,
+          expectedReturnDate: assignment.expectedReturnDate || null,
+          departmentId: destinationDepartment.id,
+          location: transfer.newLocation,
+          conditionAtAssignment: transfer.conditionAtTransfer || assignment.conditionAtAssignment || asset.condition,
+          notes: assignment.notes || '',
+        }, { transaction });
+        await createAuditLog({
+          userId: req.user.id,
+          role: req.user.role,
+          action: 'REASSIGN_ASSET',
+          entity: `assignment:${nextAssignment.id}`,
+          entityId: nextAssignment.id,
+          oldValue: previousAssignment,
+          newValue: nextAssignment.toJSON(),
+          details: { previousAssignmentId: assignment.id, transferId: transfer.id },
+          transaction,
+        });
       }
       await AssetMovement.create({
         assetId: asset.id,

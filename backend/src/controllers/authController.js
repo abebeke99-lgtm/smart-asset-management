@@ -617,13 +617,15 @@ const requestForgotPasswordOtp = async (req, res) => {
       const emailConfiguration = validateEmailConfiguration();
       const developmentOtpFallback = process.env.NODE_ENV === 'development' && !emailConfiguration.valid;
       if (!emailConfiguration.valid && !developmentOtpFallback) {
+        const configurationCode = emailConfiguration.code || 'EMAIL_NOT_CONFIGURED';
         logEmailDiagnostic('password_reset_otp', {
-          code: 'EMAIL_NOT_CONFIGURED',
+          code: configurationCode,
           missingVariables: emailConfiguration.missingVariables,
+          conflicts: emailConfiguration.conflicts,
         }, req.requestId);
         return res.status(503).json({
           success: false,
-          code: 'EMAIL_NOT_CONFIGURED',
+          code: configurationCode,
           message: 'Email service is temporarily unavailable. Please try again later.',
         });
       }
@@ -940,13 +942,15 @@ const forgotPassword = async (req, res) => {
 
     const emailConfiguration = validateEmailConfiguration();
     if (!emailConfiguration.valid) {
+      const configurationCode = emailConfiguration.code || 'EMAIL_NOT_CONFIGURED';
       logEmailDiagnostic('password_reset_email', {
-        code: 'EMAIL_NOT_CONFIGURED',
+        code: configurationCode,
         missingVariables: emailConfiguration.missingVariables,
+        conflicts: emailConfiguration.conflicts,
       }, req.requestId);
       return res.status(503).json({
         success: false,
-        code: 'EMAIL_NOT_CONFIGURED',
+        code: configurationCode,
         message: 'Unable to process the password reset request.',
       });
     }

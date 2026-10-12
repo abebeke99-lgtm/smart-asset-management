@@ -515,7 +515,8 @@ test('Store transfer endpoints enforce Store Manager role and College scope', ()
 test('approved-request fulfillment is protected by the Store Manager assignment route', () => {
   const route = assignmentRoutes.stack.find((layer) => layer.route?.path === '/fulfill-request/:id' && layer.route.methods.post);
   assert.ok(route, 'expected a Store Manager request-fulfillment endpoint');
-  assert.equal(route.route.stack.length, 4);
+  assert.equal(route.route.stack.length, 5);
+  assert.equal(route.route.stack[2].handle.name, 'requirePermissionMiddleware');
   const response = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json() {} };
   let called = false;
   route.route.stack[1].handle({ user: { role: 'admin' } }, response, () => { called = true; });
@@ -599,7 +600,7 @@ test('approved-request fulfillment consumes the reserved quantity and records as
 
   try {
     const route = assignmentRoutes.stack.find((layer) => layer.route?.path === '/fulfill-request/:id' && layer.route.methods.post);
-    const handler = route.route.stack[3].handle;
+    const handler = route.route.stack[4].handle;
     const response = { statusCode: 200, body: null, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
     await handler({
       params: { id: '25' },

@@ -7,7 +7,13 @@ const isDevelopmentDriver = (driver) => DEVELOPMENT_MAIL_DRIVERS.includes(String
 const validateEmailConfiguration = () => {
   const status = getMailerStatus();
   if (!status.configured) {
-    return { valid: false, reason: 'Email service is not configured', missingVariables: status.missingVariables };
+    return {
+      valid: false,
+      reason: 'Email service is not configured',
+      code: status.code || 'EMAIL_NOT_CONFIGURED',
+      missingVariables: status.missingVariables,
+      conflicts: status.conflicts || [],
+    };
   }
   const { password, ...safeConfig } = readMailerConfig();
   return { valid: true, config: safeConfig };
@@ -48,6 +54,11 @@ const logEmailDiagnostic = (operation, details = {}, requestId) => {
     ? details.missingVariables.filter((name) => /^(EMAIL|SMTP)_[A-Z0-9_]+$/.test(name))
     : [];
   if (missingVariables.length) diagnostic.missingVariables = missingVariables;
+
+  const conflicts = Array.isArray(details.conflicts)
+    ? details.conflicts.filter((name) => /^(EMAIL|SMTP)_[A-Z0-9_]+$/.test(name))
+    : [];
+  if (conflicts.length) diagnostic.conflicts = conflicts;
 
   console.error(JSON.stringify(diagnostic));
 };
@@ -136,8 +147,19 @@ const verifySmtpConnection = async () => {
 // requests a password reset. It never logs credentials and never throws.
 const initializeEmailService = async () => {
   const driver = getMailDriver();
+  const isProduction = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
 
   if (isDevelopmentDriver(driver)) {
+    if (isProduction) {
+      console.error(JSON.stringify({
+        event: 'email_service_not_configured',
+        code: 'EMAIL_DRIVER_INVALID',
+        driver,
+        reason: 'development_mail_driver_in_production',
+        hint: 'MAIL_DRIVER must be smtp in production. A logging mailer can never deliver password recovery email.',
+      }));
+      return { ok: false, code: 'EMAIL_DRIVER_INVALID', driver };
+    }
     console.warn(JSON.stringify({
       event: 'email_service_disabled',
       code: 'EMAIL_NOT_CONFIGURED',
@@ -150,17 +172,37 @@ const initializeEmailService = async () => {
 
   const status = getMailerStatus();
   if (!status.configured) {
+    const config = readMailerConfig();
+    const code = status.code || (config.hostInvalid ? 'EMAIL_HOST_INVALID' : 'EMAIL_NOT_CONFIGURED');
+    const hints = {
+      EMAIL_HOST_INVALID: 'EMAIL_HOST/SMTP_HOST must be an SMTP hostname such as smtp.gmail.com, not an email address.',
+      EMAIL_CONFIG_CONFLICT: `Conflicting email variables were found (${status.conflicts.join(', ')}). Remove the stale SMTP_* aliases or set them to the same value as EMAIL_*.`,
+      EMAIL_DRIVER_INVALID: 'MAIL_DRIVER must be smtp in production.',
+      EMAIL_NOT_CONFIGURED: 'Set MAIL_DRIVER=smtp and provide EMAIL_HOST/EMAIL_PORT/EMAIL_USER/EMAIL_PASSWORD.',
+    };
     console.error(JSON.stringify({
       event: 'email_service_not_configured',
-      code: 'EMAIL_NOT_CONFIGURED',
+      code,
       missingVariables: status.missingVariables,
+      ...(status.conflicts.length ? { conflicts: status.conflicts } : {}),
+      hint: hints[code] || hints.EMAIL_NOT_CONFIGURED,
     }));
-    return { ok: false, code: 'EMAIL_NOT_CONFIGURED', missingVariables: status.missingVariables };
+    return { ok: false, code, missingVariables: status.missingVariables, conflicts: status.conflicts };
+  }
+
+  const config = readMailerConfig();
+  if (config.hostNormalized) {
+    console.warn(JSON.stringify({
+      event: 'email_host_normalized',
+      code: 'EMAIL_HOST_NORMALIZED',
+      host: config.host,
+      hint: 'EMAIL_HOST/SMTP_HOST looked like a provider mailbox and was resolved to its SMTP host. Prefer setting it directly.',
+    }));
   }
 
   const result = await verifySmtpConnection();
   if (result.ok) {
-    console.log(JSON.stringify({ event: 'email_transport_ready', driver: status.driver }));
+    console.log(JSON.stringify({ event: 'email_transport_ready', driver: status.driver, host: config.host, port: config.port, secure: config.secure, requireTls: config.requireTls }));
     return { ok: true };
   }
 

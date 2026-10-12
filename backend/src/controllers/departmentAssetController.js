@@ -1,8 +1,10 @@
 const { Op } = require('sequelize');
 const {
   sequelize, Asset, AssetHistory, AssetRegistrationRequest, Assignment, User, Approval, AuditLog, Maintenance,
+  Inventory, InventoryTransaction, AssetMovement,
 } = require('../models');
 const { createAuditLog } = require('../services/auditLogService');
+const { createEventNotification } = require('../services/notificationService');
 
 const editableFields = new Set(['location', 'condition', 'assignedUserId', 'note']);
 const activeAssignmentWhere = { status: { [Op.notIn]: ['returned', 'cancelled', 'closed'] } };
@@ -335,6 +337,7 @@ const updateAsset = async (req, res, next) => {
     }
     const oldValue = { location: asset.location, condition: asset.condition, note: asset.notes || '', assignedUserId: null };
     const updates = {};
+    let assignmentNotification = null;
     if (Object.hasOwn(body, 'location')) updates.location = body.location.trim();
     if (Object.hasOwn(body, 'condition')) updates.condition = body.condition.trim();
     if (Object.hasOwn(body, 'note')) updates.notes = body.note;
@@ -365,12 +368,123 @@ const updateAsset = async (req, res, next) => {
       }
       if (activeAssignment && activeAssignment.assignedTo !== assignedUserId) {
         if (assignedUserId === null) {
+          const inventory = await Inventory.findOne({
+            where: { assetId: asset.id },
+            transaction,
+            lock: transaction.LOCK.UPDATE,
+          });
+          if (!inventory) {
+            await transaction.rollback();
+            return res.status(409).json({ success: false, message: 'Inventory record not found; assignment cannot be returned.' });
+          }
+          const quantity = Number(activeAssignment.quantity || 1);
+          const availableQuantity = Number(inventory.availableQuantity || 0);
+          const reservedQuantity = Number(inventory.reservedQuantity || 0);
+          const damagedQuantity = Number(inventory.damagedQuantity || 0);
+          if (!Number.isSafeInteger(quantity) || quantity <= 0
+            || availableQuantity + reservedQuantity + damagedQuantity + quantity > Number(inventory.quantity || 0)) {
+            await transaction.rollback();
+            return res.status(409).json({ success: false, message: 'The assignment quantity cannot be returned without exceeding recorded inventory.' });
+          }
+          await inventory.update({ availableQuantity: availableQuantity + quantity }, { transaction });
           await activeAssignment.update({ status: 'returned', workflowStatus: 'returned', returnedAt: new Date() }, { transaction });
+          await InventoryTransaction.create({
+            inventoryId: inventory.id,
+            assetId: asset.id,
+            userId: req.user.id,
+            type: 'return',
+            quantity,
+            reason: 'Asset returned',
+            notes: body.note || '',
+          }, { transaction });
+          await AssetMovement.create({
+            assetId: asset.id,
+            movementType: 'return',
+            sourceType: 'user',
+            sourceId: activeAssignment.assignedTo,
+            destinationType: 'store',
+            destinationId: null,
+            referenceType: 'assignment',
+            referenceId: activeAssignment.id,
+            performedBy: req.user.id,
+            notes: JSON.stringify({ quantity }),
+          }, { transaction });
+          const currentAssetStatus = String(asset.status || '').toLowerCase();
+          updates.status = ['disposed', 'deleted', 'archived', 'quarantined', 'damaged', 'retired', 'missing', 'lost'].includes(currentAssetStatus)
+            ? asset.status
+            : availableQuantity + quantity > 0 ? 'available' : 'assigned';
+          assignmentNotification = activeAssignment.assignedTo ? {
+            event: 'assignment_returned',
+            eventKey: `assignment_returned:${activeAssignment.id}:user:${activeAssignment.assignedTo}`,
+            entityId: activeAssignment.id,
+            userIds: [activeAssignment.assignedTo],
+            title: 'Asset returned',
+            message: 'An asset assigned to you has been returned.',
+          } : null;
         } else {
-          await activeAssignment.update({ assignedTo: assignedUserId, assignedToType: 'user', assignedToId: assignedUserId }, { transaction });
+          const previousAssignment = activeAssignment.toJSON();
+          await activeAssignment.update({ status: 'closed', workflowStatus: 'reassigned' }, { transaction });
+          const nextAssignment = await Assignment.create({
+            assetId: asset.id,
+            quantity: Number(activeAssignment.quantity || 1),
+            assignedTo: assignedUserId,
+            assignedToType: 'user',
+            assignedToId: assignedUserId,
+            assignedBy: req.user.id,
+            status: 'active',
+            workflowStatus: 'assigned',
+            expectedReturnDate: activeAssignment.expectedReturnDate || null,
+            departmentId,
+            location: Object.hasOwn(body, 'location') ? body.location.trim() : asset.location,
+            conditionAtAssignment: Object.hasOwn(body, 'condition') ? body.condition.trim() : asset.condition,
+            notes: JSON.stringify({ previousAssignmentId: activeAssignment.id }),
+          }, { transaction });
+          await AssetMovement.create({
+            assetId: asset.id,
+            movementType: 'transfer',
+            sourceType: 'user',
+            sourceId: activeAssignment.assignedTo,
+            destinationType: 'user',
+            destinationId: assignedUserId,
+            referenceType: 'assignment',
+            referenceId: nextAssignment.id,
+            performedBy: req.user.id,
+            notes: JSON.stringify({ previousAssignmentId: activeAssignment.id, quantity: Number(activeAssignment.quantity || 1) }),
+          }, { transaction });
+          oldValue.previousAssignment = previousAssignment;
+          assignmentNotification = {
+            event: 'assignment_transferred',
+            eventKey: `assignment_transferred:${activeAssignment.id}:${assignedUserId}`,
+            entityId: activeAssignment.id,
+            userIds: [activeAssignment.assignedTo, assignedUserId].filter(Boolean),
+            title: 'Asset custody transferred',
+            message: 'An asset assignment was transferred to another staff member.',
+          };
         }
       } else if (!activeAssignment && assignedUserId !== null) {
-        await Assignment.create({
+        const inventory = await Inventory.findOne({
+          where: { assetId: asset.id },
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+        if (!inventory) {
+          await transaction.rollback();
+          return res.status(409).json({ success: false, message: 'Inventory record not found; asset cannot be assigned.' });
+        }
+        const currentStatus = String(asset.status || '').toLowerCase().replace(/[_ ]/g, '-');
+        if (!['available', 'in-store', 'active', 'ready', 'idle', 'new'].includes(currentStatus)) {
+          await transaction.rollback();
+          return res.status(409).json({ success: false, message: `Asset cannot be assigned while its status is ${asset.status}` });
+        }
+        const availableQuantity = Number(inventory.availableQuantity);
+        if (!Number.isSafeInteger(availableQuantity) || availableQuantity < 1) {
+          await transaction.rollback();
+          return res.status(409).json({ success: false, message: 'Insufficient available inventory quantity.' });
+        }
+        const remainingAvailableQuantity = availableQuantity - 1;
+        await inventory.update({ availableQuantity: remainingAvailableQuantity }, { transaction });
+        updates.status = remainingAvailableQuantity > 0 ? 'available' : 'assigned';
+        const assignment = await Assignment.create({
           assetId: asset.id,
           assignedTo: assignedUserId,
           assignedToType: 'user',
@@ -382,6 +496,35 @@ const updateAsset = async (req, res, next) => {
           location: Object.hasOwn(body, 'location') ? body.location.trim() : asset.location,
           conditionAtAssignment: Object.hasOwn(body, 'condition') ? body.condition.trim() : asset.condition,
         }, { transaction });
+        await InventoryTransaction.create({
+          inventoryId: inventory.id,
+          assetId: asset.id,
+          userId: req.user.id,
+          type: 'issue',
+          quantity: 1,
+          reason: 'Asset assignment',
+          notes: body.note || '',
+        }, { transaction });
+        await AssetMovement.create({
+          assetId: asset.id,
+          movementType: 'issue',
+          sourceType: 'store',
+          sourceId: null,
+          destinationType: 'user',
+          destinationId: assignedUserId,
+          referenceType: 'assignment',
+          referenceId: assignment.id,
+          performedBy: req.user.id,
+          notes: JSON.stringify({ quantity: 1, departmentId }),
+        }, { transaction });
+        assignmentNotification = {
+          event: 'assignment_created',
+          eventKey: `assignment_created:${assignment.id}:user:${assignedUserId}`,
+          entityId: assignment.id,
+          userIds: [assignedUserId],
+          title: 'Asset assigned to you',
+          message: `${asset.name || asset.assetCode} has been assigned to you.`,
+        };
       }
     }
     if (Object.keys(updates).length) await asset.update(updates, { transaction });
@@ -412,6 +555,19 @@ const updateAsset = async (req, res, next) => {
       details: { changedFields: Object.keys(body), note: body.note ?? null },
     }, { transaction });
     await transaction.commit();
+    if (assignmentNotification) {
+      try {
+        await createEventNotification({
+          ...assignmentNotification,
+          entityType: 'assignment',
+          senderId: req.user.id,
+          assetId: asset.id,
+          type: 'assignment',
+        });
+      } catch (notificationError) {
+        console.error('Department asset assignment notification failed:', notificationError.message);
+      }
+    }
     return res.json({
       success: true,
       data: {

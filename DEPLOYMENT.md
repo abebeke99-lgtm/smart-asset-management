@@ -83,13 +83,33 @@ Set these in the Render service environment. Do not commit populated environment
 Low-stock alerts use the inventory row's `availableQuantity` as the authoritative available balance; reservation and transaction records are not subtracted again. A positive `minimumQuantity` is the item's reorder level. A stored zero (the legacy/default state) uses `STORE_DEFAULT_REORDER_LEVEL`. Available quantity at or below zero is classified out of stock, and negative balances are separately flagged as data-integrity errors. Positive balances at or below the effective reorder level are low stock; other rows are excluded. Serialized assets, expired items, and items marked unusable or unavailable are not treated as quantity-based replenishment alerts. Changing an item's reorder level to zero returns it to the system default.
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_SECURE`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM` | Required for email OTP | For Gmail use `smtp.gmail.com`, port `465` with `EMAIL_SECURE=true` (implicit TLS), and a Google App Password created with 2-Step Verification enabled. Do not use the normal account password. Port `587` uses `EMAIL_SECURE=false` (STARTTLS). Equivalent `SMTP_*` names are supported. |
 | `SMS_PROVIDER`, `SMS_API_KEY`, `SMS_API_SECRET`, `SMS_SENDER_ID` | Required for SMS OTP | Use `twilio` or `africastalking` and the corresponding provider credentials. `SMS_SENDER` remains a compatibility alias. |
-| `PASSWORD_RESET_OTP_TTL_MINUTES` | `5` | OTP expiry. |
+| `PASSWORD_RESET_OTP_TTL_MINUTES` | `10` | OTP expiry in minutes (capped to 5-15; default 10). |
 | `PASSWORD_RESET_OTP_MAX_ATTEMPTS` | `5` | The implementation caps this setting at five. |
 | `UPLOAD_DIR` | Optional | Defaults to backend-local `uploads/`. Render local disk is ephemeral. Use a persistent Render disk mounted at a path such as `/var/data/uploads`, or move uploads to external object storage (for example, an S3-compatible bucket) before relying on production persistence. |
 
 Password-recovery and general API rate limiters currently keep state in process memory. They do not coordinate across multiple Render instances and reset on process restart. Run a single backend instance until a shared rate-limit store is implemented and configured.
 
 For local `.env` setup, the development default is `MAIL_DRIVER=log` with blank SMTP credentials. To test real delivery, switch to `MAIL_DRIVER=smtp` and set the SMTP host, port, secure mode, username, password/app password, and sender address. The backend runs an SMTP `verify()` check at startup and logs connection/authentication diagnostics; check these server logs without exposing credentials. You can also check connectivity from `backend/` with `node scripts/check-smtp.js`.
+
+### Railway backend email configuration
+
+The backend reads `EMAIL_*` first and falls back to the equivalent `SMTP_*` alias. Configure exactly one set; never set both with different values. The mailer requires `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, and `EMAIL_PASSWORD`; `EMAIL_SECURE` and `EMAIL_FROM` are optional.
+
+Railway Dashboard -> Project -> Backend Service -> Variables:
+
+| Variable | Value | Notes |
+| --- | --- | --- |
+| `MAIL_DRIVER` | `smtp` | Must not be `log` in a deployed service. |
+| `EMAIL_HOST` | `smtp.gmail.com` | The SMTP server host. Do **not** put the mailbox address here. |
+| `EMAIL_PORT` | `587` | STARTTLS submission port. Use `465` only with `EMAIL_SECURE=true`. |
+| `EMAIL_SECURE` | `false` | `false` for 587 (STARTTLS), `true` for 465 (implicit TLS). |
+| `EMAIL_USER` | `abebeke99@gmail.com` | Full Gmail address. |
+| `EMAIL_PASSWORD` | `<16-character Google App Password>` | Secret. Generated with 2-Step Verification enabled; never the account password and never committed. |
+| `EMAIL_FROM` | `Asset Management <abebeke99@gmail.com>` | Display name plus sender address. Falls back to `EMAIL_USER`. |
+
+`PASSWORD_RESET_OTP_TTL_MINUTES` defaults to 10 and `PASSWORD_RESET_OTP_MAX_ATTEMPTS` defaults to 5; set them only if different values are required.
+
+A very common mistake is setting `EMAIL_HOST` to the mailbox address (`abebeke99@gmail.com`) instead of `smtp.gmail.com`. That value passes the "is it set?" check, so the request fails later with the generic *"Email service is temporarily unavailable"* response. The mailer now maps known provider mailboxes/domains to their real SMTP host and logs `email_host_normalized`, and it treats an unrecognized mailbox-style host as a missing `EMAIL_HOST` (`EMAIL_HOST_INVALID`). Correct the variable anyway. Startup logs `email_transport_ready` with the resolved host and port when authentication succeeds; on failure it logs a credential-free `email_delivery_failed` diagnostic (`EMAIL_AUTH_FAILED`, `EMAIL_CONNECTION_TIMEOUT`, `EMAIL_CONNECTION_FAILED`, or `EMAIL_PROVIDER_REJECTED`). After changing variables, redeploy the backend and confirm `email_transport_ready` appears.
 
 `DB_SSL_CA` should contain the certificate text, not a private key. The application keeps `rejectUnauthorized` enabled by default. MySQL pool capacity, foreign keys, transactions, and indexes use Sequelize/mysql2; verify target behavior against the selected Railway MySQL version and plan before cutover.
 

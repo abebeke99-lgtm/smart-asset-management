@@ -80,6 +80,42 @@ test('fulfills an approved request and refreshes its status', async () => {
   expect(await screen.findByText('Fulfilled')).toBeInTheDocument();
 });
 
+test('loads and displays the persisted approval history in request details', async () => {
+  apiClient.get.mockImplementation((url) => {
+    if (url === '/api/approvals/25') {
+      return Promise.resolve({
+        data: {
+          request: {
+            ...request,
+            lifecycleStatus: 'fulfilled',
+            history: [{
+              id: 1,
+              newStatus: 'fulfilled',
+              comment: 'Issued to the department',
+              createdAt: '2026-10-10T00:00:00.000Z',
+            }],
+          },
+        },
+      });
+    }
+    if (url === '/api/approvals') return Promise.resolve({ data: { requests: [request] } });
+    if (url === '/api/assets') return Promise.resolve({ data: { assets: [] } });
+    if (url === '/api/users') return Promise.resolve({ data: { users: [] } });
+    if (url === '/api/departments') return Promise.resolve({ data: { departments: [] } });
+    return Promise.resolve({ data: {} });
+  });
+
+  render(<StoreAssetRequests />);
+  fireEvent.click(await screen.findByRole('tab', { name: 'Approved Requests tab' }));
+  fireEvent.click(await screen.findByRole('button', { name: /View/ }));
+
+  await waitFor(() => {
+    expect(apiClient.get).toHaveBeenCalledWith('/api/approvals/25');
+  });
+  expect(await screen.findByText('Issued to the department')).toBeInTheDocument();
+  expect(screen.getByText('fulfilled')).toBeInTheDocument();
+});
+
 test('loads assets across the supported paginated API instead of requesting an invalid limit', async () => {
   apiClient.get.mockImplementation((url, options) => {
     if (url === '/api/assets') {

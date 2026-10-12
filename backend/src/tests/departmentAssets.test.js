@@ -3,9 +3,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { Op } = require('sequelize');
+const notificationService = require('../services/notificationService');
+notificationService.createEventNotification = async () => ({});
 const workspaceRoutes = require('../routes/departmentWorkspaceRoutes');
 const {
-  Asset, AssetHistory, AssetRegistrationRequest, Assignment, User, Approval, AuditLog, Maintenance, sequelize,
+  Asset, AssetHistory, AssetRegistrationRequest, Assignment, User, Approval, AuditLog, Maintenance,
+  Inventory, InventoryTransaction, AssetMovement, sequelize,
 } = require('../models');
 const { listAssets, updateAsset, exportAssets, createAssetRequest } = require('../controllers/departmentAssetController');
 
@@ -71,6 +74,29 @@ test('Department Head asset listing always uses authenticated department scope',
     Maintenance.findAll = originals.maintenanceFindAll;
     AuditLog.create = originals.auditCreate;
   }
+});
+
+test('department asset edits require assignment permission only when changing the assignee', () => {
+  const routeLayer = workspaceRoutes.stack.find((layer) => layer.route?.path === '/assets/:id' && layer.route.methods.patch);
+  assert.ok(routeLayer);
+  const permission = routeLayer.route.stack.find((layer) => layer.handle.name === 'requireAssignmentPermissionForAssetUpdate')?.handle;
+  assert.ok(permission);
+
+  const denied = response();
+  let advanced = false;
+  permission({ body: { assignedUserId: 44 }, user: { role: 'department_head', permissions: ['assets.view'] } }, denied, () => { advanced = true; });
+  assert.equal(denied.statusCode, 403);
+  assert.equal(advanced, false);
+
+  const allowed = response();
+  permission({ body: { assignedUserId: 44 }, user: { role: 'department_head', permissions: ['assets.assign'] } }, allowed, () => { advanced = true; });
+  assert.equal(allowed.statusCode, 200);
+  assert.equal(advanced, true);
+
+  const editOnly = response();
+  permission({ body: { note: 'Checked' }, user: { role: 'department_head', permissions: ['assets.view'] } }, editOnly, () => { advanced = true; });
+  assert.equal(editOnly.statusCode, 200);
+  assert.equal(advanced, true);
 });
 
 test('asset search includes digital ID and supports requested sort/filter parameter names', async () => {
@@ -325,6 +351,128 @@ test('asset update explicitly accepts note and records old/new notes in asset au
     Assignment.findOne = originals.assignmentFindOne;
     AuditLog.create = originals.auditCreate;
     AssetHistory.create = originals.assetHistoryCreate;
+  }
+});
+
+test('department asset assignment consumes stock and records the canonical assignment and movement', async () => {
+  const originals = {
+    transaction: sequelize.transaction,
+    assetFindOne: Asset.findOne,
+    assignmentFindOne: Assignment.findOne,
+    assignmentCreate: Assignment.create,
+    userFindOne: User.findOne,
+    inventoryFindOne: Inventory.findOne,
+    inventoryTransactionCreate: InventoryTransaction.create,
+    movementCreate: AssetMovement.create,
+    auditCreate: AuditLog.create,
+    historyCreate: AssetHistory.create,
+  };
+  const transaction = { LOCK: { UPDATE: 'UPDATE' }, finished: false, async commit() { this.finished = 'commit'; }, async rollback() { this.finished = 'rollback'; } };
+  const inventory = { id: 8, quantity: 1, availableQuantity: 1, reservedQuantity: 0, damagedQuantity: 0, async update(values) { Object.assign(this, values); } };
+  const asset = {
+    id: 12, departmentId: 7, location: 'Room 1', condition: 'Good', status: 'available',
+    async update(values) { Object.assign(this, values); },
+    toJSON() { return { id: this.id, status: this.status }; },
+  };
+  let assignmentValues;
+  let inventoryMovement;
+  let assetMovement;
+  sequelize.transaction = async () => transaction;
+  Asset.findOne = async () => asset;
+  Assignment.findOne = async () => null;
+  Assignment.create = async (values) => { assignmentValues = values; return { id: 34, ...values }; };
+  User.findOne = async () => ({ id: 44, active: true, status: 'active' });
+  Inventory.findOne = async () => inventory;
+  InventoryTransaction.create = async (values) => { inventoryMovement = values; };
+  AssetMovement.create = async (values) => { assetMovement = values; };
+  AuditLog.create = async () => ({ id: 1 });
+  AssetHistory.create = async () => ({ id: 1 });
+  try {
+    const res = response();
+    await updateAsset({
+      organizationScope: { departmentId: 7, collegeId: 2 },
+      params: { id: '12' },
+      user: { id: 3, role: 'department_head' },
+      body: { assignedUserId: 44 },
+    }, res, (error) => { throw error; });
+    assert.equal(res.statusCode, 200);
+    assert.equal(transaction.finished, 'commit');
+    assert.equal(inventory.availableQuantity, 0);
+    assert.equal(asset.status, 'assigned');
+    assert.equal(assignmentValues.assignedToId, 44);
+    assert.equal(assignmentValues.status, 'active');
+    assert.equal(inventoryMovement.type, 'issue');
+    assert.equal(inventoryMovement.quantity, 1);
+    assert.equal(assetMovement.movementType, 'issue');
+    assert.equal(assetMovement.referenceId, 34);
+  } finally {
+    sequelize.transaction = originals.transaction;
+    Asset.findOne = originals.assetFindOne;
+    Assignment.findOne = originals.assignmentFindOne;
+    Assignment.create = originals.assignmentCreate;
+    User.findOne = originals.userFindOne;
+    Inventory.findOne = originals.inventoryFindOne;
+    InventoryTransaction.create = originals.inventoryTransactionCreate;
+    AssetMovement.create = originals.movementCreate;
+    AuditLog.create = originals.auditCreate;
+    AssetHistory.create = originals.historyCreate;
+  }
+});
+
+test('department asset transfer closes the prior assignment and creates a traceable new one', async () => {
+  const originals = {
+    transaction: sequelize.transaction,
+    assetFindOne: Asset.findOne,
+    assignmentFindOne: Assignment.findOne,
+    assignmentCreate: Assignment.create,
+    userFindOne: User.findOne,
+    movementCreate: AssetMovement.create,
+    auditCreate: AuditLog.create,
+    historyCreate: AssetHistory.create,
+  };
+  const transaction = { LOCK: { UPDATE: 'UPDATE' }, finished: false, async commit() { this.finished = 'commit'; }, async rollback() { this.finished = 'rollback'; } };
+  const asset = { id: 12, departmentId: 7, location: 'Room 1', condition: 'Good', status: 'assigned', async update(values) { Object.assign(this, values); }, toJSON() { return { id: this.id, status: this.status }; } };
+  const previousAssignment = {
+    id: 33, assetId: 12, assignedTo: 44, assignedToId: 44, quantity: 2, expectedReturnDate: new Date('2027-01-01'),
+    async update(values) { Object.assign(this, values); },
+    toJSON() { return { ...this }; },
+  };
+  let nextAssignmentValues;
+  let movement;
+  sequelize.transaction = async () => transaction;
+  Asset.findOne = async () => asset;
+  Assignment.findOne = async () => previousAssignment;
+  Assignment.create = async (values) => { nextAssignmentValues = values; return { id: 34, ...values }; };
+  User.findOne = async () => ({ id: 45, active: true, status: 'active' });
+  AssetMovement.create = async (values) => { movement = values; };
+  AuditLog.create = async () => ({ id: 1 });
+  AssetHistory.create = async () => ({ id: 1 });
+  try {
+    const res = response();
+    await updateAsset({
+      organizationScope: { departmentId: 7, collegeId: 2 },
+      params: { id: '12' },
+      user: { id: 3, role: 'department_head' },
+      body: { assignedUserId: 45 },
+    }, res, (error) => { throw error; });
+    assert.equal(res.statusCode, 200);
+    assert.equal(transaction.finished, 'commit');
+    assert.equal(previousAssignment.status, 'closed');
+    assert.equal(previousAssignment.workflowStatus, 'reassigned');
+    assert.equal(nextAssignmentValues.assignedToId, 45);
+    assert.equal(nextAssignmentValues.quantity, 2);
+    assert.equal(new Date(nextAssignmentValues.expectedReturnDate).toISOString(), '2027-01-01T00:00:00.000Z');
+    assert.equal(movement.movementType, 'transfer');
+    assert.equal(movement.referenceId, 34);
+  } finally {
+    sequelize.transaction = originals.transaction;
+    Asset.findOne = originals.assetFindOne;
+    Assignment.findOne = originals.assignmentFindOne;
+    Assignment.create = originals.assignmentCreate;
+    User.findOne = originals.userFindOne;
+    AssetMovement.create = originals.movementCreate;
+    AuditLog.create = originals.auditCreate;
+    AssetHistory.create = originals.historyCreate;
   }
 });
 

@@ -90,7 +90,7 @@ Health Check: /api/health
 
 Set the database and `JWT_SECRET` values in Render Environment Variables. For Aiven MySQL, set `DB_SSL=true`; do not commit database credentials.
 
-For real password reset email delivery, configure `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM`, and `FRONTEND_URL` in the backend environment. For Gmail, use `smtp.gmail.com` on port `465` (implicit TLS), enable 2-Step Verification, and use a Google App Password rather than the normal account password. The app password must not be committed. Equivalent `SMTP_*` names are supported as aliases; `MAIL_FROM` and `SMTP_FROM` are legacy sender aliases. In production, `FRONTEND_URL` must be the deployed HTTPS frontend URL. SMTP secrets belong only in backend/Render environment variables and must never be added to frontend environment files.
+For real password reset email delivery, configure `MAIL_DRIVER=smtp`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM`, and `FRONTEND_URL` in the backend environment. For Gmail, set `EMAIL_HOST=smtp.gmail.com` (never the mailbox address), port `587` with `EMAIL_SECURE=false` (STARTTLS) or port `465` with `EMAIL_SECURE=true` (implicit TLS), enable 2-Step Verification, and use a Google App Password rather than the normal account password. The app password must not be committed. Equivalent `SMTP_*` names are supported as aliases; `MAIL_FROM` and `SMTP_FROM` are legacy sender aliases. In production, `FRONTEND_URL` must be the deployed HTTPS frontend URL. SMTP secrets belong only in backend/Render/Railway environment variables and must never be added to frontend environment files. See `DEPLOYMENT.md` for the exact Railway variable table.
 
 ## Local login
 

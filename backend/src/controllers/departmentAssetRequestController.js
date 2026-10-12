@@ -553,6 +553,31 @@ const decideApproval = async (req, res, next) => {
         console.error('Department request decision notification failed:', notificationError.message);
       }
     }
+    if (decision === 'escalate') {
+      try {
+        const department = await Department.findByPk(departmentId, { attributes: ['id', 'collegeId'] });
+        if (department?.collegeId) {
+          const collegeManagers = await User.findAll({
+            where: { role: 'college_manager', collegeId: department.collegeId, active: true },
+            attributes: ['id'],
+          });
+          await createEventNotification({
+            event: 'department_asset_request_escalated',
+            eventKey: `department_asset_request_escalated:${record.id}`,
+            userIds: collegeManagers.map((manager) => manager.id),
+            senderId: req.user.id,
+            entityType: 'department_asset_request',
+            entityId: record.id,
+            actionUrl: '/college/requests',
+            type: 'approval',
+            title: 'Department asset request escalated',
+            message: `Request ${record.requestCode} was escalated for college review.${comment ? ` ${comment}` : ''}`,
+          });
+        }
+      } catch (notificationError) {
+        console.error('Department request escalation notification failed:', notificationError.message);
+      }
+    }
     return res.json({ success: true, message: 'Approval action recorded', data: serializeRequest(updated) });
   } catch (error) {
     if (transaction) await transaction.rollback();
