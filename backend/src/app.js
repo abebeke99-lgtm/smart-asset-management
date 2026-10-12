@@ -48,6 +48,7 @@ const systemMonitoringRoutes = require('./routes/systemMonitoringRoutes');
 const enamRoutes = require('./routes/enamRoutes');
 const chemicalRoutes = require('./routes/chemicalRoutes');
 const serviceRequestRoutes = require('./routes/serviceRequestRoutes');
+const studentRoutes = require('./routes/studentRoutes');
 const locationRoutes = require('./routes/locationRoutes');
 const cleaningRoutes = require('./routes/cleaningRoutes');
 const softwareLicenseRoutes = require('./routes/softwareLicenseRoutes');
@@ -56,6 +57,7 @@ const incidentRoutes = require('./routes/incidentRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const backupService = require('./services/backupService');
+const { initializeEmailService } = require('./services/emailService');
 const { startAssetRetentionScheduler } = require('./services/assetRetentionService');
 const { requestMetricsMiddleware } = require('./middlewares/requestMetrics');
 const { requestContextMiddleware } = require('./middlewares/requestContext');
@@ -205,6 +207,7 @@ app.use('/api/support', supportRoutes);
 app.use('/api', adminSupportRoutes);
 app.use('/api/chemicals', chemicalRoutes);
 app.use('/api/service-requests', serviceRequestRoutes);
+app.use('/api/student', studentRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/cleaning', cleaningRoutes);
 app.use('/api/software-licenses', softwareLicenseRoutes);
@@ -324,6 +327,13 @@ async function startServer() {
   }
 
   await initializeDatabase();
+
+  try {
+    await initializeEmailService();
+  } catch (error) {
+    console.error('Email service startup verification failed.');
+  }
+
   return new Promise((resolve, reject) => {
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);

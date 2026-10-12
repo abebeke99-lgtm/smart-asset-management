@@ -20,6 +20,7 @@ describe('normalizeRole', () => {
       store_manager: getDashboardRoute('store_manager'),
       maintenance: getDashboardRoute('maintenance'),
       infrastructure: getDashboardRoute('infrastructure'),
+      teaching_assistant: getDashboardRoute('teaching_assistant'),
       staff: getDashboardRoute('staff'),
       student: getDashboardRoute('student'),
     }).toEqual({
@@ -32,8 +33,9 @@ describe('normalizeRole', () => {
       store_manager: '/store',
       maintenance: '/maintenance/dashboard',
       infrastructure: '/infrastructure/dashboard',
+      teaching_assistant: '/teaching-assistant/dashboard',
       staff: '/department',
-      student: '/student',
+      student: '/student/dashboard',
     });
     expect(normalizeRole('college')).toBe('college');
     expect(normalizeRole('college_manager')).toBe('college_manager');
@@ -55,4 +57,18 @@ test('maintenance dashboard destination is registered as a dashboard route', () 
   );
 
   expect(maintenanceRoutes).toMatch(/<Route path="dashboard" element={<MaintDashboard \/>} \/>/);
+});
+
+test('store manager navigation includes the dashboard route', () => {
+  const appSource = fs.readFileSync(path.resolve(__dirname, './App.jsx'), 'utf8');
+  expect(appSource).toMatch(/'store_manager': \[\s*\{ path: '\/store', label: '[^']*' \+ t\.dashboard, section: 'OVERVIEW' \}/);
+  expect(appSource).toContain("['OVERVIEW', 'INVENTORY MANAGEMENT', 'ASSET OPERATIONS', 'ACCOUNT MANAGEMENT']");
+});
+
+test('Teaching Assistant dashboard is role- and permission-gated', () => {
+  const appSource = fs.readFileSync(path.resolve(__dirname, './App.jsx'), 'utf8');
+  expect(appSource).toContain(
+    '<Route path="/teaching-assistant" element={<ProtectedRoute allowedRoles={[\'teaching_assistant\']} allowedPermissions={[\'assets.view\']}><RoleLayout /></ProtectedRoute>}>',
+  );
+  expect(appSource).toContain('<Route path="dashboard" element={<TeachingAssistantAssets />} />');
 });

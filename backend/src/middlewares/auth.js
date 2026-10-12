@@ -64,7 +64,7 @@ const requireAuth = (req, res, next) => {
         req.user.setDataValue('permissions', req.user.permissions);
       }
 
-      if (!isAccountActive(req.user.active) || ['disabled', 'suspended', 'blocked'].includes(String(req.user.status || '').toLowerCase())) {
+      if (!isAccountActive(req.user.active, req.user.status)) {
         return res.status(403).json({ success: false, message: 'This account is not active.' });
       }
 
@@ -80,7 +80,7 @@ const requireActiveAccount = (req, res, next) => {
     return res.status(401).json({ success: false, message: 'Authentication required' });
   }
 
-  const isActive = isAccountActive(req.user.active) && !['disabled', 'suspended', 'blocked'].includes(String(req.user.status || '').toLowerCase());
+  const isActive = isAccountActive(req.user.active, req.user.status);
   if (!isActive) {
     return res.status(403).json({ success: false, message: 'This account is not active.' });
   }

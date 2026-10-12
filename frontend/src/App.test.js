@@ -291,8 +291,8 @@ describe('Store Manager dashboard route wiring', () => {
       }));
     expect(sidebarMatch).not.toBeNull();
     expect(sidebarMatch[1].match(/ROUTES\.STORE_AVAILABLE_ASSETS/g)).toHaveLength(1);
-    expect(sidebarMatch[1]).not.toContain("path: '/store'");
     expect(sidebarItems).toEqual([
+      { route: '/store', label: "'📊 ' + t.dashboard", section: 'OVERVIEW' },
       { route: '/store/inventory', label: "'📦 Inventory'", section: 'INVENTORY MANAGEMENT' },
       { route: ROUTES.STORE_AVAILABLE_ASSETS, label: "'📦 Available Assets'", section: 'INVENTORY MANAGEMENT' },
       { route: '/store/stock-adjustments', label: "'⚙️ Stock Adjustments'", section: 'INVENTORY MANAGEMENT' },
@@ -304,8 +304,7 @@ describe('Store Manager dashboard route wiring', () => {
       { route: ROUTES.STORE_USER_REGISTRATION, label: "'User Registration'", section: 'ACCOUNT MANAGEMENT' },
       { route: '/store/notifications', label: "'🔔 ' + t.notifications", section: 'Notifications' },
     ]);
-    expect(appSource).not.toContain("renderSidebarLink(sidebarItems.find((item) => item.path === '/store'))");
-    expect(appSource).toContain("['INVENTORY MANAGEMENT', 'ASSET OPERATIONS', 'ACCOUNT MANAGEMENT'].map((sectionName) =>");
+    expect(appSource).toContain("['OVERVIEW', 'INVENTORY MANAGEMENT', 'ASSET OPERATIONS', 'ACCOUNT MANAGEMENT'].map((sectionName) =>");
   });
 
   it('maps every approved Store Manager sidebar route to a page in the protected route tree', () => {

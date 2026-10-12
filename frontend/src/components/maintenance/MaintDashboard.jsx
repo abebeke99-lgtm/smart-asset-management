@@ -161,6 +161,11 @@ function normalizeDashboardResponse(response) {
     response?.dashboard ||
     response ||
     {};
+  if (!source || typeof source !== "object" || Array.isArray(source)
+    || (!source.summary && !source.totalRequests && !source.totalMaintenanceRequests
+      && !source.total_requests && !source.byStatus)) {
+    throw new Error("Maintenance dashboard response was incomplete");
+  }
   const summary = source.summary || source;
   const byStatus = source.byStatus || {};
 
@@ -364,6 +369,21 @@ function Dashboard() {
 
         <style>{styles}</style>
       </div>
+    );
+  }
+
+  if (error && !lastUpdated) {
+    return (
+      <main className="maintenance-dashboard maintenance-dashboard-error">
+        <div className="maintenance-alert maintenance-alert-error" role="alert">
+          <div>
+            <strong>{t("dashboard.maintenanceHome.unableToLoadDashboard", "Unable to load dashboard")}</strong>
+            <p>{typeof error === "string" ? error : t("dashboard.maintenanceHome.loadError", "Unable to load maintenance dashboard.")}</p>
+          </div>
+          <button type="button" onClick={() => loadDashboard()}>{t("dashboard.maintenanceHome.tryAgain", "Try Again")}</button>
+        </div>
+        <style>{styles}</style>
+      </main>
     );
   }
 

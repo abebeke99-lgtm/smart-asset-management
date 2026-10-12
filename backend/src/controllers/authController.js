@@ -209,7 +209,7 @@ const login = async (req, res) => {
       return res.status(429).json({ success: false, message: 'Account temporarily locked. Please try again later.' });
     }
 
-    if (!isAccountActive(user.active) || ['inactive', 'suspended'].includes(String(user.status || '').toLowerCase())) {
+    if (!isAccountActive(user.active, user.status)) {
       console.warn(`Login rejected for inactive account userId=${user.id}`);
       await recordAuthEvent({ userId: user.id, action: 'LOGIN_FAILED', result: 'Failure', req });
       return res.status(403).json({ success: false, message: 'Account is deactivated.' });
@@ -275,32 +275,42 @@ const login = async (req, res) => {
 
 const register = async (req, res) => {
   try {
-    const { username, email, password, confirmPassword, fullName, role = 'student', department = '' } = req.body;
+    const body = req.body || {};
+    const username = String(body.username || '').trim();
+    const email = String(body.email || '').trim().toLowerCase();
+    const fullName = String(body.fullName || body.full_name || '').trim();
+    const phone = String(body.phone || '').trim();
+    const department = String(body.department || '').trim();
+    const role = String(body.role || 'student').trim().toLowerCase();
 
     const publicRoles = ['student', 'staff'];
-    if (!publicRoles.includes(String(role || 'student').toLowerCase())) {
+    if (!publicRoles.includes(role)) {
       return res.status(400).json({ success: false, message: 'Role must be provided by an administrator' });
     }
 
     if (!isValidUsername(username)) {
       return res.status(400).json({ success: false, message: 'Username must be at least 3 characters' });
     }
+    if (username.length > 100) return res.status(400).json({ success: false, message: 'Username must be 100 characters or fewer' });
 
-    if (!email || !isValidEmail(email)) {
+    if (!email || email.length > 255 || !isValidEmail(email)) {
       return res.status(400).json({ success: false, message: 'Valid email is required' });
     }
+    if (!fullName || fullName.length > 255) return res.status(400).json({ success: false, message: 'Full name is required and must be 255 characters or fewer' });
+    if (phone.length > 50 || (phone && !/^\+?[\d\s().-]{7,50}$/.test(phone))) return res.status(400).json({ success: false, message: 'Enter a valid phone number of at most 50 characters' });
+    if (department.length > 255) return res.status(400).json({ success: false, message: 'Department must be 255 characters or fewer' });
 
-    if (typeof password !== 'string' || !password) {
+    if (typeof body.password !== 'string' || !body.password) {
       return res.status(400).json({ success: false, message: 'Password is required.' });
     }
-    if (typeof confirmPassword !== 'string' || !confirmPassword) {
+    if (typeof body.confirmPassword !== 'string' || !body.confirmPassword) {
       return res.status(400).json({ success: false, message: 'Confirm Password is required.' });
     }
-    if (password !== confirmPassword) {
+    if (body.password !== body.confirmPassword) {
       return res.status(400).json({ success: false, message: 'Passwords do not match.' });
     }
     const security = await getSecuritySettings();
-    const passwordError = validatePassword(password || '', security);
+    const passwordError = validatePassword(body.password || '', security);
     if (passwordError) return res.status(400).json({ success: false, message: passwordError });
 
     const exists = await findExistingAccount({ username, email });
@@ -308,12 +318,13 @@ const register = async (req, res) => {
       return res.status(409).json({ success: false, message: 'Username or email is already in use' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(body.password, 10);
     const user = await User.create({
       username,
       email,
       password: hashedPassword,
-      fullName: fullName || username,
+      fullName,
+      phone,
       role,
       department,
     });
@@ -325,13 +336,22 @@ const register = async (req, res) => {
         username: user.username,
         email: user.email,
         fullName: user.fullName,
+        phone: user.phone,
         role: user.role,
         department: user.department,
       },
-      token: await generateToken(user),
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({ success: false, message: 'Username or email is already in use' });
+    }
+    const errorCode = error.code || error.parent?.code || error.original?.code;
+    console.error('Public account registration failed.', {
+      errorType: error.name || 'Error',
+      ...(errorCode ? { code: errorCode } : {}),
+      requestId: req.requestId || null,
+    });
+    return res.status(500).json({ success: false, message: 'Unable to complete registration. Please try again later.' });
   }
 };
 
@@ -370,7 +390,7 @@ const mapEmailDeliveryError = (error) => {
   return { code: 'EMAIL_NETWORK_ERROR', message: 'Email service is temporarily unavailable. Please try again later.' };
 };
 const RESET_TOKEN_TTL_MINUTES = Math.min(30, Math.max(15, Number(process.env.PASSWORD_RESET_TTL_MINUTES) || 20));
-const RESET_OTP_TTL_MINUTES = Math.min(15, Math.max(5, Number(process.env.PASSWORD_RESET_OTP_TTL_MINUTES) || 5));
+const RESET_OTP_TTL_MINUTES = Math.min(15, Math.max(5, Number(process.env.PASSWORD_RESET_OTP_TTL_MINUTES) || 10));
 const RESET_OTP_MAX_ATTEMPTS = Math.min(5, Math.max(1, Number(process.env.PASSWORD_RESET_OTP_MAX_ATTEMPTS) || 5));
 const OTP_REQUEST_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const OTP_REQUEST_RATE_LIMIT_PER_EMAIL = 5;

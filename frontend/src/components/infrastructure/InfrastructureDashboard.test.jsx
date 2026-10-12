@@ -84,6 +84,8 @@ test("translates the dashboard error fallback without refetching", async () => {
   );
 
   expect(await screen.findByText("Unable to load Infrastructure Directorate dashboard.")).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: /infrastructure.*statistics/i })).not.toBeInTheDocument();
+  expect(screen.queryByText("0")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Amharic" }));
 
   expect(await screen.findByText("የመሠረተ ልማት ዳይሬክቶሬት ዳሽቦርድን መጫን አልተቻለም።")).toBeInTheDocument();

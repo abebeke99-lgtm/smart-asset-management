@@ -95,6 +95,8 @@ import DeptAssetHistory from './components/department/DeptAssetHistory';
 import DepartmentActivityHistory from './components/department/DepartmentActivityHistory';
 import DepartmentAssetHistory from './components/department/DepartmentAssetHistory';
 import DeptTickets from './components/department/DeptTickets';
+import TeachingAssistantAssets from './components/department/TeachingAssistantAssets';
+import StudentDashboard from './components/student/StudentDashboard';
 
 import FinancePurchaseRequests from './components/finance/FinancePurchaseRequests';
 import FinancePurchaseOrders from './components/finance/FinancePurchaseOrders';
@@ -275,8 +277,9 @@ export const getDashboardRoute = (role) => {
     store_manager: '/store',
     maintenance: '/maintenance/dashboard',
     infrastructure: '/infrastructure/dashboard',
+    teaching_assistant: '/teaching-assistant/dashboard',
     staff: '/department',
-    student: '/student',
+    student: '/student/dashboard',
   };
 
   return roleMap[normalizeRole(role)] || '/home';
@@ -3163,7 +3166,7 @@ function AppContent() {
               )}
               {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'store_manager' && (
                 <>
-                  {['INVENTORY MANAGEMENT', 'ASSET OPERATIONS', 'ACCOUNT MANAGEMENT'].map((sectionName) => {
+                  {['OVERVIEW', 'INVENTORY MANAGEMENT', 'ASSET OPERATIONS', 'ACCOUNT MANAGEMENT'].map((sectionName) => {
                     const visibleItems = sidebarItems.filter((item) => item.section === sectionName);
                     if (!visibleItems.length) return null;
                     return (
@@ -3328,8 +3331,22 @@ function AppContent() {
         { path: '/college/analytics/assets', label: 'College Analytics', icon: TrendingUp },
         { path: '/college/notifications', label: 'Notifications', icon: Bell }
       ],
-      'staff': [],
-      'student': [{ path: '/student', label: 'Dashboard', icon: LayoutDashboard }],
+      'college': [
+        { path: '/college/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { path: '/college/assets', label: 'Assets', icon: Package },
+        { path: '/college/staff', label: 'College Staff', icon: Users },
+        { path: '/college/requests', label: 'Asset Requests', icon: FileText },
+        { path: '/college/assignments', label: 'Assignments', icon: UserRound },
+        { path: '/college/notifications', label: 'Notifications', icon: Bell }
+      ],
+      'teaching_assistant': [
+        { path: '/teaching-assistant/dashboard', label: 'Department Assets', icon: Package }
+      ],
+      'staff': [
+        { path: '/department', label: 'Dashboard', icon: LayoutDashboard },
+        { path: '/department/assets', label: 'Department Assets', icon: Package }
+      ],
+      'student': [{ path: '/student/dashboard', label: 'Dashboard', icon: LayoutDashboard }],
       'finance': [
         { path: '/finance', label: '📊 ' + t.dashboard, section: 'Overview' },
         { path: '/finance/purchase-requests', label: '📝 Purchase Requests', section: 'PROCUREMENT' },
@@ -3352,6 +3369,7 @@ function AppContent() {
         { path: '/finance/notifications', label: '🔔 Notifications', section: 'CONTROL' }
       ],
       'store_manager': [
+        { path: '/store', label: '📊 ' + t.dashboard, section: 'OVERVIEW' },
         { path: '/store/inventory', label: '📦 Inventory', section: 'INVENTORY MANAGEMENT' },
         { path: ROUTES.STORE_AVAILABLE_ASSETS, label: '📦 Available Assets', section: 'INVENTORY MANAGEMENT' },
         { path: '/store/stock-adjustments', label: '⚙️ Stock Adjustments', section: 'INVENTORY MANAGEMENT' },
@@ -3500,21 +3518,26 @@ function AppContent() {
     { path: '/department-head/utilization', label: 'Asset Utilization', icon: BarChart3 },
     { path: '/department-head/notifications', label: 'Notifications', icon: Bell }
   ];
-  const departmentStaffItems = [
-    { path: '/department', label: 'Overview Dashboard', icon: LayoutDashboard },
-    { path: '/department-head/profile', label: 'My Profile', icon: Users },
-    { path: '/department-head/assets', label: 'Assets', icon: Package },
-    { path: '/department-head/assignments', label: 'Assigned Assets', icon: ClipboardList },
-    { path: '/department-head/inventory', label: 'Inventory', icon: Package },
-    { path: '/department-head/verification', label: 'Asset Verification', icon: Radio },
-    { path: '/department-head/requests', label: 'Asset Requests', icon: ClipboardList },
-    { path: '/department-head/approvals', label: 'Pending Approvals', icon: ClipboardCheck },
-    { path: '/department-head/transfers', label: 'Transfer Requests', icon: ArrowLeftRight },
-    { path: '/department-head/maintenance', label: 'Maintenance Requests', icon: Wrench },
-    { path: '/department-head/returns', label: 'Asset Returns', icon: ArrowLeftRight },
-    { path: '/department-head/movement', label: 'Asset Movement', icon: ArrowLeftRight },
-    { path: '/department-head/notifications', label: 'Notifications', icon: Bell }
-  ];
+  const departmentStaffItems = sidebarRole === 'staff'
+    ? [
+      { path: '/department', label: 'Overview Dashboard', icon: LayoutDashboard },
+      { path: '/department/assets', label: 'Department Assets', icon: Package }
+    ]
+    : [
+      { path: '/department', label: 'Overview Dashboard', icon: LayoutDashboard },
+      { path: '/department-head/profile', label: 'My Profile', icon: Users },
+      { path: '/department-head/assets', label: 'Assets', icon: Package },
+      { path: '/department-head/assignments', label: 'Assigned Assets', icon: ClipboardList },
+      { path: '/department-head/inventory', label: 'Inventory', icon: Package },
+      { path: '/department-head/verification', label: 'Asset Verification', icon: Radio },
+      { path: '/department-head/requests', label: 'Asset Requests', icon: ClipboardList },
+      { path: '/department-head/approvals', label: 'Pending Approvals', icon: ClipboardCheck },
+      { path: '/department-head/transfers', label: 'Transfer Requests', icon: ArrowLeftRight },
+      { path: '/department-head/maintenance', label: 'Maintenance Requests', icon: Wrench },
+      { path: '/department-head/returns', label: 'Asset Returns', icon: ArrowLeftRight },
+      { path: '/department-head/movement', label: 'Asset Movement', icon: ArrowLeftRight },
+      { path: '/department-head/notifications', label: 'Notifications', icon: Bell }
+    ];
   const departmentManagerSections = [
     { label: 'MAIN', items: departmentHeadItems.slice(0, 1) },
     { label: 'DEPARTMENT MANAGEMENT', items: departmentHeadItems.slice(1, 5) },
@@ -3925,8 +3948,14 @@ function AppContent() {
             <Route path="notifications" element={<InfrastructureNotifications />} />
           </Route>
 
+          <Route path="/teaching-assistant" element={<ProtectedRoute allowedRoles={['teaching_assistant']} allowedPermissions={['assets.view']}><RoleLayout /></ProtectedRoute>}>
+            <Route index element={<TeachingAssistantAssets />} />
+            <Route path="dashboard" element={<TeachingAssistantAssets />} />
+          </Route>
+
           <Route path="/student" element={<ProtectedRoute allowedRoles={['student']}><RoleLayout /></ProtectedRoute>}>
-            <Route index element={<main className="role-dashboard"><h1>Student Dashboard</h1></main>} />
+            <Route index element={<Navigate to="/student/dashboard" replace />} />
+            <Route path="dashboard" element={<StudentDashboard />} />
           </Route>
 
           {/* Catch-all redirect for authenticated routes. */}

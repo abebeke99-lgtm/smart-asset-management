@@ -9,6 +9,7 @@ router.post('/college/returns', ...requireCollegeManager, resolveCollegeScope, a
 router.get('/college/returns/:id', ...requireCollegeManager, resolveCollegeScope, auth.requirePermission('college.returns.view'), workflow.getReturn);
 router.post('/college/returns/:id/approve', ...requireCollegeManager, resolveCollegeScope, auth.requirePermission('college.returns.manage'), workflow.approveReturn);
 router.post('/college/returns/:id/reject', ...requireCollegeManager, resolveCollegeScope, auth.requirePermission('college.returns.manage'), workflow.rejectReturn);
+router.post('/college/returns/:id/cancel', ...requireCollegeManager, resolveCollegeScope, auth.requirePermission('college.returns.manage'), workflow.cancelReturn);
 router.get('/department/returns', ...requireDepartmentHead, resolveDepartmentScope, workflow.listReturns);
 router.post('/department/returns', ...requireDepartmentHead, resolveDepartmentScope, workflow.createReturn);
 router.get('/department/returns/:id', ...requireDepartmentHead, resolveDepartmentScope, workflow.getReturn);

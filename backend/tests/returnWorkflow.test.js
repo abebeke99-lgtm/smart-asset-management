@@ -50,6 +50,7 @@ test('college returns routes provide scoped list, eligible options, registration
   assert.ok(source.includes('post /college/returns'));
   assert.ok(source.includes('post /college/returns/:id/approve'));
   assert.ok(source.includes('post /college/returns/:id/reject'));
+  assert.ok(source.includes('post /college/returns/:id/cancel'));
   assert.ok(source.includes('post /store/returns/:id/ready'));
   assert.ok(source.includes('post /store/returns/:id/dispatch'));
   assert.ok(source.includes('post /store/returns/:id/receive'));

@@ -98,6 +98,7 @@ test('shows a connection error instead of presenting zero-valued metrics', async
 
   expect(await screen.findByRole('alert')).toHaveTextContent('database offline');
   expect(screen.getByRole('button', { name: 'Try Again' })).toBeInTheDocument();
+  expect(document.querySelector('.maintenance-kpi-grid')).not.toBeInTheDocument();
   expect(errorLog).toHaveBeenCalledWith('Maintenance dashboard error:', expect.any(Error));
 });
 

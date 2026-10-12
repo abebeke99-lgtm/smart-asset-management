@@ -1,5 +1,8 @@
-const { getMailerStatus, getSmtpTimeouts, getTransporter, readMailerConfig } = require('../utils/mailer');
+const { classifyEmailError, getMailDriver, getMailerStatus, getSmtpTimeouts, getTransporter, readMailerConfig } = require('../utils/mailer');
 const { getRequestContext } = require('../middlewares/requestContext');
+
+const DEVELOPMENT_MAIL_DRIVERS = ['log', 'console', 'mock', 'dev', 'test', 'memory'];
+const isDevelopmentDriver = (driver) => DEVELOPMENT_MAIL_DRIVERS.includes(String(driver || '').toLowerCase());
 
 const validateEmailConfiguration = () => {
   const status = getMailerStatus();
@@ -119,8 +122,54 @@ const verifySmtpConnection = async () => {
     await withHardTimeout(() => mailer.transporter.verify(), 'verification', hardTimeout);
     return { ok: true };
   } catch (error) {
-    return { ok: false, reason: error?.message || 'SMTP verification failed', code: error?.code };
+    return {
+      ok: false,
+      reason: 'SMTP verification failed',
+      code: classifyEmailError(error),
+      providerCode: error?.code,
+    };
   }
+};
+
+// Runs once at application startup. It makes a misconfigured production mail
+// setup visible in the deployment logs immediately instead of only when a user
+// requests a password reset. It never logs credentials and never throws.
+const initializeEmailService = async () => {
+  const driver = getMailDriver();
+
+  if (isDevelopmentDriver(driver)) {
+    console.warn(JSON.stringify({
+      event: 'email_service_disabled',
+      code: 'EMAIL_NOT_CONFIGURED',
+      driver,
+      reason: 'development_mail_driver',
+      hint: 'Set MAIL_DRIVER=smtp and provide EMAIL_HOST/EMAIL_PORT/EMAIL_USER/EMAIL_PASSWORD to deliver password recovery email.',
+    }));
+    return { ok: false, code: 'EMAIL_NOT_CONFIGURED', driver };
+  }
+
+  const status = getMailerStatus();
+  if (!status.configured) {
+    console.error(JSON.stringify({
+      event: 'email_service_not_configured',
+      code: 'EMAIL_NOT_CONFIGURED',
+      missingVariables: status.missingVariables,
+    }));
+    return { ok: false, code: 'EMAIL_NOT_CONFIGURED', missingVariables: status.missingVariables };
+  }
+
+  const result = await verifySmtpConnection();
+  if (result.ok) {
+    console.log(JSON.stringify({ event: 'email_transport_ready', driver: status.driver }));
+    return { ok: true };
+  }
+
+  logEmailDiagnostic('startup_verification', {
+    code: result.code,
+    providerCode: result.providerCode,
+  });
+
+  return result;
 };
 
 const escapeHtml = (value = '') => String(value)
@@ -175,6 +224,7 @@ module.exports = {
   getSmtpTimeouts,
   validateEmailConfiguration,
   getEmailTransport,
+  initializeEmailService,
   sendMail,
   logEmailDiagnostic,
   verifySmtpConnection,

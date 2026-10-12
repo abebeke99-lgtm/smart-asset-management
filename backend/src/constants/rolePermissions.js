@@ -110,7 +110,7 @@ const DEFAULT_ROLE_PERMISSIONS = {
   store_manager: ['assets.view', 'assets.create', 'assets.update', 'assets.assign', 'assets.transfer', 'inventory.view', 'inventory.stock_in', 'inventory.stock_out', 'inventory.stock_movement', 'rfid.view', 'reports.view', 'notifications.view', 'notifications.delete'],
   maintenance: ['assets.view', 'maintenance.view', 'maintenance.request.create', 'maintenance.technician.assign', 'maintenance.update', 'maintenance.complete', 'reports.view', 'notifications.view', 'notifications.delete'],
   infrastructure: ['assets.view', 'reports.view', 'notifications.view', 'notifications.delete'],
-  teaching_assistant: [],
+  teaching_assistant: ['assets.view'],
   staff: ['assets.view'],
   student: ['assets.view'],
 };

@@ -549,6 +549,9 @@ export default function FinanceDashboard() {
   const [loading, setLoading] =
     useState(true);
 
+  const [hasDashboardData, setHasDashboardData] =
+    useState(false);
+
   const [filterLoading, setFilterLoading] =
     useState(false);
 
@@ -675,6 +678,10 @@ export default function FinanceDashboard() {
 
         const payload =
           getPayload(response);
+        if (!payload || typeof payload !== "object" || Array.isArray(payload)
+          || (!payload.summary && !payload.statistics && !payload.stats)) {
+          throw new Error("Finance dashboard response was incomplete.");
+        }
 
         const summary =
           payload?.summary ||
@@ -721,6 +728,7 @@ export default function FinanceDashboard() {
             )
           ),
         });
+        setHasDashboardData(true);
       } catch (err) {
         console.error(
           "Finance dashboard error:",
@@ -866,6 +874,19 @@ export default function FinanceDashboard() {
       );
     }
   };
+
+  if (error && !hasDashboardData && !loading) {
+    return (
+      <main className="finance-dashboard finance-dashboard-error" role="alert">
+        <p>
+          {typeof error === "object" && error.translationKey
+            ? translate(error.translationKey, "Unable to load the finance dashboard.")
+            : error}
+        </p>
+        <button type="button" onClick={loadDashboard}>{translate("errors.retry", "Retry")}</button>
+      </main>
+    );
+  }
 
   return (
     <div className="finance-dashboard">

@@ -1,11 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const controller = require('../src/controllers/ictAssetController');
-const { sequelize, Asset, Department, Approval, ServiceRequest, Notification, Incident, PreventiveMaintenance, Assignment, Maintenance, SoftwareLicense, AuditLog, MaintenanceHistory, RequestStatusHistory, IncidentHistory } = require('../src/models');
+const { sequelize, Asset, Department, Approval, ServiceRequest, Notification, Incident, PreventiveMaintenance, Assignment, Maintenance, SoftwareLicense, AuditLog, MaintenanceHistory, RequestStatusHistory, IncidentHistory, Inventory } = require('../src/models');
 
 const originals = {
   sequelizeAuthenticate: sequelize.authenticate,
   assetFindAll: Asset.findAll,
+  inventoryFindAll: Inventory.findAll,
   departmentFindAll: Department.findAll,
   approvalFindAll: Approval.findAll,
   approvalCount: Approval.count,
@@ -42,6 +43,7 @@ test('ICT dashboard controller builds payload without undefined term lists', asy
     }
     return [];
   };
+  Inventory.findAll = async () => [];
   Department.findAll = async () => [];
   Approval.findAll = async () => [];
   Approval.count = async () => 0;
@@ -79,6 +81,7 @@ test('ICT dashboard controller builds payload without undefined term lists', asy
 test.afterEach(() => {
   sequelize.authenticate = originals.sequelizeAuthenticate;
   Asset.findAll = originals.assetFindAll;
+  Inventory.findAll = originals.inventoryFindAll;
   Department.findAll = originals.departmentFindAll;
   Approval.findAll = originals.approvalFindAll;
   Approval.count = originals.approvalCount;

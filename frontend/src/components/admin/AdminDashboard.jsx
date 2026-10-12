@@ -112,6 +112,7 @@ function AdminDashboard() {
   const [dashboard, setDashboard] = useState(emptyDashboard);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [hasDashboardData, setHasDashboardData] = useState(false);
   const [thresholds, setThresholds] = useState(defaultThresholds);
   const [savingThresholds, setSavingThresholds] = useState(false);
   const [thresholdMessage, setThresholdMessage] = useState("");
@@ -136,17 +137,23 @@ function AdminDashboard() {
 
       const payload = response?.data?.data ?? response?.data ?? response;
       const data = payload && typeof payload === "object" ? payload : null;
-      if (!data) {
+      if (!data || !data.statistics || typeof data.statistics !== "object") {
         throw new Error("The dashboard response was incomplete.");
       }
 
       setDashboard(data);
+      setHasDashboardData(true);
       setThresholds(normalizeDashboardThresholds(data.thresholds));
     } catch (requestError) {
       console.error("Dashboard loading error:", requestError);
+      const fallback = translateMessage(
+        languageRef.current,
+        "dashboard.adminHome.dashboardLoadError",
+        "Unable to load administrator dashboard. Please try again.",
+      );
       const message = requestError?.message === "DASHBOARD_TIMEOUT"
-        ? translateMessage(languageRef.current, "dashboard.adminHome.dashboardTimeout")
-        : getApiErrorMessage(requestError, translateMessage(languageRef.current, "dashboard.adminHome.dashboardLoadError"));
+        ? translateMessage(languageRef.current, "dashboard.adminHome.dashboardTimeout", fallback) || fallback
+        : getApiErrorMessage(requestError, fallback) || fallback;
       setError(message);
     } finally {
       if (timeoutHandle) {
@@ -234,6 +241,22 @@ function AdminDashboard() {
     dateStyle: "medium",
     timeStyle: "short",
   }), [language]);
+
+  if (error && !hasDashboardData) {
+    return (
+      <main className="admin-dashboard-page admin-dashboard-error">
+        <PageHeader
+          eyebrow={tr("dashboard.adminHome.administrator")}
+          title={tr("dashboard.adminHome.title")}
+          subtitle={tr("dashboard.adminHome.subtitle")}
+        />
+        <section role="alert">
+          <p>{error}</p>
+          <button type="button" onClick={loadDashboard}>{tr("dashboard.adminHome.tryAgain", "Try Again")}</button>
+        </section>
+      </main>
+    );
+  }
 
   const chartState = (rows, title) => {
     if (loading) return <div className="admin-dashboard-chart-skeleton" aria-label={`Loading ${title}`} />;

@@ -1070,11 +1070,12 @@ const getIctDashboard = async (req, res, next) => {
         },
       ],
     };
-    const [assetIdsRows, assetStatusRows, assetCategoryRows, recentAssets] = await Promise.all([
+    const [assetIdsRows, assetStatusRows, assetCategoryRows, recentAssets, assetConditionRows] = await Promise.all([
       Asset.findAll({ where: assetScope, attributes: ['id'], raw: true }),
       Asset.findAll({ where: assetScope, attributes: ['status', [fn('COUNT', col('id')), 'count']], group: ['status'], raw: true }),
       Asset.findAll({ where: assetScope, attributes: ['category', [fn('COUNT', col('id')), 'count']], group: ['category'], order: [[fn('COUNT', col('id')), 'DESC']], raw: true }),
       Asset.findAll({ where: assetScope, order: [['createdAt', 'DESC']], limit: 30 }),
+      Asset.findAll({ where: assetScope, attributes: ['condition', [fn('COUNT', col('id')), 'count']], group: ['condition'], raw: true }),
     ]);
     const assetIds = assetIdsRows.map((asset) => asset.id);
     const assetIdScope = { assetId: { [Op.in]: assetIds.length ? assetIds : [-1] } };
@@ -1116,7 +1117,7 @@ const getIctDashboard = async (req, res, next) => {
       status: { [Op.notIn]: ['expired', 'revoked', 'cancelled'] },
       expiryDate: { [Op.between]: [today, ninetyDaysFromNow] },
     };
-    const [activeAssignmentCount, pendingApprovalCount, pendingServiceCount, openSupportTicketCount, openIncidentCount, expiringLicenseCount, upcomingMaintenanceCount, approvals, pendingServiceRequests, notifications, supportTicketRows, incidentRows, upcomingMaintenanceRows, activeAssignments, maintenanceRows, recentIncidentRows, recentServiceRequests] = await Promise.all([
+    const [activeAssignmentCount, pendingApprovalCount, pendingServiceCount, openSupportTicketCount, openIncidentCount, expiringLicenseCount, upcomingMaintenanceCount, approvals, pendingServiceRequests, notifications, supportTicketRows, incidentRows, upcomingMaintenanceRows, activeAssignments, maintenanceRows, recentIncidentRows, recentServiceRequests, criticalIncidentCount, criticalIncidentRows, maintenanceStatusRows, supportTicketStatusRows, inventoryRows, overdueMaintenanceCount] = await Promise.all([
       Assignment.count({ distinct: true, col: 'asset_id', where: { ...assetIdScope, status: 'active' } }),
       Approval.count({ where: pendingApprovalWhere }),
       ServiceRequest.count({ where: pendingServiceWhere }),
@@ -1134,6 +1135,12 @@ const getIctDashboard = async (req, res, next) => {
       Maintenance.findAll({ where: assetIdScope, include: [{ model: Asset, attributes: ['id', 'name', 'assetCode'] }], order: [['createdAt', 'DESC']], limit: 20 }),
       Incident.findAll({ where: incidentScope, include: incidentInclude, attributes: ['id', 'title', 'createdAt'], order: [['createdAt', 'DESC']], limit: 30 }),
       ServiceRequest.findAll({ where: organizationScope, attributes: ['id', 'requestCode', 'requestType', 'title', 'createdAt'], order: [['createdAt', 'DESC']], limit: 30 }),
+      Incident.count({ where: { ...incidentScope, priority: 'critical', status: { [Op.in]: openIncidentStatuses } } }),
+      Incident.findAll({ where: { ...incidentScope, priority: 'critical', status: { [Op.in]: openIncidentStatuses } }, order: [['createdAt', 'DESC']], limit: 10 }),
+      Maintenance.findAll({ where: assetIdScope, attributes: ['status', [fn('COUNT', col('id')), 'count']], group: ['status'], raw: true }),
+      ServiceRequest.findAll({ where: { ...organizationScope, requestType: 'support' }, attributes: ['status', [fn('COUNT', col('id')), 'count']], group: ['status'], raw: true }),
+      Inventory.findAll({ where: assetIdScope, attributes: ['assetId', 'quantity', 'availableQuantity', 'minimumQuantity'], raw: true }),
+      PreventiveMaintenance.count({ where: { ...assetIdScope, status: 'overdue' } }),
     ]);
     const lifecycleRequestIds = recentServiceRequests.map((request) => request.id);
     const [incidentHistoryRows, maintenanceHistoryRows, requestStatusHistoryRows] = await Promise.all([
@@ -1145,6 +1152,9 @@ const getIctDashboard = async (req, res, next) => {
       ? await AuditLog.findAll({ where: { entity: { [Op.in]: assetIds.map((id) => `asset:${id}`) } }, order: [['createdAt', 'DESC']], limit: 40 })
       : [];
     const countForStatus = (statuses) => assetStatusRows.reduce((total, row) => statuses.includes(normalizeStatus(row.status)) ? total + Number(row.count || 0) : total, 0);
+    const countForCondition = (conditions) => assetConditionRows.reduce((total, row) => (
+      conditions.includes(normalizeStatus(row.condition)) ? total + Number(row.count || 0) : total
+    ), 0);
     const pendingRequests = Number(pendingApprovalCount) + Number(pendingServiceCount);
     const summary = {
       totalAssets: assetIdsRows.length,
@@ -1209,9 +1219,76 @@ const getIctDashboard = async (req, res, next) => {
       upcomingMaintenance: summary.upcomingMaintenance,
       expiringLicenses: summary.expiringLicenses,
     };
+    const countByStatus = (rows, statuses) => rows.reduce((total, row) => (
+      statuses.includes(normalizeStatus(row.status)) ? total + Number(row.count || 0) : total
+    ), 0);
+    const maintenanceSummary = {
+      scheduled: countByStatus(maintenanceStatusRows, ['scheduled']),
+      in_progress: countByStatus(maintenanceStatusRows, ['in-progress', 'in progress', 'in_progress']),
+      completed: countByStatus(maintenanceStatusRows, ['completed', 'complete', 'closed']),
+      overdue: Number(overdueMaintenanceCount),
+    };
+    const supportTicketSummary = {
+      submitted: countByStatus(supportTicketStatusRows, ['submitted', 'open', 'new']),
+      assigned: countByStatus(supportTicketStatusRows, ['assigned']),
+      scheduled: countByStatus(supportTicketStatusRows, ['scheduled']),
+      in_progress: countByStatus(supportTicketStatusRows, ['in-progress', 'in progress', 'in_progress', 'investigating']),
+      waiting: countByStatus(supportTicketStatusRows, ['waiting', 'pending-user', 'pending-parts', 'pending']),
+      completed: countByStatus(supportTicketStatusRows, ['completed', 'complete', 'resolved', 'closed']),
+      escalated: countByStatus(supportTicketStatusRows, ['escalated']),
+    };
+    const conditionSummary = Object.fromEntries(assetConditionRows
+      .filter((row) => row.condition)
+      .map((row) => [normalizeStatus(row.condition).replace(/[\s-]+/g, '_'), Number(row.count || 0)]));
+    const inventoryAlerts = inventoryRows
+      .filter((item) => Number(item.availableQuantity) <= 0
+        || (Number(item.minimumQuantity) > 0 && Number(item.availableQuantity) <= Number(item.minimumQuantity)))
+      .map((item) => ({
+        assetId: item.assetId,
+        quantity: Number(item.quantity || 0),
+        availableQuantity: Number(item.availableQuantity || 0),
+        minimumQuantity: Number(item.minimumQuantity || 0),
+        severity: Number(item.availableQuantity) <= 0 ? 'out_of_stock' : 'low_stock',
+      }));
+    const dashboardKpis = {
+      totalAssets: summary.totalAssets,
+      activeAssets: countForStatus(['active', 'available', 'ready', 'idle', 'new', 'assigned', 'in-use', 'in use', 'functional']),
+      damagedAssets: countForCondition(['damaged', 'missing', 'broken']),
+      underMaintenance: summary.maintenanceAssets,
+      availableAssets: summary.availableAssets,
+      assignedAssets: summary.assignedAssets,
+      openSupportTickets: summary.supportTickets,
+      criticalIncidents: Number(criticalIncidentCount),
+    };
+    const dashboardCondition = {
+      ...conditionSummary,
+      functional: conditionSummary.functional ?? conditionSummary.good ?? 0,
+      damaged: conditionSummary.damaged ?? 0,
+      missing: conditionSummary.missing ?? 0,
+      expired: conditionSummary.expired ?? 0,
+      replaced: conditionSummary.replaced ?? 0,
+    };
 
     res.json({ success: true, dashboard: {
       ...summaryPayload,
+      kpis: dashboardKpis,
+      assetStatusSummary: {
+        available: summary.availableAssets,
+        assigned: summary.assignedAssets,
+        under_maintenance: summary.maintenanceAssets,
+        retired: summary.retiredAssets,
+      },
+      conditionSummary: dashboardCondition,
+      categories: assetCategories.map((category) => ({
+        name: category.label,
+        label: category.label,
+        total: category.count,
+        count: category.count,
+      })),
+      maintenanceSummary,
+      supportTickets: supportTicketSummary,
+      criticalIncidents: criticalIncidentRows,
+      inventoryAlerts,
       assetStatus,
       assetCategories,
       recentActivity,

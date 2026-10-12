@@ -64,6 +64,26 @@ const getMailerStatus = () => {
   return { configured, missingVariables: config.missingVariables, driver: config.driver };
 };
 
+// Classify a Nodemailer/SMTP error into a stable, non-sensitive category so the
+// failure can be logged and acted on without ever exposing credentials, hosts,
+// provider responses, or stack traces.
+const classifyEmailError = (error) => {
+  const code = String(error?.code || '').toUpperCase();
+  const responseCode = Number(error?.responseCode);
+  const response = String(error?.response || '');
+
+  if (!code && !Number.isInteger(responseCode)) return 'EMAIL_NETWORK_ERROR';
+
+  if (code === 'EMAIL_NOT_CONFIGURED') return 'EMAIL_NOT_CONFIGURED';
+  if (code === 'EMAIL_RECIPIENT_NOT_ACCEPTED') return 'EMAIL_PROVIDER_REJECTED';
+  if (code === 'EAUTH' || code === 'EACCES' || responseCode === 535 || responseCode === 534) return 'EMAIL_AUTH_FAILED';
+  if (['ETIMEDOUT', 'ETIMEOUT', 'ESOCKETTIMEDOUT', 'ESMTP_TIMEOUT', 'ECONNECTIONTIMEOUT'].includes(code)) return 'EMAIL_CONNECTION_TIMEOUT';
+  if (['ECONNECTION', 'ECONNREFUSED', 'ECONNRESET', 'EPIPE', 'ENOTFOUND', 'EDNS', 'EAI_AGAIN'].includes(code)) return 'EMAIL_CONNECTION_FAILED';
+  if (Number.isInteger(responseCode) && responseCode >= 500 && responseCode <= 599) return 'EMAIL_PROVIDER_REJECTED';
+  if (/^5\d\d/.test(response)) return 'EMAIL_PROVIDER_REJECTED';
+  return 'EMAIL_NETWORK_ERROR';
+};
+
 const getSmtpTimeouts = () => ({
   connectionTimeout: readPositiveInt('SMTP_CONNECTION_TIMEOUT_MS', DEFAULT_SMTP_TIMEOUTS.connectionTimeout),
   greetingTimeout: readPositiveInt('SMTP_GREETING_TIMEOUT_MS', DEFAULT_SMTP_TIMEOUTS.greetingTimeout),
@@ -111,4 +131,13 @@ const resetTransporter = () => {
   transporterConfigKey = '';
 };
 
-module.exports = { getMailerStatus, getSmtpTimeouts, getTransporter, readMailerConfig, resetTransporter };
+module.exports = {
+  classifyEmailError,
+  getMailDriver,
+  getMailerStatus,
+  getSmtpTimeouts,
+  getTransporter,
+  isDevelopmentMailDriver,
+  readMailerConfig,
+  resetTransporter,
+};

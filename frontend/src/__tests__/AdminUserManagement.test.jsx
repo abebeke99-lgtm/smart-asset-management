@@ -104,7 +104,7 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-test('hides college and department on add, filters only the three excluded roles, and retains password controls', async () => {
+test('shows organization fields only when an existing account is being edited or its selected role requires scope', async () => {
   await openCreateForm();
 
   expect(screen.queryByLabelText('College')).not.toBeInTheDocument();
@@ -131,6 +131,27 @@ test('hides college and department on add, filters only the three excluded roles
 
   fireEvent.click(screen.getByRole('button', { name: 'Show confirm password' }));
   expect(confirmPassword).toHaveAttribute('type', 'text');
+});
+
+test('assigns a Department Head to a selected college and department during account creation', async () => {
+  await openCreateForm();
+  fillValidNewUser();
+  fireEvent.change(screen.getByLabelText('Role *'), { target: { value: 'department_head' } });
+
+  fireEvent.change(await screen.findByLabelText('College'), { target: { value: '3' } });
+  await screen.findByRole('option', { name: 'Computer Science' });
+  fireEvent.change(await screen.findByLabelText('Department'), { target: { value: '8' } });
+  fireEvent.submit(document.querySelector('form'));
+
+  await waitFor(() => expect(apiClient.request).toHaveBeenCalledWith(expect.objectContaining({
+    url: '/api/users',
+    method: 'POST',
+    data: expect.objectContaining({
+      role: 'department_head',
+      collegeId: '3',
+      departmentId: '8',
+    }),
+  })));
 });
 
 test('rejects mismatched passwords without submitting', async () => {

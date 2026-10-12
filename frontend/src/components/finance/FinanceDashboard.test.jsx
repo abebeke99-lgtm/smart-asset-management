@@ -76,3 +76,15 @@ test("switches dashboard copy between English and Amharic without reloading dash
   expect(await screen.findByText("Finance home (English)")).toBeInTheDocument();
   expect(api.get).toHaveBeenCalledTimes(2);
 });
+
+test("does not render empty dashboard statistics after an initial API failure", async () => {
+  api.get.mockImplementation((url) => (url.endsWith("/filters")
+    ? Promise.resolve({ data: { data: { departments: [], categories: [], statuses: [], financialYears: [] } } })
+    : Promise.reject(new Error("database offline"))));
+
+  render(<UiProvider><MemoryRouter><FinanceDashboard /></MemoryRouter></UiProvider>);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Unable to load the finance dashboard.");
+  expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  expect(screen.queryByText("Finance home (English)")).not.toBeInTheDocument();
+});

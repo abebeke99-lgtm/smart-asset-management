@@ -51,6 +51,12 @@ const InfrastructureDashboard = () => {
       const response = await api.get("/api/infrastructure/dashboard");
 
       const payload = response?.data?.data ?? response?.data ?? {};
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)
+        || (!payload.summary && !payload.operational && !Object.keys(payload).some((key) => (
+          ['totalInfrastructureAssets', 'totalAssets', 'buildings', 'operationalAssets'].includes(key)
+        )))) {
+        throw new Error("The infrastructure dashboard response was incomplete.");
+      }
       const summary = payload?.summary && typeof payload.summary === "object"
         ? payload.summary
         : {};
@@ -346,6 +352,20 @@ const InfrastructureDashboard = () => {
           </div>
         </div>
       </div>
+    );
+  }
+
+  if (error && !dashboard) {
+    return (
+      <main className="infrastructure-dashboard-error" role="alert">
+        <strong>{t("dashboard.infrastructureHome.loadErrorTitle", "Dashboard data could not be loaded")}</strong>
+        <p>
+          {error === "__dashboard_load_error__"
+            ? t("dashboard.infrastructureHome.loadErrorFallback", "Unable to load Infrastructure Directorate dashboard.")
+            : error}
+        </p>
+        <button type="button" onClick={() => getDashboard()}>{t("dashboard.infrastructureHome.retry", "Retry")}</button>
+      </main>
     );
   }
 

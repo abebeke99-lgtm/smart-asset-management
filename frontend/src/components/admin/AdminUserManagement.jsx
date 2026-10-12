@@ -339,6 +339,10 @@ export default function Users() {
   const filteredUsers = useMemo(() => users, [users]);
   const storeManagerCapacityReached = storeManagerCount >= storeManagerLimit;
   const selectedRoleIsStoreManager = String(form.roleId).trim().toLowerCase().replace(/[\s-]+/g, "_") === "store_manager";
+  const selectedRole = String(form.roleId).trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const selectedRoleRequiresCollege = ["college", "college_manager", "department_head"].includes(selectedRole);
+  const selectedRoleRequiresDepartment = selectedRole === "department_head";
+  const showOrganizationFields = Boolean(editingUser || selectedRoleRequiresCollege || form.collegeId || form.departmentId);
   const formRoles = editingUser
     ? roles
     : roles.filter((role) => !['staff', 'student', 'technical_assistant'].includes(
@@ -447,6 +451,8 @@ export default function Users() {
     else if (form.username.trim().length < 3) nextErrors.username = "Username must be at least 3 characters.";
     else if (form.username.trim().length > 100) nextErrors.username = "Username must be 100 characters or fewer.";
     if (!form.roleId) nextErrors.roleId = "Role is required.";
+    if (selectedRoleRequiresCollege && !form.collegeId) nextErrors.collegeId = "Select a college for this role.";
+    if (selectedRoleRequiresDepartment && !form.departmentId) nextErrors.departmentId = "Select a department for this role.";
     if (!editingUser && selectedRoleIsStoreManager && storeManagerCapacityReached) {
       nextErrors.roleId = `The maximum of ${storeManagerLimit} Store Manager accounts has been reached.`;
     }
@@ -483,6 +489,9 @@ export default function Users() {
       };
 
       if (editingUser) {
+        payload.collegeId = form.collegeId || null;
+        payload.departmentId = form.departmentId || null;
+      } else if (showOrganizationFields) {
         payload.collegeId = form.collegeId || null;
         payload.departmentId = form.departmentId || null;
       }
@@ -1964,7 +1973,7 @@ export default function Users() {
                 </div>
               </div>
 
-              {editingUser && <div className="form-row">
+              {showOrganizationFields && <div className="form-row">
                 <div className="form-group">
                   <label className="form-label" htmlFor="new-user-college">
                     College

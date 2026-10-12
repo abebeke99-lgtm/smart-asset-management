@@ -25,6 +25,11 @@ const date = (value, locale) => value ? new Date(value).toLocaleDateString(local
 const time = (value, locale) => value ? new Date(value).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '-';
 const normalizeDashboardData = (payload) => {
   const source = payload || {};
+  if (!source || typeof source !== 'object' || Array.isArray(source)
+    || (!source.kpis || typeof source.kpis !== 'object')
+    || (!source.summary && !source.inventoryByStatus)) {
+    throw new Error('Store dashboard response was incomplete.');
+  }
   const summary = source.summary || {};
   const legacyKpis = {
     totalInventory: summary.totalInventory ?? summary.totalAssets,

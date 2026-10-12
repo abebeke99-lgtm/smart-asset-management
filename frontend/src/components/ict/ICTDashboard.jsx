@@ -112,6 +112,31 @@ const DEFAULT_DASHBOARD = {
   recentActivity: [],
 };
 
+export const normalizeIctDashboard = (response) => {
+  const source = response?.dashboard
+    ?? response?.data?.dashboard
+    ?? response?.data
+    ?? response;
+  if (!source || typeof source !== "object" || !source.kpis || !source.summary) {
+    throw new Error("The ICT dashboard response is incomplete.");
+  }
+
+  return {
+    ...DEFAULT_DASHBOARD,
+    ...source,
+    kpis: { ...DEFAULT_DASHBOARD.kpis, ...source.kpis },
+    assetStatus: { ...DEFAULT_DASHBOARD.assetStatus, ...(source.assetStatusSummary || {}) },
+    condition: { ...DEFAULT_DASHBOARD.condition, ...(source.conditionSummary || {}) },
+    categories: Array.isArray(source.categories) ? source.categories : [],
+    maintenance: { ...DEFAULT_DASHBOARD.maintenance, ...(source.maintenanceSummary || {}) },
+    supportTickets: { ...DEFAULT_DASHBOARD.supportTickets, ...(source.supportTickets || {}) },
+    notifications: Array.isArray(source.notifications) ? source.notifications : [],
+    criticalIncidents: Array.isArray(source.criticalIncidents) ? source.criticalIncidents : [],
+    inventoryAlerts: Array.isArray(source.inventoryAlerts) ? source.inventoryAlerts : [],
+    recentActivity: Array.isArray(source.recentActivity) ? source.recentActivity : [],
+  };
+};
+
 function formatNumber(value) {
   return new Intl.NumberFormat().format(Number(value || 0));
 }
@@ -252,6 +277,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [hasDashboardData, setHasDashboardData] = useState(false);
 
   const fetchDashboard = async ({ initial = false } = {}) => {
     try {
@@ -310,32 +336,9 @@ export default function Dashboard() {
        *   ...dashboard
        * }
        */
-      const data = result?.data || result || {};
-
-      setDashboard({
-        ...DEFAULT_DASHBOARD,
-        ...data,
-        kpis: {
-          ...DEFAULT_DASHBOARD.kpis,
-          ...(data.kpis || {}),
-        },
-        assetStatus: {
-          ...DEFAULT_DASHBOARD.assetStatus,
-          ...(data.assetStatus || {}),
-        },
-        condition: {
-          ...DEFAULT_DASHBOARD.condition,
-          ...(data.condition || {}),
-        },
-        maintenance: {
-          ...DEFAULT_DASHBOARD.maintenance,
-          ...(data.maintenance || {}),
-        },
-        supportTickets: {
-          ...DEFAULT_DASHBOARD.supportTickets,
-          ...(data.supportTickets || {}),
-        },
-      });
+      const data = normalizeIctDashboard(result);
+      setDashboard(data);
+      setHasDashboardData(true);
     } catch (err) {
       console.error("ICT dashboard error:", err);
 
@@ -386,6 +389,23 @@ export default function Dashboard() {
         <div className="dashboard-loading">
           <Loader2 className="spin" size={38} />
           <p>{t("dashboard.ictHome.loading", "Loading ICT assets...")}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !hasDashboardData) {
+    return (
+      <div className="dashboard-page ict-module-theme ict-theme-dashboard">
+        <div className="dashboard-error" role="alert">
+          <AlertTriangle size={20} />
+          <div>
+            <strong>{t("dashboard.ictHome.errors.title", "Dashboard Error")}</strong>
+            <p>{error.key ? t(error.key, error.fallback) : error.message}</p>
+          </div>
+          <button type="button" onClick={() => fetchDashboard({ initial: true })}>
+            {t("dashboard.ictHome.controls.tryAgain", "Try Again")}
+          </button>
         </div>
       </div>
     );

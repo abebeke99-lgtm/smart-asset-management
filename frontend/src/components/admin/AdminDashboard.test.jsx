@@ -8,7 +8,7 @@ import { UIProvider, useLanguage } from "../../contexts/UiContext";
 jest.mock("../../services/apiClient", () => ({
   __esModule: true,
   default: { get: jest.fn() },
-  getApiErrorMessage: jest.fn((_error, fallback) => fallback),
+  getApiErrorMessage: jest.fn((error, fallback) => error?.message || fallback),
 }));
 
 describe("normalizeDashboardThresholds", () => {
@@ -99,6 +99,18 @@ describe("normalizeDashboardThresholds", () => {
       expect(screen.getByText("asset:ASSET-001")).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Asset distribution" })).toBeInTheDocument();
       expect(apiClient.get).toHaveBeenCalledWith("/api/admin/dashboard", { timeout: 15000 });
+    });
+
+    test("does not show zero-valued statistics after an initial API failure", async () => {
+      apiClient.get.mockRejectedValue(new Error("database offline"));
+      const errorLog = jest.spyOn(console, "error").mockImplementation(() => {});
+
+      render(<UIProvider><AdminDashboard /></UIProvider>);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("Unable to load administrator dashboard");
+      expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /Active Assets:/ })).not.toBeInTheDocument();
+      expect(errorLog).toHaveBeenCalledWith("Dashboard loading error:", expect.any(Error));
     });
   });
 });

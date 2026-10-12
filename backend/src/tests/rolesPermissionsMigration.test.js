@@ -5,7 +5,8 @@ const { ROLE_NAMES, DEFAULT_ROLE_PERMISSIONS } = require('../constants/rolePermi
 
 test('Teaching Assistant is a supported least-privilege system role', () => {
   assert.ok(ROLE_NAMES.includes('teaching_assistant'));
-  assert.deepEqual(DEFAULT_ROLE_PERMISSIONS.teaching_assistant, []);
+  assert.deepEqual(DEFAULT_ROLE_PERMISSIONS.teaching_assistant, ['assets.view']);
+  assert.deepEqual(DEFAULT_ROLE_PERMISSIONS.teaching_assistant, ['assets.view']);
 });
 
 test('default permission grants implement the specified role matrix', () => {

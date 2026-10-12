@@ -24,6 +24,15 @@ jest.mock('react-chartjs-2', () => ({
 }));
 
 const CurrentPath = () => <output>{useLocation().pathname}</output>;
+const emptyStoreDashboard = {
+  kpis: { totalInventory: 0, availableAssets: 0, assignedAssets: 0, damagedItems: 0, lowStock: 0 },
+  inventoryByStatus: {},
+  categories: {},
+  stockMovement: {},
+  monthlyMovements: [],
+  recentActivities: [],
+  lowStockAlerts: [],
+};
 
 const renderDashboard = () => render(
   <MemoryRouter initialEntries={['/store']}>
@@ -76,7 +85,7 @@ describe('Store Manager dashboard', () => {
   });
 
   it('shows empty-state content for a successful response with no inventory or activity', async () => {
-    apiClient.get.mockResolvedValue({ data: { success: true, data: {} } });
+    apiClient.get.mockResolvedValue({ data: { success: true, data: emptyStoreDashboard } });
 
     renderDashboard();
 
@@ -85,10 +94,19 @@ describe('Store Manager dashboard', () => {
     expect(screen.getAllByText('No store activity yet')).toHaveLength(3);
   });
 
+  it('rejects an incomplete successful response instead of presenting fake empty data', async () => {
+    apiClient.get.mockResolvedValue({ data: { success: true, data: {} } });
+
+    renderDashboard();
+
+    expect(await screen.findByText('Unable to load Store dashboard')).toBeInTheDocument();
+    expect(screen.queryByText('No inventory data available')).not.toBeInTheDocument();
+  });
+
   it('shows an API error and retries the dashboard request', async () => {
     apiClient.get
       .mockRejectedValueOnce({ response: { status: 500 } })
-      .mockResolvedValueOnce({ data: { success: true, data: {} } });
+      .mockResolvedValueOnce({ data: { success: true, data: emptyStoreDashboard } });
 
     renderDashboard();
 

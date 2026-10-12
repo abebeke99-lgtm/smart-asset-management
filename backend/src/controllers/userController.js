@@ -15,6 +15,7 @@ const { isValidUsername } = require('../utils/validators');
 
 const roles = ROLE_NAMES;
 const STORE_MANAGER_ACCOUNT_LIMIT = 8;
+const collegeScopedRoles = new Set(['college', 'college_manager', 'department_head']);
 const normalizeLookupValue = (value) => String(value ?? '').trim().toLowerCase();
 const isValidPhone = (value) => {
   const phone = String(value || '').trim();
@@ -317,12 +318,22 @@ const createUser = async (req, res) => {
         error.statusCode = 400;
         throw error;
       }
+      if (college?.status && college.status !== 'active') {
+        const error = new Error('Select an active college');
+        error.statusCode = 400;
+        throw error;
+      }
 
       const departmentRecord = departmentId
         ? await Department.findByPk(departmentId, { transaction })
         : null;
       if (departmentId && !departmentRecord) {
         const error = new Error('Department not found');
+        error.statusCode = 400;
+        throw error;
+      }
+      if (departmentRecord?.status && departmentRecord.status !== 'active') {
+        const error = new Error('Select an active department');
         error.statusCode = 400;
         throw error;
       }
@@ -335,6 +346,16 @@ const createUser = async (req, res) => {
       const resolvedCollegeId = collegeId ?? (departmentRecord?.collegeId ? Number(departmentRecord.collegeId) : null);
       if (resolvedCollegeId && !college && !await College.findByPk(resolvedCollegeId, { transaction })) {
         const error = new Error('Department college not found');
+        error.statusCode = 400;
+        throw error;
+      }
+      if (collegeScopedRoles.has(role) && !resolvedCollegeId) {
+        const error = new Error('A college is required for this role');
+        error.statusCode = 400;
+        throw error;
+      }
+      if (role === 'department_head' && !departmentId) {
+        const error = new Error('A department is required for this role');
         error.statusCode = 400;
         throw error;
       }
@@ -396,12 +417,32 @@ const updateUser = async (req, res) => {
     const requestedRole = input.role || input.roleId;
     const role = requestedRole ? normalizeRoleForStorage(requestedRole) : requestedRole;
     if (requestedRole && !roles.includes(role)) return res.status(400).json({ success: false, message: 'Invalid user role' });
-    const departmentRecord = input.departmentId ? await Department.findByPk(input.departmentId) : null;
+    const parseOptionalId = (value, label) => {
+      if (value === undefined || value === null || value === '') return { id: null, error: null };
+      const idString = String(value).trim();
+      if (!/^[1-9]\d*$/.test(idString) || !Number.isSafeInteger(Number(idString))) {
+        return { id: null, error: `${label} ID must be a positive integer` };
+      }
+      return { id: Number(idString), error: null };
+    };
+    const collegeResult = parseOptionalId(input.collegeId, 'College');
+    if (collegeResult.error) return res.status(400).json({ success: false, message: collegeResult.error });
+    const departmentResult = parseOptionalId(input.departmentId, 'Department');
+    if (departmentResult.error) return res.status(400).json({ success: false, message: departmentResult.error });
+    const collegeId = input.collegeId === undefined ? user.collegeId : collegeResult.id;
+    const departmentId = input.departmentId === undefined ? user.departmentId : departmentResult.id;
+    const departmentRecord = departmentId ? await Department.findByPk(departmentId) : null;
     if (input.departmentId && !departmentRecord) return res.status(400).json({ success: false, message: 'Department not found' });
-    if (departmentRecord && (input.collegeId ?? user.collegeId) && Number(departmentRecord.collegeId) !== Number(input.collegeId ?? user.collegeId)) {
+    if (departmentRecord?.status && departmentRecord.status !== 'active') return res.status(400).json({ success: false, message: 'Select an active department' });
+    if (departmentRecord && collegeId && Number(departmentRecord.collegeId) !== Number(collegeId)) {
       return res.status(400).json({ success: false, message: 'Selected department does not belong to the selected college' });
     }
-    if (input.collegeId && !(await College.findByPk(input.collegeId))) return res.status(400).json({ success: false, message: 'College not found' });
+    const college = collegeId ? await College.findByPk(collegeId) : null;
+    if (collegeId && !college) return res.status(400).json({ success: false, message: 'College not found' });
+    if (college?.status && college.status !== 'active') return res.status(400).json({ success: false, message: 'Select an active college' });
+    const resolvedCollegeId = collegeId ?? (departmentRecord?.collegeId ? Number(departmentRecord.collegeId) : null);
+    if (collegeScopedRoles.has(role || user.role) && !resolvedCollegeId) return res.status(400).json({ success: false, message: 'A college is required for this role' });
+    if ((role || user.role) === 'department_head' && !departmentId) return res.status(400).json({ success: false, message: 'A department is required for this role' });
     const department = departmentRecord?.name || input.department;
     const fullName = input.fullName ?? input.name ?? full_name;
     if (Object.prototype.hasOwnProperty.call(input, 'username') && !String(input.username || '').trim()) {
@@ -434,8 +475,8 @@ const updateUser = async (req, res) => {
       ...(input.username ? { username: input.username } : {}),
       ...(input.email !== undefined ? { email: input.email || null } : {}),
       ...(role ? { role } : {}),
-      ...(input.departmentId !== undefined ? { departmentId: input.departmentId || null, department: department || '' } : input.department !== undefined ? { department: input.department || '' } : {}),
-      ...(input.collegeId !== undefined ? { collegeId: input.collegeId || null } : {}),
+      ...(input.departmentId !== undefined ? { departmentId: departmentId || null, department: department || '' } : input.department !== undefined ? { department: input.department || '' } : {}),
+      ...(input.collegeId !== undefined || (departmentId && input.departmentId !== undefined) ? { collegeId: resolvedCollegeId } : {}),
       ...(fullName !== undefined ? { fullName: String(fullName).trim() } : {}),
       ...(input.phone !== undefined || phone_number !== undefined ? { phone: input.phone ?? phone_number ?? '' } : {}),
       ...(nextStatus !== undefined ? { status: nextStatus, active: nextStatus === 'active' } : input.active !== undefined || is_active !== undefined ? { active: input.active ?? is_active, status: (input.active ?? is_active) ? 'active' : 'inactive' } : {})
@@ -443,7 +484,10 @@ const updateUser = async (req, res) => {
     if (Object.prototype.hasOwnProperty.call(input, 'password')) {
       updates.password = await bcrypt.hash(input.password, 10);
     }
-    if (updates.username !== user.username || updates.email !== user.email) {
+    if (
+      (Object.prototype.hasOwnProperty.call(updates, 'username') && updates.username !== user.username)
+      || (Object.prototype.hasOwnProperty.call(updates, 'email') && updates.email !== user.email)
+    ) {
       const duplicate = await findDuplicateUser({ username: updates.username || user.username, email: updates.email !== undefined ? updates.email : user.email, excludeUserId: user.id });
       if (duplicate) return res.status(409).json({ success: false, message: 'Username or email is already in use' });
     }
