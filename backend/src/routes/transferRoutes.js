@@ -15,12 +15,12 @@ const {
   AuditLog,
   Notification,
 } = require('../models');
-const { requireAuth, requireRole, requirePermission } = require('../middlewares/auth');
+const { requireAuth, requireRole, requirePermission, requireAnyPermission } = require('../middlewares/auth');
 const { resolveCollegeScope } = require('../middlewares/organizationScope');
 const { createAuditLog } = require('../services/auditLogService');
 
 const router = express.Router();
-const transferRoles = ['admin', 'ict_officer', 'store_manager', 'college'];
+const transferRoles = ['admin', 'ict_officer', 'store_manager'];
 const activeStatuses = ['Requested', 'Approved', 'Ready', 'In Transit', 'Pending', 'In Progress'];
 const validStatuses = ['Requested', 'Approved', 'Rejected', 'In Transit', 'Received', 'Cancelled'];
 const conditions = new Set(['excellent', 'good', 'fair', 'poor', 'damaged']);
@@ -196,7 +196,7 @@ const userScope = (req) => req.organizationScope?.collegeId && req.user.role !==
   ? { collegeId: req.organizationScope.collegeId }
   : {};
 
-router.get('/', requireAuth, requireRole(...transferRoles), requirePermission('assets.view'), resolveTransferOrganizationScope, async (req, res, next) => {
+router.get('/', requireAuth, requireRole(...transferRoles), requireAnyPermission('assets.view', 'ict.assets.view'), resolveTransferOrganizationScope, async (req, res, next) => {
   try {
     const page = Math.max(1, Number.parseInt(req.query.page || '1', 10) || 1);
     const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit || '20', 10) || 20));
@@ -275,7 +275,7 @@ router.get('/', requireAuth, requireRole(...transferRoles), requirePermission('a
   }
 });
 
-router.get('/:id', requireAuth, requireRole(...transferRoles), requirePermission('assets.view'), resolveTransferOrganizationScope, async (req, res, next) => {
+router.get('/:id', requireAuth, requireRole(...transferRoles), requireAnyPermission('assets.view', 'ict.assets.view'), resolveTransferOrganizationScope, async (req, res, next) => {
   try {
     const transfer = await Transfer.findByPk(req.params.id, { include: transferInclude });
     if (!transfer) return res.status(404).json({ success: false, message: 'Transfer not found.' });
@@ -292,7 +292,7 @@ router.get('/:id', requireAuth, requireRole(...transferRoles), requirePermission
   }
 });
 
-router.post('/', requireAuth, requireRole(...transferRoles), requirePermission('assets.transfer'), resolveTransferOrganizationScope, async (req, res, next) => {
+router.post('/', requireAuth, requireRole(...transferRoles), requireAnyPermission('assets.transfer', 'ict.assets.transfer'), resolveTransferOrganizationScope, async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
     const assetId = Number(req.body.assetId ?? req.body.asset_id);
@@ -485,8 +485,10 @@ router.post('/', requireAuth, requireRole(...transferRoles), requirePermission('
 
 const requireTransferActionPermission = (req, res, next) => {
   const status = String(req.body.status || '').trim();
-  const permission = ['Approved', 'Rejected'].includes(status) ? 'assets.transfer.approve' : 'assets.transfer';
-  return requirePermission(permission)(req, res, next);
+  if (['Approved', 'Rejected'].includes(status)) {
+    return requirePermission('assets.transfer.approve')(req, res, next);
+  }
+  return requireAnyPermission('assets.transfer', 'ict.assets.transfer')(req, res, next);
 };
 
 router.patch('/:id', requireAuth, requireRole(...transferRoles), requireTransferActionPermission, resolveTransferOrganizationScope, async (req, res, next) => {

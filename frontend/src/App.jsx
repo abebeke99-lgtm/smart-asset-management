@@ -2337,8 +2337,8 @@ const DashboardOverview = () => (
   </div>
 );
 
-const DashboardLayout = ({ header, sidebar, sidebarOpen, onCloseSidebar, className = '', bodyClassName = '', children }) => {
-  if (header === undefined && sidebar === undefined && children === undefined) {
+const DashboardLayout = ({ header, className = '', bodyClassName = '', children }) => {
+  if (header === undefined && children === undefined) {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <Outlet />
@@ -2350,10 +2350,6 @@ const DashboardLayout = ({ header, sidebar, sidebarOpen, onCloseSidebar, classNa
     <div className={`dashboard-layout ${className}`.trim()}>
       {header}
       <div className={`dashboard-layout-body ${bodyClassName}`.trim()}>
-        {sidebarOpen && sidebar && (
-          <button type="button" className="dashboard-layout-backdrop" onClick={onCloseSidebar} aria-label="Close navigation menu" />
-        )}
-        {sidebar}
         {children}
       </div>
     </div>
@@ -2623,53 +2619,6 @@ function AppContent() {
     if (!window.matchMedia(DASHBOARD_MOBILE_QUERY).matches) return;
     if (isSidebarOpen) closeSidebar();
     else setIsSidebarOpen(true);
-  }, [closeSidebar, isSidebarOpen]);
-
-  const t = getShellTranslations(language);
-  const translateLabel = (value) => translateNavigationLabel(language, value);
-  const translateCollegeNavigation = (value) => translateNavigationLabel(language, value);
-
-  useEffect(() => {
-    document.body.className = theme;
-  }, [theme]);
-
-  useEffect(() => {
-    const routeChanged = previousRouteRef.current !== location.pathname;
-    previousRouteRef.current = location.pathname;
-    if (routeChanged && isSidebarOpen) closeSidebar();
-  }, [closeSidebar, location.pathname, isSidebarOpen]);
-
-  useEffect(() => {
-    if (!isSidebarOpen) return undefined;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const focusableElements = sidebarRef.current?.querySelectorAll(
-      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-    );
-    const firstFocusableElement = focusableElements?.[0];
-    const lastFocusableElement = focusableElements?.[focusableElements.length - 1];
-    firstFocusableElement?.focus();
-
-    const handleDrawerKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        closeSidebar();
-      } else if (event.key === 'Tab' && firstFocusableElement && lastFocusableElement) {
-        if (event.shiftKey && document.activeElement === firstFocusableElement) {
-          event.preventDefault();
-          lastFocusableElement.focus();
-        } else if (!event.shiftKey && document.activeElement === lastFocusableElement) {
-          event.preventDefault();
-          firstFocusableElement.focus();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleDrawerKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleDrawerKeyDown);
-      document.body.style.overflow = previousOverflow;
-    };
   }, [closeSidebar, isSidebarOpen]);
 
   useEffect(() => {
@@ -3080,140 +3029,13 @@ function AppContent() {
         className="role-dashboard-layout"
         bodyClassName={`authenticated-shell${isStoreManager ? ' store-manager-body' : ''}`}
         header={dashboardHeaderVisible ? <DashboardHeader /> : null}
-        sidebarOpen={showDashboardSidebar && isSidebarOpen}
-        onCloseSidebar={closeSidebar}
-        sidebar={showDashboardSidebar ? (
-          <aside
-            ref={sidebarRef}
-            id="application-navigation-panel"
-            className={`admin-sidebar${isStoreManager ? ' store-manager-sidebar' : ''}${sidebarRole === 'ict_officer' ? ' ict-sidebar' : ''}${showCollegeNavigation ? ' college-manager-sidebar' : ''}${sidebarRole === 'department_head' ? ' department-head-sidebar' : ''}${isSidebarOpen ? ' is-mobile-open' : ''}`}
-          >
-            <nav className="admin-sidebar-nav" aria-label="Application navigation" onClick={(event) => {
-              if (event.target.closest?.('a')) closeSidebar();
-            }}>
-              {showCollegeNavigation && (
-                <>
-                  <div className="sidebar-subsection-label">{translateCollegeNavigation('MAIN')}</div>
-                  {collegeOverviewItems.map((item) => renderSidebarLink(item))}
-                  <div className="sidebar-subsection-label">{translateCollegeNavigation('COLLEGE MANAGEMENT')}</div>
-                  {collegeManagementItems.map((item) => renderSidebarLink(item))}
-                  <div className="sidebar-subsection-label">{translateCollegeNavigation('ASSET MANAGEMENT')}</div>
-                  {collegeAssetItems.map((item) => renderSidebarLink(item))}
-                  <div className="sidebar-subsection-label">{translateCollegeNavigation('OPERATIONS')}</div>
-                  {collegeOperationsItems.map((item) => renderSidebarLink(item))}
-                  <div className="sidebar-subsection-label">{translateCollegeNavigation('REPORTS & ANALYTICS')}</div>
-                  {collegeAnalyticsItems.map((item) => renderSidebarLink(item))}
-                </>
-              )}
-              {sidebarRole === 'department_head' && departmentManagerSections.map((section) => (
-                <React.Fragment key={section.label}>
-                  <div className="sidebar-subsection-label">{translateLabel(section.label)}</div>
-                  {section.items.map((item) => renderSidebarLink(item))}
-                </React.Fragment>
-              ))}
-              {showDepartmentsNavigation && sidebarRole !== 'department_head' && renderCollapsibleSection(
-                'DEPARTMENT HEAD',
-                departmentsNavOpen,
-                setDepartmentsNavOpen,
-                isDepartmentDean
-                  ? <><div className="sidebar-subsection-label">Overview</div>{departmentDeanItems.map((item) => renderSidebarLink(item, true))}</>
-                  : isDepartmentStaff
-                    ? <><div className="sidebar-subsection-label">Department Assets</div>{departmentStaffItems.map((item) => renderSidebarLink(item, true))}</>
-                    : <><div className="sidebar-subsection-label">Department Workspace</div>{renderSidebarLink({ path: '/department', label: 'Dashboard', icon: LayoutDashboard }, true)}</>,
-                'departments'
-              )}
-              {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'finance' && (
-                <>
-                  {Object.keys(financeSectionLabels).map((sectionKey) => {
-                    const visibleItems = sidebarItems.filter((item) => item.section === sectionKey || (sectionKey === 'Overview' && item.path === '/finance'));
-                    if (!visibleItems.length) return null;
-                    return (
-                      <React.Fragment key={sectionKey}>
-                        <div className="sidebar-section-label">{translateLabel(financeSectionLabels[sectionKey])}</div>
-                        {visibleItems.map((item) => renderSidebarLink(item))}
-                      </React.Fragment>
-                    );
-                  })}
-                </>
-              )}
-              {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'infrastructure' && (
-                <>
-                  {['OVERVIEW','ASSET MANAGEMENT','BUILDINGS & FACILITIES','MAINTENANCE & WORK ORDERS','ENERGY & FUEL','TRACKING','REQUESTS','ANALYTICS','DOCUMENTS','SYSTEM'].map((sectionName) => {
-                    const visibleItems = sidebarItems.filter((item) => item.section === sectionName || (sectionName === 'OVERVIEW' && item.path === '/infrastructure'));
-                    if (!visibleItems.length) return null;
-                    return (
-                      <React.Fragment key={sectionName}>
-                        <div className="sidebar-section-label">{translateLabel(sectionName)}</div>
-                        {visibleItems.map((item) => renderSidebarLink(item))}
-                      </React.Fragment>
-                    );
-                  })}
-                </>
-              )}
-              {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'ict_officer' && (
-                <>
-                  {['DASHBOARD', 'ASSET MANAGEMENT', 'TECHNICAL OPERATIONS', 'MAINTENANCE', 'TRACKING', 'ANALYTICS & REPORTS', 'SYSTEM'].map((sectionName) => {
-                    const visibleItems = sidebarItems.filter((item) => item.section === sectionName);
-                    if (!visibleItems.length) return null;
-                    return (
-                      <React.Fragment key={sectionName}>
-                        <div className="sidebar-section-label">{translateLabel(sectionName)}</div>
-                        {visibleItems.map((item) => renderSidebarLink(item))}
-                      </React.Fragment>
-                    );
-                  })}
-                </>
-              )}
-              {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'store_manager' && (
-                <>
-                  {['OVERVIEW', 'INVENTORY MANAGEMENT', 'ASSET OPERATIONS', 'ACCOUNT MANAGEMENT'].map((sectionName) => {
-                    const visibleItems = sidebarItems.filter((item) => item.section === sectionName);
-                    if (!visibleItems.length) return null;
-                    return (
-                      <React.Fragment key={sectionName}>
-                        <div className="sidebar-section-label">{translateLabel(sectionName)}</div>
-                        {visibleItems.map((item) => renderSidebarLink(item))}
-                      </React.Fragment>
-                    );
-                  })}
-                  {renderSidebarLink(sidebarItems.find((item) => item.path === '/store/notifications'))}
-                </>
-              )}
-              {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole === 'maintenance' && (
-                <>
-                  {['Dashboard', 'OPERATIONS', 'PREVENTIVE', 'RESOURCES', 'QUALITY', 'ANALYTICS'].map((sectionName) => {
-                    const visibleItems = sidebarItems.filter((item) => item.section === sectionName || (sectionName === 'Dashboard' && item.path === '/maintenance'));
-                    if (!visibleItems.length) return null;
-                    return (
-                      <React.Fragment key={sectionName}>
-                        <div className="sidebar-section-label">{translateLabel(sectionName)}</div>
-                        {visibleItems.map((item) => renderSidebarLink(item))}
-                      </React.Fragment>
-                    );
-                  })}
-                </>
-              )}
-              {!showCollegeNavigation && !showDepartmentsNavigation && sidebarRole !== 'finance' && sidebarRole !== 'infrastructure' && sidebarRole !== 'ict_officer' && sidebarRole !== 'store_manager' && sidebarRole !== 'maintenance' && sidebarItems.map((item, index) => {
-                const previousItem = sidebarItems[index - 1];
-                return (
-                  <React.Fragment key={item.path}>
-                    {sidebarRole === 'admin' && item.group !== previousItem?.group && <div className="sidebar-section-label">{translateLabel(item.group)}</div>}
-                    {renderSidebarLink(item)}
-                  </React.Fragment>
-                );
-              })}
-            </nav>
-
-          </aside>
-        ) : null}
       >
         {showDashboardSidebar && (
           <div className="dashboard-mobile-page-heading">
-            <MenuToggleButton toggleRef={sidebarToggleRef} onToggle={toggleSidebar} isOpen={isSidebarOpen} controls="application-navigation-panel" />
             <h1>{dashboardPageTitle}</h1>
           </div>
         )}
-        <main id="admin-main-content" className={`admin-main-content app-main-content${isStoreManager ? ' store-manager-main' : ''}${hideSidebar ? ' create-asset-main' : ''}`} style={hideSidebar || !showDashboardSidebar ? { width: '100%', maxWidth: '100%', marginLeft: 0 } : undefined}>
+        <main id="admin-main-content" className={`admin-main-content app-main-content${isStoreManager ? ' store-manager-main' : ''}${hideSidebar ? ' create-asset-main' : ''}`} style={{ width: '100%', maxWidth: '100%', marginLeft: 0 }}>
           {children}
         </main>
       </DashboardLayout>

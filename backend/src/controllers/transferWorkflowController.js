@@ -13,6 +13,30 @@ const transitions = {
   Received: [], Rejected: [], Cancelled: [],
 };
 const number = () => `TR-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+const statusAliases = {
+  requested: ['Requested', 'Pending'],
+  pending: ['Requested', 'Pending'],
+  approved: ['Approved', 'Ready', 'In Transit', 'In Progress'],
+  ready: ['Ready'],
+  'in transit': ['In Transit', 'In Progress'],
+  received: ['Received', 'Completed'],
+  completed: ['Received', 'Completed'],
+  rejected: ['Rejected'],
+  cancelled: ['Cancelled'],
+  canceled: ['Cancelled'],
+  rejected_cancelled: ['Rejected', 'Cancelled'],
+  'rejected-cancelled': ['Rejected', 'Cancelled'],
+  'rejected/cancelled': ['Rejected', 'Cancelled'],
+  'rejected / cancelled': ['Rejected', 'Cancelled'],
+};
+const parseDateFilter = (value, endOfDay = false) => {
+  const input = String(value || '').trim();
+  if (!input) return null;
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(input)
+    ? `${input}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`
+    : input);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
 const notifyTransferUsers = async ({ transfer, userIds, senderId, status, transaction }) => {
   const recipients = [...new Set(userIds.map(Number).filter((id) => Number.isInteger(id) && id > 0 && id !== Number(senderId)))];
   if (!recipients.length) return;
@@ -59,12 +83,24 @@ const scopeWhere = (req) => {
   if (req.organizationScope.departmentId) {
     return {
       [Op.and]: [
-        { [Op.or]: [{ sourceDepartmentId: req.organizationScope.departmentId }, { destinationDepartmentId: req.organizationScope.departmentId }] },
-        ...(req.organizationScope.collegeId ? [{ [Op.or]: [{ sourceCollegeId: req.organizationScope.collegeId }, { destinationCollegeId: req.organizationScope.collegeId }] }] : []),
+        { [Op.or]: [
+          { sourceDepartmentId: req.organizationScope.departmentId },
+          { destinationDepartmentId: req.organizationScope.departmentId },
+          { '$Asset.departmentId$': req.organizationScope.departmentId },
+        ] },
+        ...(req.organizationScope.collegeId ? [{ [Op.or]: [
+          { sourceCollegeId: req.organizationScope.collegeId },
+          { destinationCollegeId: req.organizationScope.collegeId },
+          { '$Asset.collegeId$': req.organizationScope.collegeId },
+        ] }] : []),
       ],
     };
   }
-  return { [Op.or]: [{ sourceCollegeId: req.organizationScope.collegeId }, { destinationCollegeId: req.organizationScope.collegeId }] };
+  return { [Op.or]: [
+    { sourceCollegeId: req.organizationScope.collegeId },
+    { destinationCollegeId: req.organizationScope.collegeId },
+    { '$Asset.collegeId$': req.organizationScope.collegeId },
+  ] };
 };
 const normalize = (item) => {
   const data = item.toJSON();
@@ -73,8 +109,16 @@ const normalize = (item) => {
   const approver = item.Approver || {};
   const dispatcher = item.Dispatcher || {};
   const receiver = item.Receiver || {};
+  const status = ({
+    pending: 'Requested',
+    completed: 'Received',
+    'in progress': 'In Transit',
+    cancelled: 'Cancelled',
+    canceled: 'Cancelled',
+  })[String(data.status || '').trim().toLowerCase()] || data.status;
   return {
     ...data,
+    status,
     transfer_number: item.transferNumber,
     source_department_id: item.sourceDepartmentId,
     destination_department_id: item.destinationDepartmentId,
@@ -103,15 +147,96 @@ const transferInclude = [
 const listTransfers = async (req, res, next) => {
   try {
     const where = { ...scopeWhere(req) };
-    if (req.query.status) where.status = String(req.query.status);
-    if (req.query.search) where.transferNumber = { [Op.like]: `%${String(req.query.search).trim()}%` };
-    const [rows, counts] = await Promise.all([
-      Transfer.findAll({ where, include: transferInclude, order: [['createdAt', 'DESC']] }),
-      Promise.all(['Requested', 'Approved', 'Ready', 'In Transit', 'Received', 'Rejected', 'Cancelled'].map(async (status) => [status, await Transfer.count({ where: { ...scopeWhere(req), status } })])),
+    const requestedStatus = String(req.query.status || '').trim();
+    const matchingStatuses = statusAliases[requestedStatus.toLowerCase()];
+    if (matchingStatuses) where.status = { [Op.in]: matchingStatuses };
+    else if (requestedStatus && !['all', 'all statuses', 'all_statuses'].includes(requestedStatus.toLowerCase())) where.status = requestedStatus;
+
+    const search = String(req.query.search || req.query.q || '').trim();
+    if (search) {
+      const searchClause = {
+        [Op.or]: [
+          { transferNumber: { [Op.like]: `%${search}%` } },
+          { sourceDepartment: { [Op.like]: `%${search}%` } },
+          { destinationDepartment: { [Op.like]: `%${search}%` } },
+          { currentLocation: { [Op.like]: `%${search}%` } },
+          { newLocation: { [Op.like]: `%${search}%` } },
+          { '$Asset.name$': { [Op.like]: `%${search}%` } },
+          { '$Asset.assetCode$': { [Op.like]: `%${search}%` } },
+          { '$Asset.serialNumber$': { [Op.like]: `%${search}%` } },
+        ],
+      };
+      where[Op.and] = [...(where[Op.and] || []), searchClause];
+    }
+
+    const dateFrom = String(req.query.dateFrom || req.query.date_from || '').trim();
+    const dateTo = String(req.query.dateTo || req.query.date_to || '').trim();
+    const from = parseDateFilter(dateFrom);
+    const to = parseDateFilter(dateTo, true);
+    if (dateFrom && !from) return res.status(400).json({ success: false, message: 'Invalid start date filter.' });
+    if (dateTo && !to) return res.status(400).json({ success: false, message: 'Invalid end date filter.' });
+    if (from || to) {
+      const dateWhere = {};
+      if (from) dateWhere[Op.gte] = from;
+      if (to) dateWhere[Op.lte] = to;
+      where.transferDate = dateWhere;
+    }
+
+    const page = Math.max(1, Number.parseInt(req.query.page || '1', 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit || '20', 10) || 20));
+    const summaryWhere = scopeWhere(req);
+    const countForStatuses = (statuses) => Transfer.count({
+      where: { ...summaryWhere, status: { [Op.in]: statuses } },
+      include: transferInclude,
+      distinct: true,
+    });
+    const [result, total, pending, approved, received, rejectedCancelled, requested, legacyPending, exactApproved, ready, inTransit, rejected, cancelled] = await Promise.all([
+      Transfer.findAndCountAll({
+        where,
+        include: transferInclude,
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset: (page - 1) * limit,
+        distinct: true,
+      }),
+      Transfer.count({ where: summaryWhere, include: transferInclude, distinct: true }),
+      countForStatuses(['Requested', 'Pending']),
+      countForStatuses(['Approved', 'Ready', 'In Transit', 'In Progress']),
+      countForStatuses(['Received', 'Completed']),
+      countForStatuses(['Rejected', 'Cancelled']),
+      countForStatuses(['Requested']),
+      countForStatuses(['Pending']),
+      countForStatuses(['Approved']),
+      countForStatuses(['Ready']),
+      countForStatuses(['In Transit', 'In Progress']),
+      countForStatuses(['Rejected']),
+      countForStatuses(['Cancelled']),
     ]);
-    const summary = Object.fromEntries(counts);
-    summary.total = counts.reduce((total, [, count]) => total + count, 0);
-    res.json({ success: true, data: rows.map(normalize), transfers: rows.map(normalize), summary });
+    const pages = Math.max(1, Math.ceil(result.count / limit));
+    const transfers = result.rows.map(normalize);
+    const summary = {
+      total,
+      pending,
+      approved,
+      received,
+      rejectedCancelled,
+      Requested: requested,
+      Pending: legacyPending,
+      Approved: exactApproved,
+      Ready: ready,
+      'In Transit': inTransit,
+      Received: received,
+      Rejected: rejected,
+      Cancelled: cancelled,
+      'Rejected / Cancelled': rejectedCancelled,
+    };
+    return res.json({
+      success: true,
+      data: transfers,
+      transfers,
+      pagination: { page, limit, total: result.count, pages, totalPages: pages },
+      summary,
+    });
   } catch (error) { next(error); }
 };
 
@@ -130,10 +255,18 @@ const getTransfer = async (req, res, next) => {
 const createTransfer = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
-    const assetId = Number(req.body.asset_id);
-    const destinationDepartmentId = Number(req.body.destination_department_id);
-    const { destination_location: destinationLocation, reason } = req.body;
+    const assetId = Number(req.body.asset_id ?? req.body.assetId);
+    const destinationDepartmentId = Number(req.body.destination_department_id ?? req.body.destinationDepartmentId);
+    const destinationLocation = req.body.destination_location ?? req.body.destinationLocation;
+    const reason = req.body.reason ?? req.body.transfer_reason;
+    const transferDate = req.body.transfer_date ?? req.body.transferDate;
+    const expectedReturnDate = req.body.expected_return_date ?? req.body.expectedReturnDate;
+    const notes = req.body.notes ?? req.body.description;
+    const parsedTransferDate = parseDateFilter(transferDate);
+    const parsedExpectedReturnDate = parseDateFilter(expectedReturnDate);
     if (!Number.isSafeInteger(assetId) || assetId < 1 || !Number.isSafeInteger(destinationDepartmentId) || destinationDepartmentId < 1 || !String(destinationLocation || '').trim() || !String(reason || '').trim()) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Asset, destination department, destination location, and reason are required' }); }
+    if (transferDate && !parsedTransferDate) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Transfer date must be a valid date.' }); }
+    if (expectedReturnDate && !parsedExpectedReturnDate) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Expected return date must be a valid date.' }); }
     const assetWhere = req.organizationScope.departmentId
       ? { id: assetId, departmentId: req.organizationScope.departmentId, ...(req.organizationScope.collegeId ? { collegeId: req.organizationScope.collegeId } : {}) }
       : { id: assetId, collegeId: req.organizationScope.collegeId };
@@ -145,8 +278,10 @@ const createTransfer = async (req, res, next) => {
     const duplicate = await Transfer.findOne({ where: { assetId, status: { [Op.in]: ACTIVE } }, transaction, lock: transaction.LOCK.UPDATE });
     if (duplicate) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Asset already has an active transfer' }); }
     const now = new Date();
+    let transferNumber = number();
+    while (await Transfer.findOne({ where: { transferNumber }, transaction, lock: transaction.LOCK.UPDATE })) transferNumber = number();
     const row = await Transfer.create({
-      transferNumber: number(),
+      transferNumber,
       assetId: asset.id,
       sourceCampusId: asset.campusId || null,
       sourceCollegeId: asset.collegeId,
@@ -161,7 +296,9 @@ const createTransfer = async (req, res, next) => {
       currentLocation: asset.location || '',
       newLocation: String(destinationLocation).trim(),
       transferReason: String(reason).trim(),
-      transferDate: now,
+      transferDate: parsedTransferDate || now,
+      expectedReturnDate: parsedExpectedReturnDate,
+      notes: String(notes || '').trim(),
       requestedBy: req.user.id,
       createdBy: req.user.id,
       requestedAt: now,
@@ -178,8 +315,21 @@ const createTransfer = async (req, res, next) => {
       details: { ip: req.ip || req.headers['x-forwarded-for'] || null, sessionId: req.sessionID || req.user.sessionId || req.user.jti || null },
       transaction,
     });
-    const adminUsers = await User.findAll({ where: { role: 'admin', active: true }, attributes: ['id'], transaction });
-    await notifyTransferUsers({ transfer: row, userIds: adminUsers.map((user) => user.id), senderId: req.user.id, status: row.status, transaction });
+    const reviewers = await User.findAll({
+      where: {
+        active: true,
+        [Op.or]: [
+          { role: 'admin' },
+          {
+            role: 'college_manager',
+            ...(req.organizationScope?.collegeId ? { collegeId: req.organizationScope.collegeId } : {}),
+          },
+        ],
+      },
+      attributes: ['id'],
+      transaction,
+    });
+    await notifyTransferUsers({ transfer: row, userIds: reviewers.map((user) => user.id), senderId: req.user.id, status: row.status, transaction });
     await transaction.commit();
     try { await notifyDepartmentHeads(row, row.status, req.user.id); } catch (notificationError) { console.error('Department transfer notification failed:', notificationError.message); }
     res.status(201).json({ success: true, message: 'Transfer request created', data: normalize(row) });

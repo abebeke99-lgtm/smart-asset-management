@@ -13,6 +13,12 @@
   margin-bottom: 24px;
 }
 
+.scoped-transfer-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .scoped-transfer-page .college-breadcrumb {
   margin-bottom: 8px;
   color: #64748b;
@@ -79,6 +85,14 @@
   border: 1px solid #e6ebf2;
   border-radius: 12px;
   background: #fff;
+}
+
+.scoped-transfer-filters {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(210px, 1.6fr) repeat(3, minmax(125px, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
 }
 
 .scoped-transfer-page label {
@@ -189,6 +203,14 @@
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 5px 18px rgb(15 23 42 / 4%);
+}
+
+.scoped-transfer-form--modal {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .scoped-transfer-form-heading {
@@ -392,6 +414,21 @@
   gap: 6px;
 }
 
+.scoped-transfer-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 2px;
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+.scoped-transfer-pagination > div {
+  display: flex;
+  gap: 8px;
+}
+
 .scoped-transfer-modal-backdrop {
   position: fixed;
   z-index: 1000;
@@ -412,6 +449,40 @@
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 20px 55px rgb(15 23 42 / 22%);
+}
+
+.scoped-transfer-create-modal {
+  width: min(780px, 100%);
+}
+
+.scoped-transfer-modal-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.scoped-transfer-modal-heading h2 {
+  margin: 0;
+  color: #1e2d46;
+  font-size: 1.2rem;
+}
+
+.scoped-transfer-modal-heading p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+.scoped-transfer-destination-note {
+  grid-column: 1 / -1;
+  padding: 12px 14px;
+  border: 1px solid #dce6f6;
+  border-radius: 9px;
+  background: #f5f8fe;
+  color: #344256;
+  font-size: 0.88rem;
 }
 
 .scoped-transfer-modal-grid {
@@ -438,6 +509,10 @@
   .scoped-transfer-stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .scoped-transfer-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 600px) {
@@ -448,6 +523,14 @@
   .scoped-transfer-page .scoped-transfer-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .scoped-transfer-header-actions {
+    width: 100%;
+  }
+
+  .scoped-transfer-header-actions .scoped-transfer-button {
+    flex: 1;
   }
 
   .scoped-transfer-stats {
@@ -465,6 +548,10 @@
     flex-direction: column;
   }
 
+  .scoped-transfer-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .scoped-transfer-form {
     grid-template-columns: minmax(0, 1fr);
     padding: 16px;
@@ -477,6 +564,20 @@
   .scoped-transfer-modal-backdrop {
     align-items: flex-end;
     padding: 10px;
+  }
+
+  .scoped-transfer-modal {
+    max-height: 94vh;
+    padding: 18px;
+  }
+
+  .scoped-transfer-modal-heading {
+    align-items: flex-start;
+  }
+
+  .scoped-transfer-pagination {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .scoped-transfer-modal {

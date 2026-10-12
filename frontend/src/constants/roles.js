@@ -63,6 +63,7 @@ export const ROLE_PERMISSIONS = {
     'college.assets.view',
     'college.assets.history.view',
     'college.locations.view',
+    'college.transfers.view',
     'college.staff.view',
     'college.requests.view',
     'college.approvals.view',

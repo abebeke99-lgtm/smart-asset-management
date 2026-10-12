@@ -38,6 +38,9 @@ const normalizeTransfer = (entry) => {
   return {
     ...item,
     id: item.id,
+    transferNumber: item.transferNumber || item.transfer_number || item.id,
+    sourceDepartmentId: item.sourceDepartmentId || item.source_department_id || '',
+    destinationDepartmentId: item.destinationDepartmentId || item.destination_department_id || '',
     assetId: item.assetId || item.asset_id || item.asset?.id || '',
     assetName,
     assetCode,
@@ -60,7 +63,6 @@ const getTransferListEndpoint = (scope, userRole) => {
   if (scope === 'college') return '/api/college/transfers';
   if (scope === 'department' && userRole === 'department_head') return '/api/department-head/transfers';
   if (scope === 'department') return '/api/department/transfers';
-  if (userRole === 'department_head') return '/api/department/transfers';
   return '/api/transfers';
 };
 
@@ -186,7 +188,15 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
   });
   const [status, setStatus] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [searchText, setSearchText] = useState('');
+  const [searchFilter, setSearchFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
+  const [summary, setSummary] = useState(null);
   const [selectedTransfer, setSelectedTransfer] = useState(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [processingId, setProcessingId] = useState(null);
@@ -207,17 +217,36 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
     setLoading(true); setError('');
     try {
       if (isTransferType) {
+        const transferParams = {
+          page,
+          limit: 20,
+          ...(statusFilter ? { status: statusFilter } : {}),
+          ...(searchFilter ? { search: searchFilter } : {}),
+          ...(dateFrom ? { dateFrom } : {}),
+          ...(dateTo ? { dateTo } : {}),
+        };
         const [transferResponse, assetResponse, departmentResponse] = await Promise.all([
-          apiClient.get(getTransferListEndpoint(scope, role), { params: statusFilter ? { status: statusFilter } : {} }),
-          getAssetEndpoint(scope) === '/api/assets'
-            ? getAllAssets(apiClient)
-            : apiClient.get(getAssetEndpoint(scope), { params: { limit: 50 } }),
-          apiClient.get('/api/departments', { params: { limit: 500 } }),
+          apiClient.get(getTransferListEndpoint(scope, role), { params: transferParams }),
+          getAllAssets(apiClient),
+          apiClient.get('/api/departments', { params: { limit: 100, page: 1 } }),
         ]);
 
-        setRows(parseListData(transferResponse.data).map(normalizeTransfer));
-        setAssets(Array.isArray(assetResponse) ? assetResponse : parseListData(assetResponse.data));
-        setDepartments(parseListData(departmentResponse.data));
+        const transferPayload = transferResponse.data || {};
+        setRows(parseListData(transferPayload).map(normalizeTransfer));
+        setPagination(transferPayload.pagination || { page, pages: 1, total: parseListData(transferPayload).length });
+        setSummary(transferPayload.summary || null);
+        setAssets(assetResponse);
+        const firstPageDepartments = parseListData(departmentResponse.data);
+        const departmentPages = Math.max(1, Number(departmentResponse.data?.pagination?.pages) || 1);
+        const remainingDepartmentPages = await Promise.all(
+          Array.from({ length: departmentPages - 1 }, (_, index) =>
+            apiClient.get('/api/departments', { params: { limit: 100, page: index + 2 } })
+          )
+        );
+        setDepartments([
+          ...firstPageDepartments,
+          ...remainingDepartmentPages.flatMap((response) => parseListData(response.data)),
+        ]);
       } else {
         const [workflowResponse, assetsResponse] = await Promise.all([
           apiClient.get(base, { params: { status: status || undefined } }),
@@ -233,7 +262,7 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
     } finally {
       setLoading(false);
     }
-  }, [base, config.title, isTransferType, role, scope, status, statusFilter]);
+  }, [base, config.title, dateFrom, dateTo, isTransferType, page, role, scope, searchFilter, status, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -255,39 +284,62 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
     return assets.find((asset) => Number(asset.id) === Number(form.assetId)) || null;
   }, [assets, form.assetId]);
 
+  const eligibleAssets = useMemo(() => assets.filter((asset) => ![
+    'disposed', 'retired', 'deleted', 'soft-deleted', 'lost', 'missing', 'under-maintenance',
+    'in-maintenance', 'maintenance', 'testing', 'in-transfer',
+  ].includes(String(asset.status || '').toLowerCase().replace(/[_ ]/g, '-'))), [assets]);
+
+  const activeDepartments = useMemo(
+    () => departments.filter((department) => String(department.status || '').toLowerCase() === 'active'),
+    [departments]
+  );
+
   const statusSummary = useMemo(() => {
-    const summary = { total: rows.length, pending: 0, approved: 0, rejected: 0, received: 0 };
-    rows.forEach((row) => {
-      const currentStatus = String(row.status || '').toLowerCase();
-      if (currentStatus.includes('pending') || currentStatus.includes('requested')) summary.pending += 1;
-      if (currentStatus.includes('approved')) summary.approved += 1;
-      if (currentStatus.includes('rejected') || currentStatus.includes('cancelled')) summary.rejected += 1;
-      if (currentStatus === 'received') summary.received += 1;
-    });
-    return summary;
-  }, [rows]);
+    if (summary) {
+      return {
+        total: summary.total || 0,
+        pending: summary.pending || 0,
+        approved: summary.approved || 0,
+        rejected: summary.rejectedCancelled || 0,
+        received: summary.received || 0,
+      };
+    }
+    return { total: pagination.total || 0, pending: 0, approved: 0, rejected: 0, received: 0 };
+  }, [pagination.total, summary]);
 
   const createTransfer = async (event) => {
     event.preventDefault();
-    if (!form.assetId || !form.destinationDepartmentId || !form.newLocation || !form.transferReason.trim()) {
+    if (saving) return;
+    if (!form.assetId || !form.destinationDepartmentId || !form.newLocation.trim() || !form.transferReason.trim()) {
       setError('Asset, destination department, destination location and reason are required.');
       return;
     }
 
-    const asset = assets.find((item) => Number(item.id) === Number(form.assetId));
+    const asset = eligibleAssets.find((item) => Number(item.id) === Number(form.assetId));
     if (!asset) {
       setError('The selected asset could not be validated.');
       return;
     }
 
-    const department = departments.find((item) => Number(item.id) === Number(form.destinationDepartmentId));
+    const department = activeDepartments.find((item) => Number(item.id) === Number(form.destinationDepartmentId));
     if (!department) {
       setError('Please select a valid destination department.');
       return;
     }
 
-    if (role === 'college' && asset.department && String(asset.department).trim() !== String(user?.department || '').trim()) {
-      setError('This asset does not belong to your authorized department scope.');
+    const sourceDepartmentId = asset.departmentId ?? asset.department_id;
+    const currentLocation = asset.location || '';
+    if (
+      sourceDepartmentId &&
+      Number(sourceDepartmentId) === Number(department.id) &&
+      currentLocation.trim().toLowerCase() === String(form.newLocation).trim().toLowerCase()
+    ) {
+      setError('Choose a destination different from the asset’s current location.');
+      return;
+    }
+
+    if (role !== 'department_head' || scope !== 'department') {
+      setError('You are not authorized to create transfers from this view.');
       return;
     }
 
@@ -298,8 +350,11 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
         destination_department_id: Number(form.destinationDepartmentId),
         destination_location: String(form.newLocation).trim(),
         reason: String(form.transferReason).trim(),
+        transfer_date: form.transferDate,
+        notes: String(form.notes || '').trim(),
       });
       setSuccessMessage('Transfer created successfully.');
+      setCreateModalOpen(false);
       setForm({
         assetId: '',
         destinationDepartmentId: '',
@@ -308,7 +363,8 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
         transferDate: new Date().toISOString().slice(0, 10),
         notes: '',
       });
-      await load();
+      if (page !== 1) setPage(1);
+      else await load();
     } catch (createError) {
       setError(createError.response?.data?.message || 'Unable to create the transfer.');
     } finally {
@@ -368,24 +424,28 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
 
   const exportTransfers = () => {
     if (!rows.length) return;
-    const worksheet = XLSX.utils.json_to_sheet(rows.map((row) => ({
-      [translate('Transfer ID')]: row.id,
-      [translate('Asset')]: row.assetName,
-      [translate('Asset Code')]: row.assetCode,
-      [translate('Serial Number')]: row.serialNumber,
-      [translate('From Department')]: row.fromDepartment,
-      [translate('From Location')]: row.fromLocation,
-      [translate('To Department')]: row.toDepartment,
-      [translate('To Location')]: row.toLocation,
-      [translate('Requested By')]: row.requestedBy,
-      [translate('Approved By')]: row.approvedBy,
-      [translate('Transfer Date')]: row.transferDate,
-      [translate('Reason')]: row.transferReason,
-      [translate('Status')]: translate(row.status),
-    })));
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, translate('Transfers'));
-    XLSX.writeFile(workbook, 'asset-transfers.xlsx');
+    try {
+      const worksheet = XLSX.utils.json_to_sheet(rows.map((row) => ({
+        [translate('Transfer ID')]: row.transferNumber || row.id,
+        [translate('Asset')]: row.assetName,
+        [translate('Asset Code')]: row.assetCode,
+        [translate('Serial Number')]: row.serialNumber,
+        [translate('From Department')]: row.fromDepartment,
+        [translate('From Location')]: row.fromLocation,
+        [translate('To Department')]: row.toDepartment,
+        [translate('To Location')]: row.toLocation,
+        [translate('Requested By')]: row.requestedBy,
+        [translate('Approved By')]: row.approvedBy,
+        [translate('Transfer Date')]: row.transferDate,
+        [translate('Reason')]: row.transferReason,
+        [translate('Status')]: translate(row.status),
+      })));
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, translate('Transfers'));
+      XLSX.writeFile(workbook, 'asset-transfers.xlsx');
+    } catch (exportError) {
+      setError(exportError.message || 'Unable to export the visible transfers.');
+    }
   };
 
   if (!isTransferType) {
@@ -413,9 +473,20 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
         <div>
           <div className="college-breadcrumb">{translate(scope === 'college' ? 'College' : 'Department')} / {translate('Transfers')}</div>
           <h1>{translate('Asset Transfers')}</h1>
-          <p>Track and manage transfers within your authorized department.</p>
+          <p>Track and manage transfers within your authorized department</p>
         </div>
-        <button type="button" className="scoped-transfer-button scoped-transfer-button--secondary" onClick={exportTransfers} disabled={!rows.length || loading}>{translate('Export Excel')}</button>
+        <div className="scoped-transfer-header-actions">
+          {scope === 'department' && role === 'department_head' && (
+            <button
+              type="button"
+              className="scoped-transfer-button scoped-transfer-button--primary"
+              onClick={() => { setError(''); setCreateModalOpen(true); }}
+            >
+              New Transfer
+            </button>
+          )}
+          <button type="button" className="scoped-transfer-button scoped-transfer-button--secondary" onClick={exportTransfers} disabled={!rows.length || loading}>{translate('Export Excel')}</button>
+        </div>
       </header>
 
       <div className="scoped-transfer-stats" aria-label="Transfer summary">
@@ -427,59 +498,47 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
       </div>
 
       <div className="scoped-transfer-toolbar">
-        <label htmlFor="transfer-status-filter">Status
-        <select id="transfer-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-          <option value="">{translate('All statuses')}</option>
-          <option value="Requested">{translate('Requested')}</option>
-          <option value="Approved">{translate('Approved')}</option>
-          <option value="Ready">{translate('Ready')}</option>
-          <option value="In Transit">{translate('In Transit')}</option>
-          <option value="Received">{translate('Received')}</option>
-          <option value="Rejected">{translate('Rejected')}</option>
-          <option value="Cancelled">{translate('Cancelled')}</option>
-        </select>
-        </label>
+        <form className="scoped-transfer-filters" onSubmit={(event) => {
+          event.preventDefault();
+          if (dateFrom && dateTo && dateFrom > dateTo) {
+            setError('The start date must be on or before the end date.');
+            return;
+          }
+          setError('');
+          setPage(1);
+          setSearchFilter(searchText.trim());
+        }}>
+          <label htmlFor="transfer-search">Search
+            <input
+              id="transfer-search"
+              type="search"
+              placeholder="Transfer number, asset code or name"
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+            />
+          </label>
+          <label htmlFor="transfer-status-filter">Status
+            <select id="transfer-status-filter" value={statusFilter} onChange={(event) => { setPage(1); setStatusFilter(event.target.value); }}>
+              <option value="">{translate('All statuses')}</option>
+              <option value="Requested">{translate('Requested')}</option>
+              <option value="Approved">{translate('Approved')}</option>
+              <option value="Ready">{translate('Ready')}</option>
+              <option value="In Transit">{translate('In Transit')}</option>
+              <option value="Received">{translate('Received')}</option>
+              <option value="Rejected">{translate('Rejected')}</option>
+              <option value="Cancelled">{translate('Cancelled')}</option>
+            </select>
+          </label>
+          <label htmlFor="transfer-date-from">From date
+            <input id="transfer-date-from" type="date" value={dateFrom} onChange={(event) => { setPage(1); setDateFrom(event.target.value); }} />
+          </label>
+          <label htmlFor="transfer-date-to">To date
+            <input id="transfer-date-to" type="date" value={dateTo} onChange={(event) => { setPage(1); setDateTo(event.target.value); }} />
+          </label>
+          <button type="submit" className="scoped-transfer-button scoped-transfer-button--primary">Search</button>
+        </form>
         <button type="button" className="scoped-transfer-button scoped-transfer-button--secondary" onClick={load} disabled={loading}>{translate('Refresh')}</button>
       </div>
-
-      {scope === 'department' && <form className="scoped-transfer-form" onSubmit={createTransfer}>
-        <div className="scoped-transfer-form-heading"><div><h2>Create a transfer</h2><p>Provide the asset and destination details to submit a transfer request.</p></div></div>
-        <label htmlFor="transfer-asset">Asset
-        <select id="transfer-asset" required value={form.assetId} onChange={(event) => setForm((previous) => ({ ...previous, assetId: event.target.value }))}>
-          <option value="">{translate('Select real asset')}</option>
-          {assets.map((asset) => (
-            <option key={asset.id} value={asset.id}>{asset.name} ({asset.assetCode || asset.id})</option>
-          ))}
-        </select>
-        </label>
-
-        {selectedAsset && (
-          <div className="scoped-transfer-asset-summary">
-            <div><strong>{translate('Current Department')}</strong><span>{selectedAsset.department || '—'}</span></div>
-            <div><strong>{translate('Current Location')}</strong><span>{selectedAsset.location || '—'}</span></div>
-            <div><strong>{translate('Asset Status')}</strong><span>{translate(selectedAsset.status) || '—'}</span></div>
-          </div>
-        )}
-
-        <label htmlFor="transfer-destination-department">Destination department
-        <select id="transfer-destination-department" required value={form.destinationDepartmentId} onChange={(event) => setForm((previous) => ({ ...previous, destinationDepartmentId: event.target.value }))}>
-          <option value="">{translate('Select destination department')}</option>
-          {departments.map((department) => (
-            <option key={department.id} value={department.id}>{department.name || department.departmentName}</option>
-          ))}
-        </select>
-        </label>
-
-        <label htmlFor="transfer-destination-location">{translate('Destination location')}<input id="transfer-destination-location" required value={form.newLocation} onChange={(event) => setForm((previous) => ({ ...previous, newLocation: event.target.value }))} /></label>
-        <label htmlFor="transfer-date">Transfer date<input id="transfer-date" type="date" value={form.transferDate} onChange={(event) => setForm((previous) => ({ ...previous, transferDate: event.target.value }))} /></label>
-        <label className="scoped-transfer-form-wide" htmlFor="transfer-reason">{translate('Transfer reason / notes')}<textarea id="transfer-reason" required rows="3" value={form.transferReason} onChange={(event) => setForm((previous) => ({ ...previous, transferReason: event.target.value }))} /></label>
-        <label className="scoped-transfer-form-wide" htmlFor="transfer-notes">{translate('Additional notes')}<textarea id="transfer-notes" rows="2" value={form.notes} onChange={(event) => setForm((previous) => ({ ...previous, notes: event.target.value }))} /></label>
-
-        <div className="scoped-transfer-form-actions">
-          <button type="submit" className="scoped-transfer-button scoped-transfer-button--primary" disabled={saving}>{saving ? translate('Submitting') : translate('Create Transfer')}</button>
-          <button type="button" className="scoped-transfer-button scoped-transfer-button--secondary" onClick={() => setForm({ assetId: '', destinationDepartmentId: '', newLocation: '', transferReason: '', transferDate: new Date().toISOString().slice(0, 10), notes: '' })}>{translate('Clear')}</button>
-        </div>
-      </form>}
 
       {error && <div className="scoped-transfer-alert scoped-transfer-alert--error" role="alert">{error}</div>}
       {successMessage && <div className="scoped-transfer-alert scoped-transfer-alert--success" role="status">{successMessage}</div>}
@@ -487,23 +546,26 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
       {loading ? (
         <div className="scoped-transfer-loading" role="status"><span />{translate('Loading transfer records...')}</div>
       ) : rows.length === 0 ? (
-        <div className="scoped-transfer-empty"><h2>{translate('No transfer records found.')}</h2><p>New transfer requests will appear here.</p></div>
+        <div className="scoped-transfer-empty"><h2>{translate('No transfer records found.')}</h2><p>New transfer requests will appear here</p></div>
       ) : (
         <div className="scoped-transfer-table-wrap">
           <table className="college-table scoped-transfer-table">
             <thead>
               <tr>
+                <th>Transfer #</th>
                 <th>{translate('Asset')}</th>
                 <th>{translate('Status')}</th>
                 <th>{translate('Current → Destination')}</th>
                 <th>{translate('Reason')}</th>
                 <th>{translate('Date')}</th>
+                <th>{translate('Requested By')}</th>
                 <th>{translate('Actions')}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id}>
+                  <td>{row.transferNumber || row.id}</td>
                   <td>{row.assetName || translate('Unknown')}</td>
                   <td>
                     <span className={`scoped-transfer-badge scoped-transfer-badge--${(row.status || 'pending').toLowerCase().replace(/\s+/g, '-')}`}>
@@ -516,19 +578,20 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
                   </td>
                   <td>{row.transferReason || '—'}</td>
                   <td>{row.transferDate ? new Date(row.transferDate).toLocaleDateString() : '—'}</td>
+                  <td>{row.requestedBy || '—'}</td>
                   <td>
                     <div className="scoped-transfer-row-actions">
                       <button className="scoped-transfer-button scoped-transfer-button--secondary" type="button" onClick={() => openTransferDetails(row)} disabled={processingId === row.id}>{translate('View')}</button>
-                      {scope === 'college' && row.status === 'Requested' && (
+                      {scope === 'college' && ['requested', 'pending'].includes(String(row.status).toLowerCase()) && (
                         <button className="scoped-transfer-button scoped-transfer-button--primary" type="button" onClick={() => handleAction(row, 'approve')} disabled={processingId === row.id}>{translate('Approve')}</button>
                       )}
-                      {scope === 'college' && row.status === 'Requested' && (
+                      {scope === 'college' && ['requested', 'pending'].includes(String(row.status).toLowerCase()) && (
                         <button className="scoped-transfer-button scoped-transfer-button--danger" type="button" onClick={() => handleAction(row, 'reject')} disabled={processingId === row.id}>{translate('Reject')}</button>
                       )}
-                      {scope === 'department' && role === 'department_head' && ['Requested', 'Approved'].includes(row.status) && (
+                      {scope === 'department' && role === 'department_head' && ['requested', 'approved'].includes(String(row.status).toLowerCase()) && (
                         <button className="scoped-transfer-button scoped-transfer-button--danger" type="button" onClick={() => handleAction(row, 'cancel')} disabled={processingId === row.id}>Cancel</button>
                       )}
-                      {scope === 'department' && role === 'department_head' && row.status === 'In Transit' && Number(row.destinationDepartmentId ?? row.destination_department_id) === Number(user?.departmentId ?? user?.department_id) && (
+                      {scope === 'department' && role === 'department_head' && String(row.status).toLowerCase() === 'in transit' && Number(row.destinationDepartmentId) === Number(user?.departmentId ?? user?.department_id) && (
                         <button className="scoped-transfer-button scoped-transfer-button--primary" type="button" onClick={() => handleAction(row, 'receive')} disabled={processingId === row.id}>Confirm receipt</button>
                       )}
                     </div>
@@ -537,6 +600,84 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {!loading && pagination.pages > 1 && (
+        <nav className="scoped-transfer-pagination" aria-label="Transfer pages">
+          <span>Page {pagination.page || page} of {pagination.pages} · {pagination.total} transfers</span>
+          <div>
+            <button type="button" className="scoped-transfer-button scoped-transfer-button--secondary" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Previous</button>
+            <button type="button" className="scoped-transfer-button scoped-transfer-button--secondary" onClick={() => setPage((current) => Math.min(Number(pagination.pages) || 1, current + 1))} disabled={page >= Number(pagination.pages)}>Next</button>
+          </div>
+        </nav>
+      )}
+
+      {createModalOpen && scope === 'department' && role === 'department_head' && (
+        <div className="scoped-transfer-modal-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !saving) setCreateModalOpen(false);
+        }}>
+          <section className="scoped-transfer-modal scoped-transfer-create-modal" role="dialog" aria-modal="true" aria-labelledby="transfer-create-title">
+            <div className="scoped-transfer-modal-heading">
+              <div>
+                <h2 id="transfer-create-title">New Transfer</h2>
+                <p>Choose an eligible asset and an active destination department.</p>
+              </div>
+              <button className="scoped-transfer-button scoped-transfer-button--secondary" type="button" onClick={() => setCreateModalOpen(false)} disabled={saving}>Close</button>
+            </div>
+            <form className="scoped-transfer-form scoped-transfer-form--modal" onSubmit={createTransfer}>
+              <label htmlFor="transfer-asset">Asset
+                <select id="transfer-asset" required value={form.assetId} onChange={(event) => setForm((previous) => ({ ...previous, assetId: event.target.value }))}>
+                  <option value="">{translate('Select real asset')}</option>
+                  {eligibleAssets.map((asset) => (
+                    <option key={asset.id} value={asset.id}>{asset.name} ({asset.assetCode || asset.id})</option>
+                  ))}
+                </select>
+              </label>
+              <label htmlFor="transfer-destination-department">Destination department
+                <select id="transfer-destination-department" required value={form.destinationDepartmentId} onChange={(event) => setForm((previous) => ({ ...previous, destinationDepartmentId: event.target.value }))}>
+                  <option value="">{translate('Select destination department')}</option>
+                  {activeDepartments.map((department) => (
+                    <option key={department.id} value={department.id}>{department.name || department.departmentName}</option>
+                  ))}
+                </select>
+              </label>
+
+              {selectedAsset && (
+                <div className="scoped-transfer-asset-summary">
+                  <div><strong>Source department</strong><span>{selectedAsset.department?.name || selectedAsset.department || user?.department || '—'}</span></div>
+                  <div><strong>Source location</strong><span>{selectedAsset.location || '—'}</span></div>
+                  <div><strong>Asset status</strong><span>{translate(selectedAsset.status) || '—'}</span></div>
+                </div>
+              )}
+              {form.destinationDepartmentId && (
+                <div className="scoped-transfer-destination-note">
+                  Destination: {activeDepartments.find((department) => Number(department.id) === Number(form.destinationDepartmentId))?.name || '—'}
+                </div>
+              )}
+
+              <label htmlFor="transfer-destination-location">{translate('Destination location')}
+                <input id="transfer-destination-location" required value={form.newLocation} onChange={(event) => setForm((previous) => ({ ...previous, newLocation: event.target.value }))} />
+              </label>
+              <label htmlFor="transfer-date">{translate('Transfer date')}
+                <input id="transfer-date" type="date" required value={form.transferDate} onChange={(event) => setForm((previous) => ({ ...previous, transferDate: event.target.value }))} />
+              </label>
+              <label htmlFor="transfer-requester">Requested by
+                <input id="transfer-requester" value={user?.fullName || user?.full_name || user?.username || 'Current user'} readOnly />
+              </label>
+              <label className="scoped-transfer-form-wide" htmlFor="transfer-reason">{translate('Transfer reason / notes')}
+                <textarea id="transfer-reason" required rows="3" value={form.transferReason} onChange={(event) => setForm((previous) => ({ ...previous, transferReason: event.target.value }))} />
+              </label>
+              <label className="scoped-transfer-form-wide" htmlFor="transfer-notes">{translate('Additional notes')}
+                <textarea id="transfer-notes" rows="2" value={form.notes} onChange={(event) => setForm((previous) => ({ ...previous, notes: event.target.value }))} />
+              </label>
+              {error && <div className="scoped-transfer-alert scoped-transfer-alert--error scoped-transfer-form-wide" role="alert">{error}</div>}
+              <div className="scoped-transfer-form-actions">
+                <button type="submit" className="scoped-transfer-button scoped-transfer-button--primary" disabled={saving || !eligibleAssets.length || !activeDepartments.length}>{saving ? translate('Submitting') : translate('Create Transfer')}</button>
+                <button type="button" className="scoped-transfer-button scoped-transfer-button--secondary" onClick={() => setCreateModalOpen(false)} disabled={saving}>Cancel</button>
+              </div>
+            </form>
+          </section>
         </div>
       )}
 
