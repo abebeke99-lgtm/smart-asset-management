@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { requireRole, requirePermission } = require('../middlewares/auth');
+const { DEFAULT_ROLE_PERMISSIONS } = require('../constants/rolePermissions');
 
 const makeResponse = () => ({
   status(code) {
@@ -59,4 +60,18 @@ test('requirePermission allows valid college manager permissions', () => {
   });
 
   assert.equal(nextCalled, true, 'authorized college manager should pass the permission guard');
+});
+
+test('college role can view locations without receiving location management access', () => {
+  const req = { user: { role: 'college', active: true } };
+  const res = makeResponse();
+  let nextCalled = false;
+
+  requirePermission('college.locations.view')(req, res, () => {
+    nextCalled = true;
+  });
+
+  assert.equal(nextCalled, true, 'college role should pass the location view permission guard');
+  assert.equal(DEFAULT_ROLE_PERMISSIONS.college.includes('college.locations.view'), true);
+  assert.equal(DEFAULT_ROLE_PERMISSIONS.college.includes('college.locations.manage'), false, 'college role must not receive location management access');
 });
