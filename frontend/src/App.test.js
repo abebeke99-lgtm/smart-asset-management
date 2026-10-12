@@ -573,7 +573,6 @@ describe('College Manager sidebar specification', () => {
       name: 'collegeOperationsItems',
       heading: 'OPERATIONS',
       items: [
-        ['/college/maintenance', 'Maintenance Oversight'],
         ['/college/rfid', 'RFID / QR Tracking'],
         ['/college/verification', 'Asset Verification'],
       ],
@@ -589,7 +588,7 @@ describe('College Manager sidebar specification', () => {
     },
   ];
 
-  it('renders only the 18 approved items under the five approved sections', () => {
+  it('renders only the 17 approved items under the five approved sections', () => {
     const actualSections = collegeSections.map(({ name, heading }) => {
       const sectionSource = appSource.match(new RegExp(`const ${name} = \\[([\\s\\S]*?)\\];`))?.[1] || '';
       const items = [...sectionSource.matchAll(/\{ path: '([^']+)', label: '([^']+)'/g)]
@@ -597,7 +596,7 @@ describe('College Manager sidebar specification', () => {
       return { heading, items };
     });
     expect(actualSections).toEqual(collegeSections.map(({ heading, items }) => ({ heading, items })));
-    expect(actualSections.flatMap(({ items }) => items)).toHaveLength(18);
+    expect(actualSections.flatMap(({ items }) => items)).toHaveLength(17);
     for (const { heading } of collegeSections) {
       expect(appSource).toContain(`translateCollegeNavigation('${heading}')`);
     }

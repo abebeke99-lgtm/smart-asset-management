@@ -1,15 +1,22 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import apiClient from '../../services/apiClient';
 import { UiProvider, useLanguage } from '../../contexts/UiContext';
+import { useAuth } from '../../contexts/AuthContext';
 import CollegeAssets from './CollegeAssets';
 
 jest.mock('../../services/apiClient', () => ({
   __esModule: true,
   default: {
-    get: jest.fn()
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn()
   }
+}));
+
+jest.mock('../../contexts/AuthContext', () => ({
+  useAuth: jest.fn()
 }));
 
 function LanguageSwitch() {
@@ -24,6 +31,9 @@ function LanguageSwitch() {
 beforeEach(() => {
   localStorage.setItem('language', 'en');
   apiClient.get.mockReset();
+  apiClient.post.mockReset();
+  apiClient.put.mockReset();
+  useAuth.mockReturnValue({ user: null, hasPermission: () => false });
   apiClient.get.mockResolvedValue({
     data: {
       data: [{
@@ -93,4 +103,114 @@ test('translates asset details and preserves the requested asset id', async () =
   expect(await screen.findByRole('dialog')).toHaveTextContent('Asset details');
   expect(screen.getByText('Serial Number')).toBeInTheDocument();
   expect(apiClient.get).toHaveBeenCalledWith('/api/college/assets/3');
+});
+
+test('college managers can register an asset with scoped reference data and refresh the list', async () => {
+  useAuth.mockReturnValue({
+    user: { role: 'college_manager' },
+    hasPermission: (permission) => permission === 'college.assets.create'
+  });
+  apiClient.get.mockImplementation((url) => {
+    if (url.endsWith('/registration-options')) {
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            college: { id: 4, name: 'Engineering College' },
+            categories: [{ id: 2, name: 'Laboratory Equipment' }],
+            departments: [{ id: 9, name: 'Physics' }],
+            custodians: [{ id: 15, name: 'Alemu Bekele' }]
+          }
+        }
+      });
+    }
+    return Promise.resolve({
+      data: {
+        data: [{ id: 3, assetCode: 'MAU-003', name: 'Laboratory Microscope', category: 'Laboratory Equipment' }],
+        summary: { total: 1 },
+        filters: { categories: [], statuses: [], conditions: [], locations: [], assignmentStatuses: [], departments: [] },
+        pagination: { page: 1, limit: 20, total: 1, pages: 1 },
+        college: { id: 4, name: 'Engineering College' }
+      }
+    });
+  });
+  apiClient.post.mockResolvedValue({ data: { success: true, data: { id: 30 } } });
+
+  render(
+    <UiProvider>
+      <MemoryRouter><CollegeAssets /></MemoryRouter>
+    </UiProvider>
+  );
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Register asset' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Register asset' });
+  fireEvent.change(within(dialog).getByLabelText(/Asset code/), { target: { value: 'ENG-001' } });
+  fireEvent.change(within(dialog).getByLabelText(/Asset name/), { target: { value: 'New microscope' } });
+  fireEvent.change(within(dialog).getByLabelText(/Category/), { target: { value: 'Laboratory Equipment' } });
+  fireEvent.change(within(dialog).getByLabelText(/Department/), { target: { value: '9' } });
+  fireEvent.change(within(dialog).getByLabelText(/^Location/), { target: { value: 'Physics Lab' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save asset' }));
+
+  await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/api/college/assets', expect.objectContaining({
+    assetCode: 'ENG-001',
+    name: 'New microscope',
+    category: 'Laboratory Equipment',
+    departmentId: 9,
+    location: 'Physics Lab',
+    quantity: 1
+  })));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitFor(() => expect(apiClient.get).toHaveBeenCalledTimes(3));
+});
+
+test('college managers with update permission edit an existing asset through the scoped endpoint', async () => {
+  useAuth.mockReturnValue({
+    user: { role: 'college_manager' },
+    hasPermission: (permission) => permission === 'college.assets.update'
+  });
+  apiClient.get.mockImplementation((url) => Promise.resolve(url.endsWith('/registration-options')
+    ? { data: { data: { college: { id: 4, name: 'Engineering College' }, categories: [{ id: 2, name: 'Laboratory Equipment' }], departments: [], custodians: [] } } }
+    : { data: { data: [{ id: 3, assetCode: 'MAU-003', name: 'Laboratory Microscope', category: 'Laboratory Equipment', purchaseDate: '2024-01-01', purchasePrice: 1200 }], summary: {}, filters: {}, pagination: { page: 1, limit: 20, total: 1, pages: 1 } } }));
+  apiClient.put.mockResolvedValue({ data: { success: true, data: { id: 3 } } });
+
+  render(
+    <UiProvider>
+      <MemoryRouter><CollegeAssets /></MemoryRouter>
+    </UiProvider>
+  );
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit Laboratory Microscope' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Edit asset' });
+  fireEvent.change(within(dialog).getByLabelText(/Asset name/), { target: { value: 'Updated microscope' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save asset' }));
+
+  await waitFor(() => expect(apiClient.put).toHaveBeenCalledWith('/api/college/assets/3', expect.objectContaining({
+    name: 'Updated microscope',
+    category: 'Laboratory Equipment',
+    purchaseDate: '2024-01-01'
+  })));
+});
+
+test('invalid list responses produce a visible error and Retry reloads the list', async () => {
+  apiClient.get
+    .mockResolvedValueOnce({ data: { data: { unexpected: true } } })
+    .mockResolvedValueOnce({
+      data: {
+        data: [],
+        summary: {},
+        filters: {},
+        pagination: { page: 1, limit: 20, total: 0, pages: 1 }
+      }
+    });
+
+  render(
+    <UiProvider>
+      <MemoryRouter><CollegeAssets /></MemoryRouter>
+    </UiProvider>
+  );
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('The server returned invalid asset data.');
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(await screen.findAllByText('No assets found')).toHaveLength(2);
+  expect(apiClient.get).toHaveBeenCalledTimes(2);
 });

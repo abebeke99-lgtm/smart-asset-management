@@ -1,12 +1,13 @@
 const express = require('express');
 const { requireAuth, requireActiveAccount, requireRole, requirePermission } = require('../middlewares/auth');
 const { requireCollegeManager, resolveCollegeScope } = require('../middlewares/organizationScope');
-const { getCollegeDashboard, getCollegeProfile, updateCollegeProfile, listCollegeDepartments, getCollegeDepartmentOverview, getCollegeDepartmentPerformance, getCollegeDepartmentReports, listCollegeStaff, getCollegeStaffMember, listCollegeAssets, getCollegeInventory, getCollegeAsset, listCollegeLocations, getCollegeLocation, createCollegeLocation, updateCollegeLocation, deleteCollegeLocation, createCollegeDepartment, updateCollegeDepartment, updateCollegeDepartmentStatus, deleteCollegeDepartment, getCollegeDepartmentDetails, listCollegeDepartmentStaff, listCollegeDepartmentAssets, listCollegeAssignments, listCollegeMaintenance, getCollegeMaintenance, listCollegeVerification, getCollegeReports, getCollegeAssetAnalytics, listCollegeRFIDTracking } = require('../controllers/collegeController');
+const { getCollegeDashboard, getCollegeProfile, updateCollegeProfile, listCollegeDepartments, getCollegeDepartmentOverview, getCollegeDepartmentPerformance, getCollegeDepartmentReports, listCollegeStaff, getCollegeStaffMember, listCollegeAssets, getCollegeInventory, getCollegeAssetRegistrationOptions, getCollegeAsset, listCollegeLocations, getCollegeLocation, createCollegeLocation, updateCollegeLocation, deleteCollegeLocation, createCollegeDepartment, updateCollegeDepartment, updateCollegeDepartmentStatus, deleteCollegeDepartment, getCollegeDepartmentDetails, listCollegeDepartmentStaff, listCollegeDepartmentAssets, listCollegeAssignments, listCollegeMaintenance, getCollegeMaintenance, listCollegeVerification, getCollegeReports, getCollegeAssetAnalytics, listCollegeRFIDTracking } = require('../controllers/collegeController');
 const { listRequests, getRequest, decideRequest, listCollegeRequests, getCollegeRequest, listCollegeDepartmentRequests } = require('../controllers/workspaceRequestController');
 const verification = require('../controllers/verificationController');
-const { getAssetHistory } = require('../controllers/assetController');
+const { getAssetHistory, createAsset, updateAsset } = require('../controllers/assetController');
 const { Asset } = require('../models');
-const { listAssetDocuments, uploadAssetDocument, deleteAssetDocument, downloadAssetDocument } = require('../controllers/assetExtendedController');
+const { listAssetDocuments, uploadAssetDocument, deleteAssetDocument, downloadAssetDocument, createAssetCustody, endCustody } = require('../controllers/assetExtendedController');
+const collegeAssetRequests = require('../controllers/collegeAssetRequestController');
 
 const router = express.Router();
 const { Op } = require('sequelize');
@@ -74,8 +75,15 @@ router.get('/departments/:id', requirePermission('college.departments.view'), ge
 router.put('/departments/:id', requirePermission('college.departments.manage'), updateCollegeDepartment);
 router.patch('/departments/:id/status', requirePermission('college.departments.manage'), updateCollegeDepartmentStatus);
 router.delete('/departments/:id', requirePermission('college.departments.manage'), deleteCollegeDepartment);
-router.get('/requests', requirePermission('college.requests.view'), listCollegeRequests);
-router.get('/requests/:id', requirePermission('college.requests.view'), getCollegeRequest);
+router.get('/requests', requirePermission('college.requests.view'), collegeAssetRequests.list);
+router.get('/requests/options', requireRole('college_manager'), requirePermission('college.requests.create'), collegeAssetRequests.options);
+router.post('/requests', requireRole('college_manager'), requirePermission('college.requests.create'), collegeAssetRequests.create);
+router.get('/requests/:id', requirePermission('college.requests.view'), collegeAssetRequests.detail);
+router.put('/requests/:id', requireRole('college_manager'), requirePermission('college.requests.update'), collegeAssetRequests.update);
+router.post('/requests/:id/cancel', requireRole('college_manager'), requirePermission('college.requests.cancel'), collegeAssetRequests.cancel);
+router.post('/requests/:id/approve', requireRole('college_manager'), requirePermission('college.approvals.approve'), collegeAssetRequests.decide('approve'));
+router.post('/requests/:id/reject', requireRole('college_manager'), requirePermission('college.approvals.reject'), collegeAssetRequests.decide('reject'));
+router.post('/requests/:id/request-changes', requireRole('college_manager'), requirePermission('college.approvals.request_changes'), collegeAssetRequests.decide('requestChanges'));
 router.get('/department-requests', requirePermission('college.requests.view'), listCollegeDepartmentRequests);
 router.get('/approvals', requirePermission('college.approvals.view'), listCollegeRequests);
 router.get('/approvals/:id', requirePermission('college.approvals.view'), getCollegeRequest);
@@ -222,6 +230,11 @@ router.get('/analytics/assets', requirePermission('college.analytics.view'), get
 router.get('/staff', requirePermission('college.staff.view'), listCollegeStaff);
 router.get('/staff/:id', requirePermission('college.staff.view'), getCollegeStaffMember);
 router.get('/assets', requirePermission('college.assets.view'), listCollegeAssets);
+router.get('/assets/registration-options', requirePermission('college.assets.view'), getCollegeAssetRegistrationOptions);
+router.post('/assets', requireRole('college_manager'), requirePermission('college.assets.create'), createAsset);
+router.put('/assets/:id', requireRole('college_manager'), requirePermission('college.assets.update'), updateAsset);
+router.post('/assets/:id/custody', requireRole('college_manager'), requirePermission('college.assignments.manage'), requireCollegeAsset, createAssetCustody);
+router.post('/assets/:id/custody/:custodyId/end', requireRole('college_manager'), requirePermission('college.assignments.manage'), requireCollegeAsset, endCustody);
 router.get('/inventory', requirePermission('college.inventory.view'), getCollegeInventory);
 router.get('/rfid', requirePermission('college.rfid.view'), listCollegeRFIDTracking);
 router.get('/assets/:id/history', requirePermission('college.history.view'), getAssetHistory);

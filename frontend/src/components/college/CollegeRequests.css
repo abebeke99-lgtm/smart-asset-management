@@ -24,7 +24,7 @@
 .college-requests-table-wrap td small { display: block; margin-top: 3px; color: #94a3b8; }
 .college-requests-badge { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; }
 .status-pending { background: #fef3c7; color: #92400e; }.status-approved { background: #dcfce7; color: #166534; }.status-rejected { background: #fee2e2; color: #991b1b; }.status-cancelled { background: #e2e8f0; color: #475569; }
-.priority-low { background: #dcfce7; color: #166534; }.priority-medium { background: #EAF2FA; color: #075985; }.priority-high, .priority-critical { background: #ffedd5; color: #9a3412; }
+.priority-low { background: #dcfce7; color: #166534; }.priority-medium { background: #EAF2FA; color: #075985; }.priority-high, .priority-urgent, .priority-critical { background: #ffedd5; color: #9a3412; }
 .college-requests-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 1px solid #bae6fd; border-radius: 7px; background: #F5F7FA; color: #0369a1; cursor: pointer; }
 .college-requests-empty, .college-requests-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 220px; padding: 24px; color: #64748b; text-align: center; }
 .college-requests-empty strong, .college-requests-state strong { color: #334155; }
@@ -38,3 +38,28 @@
 .college-requests-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }.college-requests-details div, .college-requests-description { padding: 12px; border-radius: 8px; background: #F5F7FA; }.college-requests-details span, .college-requests-description span { display: block; color: #64748b; font-size: 11px; text-transform: uppercase; }.college-requests-details strong { display: block; margin-top: 4px; overflow-wrap: anywhere; }.college-requests-description { margin-top: 10px; }.college-requests-description p { margin: 5px 0 0; line-height: 1.5; overflow-wrap: anywhere; }
 @media (max-width: 900px) { .college-requests-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .college-requests-page { padding: 16px; }.college-requests-heading { flex-direction: column; }.college-requests-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }.college-requests-toolbar label:not(.college-requests-search) { flex: 1 1 140px; }.college-requests-details { grid-template-columns: 1fr; } }
+.college-requests-header-actions, .college-requests-row-actions, .college-requests-form-actions, .college-requests-decision-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.college-requests-create, .college-requests-decision-actions button, .college-requests-form-actions button[type="submit"] { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #0369a1; border-radius: 8px; padding: 9px 13px; background: #0369a1; color: #fff; font-weight: 700; cursor: pointer; }
+.college-requests-row-actions { min-width: 130px; }
+.college-requests-text-button, .college-requests-edit-detail { border: 0; padding: 7px 9px; background: transparent; color: #0369a1; font-weight: 700; cursor: pointer; }
+.college-requests-text-button:disabled, .college-requests-decision-actions button:disabled { cursor: not-allowed; opacity: .55; }
+.college-requests-form-modal { width: min(840px, 100%); }
+.college-requests-form { display: grid; gap: 16px; }
+.college-requests-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.college-requests-form-field { display: grid; gap: 6px; color: #334155; font-size: 13px; font-weight: 700; }
+.college-requests-form-field input, .college-requests-form-field select, .college-requests-form-field textarea { width: 100%; min-height: 40px; padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #0f172a; font: inherit; }
+.college-requests-form-field textarea { resize: vertical; }
+.college-requests-form-wide { grid-column: 1 / -1; }
+.college-requests-form-actions { justify-content: flex-end; }
+.college-requests-form-actions button[type="button"] { border: 1px solid #cbd5e1; border-radius: 8px; padding: 9px 13px; background: #fff; color: #334155; font-weight: 700; cursor: pointer; }
+.college-requests-form-actions button:disabled { cursor: not-allowed; opacity: .55; }
+.college-requests-form-error { margin: 0; color: #b91c1c; }
+.college-requests-history { display: grid; gap: 10px; margin-top: 16px; }
+.college-requests-history h3 { margin: 0; }
+.college-requests-history article { padding: 12px; border-left: 3px solid #38bdf8; background: #f8fafc; }
+.college-requests-history article span { display: block; color: #64748b; font-size: 12px; }
+.college-requests-history article p { margin: 6px 0 0; color: #475569; }
+.college-requests-decision-actions { justify-content: flex-end; margin-top: 16px; }
+.college-requests-badge.status-under-review, .college-requests-badge.status-escalated { background: #e0f2fe; color: #075985; }
+.college-requests-badge.status-changes-requested { background: #fef3c7; color: #92400e; }
+@media (max-width: 620px) { .college-requests-form-grid { grid-template-columns: 1fr; }.college-requests-form-wide { grid-column: auto; }.college-requests-header-actions { width: 100%; }.college-requests-create, .college-requests-refresh { flex: 1; justify-content: center; } }

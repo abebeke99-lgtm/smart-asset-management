@@ -6,7 +6,7 @@ const sqlQualifiedColumn = (model, field) => col(`${model.name}.${snakeCaseColum
 // Sequelize does not apply attribute-to-column mapping inside `$association.attribute$` where paths,
 // so those paths must reference the real (snake_cased) database column.
 const joinedColumn = (association, field) => `$${association}.${snakeCaseColumn(field)}$`;
-const { Asset, User, Department, Maintenance, Approval, Transfer, AuditLog, College, AssetReturn, VerificationSession, VerificationItem, Assignment, Category, AssetMovement, RFIDLog, Campus, Building, Room } = require('../models');
+const { Asset, User, Department, Maintenance, Approval, Transfer, AuditLog, College, AssetReturn, VerificationSession, VerificationItem, Assignment, Category, AssetMovement, RFIDLog, Campus, Building, Room, AssetCustody } = require('../models');
 const { createAuditLog } = require('../services/auditLogService');
 
 const collegeScope = (req) => String(req.user?.department || '').trim();
@@ -1652,27 +1652,60 @@ const listCollegeStaff = async (req, res, next) => {
 const listCollegeAssets = async (req, res, next) => {
   try {
     const { page, limit, offset } = pagination(req.query);
-    const collegeId = req.organizationScope.collegeId;
+    const collegeId = Number(req.organizationScope?.collegeId);
+    if (!collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
     const where = { collegeId };
     for (const field of ['departmentId', 'category', 'status', 'location', 'condition']) if (req.query[field]) where[field] = req.query[field];
+    if (req.query.departmentId) {
+      const departmentId = Number(req.query.departmentId);
+      if (!Number.isInteger(departmentId) || departmentId < 1) return res.status(400).json({ success: false, message: 'Department is not part of your college' });
+      const department = await Department.findOne({ where: { id: departmentId, collegeId }, attributes: ['id'] });
+      if (!department) return res.status(400).json({ success: false, message: 'Department is not part of your college' });
+      where.departmentId = departmentId;
+    }
+    if (req.query.dateFrom || req.query.dateTo) {
+      const purchaseDate = {};
+      if (req.query.dateFrom) {
+        const dateFrom = new Date(req.query.dateFrom);
+        if (Number.isNaN(dateFrom.getTime())) return res.status(400).json({ success: false, message: 'Invalid start date' });
+        purchaseDate[Op.gte] = dateFrom;
+      }
+      if (req.query.dateTo) {
+        const dateTo = new Date(req.query.dateTo);
+        if (Number.isNaN(dateTo.getTime())) return res.status(400).json({ success: false, message: 'Invalid end date' });
+        dateTo.setUTCHours(23, 59, 59, 999);
+        purchaseDate[Op.lte] = dateTo;
+      }
+      if (purchaseDate[Op.gte] && purchaseDate[Op.lte] && purchaseDate[Op.gte] > purchaseDate[Op.lte]) {
+        return res.status(400).json({ success: false, message: 'Start date must not be after end date' });
+      }
+      where.purchaseDate = purchaseDate;
+    }
     const search = String(req.query.search || '').trim();
     if (search) where[Op.or] = [{ name: { [Op.like]: `%${search}%` } }, { assetCode: { [Op.like]: `%${search}%` } }, { serialNumber: { [Op.like]: `%${search}%` } }, { rfidTag: { [Op.like]: `%${search}%` } }, { manufacturer: { [Op.like]: `%${search}%` } }, { model: { [Op.like]: `%${search}%` } }, { department: { [Op.like]: `%${search}%` } }];
     const assignmentInclude = { model: Assignment, required: false, include: [{ model: User, required: false, attributes: ['id', 'fullName', 'username'] }] };
+    const custodyInclude = { model: AssetCustody, required: false, where: { status: 'active' }, include: [{ model: User, as: 'Custodian', required: false, attributes: ['id', 'fullName', 'username'] }] };
     if (req.query.assignmentStatus) { assignmentInclude.where = { status: req.query.assignmentStatus }; assignmentInclude.required = true; }
+    const allowedSortFields = new Set(['createdAt', 'updatedAt', 'purchaseDate', 'name', 'assetCode', 'status']);
+    const requestedSort = String(req.query.sortBy || 'updatedAt');
+    const sortBy = allowedSortFields.has(requestedSort) ? requestedSort : 'updatedAt';
+    const sortOrder = String(req.query.sortOrder || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
     const [result, allAssets, departments] = await Promise.all([
-      Asset.findAndCountAll({ where, include: [{ model: Department, as: 'DepartmentRecord', required: false, attributes: ['id', 'name'] }, assignmentInclude], distinct: true, order: [['updatedAt', 'DESC']], limit, offset }),
-      Asset.findAll({ where: { collegeId }, attributes: ['status', 'condition', 'category', 'location'], include: [{ model: Assignment, required: false, attributes: ['assetId', 'status'] }] }),
+      Asset.findAndCountAll({ where, include: [{ model: Department, as: 'DepartmentRecord', required: false, attributes: ['id', 'name'] }, assignmentInclude, custodyInclude], distinct: true, order: [[sortBy, sortOrder]], limit, offset }),
+      Asset.findAll({ where: { collegeId }, attributes: ['status', 'condition', 'category', 'location'], include: [{ model: Assignment, required: false, attributes: ['assetId', 'status'] }, { model: AssetCustody, required: false, where: { status: 'active' }, attributes: ['assetId', 'status'] }] }),
       Department.findAll({ where: { collegeId }, attributes: ['id', 'name'], order: [['name', 'ASC']] }),
     ]);
     const values = (field) => [...new Set(allAssets.map((asset) => String(asset[field] || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     const isCurrent = (assignment) => !['returned', 'cancelled', 'closed'].includes(String(assignment.status || '').toLowerCase());
-    const activeAssignments = allAssets.filter((asset) => asset.Assignments?.some(isCurrent)).length;
+    const activeAssignments = allAssets.filter((asset) => asset.Assignments?.some(isCurrent) || asset.AssetCustodies?.some((custody) => custody.status === 'active')).length;
     const normalized = (value) => String(value || '').toLowerCase().replace(/[_-]+/g, '-').replace(/\s+/g, '-');
     const countBy = (matches) => allAssets.filter((asset) => matches.includes(normalized(asset.status))).length;
     const data = result.rows.map((asset) => {
       const row = asset.toJSON();
       const currentAssignment = (row.Assignments || []).find(isCurrent);
-      return { ...row, departmentName: row.DepartmentRecord?.name || row.department || '', assignedUser: currentAssignment?.User ? { id: currentAssignment.User.id, name: currentAssignment.User.fullName || currentAssignment.User.username } : null };
+      const activeCustody = (row.AssetCustodies || []).find((custody) => custody.status === 'active');
+      const assignedUser = currentAssignment?.User || activeCustody?.Custodian;
+      return { ...row, departmentName: row.DepartmentRecord?.name || row.department || '', assignedUser: assignedUser ? { id: assignedUser.id, name: assignedUser.fullName || assignedUser.username } : null };
     });
     const summary = { total: allAssets.length, active: countBy(['active', 'available', 'in-use', 'assigned']), assigned: activeAssignments, available: countBy(['available', 'ready', 'idle']), maintenance: countBy(['maintenance', 'under-maintenance', 'in-repair', 'repair']), damagedMissing: countBy(['damaged', 'missing', 'lost']) };
     res.json({ success: true, data, college: { id: req.organizationScope.college.id, name: req.organizationScope.college.collegeName, code: req.organizationScope.college.collegeCode }, summary, filters: { categories: values('category'), statuses: values('status'), conditions: values('condition'), locations: values('location'), assignmentStatuses: [...new Set(allAssets.flatMap((asset) => (asset.Assignments || []).map((assignment) => assignment.status)).filter(Boolean))].sort(), departments }, pagination: { page, limit, total: result.count, pages: Math.ceil(result.count / limit), totalPages: Math.ceil(result.count / limit) } });
@@ -1681,10 +1714,34 @@ const listCollegeAssets = async (req, res, next) => {
 
 const getCollegeAsset = async (req, res, next) => {
   try {
-    const asset = await Asset.findOne({ where: { id: req.params.id, collegeId: req.organizationScope.collegeId }, include: [{ model: Department, as: 'DepartmentRecord', required: false, attributes: ['id', 'name'] }, { model: Assignment, required: false, include: [{ model: User, required: false, attributes: ['id', 'fullName', 'username'] }] }] });
+    const asset = await Asset.findOne({ where: { id: req.params.id, collegeId: req.organizationScope.collegeId }, include: [{ model: Department, as: 'DepartmentRecord', required: false, attributes: ['id', 'name'] }, { model: Assignment, required: false, include: [{ model: User, required: false, attributes: ['id', 'fullName', 'username'] }] }, { model: AssetCustody, required: false, where: { status: 'active' }, include: [{ model: User, as: 'Custodian', required: false, attributes: ['id', 'fullName', 'username'] }] }] });
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found in your college' });
     return res.json({ success: true, data: asset });
   } catch (error) { return next(error); }
+};
+
+const getCollegeAssetRegistrationOptions = async (req, res, next) => {
+  try {
+    const collegeId = Number(req.organizationScope?.collegeId);
+    if (!collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+    const [college, categories, departments, custodians] = await Promise.all([
+      College.findByPk(collegeId, { attributes: ['id', 'collegeName'] }),
+      Category.findAll({ where: { status: 'active' }, attributes: ['id', 'name'], order: [['name', 'ASC']] }),
+      Department.findAll({ where: { collegeId }, attributes: ['id', 'name'], order: [['name', 'ASC']] }),
+      User.findAll({ where: { collegeId, active: true }, attributes: ['id', 'fullName', 'username'], order: [['fullName', 'ASC']] }),
+    ]);
+    return res.json({
+      success: true,
+      data: {
+        college: college ? { id: college.id, name: college.collegeName } : null,
+        categories,
+        departments,
+        custodians: custodians.map((user) => ({ id: user.id, name: user.fullName || user.username })),
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
 };
 
 const getCollegeInventory = (req, res, next) => listCollegeAssets(req, res, next);
@@ -3205,6 +3262,7 @@ module.exports = {
   getCollegeStaffMember,
   listCollegeAssets,
   getCollegeInventory,
+  getCollegeAssetRegistrationOptions,
   getCollegeAsset,
   listCollegeRFIDTracking,
   getCollegeLocation,

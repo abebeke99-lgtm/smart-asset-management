@@ -7,6 +7,7 @@ const {
   AssetDocument,
   AssetGrant,
   AssetCustody,
+  Inventory,
   User,
   Category,
   Campus,
@@ -421,8 +422,12 @@ const createAssetCustody = async (req, res, next) => {
     if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
     const custodianId = Number(req.body.custodianId || req.body.custodian_id || req.body.assigned_to);
     if (!Number.isInteger(custodianId)) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'A valid custodian user id is required' }); }
-    const custodian = await User.findByPk(custodianId, { transaction });
-    if (!custodian || !custodian.active) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Custodian user not found or inactive' }); }
+    const scopedCollegeId = getCollegeScopeId(req);
+    const custodian = await User.findOne({
+      where: { id: custodianId, active: true, ...(isCollegeScopedRole(req.user?.role) ? { collegeId: scopedCollegeId } : {}) },
+      transaction,
+    });
+    if (!custodian) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Custodian user not found, inactive, or outside your college' }); }
     await AssetCustody.update({ status: 'returned', returnedDate: new Date() }, { where: { assetId: asset.id, status: 'active' }, transaction });
     const custody = await AssetCustody.create({
       assetId: asset.id,
@@ -432,6 +437,14 @@ const createAssetCustody = async (req, res, next) => {
       status: 'active',
       notes: req.body.notes || '',
     }, { transaction });
+    if (isCollegeScopedRole(req.user?.role)) {
+      const inventory = await Inventory.findOne({ where: { assetId: asset.id }, transaction });
+      if (inventory && Number(inventory.availableQuantity) < 1) {
+        await transaction.rollback();
+        return res.status(409).json({ success: false, message: 'No unassigned inventory is available for this asset' });
+      }
+      if (inventory) await inventory.update({ availableQuantity: Number(inventory.availableQuantity) - 1 }, { transaction });
+    }
     await item_updateAsset(asset, { status: 'in-use' }, req.user.id, req.user.role, transaction);
     await AuditLog.create({ userId: req.user.id, action: 'CREATE_ASSET_CUSTODY', entity: `asset:${asset.id}`, details: JSON.stringify({ custodyId: custody.id, custodianId }) }, { transaction });
     await transaction.commit();
@@ -443,13 +456,33 @@ const createAssetCustody = async (req, res, next) => {
 };
 
 const endCustody = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
   try {
-    const custody = await AssetCustody.findOne({ where: { id: req.params.custodyId, assetId: req.params.id } });
-    if (!custody) return res.status(404).json({ success: false, message: 'Custody record not found' });
-    if (custody.status !== 'active') return res.status(409).json({ success: false, message: 'Custody is already closed' });
-    await custody.update({ status: 'returned', returnedDate: new Date() });
+    const asset = await findAssetInScope(req, req.params.id, { transaction });
+    if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
+    const custody = await AssetCustody.findOne({ where: { id: req.params.custodyId, assetId: asset.id, status: 'active' }, transaction });
+    if (!custody) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Active custody record not found' }); }
+    await custody.update({ status: 'returned', returnedDate: new Date() }, { transaction });
+    const [activeCustodyCount, activeAssignmentCount] = await Promise.all([
+      AssetCustody.count({ where: { assetId: asset.id, status: 'active' }, transaction }),
+      Assignment.count({ where: { assetId: asset.id, status: { [Op.notIn]: ['returned', 'cancelled', 'closed'] } }, transaction }),
+    ]);
+    if (asset.status === 'in-use' && activeCustodyCount === 0 && activeAssignmentCount === 0) {
+      await item_updateAsset(asset, { status: 'available' }, req.user.id, req.user.role, transaction);
+      const inventory = await Inventory.findOne({ where: { assetId: asset.id }, transaction });
+      if (inventory) {
+        await inventory.update({
+          availableQuantity: Math.min(Number(inventory.quantity), Number(inventory.availableQuantity) + 1),
+        }, { transaction });
+      }
+    }
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'END_ASSET_CUSTODY', entity: `asset:${asset.id}`, entityId: asset.id, details: { custodyId: custody.id }, transaction });
+    await transaction.commit();
     res.json({ success: true, data: custody });
-  } catch (error) { next(error); }
+  } catch (error) {
+    await transaction.rollback();
+    next(error);
+  }
 };
 
 async function item_updateAsset(asset, updates, userId, role, transaction) {

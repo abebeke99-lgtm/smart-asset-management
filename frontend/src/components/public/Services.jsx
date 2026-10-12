@@ -18,7 +18,8 @@ import {
 
 const servicesByLanguage = {
   en: {
-    systemTitle: 'University Asset Management System',
+    pageTitle: 'Asset Management Modules',
+    pageSubtitle: 'Manage, track, verify, and analyze university assets in one place.',
     services: [
       {
         title: 'Asset Registration',
@@ -72,7 +73,8 @@ const servicesByLanguage = {
     ]
   },
   am: {
-    systemTitle: 'የዩኒቨርሲቲ ንብረት አስተዳደር ስርዓት',
+    pageTitle: 'የንብረት አስተዳደር ሞጁሎች',
+    pageSubtitle: 'የዩኒቨርሲቲ ንብረቶችን በአንድ ቦታ ያስተዳድሩ፣ ይከታተሉ፣ ያረጋግጡና ይተንትኑ።',
     services: [
       {
         title: 'የንብረት ምዝገባ',
@@ -136,14 +138,14 @@ const serviceMedia = [
     }
   },
   {
-    src: '/images/hero/imagefs.jpg',
+    src: '/images/workflow/asset-workflow.svg',
     alt: {
-      en: 'Shelves of organized books and materials in a university library',
-      am: 'በዩኒቨርሲቲ ቤተ-መጻሕፍት የተደራጁ መደርደሪያዎች'
+      en: 'Illustration of university asset inventory workflows',
+      am: 'የዩኒቨርሲቲ ንብረት ኢንቬንተሪ የሥራ ሂደት ምሳሌ'
     }
   },
   {
-    src: '/images/workflow/asset-workflow.svg',
+    src: '/images/assets/asset-management.svg',
     alt: {
       en: 'Illustration of an asset assignment workflow',
       am: 'የንብረት ምደባ የሥራ ሂደት ምሳሌ'
@@ -194,6 +196,7 @@ const getLocalizedServiceMedia = (language) => serviceMedia.map(({ src, alt }) =
 const serviceDetails = {
   en: {
     viewDetails: 'View Details',
+    moreInfo: 'More info',
     close: 'Close service details',
     featuresHeading: 'What you can do',
     openService: 'Open Service',
@@ -258,6 +261,7 @@ const serviceDetails = {
   },
   am: {
     viewDetails: 'ዝርዝር ይመልከቱ',
+    moreInfo: 'ተጨማሪ መረጃ',
     close: 'የአገልግሎት ዝርዝር ዝጋ',
     featuresHeading: 'ማከናወን የሚችሉት',
     openService: 'አገልግሎቱን ክፈት',
@@ -335,7 +339,7 @@ const ServiceImage = ({ service, imageAlt, className = '' }) => {
 
   return (
     <img
-      className={className}
+      className={`${className}${service.src.endsWith('.svg') ? ' services-vector-image' : ''}`}
       src={service.src}
       alt={imageAlt}
       loading="lazy"
@@ -397,20 +401,17 @@ const Services = () => {
   return (
     <div className={`services-page${theme === 'dark' ? ' services-page-dark' : ''}`}>
       <section className="services-section services-shell" aria-labelledby="services-section-title">
-        <h2 id="services-section-title" className="services-visually-hidden">{content.systemTitle}</h2>
+        <header className="services-page-heading">
+          <h1 id="services-section-title">{content.pageTitle}</h1>
+          <p>{content.pageSubtitle}</p>
+        </header>
         <div className="services-grid">
           {content.services.map(({ title, description, to, icon: Icon, secondaryIcon: SecondaryIcon }, index) => {
             const service = localizedServiceMedia[index];
             return (
               <article className="services-card" key={title} style={{ '--services-card-index': index }}>
                 <div className="services-card-image-frame">
-                  {index === 0 ? (
-                    <Link to={to} className="services-card-image-link" aria-label={`Open ${title}`}>
-                      <ServiceImage service={service} imageAlt={service.alt} className="services-card-image" />
-                    </Link>
-                  ) : (
-                    <ServiceImage service={service} imageAlt={service.alt} className="services-card-image" />
-                  )}
+                  <ServiceImage service={service} imageAlt={service.alt} className="services-card-image" />
                 </div>
                 <span className="services-card-icon" aria-hidden="true">
                   <Icon size={26} strokeWidth={1.8} />
@@ -418,19 +419,28 @@ const Services = () => {
                 </span>
                 <h3>{title}</h3>
                 <p className="services-card-description">{description}</p>
-                <button
-                  className="services-card-action"
-                  type="button"
-                  aria-haspopup="dialog"
-                  aria-label={`${details.viewDetails}: ${title}`}
-                  onClick={(event) => {
-                    detailTriggerRef.current = event.currentTarget;
-                    setSelectedService({ index, title, description, to });
-                  }}
-                >
-                  {details.viewDetails}
-                  <ArrowRight size={17} strokeWidth={2} aria-hidden="true" />
-                </button>
+                <div className="services-card-actions">
+                  <button
+                    className="services-card-more-info"
+                    type="button"
+                    aria-haspopup="dialog"
+                    aria-label={`${details.moreInfo}: ${title}`}
+                    onClick={(event) => {
+                      detailTriggerRef.current = event.currentTarget;
+                      setSelectedService({ index, title, description, to });
+                    }}
+                  >
+                    {details.moreInfo}
+                  </button>
+                  <Link
+                    className="services-card-action"
+                    to={to}
+                    aria-label={`${details.viewDetails}: ${title}`}
+                  >
+                    {details.viewDetails}
+                    <ArrowRight size={17} strokeWidth={2} aria-hidden="true" />
+                  </Link>
+                </div>
               </article>
             );
           })}
@@ -525,6 +535,27 @@ const Services = () => {
 
         .services-section { padding-top: 48px; padding-bottom: 64px; }
 
+        .services-page-heading {
+          margin-bottom: 28px;
+        }
+
+        .services-page-heading h1 {
+          margin: 0;
+          color: var(--services-navy);
+          font-size: clamp(1.9rem, 3.6vw, 2.65rem);
+          font-weight: 750;
+          letter-spacing: -0.035em;
+          line-height: 1.15;
+        }
+
+        .services-page-heading p {
+          max-width: 680px;
+          margin: 10px 0 0;
+          color: var(--services-muted);
+          font-size: 1rem;
+          line-height: 1.65;
+        }
+
         .services-grid {
           display: grid;
           grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -564,12 +595,6 @@ const Services = () => {
           margin-bottom: 20px;
         }
 
-        .services-card-image-link {
-          display: block;
-          width: 100%;
-          height: 100%;
-        }
-
         .services-card-image,
         .services-image-fallback {
           display: flex;
@@ -582,6 +607,12 @@ const Services = () => {
 
         .services-card-image {
           transition: transform 350ms ease;
+        }
+
+        .services-card-image.services-vector-image,
+        .services-detail-image.services-vector-image {
+          object-fit: contain;
+          padding: 10px;
         }
 
         .services-card:hover .services-card-image {
@@ -642,31 +673,58 @@ const Services = () => {
           overflow-wrap: anywhere;
         }
 
+        .services-card-actions {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-top: auto;
+          padding-top: 18px;
+        }
+
         .services-card-action {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          align-self: flex-start;
-          margin-top: auto;
-          min-height: 44px;
-          padding: 10px 0 0;
-          border: 0;
-          background: transparent;
-          color: var(--services-blue);
-          font-size: 0.9rem;
+          justify-content: center;
+          min-height: 42px;
+          padding: 9px 13px;
+          border: 1px solid var(--services-blue);
+          border-radius: 9px;
+          background: var(--services-blue);
+          color: #fff;
+          font-size: 0.86rem;
           font-weight: 700;
           font-family: inherit;
           text-decoration: none;
           cursor: pointer;
-          transition: color 180ms ease, transform 180ms ease;
+          transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
         }
 
         .services-card-action:hover {
-          color: var(--services-cyan);
+          border-color: #0874ae;
+          background: #0874ae;
           transform: translateX(2px);
         }
 
+        .services-card-more-info {
+          min-height: 42px;
+          padding: 8px 0;
+          border: 0;
+          background: transparent;
+          color: var(--services-muted);
+          font: inherit;
+          font-size: 0.82rem;
+          font-weight: 650;
+          cursor: pointer;
+        }
+
+        .services-card-more-info:hover {
+          color: var(--services-blue);
+        }
+
         .services-card-action:focus-visible,
+        .services-card-more-info:focus-visible,
         .services-detail-close:focus-visible,
         .services-open-button:focus-visible {
           border-radius: 2px;
@@ -813,6 +871,8 @@ const Services = () => {
         @media (max-width: 640px) {
           .services-shell { width: calc(100% - 36px); }
           .services-section { padding-top: 28px; padding-bottom: 42px; }
+          .services-page-heading { margin-bottom: 20px; }
+          .services-page-heading p { font-size: 0.94rem; }
           .services-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
           .services-card { min-height: 360px; padding: 22px; }
           .services-card-image-frame { height: 160px; }

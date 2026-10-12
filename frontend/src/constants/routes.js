@@ -125,6 +125,7 @@ export const ROUTES = {
   FINANCE_BUDGET_REPORTS: '/finance/budget-reports',
   FINANCE_DEPRECIATION_REPORTS: '/finance/depreciation-reports',
   FINANCE_ASSET_VALUE_REPORTS: '/finance/asset-value-reports',
+  FINANCE_AUDIT: '/finance/audit',
   FINANCE_NOTIFICATIONS: '/finance/notifications',
 
   // Maintenance Routes

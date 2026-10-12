@@ -59,9 +59,17 @@ const requestIncludes = () => [
 const serializeRequest = (record) => {
   const value = record.toJSON();
   const { Requester, DepartmentRecord, AssetRecord, History, ...request } = value;
+  let collegeDetails = null;
+  try {
+    const parsed = JSON.parse(String(request.description || ''));
+    if (parsed?.collegeRequest === true) collegeDetails = parsed;
+  } catch {}
   return {
     ...request,
     requestNumber: value.requestCode,
+    requestTitle: collegeDetails?.title || value.requestedItem,
+    preferredLocation: collegeDetails?.preferredLocation || '',
+    description: collegeDetails?.description || value.description,
     requestType: value.category || 'Asset Request',
     requester: Requester ? {
       id: Requester.id,

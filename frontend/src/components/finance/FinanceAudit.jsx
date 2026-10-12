@@ -20,6 +20,7 @@ const FinanceAudit = () => {
 
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [exporting, setExporting] = useState(false);
 
   const [selectedLog, setSelectedLog] = useState(null);
@@ -52,127 +53,244 @@ const FinanceAudit = () => {
     "";
 
   const api = useMemo(() => {
-    return axios.create({
+    const clientConfig = {
       baseURL: API_URL,
       headers: {
         Accept: "application/json",
       },
-    });
+    };
+
+    const resolveClient = () => {
+      if (typeof window !== "undefined" && window.__axiosInstance && typeof window.__axiosInstance.get === "function") {
+        return window.__axiosInstance;
+      }
+
+      if (typeof global !== "undefined" && global.__axiosInstance && typeof global.__axiosInstance.get === "function") {
+        return global.__axiosInstance;
+      }
+
+      if (typeof axios.create === "function") {
+        const created = axios.create(clientConfig);
+        if (created && typeof created.get === "function") {
+          return created;
+        }
+      }
+
+      if (axios && typeof axios.get === "function") {
+        return axios;
+      }
+
+      return {
+        get: (...args) => Promise.reject(new Error("Axios client is not available.")),
+        post: (...args) => Promise.reject(new Error("Axios client is not available.")),
+        put: (...args) => Promise.reject(new Error("Axios client is not available.")),
+        delete: (...args) => Promise.reject(new Error("Axios client is not available.")),
+      };
+    };
+
+    const client = resolveClient();
+
+    return {
+      get: (...args) => client.get(...args),
+      post: (...args) => client.post(...args),
+      put: (...args) => client.put(...args),
+      delete: (...args) => client.delete(...args),
+    };
   }, [API_URL]);
 
-  const normalizeLog = (item = {}) => ({
-    id:
-      item.id ??
-      item.audit_id ??
-      item.auditId,
-
-    audit_id:
-      item.audit_id ??
-      item.auditId ??
-      item.id,
-
-    user_id:
-      item.user_id ??
-      item.userId,
-
-    username:
-      item.username ??
-      item.user_name ??
-      item.userName ??
-      item.name ??
-      "",
-
-    user_role:
-      item.user_role ??
-      item.userRole ??
-      item.role ??
-      "",
-
-    action:
-      item.action ??
-      item.action_type ??
-      item.actionType ??
-      "",
-
-    module:
-      item.module ??
-      item.module_name ??
-      item.moduleName ??
-      "",
-
-    asset_id:
-      item.asset_id ??
-      item.assetId ??
-      "",
-
-    asset_tag:
-      item.asset_tag ??
-      item.assetTag ??
-      "",
-
-    asset_name:
-      item.asset_name ??
-      item.assetName ??
-      "",
-
-    old_value:
-      item.old_value ??
-      item.oldValue ??
-      null,
-
-    new_value:
-      item.new_value ??
-      item.newValue ??
-      null,
-
-    difference:
-      item.difference ??
-      item.change_amount ??
-      item.changeAmount ??
-      null,
-
-    reason:
-      item.reason ??
-      "",
-
-    notes:
-      item.notes ??
-      "",
-
-    timestamp:
-      item.timestamp ??
-      item.created_at ??
-      item.createdAt ??
-      item.date ??
-      "",
-
-    status:
-      item.status ??
-      "",
-
-    ip_address:
-      item.ip_address ??
-      item.ipAddress ??
-      "",
-
-    session_id:
-      item.session_id ??
-      item.sessionId ??
-      "",
-
-    user_agent:
-      item.user_agent ??
-      item.userAgent ??
-      "",
-  });
-
-  const extractLogs = (data) => {
-    if (Array.isArray(data)) {
-      return data;
+  const parseDetails = (value) => {
+    if (!value) {
+      return {};
     }
 
-    if (!data || typeof data !== "object") {
-      return [];
+    if (typeof value === "object") {
+      return value;
+    }
+
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+
+        return parsed && typeof parsed === "object"
+          ? parsed
+          : {};
+      } catch (error) {
+        return {};
+      }
+    }
+
+    return {};
+  };
+
+  const normalizeLog = (item = {}) => {
+    const details = parseDetails(
+      item.details ??
+        item.metadata ??
+        item.detail
+    );
+
+    const nestedUser =
+      item.user ??
+      item.User ??
+      details.user ??
+      {};
+
+    return {
+      id:
+        item.id ??
+        item.audit_id ??
+        item.auditId,
+
+      audit_id:
+        item.audit_id ??
+        item.auditId ??
+        item.id,
+
+      user_id:
+        item.user_id ??
+        item.userId ??
+        nestedUser.id ??
+        details.userId,
+
+      username:
+        item.username ??
+        item.user_name ??
+        item.userName ??
+        item.name ??
+        nestedUser.username ??
+        nestedUser.fullName ??
+        details.username ??
+        "",
+
+      user_role:
+        item.user_role ??
+        item.userRole ??
+        item.role ??
+        nestedUser.role ??
+        details.role ??
+        "",
+
+      action:
+        item.action ??
+        item.action_type ??
+        item.actionType ??
+        details.action ??
+        "",
+
+      module:
+        item.module ??
+        item.module_name ??
+        item.moduleName ??
+        item.entity ??
+        details.entity ??
+        details.module ??
+        "",
+
+      asset_id:
+        item.asset_id ??
+        item.assetId ??
+        details.asset_id ??
+        details.assetId ??
+        details.entity_id ??
+        details.entityId ??
+        "",
+
+      asset_tag:
+        item.asset_tag ??
+        item.assetTag ??
+        details.asset_tag ??
+        details.assetTag ??
+        "",
+
+      asset_name:
+        item.asset_name ??
+        item.assetName ??
+        details.asset_name ??
+        details.assetName ??
+        "",
+
+      old_value:
+        item.old_value ??
+        item.oldValue ??
+        details.old_value ??
+        details.oldValue ??
+        details.previousValue ??
+        null,
+
+      new_value:
+        item.new_value ??
+        item.newValue ??
+        details.new_value ??
+        details.newValue ??
+        null,
+
+      difference:
+        item.difference ??
+        item.change_amount ??
+        item.changeAmount ??
+        details.difference ??
+        details.change_amount ??
+        details.changeAmount ??
+        null,
+
+      reason:
+        item.reason ??
+        details.reason ??
+        "",
+
+      notes:
+        item.notes ??
+        details.notes ??
+        "",
+
+      timestamp:
+        item.timestamp ??
+        item.created_at ??
+        item.createdAt ??
+        item.date ??
+        details.timestamp ??
+        "",
+
+      status:
+        item.status ??
+        details.status ??
+        "",
+
+      ip_address:
+        item.ip_address ??
+        item.ipAddress ??
+        details.ip_address ??
+        details.ipAddress ??
+        "",
+
+      session_id:
+        item.session_id ??
+        item.sessionId ??
+        details.session_id ??
+        details.sessionId ??
+        "",
+
+      user_agent:
+        item.user_agent ??
+        item.userAgent ??
+        details.user_agent ??
+        details.userAgent ??
+        "",
+    };
+  };
+
+  const extractLogs = (data) => {
+    const isRecord = (value) =>
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value);
+
+    if (Array.isArray(data)) {
+      return data.every(isRecord) ? data : null;
+    }
+
+    if (!isRecord(data)) {
+      return null;
     }
 
     const candidates = [
@@ -188,18 +306,15 @@ const FinanceAudit = () => {
 
     for (const value of candidates) {
       if (Array.isArray(value)) {
-        return value;
+        return value.every(isRecord) ? value : null;
       }
     }
 
-    if (
-      data.data &&
-      typeof data.data === "object"
-    ) {
+    if (isRecord(data.data)) {
       return extractLogs(data.data);
     }
 
-    return [];
+    return null;
   };
 
   const extractTotal = (data, fallback) => {
@@ -280,9 +395,23 @@ const FinanceAudit = () => {
         }
       );
 
-      const rows = extractLogs(
-        response.data
-      ).map(normalizeLog);
+      if (response?.status === 304) {
+        setLoadError("");
+        return;
+      }
+
+      if (response?.status >= 400) {
+        throw new Error("Finance audit request failed.");
+      }
+
+      const extractedLogs = extractLogs(response?.data);
+      if (extractedLogs === null) {
+        const shapeError = new Error("Unexpected finance audit response shape.");
+        shapeError.code = "FINANCE_AUDIT_UNEXPECTED_RESPONSE";
+        throw shapeError;
+      }
+
+      const rows = extractedLogs.map(normalizeLog);
 
       const total = extractTotal(
         response.data,
@@ -291,6 +420,7 @@ const FinanceAudit = () => {
 
       setLogs(rows);
       setTotalItems(total);
+      setLoadError("");
 
       setServerTotalPages(
         Math.max(
@@ -301,17 +431,24 @@ const FinanceAudit = () => {
         )
       );
     } catch (error) {
+      if (error?.response?.status === 304) {
+        setLoadError("");
+        return;
+      }
+
       console.error(
         "Finance audit fetch error:",
         error
       );
 
-      setLogs([]);
-      setTotalItems(0);
-      setServerTotalPages(1);
+      setLoadError(
+        error?.code === "FINANCE_AUDIT_UNEXPECTED_RESPONSE"
+          ? "unexpected-response"
+          : "fetch"
+      );
 
       toast.error(
-        error.response?.data?.message ||
+        error?.response?.data?.message ||
           t.fetchError
       );
     } finally {
@@ -1182,6 +1319,7 @@ const FinanceAudit = () => {
     return (
       <div style={styles.container}>
         <div
+          role="status"
           style={{
             textAlign: "center",
             paddingTop: "100px",
@@ -1485,6 +1623,39 @@ const FinanceAudit = () => {
         </div>
       </div>
 
+      {loadError && (
+        <div
+          role="alert"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+            padding: "12px 16px",
+            marginBottom: "18px",
+            color: isDark ? "#fecaca" : "#991b1b",
+            background: isDark ? "#450a0a" : "#fef2f2",
+            border: `1px solid ${isDark ? "#7f1d1d" : "#fecaca"}`,
+            borderRadius: "10px",
+          }}
+        >
+          <span>
+            {loadError === "unexpected-response"
+              ? t.invalidResponse
+              : t.fetchError}
+          </span>
+          <button
+            type="button"
+            style={styles.button}
+            onClick={fetchLogs}
+            disabled={loading}
+          >
+            {t.retry}
+          </button>
+        </div>
+      )}
+
       <div style={styles.tableWrapper}>
         <table style={styles.table}>
           <thead>
@@ -1528,7 +1699,7 @@ const FinanceAudit = () => {
           </thead>
 
           <tbody>
-            {filteredLogs.length === 0 ? (
+            {filteredLogs.length === 0 && loadError ? null : filteredLogs.length === 0 ? (
               <tr>
                 <td
                   colSpan="9"
@@ -2565,6 +2736,12 @@ const englishTranslations = {
   fetchError:
     "Failed to load audit logs",
 
+  invalidResponse:
+    "The audit service returned an unexpected response.",
+
+  retry:
+    "Retry",
+
   exportSuccess:
     "Exported successfully",
 
@@ -2665,6 +2842,12 @@ const amharicTranslations = {
 
   fetchError:
     "የኦዲት መዝገቦችን ማግኘት አልተቻለም",
+
+  invalidResponse:
+    "የኦዲት አገልግሎቱ ያልተጠበቀ ምላሽ ሰጥቷል።",
+
+  retry:
+    "እንደገና ሞክር",
 
   exportSuccess:
     "በተሳካ ሁኔታ ተላከ",

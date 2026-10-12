@@ -1,4 +1,4 @@
-const { sequelize, Asset, AssetDocument, Inventory, Assignment, Transfer, Maintenance, RFIDLog, AuditLog, User, Department, College, Campus, Building, Room, Category } = require('../models');
+const { sequelize, Asset, AssetDocument, Inventory, Assignment, Transfer, Maintenance, RFIDLog, AuditLog, User, Department, College, Campus, Building, Room, Category, AssetCustody } = require('../models');
 const { Op } = require('sequelize');
 const { nextDigitalId, buildAssetCodeFromConfig } = require('./assetExtendedController');
 const { createAuditLog } = require('../services/auditLogService');
@@ -310,6 +310,46 @@ const createAsset = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Asset name is required' });
     }
 
+    if (scopedRole) {
+      const categoryName = String(body.category || '').trim();
+      if (!categoryName) {
+        await transaction.rollback();
+        return res.status(422).json({ success: false, message: 'Asset category is required' });
+      }
+      const category = await Category.findOne({ where: { name: categoryName, status: 'active' }, transaction });
+      if (!category) {
+        await transaction.rollback();
+        return res.status(422).json({ success: false, message: 'Select an active asset category' });
+      }
+      const requestedDepartmentId = body.departmentId ?? body.department_id;
+      if (requestedDepartmentId !== undefined && requestedDepartmentId !== null && requestedDepartmentId !== '') {
+        const departmentId = Number(requestedDepartmentId);
+        if (!Number.isInteger(departmentId) || departmentId < 1) {
+          await transaction.rollback();
+          return res.status(422).json({ success: false, message: 'Select a valid department in your college' });
+        }
+        const scopedDepartment = await Department.findOne({ where: { id: departmentId, collegeId }, transaction });
+        if (!scopedDepartment) {
+          await transaction.rollback();
+          return res.status(422).json({ success: false, message: 'Department is outside your college' });
+        }
+        body.departmentId = departmentId;
+        body.department = scopedDepartment.name;
+      }
+      if (!purchaseDate || Number.isNaN(Date.parse(purchaseDate))) {
+        await transaction.rollback();
+        return res.status(422).json({ success: false, message: 'A valid purchase date is required' });
+      }
+      if (!String(body.unit || '').trim() || !String(body.location || '').trim() || !String(body.condition || '').trim()) {
+        await transaction.rollback();
+        return res.status(422).json({ success: false, message: 'Unit, condition, and location are required' });
+      }
+      if (!['available', 'in-use', 'under-maintenance', 'damaged'].includes(String(body.status || 'available').toLowerCase())) {
+        await transaction.rollback();
+        return res.status(422).json({ success: false, message: 'Select a valid initial asset status' });
+      }
+    }
+
     if (adminRegistration) {
       const [category, campus, college, department, laboratory, building, room] = await Promise.all([
         Category.findOne({ where: { name: String(body.category).trim(), status: 'active' }, transaction }),
@@ -379,6 +419,28 @@ const createAsset = async (req, res) => {
     });
     if (duplicate) { await transaction.rollback(); return res.status(409).json({ success: false, message: 'Asset code, serial number, or RFID tag already exists' }); }
 
+    const requestedCustodianId = body.custodianId ?? body.custodian_id;
+    let custodian = null;
+    if (requestedCustodianId !== undefined && requestedCustodianId !== null && requestedCustodianId !== '') {
+      const custodianId = Number(requestedCustodianId);
+      if (!Number.isInteger(custodianId) || custodianId < 1) {
+        await transaction.rollback();
+        return res.status(422).json({ success: false, message: 'Select a valid custodian' });
+      }
+      custodian = await User.findOne({
+        where: { id: custodianId, active: true, ...(scopedRole ? { collegeId } : {}) },
+        transaction,
+      });
+      if (!custodian) {
+        await transaction.rollback();
+        return res.status(422).json({ success: false, message: 'Custodian is not an active user in your college' });
+      }
+      if (quantity !== 1) {
+        await transaction.rollback();
+        return res.status(422).json({ success: false, message: 'A custodian can only be selected for a single asset item' });
+      }
+    }
+
     if (adminRegistration) savedManual = saveAssetDocument(body.equipmentManual, 'assets');
 
     const asset = await Asset.create({
@@ -403,10 +465,12 @@ const createAsset = async (req, res) => {
         ...(body.specifications && typeof body.specifications === 'object' ? body.specifications : {}),
         ...(body.laboratoryId || body.laboratory_id ? { laboratoryId: Number(body.laboratoryId || body.laboratory_id) } : {}),
         ...(body.warrantyCoverage !== undefined ? { warrantyCoverage: String(body.warrantyCoverage) } : {}),
+        ...(body.purchaseOrderNumber ? { purchaseOrderNumber: String(body.purchaseOrderNumber).trim() } : {}),
+        ...(body.invoiceNumber ? { invoiceNumber: String(body.invoiceNumber).trim() } : {}),
       },
       fundingSource: normalizedFundingSource,
       condition: body.condition || body.condition_status || 'Good',
-      status: body.status || 'available',
+      status: custodian ? 'in-use' : (body.status || 'available'),
       purchaseDate,
       expiryDate: body.expiryDate || body.expiry_date || null,
       batchLot: body.batchLot || body.batch_lot || null,
@@ -433,10 +497,21 @@ const createAsset = async (req, res) => {
     await Inventory.create({
       assetId: asset.id,
       quantity: Number(req.body.quantity || 1),
-      availableQuantity: Number(req.body.quantity || 1),
+      availableQuantity: custodian ? 0 : Number(req.body.quantity || 1),
       departmentId: req.body.departmentId || null,
       location: req.body.location || '',
     }, { transaction });
+    if (custodian) {
+      const custody = await AssetCustody.create({
+        assetId: asset.id,
+        custodianId: custodian.id,
+        handedOverBy: req.user.id,
+        receivedDate: new Date(),
+        status: 'active',
+        notes: '',
+      }, { transaction });
+      await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CREATE_ASSET_CUSTODY', entity: `asset:${asset.id}`, entityId: asset.id, details: { custodyId: custody.id, custodianId: custodian.id }, transaction });
+    }
     await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'CREATE_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, newValue: asset.toJSON(), details: { assetId: asset.id }, transaction });
     await transaction.commit();
     res.status(201).json({ success: true, data: asset });
@@ -472,7 +547,7 @@ const updateAsset = async (req, res) => {
     const aliases = {
       asset_id: 'assetCode', serial_number: 'serialNumber', rfid_tag: 'rfidTag',
       condition_status: 'condition', purchase_cost: 'purchasePrice', warranty_expiry: 'warrantyExpiry',
-      expiry_date: 'expiryDate', batch_lot: 'batchLot', college_id: 'collegeId',
+      expiry_date: 'expiryDate', batch_lot: 'batchLot', college_id: 'collegeId', department_id: 'departmentId',
     };
     for (const [alias, field] of Object.entries(aliases)) {
       if (req.body[alias] !== undefined) updates[field] = req.body[alias];
@@ -481,12 +556,42 @@ const updateAsset = async (req, res) => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
     }
     if (scopedRole) updates.collegeId = collegeId;
+    if (updates.category !== undefined) {
+      const category = await Category.findOne({ where: { name: String(updates.category).trim(), status: 'active' } });
+      if (!category) return res.status(422).json({ success: false, message: 'Select an active asset category' });
+    }
+    if (scopedRole && updates.departmentId !== undefined) {
+      if (updates.departmentId === null || updates.departmentId === '') {
+        updates.departmentId = null;
+        updates.department = '';
+      } else {
+        const departmentId = Number(updates.departmentId);
+        const department = Number.isInteger(departmentId)
+          ? await Department.findOne({ where: { id: departmentId, collegeId }, attributes: ['id', 'name'] })
+          : null;
+        if (!department) return res.status(422).json({ success: false, message: 'Department is outside your college' });
+        updates.departmentId = department.id;
+        updates.department = department.name;
+      }
+    }
+    if (req.body.purchaseOrderNumber !== undefined || req.body.invoiceNumber !== undefined) {
+      updates.specifications = {
+        ...(asset.specifications && typeof asset.specifications === 'object' ? asset.specifications : {}),
+        ...(req.body.purchaseOrderNumber !== undefined ? { purchaseOrderNumber: String(req.body.purchaseOrderNumber).trim() } : {}),
+        ...(req.body.invoiceNumber !== undefined ? { invoiceNumber: String(req.body.invoiceNumber).trim() } : {}),
+      };
+    }
+    if (updates.name !== undefined && !String(updates.name).trim()) return res.status(422).json({ success: false, message: 'Asset name is required' });
+    if (updates.assetCode !== undefined && !String(updates.assetCode).trim()) return res.status(422).json({ success: false, message: 'Asset code is required' });
     for (const field of ['purchasePrice', 'currentValue', 'quantity', 'healthScore']) {
       if (updates[field] !== undefined && updates[field] !== null && updates[field] !== '') {
         const value = Number(updates[field]);
         if (!Number.isFinite(value) || value < 0) return res.status(422).json({ success: false, message: `${field} must be a non-negative number` });
         updates[field] = value;
       }
+    }
+    if (updates.quantity !== undefined && (!Number.isInteger(updates.quantity) || updates.quantity < 1)) {
+      return res.status(422).json({ success: false, message: 'Quantity must be a positive integer' });
     }
     for (const field of ['purchaseDate', 'warrantyExpiry']) {
       if (updates[field] !== undefined && updates[field] !== null && updates[field] !== '' && Number.isNaN(Date.parse(updates[field]))) {
@@ -496,12 +601,39 @@ const updateAsset = async (req, res) => {
     const serialNumber = String(updates.serialNumber ?? asset.serialNumber ?? '').trim();
     const quantity = Number(updates.quantity ?? asset.quantity ?? 1);
     if (serialNumber && quantity !== 1) return res.status(422).json({ success: false, message: 'Serialized assets must have a quantity of one' });
+    if (updates.assetCode !== undefined && String(updates.assetCode).trim() !== String(asset.assetCode || '').trim()) {
+      const duplicate = await Asset.findOne({ where: { assetCode: String(updates.assetCode).trim(), id: { [Op.ne]: asset.id } } });
+      if (duplicate) return res.status(409).json({ success: false, message: 'Asset code already exists' });
+      updates.assetCode = String(updates.assetCode).trim();
+    }
     if (serialNumber && serialNumber !== String(asset.serialNumber || '').trim()) {
       const duplicate = await Asset.findOne({ where: { serialNumber, id: { [Op.ne]: asset.id } } });
       if (duplicate) return res.status(409).json({ success: false, message: 'Serial number already exists' });
     }
-    await asset.update(updates);
-    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, oldValue: previousValue, newValue: asset.toJSON(), details: { assetId: asset.id } });
+    const transaction = await sequelize.transaction();
+    try {
+      await asset.update(updates, { transaction });
+      const inventory = await Inventory.findOne({ where: { assetId: asset.id }, transaction });
+      if (inventory) {
+        const quantity = Number(asset.quantity ?? inventory.quantity);
+        const previousQuantity = Number(inventory.quantity);
+        const availableQuantity = Math.max(0, Math.min(
+          quantity,
+          Number(inventory.availableQuantity) + quantity - previousQuantity,
+        ));
+        await inventory.update({
+          quantity,
+          availableQuantity,
+          departmentId: asset.departmentId ?? null,
+          location: asset.location || '',
+        }, { transaction });
+      }
+      await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'UPDATE_ASSET', entity: `asset:${asset.id}`, entityId: asset.id, oldValue: previousValue, newValue: asset.toJSON(), details: { assetId: asset.id }, transaction });
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
     res.json({ success: true, data: serializeAsset(asset) });
   } catch (error) {
     console.error('Asset update failed:', error);

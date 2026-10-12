@@ -110,6 +110,7 @@ import DisposalFinancialRecords from './components/finance/DisposalFinancialReco
 import FinanceBudgetReports from './components/finance/FinanceBudgetReports';
 import FinanceDepreciationReports from './components/finance/FinanceDepreciationReports';
 import FinanceAssetValueReports from './components/finance/FinanceAssetValueReports';
+import FinanceAudit from './components/finance/FinanceAudit';
 import FinanceNotifications from './components/finance/FinanceNotifications';
 
 import StoreReceivePage from './components/store/StoreReceivePage';
@@ -3320,7 +3321,6 @@ function AppContent() {
         { path: '/college/assignments', label: 'Assignments', icon: UserRound },
         { path: '/college/transfers', label: 'Transfers', icon: ArrowLeftRight },
         { path: '/college/returns', label: 'Returns', icon: Undo2 },
-        { path: '/college/maintenance', label: 'Maintenance Oversight', icon: Wrench },
         { path: '/college/rfid', label: 'RFID / QR Tracking', icon: QrCode },
         { path: '/college/verification', label: 'Asset Verification', icon: Check },
         { path: '/college/reports', label: 'College Reports', icon: BarChart3 },
@@ -3347,6 +3347,7 @@ function AppContent() {
         { path: '/finance/budget-reports', label: '🏦 Budget Reports', section: 'REPORTING' },
         { path: '/finance/depreciation-reports', label: '💰 Depreciation Reports', section: 'REPORTING' },
         { path: '/finance/asset-value-reports', label: '📦 Asset Value Reports', section: 'REPORTING' },
+        { path: '/finance/audit', label: '🧾 Audit Trail', section: 'REPORTING' },
         { path: '/finance/notifications', label: '🔔 Notifications', section: 'CONTROL' }
       ],
       'store_manager': [
@@ -3452,7 +3453,6 @@ function AppContent() {
     { path: '/college/returns', label: 'Returns', icon: Undo2, group: 'Asset Management' }
   ];
   const collegeOperationsItems = [
-    { path: '/college/maintenance', label: 'Maintenance Oversight', icon: Wrench, group: 'Operations' },
     { path: '/college/rfid', label: 'RFID / QR Tracking', icon: QrCode, group: 'Operations' },
     { path: '/college/verification', label: 'Asset Verification', icon: Check, group: 'Operations' }
   ];
@@ -3815,6 +3815,7 @@ function AppContent() {
             <Route path="budget-reports" element={<FinanceBudgetReports />} />
             <Route path="depreciation-reports" element={<FinanceDepreciationReports />} />
             <Route path="asset-value-reports" element={<FinanceAssetValueReports />} />
+            <Route path="audit" element={<FinanceAudit />} />
             <Route path="notifications" element={<FinanceNotifications />} />
           </Route>
 

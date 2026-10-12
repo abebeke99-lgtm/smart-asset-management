@@ -411,7 +411,23 @@ const updateValuation = async (req, res, next) => {
   } catch (e) { await tx.rollback(); next(e); }
 };
 const valuationHistory = async (req, res, next) => { try { if (!ensureFinance(req, res)) return; const records = await FinancialRecord.findAll({ where: { assetId: req.params.id }, include: [{ model: User, attributes: ['username', 'fullName'] }], order: [['createdAt', 'DESC']] }); res.json({ success: true, history: records }); } catch (e) { next(e); } };
-const listAudit = async (req, res, next) => { try { if (!ensureFinance(req, res)) return; const logs = await AuditLog.findAll({ include: [{ model: User, attributes: ['username', 'fullName', 'role'] }], order: [['createdAt', 'DESC']] }); res.json({ success: true, logs, total: logs.length }); } catch (e) { next(e); } };
+const listAudit = async (req, res) => {
+  try {
+    if (!ensureFinance(req, res)) return;
+    const logs = await AuditLog.findAll({
+      include: [{ model: User, attributes: ['username', 'fullName', 'role'] }],
+      order: [['createdAt', 'DESC']],
+    });
+    res.json({ success: true, logs, total: logs.length });
+  } catch (error) {
+    console.error('Finance audit query failed:', {
+      code: error.original?.code || null,
+      sqlMessage: error.original?.sqlMessage || null,
+      sql: error.sql || null,
+    });
+    return res.status(500).json({ message: 'Unable to load finance audit records' });
+  }
+};
 
 const listSuppliers = async (req, res, next) => {
   try {

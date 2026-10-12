@@ -1,8 +1,10 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState } from 'react';
-import { Eye, Package, RefreshCw, Search, X } from 'lucide-react';
+import { Edit3, Eye, Package, Plus, RefreshCw, Search, X } from 'lucide-react';
 import apiClient from '../../services/apiClient';
 import { useTranslation } from '../../contexts/UiContext';
+import { useAuth } from '../../contexts/AuthContext';
+import CollegeAssetForm from './CollegeAssetForm';
 import './CollegeAssets.css';
 
 const emptyFilters = { categories: [], statuses: [], conditions: [], locations: [], assignmentStatuses: [], departments: [] };
@@ -12,39 +14,99 @@ const label = (value) => String(value || '').replace(/[_-]+/g, ' ').replace(/\b\
 const date = (value) => value ? new Date(value).toLocaleDateString() : '—';
 const money = (value) => value === null || value === undefined || value === '' ? '—' : Number(value).toLocaleString(undefined, { style: 'currency', currency: 'ETB' });
 const isCurrentAssignment = (assignment) => !['returned', 'cancelled', 'closed'].includes(String(assignment.status || '').toLowerCase());
+const arrayOrEmpty = (value) => Array.isArray(value) ? value : [];
 
 const CollegeAssets = ({ inventory = false }) => {
   const { t } = useTranslation();
+  const auth = useAuth() || {};
+  const role = String(auth.user?.role || '').toLowerCase().replace(/[\s-]+/g, '_');
+  const canCreate = role === 'college_manager' && Boolean(auth.hasPermission?.('college.assets.create'));
+  const canUpdate = role === 'college_manager' && Boolean(auth.hasPermission?.('college.assets.update'));
+  const canManageAssignments = role === 'college_manager' && Boolean(auth.hasPermission?.('college.assignments.manage'));
   const [state, setState] = useState({ loading: true, tableLoading: false, error: '', assets: [], summary: emptySummary, filters: emptyFilters, pagination: { page: 1, limit: 20, total: 0, pages: 1 }, college: null });
-  const [query, setQuery] = useState({ search: '', category: '', status: '', condition: '', location: '', departmentId: '', assignmentStatus: '' });
+  const [query, setQuery] = useState({ search: '', category: '', status: '', condition: '', location: '', departmentId: '', assignmentStatus: '', dateFrom: '', dateTo: '', sortBy: 'updatedAt', sortOrder: 'DESC' });
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingAsset, setEditingAsset] = useState(null);
 
   const loadAssets = async (initial = false) => {
     setState((previous) => ({ ...previous, loading: initial, tableLoading: !initial, error: '' }));
     try {
       const response = await apiClient.get(inventory ? '/api/college/inventory' : '/api/college/assets', { params: { ...query, page, limit: 20, search: query.search || undefined } });
-      const payload = response.data || {};
-      setState((previous) => ({ ...previous, loading: false, tableLoading: false, assets: payload.data || [], summary: payload.summary || emptySummary, filters: payload.filters || emptyFilters, pagination: payload.pagination || previous.pagination, college: payload.college || previous.college }));
+      const payload = response.data;
+      if (!payload || !Array.isArray(payload.data)) throw new Error(t('collegeAssets.invalidResponse', 'The server returned invalid asset data.'));
+      const filters = payload.filters && typeof payload.filters === 'object' ? payload.filters : {};
+      const summary = payload.summary && typeof payload.summary === 'object' ? payload.summary : emptySummary;
+      const pagination = payload.pagination && typeof payload.pagination === 'object' ? payload.pagination : {};
+      setState((previous) => ({
+        ...previous,
+        loading: false,
+        tableLoading: false,
+        assets: payload.data,
+        summary: { ...emptySummary, ...summary },
+        filters: Object.fromEntries(Object.keys(emptyFilters).map((key) => [key, arrayOrEmpty(filters[key])])),
+        pagination: {
+          page: Number(pagination.page) > 0 ? Number(pagination.page) : page,
+          limit: Number(pagination.limit) > 0 ? Number(pagination.limit) : 20,
+          total: Number.isFinite(Number(pagination.total)) ? Number(pagination.total) : payload.data.length,
+          pages: Number(pagination.pages || pagination.totalPages) > 0 ? Number(pagination.pages || pagination.totalPages) : 1
+        },
+        college: payload.college || previous.college
+      }));
     } catch (error) {
-      setState((previous) => ({ ...previous, loading: false, tableLoading: false, error: error.response?.data?.message || t('collegeAssets.loadError', 'Unable to load college assets.') }));
+      const message = error.response?.data?.message
+        || (error.response || error.code === 'ERR_NETWORK' || error.message === 'Network Error' ? '' : error.message)
+        || t('collegeAssets.loadError', 'Unable to load college assets.');
+      setState((previous) => ({ ...previous, loading: false, tableLoading: false, error: message }));
     }
   };
 
   useEffect(() => {
     const timer = setTimeout(() => loadAssets(!state.assets.length && state.loading), 350);
     return () => clearTimeout(timer);
-  }, [page, query.search, query.category, query.status, query.condition, query.location, query.departmentId, query.assignmentStatus]);
+  }, [page, query.search, query.category, query.status, query.condition, query.location, query.departmentId, query.assignmentStatus, query.dateFrom, query.dateTo, query.sortBy, query.sortOrder]);
 
   const updateQuery = (field, value) => { setPage(1); setQuery((previous) => ({ ...previous, [field]: value === 'All' ? '' : value })); };
-  const clearFilters = () => { setPage(1); setQuery({ search: '', category: '', status: '', condition: '', location: '', departmentId: '', assignmentStatus: '' }); };
+  const clearFilters = () => { setPage(1); setQuery({ search: '', category: '', status: '', condition: '', location: '', departmentId: '', assignmentStatus: '', dateFrom: '', dateTo: '', sortBy: 'updatedAt', sortOrder: 'DESC' }); };
+  const closeForm = () => { setFormOpen(false); setEditingAsset(null); };
+  const saveAsset = async () => {
+    closeForm();
+    setSelected(null);
+    await loadAssets();
+  };
+  const editAsset = (asset) => {
+    setSelected(null);
+    setEditingAsset(asset);
+    setFormOpen(true);
+  };
   const openDetails = async (asset) => {
     setSelected({ ...asset, loading: true });
     setDetailLoading(true);
-    try { const response = await apiClient.get(`/api/college/assets/${asset.id}`); setSelected(response.data?.data || asset); } catch (error) { setSelected({ ...asset, detailError: error.response?.data?.message || t('collegeAssets.detailLoadError', 'Unable to load asset details.') }); } finally { setDetailLoading(false); }
+    try {
+      const response = await apiClient.get(`/api/college/assets/${asset.id}`);
+      if (!response.data?.data || typeof response.data.data !== 'object') throw new Error(t('collegeAssets.invalidResponse', 'The server returned invalid asset data.'));
+      setSelected(response.data.data);
+    } catch (error) {
+      setSelected({ ...asset, detailError: error.response?.data?.message || error.message || t('collegeAssets.detailLoadError', 'Unable to load asset details.') });
+    } finally { setDetailLoading(false); }
   };
-  const hasFilters = Object.values(query).some(Boolean);
+  const releaseCustody = async (asset, custody) => {
+    setDetailLoading(true);
+    try {
+      await apiClient.post(`/api/college/assets/${asset.id}/custody/${custody.id}/end`);
+      await loadAssets();
+      const response = await apiClient.get(`/api/college/assets/${asset.id}`);
+      if (!response.data?.data || typeof response.data.data !== 'object') throw new Error(t('collegeAssets.invalidResponse', 'The server returned invalid asset data.'));
+      setSelected(response.data.data);
+    } catch (error) {
+      setSelected((previous) => ({ ...previous, detailError: error.response?.data?.message || error.message || t('collegeAssets.detailLoadError', 'Unable to load asset details.') }));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+  const hasFilters = Boolean(query.search || query.category || query.status || query.condition || query.location || query.departmentId || query.assignmentStatus || query.dateFrom || query.dateTo);
   const pagination = state.pagination;
   const first = pagination.total ? ((pagination.page - 1) * pagination.limit) + 1 : 0;
   const last = Math.min(pagination.page * pagination.limit, pagination.total);
@@ -70,7 +132,7 @@ const CollegeAssets = ({ inventory = false }) => {
     ['model', selected?.model], ['status', label(selected?.status)],
     ['condition', selected?.condition], ['department', selected?.DepartmentRecord?.name || selected?.department],
     ['location', selected?.location],
-    ['assignedTo', selected?.Assignments?.find(isCurrentAssignment)?.User?.fullName || selected?.Assignments?.find(isCurrentAssignment)?.User?.username],
+    ['assignedTo', selected?.Assignments?.find(isCurrentAssignment)?.User?.fullName || selected?.Assignments?.find(isCurrentAssignment)?.User?.username || selected?.AssetCustodies?.find((custody) => custody.status === 'active')?.Custodian?.fullName || selected?.AssetCustodies?.find((custody) => custody.status === 'active')?.Custodian?.username],
     ['purchaseDate', date(selected?.purchaseDate)], ['purchaseCost', money(selected?.purchasePrice)],
     ['currentValue', money(selected?.currentValue)], ['warrantyExpiry', date(selected?.warrantyExpiry)],
     ['created', date(selected?.createdAt)], ['updated', date(selected?.updatedAt)]
@@ -83,7 +145,10 @@ const CollegeAssets = ({ inventory = false }) => {
         <h1>{t(inventory ? 'collegeAssets.inventoryTitle' : 'collegeAssets.assetsTitle', inventory ? 'College Inventory' : 'College Assets')}</h1>
         <p>{state.college?.name ? `${state.college.name} · ` : ''}{t(inventory ? 'collegeAssets.inventoryDescription' : 'collegeAssets.assetsDescription', inventory ? 'Monitor the physical inventory belonging to your college.' : 'Manage and monitor assets belonging to your college.')}</p>
       </div>
-      <button className="college-assets-refresh" type="button" onClick={() => loadAssets()}><RefreshCw size={16} /> {t('collegeAssets.refresh', 'Refresh')}</button>
+      <div className="college-assets-heading-actions">
+        {canCreate && !inventory && <button className="college-assets-primary" type="button" onClick={() => { setEditingAsset(null); setFormOpen(true); }}><Plus size={16} /> {t('collegeAssets.registerAsset', 'Register asset')}</button>}
+        <button className="college-assets-refresh" type="button" onClick={() => loadAssets()}><RefreshCw size={16} /> {t('collegeAssets.refresh', 'Refresh')}</button>
+      </div>
     </header>
     <section className="college-assets-summary" aria-label={t('collegeAssets.assetSummary', 'Asset summary')}>
       {summaryItems.map(([key, title]) => <div className="college-assets-stat" key={key}><span>{t(`collegeAssets.${title}`, title)}</span><strong>{Number(state.summary[key] || 0).toLocaleString()}</strong></div>)}
@@ -91,14 +156,19 @@ const CollegeAssets = ({ inventory = false }) => {
     <section className="college-assets-toolbar" aria-label={t('collegeAssets.filters', 'Asset filters')}>
       <label className="college-assets-search"><Search size={17} /><span className="sr-only">{t('collegeAssets.searchAssets', 'Search assets')}</span><input value={query.search} onChange={(event) => updateQuery('search', event.target.value)} placeholder={t('collegeAssets.searchPlaceholder', 'Search tag, name, serial, maker...')} /></label>
       {selectOptions.map(([field, title, allTitle, options]) => <label key={field}><span className="sr-only">{t(`collegeAssets.${title}`, title)}</span><select value={query[field]} onChange={(event) => updateQuery(field, event.target.value)}><option value="">{t(`collegeAssets.${allTitle}`, allTitle)}</option>{options.map((option) => <option value={typeof option === 'object' ? option.value : option} key={typeof option === 'object' ? option.value : option}>{typeof option === 'object' ? option.label : label(option)}</option>)}</select></label>)}
+      <label><span className="sr-only">{t('collegeAssets.dateFrom', 'Purchase date from')}</span><input aria-label={t('collegeAssets.dateFrom', 'Purchase date from')} type="date" value={query.dateFrom} onChange={(event) => updateQuery('dateFrom', event.target.value)} /></label>
+      <label><span className="sr-only">{t('collegeAssets.dateTo', 'Purchase date to')}</span><input aria-label={t('collegeAssets.dateTo', 'Purchase date to')} type="date" value={query.dateTo} onChange={(event) => updateQuery('dateTo', event.target.value)} /></label>
+      <label><span className="sr-only">{t('collegeAssets.sortAssets', 'Sort assets')}</span><select aria-label={t('collegeAssets.sortAssets', 'Sort assets')} value={query.sortBy} onChange={(event) => updateQuery('sortBy', event.target.value)}><option value="updatedAt">{t('collegeAssets.sortUpdated', 'Recently updated')}</option><option value="purchaseDate">{t('collegeAssets.sortPurchaseDate', 'Purchase date')}</option><option value="name">{t('collegeAssets.sortName', 'Name')}</option><option value="assetCode">{t('collegeAssets.sortAssetCode', 'Asset code')}</option></select></label>
+      <label><span className="sr-only">{t('collegeAssets.sortOrder', 'Sort order')}</span><select aria-label={t('collegeAssets.sortOrder', 'Sort order')} value={query.sortOrder} onChange={(event) => updateQuery('sortOrder', event.target.value)}><option value="DESC">{t('collegeAssets.sortDescending', 'Descending')}</option><option value="ASC">{t('collegeAssets.sortAscending', 'Ascending')}</option></select></label>
       {hasFilters && <button className="college-assets-clear" type="button" onClick={clearFilters}><X size={15} /> {t('collegeAssets.clearFilters', 'Clear Filters')}</button>}
     </section>
     <section className="college-assets-table-panel">
       <div className="college-assets-table-meta"><strong>{pagination.total ? t('collegeAssets.showingAssets', 'Showing {start}–{end} of {total} assets', { start: first, end: last, total: pagination.total }) : t('collegeAssets.noAssetsFound', 'No assets found') }</strong>{state.tableLoading && <RefreshCw size={15} className="college-assets-spin" />}</div>
-      {state.assets.length ? <div className="college-assets-table-wrap"><table><thead><tr>{['assetTag', 'assetName', 'category', 'department', 'location', 'status', 'condition', 'currentValue', 'actions'].map((key) => <th key={key}>{t(`collegeAssets.${key}`, key)}</th>)}</tr></thead><tbody>{state.assets.map((asset) => <tr key={asset.id}><td><strong>{display(asset.assetCode)}</strong></td><td>{display(asset.name)}<small>{display(asset.serialNumber)}</small></td><td>{display(asset.category)}</td><td>{display(asset.departmentName || asset.department)}</td><td>{display(asset.location)}</td><td><span className="college-assets-badge">{label(asset.status)}</span></td><td>{display(asset.condition)}</td><td>{money(asset.currentValue)}</td><td><button className="college-assets-icon-button" type="button" onClick={() => openDetails(asset)} aria-label={t('collegeAssets.viewDetailsFor', 'View details for {name}', { name: asset.name })} title={t('collegeAssets.viewDetails', 'View details')}><Eye size={17} /></button></td></tr>)}</tbody></table></div> : <div className="college-assets-empty"><Package size={28} /><strong>{hasFilters ? t('collegeAssets.noFilteredAssets', 'No assets match your current filters.') : t('collegeAssets.noAssetsFound', 'No assets found')}</strong>{hasFilters && <button type="button" onClick={clearFilters}>{t('collegeAssets.clearFilters', 'Clear Filters')}</button>}</div>}
+      {state.assets.length ? <div className="college-assets-table-wrap"><table><thead><tr>{['assetTag', 'assetName', 'category', 'department', 'location', 'status', 'condition', 'currentValue', 'actions'].map((key) => <th key={key}>{t(`collegeAssets.${key}`, key)}</th>)}</tr></thead><tbody>{state.assets.map((asset) => <tr key={asset.id}><td><strong>{display(asset.assetCode)}</strong></td><td>{display(asset.name)}<small>{display(asset.serialNumber)}</small></td><td>{display(asset.category)}</td><td>{display(asset.departmentName || asset.department)}</td><td>{display(asset.location)}</td><td><span className="college-assets-badge">{label(asset.status)}</span></td><td>{display(asset.condition)}</td><td>{money(asset.currentValue)}</td><td className="college-assets-row-actions"><button className="college-assets-icon-button" type="button" onClick={() => openDetails(asset)} aria-label={t('collegeAssets.viewDetailsFor', 'View details for {name}', { name: asset.name })} title={t('collegeAssets.viewDetails', 'View details')}><Eye size={17} /></button>{canUpdate && !inventory && <button className="college-assets-icon-button" type="button" onClick={() => editAsset(asset)} aria-label={t('collegeAssets.editAssetFor', 'Edit {name}', { name: asset.name })} title={t('collegeAssets.editAsset', 'Edit asset')}><Edit3 size={16} /></button>}</td></tr>)}</tbody></table></div> : <div className="college-assets-empty"><Package size={28} /><strong>{hasFilters ? t('collegeAssets.noFilteredAssets', 'No assets match your current filters.') : t('collegeAssets.noAssetsFound', 'No assets found')}</strong>{hasFilters && <button type="button" onClick={clearFilters}>{t('collegeAssets.clearFilters', 'Clear Filters')}</button>}</div>}
       <nav className="college-assets-pagination" aria-label={t('collegeAssets.assetPages', 'Asset pages')}><button type="button" disabled={pagination.page <= 1} onClick={() => setPage((value) => value - 1)}>{t('collegeAssets.previous', 'Previous')}</button><span>{t('collegeAssets.pageOf', 'Page {page} of {total}', { page: pagination.page, total: Math.max(1, pagination.pages) })}</span><button type="button" disabled={pagination.page >= pagination.pages} onClick={() => setPage((value) => value + 1)}>{t('collegeAssets.next', 'Next')}</button></nav>
     </section>
-    {selected && <div className="college-assets-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setSelected(null)}><section className="college-assets-modal" role="dialog" aria-modal="true" aria-labelledby="asset-details-title"><div className="college-assets-modal-head"><div><span className="college-assets-eyebrow">{t('collegeAssets.assetDetails', 'Asset details')}</span><h2 id="asset-details-title">{display(selected.name)}</h2></div><button type="button" onClick={() => setSelected(null)} aria-label={t('collegeAssets.closeDetails', 'Close details')}><X /></button></div>{detailLoading ? <div className="college-assets-modal-loading"><RefreshCw className="college-assets-spin" /> {t('collegeAssets.loadingDetails', 'Loading details...')}</div> : selected.detailError ? <p className="college-assets-error">{selected.detailError}</p> : <div className="college-assets-details">{detailItems.map(([key, value]) => <div key={key}><span>{t(`collegeAssets.${key}`, key)}</span><strong>{display(value)}</strong></div>)}</div>}</section></div>}
+    {selected && <div className="college-assets-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setSelected(null)}><section className="college-assets-modal" role="dialog" aria-modal="true" aria-labelledby="asset-details-title"><div className="college-assets-modal-head"><div><span className="college-assets-eyebrow">{t('collegeAssets.assetDetails', 'Asset details')}</span><h2 id="asset-details-title">{display(selected.name)}</h2></div><button type="button" onClick={() => setSelected(null)} aria-label={t('collegeAssets.closeDetails', 'Close details')}><X /></button></div>{detailLoading ? <div className="college-assets-modal-loading"><RefreshCw className="college-assets-spin" /> {t('collegeAssets.loadingDetails', 'Loading details...')}</div> : selected.detailError ? <p className="college-assets-error" role="alert">{selected.detailError}</p> : <><div className="college-assets-details">{detailItems.map(([key, value]) => <div key={key}><span>{t(`collegeAssets.${key}`, key)}</span><strong>{display(value)}</strong></div>)}</div><div className="college-assets-form-actions">{canUpdate && !inventory && <button className="college-assets-primary" type="button" onClick={() => editAsset(selected)}><Edit3 size={16} /> {t('collegeAssets.editAsset', 'Edit asset')}</button>}{canManageAssignments && !inventory && selected.AssetCustodies?.some((custody) => custody.status === 'active') && <button className="college-assets-clear" type="button" onClick={() => releaseCustody(selected, selected.AssetCustodies.find((custody) => custody.status === 'active'))}>{t('collegeAssets.releaseCustodian', 'Release custodian')}</button>}</div></>}</section></div>}
+    {formOpen && <CollegeAssetForm asset={editingAsset} onClose={closeForm} onSaved={saveAsset} t={t} />}
   </div>;
 };
 
