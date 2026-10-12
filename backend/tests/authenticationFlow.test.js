@@ -142,25 +142,30 @@ test('JWT secret is required in every environment and ignores development-only f
   }
 });
 
-test('verification session listing tolerates requests without organization scope data', async () => {
+test('verification session listing requires an organization scope and never queries unscoped', async () => {
   const { VerificationSession } = require('../src/models');
   const previousFindAll = VerificationSession.findAll;
   const calls = [];
+  let statusCode = 200;
 
   VerificationSession.findAll = async (options) => {
     calls.push(options);
     return [];
   };
+  const res = {
+    status(code) { statusCode = code; return this; },
+    json: () => {},
+  };
 
   try {
     await verificationController.listSessions(
       { user: { id: 1 }, organizationScope: undefined },
-      { json: () => {} },
+      res,
       (error) => { throw error; }
     );
 
-    assert.equal(calls.length, 1);
-    assert.deepEqual(calls[0].where, {});
+    assert.equal(statusCode, 403);
+    assert.equal(calls.length, 0);
   } finally {
     VerificationSession.findAll = previousFindAll;
   }

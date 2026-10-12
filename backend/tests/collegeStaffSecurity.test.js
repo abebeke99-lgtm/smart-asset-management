@@ -7,8 +7,8 @@ const routeSource = fs.readFileSync(path.resolve(__dirname, '../src/routes/colle
 const controllerSource = fs.readFileSync(path.resolve(__dirname, '../src/controllers/collegeController.js'), 'utf8');
 
 test('college staff route enforces the read-only permission contract', () => {
-  assert.match(routeSource, /router\.get\('\/staff',\s*requirePermission\('college\.staff\.view'\),\s*listCollegeStaff\)/);
-  assert.match(routeSource, /router\.get\('\/staff\/:id',\s*requirePermission\('college\.staff\.view'\),\s*getCollegeStaffMember\)/);
+  assert.match(routeSource, /router\.get\('\/staff',\s*requirePermission\('college\.staff\.view'\),\s*collegeStaff\.list\)/);
+  assert.match(routeSource, /router\.get\('\/staff\/:id',\s*requirePermission\('college\.staff\.view'\),\s*collegeStaff\.detail\)/);
 });
 
 test('college staff queries scope staff lookups to the authenticated college', () => {

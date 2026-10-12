@@ -116,6 +116,7 @@ import FinanceNotifications from './components/finance/FinanceNotifications';
 import StoreReceivePage from './components/store/StoreReceivePage';
 import StoreIssuePage from './components/store/StoreIssuePage';
 import StoreReturnsPage from './components/store/StoreReturnsPage';
+import StoreReturnLifecycle from './components/store/StoreReturnLifecycle';
 import StoreAssetRequests from './components/store/StoreAssetRequests';
 import StoreHistory from './components/store/StoreHistory';
 import StoreMaintenance from './components/store/StoreMaintenance';
@@ -3829,7 +3830,7 @@ function AppContent() {
             <Route path="stock-adjustments" element={<StoreAdjustments />} />
             <Route path="receive" element={<StoreReceivePage />} />
             <Route path="issue" element={<StoreIssuePage />} />
-            <Route path="returns" element={<StoreReturnsPage />} />
+            <Route path="returns" element={<><StoreReturnsPage /><StoreReturnLifecycle /></>} />
             <Route path="transfers" element={<StoreTransfers />} />
             <Route path="requests" element={<StoreAssetRequests />} />
             <Route path="tracking" element={<StoreTracking />} />

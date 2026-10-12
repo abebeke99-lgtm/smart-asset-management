@@ -44,14 +44,13 @@ const CollegeReports = () => {
   const translate = (value) => language === 'am' ? AMHARIC_COPY[value] || AMHARIC_COPY[String(value).toLowerCase()] || value : value;
   const [reportType, setReportType] = useState('inventory');
   const [loading, setLoading] = useState(true);
-  const [, setTableLoading] = useState(false);
   const [error, setError] = useState('');
   const [filters, setFilters] = useState({ departmentId: '', categoryId: '', status: '', dateFrom: '', dateTo: '', search: '' });
   const [page, setPage] = useState(1);
   const [payload, setPayload] = useState({ data: [], summary: emptySummary, filters: { departments: [], categories: [], statuses: [] }, pagination: { page: 1, limit: 20, total: 0, totalPages: 1 }, charts: [], college: null, reportType: 'inventory' });
 
   const loadReports = async (nextPage = page) => {
-    setTableLoading(true);
+    setLoading(true);
     setError('');
     try {
       const response = await apiClient.get('/api/college/reports', {
@@ -81,7 +80,6 @@ const CollegeReports = () => {
       setError(language === 'am' ? translate('Failed to load report data.') : requestError.response?.data?.message || 'Failed to load report data.');
     } finally {
       setLoading(false);
-      setTableLoading(false);
     }
   };
 
@@ -178,6 +176,47 @@ const CollegeReports = () => {
     return row?.label || '—';
   };
 
+  const exportReport = async () => {
+    setError('');
+    try {
+      let currentPage = 1;
+      let totalPages = 1;
+      const exportRows = [];
+      while (currentPage <= totalPages) {
+        const response = await apiClient.get('/api/college/reports', {
+          params: {
+            page: currentPage,
+            limit: 100,
+            reportType,
+            departmentId: filters.departmentId || undefined,
+            categoryId: filters.categoryId || undefined,
+            status: filters.status || undefined,
+            dateFrom: filters.dateFrom || undefined,
+            dateTo: filters.dateTo || undefined,
+            search: filters.search || undefined,
+          },
+        });
+        const data = response.data || {};
+        exportRows.push(...(data.data || []));
+        totalPages = Math.max(1, Number(data.pagination?.totalPages) || 1);
+        currentPage += 1;
+      }
+      const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+      const csv = [
+        tableHeaders.map(escapeCsv).join(','),
+        ...exportRows.map((row) => tableHeaders.map((_, index) => escapeCsv(renderCell(row, index))).join(',')),
+      ].join('\n');
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `college-${reportType}-report.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (requestError) {
+      setError(language === 'am' ? translate('Failed to load report data.') : requestError.response?.data?.message || 'Failed to export report data.');
+    }
+  };
+
   const renderMinimalChart = () => {
     if (!payload.charts || payload.charts.length === 0) return <div className="college-reports-empty">{translate('No chart data available for this report.')}</div>;
     const max = Math.max(...payload.charts.map((entry) => Number(entry.value) || 0), 1);
@@ -209,7 +248,8 @@ const CollegeReports = () => {
           ))}
         </div>
         <div className="college-reports-actions">
-          <button type="button" onClick={() => loadReports(page)}><RefreshCw size={16} /> {translate('Refresh')}</button>
+          <button type="button" onClick={() => loadReports(page)} disabled={loading}><RefreshCw size={16} /> {translate('Refresh')}</button>
+          <button type="button" onClick={exportReport} disabled={loading}><Download size={16} /> {translate('Export')}</button>
         </div>
       </div>
 

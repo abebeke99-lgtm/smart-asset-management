@@ -11,6 +11,8 @@ const allowedChannels = new Set(['in_app', 'email', 'sms']);
 const defaultEventRules = {
   assignment_created: { enabled: true, inApp: true, email: false, recipientRule: 'Assigned User', priority: 'normal' },
   assignment_returned: { enabled: true, inApp: true, email: false, recipientRule: 'Assigned User', priority: 'normal' },
+  asset_return_submitted: { enabled: true, inApp: true, email: false, recipientRule: 'Current Custodian and College Managers', priority: 'normal' },
+  asset_return_status_changed: { enabled: true, inApp: true, email: false, recipientRule: 'Return Requester and Current Custodian', priority: 'normal' },
   department_request_submitted: { enabled: true, inApp: true, email: false, recipientRule: 'Department Heads', priority: 'normal' },
   department_request_approved: { enabled: true, inApp: true, email: false, recipientRule: 'Requester', priority: 'normal' },
   department_request_rejected: { enabled: true, inApp: true, email: false, recipientRule: 'Requester', priority: 'high' },

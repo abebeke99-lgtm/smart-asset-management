@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { sequelize } = require('../src/config/database');
-const { ensureQrCodeColumn } = require('../src/scripts/migrations/adminRfidTracking');
+const { ensureQrCodeColumn, ensureRfidLogColumns } = require('../src/scripts/migrations/adminRfidTracking');
 
 test('QR schema repair adds and constrains only the missing asset QR column', { concurrency: false }, async () => {
   const queryInterface = sequelize.getQueryInterface();
@@ -75,5 +75,35 @@ test('QR schema repair leaves an already-correct asset column unchanged', { conc
     queryInterface.describeTable = originalDescribeTable;
     queryInterface.showIndex = originalShowIndex;
     sequelize.query = originalQuery;
+  }
+});
+
+test('RFID log schema repair adds missing reader and authenticated scanner columns additively', { concurrency: false }, async () => {
+  const queryInterface = sequelize.getQueryInterface();
+  const originals = {
+    describeTable: queryInterface.describeTable,
+    addColumn: queryInterface.addColumn,
+  };
+  const changes = [];
+  queryInterface.describeTable = async (table) => {
+    assert.equal(table, 'rfid_logs');
+    return { id: {}, asset_id: {}, tag: {}, action: {}, location: {}, notes: {}, created_at: {}, updated_at: {} };
+  };
+  queryInterface.addColumn = async (table, column, definition) => {
+    changes.push({ table, column, definition });
+  };
+
+  try {
+    assert.equal(await ensureRfidLogColumns(), true);
+    assert.deepEqual(changes.map(({ table, column }) => [table, column]), [
+      ['rfid_logs', 'reader_id'],
+      ['rfid_logs', 'scanned_by'],
+    ]);
+    assert.equal(changes[1].definition.allowNull, true);
+    assert.equal(changes[1].definition.references.model, 'users');
+    assert.equal(changes[1].definition.onDelete, 'SET NULL');
+  } finally {
+    queryInterface.describeTable = originals.describeTable;
+    queryInterface.addColumn = originals.addColumn;
   }
 });

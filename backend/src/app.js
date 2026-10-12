@@ -9,7 +9,7 @@ require('./models');
 const { syncDatabase } = require('./config/sync');
 const { seedDatabase } = require('./config/seed');
 const { initializeInitialAdmin } = require('./services/initialAdminService');
-const { ensureQrCodeColumn } = require('./scripts/migrations/adminRfidTracking');
+const { ensureQrCodeColumn, ensureRfidLogColumns } = require('./scripts/migrations/adminRfidTracking');
 const { ensureRoomSchema } = require('./scripts/migrations/roomSchema');
 const { ensureUploadDirectories } = require('./utils/uploadUtils');
 
@@ -229,14 +229,15 @@ app.use((err, req, res, next) => {
   }
 
   console.error('Server Error:', {
+    requestId: req.requestId || null,
+    operation: `${req.method} ${req.path}`,
+    errorCategory: err.name || 'Error',
     name: err.name,
     message: err.message,
     code: err.original?.code || err.parent?.code || err.code,
     sqlMessage: err.original?.sqlMessage || err.parent?.sqlMessage,
     sql: err.sql || err.original?.sql,
     stack: err.stack,
-    url: req.originalUrl,
-    method: req.method,
     ip: req.ip,
   });
   res.status(status).json({
@@ -275,6 +276,7 @@ async function initializeDatabase() {
         }
         if (schemaReady) {
           await ensureQrCodeColumn();
+          await ensureRfidLogColumns();
           await ensureRoomSchema();
         }
       } catch (error) {

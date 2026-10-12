@@ -1,13 +1,14 @@
 const express = require('express');
 const { requireAuth, requireActiveAccount, requireRole, requirePermission } = require('../middlewares/auth');
 const { requireCollegeManager, resolveCollegeScope } = require('../middlewares/organizationScope');
-const { getCollegeDashboard, getCollegeProfile, updateCollegeProfile, listCollegeDepartments, getCollegeDepartmentOverview, getCollegeDepartmentPerformance, getCollegeDepartmentReports, listCollegeStaff, getCollegeStaffMember, listCollegeAssets, getCollegeInventory, getCollegeAssetRegistrationOptions, getCollegeAsset, listCollegeLocations, getCollegeLocation, createCollegeLocation, updateCollegeLocation, deleteCollegeLocation, createCollegeDepartment, updateCollegeDepartment, updateCollegeDepartmentStatus, deleteCollegeDepartment, getCollegeDepartmentDetails, listCollegeDepartmentStaff, listCollegeDepartmentAssets, listCollegeAssignments, listCollegeMaintenance, getCollegeMaintenance, listCollegeVerification, getCollegeReports, getCollegeAssetAnalytics, listCollegeRFIDTracking } = require('../controllers/collegeController');
+const { getCollegeDashboard, getCollegeProfile, updateCollegeProfile, listCollegeDepartments, getCollegeDepartmentOverview, getCollegeDepartmentPerformance, getCollegeDepartmentReports, listCollegeAssets, getCollegeInventory, getCollegeAssetRegistrationOptions, getCollegeAsset, listCollegeLocations, getCollegeLocation, createCollegeLocation, updateCollegeLocation, deleteCollegeLocation, createCollegeDepartment, updateCollegeDepartment, updateCollegeDepartmentStatus, deleteCollegeDepartment, getCollegeDepartmentDetails, listCollegeDepartmentStaff, listCollegeDepartmentAssets, listCollegeAssignments, getCollegeAssignmentOptions, listCollegeMaintenance, getCollegeMaintenance, listCollegeVerification, getCollegeReports, getCollegeAssetAnalytics, listCollegeRFIDTracking, lookupCollegeTrackingCode, recordCollegeTrackingScan, assignCollegeTrackingTags, regenerateCollegeQr } = require('../controllers/collegeController');
 const { listRequests, getRequest, decideRequest, listCollegeRequests, getCollegeRequest, listCollegeDepartmentRequests } = require('../controllers/workspaceRequestController');
 const verification = require('../controllers/verificationController');
 const { getAssetHistory, createAsset, updateAsset } = require('../controllers/assetController');
 const { Asset } = require('../models');
 const { listAssetDocuments, uploadAssetDocument, deleteAssetDocument, downloadAssetDocument, createAssetCustody, endCustody } = require('../controllers/assetExtendedController');
 const collegeAssetRequests = require('../controllers/collegeAssetRequestController');
+const collegeStaff = require('../controllers/collegeStaffController');
 
 const router = express.Router();
 const { Op } = require('sequelize');
@@ -88,6 +89,12 @@ router.get('/department-requests', requirePermission('college.requests.view'), l
 router.get('/approvals', requirePermission('college.approvals.view'), listCollegeRequests);
 router.get('/approvals/:id', requirePermission('college.approvals.view'), getCollegeRequest);
 router.get('/assignments', requirePermission('college.assignments.view'), listCollegeAssignments);
+router.get('/assignment-options', requireRole('college_manager'), requirePermission('college.assignments.manage'), getCollegeAssignmentOptions);
+router.get('/rfid', requirePermission('college.rfid.view'), listCollegeRFIDTracking);
+router.get('/rfid/lookup/:code', requirePermission('college.rfid.view'), lookupCollegeTrackingCode);
+router.post('/rfid/scan', requireRole('college_manager'), requirePermission('college.rfid.view'), recordCollegeTrackingScan);
+router.post('/rfid/assets/:id/tags', requireRole('college_manager'), requirePermission('college.assets.update'), assignCollegeTrackingTags);
+router.post('/rfid/assets/:id/qr/regenerate', requireRole('college_manager'), requirePermission('college.assets.update'), regenerateCollegeQr);
 router.post('/approvals/:id/approve', requirePermission('college.approvals.approve'), (req, res, next) => { req.body.decision = 'approved'; return decideRequest(req, res, next); });
 router.post('/approvals/:id/reject', requirePermission('college.approvals.reject'), (req, res, next) => { req.body.decision = 'rejected'; return decideRequest(req, res, next); });
 router.post('/approvals/:id/request-changes', requirePermission('college.approvals.request_changes'), (req, res, next) => { req.body.decision = 'changes_requested'; return decideRequest(req, res, next); });
@@ -227,8 +234,13 @@ router.delete('/notifications/:id', requirePermission('notifications.delete'), a
 });
 router.get('/reports', requirePermission('college.reports.view'), getCollegeReports);
 router.get('/analytics/assets', requirePermission('college.analytics.view'), getCollegeAssetAnalytics);
-router.get('/staff', requirePermission('college.staff.view'), listCollegeStaff);
-router.get('/staff/:id', requirePermission('college.staff.view'), getCollegeStaffMember);
+router.get('/staff', requirePermission('college.staff.view'), collegeStaff.list);
+router.get('/staff/options', requirePermission('college.staff.view'), collegeStaff.options);
+router.get('/staff/:id/assignment-options', requireRole('college_manager'), requirePermission('college.assignments.manage'), collegeStaff.assignmentOptions);
+router.get('/staff/:id', requirePermission('college.staff.view'), collegeStaff.detail);
+router.post('/staff', requireRole('college_manager'), requirePermission('college.staff.manage'), collegeStaff.create);
+router.put('/staff/:id', requireRole('college_manager'), requirePermission('college.staff.manage'), collegeStaff.update);
+router.patch('/staff/:id/status', requireRole('college_manager'), requirePermission('college.staff.manage'), collegeStaff.setStatus);
 router.get('/assets', requirePermission('college.assets.view'), listCollegeAssets);
 router.get('/assets/registration-options', requirePermission('college.assets.view'), getCollegeAssetRegistrationOptions);
 router.post('/assets', requireRole('college_manager'), requirePermission('college.assets.create'), createAsset);
@@ -236,7 +248,6 @@ router.put('/assets/:id', requireRole('college_manager'), requirePermission('col
 router.post('/assets/:id/custody', requireRole('college_manager'), requirePermission('college.assignments.manage'), requireCollegeAsset, createAssetCustody);
 router.post('/assets/:id/custody/:custodyId/end', requireRole('college_manager'), requirePermission('college.assignments.manage'), requireCollegeAsset, endCustody);
 router.get('/inventory', requirePermission('college.inventory.view'), getCollegeInventory);
-router.get('/rfid', requirePermission('college.rfid.view'), listCollegeRFIDTracking);
 router.get('/assets/:id/history', requirePermission('college.history.view'), getAssetHistory);
 router.get('/assets/:id/documents', requirePermission('college.assets.view'), requireCollegeAsset, listAssetDocuments);
 router.post('/assets/:id/documents', requirePermission('college.documents.manage'), requireCollegeAsset, uploadAssetDocument);

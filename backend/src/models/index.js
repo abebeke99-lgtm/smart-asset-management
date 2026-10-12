@@ -380,6 +380,8 @@ User.hasMany(PasswordRecovery, { foreignKey: 'userId', onDelete: 'CASCADE' });
 PasswordRecovery.belongsTo(User, { foreignKey: 'userId' });
 Asset.hasMany(RFIDLog, { foreignKey: 'assetId' });
 RFIDLog.belongsTo(Asset, { foreignKey: 'assetId' });
+RFIDLog.belongsTo(User, { foreignKey: 'scannedBy', as: 'ScannedByUser' });
+User.hasMany(RFIDLog, { foreignKey: 'scannedBy', as: 'RFIDScans' });
 User.hasMany(AuditLog, { foreignKey: 'userId' });
 AuditLog.belongsTo(User, { foreignKey: 'userId' });
 User.hasMany(UserActivityLog, { foreignKey: 'userId' });

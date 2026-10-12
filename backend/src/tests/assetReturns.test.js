@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const routes = require('../routes/returnWorkflowRoutes');
 const workspaceRoutes = require('../routes/departmentWorkspaceRoutes');
-const { requireDepartmentHead, resolveDepartmentScope } = require('../middlewares/organizationScope');
+const { requireCollegeManager, resolveCollegeScope, requireDepartmentHead, resolveDepartmentScope } = require('../middlewares/organizationScope');
 const { createReturn, listReturns, getReturn, cancelReturn } = require('../controllers/returnWorkflowController');
 const { sequelize, Asset, Assignment, AssetReturn, AuditLog, Maintenance, MaintenanceHistory, User } = require('../models');
 
@@ -78,6 +78,57 @@ test('department return routes require Department Head role and department scope
   }
 });
 
+test('college return routes require College Manager role, atomic permission, and college scope', () => {
+  for (const [path, method] of [
+    ['/college/returns', 'get'],
+    ['/college/returns/options', 'get'],
+    ['/college/returns', 'post'],
+    ['/college/returns/:id', 'get'],
+    ['/college/returns/:id/approve', 'post'],
+    ['/college/returns/:id/reject', 'post'],
+  ]) {
+    const route = routes.stack.find((layer) => layer.route?.path === path && layer.route.methods[method]);
+    assert.ok(route, `expected ${method.toUpperCase()} ${path}`);
+    assert.equal(route.route.stack.length, 5);
+    assert.equal(route.route.stack[0].handle, requireCollegeManager[0]);
+    assert.equal(route.route.stack[1].handle, requireCollegeManager[1]);
+    assert.equal(route.route.stack[2].handle, resolveCollegeScope);
+    const permissionGuard = route.route.stack[3].handle;
+    let granted = false;
+    permissionGuard({ user: { role: 'college_manager', permissions: ['college.returns.view', 'college.returns.manage'] } }, response(), () => { granted = true; });
+    assert.equal(granted, true);
+    const deniedPermission = response();
+    permissionGuard({ user: { role: 'college_manager', permissions: [] } }, deniedPermission, () => assert.fail('must deny without the required permission'));
+    assert.equal(deniedPermission.statusCode, 403);
+    const roleGuard = route.route.stack[1].handle;
+    const denied = response();
+    roleGuard({ user: { role: 'department_head' } }, denied, () => assert.fail('must deny a non-college role'));
+    assert.equal(denied.statusCode, 403);
+    let allowed = false;
+    roleGuard({ user: { role: 'college_manager', permissions: [] } }, response(), () => { allowed = true; });
+    assert.equal(allowed, true);
+  }
+});
+
+test('return list rejects an invalid status filter before querying the database', async () => {
+  const originalTransaction = sequelize.transaction;
+  const originalFindAndCountAll = AssetReturn.findAndCountAll;
+  const originalFindAll = AssetReturn.findAll;
+  sequelize.transaction = async () => assert.fail('invalid status filter must not open a transaction');
+  AssetReturn.findAndCountAll = async () => assert.fail('invalid status filter must not run a list query');
+  AssetReturn.findAll = async () => assert.fail('invalid status filter must not run a summary query');
+  const res = response();
+  try {
+    await listReturns({ organizationScope: { collegeId: 4 }, query: { status: 'Pending' } }, res, (error) => { throw error; });
+    assert.equal(res.statusCode, 400);
+    assert.match(res.body.message, /status filter is invalid/i);
+  } finally {
+    sequelize.transaction = originalTransaction;
+    AssetReturn.findAndCountAll = originalFindAndCountAll;
+    AssetReturn.findAll = originalFindAll;
+  }
+});
+
 test('department return rejects an invalid condition before opening a transaction', async () => {
   const originalTransaction = sequelize.transaction;
   sequelize.transaction = async () => assert.fail('invalid return must not start a transaction');
@@ -102,6 +153,7 @@ test('damaged return records its assigned person, date, evidence, and opens one 
       return { id: 22, name: 'Laptop', assetCode: 'L-22', status: 'assigned', collegeId: 2, departmentId: 7 };
     }),
     replace(Assignment, 'findOne', async () => ({ id: 9, assetId: 22, assignedTo: 44 })),
+    replace(AssetReturn, 'findAll', async () => []),
     replace(AssetReturn, 'create', async (values) => ({
       id: 15,
       ...values,
@@ -147,6 +199,7 @@ test('damaged return reuses an existing open maintenance record', async () => {
     replace(sequelize, 'transaction', async () => transaction),
     replace(Asset, 'findOne', async () => ({ id: 22, name: 'Laptop', status: 'assigned', collegeId: 2, departmentId: 7 })),
     replace(Assignment, 'findOne', async () => ({ id: 9, assetId: 22, assignedTo: 44 })),
+    replace(AssetReturn, 'findAll', async () => []),
     replace(AssetReturn, 'create', async (values) => ({ id: 15, ...values, toJSON() { return { id: this.id, ...values }; } })),
     replace(User, 'findByPk', async () => ({ id: 44, fullName: 'Returning Person', username: 'returner' })),
     replace(Maintenance, 'findOne', async () => existingMaintenance),
@@ -182,10 +235,13 @@ test('return history queries only the department and normalizes linked asset and
       };
     },
   };
-  const restore = replace(AssetReturn, 'findAndCountAll', async (options) => {
-    query = options;
-    return { rows: [record], count: 1 };
-  });
+  const restore = [
+    replace(AssetReturn, 'findAndCountAll', async (options) => {
+      query = options;
+      return { rows: [record], count: 1 };
+    }),
+    replace(AssetReturn, 'findAll', async () => [{ status: 'Requested' }]),
+  ];
   const res = response();
   try {
     await listReturns({ organizationScope: { departmentId: 7 }, query: {} }, res, (error) => { throw error; });
@@ -194,12 +250,13 @@ test('return history queries only the department and normalizes linked asset and
     assert.equal(res.body.data[0].asset_name, 'Laptop');
     assert.equal(res.body.data[0].returning_person_name, 'Returning Person');
     assert.equal(res.body.data[0].return_date, '2026-10-05');
+    assert.deepEqual(res.body.summary, { total: 1, byStatus: { Requested: 1 } });
   } finally {
-    restore();
+    restore.reverse().forEach((undo) => undo());
   }
 });
 
-test('return list query errors are logged and returned as a message-only 500', async () => {
+test('return list query errors are logged with context and forwarded to the error handler', async () => {
   const originalFindAndCountAll = AssetReturn.findAndCountAll;
   const originalConsoleError = console.error;
   const databaseError = Object.assign(new Error('Return query failed'), {
@@ -208,20 +265,20 @@ test('return list query errors are logged and returned as a message-only 500', a
     sql: 'SELECT asset_returns.createdAt FROM asset_returns',
   });
   let logged;
+  let forwarded;
   AssetReturn.findAndCountAll = async () => { throw databaseError; };
   console.error = (...args) => { logged = args; };
   try {
     const res = response();
-    await listReturns({ organizationScope: { departmentId: 7 }, query: {} }, res, (error) => { throw error; });
-    assert.equal(res.statusCode, 500);
-    assert.deepEqual(res.body, { message: 'Failed to load asset returns' });
+    await listReturns({ organizationScope: { departmentId: 7 }, query: {} }, res, (error) => { forwarded = error; });
+    assert.equal(forwarded, databaseError);
     assert.equal(logged[0], 'Failed to list asset returns:');
     assert.deepEqual(logged[1], {
-      name: 'SequelizeDatabaseError',
-      message: 'Return query failed',
+      requestId: null,
+      operation: 'GET /api/college/returns',
+      errorCategory: 'SequelizeDatabaseError',
       code: 'ER_BAD_FIELD_ERROR',
       sqlMessage: "Unknown column 'asset_returns.createdAt'",
-      sql: 'SELECT asset_returns.createdAt FROM asset_returns',
     });
   } finally {
     AssetReturn.findAndCountAll = originalFindAndCountAll;

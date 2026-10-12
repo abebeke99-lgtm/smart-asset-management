@@ -4,6 +4,8 @@ const { requireCollegeManager, resolveCollegeScope, requireDepartmentHead, resol
 const workflow = require('../controllers/returnWorkflowController');
 
 router.get('/college/returns', ...requireCollegeManager, resolveCollegeScope, auth.requirePermission('college.returns.view'), workflow.listReturns);
+router.get('/college/returns/options', ...requireCollegeManager, resolveCollegeScope, auth.requirePermission('college.returns.view'), workflow.listEligibleReturnAssets);
+router.post('/college/returns', ...requireCollegeManager, resolveCollegeScope, auth.requirePermission('college.returns.manage'), workflow.createReturn);
 router.get('/college/returns/:id', ...requireCollegeManager, resolveCollegeScope, auth.requirePermission('college.returns.view'), workflow.getReturn);
 router.post('/college/returns/:id/approve', ...requireCollegeManager, resolveCollegeScope, auth.requirePermission('college.returns.manage'), workflow.approveReturn);
 router.post('/college/returns/:id/reject', ...requireCollegeManager, resolveCollegeScope, auth.requirePermission('college.returns.manage'), workflow.rejectReturn);
@@ -17,7 +19,10 @@ router.get('/department-head/returns/:id', ...requireDepartmentHead, resolveDepa
 router.post('/department-head/returns/:id/cancel', ...requireDepartmentHead, resolveDepartmentScope, workflow.cancelReturn);
 router.get('/store/returns', auth.requireAuth, auth.requireRole('store_manager'), resolveCollegeScope, workflow.listReturns);
 router.post('/store/returns', auth.requireAuth, auth.requireRole('store_manager'), resolveCollegeScope, workflow.processStoreReturn);
+router.post('/store/returns/:id/ready', auth.requireAuth, auth.requireRole('store_manager'), resolveCollegeScope, workflow.readyReturn);
+router.post('/store/returns/:id/dispatch', auth.requireAuth, auth.requireRole('store_manager'), resolveCollegeScope, workflow.dispatchReturn);
 router.post('/store/returns/:id/receive', auth.requireAuth, auth.requireRole('store_manager'), resolveCollegeScope, workflow.receiveReturn);
 router.post('/store/returns/:id/inspect', auth.requireAuth, auth.requireRole('store_manager'), resolveCollegeScope, workflow.inspectReturn);
+router.post('/store/returns/:id/complete', auth.requireAuth, auth.requireRole('store_manager'), resolveCollegeScope, workflow.completeReturn);
 
 module.exports = router;

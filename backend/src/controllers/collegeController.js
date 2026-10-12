@@ -1,4 +1,5 @@
-const { Op, fn, col, literal } = require('sequelize');
+const crypto = require('node:crypto');
+const { Op, fn, col, literal, where } = require('sequelize');
 
 const snakeCaseColumn = (field) => String(field).replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 const sqlColumn = (field) => col(snakeCaseColumn(field));
@@ -6,7 +7,7 @@ const sqlQualifiedColumn = (model, field) => col(`${model.name}.${snakeCaseColum
 // Sequelize does not apply attribute-to-column mapping inside `$association.attribute$` where paths,
 // so those paths must reference the real (snake_cased) database column.
 const joinedColumn = (association, field) => `$${association}.${snakeCaseColumn(field)}$`;
-const { Asset, User, Department, Maintenance, Approval, Transfer, AuditLog, College, AssetReturn, VerificationSession, VerificationItem, Assignment, Category, AssetMovement, RFIDLog, Campus, Building, Room, AssetCustody } = require('../models');
+const { sequelize, Asset, User, Department, Maintenance, Approval, Transfer, AuditLog, College, AssetReturn, VerificationSession, VerificationItem, Assignment, Category, AssetMovement, RFIDLog, Campus, Building, Room, AssetCustody, Inventory } = require('../models');
 const { createAuditLog } = require('../services/auditLogService');
 
 const collegeScope = (req) => String(req.user?.department || '').trim();
@@ -42,7 +43,7 @@ const listCollegeAssignments = async (req, res, next) => {
     if (assignedTo) {
       const assignee = await User.findOne({ where: { id: assignedTo, collegeId }, attributes: ['id'] });
       if (!assignee) return res.status(400).json({ success: false, message: 'Assigned user is not part of your college' });
-      assignmentWhere.assignedTo = assignedTo;
+      assignmentWhere[Op.and] = [{ [Op.or]: [{ assignedTo }, { assignedToId: assignedTo }] }];
     }
     if (status) assignmentWhere.status = status;
     if (location) assetWhere.location = { [Op.like]: `%${location}%` };
@@ -58,7 +59,12 @@ const listCollegeAssignments = async (req, res, next) => {
       { '$User.username$': { [Op.like]: `%${search}%` } },
     ];
     const assetInclude = { model: Asset, where: assetWhere, required: true, attributes: ['id', 'assetCode', 'name', 'category', 'serialNumber', 'department', 'location', 'collegeId', 'departmentId'], include: [{ model: Department, as: 'DepartmentRecord', attributes: ['id', 'name', 'code'], required: false }] };
-    const userInclude = { model: User, attributes: ['id', 'username', 'fullName', 'email', 'department', 'departmentId', 'collegeId'], required: false };
+    const userInclude = {
+      model: User,
+      attributes: ['id', 'username', 'fullName', 'email', 'department', 'departmentId', 'collegeId'],
+      include: [{ model: Department, as: 'DepartmentRecord', attributes: ['id', 'name', 'code'], required: false }],
+      required: false,
+    };
     const scopedOptions = { where: assignmentWhere, include: [assetInclude, userInclude], distinct: true };
     const [result, allScoped, staff] = await Promise.all([
       Assignment.findAndCountAll({ ...scopedOptions, limit, offset, order: [['createdAt', 'DESC']] }),
@@ -76,10 +82,14 @@ const listCollegeAssignments = async (req, res, next) => {
         assetId: data.assetId,
         asset: data.Asset ? { id: data.Asset.id, code: data.Asset.assetCode, name: data.Asset.name, category: data.Asset.category, serialNumber: data.Asset.serialNumber } : null,
         assignee: data.User ? { id: data.User.id, name: data.User.fullName || data.User.username, username: data.User.username } : null,
-        department: data.Asset?.DepartmentRecord ? { id: data.Asset.DepartmentRecord.id, name: data.Asset.DepartmentRecord.name, code: data.Asset.DepartmentRecord.code } : (data.Asset?.department ? { name: data.Asset.department } : null),
+        department: data.User?.DepartmentRecord
+          ? { id: data.User.DepartmentRecord.id, name: data.User.DepartmentRecord.name, code: data.User.DepartmentRecord.code }
+          : data.Asset?.DepartmentRecord
+            ? { id: data.Asset.DepartmentRecord.id, name: data.Asset.DepartmentRecord.name, code: data.Asset.DepartmentRecord.code }
+            : (data.Asset?.department ? { name: data.Asset.department } : null),
         location: notes.location || data.Asset?.location || null,
-        assignedDate: notes.assignedDate || data.createdAt,
-        expectedReturnDate: notes.expectedReturnDate || null,
+        assignedDate: data.assignedDate || notes.assignedDate || data.createdAt,
+        expectedReturnDate: data.expectedReturnDate || notes.expectedReturnDate || null,
         status: data.status,
         notes: notes.notes || notes.remarks || null,
         createdAt: data.createdAt,
@@ -89,6 +99,70 @@ const listCollegeAssignments = async (req, res, next) => {
     const collegeAssets = await Asset.findAll({ where: { collegeId }, attributes: ['category', 'location'], raw: true });
     res.json({ success: true, data: { summary, assignments, pagination: { page, limit, total: result.count, totalPages: Math.ceil(result.count / limit), pages: Math.ceil(result.count / limit) || 1 }, filters: { departments, statuses, users: staff, categories: [...new Set(collegeAssets.map((asset) => asset.category).filter(Boolean))].sort(), locations: [...new Set(collegeAssets.map((asset) => asset.location).filter(Boolean))].sort() } } });
   } catch (error) { next(error); }
+};
+
+const getCollegeAssignmentOptions = async (req, res, next) => {
+  try {
+    const collegeId = Number(req.organizationScope?.collegeId);
+    if (!Number.isSafeInteger(collegeId) || collegeId <= 0) {
+      return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+    }
+
+    const [inventoryRows, staff, departments] = await Promise.all([
+      Inventory.findAll({
+        where: { availableQuantity: { [Op.gt]: 0 } },
+        attributes: ['assetId', 'availableQuantity'],
+        include: [{
+          model: Asset,
+          where: {
+            collegeId,
+            status: { [Op.notIn]: ['retired', 'disposed', 'deleted', 'archived', 'quarantined', 'damaged', 'missing', 'lost'] },
+          },
+          attributes: ['id', 'name', 'assetCode', 'category', 'serialNumber', 'status', 'condition', 'departmentId', 'location'],
+          required: true,
+        }],
+        order: [[Asset, 'name', 'ASC']],
+      }),
+      User.findAll({
+        where: { collegeId, role: 'staff', active: true, status: 'active' },
+        attributes: ['id', 'username', 'fullName', 'departmentId', 'department'],
+        include: [{ model: Department, as: 'DepartmentRecord', attributes: ['id', 'name', 'code'], required: false }],
+        order: [['fullName', 'ASC']],
+      }),
+      Department.findAll({
+        where: { collegeId, status: 'active' },
+        attributes: ['id', 'name', 'code'],
+        order: [['name', 'ASC']],
+      }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        assets: inventoryRows.map((row) => {
+          const inventory = row.toJSON();
+          return { ...inventory.Asset, availableQuantity: Number(inventory.availableQuantity) };
+        }),
+        staff: staff.map((user) => {
+          const value = user.toJSON();
+          return {
+            id: value.id,
+            username: value.username,
+            fullName: value.fullName,
+            departmentId: value.departmentId,
+            department: value.DepartmentRecord ? {
+              id: value.DepartmentRecord.id,
+              name: value.DepartmentRecord.name,
+              code: value.DepartmentRecord.code,
+            } : value.department ? { name: value.department } : null,
+          };
+        }),
+        departments,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
 };
 
 const normalizeMaintenanceStatus = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, '-');
@@ -166,7 +240,7 @@ const listCollegeMaintenance = async (req, res, next) => {
       if (dateFrom) where.createdAt[Op.gte] = new Date(dateFrom);
       if (dateTo) {
         const endDate = new Date(dateTo);
-        endDate.setHours(23, 59, 59, 999);
+        endDate.setUTCHours(23, 59, 59, 999);
         where.createdAt[Op.lte] = endDate;
       }
     }
@@ -643,7 +717,7 @@ const buildDateRangeWhere = (dateField, dateFrom, dateTo, baseWhere = {}) => {
   if (dateFrom) where[dateField][Op.gte] = new Date(dateFrom);
   if (dateTo) {
     const endDate = new Date(dateTo);
-    endDate.setHours(23, 59, 59, 999);
+    endDate.setUTCHours(23, 59, 59, 999);
     where[dateField][Op.lte] = endDate;
   }
   return where;
@@ -664,22 +738,40 @@ const buildTrendSeries = async (model, where, dateField = 'createdAt', include =
 const getCollegeAssetAnalytics = async (req, res, next) => {
   try {
     const collegeId = Number(req.organizationScope?.collegeId);
-    if (!collegeId) {
+    if (!Number.isSafeInteger(collegeId) || collegeId <= 0) {
       return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
     }
 
-    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit, 10) || 20));
+    const parsePositiveInteger = (value, fallback, maximum = Number.MAX_SAFE_INTEGER) => {
+      if (value === undefined || value === '') return fallback;
+      if (!/^\d+$/.test(String(value))) return null;
+      const parsed = Number(value);
+      return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= maximum ? parsed : null;
+    };
+    const page = parsePositiveInteger(req.query.page, 1);
+    const limit = parsePositiveInteger(req.query.limit, 20, 50);
+    if (page === null || limit === null) {
+      return res.status(400).json({ success: false, message: 'Page and limit must be positive integers.' });
+    }
     const offset = (page - 1) * limit;
     const search = String(req.query.search || '').trim();
-    const departmentId = req.query.departmentId ? Number(req.query.departmentId) : null;
-    const category = String(req.query.categoryId || req.query.category || '').trim();
+    const hasDepartmentFilter = req.query.departmentId !== undefined && req.query.departmentId !== '';
+    const departmentId = hasDepartmentFilter ? parsePositiveInteger(req.query.departmentId, null) : null;
+    const hasCategoryFilter = req.query.categoryId !== undefined && req.query.categoryId !== '';
+    const categoryId = hasCategoryFilter ? parsePositiveInteger(req.query.categoryId, null) : null;
+    const category = String(req.query.category || '').trim();
     const status = String(req.query.status || '').trim();
     const condition = String(req.query.condition || '').trim();
     const location = String(req.query.locationId || req.query.location || '').trim();
     const dateFrom = String(req.query.dateFrom || '').trim();
     const dateTo = String(req.query.dateTo || '').trim();
 
+    if ((hasDepartmentFilter && departmentId === null) || (hasCategoryFilter && categoryId === null)) {
+      return res.status(400).json({ success: false, message: 'Department and category filters must be positive integer IDs.' });
+    }
+    if (!Number.isSafeInteger(offset) || search.length > 255) {
+      return res.status(400).json({ success: false, message: 'Search and pagination values are outside the supported range.' });
+    }
     if (dateFrom && Number.isNaN(Date.parse(dateFrom))) {
       return res.status(422).json({ success: false, message: 'Date from is invalid' });
     }
@@ -690,18 +782,25 @@ const getCollegeAssetAnalytics = async (req, res, next) => {
       return res.status(422).json({ success: false, message: 'Date from must be before date to' });
     }
 
-    const departments = await Department.findAll({ where: { collegeId }, attributes: ['id', 'name', 'code'], order: [['name', 'ASC']], raw: true });
+    const [departments, selectedCategory] = await Promise.all([
+      Department.findAll({ where: { collegeId }, attributes: ['id', 'name', 'code'], order: [['name', 'ASC']], raw: true }),
+      categoryId ? Category.findByPk(categoryId, { attributes: ['id', 'name'] }) : null,
+    ]);
     const departmentIds = new Set(departments.map((department) => Number(department.id)));
-    if (departmentId && !departmentIds.has(departmentId)) {
+    if (departmentId !== null && !departmentIds.has(departmentId)) {
       return res.status(400).json({ success: false, message: 'Department is not part of your college' });
+    }
+    if (categoryId !== null && !selectedCategory) {
+      return res.status(400).json({ success: false, message: 'Category is not available' });
     }
 
     const assetWhere = { collegeId };
-    if (departmentId) assetWhere.departmentId = departmentId;
-    if (category) assetWhere.category = category;
+    if (departmentId !== null) assetWhere.departmentId = departmentId;
+    if (categoryId !== null) assetWhere.category = selectedCategory.name;
+    else if (category) assetWhere.category = category;
     if (status) assetWhere.status = status;
     if (condition) assetWhere.condition = condition;
-    if (location) assetWhere.location = { [Op.like]: `%${location}%` };
+    if (location) assetWhere.location = location;
     if (search) {
       assetWhere[Op.or] = [
         { assetCode: { [Op.like]: `%${search}%` } },
@@ -717,7 +816,7 @@ const getCollegeAssetAnalytics = async (req, res, next) => {
       if (dateFrom) assetWhere.createdAt[Op.gte] = new Date(dateFrom);
       if (dateTo) {
         const endDate = new Date(dateTo);
-        endDate.setHours(23, 59, 59, 999);
+        endDate.setUTCHours(23, 59, 59, 999);
         assetWhere.createdAt[Op.lte] = endDate;
       }
     }
@@ -727,7 +826,6 @@ const getCollegeAssetAnalytics = async (req, res, next) => {
         where: assetWhere,
         include: [{ model: Department, as: 'DepartmentRecord', required: false, attributes: ['id', 'name', 'code'] }],
         order: [['updatedAt', 'DESC'], ['name', 'ASC']],
-        raw: true,
       }),
       Asset.count({ where: assetWhere }),
       Asset.findAll({ where: assetWhere, attributes: ['status', [fn('COUNT', col('id')), 'count']], group: ['status'], raw: true }),
@@ -752,21 +850,26 @@ const getCollegeAssetAnalytics = async (req, res, next) => {
         raw: true,
       }),
       Maintenance.findAll({
-        include: [{ model: Asset, required: true, where: assetWhere, attributes: ['id'] }],
-        attributes: ['status', [fn('COUNT', col('id')), 'count']],
-        group: ['status'],
+        include: [{ model: Asset, required: true, where: assetWhere, attributes: [] }],
+        attributes: ['status', [fn('COUNT', sqlQualifiedColumn(Maintenance, 'id')), 'count']],
+        group: [sqlQualifiedColumn(Maintenance, 'status')],
         raw: true,
       }),
       VerificationItem.findAll({
-        include: [{ model: Asset, required: true, where: assetWhere, attributes: ['id'] }],
-        attributes: ['state', [fn('COUNT', col('id')), 'count']],
-        group: ['state'],
-        raw: true,
+        include: [
+          { model: Asset, required: true, where: assetWhere, attributes: ['id'] },
+          { model: VerificationSession, required: true, where: { collegeId }, attributes: [] },
+        ],
+        attributes: ['id', 'assetId', 'state', 'createdAt'],
+        order: [['createdAt', 'DESC']],
       }),
       VerificationItem.findAll({
-        include: [{ model: Asset, required: true, where: assetWhere, attributes: ['id'] }],
-        attributes: ['state', [fn('COUNT', col('id')), 'count']],
-        group: ['state'],
+        include: [
+          { model: Asset, required: true, where: assetWhere, attributes: [] },
+          { model: VerificationSession, required: true, where: { collegeId }, attributes: [] },
+        ],
+        attributes: ['state', [fn('COUNT', sqlQualifiedColumn(VerificationItem, 'id')), 'count']],
+        group: [sqlQualifiedColumn(VerificationItem, 'state')],
         raw: true,
       }),
       Transfer.findAll({
@@ -780,7 +883,7 @@ const getCollegeAssetAnalytics = async (req, res, next) => {
         attributes: ['id', 'status', 'requestedAt', 'createdAt', 'condition'],
         raw: true,
       }),
-      Asset.sum('currentValue', { where: assetWhere }) || Asset.sum('purchasePrice', { where: assetWhere }) || 0,
+      Asset.sum('currentValue', { where: assetWhere }),
       buildTrendSeries(Assignment, buildDateRangeWhere('createdAt', dateFrom, dateTo, { status: { [Op.in]: ['active', 'assigned', 'in_use', 'issued'] } }), 'createdAt', [{ model: Asset, required: true, where: assetWhere, attributes: [] }]),
       buildTrendSeries(Maintenance, buildDateRangeWhere('createdAt', dateFrom, dateTo), 'createdAt', [{ model: Asset, required: true, where: assetWhere, attributes: [] }]),
       buildTrendSeries(Transfer, buildDateRangeWhere('transferDate', dateFrom, dateTo), 'transferDate', [{ model: Asset, required: true, where: assetWhere, attributes: [] }]),
@@ -862,7 +965,7 @@ const getCollegeAssetAnalytics = async (req, res, next) => {
     ].map((row) => ({ ...row, percentage: totalAssets ? Number(((row.count / totalAssets) * 100).toFixed(2)) : 0 }));
 
     const maintenanceSummary = maintenanceByStatus.map((row) => ({ status: row.status || 'Unknown', count: Number(row.count || 0) }));
-    const verificationSummary = (verificationRows || []).map((row) => ({ status: row.state || 'Unknown', count: Number(row.count || 0) }));
+    const verificationSummary = (verificationByState || []).map((row) => ({ status: row.state || 'Unknown', count: Number(row.count || 0) }));
 
     const tableRows = assets.slice(offset, offset + limit).map((asset) => {
       const assignment = assignmentRows.find((row) => Number(row.assetId) === Number(asset.id) && assetIdSet.has(Number(row.assetId)));
@@ -893,7 +996,7 @@ const getCollegeAssetAnalytics = async (req, res, next) => {
         college: { id: collegeId, name: req.organizationScope.college?.collegeName || 'College' },
         filters: {
           departmentId: departmentId || '',
-          categoryId: category || '',
+          categoryId: categoryId || category || '',
           status: status || '',
           condition: condition || '',
           locationId: location || '',
@@ -1749,26 +1852,40 @@ const getCollegeInventory = (req, res, next) => listCollegeAssets(req, res, next
 const listCollegeRFIDTracking = async (req, res, next) => {
   try {
     const collegeId = Number(req.organizationScope?.collegeId);
-    if (!collegeId) {
+    if (!Number.isSafeInteger(collegeId) || collegeId <= 0) {
       return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
     }
 
-    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 25));
+    const parsePositiveInteger = (value, fallback, maximum = Number.MAX_SAFE_INTEGER) => {
+      if (value === undefined || value === '') return fallback;
+      if (!/^\d+$/.test(String(value))) return null;
+      const parsed = Number(value);
+      return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= maximum ? parsed : null;
+    };
+    const page = parsePositiveInteger(req.query.page, 1);
+    const limit = parsePositiveInteger(req.query.limit, 25, 100);
+    const search = req.query.search === undefined ? '' : typeof req.query.search === 'string' ? req.query.search.trim() : null;
+    const status = req.query.status === undefined ? '' : typeof req.query.status === 'string' ? req.query.status.trim() : null;
+    const location = req.query.location === undefined ? '' : typeof req.query.location === 'string' ? req.query.location.trim() : null;
+    const hasDepartmentFilter = req.query.departmentId !== undefined && req.query.departmentId !== '';
+    const departmentId = hasDepartmentFilter ? parsePositiveInteger(req.query.departmentId, null) : null;
+    if (page === null || limit === null || (hasDepartmentFilter && departmentId === null)
+      || search === null || search.length > 255
+      || status === null || status.length > 100
+      || location === null || location.length > 255) {
+      return res.status(400).json({ success: false, message: 'Tracking filters must be valid text and page/limit values must be positive integers.' });
+    }
     const offset = (page - 1) * limit;
-    const search = String(req.query.search || '').trim();
-    const status = String(req.query.status || '').trim();
-    const departmentId = req.query.departmentId ? Number(req.query.departmentId) : null;
-    const location = String(req.query.location || '').trim();
-
-    const departments = await Department.findAll({ where: { collegeId }, attributes: ['id', 'name', 'code'], order: [['name', 'ASC']], raw: true });
-    const departmentIds = new Set(departments.map((department) => Number(department.id)));
-    if (departmentId && !departmentIds.has(departmentId)) {
+    const [departments, statuses] = await Promise.all([
+      Department.findAll({ where: { collegeId }, attributes: ['id', 'name', 'code'], order: [['name', 'ASC']], raw: true }),
+      Asset.findAll({ where: { collegeId }, attributes: ['status'], group: ['status'], raw: true }),
+    ]);
+    if (departmentId !== null && !departments.some((department) => Number(department.id) === departmentId)) {
       return res.status(400).json({ success: false, message: 'Department is not part of your college' });
     }
 
     const assetWhere = { collegeId };
-    if (departmentId) assetWhere.departmentId = departmentId;
+    if (departmentId !== null) assetWhere.departmentId = departmentId;
     if (status) assetWhere.status = status;
     if (location) assetWhere.location = { [Op.like]: `%${location}%` };
     if (search) {
@@ -1776,74 +1893,115 @@ const listCollegeRFIDTracking = async (req, res, next) => {
         { name: { [Op.like]: `%${search}%` } },
         { assetCode: { [Op.like]: `%${search}%` } },
         { serialNumber: { [Op.like]: `%${search}%` } },
+        { qrCode: { [Op.like]: `%${search}%` } },
+        { digitalId: { [Op.like]: `%${search}%` } },
         { rfidTag: { [Op.like]: `%${search}%` } },
         { location: { [Op.like]: `%${search}%` } },
       ];
     }
 
-    const [assets, totalTrackedAssets, recentLogs] = await Promise.all([
-      Asset.findAll({
+    const recentSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const recentLogWhere = { createdAt: { [Op.gte]: recentSince } };
+    const logAssetInclude = {
+      model: Asset,
+      where: assetWhere,
+      required: true,
+      attributes: ['id', 'name', 'assetCode', 'serialNumber', 'qrCode', 'rfidTag', 'location', 'status', 'condition', 'departmentId'],
+      include: [{ model: Department, as: 'DepartmentRecord', required: false, attributes: ['id', 'name'] }],
+    };
+    const collegeLogAssetInclude = { ...logAssetInclude, where: { collegeId } };
+    const [assetResult, totalTrackedAssets, taggedAssets, locationsResult, recentScanCount, recentLogs] = await Promise.all([
+      Asset.findAndCountAll({
         where: assetWhere,
         include: [{ model: Department, as: 'DepartmentRecord', required: false, attributes: ['id', 'name', 'code'] }],
         order: [['updatedAt', 'DESC'], ['name', 'ASC']],
         limit,
         offset,
+        distinct: true,
+      }),
+      Asset.count({ where: { collegeId } }),
+      Asset.count({
+        where: {
+          collegeId,
+          [Op.or]: [
+            sequelize.where(sequelize.fn('TRIM', sequelize.col('qr_code')), { [Op.ne]: '' }),
+            sequelize.where(sequelize.fn('TRIM', sequelize.col('digital_id')), { [Op.ne]: '' }),
+            sequelize.where(sequelize.fn('TRIM', sequelize.col('rfid_tag')), { [Op.ne]: '' }),
+          ],
+        },
+      }),
+      Asset.findAll({
+        where: { collegeId, [Op.and]: [sequelize.where(sequelize.fn('TRIM', sequelize.col('location')), { [Op.ne]: '' })] },
+        attributes: [[sequelize.fn('DISTINCT', sequelize.fn('TRIM', sequelize.col('location'))), 'location']],
         raw: true,
       }),
-      Asset.count({ where: assetWhere }),
+      RFIDLog.count({ where: recentLogWhere, include: [collegeLogAssetInclude], distinct: true, col: 'RFIDLog.id' }),
       RFIDLog.findAll({
-        include: [{ model: Asset, where: { collegeId }, required: true, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'rfidTag', 'location', 'status', 'condition', 'departmentId'] }],
+        where: recentLogWhere,
+        attributes: ['id', 'assetId', 'tag', 'readerId', 'scannedBy', 'action', 'location', 'notes', 'createdAt'],
+        include: [
+          logAssetInclude,
+          { model: User, as: 'ScannedByUser', attributes: ['id', 'fullName', 'username'], required: false },
+        ],
         order: [['createdAt', 'DESC']],
         limit: 20,
-        raw: true,
       }),
     ]);
 
-    const taggedAssets = assets.filter((asset) => String(asset.rfidTag || '').trim());
-    const untaggedAssets = assets.filter((asset) => !String(asset.rfidTag || '').trim());
-    const uniqueLocations = new Set(assets.map((asset) => String(asset.location || '').trim()).filter(Boolean)).size;
     const summary = {
       totalAssets: totalTrackedAssets,
-      taggedAssets: taggedAssets.length,
-      untaggedAssets: untaggedAssets.length,
-      uniqueLocations,
-      recentScans: recentLogs.length,
+      taggedAssets,
+      untaggedAssets: totalTrackedAssets - taggedAssets,
+      uniqueLocations: locationsResult.length,
+      recentScans: recentScanCount,
     };
 
-    const serialisedAssets = assets.map((asset) => ({
+    const serialisedAssets = assetResult.rows.map((record) => {
+      const asset = record.toJSON();
+      return {
       id: asset.id,
       assetCode: asset.assetCode,
       name: asset.name,
       serialNumber: asset.serialNumber,
+      qrCode: asset.qrCode || asset.digitalId || '',
       rfidTag: asset.rfidTag || '',
       category: asset.category,
-      department: asset['DepartmentRecord.name'] || asset.department || 'Unassigned',
+      department: asset.DepartmentRecord?.name || asset.department || 'Unassigned',
       departmentId: asset.departmentId,
       location: asset.location || 'Unknown',
       status: asset.status,
       condition: asset.condition,
       updatedAt: asset.updatedAt,
       createdAt: asset.createdAt,
-    }));
+      };
+    });
 
-    const serialisedLogs = recentLogs.map((log) => ({
-      id: log.id,
-      assetId: log.assetId,
-      tag: log.tag,
-      action: log.action,
-      location: log.location || log['Asset.location'] || 'Unknown',
-      notes: log.notes,
-      createdAt: log.createdAt,
-      asset: {
-        id: log['Asset.id'],
-        name: log['Asset.name'],
-        assetCode: log['Asset.assetCode'],
-        serialNumber: log['Asset.serialNumber'],
-        rfidTag: log['Asset.rfidTag'],
-        status: log['Asset.status'],
-        condition: log['Asset.condition'],
-      },
-    }));
+    const serialisedLogs = recentLogs.map((record) => {
+      const log = record.toJSON();
+      return {
+        id: log.id,
+        assetId: log.assetId,
+        tag: log.tag,
+        readerId: log.readerId || null,
+        action: log.action,
+        location: log.location || log.Asset?.location || 'Unknown',
+        notes: log.notes,
+        createdAt: log.createdAt,
+        scannedBy: log.ScannedByUser
+          ? { id: log.ScannedByUser.id, name: log.ScannedByUser.fullName || log.ScannedByUser.username }
+          : null,
+        asset: {
+          id: log.Asset?.id,
+          name: log.Asset?.name,
+          assetCode: log.Asset?.assetCode,
+          serialNumber: log.Asset?.serialNumber,
+          rfidTag: log.Asset?.rfidTag,
+          qrCode: log.Asset?.qrCode,
+          status: log.Asset?.status,
+          condition: log.Asset?.condition,
+        },
+      };
+    });
 
     return res.json({
       success: true,
@@ -1853,20 +2011,267 @@ const listCollegeRFIDTracking = async (req, res, next) => {
       college: { id: collegeId, name: req.organizationScope.college?.collegeName || 'College' },
       filters: {
         departments: departments.map((department) => ({ id: department.id, name: department.name, code: department.code })),
-        statuses: [...new Set(assets.map((asset) => String(asset.status || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
-        locations: [...new Set(assets.map((asset) => String(asset.location || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+        statuses: statuses.map((asset) => String(asset.status || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b)),
+        locations: locationsResult.map((row) => String(row.location || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b)),
       },
       pagination: {
         page,
         limit,
-        total: totalTrackedAssets,
-        totalPages: Math.ceil(totalTrackedAssets / limit),
+        total: assetResult.count,
+        totalPages: Math.ceil(assetResult.count / limit),
       },
     });
   } catch (error) {
+    console.error('College RFID tracking query failed:', {
+      requestId: req.requestId || null,
+      operation: `${req.method || 'GET'} ${req.path || '/api/college/rfid'}`,
+      errorCategory: error.name || 'Error',
+      errorType: error.name,
+      code: error.original?.code || error.parent?.code || error.code,
+      sqlMessage: error.original?.sqlMessage || error.parent?.sqlMessage,
+    });
     return next(error);
   }
 };
+
+const findCollegeTrackingAsset = async (id, collegeId, transaction) => Asset.findOne({
+  where: { id, collegeId },
+  transaction,
+  ...(transaction ? { lock: transaction.LOCK.UPDATE } : {}),
+});
+
+const trackingIdentifierExists = async (fieldNames, value, excludedId, transaction) => {
+  const conditions = fieldNames.map((field) => where(
+    fn('UPPER', fn('TRIM', col(field))),
+    value,
+  ));
+  return (await Asset.count({
+    where: {
+      [Op.and]: [
+        { [Op.or]: conditions },
+        ...(excludedId ? [{ id: { [Op.ne]: excludedId } }] : []),
+      ],
+    },
+    paranoid: false,
+    transaction,
+  })) > 0;
+};
+
+const lookupCollegeTrackingCode = async (req, res, next) => {
+  try {
+    const collegeId = Number(req.organizationScope?.collegeId);
+    const value = String(req.params.code || '').trim().toUpperCase();
+    if (!value || value.length > 255 || /[\u0000-\u001f]/.test(value)) {
+      return res.status(400).json({ success: false, message: 'A valid tracking identifier is required.' });
+    }
+    const matches = await Asset.findAll({
+      where: {
+        collegeId,
+        [Op.or]: [
+          where(fn('UPPER', fn('TRIM', col('qr_code'))), value),
+          where(fn('UPPER', fn('TRIM', col('digital_id'))), value),
+          where(fn('UPPER', fn('TRIM', col('rfid_tag'))), value),
+          where(fn('UPPER', fn('TRIM', col('asset_code'))), value),
+        ],
+      },
+      attributes: ['id', 'name', 'assetCode', 'qrCode', 'digitalId', 'rfidTag', 'status', 'condition', 'department', 'departmentId', 'location'],
+      limit: 2,
+    });
+    if (matches.length > 1) return res.status(409).json({ success: false, message: 'This tracking identifier matches multiple assets.' });
+    if (!matches[0]) return res.status(404).json({ success: false, message: 'Asset not found in your college.' });
+    const asset = matches[0];
+    return res.json({
+      success: true,
+      data: {
+        id: asset.id,
+        name: asset.name,
+        assetCode: asset.assetCode,
+        qrCode: asset.qrCode || asset.digitalId || null,
+        rfidTag: asset.rfidTag || null,
+        status: asset.status,
+        condition: asset.condition,
+        department: asset.department || null,
+        departmentId: asset.departmentId,
+        location: asset.location || 'Unknown',
+      },
+    });
+  } catch (error) {
+    console.error('College RFID identifier lookup failed:', {
+      route: req.originalUrl?.split('?')[0] || '/api/college/rfid/lookup/:code',
+      errorType: error.name,
+      code: error.original?.code || error.parent?.code || error.code,
+      sqlMessage: error.original?.sqlMessage || error.parent?.sqlMessage,
+    });
+    return next(error);
+  }
+};
+
+const recordCollegeTrackingScan = async (req, res, next) => {
+  let transaction;
+  try {
+    const collegeId = Number(req.organizationScope?.collegeId);
+    const method = typeof req.body?.method === 'string' ? req.body.method.trim().toLowerCase() : '';
+    const value = typeof req.body?.value === 'string' ? req.body.value.trim() : '';
+    if (!['manual', 'qr', 'rfid'].includes(method) || !value || value.length > 255 || /[\u0000-\u001f]/.test(value)) {
+      return res.status(400).json({ success: false, message: 'A supported scan method and valid tracking value are required.' });
+    }
+    const normalized = value.toUpperCase();
+    const fields = method === 'qr'
+      ? ['qr_code', 'digital_id']
+      : method === 'rfid'
+        ? ['rfid_tag']
+        : ['qr_code', 'digital_id', 'rfid_tag', 'asset_code'];
+    transaction = await sequelize.transaction();
+    const matches = await Asset.findAll({
+      where: {
+        collegeId,
+        [Op.or]: fields.map((field) => where(fn('UPPER', fn('TRIM', col(field))), normalized)),
+      },
+      attributes: ['id', 'name', 'assetCode', 'qrCode', 'digitalId', 'rfidTag', 'location'],
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+      limit: 2,
+    });
+    if (matches.length > 1) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'This tracking value matches multiple assets.' });
+    }
+    if (!matches[0]) {
+      await transaction.rollback();
+      return res.status(404).json({ success: false, message: 'No asset with this identifier exists in your college; no scan was recorded.' });
+    }
+
+    const asset = matches[0];
+    const log = await RFIDLog.create({
+      assetId: asset.id,
+      tag: value,
+      action: `${method}_scan`,
+      location: asset.location || '',
+      notes: JSON.stringify({ method }),
+      scannedBy: req.user.id,
+    }, { transaction });
+    await createAuditLog({
+      userId: req.user.id,
+      role: req.user.role,
+      action: 'ASSET_TRACKING_SCAN',
+      entity: `asset:${asset.id}`,
+      details: { method, scanId: log.id },
+      transaction,
+    });
+    await transaction.commit();
+    return res.status(201).json({
+      success: true,
+      data: {
+        id: log.id,
+        assetId: asset.id,
+        method,
+        timestamp: log.createdAt,
+        location: asset.location || 'Unknown',
+        asset: { id: asset.id, name: asset.name, assetCode: asset.assetCode },
+      },
+    });
+  } catch (error) {
+    if (transaction && !transaction.finished) await transaction.rollback();
+    console.error('College RFID scan write failed:', {
+      route: req.originalUrl?.split('?')[0] || '/api/college/rfid/scan',
+      errorType: error.name,
+      code: error.original?.code || error.parent?.code || error.code,
+      sqlMessage: error.original?.sqlMessage || error.parent?.sqlMessage,
+    });
+    return next(error);
+  }
+};
+
+const updateCollegeTrackingTags = async (req, res, next, regenerateQr = false) => {
+  let transaction;
+  try {
+    const id = Number(req.params.id);
+    const collegeId = Number(req.organizationScope?.collegeId);
+    if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ success: false, message: 'A valid asset ID is required.' });
+    const body = req.body || {};
+    if (!regenerateQr && ((body.qrCode !== undefined && typeof body.qrCode !== 'string')
+      || (body.rfidTag !== undefined && body.rfidTag !== null && typeof body.rfidTag !== 'string'))) {
+      return res.status(400).json({ success: false, message: 'QR code and RFID values must be text.' });
+    }
+    if (!regenerateQr && body.qrCode === undefined && body.rfidTag === undefined) {
+      return res.status(400).json({ success: false, message: 'Provide a QR code or RFID tag to update.' });
+    }
+
+    let qrCode = regenerateQr ? `QR-${crypto.randomUUID().replace(/-/g, '').toUpperCase()}`
+      : body.qrCode === undefined ? undefined : body.qrCode.trim().toUpperCase();
+    let rfidTag = body.rfidTag === null ? null
+      : body.rfidTag === undefined ? undefined : body.rfidTag.trim().toUpperCase() || null;
+    if (qrCode !== undefined && (!qrCode || qrCode.length > 100)) {
+      return res.status(400).json({ success: false, message: 'QR code must be between 1 and 100 characters.' });
+    }
+    if (rfidTag !== undefined && rfidTag !== null && rfidTag.length > 255) {
+      return res.status(400).json({ success: false, message: 'RFID tag must be between 1 and 255 characters.' });
+    }
+
+    transaction = await sequelize.transaction();
+    const asset = await findCollegeTrackingAsset(id, collegeId, transaction);
+    if (!asset) {
+      await transaction.rollback();
+      return res.status(404).json({ success: false, message: 'Asset not found in your college.' });
+    }
+    if (regenerateQr) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (!await trackingIdentifierExists(['qr_code', 'digital_id'], qrCode, id, transaction)) break;
+        qrCode = `QR-${crypto.randomUUID().replace(/-/g, '').toUpperCase()}`;
+      }
+      if (await trackingIdentifierExists(['qr_code', 'digital_id'], qrCode, id, transaction)) {
+        await transaction.rollback();
+        return res.status(409).json({ success: false, message: 'Unable to generate a unique QR code; please try again.' });
+      }
+    }
+    if (qrCode !== undefined && await trackingIdentifierExists(['qr_code', 'digital_id'], qrCode, id, transaction)) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'That QR code is already assigned.' });
+    }
+    if (rfidTag && await trackingIdentifierExists(['rfid_tag'], rfidTag, id, transaction)) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'That RFID tag is already assigned.' });
+    }
+
+    const before = { qrCode: asset.qrCode || asset.digitalId || null, rfidTag: asset.rfidTag || null };
+    const changes = {};
+    if (qrCode !== undefined) {
+      changes.qrCode = qrCode;
+      changes.digitalId = qrCode;
+    }
+    if (rfidTag !== undefined) changes.rfidTag = rfidTag;
+    await asset.update(changes, { transaction });
+    await createAuditLog({
+      userId: req.user.id,
+      role: req.user.role,
+      action: regenerateQr ? 'ASSET_QR_REGENERATED' : 'ASSET_TRACKING_TAGS_ASSIGNED',
+      entity: `asset:${asset.id}`,
+      oldValue: before,
+      newValue: { qrCode: asset.qrCode || asset.digitalId || null, rfidTag: asset.rfidTag || null },
+      transaction,
+    });
+    await transaction.commit();
+    return res.json({
+      success: true,
+      data: { id: asset.id, qrCode: asset.qrCode || asset.digitalId || null, rfidTag: asset.rfidTag || null },
+    });
+  } catch (error) {
+    if (transaction && !transaction.finished) await transaction.rollback();
+    if (error.name === 'SequelizeUniqueConstraintError' || error.original?.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ success: false, message: 'That QR code or RFID tag is already assigned.' });
+    }
+    console.error('College RFID tag update failed:', {
+      route: req.originalUrl?.split('?')[0] || '/api/college/rfid/assets/:id/tags',
+      errorType: error.name,
+      code: error.original?.code || error.parent?.code || error.code,
+      sqlMessage: error.original?.sqlMessage || error.parent?.sqlMessage,
+    });
+    return next(error);
+  }
+};
+
+const assignCollegeTrackingTags = (req, res, next) => updateCollegeTrackingTags(req, res, next);
+const regenerateCollegeQr = (req, res, next) => updateCollegeTrackingTags(req, res, next, true);
 
 const ensureCollegeLocationAccess = async (collegeId, type, id) => {
   const scopeWhere = { collegeId };
@@ -2729,24 +3134,51 @@ const getCollegeDepartmentReports = async (req, res, next) => {
 const getCollegeReports = async (req, res, next) => {
   try {
     const collegeId = Number(req.organizationScope?.collegeId);
-    if (!collegeId) {
+    if (!Number.isSafeInteger(collegeId) || collegeId <= 0) {
       return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
     }
 
-    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 20));
+    const parsePositiveInteger = (value, fallback, maximum = Number.MAX_SAFE_INTEGER) => {
+      if (value === undefined || value === '') return fallback;
+      if (!/^\d+$/.test(String(value))) return null;
+      const parsed = Number(value);
+      return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= maximum ? parsed : null;
+    };
+    const page = parsePositiveInteger(req.query.page, 1);
+    const limit = parsePositiveInteger(req.query.limit, 20, 100);
+    if (page === null || limit === null) {
+      return res.status(400).json({ success: false, message: 'Page and limit must be positive integers.' });
+    }
     const offset = (page - 1) * limit;
     const reportType = String(req.query.reportType || 'inventory').trim().toLowerCase();
     const allowedReportTypes = ['inventory', 'status', 'departments', 'assignments', 'transfers', 'returns', 'maintenance', 'verification', 'requests', 'movement'];
-    const normalizedReportType = allowedReportTypes.includes(reportType) ? reportType : 'inventory';
+    if (!allowedReportTypes.includes(reportType)) {
+      return res.status(400).json({ success: false, message: 'Report type is not supported.' });
+    }
+    const normalizedReportType = reportType;
     const search = String(req.query.search || '').trim();
-    const departmentId = req.query.departmentId ? Number(req.query.departmentId) : null;
-    const categoryId = req.query.categoryId ? Number(req.query.categoryId) : null;
+    const hasDepartmentFilter = req.query.departmentId !== undefined && req.query.departmentId !== '';
+    const departmentId = hasDepartmentFilter ? parsePositiveInteger(req.query.departmentId, null) : null;
+    const hasCategoryFilter = req.query.categoryId !== undefined && req.query.categoryId !== '';
+    const categoryId = hasCategoryFilter ? parsePositiveInteger(req.query.categoryId, null) : null;
     const status = String(req.query.status || '').trim();
     const dateFrom = String(req.query.dateFrom || '').trim();
     const dateTo = String(req.query.dateTo || '').trim();
 
-    if (departmentId) {
+    if (!Number.isSafeInteger(offset) || search.length > 255
+      || (hasDepartmentFilter && departmentId === null)
+      || (hasCategoryFilter && categoryId === null)) {
+      return res.status(400).json({ success: false, message: 'Report filters and pagination values are invalid.' });
+    }
+
+    if ((dateFrom && Number.isNaN(Date.parse(dateFrom))) || (dateTo && Number.isNaN(Date.parse(dateTo)))) {
+      return res.status(400).json({ success: false, message: 'Report dates are invalid.' });
+    }
+    if (dateFrom && dateTo && new Date(dateFrom) > new Date(dateTo)) {
+      return res.status(400).json({ success: false, message: 'Date from must be before date to.' });
+    }
+
+    if (departmentId !== null) {
       const department = await Department.findOne({ where: { id: departmentId, collegeId }, attributes: ['id'] });
       if (!department) {
         return res.status(400).json({ success: false, message: 'Department is not part of your college' });
@@ -2754,14 +3186,21 @@ const getCollegeReports = async (req, res, next) => {
     }
 
     const assetWhere = { collegeId };
-    if (departmentId) assetWhere.departmentId = departmentId;
+    const relatedAssetWhere = { collegeId };
+    if (departmentId !== null) assetWhere.departmentId = departmentId;
+    if (departmentId !== null) relatedAssetWhere.departmentId = departmentId;
 
-    const categoryName = categoryId ? (await Category.findByPk(categoryId, { attributes: ['id', 'name'] }))?.name || null : null;
-    if (categoryId && !categoryName) {
+    const category = categoryId !== null ? await Category.findByPk(categoryId, { attributes: ['id', 'name'] }) : null;
+    if (categoryId !== null && !category) {
       return res.status(400).json({ success: false, message: 'Category is not available for your college' });
     }
-    if (categoryName) assetWhere.category = categoryName;
+    if (category) assetWhere.category = category.name;
+    if (category) relatedAssetWhere.category = category.name;
+    if (normalizedReportType === 'movement' && status) relatedAssetWhere.status = status;
     if (status) assetWhere.status = status;
+    if (status.length > 100) {
+      return res.status(400).json({ success: false, message: 'Status filter is too long.' });
+    }
 
     if (dateFrom && Number.isNaN(Date.parse(dateFrom))) {
       return res.status(400).json({ success: false, message: 'Date from is invalid' });
@@ -2826,7 +3265,7 @@ const getCollegeReports = async (req, res, next) => {
         if (dateFrom) where.updatedAt[Op.gte] = new Date(dateFrom);
         if (dateTo) {
           const endDate = new Date(dateTo);
-          endDate.setHours(23, 59, 59, 999);
+          endDate.setUTCHours(23, 59, 59, 999);
           where.updatedAt[Op.lte] = endDate;
         }
       }
@@ -2870,7 +3309,7 @@ const getCollegeReports = async (req, res, next) => {
         };
       });
       total = result.count;
-      const allAssets = await Asset.findAll({ where: { collegeId }, attributes: ['status', 'id'], raw: true });
+      const allAssets = await Asset.findAll({ where, attributes: ['status', 'id'], raw: true });
       summary = {
         totalAssets: allAssets.length,
         activeAssets: allAssets.filter((asset) => ['active', 'available', 'assigned', 'in-use', 'issued'].includes(String(asset.status || '').trim().toLowerCase())).length,
@@ -2878,9 +3317,30 @@ const getCollegeReports = async (req, res, next) => {
         availableAssets: allAssets.filter((asset) => ['available', 'ready', 'idle'].includes(String(asset.status || '').trim().toLowerCase())).length,
         underMaintenance: allAssets.filter((asset) => ['maintenance', 'under-maintenance', 'in-repair', 'repair'].includes(String(asset.status || '').trim().toLowerCase())).length,
       };
-      chartData = Array.from(new Map(Object.entries(computeAssetStatusSummary(allAssets.map((asset) => ({ status: asset.status }))))).entries()).map(([label, value]) => ({ label, value }));
+      chartData = Object.entries(computeAssetStatusSummary(allAssets.map((asset) => ({ status: asset.status }))))
+        .filter(([label]) => label !== 'total')
+        .map(([label, value]) => ({ label, value }));
     } else if (normalizedReportType === 'status') {
-      const allAssets = await Asset.findAll({ where: { collegeId }, attributes: ['status'], raw: true });
+      const where = { ...assetWhere };
+      if (dateFrom || dateTo) {
+        where.createdAt = {};
+        if (dateFrom) where.createdAt[Op.gte] = new Date(dateFrom);
+        if (dateTo) {
+          const endDate = new Date(dateTo);
+          endDate.setUTCHours(23, 59, 59, 999);
+          where.createdAt[Op.lte] = endDate;
+        }
+      }
+      if (search) {
+        where[Op.or] = [
+          { name: { [Op.like]: `%${search}%` } },
+          { assetCode: { [Op.like]: `%${search}%` } },
+          { serialNumber: { [Op.like]: `%${search}%` } },
+          { department: { [Op.like]: `%${search}%` } },
+          { category: { [Op.like]: `%${search}%` } },
+        ];
+      }
+      const allAssets = await Asset.findAll({ where, attributes: ['status'], raw: true });
       const statusCounts = computeAssetStatusSummary(allAssets.map((asset) => ({ status: asset.status })));
       delete statusCounts.total;
       const totalAssets = allAssets.length;
@@ -2894,20 +3354,50 @@ const getCollegeReports = async (req, res, next) => {
       chartData = rows.map((item) => ({ label: item.label, value: item.count }));
     } else if (normalizedReportType === 'departments') {
       const where = { collegeId };
-      if (departmentId) where.id = departmentId;
-      const departmentsData = await Department.findAll({
-        where,
-        include: [{ model: User, attributes: ['id'], required: false }, { model: Asset, attributes: ['id', 'status'], required: false }],
-        order: [['name', 'ASC']],
-      });
+      if (departmentId !== null) where.id = departmentId;
+      const departmentsData = await Department.findAll({ where, attributes: ['id', 'name'], order: [['name', 'ASC']], raw: true });
+      const scopedDepartmentIds = departmentsData.map((department) => department.id);
+      const departmentAssetWhere = { ...assetWhere, ...(dateFrom || dateTo ? { createdAt: {} } : {}) };
+      if (dateFrom) departmentAssetWhere.createdAt[Op.gte] = new Date(dateFrom);
+      if (dateTo) {
+        const endDate = new Date(dateTo);
+        endDate.setUTCHours(23, 59, 59, 999);
+        departmentAssetWhere.createdAt[Op.lte] = endDate;
+      }
+      if (search) {
+        departmentAssetWhere[Op.or] = [
+          { name: { [Op.like]: `%${search}%` } },
+          { assetCode: { [Op.like]: `%${search}%` } },
+          { serialNumber: { [Op.like]: `%${search}%` } },
+        ];
+      }
+      const [departmentAssets, departmentStaff] = await Promise.all([
+        scopedDepartmentIds.length
+          ? Asset.findAll({ where: departmentAssetWhere, attributes: ['id', 'departmentId', 'status'], raw: true })
+          : [],
+        scopedDepartmentIds.length
+          ? User.findAll({ where: { collegeId, departmentId: { [Op.in]: scopedDepartmentIds } }, attributes: ['departmentId'], raw: true })
+          : [],
+      ]);
+      const assetsByDepartment = new Map();
+      for (const asset of departmentAssets) {
+        const group = assetsByDepartment.get(Number(asset.departmentId)) || [];
+        group.push(asset);
+        assetsByDepartment.set(Number(asset.departmentId), group);
+      }
+      const staffByDepartment = new Map();
+      for (const staffMember of departmentStaff) {
+        const departmentKey = Number(staffMember.departmentId);
+        staffByDepartment.set(departmentKey, (staffByDepartment.get(departmentKey) || 0) + 1);
+      }
       rows = departmentsData.map((department) => {
-        const departmentAssets = department.Assets || [];
-        const assetStates = departmentAssets.map((asset) => String(asset.status || '').trim().toLowerCase());
+        const departmentAssetRows = assetsByDepartment.get(Number(department.id)) || [];
+        const assetStates = departmentAssetRows.map((asset) => String(asset.status || '').trim().toLowerCase());
         return {
           id: department.id,
           department: department.name,
-          staffCount: (department.Users || []).length,
-          totalAssets: departmentAssets.length,
+          staffCount: staffByDepartment.get(Number(department.id)) || 0,
+          totalAssets: departmentAssetRows.length,
           assigned: assetStates.filter((state) => ['assigned', 'in-use', 'issued', 'allocated'].includes(state)).length,
           available: assetStates.filter((state) => ['available', 'ready', 'idle'].includes(state)).length,
           underMaintenance: assetStates.filter((state) => ['maintenance', 'under-maintenance', 'in-repair', 'repair'].includes(state)).length,
@@ -2922,6 +3412,7 @@ const getCollegeReports = async (req, res, next) => {
         totalStaff: rows.reduce((sum, row) => sum + Number(row.staffCount || 0), 0),
       };
       chartData = rows.map((row) => ({ label: row.department, value: row.totalAssets }));
+      rows = rows.slice(offset, offset + limit);
     } else if (normalizedReportType === 'assignments') {
       const where = {};
       if (status) where.status = status;
@@ -2938,19 +3429,29 @@ const getCollegeReports = async (req, res, next) => {
         if (dateFrom) where.createdAt[Op.gte] = new Date(dateFrom);
         if (dateTo) {
           const endDate = new Date(dateTo);
-          endDate.setHours(23, 59, 59, 999);
+          endDate.setUTCHours(23, 59, 59, 999);
           where.createdAt[Op.lte] = endDate;
         }
       }
       const result = await Assignment.findAndCountAll({
         where,
         include: [
-          { model: Asset, where: { collegeId, ...(departmentId ? { departmentId } : {}) }, required: true, attributes: ['id', 'name', 'assetCode', 'departmentId', 'department', 'location', 'status'], include: [{ model: Department, as: 'DepartmentRecord', attributes: ['id', 'name', 'code'], required: false }] },
+          { model: Asset, where: relatedAssetWhere, required: true, attributes: ['id', 'name', 'assetCode', 'departmentId', 'department', 'location', 'status'], include: [{ model: Department, as: 'DepartmentRecord', attributes: ['id', 'name', 'code'], required: false }] },
           { model: User, required: false, attributes: ['id', 'fullName', 'username'] },
         ],
         order: [['createdAt', 'DESC']],
         limit,
         offset,
+      });
+      const activeAssignmentWhere = {
+        ...where,
+        status: status || { [Op.in]: ['active', 'assigned', 'in_use', 'issued'] },
+      };
+      const activeAssignmentCount = await Assignment.count({
+        where: activeAssignmentWhere,
+        include: [{ model: Asset, where: relatedAssetWhere, required: true, attributes: [] }],
+        distinct: true,
+        col: 'id',
       });
       rows = result.rows.map((assignment) => ({
         id: assignment.id,
@@ -2963,8 +3464,8 @@ const getCollegeReports = async (req, res, next) => {
         location: assignment.Asset?.location || '—',
       }));
       total = result.count;
-      summary = { totalAssignments: result.count, activeAssignments: result.rows.filter((row) => !['returned', 'cancelled', 'closed'].includes(String(row.status || '').toLowerCase())).length };
-      chartData = [];
+      summary = { totalAssignments: result.count, activeAssignments: activeAssignmentCount };
+      chartData = [{ label: 'Total Assignments', value: result.count }];
     } else if (normalizedReportType === 'transfers') {
       const where = {};
       if (status) where.status = status;
@@ -2981,14 +3482,14 @@ const getCollegeReports = async (req, res, next) => {
         if (dateFrom) where.transferDate[Op.gte] = new Date(dateFrom);
         if (dateTo) {
           const endDate = new Date(dateTo);
-          endDate.setHours(23, 59, 59, 999);
+          endDate.setUTCHours(23, 59, 59, 999);
           where.transferDate[Op.lte] = endDate;
         }
       }
       const result = await Transfer.findAndCountAll({
         where,
         include: [
-          { model: Asset, where: { collegeId, ...(departmentId ? { departmentId } : {}) }, required: true, attributes: ['id', 'name', 'assetCode'] },
+          { model: Asset, where: relatedAssetWhere, required: true, attributes: ['id', 'name', 'assetCode'] },
           { model: User, as: 'Requester', required: false, attributes: ['id', 'fullName', 'username'] },
         ],
         order: [['transferDate', 'DESC'], ['createdAt', 'DESC']],
@@ -3007,9 +3508,10 @@ const getCollegeReports = async (req, res, next) => {
       }));
       total = result.count;
       summary = { totalTransfers: result.count };
+      chartData = [{ label: 'Total Transfers', value: result.count }];
     } else if (normalizedReportType === 'returns') {
-      const where = { collegeId };
-      if (departmentId) where.departmentId = departmentId;
+      const where = {};
+      if (departmentId !== null) where.departmentId = departmentId;
       if (status) where.status = status;
       if (search) {
         where[Op.or] = [
@@ -3023,14 +3525,14 @@ const getCollegeReports = async (req, res, next) => {
         if (dateFrom) where.requestedAt[Op.gte] = new Date(dateFrom);
         if (dateTo) {
           const endDate = new Date(dateTo);
-          endDate.setHours(23, 59, 59, 999);
+          endDate.setUTCHours(23, 59, 59, 999);
           where.requestedAt[Op.lte] = endDate;
         }
       }
       const result = await AssetReturn.findAndCountAll({
         where,
         include: [
-          { model: Asset, where: { collegeId, ...(departmentId ? { departmentId } : {}) }, required: true, attributes: ['id', 'name', 'assetCode', 'department', 'location'] },
+          { model: Asset, where: relatedAssetWhere, required: true, attributes: ['id', 'name', 'assetCode', 'department', 'location'] },
           { model: User, as: 'Requester', required: false, attributes: ['id', 'fullName', 'username'] },
         ],
         order: [['requestedAt', 'DESC'], ['createdAt', 'DESC']],
@@ -3048,6 +3550,7 @@ const getCollegeReports = async (req, res, next) => {
       }));
       total = result.count;
       summary = { totalReturns: result.count };
+      chartData = [{ label: 'Total Returns', value: result.count }];
     } else if (normalizedReportType === 'maintenance') {
       const where = {};
       if (status) where.status = status;
@@ -3064,14 +3567,14 @@ const getCollegeReports = async (req, res, next) => {
         if (dateFrom) where.createdAt[Op.gte] = new Date(dateFrom);
         if (dateTo) {
           const endDate = new Date(dateTo);
-          endDate.setHours(23, 59, 59, 999);
+          endDate.setUTCHours(23, 59, 59, 999);
           where.createdAt[Op.lte] = endDate;
         }
       }
       const result = await Maintenance.findAndCountAll({
         where,
         include: [
-          { model: Asset, where: { collegeId, ...(departmentId ? { departmentId } : {}) }, required: true, attributes: ['id', 'name', 'assetCode', 'department', 'location', 'category'] },
+          { model: Asset, where: relatedAssetWhere, required: true, attributes: ['id', 'name', 'assetCode', 'department', 'location', 'category'] },
           { model: User, as: 'Requester', required: false, attributes: ['id', 'fullName', 'username'] },
           { model: User, as: 'Technician', required: false, attributes: ['id', 'fullName', 'username'] },
         ],
@@ -3093,9 +3596,10 @@ const getCollegeReports = async (req, res, next) => {
       }));
       total = result.count;
       summary = { totalMaintenance: result.count };
+      chartData = [{ label: 'Maintenance Records', value: result.count }];
     } else if (normalizedReportType === 'verification') {
       const where = { collegeId };
-      if (departmentId) where.departmentId = departmentId;
+      if (departmentId !== null) where.departmentId = departmentId;
       if (status) where.status = status;
       if (search) {
         // The main model is wrapped in a subquery here, so resolve the asset match to session ids first.
@@ -3118,7 +3622,7 @@ const getCollegeReports = async (req, res, next) => {
         if (dateFrom) where.createdAt[Op.gte] = new Date(dateFrom);
         if (dateTo) {
           const endDate = new Date(dateTo);
-          endDate.setHours(23, 59, 59, 999);
+          endDate.setUTCHours(23, 59, 59, 999);
           where.createdAt[Op.lte] = endDate;
         }
       }
@@ -3127,11 +3631,12 @@ const getCollegeReports = async (req, res, next) => {
         include: [
           { model: Department, attributes: ['id', 'name', 'code'], required: false },
           { model: User, as: 'Starter', attributes: ['id', 'fullName', 'username'], required: false },
-          { model: VerificationItem, required: false, include: [{ model: Asset, where: { collegeId, ...(departmentId ? { departmentId } : {}) }, required: false, attributes: ['id', 'name', 'assetCode', 'location'] }] },
+          { model: VerificationItem, required: false, include: [{ model: Asset, where: relatedAssetWhere, required: false, attributes: ['id', 'name', 'assetCode', 'location'] }] },
         ],
         order: [['createdAt', 'DESC']],
         limit,
         offset,
+        distinct: true,
       });
       rows = result.rows.map((session) => ({
         id: session.id,
@@ -3146,9 +3651,12 @@ const getCollegeReports = async (req, res, next) => {
       }));
       total = result.count;
       summary = { totalSessions: result.count };
+      chartData = [{ label: 'Verification Sessions', value: result.count }];
     } else if (normalizedReportType === 'requests') {
-      const where = { departmentId: { [Op.ne]: null } };
-      if (departmentId) where.departmentId = departmentId;
+      const scopedDepartments = await Department.findAll({ where: { collegeId }, attributes: ['id'], raw: true });
+      const collegeDepartmentIds = scopedDepartments.map((department) => Number(department.id));
+      const where = { departmentId: { [Op.in]: collegeDepartmentIds } };
+      if (departmentId !== null) where.departmentId = departmentId;
       if (status) where.status = status;
       if (search) {
         where[Op.or] = [
@@ -3163,7 +3671,7 @@ const getCollegeReports = async (req, res, next) => {
         if (dateFrom) where.createdAt[Op.gte] = new Date(dateFrom);
         if (dateTo) {
           const endDate = new Date(dateTo);
-          endDate.setHours(23, 59, 59, 999);
+          endDate.setUTCHours(23, 59, 59, 999);
           where.createdAt[Op.lte] = endDate;
         }
       }
@@ -3172,7 +3680,7 @@ const getCollegeReports = async (req, res, next) => {
         include: [
           { model: Department, attributes: ['id', 'name', 'code'], required: false },
           { model: User, as: 'Requester', required: false, attributes: ['id', 'fullName', 'username'] },
-          { model: Asset, required: false, where: { collegeId }, attributes: ['id', 'name', 'category'] },
+          { model: Asset, required: categoryId !== null, where: relatedAssetWhere, attributes: ['id', 'name', 'category'] },
         ],
         order: [['createdAt', 'DESC']],
         limit,
@@ -3192,6 +3700,7 @@ const getCollegeReports = async (req, res, next) => {
       }));
       total = result.count;
       summary = { totalRequests: result.count };
+      chartData = [{ label: 'Total Requests', value: result.count }];
     } else if (normalizedReportType === 'movement') {
       const where = {};
       if (search) {
@@ -3206,14 +3715,14 @@ const getCollegeReports = async (req, res, next) => {
         if (dateFrom) where.createdAt[Op.gte] = new Date(dateFrom);
         if (dateTo) {
           const endDate = new Date(dateTo);
-          endDate.setHours(23, 59, 59, 999);
+          endDate.setUTCHours(23, 59, 59, 999);
           where.createdAt[Op.lte] = endDate;
         }
       }
       const result = await AssetMovement.findAndCountAll({
         where,
         include: [
-          { model: Asset, where: { collegeId, ...(departmentId ? { departmentId } : {}) }, required: true, attributes: ['id', 'name', 'assetCode'] },
+          { model: Asset, where: relatedAssetWhere, required: true, attributes: ['id', 'name', 'assetCode'] },
           { model: User, required: false, attributes: ['id', 'fullName', 'username'] },
         ],
         order: [['createdAt', 'DESC']],
@@ -3233,6 +3742,7 @@ const getCollegeReports = async (req, res, next) => {
       }));
       total = result.count;
       summary = { totalMovements: result.count };
+      chartData = [{ label: 'Asset Movements', value: result.count }];
     }
 
     res.json({
@@ -3265,6 +3775,10 @@ module.exports = {
   getCollegeAssetRegistrationOptions,
   getCollegeAsset,
   listCollegeRFIDTracking,
+  lookupCollegeTrackingCode,
+  recordCollegeTrackingScan,
+  assignCollegeTrackingTags,
+  regenerateCollegeQr,
   getCollegeLocation,
   listCollegeLocations,
   createCollegeLocation,
@@ -3278,6 +3792,7 @@ module.exports = {
   listCollegeDepartmentStaff,
   listCollegeDepartmentAssets,
   listCollegeAssignments,
+  getCollegeAssignmentOptions,
   listCollegeMaintenance,
   getCollegeMaintenance,
   listCollegeVerification,

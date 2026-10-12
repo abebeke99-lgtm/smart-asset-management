@@ -13,6 +13,30 @@ const assertNoDuplicates = async (field) => {
   }
 };
 
+const ensureRfidLogColumns = async () => {
+  const queryInterface = sequelize.getQueryInterface();
+  const columns = await queryInterface.describeTable('rfid_logs');
+  let changed = false;
+  if (!columns.reader_id) {
+    await queryInterface.addColumn('rfid_logs', 'reader_id', {
+      type: DataTypes.STRING(80),
+      allowNull: true,
+    });
+    changed = true;
+  }
+  if (!columns.scanned_by) {
+    await queryInterface.addColumn('rfid_logs', 'scanned_by', {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: { model: 'users', key: 'id' },
+      onUpdate: 'CASCADE',
+      onDelete: 'SET NULL',
+    });
+    changed = true;
+  }
+  return changed;
+};
+
 const ensureQrCodeColumn = async () => {
   const queryInterface = sequelize.getQueryInterface();
   let columns = await queryInterface.describeTable('assets');
@@ -87,16 +111,7 @@ const up = async () => {
     });
   }
 
-  const logColumns = await queryInterface.describeTable('rfid_logs');
-  if (!logColumns.scanned_by) {
-    await queryInterface.addColumn('rfid_logs', 'scanned_by', {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: { model: 'users', key: 'id' },
-      onUpdate: 'CASCADE',
-      onDelete: 'SET NULL',
-    });
-  }
+  await ensureRfidLogColumns();
 };
 
 if (require.main === module) {
@@ -108,4 +123,4 @@ if (require.main === module) {
     .finally(() => sequelize.close());
 }
 
-module.exports = { ensureQrCodeColumn, up };
+module.exports = { ensureQrCodeColumn, ensureRfidLogColumns, up };

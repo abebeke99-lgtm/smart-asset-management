@@ -77,11 +77,11 @@ test('always uses a MySQL database in development even when no MySQL config is p
   const previousDbPort = process.env.DB_PORT;
 
   process.env.NODE_ENV = 'development';
-  delete process.env.DB_HOST;
-  delete process.env.DB_NAME;
-  delete process.env.DB_USER;
-  delete process.env.DB_PASSWORD;
-  delete process.env.DB_PORT;
+  process.env.DB_HOST = '';
+  process.env.DB_NAME = '';
+  process.env.DB_USER = '';
+  process.env.DB_PASSWORD = '';
+  process.env.DB_PORT = '';
 
   delete require.cache[require.resolve('../src/config/database')];
 

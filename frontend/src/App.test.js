@@ -323,7 +323,6 @@ describe('Store Manager dashboard route wiring', () => {
       ['stock-adjustments', 'StoreAdjustments'],
       ['receive', 'StoreReceivePage'],
       ['issue', 'StoreIssuePage'],
-      ['returns', 'StoreReturnsPage'],
       ['transfers', 'StoreTransfers'],
       ['requests', 'StoreAssetRequests'],
       ['notifications', 'StoreNotifications'],
@@ -331,6 +330,7 @@ describe('Store Manager dashboard route wiring', () => {
     ]) {
       expect(storeRouteTree).toContain(`<Route path="${route[0]}" element={<${route[1]} />} />`);
     }
+    expect(storeRouteTree).toContain('<Route path="returns" element={<><StoreReturnsPage /><StoreReturnLifecycle /></>} />');
   });
 
   it('uses the role route registry for the sidebar destination and excludes it from other roles', () => {

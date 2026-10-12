@@ -8,13 +8,17 @@ const { createAuditLog } = require('../services/auditLogService');
 
 const router = express.Router();
 const canManageAssignments = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'department_head')];
+const canManageCollegeAssignments = [requireAuth, requireRole('admin', 'ict_officer', 'store_manager', 'department_head', 'college_manager')];
 const requireDepartmentPermission = (permission) => {
   return function requireDepartmentPermission(req, res, next) {
-    return req.user?.role === 'department_head'
-      ? requirePermission(permission)(req, res, next)
-      : next();
+    if (req.user?.role === 'department_head') return requirePermission(permission)(req, res, next);
+    if (req.user?.role === 'college_manager') return requirePermission('college.assignments.manage')(req, res, next);
+    return next();
   };
 };
+const requireCollegeManagerAssignmentPermission = (req, res, next) => req.user?.role === 'college_manager'
+  ? requirePermission('college.assignments.manage')(req, res, next)
+  : next();
 const resolveAssignmentOrganizationScope = (req, res, next) => ['ict_officer', 'store_manager', 'college_manager'].includes(req.user.role)
   ? resolveCollegeScope(req, res, next)
   : req.user.role === 'department_head'
@@ -433,7 +437,7 @@ router.post('/fulfill-request/:id', requireAuth, requireRole('store_manager'), r
   }
 });
 
-router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.assign'), resolveAssignmentOrganizationScope, async (req, res, next) => {
+router.post('/', ...canManageCollegeAssignments, requireDepartmentPermission('assets.assign'), resolveAssignmentOrganizationScope, async (req, res, next) => {
   const {
     asset_id,
     assigned_to,
@@ -511,6 +515,10 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
       await transaction.rollback();
       return res.status(409).json({ success: false, message: 'Cannot assign an asset to an inactive user.' });
     }
+    if (req.user.role === 'college_manager' && (assignedToType !== 'user' || assignee?.role !== 'staff')) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'College assignments can only be assigned to active staff members.' });
+    }
     if (assignedToType === 'department' && (!assignedDepartment || assignedDepartment.status !== 'active')) {
       await transaction.rollback();
       return res.status(404).json({ success: false, message: 'Active department not found.' });
@@ -531,6 +539,25 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
     if (assignedToType === 'user' && departmentId && assignee.departmentId && Number(assignee.departmentId) !== departmentId) {
       await transaction.rollback();
       return res.status(400).json({ success: false, message: 'The selected user does not belong to the selected department.' });
+    }
+    if (req.user.role === 'college_manager') {
+      const managerCollegeId = Number(req.organizationScope?.collegeId);
+      if (!Number.isSafeInteger(managerCollegeId) || Number(assignee.collegeId) !== managerCollegeId) {
+        await transaction.rollback();
+        return res.status(403).json({ success: false, message: 'Recipient is outside your organization scope.' });
+      }
+      const staffDepartmentId = Number(departmentId || assignee.departmentId || 0);
+      if (staffDepartmentId) {
+        const staffDepartment = await Department.findOne({
+          where: { id: staffDepartmentId, collegeId: managerCollegeId, status: 'active' },
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+        if (!staffDepartment) {
+          await transaction.rollback();
+          return res.status(400).json({ success: false, message: 'Select an active department within your college.' });
+        }
+      }
     }
     if (college_id && assignedToType === 'user' && Number(assignee.collegeId) !== Number(college_id)) {
       await transaction.rollback();
@@ -567,19 +594,25 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
 
     const userCollegeId = ['ict_officer', 'store_manager'].includes(req.user?.role)
       ? req.organizationScope.collegeId
-      : req.user?.collegeId ?? req.user?.college_id;
+      : req.user?.role === 'college_manager'
+        ? req.organizationScope?.collegeId
+        : req.user?.collegeId ?? req.user?.college_id;
     if (userCollegeId && Number(asset.collegeId) !== Number(userCollegeId)) {
       await transaction.rollback();
       return res.status(403).json({ success: false, message: 'Asset is outside your organization scope' });
     }
     const recipientCollegeId = assignedToType === 'user' ? assignee?.collegeId : assignedDepartment?.collegeId;
-    if (userCollegeId && (req.user?.role === 'store_manager'
+    if (userCollegeId && (req.user?.role === 'college_manager'
+      ? Number(recipientCollegeId) !== Number(userCollegeId)
+      : req.user?.role === 'store_manager'
       ? Number(recipientCollegeId) !== Number(userCollegeId)
       : recipientCollegeId && Number(recipientCollegeId) !== Number(userCollegeId))) {
       await transaction.rollback();
       return res.status(403).json({ success: false, message: 'Recipient is outside your organization scope' });
     }
-    if (userCollegeId && (req.user?.role === 'store_manager'
+    if (userCollegeId && (req.user?.role === 'college_manager'
+      ? Number(assignedDepartment?.collegeId) !== Number(userCollegeId)
+      : req.user?.role === 'store_manager'
       ? Number(assignedDepartment?.collegeId) !== Number(userCollegeId)
       : assignedDepartment?.collegeId && Number(assignedDepartment.collegeId) !== Number(userCollegeId))) {
       await transaction.rollback();
@@ -729,7 +762,7 @@ router.post('/', ...canManageAssignments, requireDepartmentPermission('assets.as
   }
 });
 
-router.post('/:id/return', ...canManageAssignments, resolveAssignmentOrganizationScope, async (req, res, next) => {
+router.post('/:id/return', ...canManageCollegeAssignments, requireCollegeManagerAssignmentPermission, resolveAssignmentOrganizationScope, async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
     const assignment = await Assignment.findByPk(req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
@@ -831,7 +864,7 @@ router.post('/:id/return', ...canManageAssignments, resolveAssignmentOrganizatio
   }
 });
 
-router.post('/:id/transfer', ...canManageAssignments, resolveAssignmentOrganizationScope, async (req, res, next) => {
+router.post('/:id/transfer', ...canManageAssignments, requireCollegeManagerAssignmentPermission, resolveAssignmentOrganizationScope, async (req, res, next) => {
   const assignedToType = String(req.body.assigned_to_type || req.body.assignedToType || 'user').trim().toLowerCase();
   const assignedToId = Number(req.body.assigned_to_id || req.body.assignedToId || req.body.new_user_id || req.body.newUserId);
   if (!['user', 'department', 'laboratory'].includes(assignedToType)) return res.status(400).json({ success: false, message: 'Assigned To type must be User, Department or Laboratory.' });

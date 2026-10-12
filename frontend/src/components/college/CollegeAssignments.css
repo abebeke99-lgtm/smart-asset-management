@@ -460,6 +460,34 @@
     align-items: stretch;
   }
 
+  .college-assignments-header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .college-assignments-create-button { border-color: #1d4ed8; background: #1d4ed8; color: #fff; }
+  .college-assignments-create-button:hover { background: #1e40af; color: #fff; }
+  .college-assignments-return-button { min-height: 34px; margin-left: 6px; padding: 0 9px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #334155; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .college-assignments-return-button:disabled { cursor: wait; opacity: .6; }
+  .college-assignments-form-modal { width: min(720px, 100%); }
+  .college-assignments-modal-head p { margin: 8px 0 0; color: #64748b; font-size: 13px; }
+  .college-assignments-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding-top: 18px; }
+  .college-assignments-form label { display: grid; align-content: start; gap: 7px; color: #334155; font-size: 13px; font-weight: 700; }
+  .college-assignments-form input, .college-assignments-form select, .college-assignments-form textarea { width: 100%; min-height: 40px; box-sizing: border-box; padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #0f172a; font: inherit; font-weight: 400; }
+  .college-assignments-form textarea { resize: vertical; }
+  .college-assignments-form input:focus-visible, .college-assignments-form select:focus-visible, .college-assignments-form textarea:focus-visible { outline: 3px solid rgba(37,99,235,.2); border-color: #2563eb; }
+  .college-assignments-form [aria-invalid="true"] { border-color: #dc2626; }
+  .college-assignments-form-wide { grid-column: 1 / -1; }
+  .college-assignments-selected-asset, .college-assignments-field-hint { color: #64748b; font-size: 12px; font-weight: 400; line-height: 1.5; }
+  .college-assignments-field-error { color: #b91c1c; font-size: 12px; font-weight: 600; }
+  .college-assignments-form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; }
+  .college-assignments-form-actions button:disabled { cursor: not-allowed; opacity: .6; }
+  .college-assignments-modal-head button:disabled { cursor: not-allowed; opacity: .5; }
+  @media (max-width: 700px) {
+    .college-assignments-header-actions { width: 100%; }
+    .college-assignments-header-actions button { flex: 1; }
+    .college-assignments-form { grid-template-columns: 1fr; }
+    .college-assignments-form-wide, .college-assignments-form-actions { grid-column: auto; }
+    .college-assignments-form-actions { flex-direction: column-reverse; }
+    .college-assignments-form-actions button { width: 100%; }
+  }
+
   .college-assignments-action-button {
     width: 100%;
   }

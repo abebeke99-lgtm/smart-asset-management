@@ -20,6 +20,7 @@ import CollegeRequests from './CollegeRequests';
 import CollegeDepartmentRequests from './CollegeDepartmentRequests';
 import CollegeApprovals from './CollegeApprovals';
 import CollegeAssignments from './CollegeAssignments';
+import CollegeReturns from './CollegeReturns';
 import CollegeVerification from './CollegeVerification';
 import CollegeMaintenance from './CollegeMaintenance';
 import CollegeNotifications from './CollegeNotifications';
@@ -66,11 +67,7 @@ const CollegeManagerPages = ({ section = 'dashboard' }) => {
         <CollegeProfile />
       </CollegeSectionWrapper>
     ),
-    staff: (
-      <CollegeSectionWrapper title="College Staff" subtitle="Staff records within the authorized college, with asset assignments and activity summaries.">
-        <CollegeStaff />
-      </CollegeSectionWrapper>
-    ),
+    staff: <CollegeStaff />,
     locations: (
       <CollegeSectionWrapper title="College Locations" subtitle="Manage buildings, rooms, and asset locations within your college.">
         <CollegeLocations />
@@ -89,7 +86,7 @@ const CollegeManagerPages = ({ section = 'dashboard' }) => {
     ),
     assignments: <CollegeAssignments />,
     transfers: <ScopedWorkflowPage scope="college" type="transfers" />,
-    returns: <ScopedWorkflowPage scope="college" type="returns" />,
+    returns: <CollegeReturns />,
     maintenance: <CollegeMaintenance />,
     rfid: (
       <CollegeSectionWrapper title="RFID / QR Tracking" subtitle="Asset lookup, scan history and location tracking for authorized college assets.">

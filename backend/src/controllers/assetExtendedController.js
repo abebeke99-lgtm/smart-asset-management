@@ -418,8 +418,13 @@ const listCustody = async (req, res, next) => {
 const createAssetCustody = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   try {
-    const asset = await findAssetInScope(req, req.params.id, { transaction });
+    const asset = await findAssetInScope(req, req.params.id, { transaction, lock: transaction.LOCK.UPDATE });
     if (!asset) { await transaction.rollback(); return res.status(404).json({ success: false, message: 'Asset not found' }); }
+    const normalizedAssetStatus = String(asset.status || '').trim().toLowerCase().replace(/[_\s]+/g, '-');
+    if (!['available', 'active', 'ready', 'idle'].includes(normalizedAssetStatus)) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'Only available assets can be assigned' });
+    }
     const custodianId = Number(req.body.custodianId || req.body.custodian_id || req.body.assigned_to);
     if (!Number.isInteger(custodianId)) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'A valid custodian user id is required' }); }
     const scopedCollegeId = getCollegeScopeId(req);
@@ -428,7 +433,14 @@ const createAssetCustody = async (req, res, next) => {
       transaction,
     });
     if (!custodian) { await transaction.rollback(); return res.status(400).json({ success: false, message: 'Custodian user not found, inactive, or outside your college' }); }
-    await AssetCustody.update({ status: 'returned', returnedDate: new Date() }, { where: { assetId: asset.id, status: 'active' }, transaction });
+    const [activeCustody, activeAssignment] = await Promise.all([
+      AssetCustody.findOne({ where: { assetId: asset.id, status: 'active' }, transaction, lock: transaction.LOCK.UPDATE }),
+      Assignment.findOne({ where: { assetId: asset.id, status: { [Op.notIn]: ['returned', 'cancelled', 'closed'] } }, transaction, lock: transaction.LOCK.UPDATE }),
+    ]);
+    if (activeCustody || activeAssignment) {
+      await transaction.rollback();
+      return res.status(409).json({ success: false, message: 'This asset already has an active assignment' });
+    }
     const custody = await AssetCustody.create({
       assetId: asset.id,
       custodianId,
