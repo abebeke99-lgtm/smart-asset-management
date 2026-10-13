@@ -3210,7 +3210,6 @@ function AppContent() {
         { path: '/college/rfid', label: 'RFID / QR Tracking', icon: QrCode },
         { path: '/college/verification', label: 'Asset Verification', icon: Check },
         { path: '/college/reports', label: 'College Reports', icon: BarChart3 },
-        { path: '/college/analytics/assets', label: 'College Analytics', icon: TrendingUp },
         { path: '/college/notifications', label: 'Notifications', icon: Bell }
       ],
       'college': [
@@ -3377,7 +3376,6 @@ function AppContent() {
   ];
   const collegeAnalyticsItems = [
     { path: '/college/reports', label: 'College Reports', icon: BarChart3, group: translateCollegeNavigation('REPORTS & ANALYTICS') },
-    { path: '/college/analytics/assets', label: 'College Analytics', icon: TrendingUp, group: translateCollegeNavigation('REPORTS & ANALYTICS') },
     { path: '/college/notifications', label: 'Notifications', icon: Bell, group: translateCollegeNavigation('REPORTS & ANALYTICS') }
   ];
   const departmentHeadItems = [
@@ -3559,11 +3557,6 @@ function AppContent() {
             );
           })}
         </nav>
-        <div className="admin-sidebar-footer">
-          <button type="button" className="sidebar-logout" onClick={handleLogout}>
-            <LogOut size={15} aria-hidden="true" /> {t.logout}
-          </button>
-        </div>
       </aside>
     </>
   );

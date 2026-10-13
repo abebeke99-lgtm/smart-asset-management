@@ -163,6 +163,53 @@ test('college managers can register an asset with scoped reference data and refr
   await waitFor(() => expect(apiClient.get).toHaveBeenCalledTimes(3));
 });
 
+test('registered assets refresh into the College Inventory list', async () => {
+  let registered = false;
+  useAuth.mockReturnValue({
+    user: { role: 'college_manager' },
+    hasPermission: (permission) => permission === 'college.assets.create'
+  });
+  apiClient.get.mockImplementation((url) => Promise.resolve(url.endsWith('/registration-options')
+    ? { data: { data: { college: { id: 4, name: 'Engineering College' }, categories: [{ id: 2, name: 'Laboratory Equipment' }], departments: [], custodians: [] } } }
+    : {
+      data: {
+        data: registered ? [{ id: 30, assetCode: 'ENG-030', name: 'New microscope', category: 'Laboratory Equipment' }] : [],
+        summary: { total: registered ? 1 : 0 },
+        filters: {},
+        pagination: { page: 1, limit: 20, total: registered ? 1 : 0, pages: 1 }
+      }
+    }));
+  apiClient.post.mockImplementation(async () => {
+    registered = true;
+    return { data: { success: true, data: { id: 30 } } };
+  });
+
+  render(
+    <UiProvider>
+      <MemoryRouter><CollegeAssets inventory /></MemoryRouter>
+    </UiProvider>
+  );
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Register asset' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Register asset' });
+  fireEvent.change(within(dialog).getByLabelText(/Asset code/), { target: { value: 'ENG-030' } });
+  fireEvent.change(within(dialog).getByLabelText(/Asset name/), { target: { value: 'New microscope' } });
+  fireEvent.change(within(dialog).getByLabelText(/Category/), { target: { value: 'Laboratory Equipment' } });
+  fireEvent.change(within(dialog).getByLabelText(/^Location/), { target: { value: 'Physics Lab' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Save asset' }));
+
+  expect(await screen.findByText('New microscope')).toBeInTheDocument();
+  expect(apiClient.post).toHaveBeenCalledWith('/api/college/assets', expect.objectContaining({
+    assetCode: 'ENG-030',
+    name: 'New microscope',
+    category: 'Laboratory Equipment',
+    location: 'Physics Lab'
+  }));
+  expect(apiClient.get).toHaveBeenCalledWith('/api/college/inventory', expect.objectContaining({
+    params: expect.objectContaining({ page: 1, limit: 20 })
+  }));
+});
+
 test('college managers with update permission edit an existing asset through the scoped endpoint', async () => {
   useAuth.mockReturnValue({
     user: { role: 'college_manager' },

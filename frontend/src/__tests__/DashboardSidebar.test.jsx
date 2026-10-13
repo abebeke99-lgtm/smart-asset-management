@@ -88,7 +88,7 @@ describe('authenticated dashboard sidebar', () => {
     expect(screen.getByText('Mekdela Amba University')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Users' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByRole('link', { name: 'Transactions' })).not.toBeInTheDocument();
-    expect(within(sidebar).getByRole('button', { name: 'Logout' })).toBeInTheDocument();
+    expect(within(sidebar).queryByRole('button', { name: 'Logout' })).not.toBeInTheDocument();
   });
 
   it('updates the available menu when the authenticated role changes', async () => {
@@ -110,7 +110,7 @@ describe('authenticated dashboard sidebar', () => {
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument();
   });
 
-  it('removes duplicate identity and branding from the college manager sidebar while retaining its menus and Logout', async () => {
+  it('removes College Analytics and sidebar Logout while retaining the other college menus', async () => {
     mockAuthUser = {
       id: 3,
       role: 'college_manager',
@@ -128,7 +128,7 @@ describe('authenticated dashboard sidebar', () => {
     expect(sidebarElement.querySelector('.admin-sidebar-profile')).not.toBeInTheDocument();
     expect(sidebarElement.querySelector('.sidebar-brand')).not.toBeInTheDocument();
     expect(sidebarElement.querySelector('.sidebar-account')).not.toBeInTheDocument();
-    expect(sidebar.getByRole('button', { name: 'Logout' })).toBeInTheDocument();
+    expect(sidebar.queryByRole('button', { name: 'Logout' })).not.toBeInTheDocument();
     expect(sidebar.queryByText('bekele')).not.toBeInTheDocument();
     expect(sidebar.queryByText('COLLEGE MANAGER')).not.toBeInTheDocument();
     expect(sidebar.queryByText('Active')).not.toBeInTheDocument();
@@ -137,11 +137,10 @@ describe('authenticated dashboard sidebar', () => {
     expect(sidebar.getByRole('link', { name: 'Transfers' })).toBeInTheDocument();
     expect(sidebar.getByRole('link', { name: 'Returns' })).toBeInTheDocument();
     expect(sidebar.getByRole('link', { name: 'Asset Requests' })).toBeInTheDocument();
+    expect(sidebar.getByRole('link', { name: 'College Reports' })).toBeInTheDocument();
+    expect(sidebar.queryByRole('link', { name: 'College Analytics' })).not.toBeInTheDocument();
+    expect(sidebar.getByRole('link', { name: 'Notifications' })).toBeInTheDocument();
     expect(screen.getByText('Mekdela Amba University')).toBeInTheDocument();
-
-    fireEvent.click(sidebar.getByRole('button', { name: 'Logout' }));
-
-    await waitFor(() => expect(mockLogout).toHaveBeenCalledTimes(1));
   });
 
   it.each([
@@ -158,7 +157,7 @@ describe('authenticated dashboard sidebar', () => {
     ['maintenance', 'Requests'],
     ['maintenance_coordinator', 'Requests'],
     ['infrastructure', 'Infrastructure Assets'],
-  ])('keeps the %s menu and Logout while removing all duplicate sidebar cards', async (role, expectedMenu) => {
+  ])('keeps the %s menu and removes sidebar Logout while removing all duplicate sidebar cards', async (role, expectedMenu) => {
     mockAuthUser = {
       id: 40,
       role,
@@ -178,7 +177,7 @@ describe('authenticated dashboard sidebar', () => {
     expect(within(sidebar).queryByText('Active')).not.toBeInTheDocument();
     expect(within(sidebar).queryByText('University Asset Management System')).not.toBeInTheDocument();
     expect(within(sidebar).getByRole('link', { name: expectedMenu })).toBeInTheDocument();
-    expect(within(sidebar).getByRole('button', { name: 'Logout' })).toBeInTheDocument();
+    expect(within(sidebar).queryByRole('button', { name: 'Logout' })).not.toBeInTheDocument();
   });
 
   it('opens and closes the mobile navigation with its button and Escape key', async () => {
@@ -199,12 +198,13 @@ describe('authenticated dashboard sidebar', () => {
     expect(sidebar).toHaveAttribute('aria-hidden', 'true');
   });
 
-  it('logs out from the sidebar and returns to the signed-out route', async () => {
+  it('keeps Logout in the profile menu and returns to the signed-out route', async () => {
     await act(async () => {
       render(<App />);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Logout' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open user menu' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Logout' }));
 
     await waitFor(() => expect(window.location.pathname).toBe('/login'));
     expect(mockLogout).toHaveBeenCalledTimes(1);

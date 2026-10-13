@@ -1,7 +1,9 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Package, Plus, RefreshCw, Search, ShieldCheck, X } from 'lucide-react';
 import apiClient from '../../services/apiClient';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import './CollegeVerification.css';
 
 const stateLabelMap = {
@@ -36,6 +38,9 @@ const formatDate = (value) => value ? new Date(value).toLocaleString() : '—';
 const safeValue = (value) => value === null || value === undefined || value === '' ? '—' : value;
 
 const CollegeVerification = () => {
+  const auth = useAuth() || {};
+  const navigate = useNavigate();
+  const canManage = Boolean(auth.hasPermission?.('college.verification.manage'));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -44,7 +49,17 @@ const CollegeVerification = () => {
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1, pages: 1 });
   const [filters, setFilters] = useState({ departments: [], statuses: [], locations: [], assetStatuses: [] });
   const [query, setQuery] = useState({ search: '', departmentId: '', status: '', assetStatus: '', location: '' });
-  const [submitting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
+  const [sessionName, setSessionName] = useState('');
+  const [activeSession, setActiveSession] = useState(null);
+  const [sessionAssets, setSessionAssets] = useState([]);
+  const [assetIndex, setAssetIndex] = useState(0);
+  const [assetState, setAssetState] = useState('verified');
+  const [assetNotes, setAssetNotes] = useState('');
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const [sessionError, setSessionError] = useState('');
+  const [sessionNotice, setSessionNotice] = useState('');
 
   const loadVerification = async (showLoader = true) => {
     try {
@@ -110,6 +125,135 @@ const CollegeVerification = () => {
     loadVerification(false);
   };
 
+  const loadCollegeAssets = async () => {
+    const firstResponse = await apiClient.get('/api/college/assets', { params: { page: 1, limit: 100 } });
+    const firstPayload = firstResponse.data;
+    if (!firstPayload || !Array.isArray(firstPayload.data)) throw new Error('The server returned invalid college asset data.');
+    const assets = [...firstPayload.data];
+    const totalPages = Math.max(1, Number(firstPayload.pagination?.pages || firstPayload.pagination?.totalPages) || 1);
+    for (let page = 2; page <= totalPages; page += 1) {
+      const response = await apiClient.get('/api/college/assets', { params: { page, limit: 100 } });
+      if (!Array.isArray(response.data?.data)) throw new Error('The server returned invalid college asset data.');
+      assets.push(...response.data.data);
+    }
+    return assets;
+  };
+
+  const openSession = async (session) => {
+    setSessionLoading(true);
+    setSessionError('');
+    setSessionNotice('');
+    try {
+      const [sessionResponse, assets] = await Promise.all([
+        apiClient.get(`/api/college/verification/${session.id}`),
+        loadCollegeAssets(),
+      ]);
+      const data = sessionResponse.data?.data;
+      if (!data || !Array.isArray(assets)) throw new Error('The server returned invalid verification data.');
+      const sessionItems = data.VerificationItems || data.verificationItems || [];
+      setActiveSession({ ...data, VerificationItems: sessionItems });
+      setSessionAssets(assets);
+      const checkedAssetIds = new Set(sessionItems.map((item) => Number(item.assetId)));
+      const nextIndex = assets.findIndex((asset) => !checkedAssetIds.has(Number(asset.id)));
+      const selectedIndex = nextIndex >= 0 ? nextIndex : 0;
+      const selectedItem = sessionItems.find((item) => Number(item.assetId) === Number(assets[selectedIndex]?.id));
+      setAssetIndex(selectedIndex);
+      setAssetState(selectedItem?.state || 'verified');
+      setAssetNotes(selectedItem?.notes || '');
+    } catch (requestError) {
+      setSessionError(requestError.response?.data?.message || requestError.message || 'Unable to load verification session.');
+    } finally {
+      setSessionLoading(false);
+    }
+  };
+
+  const startSession = async (event) => {
+    event.preventDefault();
+    setSessionLoading(true);
+    setSessionError('');
+    try {
+      const response = await apiClient.post('/api/college/verification', { name: sessionName.trim() });
+      const session = response.data?.data;
+      if (!session?.id) throw new Error(response.data?.message || 'Unable to create verification session.');
+      setSessionDialogOpen(false);
+      setSessionName('');
+      await loadVerification(false);
+      await openSession(session);
+    } catch (requestError) {
+      setSessionError(requestError.response?.data?.message || requestError.message || 'Unable to start verification session.');
+    } finally {
+      setSessionLoading(false);
+    }
+  };
+
+  const recordCurrentAsset = async (event) => {
+    event.preventDefault();
+    const asset = sessionAssets[assetIndex];
+    if (!activeSession || !asset || submitting) return;
+    setSubmitting(true);
+    setSessionError('');
+    setSessionNotice('');
+    try {
+      const response = await apiClient.post(`/api/college/verification/${activeSession.id}/items`, {
+        asset_id: asset.id,
+        state: assetState,
+        notes: assetNotes.trim(),
+      });
+      const item = response.data?.data;
+      if (!item?.id) throw new Error(response.data?.message || 'The verification result was not saved.');
+      setActiveSession((current) => {
+        const currentItems = current.VerificationItems || [];
+        const existingIndex = currentItems.findIndex((record) => Number(record.assetId) === Number(item.assetId));
+        const nextItems = existingIndex >= 0
+          ? currentItems.map((record, index) => index === existingIndex ? item : record)
+          : [...currentItems, item];
+        return { ...current, VerificationItems: nextItems };
+      });
+      setSessionNotice(`${asset.name || asset.assetCode} recorded as ${stateLabelMap[assetState] || assetState}.`);
+      setAssetNotes('');
+      setAssetState('verified');
+      const recordedIds = new Set([
+        ...(activeSession.VerificationItems || []).map((record) => Number(record.assetId)),
+        Number(item.assetId),
+      ]);
+      const nextIndex = sessionAssets.findIndex((candidate, index) => index > assetIndex && !recordedIds.has(Number(candidate.id)));
+      if (nextIndex >= 0) setAssetIndex(nextIndex);
+      else if (assetIndex < sessionAssets.length - 1) {
+        const firstUnchecked = sessionAssets.findIndex((candidate) => !recordedIds.has(Number(candidate.id)));
+        if (firstUnchecked >= 0) setAssetIndex(firstUnchecked);
+      }
+      await loadVerification(false);
+    } catch (requestError) {
+      setSessionError(requestError.response?.data?.message || requestError.message || 'Unable to record this asset.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const finishSession = async () => {
+    if (!activeSession || submitting) return;
+    setSubmitting(true);
+    setSessionError('');
+    try {
+      await apiClient.post(`/api/college/verification/${activeSession.id}/submit`, {});
+      setActiveSession((current) => ({ ...current, status: 'submitted' }));
+      await loadVerification(false);
+    } catch (requestError) {
+      setSessionError(requestError.response?.data?.message || requestError.message || 'Unable to submit verification session.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const selectAsset = (index) => {
+    const asset = sessionAssets[index];
+    const recordedItem = (activeSession?.VerificationItems || []).find((item) => Number(item.assetId) === Number(asset?.id));
+    setAssetIndex(index);
+    setAssetState(recordedItem?.state || 'verified');
+    setAssetNotes(recordedItem?.notes || '');
+    setSessionNotice('');
+  };
+
   if (loading) {
     return (
       <div className="college-verification-state" aria-busy="true">
@@ -138,10 +282,20 @@ const CollegeVerification = () => {
           <p className="college-verification-eyebrow"><ShieldCheck size={15} /> Verification Overview</p>
           <h3>Physical verification for the authorized college</h3>
         </div>
-        <button type="button" className="college-verification-refresh" onClick={refresh} disabled={refreshing}>
-          <RefreshCw size={15} className={refreshing ? 'spin' : ''} /> {refreshing ? 'Refreshing...' : 'Refresh'}
-        </button>
+        <div className="college-verification-header-actions">
+          {canManage && <button type="button" className="college-verification-start" onClick={() => { setSessionError(''); setSessionDialogOpen(true); }} disabled={!summary.totalAssets}><Plus size={15} /> Start verification</button>}
+          <button type="button" className="college-verification-refresh" onClick={refresh} disabled={refreshing}>
+            <RefreshCw size={15} className={refreshing ? 'spin' : ''} /> {refreshing ? 'Refreshing...' : 'Refresh'}
+          </button>
+        </div>
       </header>
+      {sessionError && !activeSession && !sessionDialogOpen && (
+        <div className="college-verification-inline-error" role="alert">
+          <AlertTriangle size={17} />
+          <span>{sessionError}</span>
+          <button type="button" onClick={() => setSessionError('')}>Dismiss</button>
+        </div>
+      )}
 
       <section className="college-verification-kpis" aria-label="Verification KPI cards">
         {stats.map((stat) => (
@@ -236,7 +390,7 @@ const CollegeVerification = () => {
                       </span>
                     </td>
                     <td>
-                      <button type="button" className="college-verification-action" disabled={submitting}>View</button>
+                      <button type="button" className="college-verification-action" disabled={sessionLoading} onClick={() => openSession(session)}>View</button>
                     </td>
                   </tr>
                 ))}
@@ -265,6 +419,81 @@ const CollegeVerification = () => {
         <span>Page {pagination.page} of {Math.max(1, pagination.totalPages)}</span>
         <button type="button" disabled={pagination.page >= pagination.totalPages} onClick={() => {}}>Next</button>
       </div>
+
+      {summary.totalAssets === 0 && canManage && (
+        <div className="college-verification-no-assets" role="status">
+          <Package size={20} />
+          <span>Register college assets before starting a verification.</span>
+          <button type="button" onClick={() => navigate('/college/assets')}>Register assets</button>
+        </div>
+      )}
+
+      {sessionDialogOpen && (
+        <div className="college-verification-modal-backdrop" role="presentation">
+          <section className="college-verification-modal" role="dialog" aria-modal="true" aria-labelledby="verification-start-title">
+            <div className="college-verification-modal-header">
+              <div><span className="college-verification-eyebrow">New verification</span><h3 id="verification-start-title">Start a verification session</h3></div>
+              <button type="button" aria-label="Close" onClick={() => setSessionDialogOpen(false)} disabled={sessionLoading}><X size={18} /></button>
+            </div>
+            {sessionError && <p className="college-verification-modal-error" role="alert">{sessionError}</p>}
+            <form onSubmit={startSession}>
+              <label htmlFor="verification-session-name">Session name</label>
+              <input id="verification-session-name" value={sessionName} onChange={(event) => setSessionName(event.target.value)} required minLength={2} maxLength={255} placeholder="e.g. Laboratory inventory check" />
+              <p>Assets are checked and recorded one at a time. The session will use assets registered to your college.</p>
+              <button type="submit" disabled={sessionLoading || sessionName.trim().length < 2}>{sessionLoading ? 'Starting...' : 'Start session'}</button>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {activeSession && (
+        <div className="college-verification-modal-backdrop" role="presentation">
+          <section className="college-verification-modal college-verification-workflow" role="dialog" aria-modal="true" aria-labelledby="verification-workflow-title">
+            <div className="college-verification-modal-header">
+              <div><span className="college-verification-eyebrow">Session #{activeSession.id}</span><h3 id="verification-workflow-title">{activeSession.name}</h3></div>
+              <button type="button" aria-label="Close verification session" onClick={() => { setActiveSession(null); setSessionError(''); setSessionNotice(''); }}><X size={18} /></button>
+            </div>
+            {sessionLoading ? <div className="college-verification-state" aria-busy="true"><RefreshCw /> Loading assets...</div> : sessionAssets.length === 0 ? (
+              <div className="college-verification-empty"><Package size={22} /> No college assets are available to verify.</div>
+            ) : (
+              <>
+                <div className="college-verification-progress">
+                  <strong>Asset {assetIndex + 1} of {sessionAssets.length}</strong>
+                  <span>{(activeSession.VerificationItems || []).length} recorded</span>
+                </div>
+                <div className="college-verification-asset-card">
+                  <span>{sessionAssets[assetIndex]?.assetCode || 'Asset code unavailable'}</span>
+                  <h4>{sessionAssets[assetIndex]?.name || 'Unnamed asset'}</h4>
+                  <p>{[sessionAssets[assetIndex]?.category, sessionAssets[assetIndex]?.departmentName || sessionAssets[assetIndex]?.department, sessionAssets[assetIndex]?.location].filter(Boolean).join(' · ') || 'No additional asset details'}</p>
+                  {(activeSession.VerificationItems || []).some((item) => Number(item.assetId) === Number(sessionAssets[assetIndex]?.id)) && (
+                    <span className={`college-verification-recorded ${statusBadges[(activeSession.VerificationItems || []).find((item) => Number(item.assetId) === Number(sessionAssets[assetIndex]?.id))?.state] || 'status-muted'}`}>
+                      Recorded: {stateLabelMap[(activeSession.VerificationItems || []).find((item) => Number(item.assetId) === Number(sessionAssets[assetIndex]?.id))?.state] || 'Needs review'}
+                    </span>
+                  )}
+                </div>
+                {sessionError && <p className="college-verification-modal-error" role="alert">{sessionError}</p>}
+                {sessionNotice && <p className="college-verification-modal-success" role="status"><Check size={15} /> {sessionNotice}</p>}
+                {['draft', 'in_progress'].includes(activeSession.status) && (
+                  <form className="college-verification-record-form" onSubmit={recordCurrentAsset}>
+                    <label htmlFor="verification-asset-result">Observed result</label>
+                    <select id="verification-asset-result" value={assetState} onChange={(event) => setAssetState(event.target.value)}>
+                      {['verified', 'missing', 'wrong_location', 'damaged', 'unidentified', 'needs_review'].map((status) => <option key={status} value={status}>{stateLabelMap[status]}</option>)}
+                    </select>
+                    <label htmlFor="verification-asset-notes">Notes (optional)</label>
+                    <textarea id="verification-asset-notes" value={assetNotes} onChange={(event) => setAssetNotes(event.target.value)} maxLength={2000} rows={3} />
+                    <button type="submit" className="college-verification-start" disabled={submitting}>{submitting ? 'Saving...' : 'Save result and continue'}</button>
+                  </form>
+                )}
+                <div className="college-verification-workflow-footer">
+                  <button type="button" className="college-verification-action" disabled={assetIndex <= 0} onClick={() => selectAsset(Math.max(0, assetIndex - 1))}> <ChevronLeft size={15} /> Previous asset</button>
+                  <button type="button" className="college-verification-action" disabled={assetIndex >= sessionAssets.length - 1} onClick={() => selectAsset(Math.min(sessionAssets.length - 1, assetIndex + 1))}>Next asset <ChevronRight size={15} /></button>
+                  {['draft', 'in_progress'].includes(activeSession.status) && <button type="button" className="college-verification-finish" disabled={submitting || !(activeSession.VerificationItems || []).length} onClick={finishSession}>Finish session</button>}
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 };

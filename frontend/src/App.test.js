@@ -580,13 +580,12 @@ describe('College Manager sidebar specification', () => {
       heading: 'REPORTS & ANALYTICS',
       items: [
         ['/college/reports', 'College Reports'],
-        ['/college/analytics/assets', 'College Analytics'],
         ['/college/notifications', 'Notifications'],
       ],
     },
   ];
 
-  it('renders only the 17 approved items under the five approved sections', () => {
+  it('renders only the 16 approved items under the five approved sections', () => {
     const actualSections = collegeSections.map(({ name, heading }) => {
       const sectionSource = appSource.match(new RegExp(`const ${name} = \\[([\\s\\S]*?)\\];`))?.[1] || '';
       const items = [...sectionSource.matchAll(/\{ path: '([^']+)', label: '([^']+)'/g)]
@@ -594,7 +593,7 @@ describe('College Manager sidebar specification', () => {
       return { heading, items };
     });
     expect(actualSections).toEqual(collegeSections.map(({ heading, items }) => ({ heading, items })));
-    expect(actualSections.flatMap(({ items }) => items)).toHaveLength(17);
+    expect(actualSections.flatMap(({ items }) => items)).toHaveLength(16);
     for (const { heading } of collegeSections) {
       expect(appSource).toContain(`translateCollegeNavigation('${heading}')`);
     }

@@ -119,13 +119,13 @@ test('college analytics handles empty filters and applies the same authorized fi
   assert.deepEqual(assetWhere, { collegeId: 22 });
   assert.equal(calls.verification.length, 2, 'verification details and aggregate should each be fetched once');
   assert.equal(res.body.data.summary.totalAssetValue, 100, 'the aggregate results must stay aligned with the corresponding models');
-  const maintenanceAggregate = calls.maintenance.find((options) => options.attributes.some(([, alias]) => alias === 'count') && options.group?.[0]?.col === 'Maintenance.status');
-  const verificationAggregate = calls.verification.find((options) => options.group?.[0]?.col === 'VerificationItem.state');
+  const maintenanceAggregate = calls.maintenance.find((options) => options.attributes.some(([, alias]) => alias === 'count') && options.group?.[0]?.col === 'status');
+  const verificationAggregate = calls.verification.find((options) => options.group?.[0]?.col === 'state');
   assert.ok(maintenanceAggregate);
   assert.ok(verificationAggregate);
-  assert.equal(maintenanceAggregate.attributes.find(([, alias]) => alias === 'count')[0].args[0].col, 'Maintenance.id');
+  assert.equal(maintenanceAggregate.attributes.find(([, alias]) => alias === 'count')[0].args[0].col, 'id');
   assert.deepEqual(maintenanceAggregate.include[0].attributes, []);
-  assert.equal(verificationAggregate.attributes.find(([, alias]) => alias === 'count')[0].args[0].col, 'VerificationItem.id');
+  assert.equal(verificationAggregate.attributes.find(([, alias]) => alias === 'count')[0].args[0].col, 'id');
   assert.deepEqual(verificationAggregate.include[0].attributes, []);
   assert.deepEqual(verificationAggregate.include[1].where, { collegeId: 22 });
 });

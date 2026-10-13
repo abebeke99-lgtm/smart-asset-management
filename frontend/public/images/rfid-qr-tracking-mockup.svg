@@ -1,0 +1,250 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">RFID / QR Tracking dashboard mockup</title>
+  <desc id="description">Static sample dashboard design for Mekdela Amba University. Controls and sample records are illustrative only.</desc>
+  <defs>
+    <linearGradient id="sidebar" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#173a68"/>
+      <stop offset="1" stop-color="#10294c"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3987d1"/>
+      <stop offset="1" stop-color="#2468b4"/>
+    </linearGradient>
+    <linearGradient id="softBlue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f5faff"/>
+      <stop offset="1" stop-color="#eaf3fc"/>
+    </linearGradient>
+    <filter id="shadow" x="-15%" y="-20%" width="130%" height="150%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#183756" flood-opacity=".07"/>
+    </filter>
+    <style>
+      text { font-family: Inter, "Segoe UI", Arial, sans-serif; }
+      .muted { fill: #72839a; }
+      .nav { fill: #d6e4f4; font-size: 14px; font-weight: 550; }
+      .label { fill: #657991; font-size: 12px; }
+      .small { fill: #72839a; font-size: 11px; }
+      .body { fill: #334b66; font-size: 13px; }
+      .bold { fill: #1b3553; font-weight: 700; }
+      .card { fill: #fff; stroke: #e1e9f1; stroke-width: 1; }
+      .line { stroke: #e9eff5; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#f3f6fa"/>
+
+  <!-- Sidebar -->
+  <rect width="248" height="1000" fill="url(#sidebar)"/>
+  <path d="M0 80h248" stroke="#ffffff" stroke-opacity=".12"/>
+  <g transform="translate(22 20)">
+    <path d="M24 0 46 8v19c0 15-10 26-22 32C12 53 2 42 2 27V8z" fill="#fff" fill-opacity=".13" stroke="#c9e1fa" stroke-width="1.5"/>
+    <path d="M24 10 35 15v11c0 8-5 14-11 18-6-4-11-10-11-18V15z" fill="#fff"/>
+    <path d="m17 28 5 5 10-12" fill="none" stroke="#3074b3" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="58" y="20" fill="#fff" font-size="16" font-weight="750">Mekdela Amba</text>
+    <text x="58" y="40" fill="#fff" font-size="16" font-weight="750">University</text>
+    <text x="58" y="57" fill="#c7d9ed" font-size="10.5">Smart Asset Management System</text>
+  </g>
+
+  <text x="24" y="112" fill="#93afcf" font-size="10" font-weight="750" letter-spacing="1.2">WORKSPACE</text>
+  <g class="nav">
+    <rect x="13" y="128" width="222" height="42" rx="9" fill="#ffffff" fill-opacity=".06"/>
+    <text x="48" y="155">Dashboard</text>
+    <text x="22" y="155" fill="#9eb8d6" font-size="18">⌂</text>
+    <text x="22" y="205" fill="#9eb8d6" font-size="16">▦</text><text x="48" y="205">Asset Management</text>
+    <text x="22" y="250" fill="#9eb8d6" font-size="17">◇</text><text x="48" y="250">All College Assets</text>
+    <text x="22" y="295" fill="#9eb8d6" font-size="16">▤</text><text x="48" y="295">Inventory</text>
+    <text x="22" y="340" fill="#9eb8d6" font-size="17">♧</text><text x="48" y="340">Asset Requests</text>
+    <text x="22" y="385" fill="#9eb8d6" font-size="16">✓</text><text x="48" y="385">Approvals</text>
+    <text x="22" y="430" fill="#9eb8d6" font-size="16">♙</text><text x="48" y="430">Assignments</text>
+    <text x="22" y="475" fill="#9eb8d6" font-size="16">⇄</text><text x="48" y="475">Transfers</text>
+    <text x="22" y="520" fill="#9eb8d6" font-size="16">↶</text><text x="48" y="520">Returns</text>
+  </g>
+  <text x="24" y="566" fill="#93afcf" font-size="10" font-weight="750" letter-spacing="1.2">OPERATIONS</text>
+  <rect x="10" y="582" width="228" height="44" rx="9" fill="url(#blue)"/>
+  <rect x="10" y="590" width="3" height="28" rx="2" fill="#fff"/>
+  <text x="24" y="610" fill="#fff" font-size="16">⌗</text>
+  <text x="49" y="610" fill="#fff" font-size="14" font-weight="700">RFID / QR Tracking</text>
+  <g class="nav">
+    <text x="22" y="661" fill="#9eb8d6" font-size="16">✓</text><text x="48" y="661">Asset Verification</text>
+  </g>
+  <text x="24" y="710" fill="#93afcf" font-size="10" font-weight="750" letter-spacing="1.2">REPORTS &amp; ANALYTICS</text>
+  <g class="nav">
+    <text x="22" y="750" fill="#9eb8d6" font-size="15">▥</text><text x="48" y="750">College Reports</text>
+    <text x="22" y="795" fill="#9eb8d6" font-size="16">♧</text><text x="48" y="795">Notifications</text>
+  </g>
+  <path d="M18 916h212" stroke="#ffffff" stroke-opacity=".13"/>
+  <text x="22" y="947" fill="#e3edf8" font-size="12" font-weight="650">Mekdela Amba University</text>
+  <text x="22" y="967" fill="#9fb6d1" font-size="10">Knowledge  ·  Service  ·  Excellence</text>
+
+  <!-- Top bar -->
+  <rect x="248" width="1352" height="80" fill="#fff"/>
+  <path d="M248 79.5h1352" stroke="#e0e8f0"/>
+  <rect x="545" y="19" width="520" height="42" rx="11" fill="#f7f9fc" stroke="#e1e8f0"/>
+  <circle cx="568" cy="39" r="7" fill="none" stroke="#8495aa" stroke-width="1.8"/>
+  <path d="m573 44 5 5" stroke="#8495aa" stroke-width="1.8" stroke-linecap="round"/>
+  <text x="588" y="44" class="muted" font-size="13">Search assets, tags, locations...</text>
+  <rect x="1008" y="27" width="38" height="25" rx="5" fill="#fff" stroke="#dfe7ef"/>
+  <text x="1020" y="44" class="small" font-size="11">⌘ K</text>
+  <circle cx="1431" cy="40" r="19" fill="#edf4fb"/>
+  <path d="M1424 43v-5a7 7 0 0 1 14 0v5l3 4h-20z" fill="none" stroke="#47739f" stroke-width="1.7" stroke-linejoin="round"/>
+  <circle cx="1431" cy="50" r="1.5" fill="#47739f"/>
+  <circle cx="1443" cy="27" r="5" fill="#e25b5b"/>
+  <text x="1441" y="29.5" fill="#fff" font-size="7" font-weight="700">3</text>
+  <circle cx="1491" cy="40" r="19" fill="#3074b3"/>
+  <text x="1482" y="45" fill="#fff" font-size="13" font-weight="700">CM</text>
+  <text x="1518" y="37" class="bold" font-size="12">College Manager</text>
+  <text x="1518" y="53" class="muted" font-size="10">Authorized account</text>
+
+  <!-- Main heading -->
+  <text x="282" y="111" class="small">Dashboard</text>
+  <text x="344" y="111" fill="#a2afbe" font-size="11">›</text>
+  <text x="360" y="111" class="small">Operations</text>
+  <text x="419" y="111" fill="#a2afbe" font-size="11">›</text>
+  <text x="435" y="111" fill="#3074b3" font-size="11" font-weight="700">RFID / QR Tracking</text>
+  <text x="282" y="151" fill="#183451" font-size="27" font-weight="750">RFID / QR Tracking</text>
+  <text x="282" y="176" class="muted" font-size="13">Scan, identify, and monitor assets within your college.</text>
+  <rect x="1305" y="128" width="100" height="38" rx="9" fill="url(#blue)"/>
+  <text x="1323" y="152" fill="#fff" font-size="12" font-weight="700">▣  Scan QR Code</text>
+  <rect x="1415" y="128" width="76" height="38" rx="9" fill="#fff" stroke="#d7e2ee"/>
+  <text x="1430" y="152" fill="#345573" font-size="12" font-weight="650">⇩  Export</text>
+  <rect x="1500" y="128" width="78" height="38" rx="9" fill="#fff" stroke="#d7e2ee"/>
+  <text x="1513" y="152" fill="#345573" font-size="12" font-weight="650">↻  Refresh</text>
+
+  <!-- Summary cards -->
+  <g filter="url(#shadow)">
+    <rect x="280" y="197" width="310" height="96" rx="12" class="card"/>
+    <rect x="603" y="197" width="310" height="96" rx="12" class="card"/>
+    <rect x="926" y="197" width="310" height="96" rx="12" class="card"/>
+    <rect x="1249" y="197" width="310" height="96" rx="12" class="card"/>
+  </g>
+  <circle cx="318" cy="244" r="22" fill="#eaf3fc"/><text x="307" y="251" fill="#3074b3" font-size="20">⌗</text>
+  <text x="355" y="231" class="label">Total Tagged</text><text x="355" y="264" class="bold" font-size="26">248</text>
+  <text x="410" y="263" fill="#1b9b68" font-size="11">↑  12 this month</text>
+  <circle cx="641" cy="244" r="22" fill="#e9f8f2"/><text x="631" y="251" fill="#1b9b68" font-size="18">◷</text>
+  <text x="678" y="231" class="label">Scanned Today</text><text x="678" y="264" class="bold" font-size="26">48</text>
+  <text x="732" y="263" class="small">Across 32 assets</text>
+  <circle cx="964" cy="244" r="22" fill="#edf4ff"/><text x="957" y="251" fill="#3074b3" font-size="19">♙</text>
+  <text x="1001" y="231" class="label">Assigned Assets</text><text x="1001" y="264" class="bold" font-size="26">186</text>
+  <text x="1057" y="263" class="small">75% of tagged assets</text>
+  <circle cx="1287" cy="244" r="22" fill="#fff5e9"/><text x="1279" y="251" fill="#dd8c24" font-size="19">!</text>
+  <text x="1324" y="231" class="label">Needs Attention</text><text x="1324" y="264" class="bold" font-size="26">12</text>
+  <text x="1376" y="263" fill="#d17d22" font-size="11">Review recommended</text>
+
+  <!-- Filters -->
+  <rect x="280" y="309" width="1279" height="80" rx="12" class="card" filter="url(#shadow)"/>
+  <text x="300" y="330" class="label" font-weight="700">SEARCH &amp; FILTERS</text>
+  <rect x="300" y="341" width="380" height="34" rx="8" fill="#fff" stroke="#d9e3ed"/>
+  <circle cx="317" cy="357" r="5.5" fill="none" stroke="#8698ad" stroke-width="1.5"/><path d="m321 361 4 4" stroke="#8698ad" stroke-width="1.5"/>
+  <text x="334" y="361" class="small">Asset name, RFID / QR tag...</text>
+  <rect x="692" y="341" width="205" height="34" rx="8" fill="#fff" stroke="#d9e3ed"/>
+  <text x="706" y="362" class="body" font-size="12">All locations</text><text x="878" y="362" class="muted">⌄</text>
+  <rect x="909" y="341" width="205" height="34" rx="8" fill="#fff" stroke="#d9e3ed"/>
+  <text x="923" y="362" class="body" font-size="12">All statuses</text><text x="1095" y="362" class="muted">⌄</text>
+  <rect x="1126" y="341" width="205" height="34" rx="8" fill="#fff" stroke="#d9e3ed"/>
+  <text x="1140" y="362" class="body" font-size="12">All departments</text><text x="1312" y="362" class="muted">⌄</text>
+  <rect x="1344" y="341" width="195" height="34" rx="8" fill="#fff" stroke="#d9e3ed"/>
+  <text x="1360" y="362" fill="#386b99" font-size="11" font-weight="650">Clear filters</text>
+
+  <!-- Scanner panel -->
+  <rect x="280" y="405" width="704" height="300" rx="13" class="card" filter="url(#shadow)"/>
+  <text x="303" y="437" class="bold" font-size="15">Scan / Look Up Asset</text>
+  <circle cx="936" cy="432" r="4" fill="#21a66f"/>
+  <text x="947" y="436" fill="#27815d" font-size="11" font-weight="650">Scanner ready</text>
+  <path d="M301 452h662" class="line"/>
+  <rect x="302" y="466" width="144" height="34" rx="7" fill="url(#blue)"/>
+  <text x="320" y="488" fill="#fff" font-size="11" font-weight="700">⌕  Manual Lookup</text>
+  <rect x="454" y="466" width="143" height="34" rx="7" fill="#fff" stroke="#d9e3ed"/>
+  <text x="472" y="488" fill="#49637e" font-size="11" font-weight="650">▦  QR Code Scan</text>
+  <rect x="605" y="466" width="125" height="34" rx="7" fill="#fff" stroke="#d9e3ed"/>
+  <text x="624" y="488" fill="#49637e" font-size="11" font-weight="650">◉  RFID Scan</text>
+  <text x="303" y="527" class="label" font-weight="650">Enter asset code, QR ID, or RFID tag</text>
+  <rect x="302" y="538" width="366" height="40" rx="8" fill="#fff" stroke="#d5e0eb"/>
+  <text x="317" y="563" fill="#93a2b4" font-size="12">e.g. AST-001, QR123456, RFID-7890</text>
+  <rect x="678" y="538" width="93" height="40" rx="8" fill="#3074b3"/>
+  <text x="699" y="563" fill="#fff" font-size="12" font-weight="700">⌕  Lookup</text>
+  <rect x="302" y="591" width="469" height="88" rx="9" fill="#f7faff" stroke="#e1eaf3"/>
+  <text x="317" y="612" fill="#324b67" font-size="11" font-weight="700">Scan Result</text>
+  <circle cx="329" cy="642" r="13" fill="#e6f0fb"/>
+  <text x="326" y="647" fill="#3074b3" font-size="14" font-weight="700">i</text>
+  <text x="352" y="641" fill="#344d69" font-size="11" font-weight="650">Ready to scan</text>
+  <text x="352" y="660" class="small">Scan a QR code or enter a tag to view matching asset details.</text>
+  <rect x="789" y="466" width="174" height="213" rx="10" fill="url(#softBlue)" stroke="#e2ecf6"/>
+  <rect x="841" y="500" width="70" height="70" rx="13" fill="#fff" stroke="#d9e7f4"/>
+  <path d="M851 521v-10h11M901 521v-10h-11M851 549v10h11M901 549v10h-11" fill="none" stroke="#3c8bd0" stroke-width="3" stroke-linecap="round"/>
+  <g fill="#2a74bd">
+    <rect x="865" y="516" width="5" height="5"/><rect x="876" y="516" width="5" height="5"/><rect x="887" y="516" width="5" height="5"/>
+    <rect x="865" y="527" width="5" height="5"/><rect x="881" y="527" width="5" height="5"/><rect x="887" y="527" width="5" height="5"/>
+    <rect x="870" y="538" width="5" height="5"/><rect x="881" y="538" width="5" height="5"/><rect x="892" y="538" width="5" height="5"/>
+    <rect x="865" y="549" width="5" height="5"/><rect x="876" y="549" width="5" height="5"/><rect x="887" y="549" width="5" height="5"/>
+  </g>
+  <text x="876" y="599" text-anchor="middle" class="body" font-size="11" font-weight="650">Camera scan area</text>
+  <text x="876" y="618" text-anchor="middle" class="small">Illustrative preview</text>
+  <text x="876" y="650" text-anchor="middle" fill="#3074b3" font-size="10" font-weight="650">Ready to scan</text>
+
+  <!-- Recent activity -->
+  <rect x="1000" y="405" width="559" height="300" rx="13" class="card" filter="url(#shadow)"/>
+  <text x="1022" y="437" class="bold" font-size="15">Recent Scanning Activity</text>
+  <text x="1497" y="437" fill="#3074b3" font-size="11" font-weight="650">View all</text>
+  <path d="M1021 452h517" class="line"/>
+  <rect x="1021" y="463" width="517" height="29" rx="6" fill="#f5f8fb"/>
+  <text x="1031" y="482" class="label" font-size="10" font-weight="700">TIME</text>
+  <text x="1118" y="482" class="label" font-size="10" font-weight="700">ASSET</text>
+  <text x="1301" y="482" class="label" font-size="10" font-weight="700">LOCATION</text>
+  <text x="1433" y="482" class="label" font-size="10" font-weight="700">METHOD</text>
+  <text x="1501" y="482" class="label" font-size="10" font-weight="700">RESULT</text>
+  <g class="small">
+    <text x="1031" y="518">Oct 12, 2026</text><text x="1031" y="533">01:32 PM</text>
+    <text x="1118" y="518" fill="#334b66">Laptop Computer</text><text x="1118" y="533">AST-001</text>
+    <text x="1301" y="518">Library · Main</text>
+    <text x="1438" y="525" fill="#3176bd" font-weight="700">QR</text>
+    <rect x="1496" y="507" width="39" height="22" rx="11" fill="#e7f7ef"/><text x="1504" y="522" fill="#248158" font-weight="700">Found</text>
+    <text x="1031" y="562">Oct 12, 2026</text><text x="1031" y="577">01:18 PM</text>
+    <text x="1118" y="562" fill="#334b66">Projector</text><text x="1118" y="577">AST-045</text>
+    <text x="1301" y="562">Engineering · 2</text>
+    <text x="1437" y="569" fill="#7652be" font-weight="700">RFID</text>
+    <rect x="1496" y="551" width="39" height="22" rx="11" fill="#e7f7ef"/><text x="1504" y="566" fill="#248158" font-weight="700">Found</text>
+    <text x="1031" y="606">Oct 12, 2026</text><text x="1031" y="621">12:55 PM</text>
+    <text x="1118" y="606" fill="#334b66">Desktop Computer</text><text x="1118" y="621">AST-032</text>
+    <text x="1301" y="606">IT Department</text>
+    <text x="1437" y="613" fill="#3176bd" font-weight="700">QR</text>
+    <rect x="1496" y="595" width="39" height="22" rx="11" fill="#e7f7ef"/><text x="1504" y="610" fill="#248158" font-weight="700">Found</text>
+    <text x="1031" y="650">Oct 12, 2026</text><text x="1031" y="665">12:40 PM</text>
+    <text x="1118" y="650" fill="#334b66">Printer</text><text x="1118" y="665">AST-067</text>
+    <text x="1301" y="650">Admin Building</text>
+    <text x="1435" y="657" fill="#647991" font-weight="700">Manual</text>
+    <rect x="1496" y="639" width="39" height="22" rx="11" fill="#fff2e1"/><text x="1501" y="654" fill="#a56c20" font-weight="700">Review</text>
+  </g>
+  <path d="M1021 681h517" class="line"/>
+
+  <!-- Asset register -->
+  <rect x="280" y="721" width="704" height="244" rx="13" class="card" filter="url(#shadow)"/>
+  <text x="303" y="752" class="bold" font-size="15">Tagged Asset Register</text>
+  <text x="467" y="752" class="small">Sample records · 248 assets</text>
+  <rect x="302" y="767" width="661" height="29" rx="6" fill="#f5f8fb"/>
+  <text x="313" y="786" class="label" font-size="10" font-weight="700">ASSET NAME</text>
+  <text x="435" y="786" class="label" font-size="10" font-weight="700">ASSET CODE</text>
+  <text x="543" y="786" class="label" font-size="10" font-weight="700">RFID / QR TAG</text>
+  <text x="672" y="786" class="label" font-size="10" font-weight="700">LOCATION</text>
+  <text x="802" y="786" class="label" font-size="10" font-weight="700">LAST SCAN</text>
+  <text x="905" y="786" class="label" font-size="10" font-weight="700">STATUS</text>
+  <g class="small">
+    <path d="M302 804h661M302 843h661M302 882h661M302 921h661" class="line"/>
+    <text x="313" y="829" fill="#334b66">Laptop Computer</text><text x="435" y="829">AST-001</text><text x="543" y="829">QR-00142</text><text x="672" y="829">Library · Main</text><text x="802" y="829">01:32 PM</text><rect x="900" y="813" width="53" height="22" rx="11" fill="#e7f7ef"/><text x="911" y="828" fill="#248158" font-weight="700">Active</text>
+    <text x="313" y="868" fill="#334b66">Projector</text><text x="435" y="868">AST-045</text><text x="543" y="868">RFID-00456</text><text x="672" y="868">Engineering · 2</text><text x="802" y="868">01:18 PM</text><rect x="900" y="852" width="53" height="22" rx="11" fill="#e7f7ef"/><text x="911" y="867" fill="#248158" font-weight="700">Active</text>
+    <text x="313" y="907" fill="#334b66">Desktop Computer</text><text x="435" y="907">AST-032</text><text x="543" y="907">QR-00087</text><text x="672" y="907">IT Department</text><text x="802" y="907">12:55 PM</text><rect x="900" y="891" width="53" height="22" rx="11" fill="#e7f7ef"/><text x="911" y="906" fill="#248158" font-weight="700">Active</text>
+    <text x="313" y="946" fill="#334b66">Printer</text><text x="435" y="946">AST-067</text><text x="543" y="946">RFID-00789</text><text x="672" y="946">Admin Building</text><text x="802" y="946">12:40 PM</text><rect x="900" y="930" width="53" height="22" rx="11" fill="#fff3df"/><text x="908" y="945" fill="#9a681e" font-weight="700">Review</text>
+  </g>
+
+  <!-- Quick stats -->
+  <rect x="1000" y="721" width="559" height="244" rx="13" class="card" filter="url(#shadow)"/>
+  <text x="1022" y="752" class="bold" font-size="15">Quick Stats</text>
+  <text x="1022" y="784" fill="#3074b3" font-size="14">◷</text><text x="1048" y="784" class="body">Unique assets scanned today</text><text x="1510" y="784" fill="#1b9b68" font-size="15" font-weight="750">32</text>
+  <path d="M1021 797h517" class="line"/>
+  <text x="1022" y="822" fill="#3074b3" font-size="14">⌗</text><text x="1048" y="822" class="body">Active tagged assets</text><text x="1510" y="822" fill="#3074b3" font-size="15" font-weight="750">248</text>
+  <path d="M1021 835h517" class="line"/>
+  <text x="1022" y="860" fill="#dd8c24" font-size="14">!</text><text x="1048" y="860" class="body">Assets needing review</text><text x="1510" y="860" fill="#dd8c24" font-size="15" font-weight="750">12</text>
+  <path d="M1021 873h517" class="line"/>
+  <text x="1022" y="898" fill="#3074b3" font-size="14">⌖</text><text x="1048" y="898" class="body">Registered locations</text><text x="1510" y="898" fill="#3074b3" font-size="15" font-weight="750">15</text>
+  <path d="M1021 911h517" class="line"/>
+  <rect x="1022" y="928" width="515" height="24" rx="6" fill="#f4f8fc"/>
+  <text x="1033" y="944" class="small">Illustrative UI only · Sample data · No live scans or records</text>
+</svg>

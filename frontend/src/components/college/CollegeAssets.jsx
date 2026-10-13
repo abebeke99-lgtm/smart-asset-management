@@ -146,7 +146,7 @@ const CollegeAssets = ({ inventory = false }) => {
         <p>{state.college?.name ? `${state.college.name} · ` : ''}{t(inventory ? 'collegeAssets.inventoryDescription' : 'collegeAssets.assetsDescription', inventory ? 'Monitor the physical inventory belonging to your college.' : 'Manage and monitor assets belonging to your college.')}</p>
       </div>
       <div className="college-assets-heading-actions">
-        {canCreate && !inventory && <button className="college-assets-primary" type="button" onClick={() => { setEditingAsset(null); setFormOpen(true); }}><Plus size={16} /> {t('collegeAssets.registerAsset', 'Register asset')}</button>}
+        {canCreate && <button className="college-assets-primary" type="button" onClick={() => { setEditingAsset(null); setFormOpen(true); }}><Plus size={16} /> {t('collegeAssets.registerAsset', 'Register asset')}</button>}
         <button className="college-assets-refresh" type="button" onClick={() => loadAssets()}><RefreshCw size={16} /> {t('collegeAssets.refresh', 'Refresh')}</button>
       </div>
     </header>

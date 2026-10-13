@@ -1,0 +1,565 @@
+.college-reports-page {
+  display: grid;
+  gap: 20px;
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 24px;
+  color: #172b45;
+}
+
+.college-reports-toolbar {
+  display: grid;
+  gap: 14px;
+}
+
+.college-reports-selector {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 2px 2px 8px;
+  scrollbar-width: thin;
+}
+
+.college-reports-selector button,
+.college-reports-actions button,
+.college-reports-table-head button,
+.college-reports-pagination button,
+.college-reports-error button,
+.college-reports-filter-bar .clear-filters {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid #d4dfeb;
+  border-radius: 9px;
+  color: #294765;
+  background: #fff;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.college-reports-selector button:hover,
+.college-reports-actions button:hover:not(:disabled),
+.college-reports-table-head button:hover:not(:disabled),
+.college-reports-pagination button:hover:not(:disabled),
+.college-reports-error button:hover,
+.college-reports-filter-bar .clear-filters:hover {
+  border-color: #8bb4da;
+  background: #f1f7fd;
+}
+
+.college-reports-selector button.active {
+  border-color: #2569a6;
+  color: #fff;
+  background: #3074b3;
+  box-shadow: 0 3px 9px rgba(37, 105, 166, 0.2);
+}
+
+.college-reports-selector button:focus-visible,
+.college-reports-page button:focus-visible,
+.college-reports-page input:focus-visible,
+.college-reports-page select:focus-visible {
+  outline: 3px solid rgba(48, 116, 179, 0.28);
+  outline-offset: 2px;
+}
+
+.college-reports-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.college-reports-actions button:first-child {
+  color: #294765;
+  background: #fff;
+}
+
+.college-reports-actions button:last-child {
+  border-color: #2569a6;
+  color: #fff;
+  background: #3074b3;
+}
+
+.college-reports-actions button:last-child:hover:not(:disabled) {
+  border-color: #205d95;
+  background: #28679f;
+}
+
+.college-reports-page button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.college-reports-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.7fr) repeat(3, minmax(150px, 1fr)) repeat(2, minmax(150px, 1fr)) auto;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #e0e8f1;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(24, 55, 86, 0.045);
+}
+
+.college-reports-filter-bar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 11px;
+  border: 1px solid #d6e0eb;
+  border-radius: 8px;
+  color: #6c8096;
+  background: #fff;
+}
+
+.college-reports-filter-bar label:focus-within {
+  border-color: #5792c5;
+  box-shadow: 0 0 0 3px rgba(48, 116, 179, 0.12);
+}
+
+.college-reports-filter-bar input,
+.college-reports-filter-bar select {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  border: 0;
+  outline: 0;
+  color: #294765;
+  background: transparent;
+  font: inherit;
+  font-size: 0.84rem;
+}
+
+.college-reports-filter-bar input::placeholder {
+  color: #8798aa;
+}
+
+.college-reports-filter-bar input[type='date'] {
+  color-scheme: light;
+}
+
+.college-reports-filter-bar .clear-filters {
+  min-height: 42px;
+  padding: 8px 11px;
+  color: #8a3c43;
+  border-color: #f0d4d6;
+}
+
+.college-reports-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.college-reports-kpi {
+  display: grid;
+  gap: 9px;
+  min-height: 98px;
+  padding: 18px 20px;
+  border: 1px solid #e0e8f1;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #fff 55%, #f4f8fc);
+  box-shadow: 0 4px 16px rgba(24, 55, 86, 0.045);
+}
+
+.college-reports-kpi span {
+  color: #647991;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.college-reports-kpi strong {
+  color: #183d63;
+  font-size: clamp(1.4rem, 2vw, 1.8rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.college-reports-chart-card,
+.college-reports-table-panel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #e0e8f1;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(24, 55, 86, 0.045);
+}
+
+.college-reports-card-header,
+.college-reports-table-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e8eef5;
+}
+
+.college-reports-card-header > svg {
+  flex: 0 0 auto;
+  color: #3074b3;
+}
+
+.college-eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: #3074b3;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.college-reports-card-header h3 {
+  margin: 0;
+  color: #183d63;
+  font-size: 1.1rem;
+}
+
+.college-reports-chart-list {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.college-reports-chart-row {
+  display: grid;
+  gap: 8px;
+}
+
+.college-reports-chart-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  color: #526981;
+  font-size: 0.86rem;
+}
+
+.college-reports-chart-meta strong {
+  color: #183d63;
+  font-variant-numeric: tabular-nums;
+}
+
+.college-reports-chart-track {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf3f9;
+}
+
+.college-reports-chart-track span {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3074b3, #66a5d6);
+  transition: width 180ms ease;
+}
+
+.college-reports-empty,
+.college-reports-state {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+  padding: 24px;
+  color: #74869a;
+  font-size: 0.92rem;
+  text-align: center;
+}
+
+.college-reports-table-head > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.college-reports-table-head strong {
+  color: #183d63;
+  font-size: 1rem;
+}
+
+.college-reports-table-head small {
+  color: #74869a;
+  font-size: 0.78rem;
+}
+
+.college-reports-table-head button {
+  min-height: 36px;
+  padding: 7px 11px;
+}
+
+.college-reports-table-wrap {
+  width: 100%;
+  overflow: auto;
+}
+
+.college-reports-table-wrap table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.college-reports-table-wrap th {
+  position: sticky;
+  top: 0;
+  padding: 12px 16px;
+  color: #385a79;
+  background: #f3f7fb;
+  font-size: 0.74rem;
+  font-weight: 750;
+  letter-spacing: 0.035em;
+  white-space: nowrap;
+}
+
+.college-reports-table-wrap td {
+  padding: 13px 16px;
+  border-top: 1px solid #edf1f6;
+  color: #52667d;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.college-reports-table-wrap tbody tr:hover {
+  background: #f8fbfe;
+}
+
+.college-reports-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 14px 18px;
+  border-top: 1px solid #e8eef5;
+  color: #657a90;
+  font-size: 0.82rem;
+}
+
+.college-reports-pagination button {
+  min-height: 34px;
+  padding: 6px 11px;
+  font-size: 0.8rem;
+}
+
+.college-reports-error {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  color: #9b343c;
+  background: #fff8f8;
+}
+
+.college-reports-error button {
+  color: #8a3037;
+  border-color: #efc9cc;
+}
+
+body.dark .college-reports-page {
+  color: #e2eaf3;
+}
+
+body.dark .college-reports-selector button,
+body.dark .college-reports-filter-bar,
+body.dark .college-reports-filter-bar label,
+body.dark .college-reports-filter-bar .clear-filters,
+body.dark .college-reports-kpi,
+body.dark .college-reports-chart-card,
+body.dark .college-reports-table-panel,
+body.dark .college-reports-actions button,
+body.dark .college-reports-table-head button,
+body.dark .college-reports-pagination button,
+body.dark .college-reports-error button {
+  border-color: #344a61;
+  color: #d8e5f2;
+  background: #1e2c3b;
+}
+
+body.dark .college-reports-selector button.active,
+body.dark .college-reports-actions button:last-child {
+  border-color: #367eb9;
+  color: #fff;
+  background: #3074b3;
+}
+
+body.dark .college-reports-filter-bar input,
+body.dark .college-reports-filter-bar select {
+  color: #d8e5f2;
+}
+
+body.dark .college-reports-kpi span,
+body.dark .college-reports-chart-meta,
+body.dark .college-reports-table-head small,
+body.dark .college-reports-pagination {
+  color: #a9bbcd;
+}
+
+body.dark .college-reports-kpi strong,
+body.dark .college-reports-card-header h3,
+body.dark .college-reports-chart-meta strong,
+body.dark .college-reports-table-head strong {
+  color: #e3eef9;
+}
+
+body.dark .college-reports-card-header,
+body.dark .college-reports-table-head,
+body.dark .college-reports-pagination {
+  border-color: #344a61;
+}
+
+body.dark .college-reports-table-wrap th {
+  color: #c0d4e7;
+  background: #26394c;
+}
+
+body.dark .college-reports-table-wrap td {
+  color: #b8c8d8;
+  border-color: #2c4054;
+}
+
+body.dark .college-reports-table-wrap tbody tr:hover {
+  background: #23364a;
+}
+
+@media (min-width: 1100px) {
+  .college-reports-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+
+@media (max-width: 1100px) {
+  .college-reports-filter-bar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .college-reports-filter-bar label:first-child {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 700px) {
+  .college-reports-page {
+    gap: 14px;
+    padding: 16px 12px;
+  }
+
+  .college-reports-toolbar {
+    gap: 10px;
+  }
+
+  .college-reports-actions {
+    justify-content: stretch;
+  }
+
+  .college-reports-actions button {
+    flex: 1;
+  }
+
+  .college-reports-filter-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 11px;
+  }
+
+  .college-reports-filter-bar label:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .college-reports-filter-bar label {
+    gap: 6px;
+    padding: 0 8px;
+  }
+
+  .college-reports-filter-bar label svg {
+    flex: 0 0 auto;
+    width: 13px;
+  }
+
+  .college-reports-filter-bar input,
+  .college-reports-filter-bar select {
+    font-size: 0.76rem;
+  }
+
+  .college-reports-filter-bar .clear-filters {
+    grid-column: 1 / -1;
+  }
+
+  .college-reports-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .college-reports-kpi {
+    min-height: 82px;
+    padding: 14px;
+  }
+
+  .college-reports-card-header,
+  .college-reports-table-head {
+    padding: 15px;
+  }
+
+  .college-reports-chart-list {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 380px) {
+  .college-reports-filter-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .college-reports-filter-bar label:first-child,
+  .college-reports-filter-bar .clear-filters {
+    grid-column: auto;
+  }
+
+  .college-reports-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .college-reports-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .college-reports-selector button,
+  .college-reports-actions button,
+  .college-reports-chart-track span {
+    transition: none;
+  }
+}
+
+@media print {
+  .college-reports-page {
+    max-width: none;
+    padding: 0;
+  }
+
+  .college-reports-toolbar,
+  .college-reports-filter-bar,
+  .college-reports-pagination {
+    display: none !important;
+  }
+
+  .college-reports-chart-card,
+  .college-reports-table-panel,
+  .college-reports-kpi {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+}
