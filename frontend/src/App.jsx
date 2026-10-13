@@ -3558,26 +3558,30 @@ function AppContent() {
         aria-label={t.primaryNavigation}
         aria-hidden={isMobileViewport && !isSidebarOpen}
       >
-        <div className="admin-sidebar-profile">
-          <strong className="sidebar-user-name">{user.fullName || user.username || t.user}</strong>
-          <div className="sidebar-role">{sidebarRoleLabel}</div>
-          {(user.collegeName || user.college?.collegeName) && (
-            <div className="sidebar-organization">{user.collegeName || user.college.collegeName}</div>
-          )}
-          <div className="sidebar-status"><span aria-hidden="true" /> {translateLabel('Active')}</div>
-        </div>
-        <div className="sidebar-brand">
-          <img
-            src={logoError ? UNIVERSITY_LOGO : organizationProfile.logo || UNIVERSITY_LOGO}
-            alt=""
-            aria-hidden="true"
-            onError={handleLogoError}
-          />
-          <div>
-            <strong>{organizationProfile.name || t.university}</strong>
-            <span>{t.systemName || t.footerBrandTitle}</span>
+        {sidebarRole !== 'college_manager' && (
+          <div className="admin-sidebar-profile">
+            <strong className="sidebar-user-name">{user.fullName || user.username || t.user}</strong>
+            <div className="sidebar-role">{sidebarRoleLabel}</div>
+            {(user.collegeName || user.college?.collegeName) && (
+              <div className="sidebar-organization">{user.collegeName || user.college.collegeName}</div>
+            )}
+            <div className="sidebar-status"><span aria-hidden="true" /> {translateLabel('Active')}</div>
           </div>
-        </div>
+        )}
+        {sidebarRole !== 'college_manager' && (
+          <div className="sidebar-brand">
+            <img
+              src={logoError ? UNIVERSITY_LOGO : organizationProfile.logo || UNIVERSITY_LOGO}
+              alt=""
+              aria-hidden="true"
+              onError={handleLogoError}
+            />
+            <div>
+              <strong>{organizationProfile.name || t.university}</strong>
+              <span>{t.systemName || t.footerBrandTitle}</span>
+            </div>
+          </div>
+        )}
         <nav className="admin-sidebar-nav">
           {dashboardSidebarSections.map((section) => {
             const visibleItems = section.items.filter((item) => !item.permission || hasPermission(item.permission));
@@ -3590,18 +3594,20 @@ function AppContent() {
             );
           })}
         </nav>
-        <div className="admin-sidebar-footer">
-          <div className="sidebar-account">
-            <UserCircle size={30} aria-hidden="true" />
-            <div>
-              <strong>{user.fullName || user.username || t.user}</strong>
-              <span>{sidebarRoleLabel}</span>
+        {sidebarRole !== 'college_manager' && (
+          <div className="admin-sidebar-footer">
+            <div className="sidebar-account">
+              <UserCircle size={30} aria-hidden="true" />
+              <div>
+                <strong>{user.fullName || user.username || t.user}</strong>
+                <span>{sidebarRoleLabel}</span>
+              </div>
             </div>
+            <button type="button" className="sidebar-logout" onClick={handleLogout}>
+              <LogOut size={15} aria-hidden="true" /> {t.logout}
+            </button>
           </div>
-          <button type="button" className="sidebar-logout" onClick={handleLogout}>
-            <LogOut size={15} aria-hidden="true" /> {t.logout}
-          </button>
-        </div>
+        )}
       </aside>
     </>
   );

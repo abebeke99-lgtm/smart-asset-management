@@ -15,6 +15,12 @@ const getInitialForm = (data = {}) => ({
   email: data.email || '',
 });
 
+const isValidPhone = (value) => {
+  const phone = String(value || '').trim();
+  const digits = phone.replace(/\D/g, '');
+  return !phone || (/^\+?[\d\s().-]+$/.test(phone) && digits.length >= 7 && digits.length <= 15);
+};
+
 const validateForm = (values) => {
   const errors = {};
   if (!String(values.collegeName || '').trim()) {
@@ -22,6 +28,9 @@ const validateForm = (values) => {
   }
   if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(values.email).trim())) {
     errors.email = 'Please enter a valid email address.';
+  }
+  if (!isValidPhone(values.phone)) {
+    errors.phone = 'Enter a valid phone number with 7 to 15 digits.';
   }
   return errors;
 };
@@ -138,7 +147,7 @@ const CollegeProfile = () => {
       <ProfileSection title="Management" icon={UserCircle}><Info label="College Manager" value={manager.name} /><Info label="Manager Email" value={manager.email} /><Info label="Manager Phone" value={manager.phone} /></ProfileSection>
       <ProfileSection title="System Information" icon={CalendarDays}><Info label="College ID" value={profile.id} /><Info label="Created Date" value={formatDate(profile.createdAt)} /><Info label="Updated Date" value={formatDate(profile.updatedAt)} /></ProfileSection>
     </div>
-    {editing && <div className="college-profile-modal-backdrop" role="presentation"><div className="college-profile-modal" role="dialog" aria-modal="true" aria-labelledby="edit-college-profile"><div className="college-profile-modal-heading"><div><h2 id="edit-college-profile">Edit College Profile</h2><p>Update the fields managed by your college.</p></div><button className="college-profile-close" type="button" aria-label="Close edit profile" onClick={closeEditor}><X size={19} /></button></div><form onSubmit={submit}><label>College Name<input name="collegeName" value={form.collegeName} onChange={updateField} aria-invalid={Boolean(formErrors.collegeName)} required />{formErrors.collegeName && <span className="college-profile-field-error">{formErrors.collegeName}</span>}</label><label>Description<textarea name="description" value={form.description} onChange={updateField} rows="4" /></label><label>Location / Address<input name="location" value={form.location} onChange={updateField} /></label><div className="college-profile-form-row"><label>Phone<input name="phone" value={form.phone} onChange={updateField} /></label><label>Email<input type="email" name="email" value={form.email} onChange={updateField} aria-invalid={Boolean(formErrors.email)} />{formErrors.email && <span className="college-profile-field-error">{formErrors.email}</span>}</label></div><div className="college-profile-form-actions"><button type="button" onClick={closeEditor}>Cancel</button><button className="college-profile-save" type="submit" disabled={saving || !canUpdateProfile}>{saving ? 'Saving...' : <><Save size={16} /> Save Changes</>}</button></div></form></div></div>}
+    {editing && <div className="college-profile-modal-backdrop" role="presentation"><div className="college-profile-modal" role="dialog" aria-modal="true" aria-labelledby="edit-college-profile"><div className="college-profile-modal-heading"><div><h2 id="edit-college-profile">Edit College Profile</h2><p>Update the fields managed by your college.</p></div><button className="college-profile-close" type="button" aria-label="Close edit profile" onClick={closeEditor}><X size={19} /></button></div><form onSubmit={submit}><label>College Name<input name="collegeName" value={form.collegeName} onChange={updateField} aria-invalid={Boolean(formErrors.collegeName)} required />{formErrors.collegeName && <span className="college-profile-field-error">{formErrors.collegeName}</span>}</label><label>Description<textarea name="description" value={form.description} onChange={updateField} rows="4" /></label><label>Location / Address<input name="location" value={form.location} onChange={updateField} /></label><div className="college-profile-form-row"><label>Phone<input name="phone" value={form.phone} onChange={updateField} aria-invalid={Boolean(formErrors.phone)} />{formErrors.phone && <span className="college-profile-field-error">{formErrors.phone}</span>}</label><label>Email<input type="email" name="email" value={form.email} onChange={updateField} aria-invalid={Boolean(formErrors.email)} />{formErrors.email && <span className="college-profile-field-error">{formErrors.email}</span>}</label></div><div className="college-profile-form-actions"><button type="button" onClick={closeEditor}>Cancel</button><button className="college-profile-save" type="submit" disabled={saving || !canUpdateProfile}>{saving ? 'Saving...' : <><Save size={16} /> Save Changes</>}</button></div></form></div></div>}
   </div>;
 };
 

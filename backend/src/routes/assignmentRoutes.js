@@ -240,6 +240,7 @@ router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'
     const orderField = allowedSort.includes(sortBy) ? sortBy : 'createdAt';
 
     const include = getAssignmentInclude(req);
+    const statusCountInclude = include.map((entry) => ({ ...entry, attributes: [] }));
     const [{ count, rows }, statusCounts] = await Promise.all([
       Assignment.findAndCountAll({
         where,
@@ -250,9 +251,9 @@ router.get('/', requireAuth, requireRole('admin', 'ict_officer', 'store_manager'
       }),
       Assignment.findAll({
         where,
-        include,
+        include: statusCountInclude,
         attributes: ['status', [sequelize.fn('COUNT', sequelize.col('Assignment.id')), 'count']],
-        group: ['status'],
+        group: [sequelize.col('Assignment.status')],
         raw: true,
       }),
     ]);

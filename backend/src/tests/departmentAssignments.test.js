@@ -152,7 +152,16 @@ test('department-head assignment list uses a database-column-mapped department f
   assert.deepEqual(assetInclude.where, { departmentId: 7, collegeId: 3 });
   assert.equal(assetInclude.required, true);
   assert.deepEqual(response.body.summary, { total: 9, active: 6, returned: 2, pending: 1 });
-  assert.deepEqual(groupedOptions.group, ['status']);
+  groupedOptions.model = models.Assignment;
+  models.Assignment._validateIncludedElements(groupedOptions);
+  const groupedSql = models.sequelize.dialect.queryGenerator.selectQuery(
+    models.Assignment.getTableName(),
+    groupedOptions,
+    models.Assignment,
+  );
+  assert.match(groupedSql, /`Asset`\.`department_id` = 7/);
+  assert.match(groupedSql, /GROUP BY `Assignment`\.`status`/);
+  assert.doesNotMatch(groupedSql, /`Asset`\.`id` AS|`User`\.`id` AS|`AssignedByUser`\.`id` AS/);
 
   queryOptions.model = models.Assignment;
   models.Assignment._validateIncludedElements(queryOptions);

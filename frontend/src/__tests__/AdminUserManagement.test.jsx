@@ -62,7 +62,7 @@ const respondToApiRequests = () => {
     }
     if (url === '/api/roles') return Promise.resolve({ data: { roles: roleNames.map((name) => ({
       name,
-      displayName: ({ staff: 'Staff', student: 'Student', technical_assistant: 'Technical Assistant', maintenance: 'Maintenance' })[name] || name,
+      displayName: ({ staff: 'Staff', student: 'Student', technical_assistant: 'Technical Assistant', maintenance: 'Maintenance Coordinator' })[name] || name,
     })) } });
     if (/^\/api\/colleges\/\d+\/departments$/.test(url)) return Promise.resolve({ data: { departments: [{ id: 8, name: 'Computer Science' }] } });
     if (url.startsWith('/api/colleges')) return Promise.resolve({ data: { colleges: [{ id: 3, collegeName: 'College of Engineering' }] } });
@@ -215,9 +215,9 @@ test('submits the add-user form, closes it, and refreshes the visible user list'
   expect(await screen.findByText('new.user@example.edu')).toBeInTheDocument();
 });
 
-test('creates and displays a Maintenance user using the canonical role identifier', async () => {
+test('creates and displays a Maintenance Coordinator using the canonical role identifier', async () => {
   await openCreateForm();
-  expect(within(screen.getByLabelText('Role *')).getByRole('option', { name: 'Maintenance' })).toHaveValue('maintenance');
+  expect(within(screen.getByLabelText('Role *')).getByRole('option', { name: 'Maintenance Coordinator' })).toHaveValue('maintenance');
 
   fillValidNewUser();
   fireEvent.change(screen.getByLabelText('Role *'), { target: { value: 'maintenance' } });
@@ -230,10 +230,10 @@ test('creates and displays a Maintenance user using the canonical role identifie
   })));
 
   const userEmail = await screen.findByText('new.user@example.edu');
-  expect(within(userEmail.closest('tr')).getByText('Maintenance')).toBeInTheDocument();
+  expect(within(userEmail.closest('tr')).getByText('Maintenance Coordinator')).toBeInTheDocument();
 });
 
-test('updates an existing user to the canonical Maintenance role', async () => {
+test('updates an existing user to the canonical Maintenance Coordinator role', async () => {
   usersResponse = [{
     id: 17,
     fullName: 'Existing User',

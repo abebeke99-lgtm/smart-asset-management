@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { getDefaultGrant, getLegacyScope } = require('../scripts/migrations/rolesPermissions');
-const { ROLE_NAMES, DEFAULT_ROLE_PERMISSIONS } = require('../constants/rolePermissions');
+const { ROLE_NAMES, DEFAULT_ROLE_PERMISSIONS, normalizeRoleForStorage } = require('../constants/rolePermissions');
 
 test('Teaching Assistant is a supported least-privilege system role', () => {
   assert.ok(ROLE_NAMES.includes('teaching_assistant'));
@@ -11,6 +11,8 @@ test('Teaching Assistant is a supported least-privilege system role', () => {
 
 test('Maintenance is a supported role with no administrator, user-management, or financial permissions', () => {
   assert.ok(ROLE_NAMES.includes('maintenance'));
+  assert.equal(normalizeRoleForStorage('maintenance_coordinator'), 'maintenance');
+  assert.equal(normalizeRoleForStorage('Maintenance Coordinator'), 'maintenance');
   assert.deepEqual(DEFAULT_ROLE_PERMISSIONS.maintenance, [
     'assets.view',
     'maintenance.view',

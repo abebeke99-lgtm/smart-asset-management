@@ -13,6 +13,11 @@ const { createAuditLog } = require('../services/auditLogService');
 const collegeScope = (req) => String(req.user?.department || '').trim();
 const normalizeStatus = (value) => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 const getDisplayName = (value, fallback = 'Unknown') => String(value || '').trim() || fallback;
+const isValidPhone = (value) => {
+  const phone = String(value || '').trim();
+  const digits = phone.replace(/\D/g, '');
+  return !phone || (/^\+?[\d\s().-]+$/.test(phone) && digits.length >= 7 && digits.length <= 15);
+};
 const parseAssignmentNotes = (value) => {
   if (!value) return {};
   if (typeof value === 'object') return value;
@@ -1239,8 +1244,8 @@ const updateCollegeProfile = async (req, res, next) => {
 
     const phone = String(req.body.phone ?? college.phone ?? '').trim();
     const email = String(req.body.email ?? college.email ?? '').trim();
-    if (phone && !/^[+()\-\s0-9]{7,25}$/.test(phone)) {
-      return res.status(400).json({ success: false, message: 'Please enter a valid phone number.' });
+    if (!isValidPhone(phone)) {
+      return res.status(400).json({ success: false, message: 'Enter a valid phone number with 7 to 15 digits.' });
     }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });

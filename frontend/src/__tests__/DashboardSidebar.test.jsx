@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import App from '../App';
 
@@ -32,6 +32,14 @@ jest.mock('../utils/api', () => ({
     post: jest.fn(async () => ({ data: {} })),
   },
   getApiErrorMessage: (_error, fallback) => fallback || 'Request failed',
+}));
+
+jest.mock('../services/apiClient', () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(() => Promise.resolve({ data: { data: {} } })),
+    post: jest.fn(() => Promise.resolve({ data: {} })),
+  },
 }));
 
 jest.mock('../components/admin/AdminUserManagement', () => () => <div>Admin users page</div>);
@@ -96,6 +104,41 @@ describe('authenticated dashboard sidebar', () => {
 
     expect(screen.getByRole('link', { name: 'Transactions' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument();
+  });
+
+  it('removes duplicate identity and branding from the college manager sidebar while retaining header logout', async () => {
+    mockAuthUser = {
+      id: 3,
+      role: 'college_manager',
+      username: 'bekele',
+      fullName: 'bekele',
+    };
+    window.history.pushState({}, '', '/college/requests');
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    const sidebarElement = screen.getByLabelText('Primary navigation');
+    const sidebar = within(sidebarElement);
+    expect(sidebarElement.querySelector('.admin-sidebar-profile')).not.toBeInTheDocument();
+    expect(sidebarElement.querySelector('.sidebar-brand')).not.toBeInTheDocument();
+    expect(sidebarElement.querySelector('.sidebar-account')).not.toBeInTheDocument();
+    expect(sidebarElement.querySelector('.sidebar-logout')).not.toBeInTheDocument();
+    expect(sidebar.queryByText('bekele')).not.toBeInTheDocument();
+    expect(sidebar.queryByText('COLLEGE MANAGER')).not.toBeInTheDocument();
+    expect(sidebar.queryByText('Active')).not.toBeInTheDocument();
+    expect(sidebar.queryByText('Mekdela Amba University')).not.toBeInTheDocument();
+    expect(sidebar.getByRole('link', { name: 'Assignments' })).toBeInTheDocument();
+    expect(sidebar.getByRole('link', { name: 'Transfers' })).toBeInTheDocument();
+    expect(sidebar.getByRole('link', { name: 'Returns' })).toBeInTheDocument();
+    expect(sidebar.getByRole('link', { name: 'Asset Requests' })).toBeInTheDocument();
+    expect(screen.getByText('Mekdela Amba University')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open user menu' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Logout' }));
+
+    await waitFor(() => expect(mockLogout).toHaveBeenCalledTimes(1));
   });
 
   it('opens and closes the mobile navigation with its button and Escape key', async () => {

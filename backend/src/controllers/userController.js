@@ -626,7 +626,13 @@ const updateProfile = async (req, res) => {
       if (req.body.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(req.body.email))) return res.status(400).json({ success: false, message: 'Invalid email address' });
       updates.email = req.body.email || null;
     }
-    if (req.body.phone !== undefined) updates.phone = String(req.body.phone ?? '').trim();
+    if (req.body.phone !== undefined) {
+      const phone = String(req.body.phone ?? '').trim();
+      if (!isValidPhone(phone)) {
+        return res.status(400).json({ success: false, message: 'Enter a valid phone number with 7 to 15 digits.' });
+      }
+      updates.phone = phone;
+    }
 
     if (!Object.keys(updates).length) {
       return res.json({ success: true, message: 'No profile changes to save.', user: safeUser(user), data: safeUser(user) });

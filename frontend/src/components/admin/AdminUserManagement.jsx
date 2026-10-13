@@ -99,7 +99,9 @@ function normalizeUser(item, index) {
       item?.roleName ??
       item?.role?.name ??
       (typeof item?.role === "string"
-        ? item.role.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+        ? item.role === "maintenance"
+          ? "Maintenance Coordinator"
+          : item.role.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
         : "") ??
       "",
 
@@ -288,7 +290,9 @@ export default function Users() {
       if (requestedPage > pages) setPage(pages);
       setRoles(extractArray(rolesResponse, ["roles"]).map((item, index) => ({
         id: item?.name ?? item?.role ?? `role-${index}`,
-        name: item?.name === "maintenance" ? "Maintenance" : item?.displayName ?? item?.name ?? item?.role ?? "",
+        name: item?.name === "maintenance"
+          ? item?.displayName || "Maintenance Coordinator"
+          : item?.displayName ?? item?.name ?? item?.role ?? "",
       })));
       setStoreManagerCount(Number(storeManagerResponse?.data?.count) || 0);
       setStoreManagerLimit(Number(storeManagerResponse?.data?.limit) || 8);

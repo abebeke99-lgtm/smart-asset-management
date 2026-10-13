@@ -6,7 +6,7 @@ const ROLE_SEEDS = [
   ['ict_officer', 'ICT Officer', 'Information and communications technology operations'],
   ['college_manager', 'College Manager', 'College-level management'],
   ['store_manager', 'Store Manager', 'Store and inventory management'],
-  ['maintenance', 'Maintenance', 'Maintenance coordination'],
+  ['maintenance', 'Maintenance Coordinator', 'Maintenance coordination'],
   ['infrastructure', 'Infrastructure / Facilities', 'Infrastructure and facilities management'],
   ['department_head', 'Department Head', 'Department leadership'],
   ['teaching_assistant', 'Teaching Assistant', 'Teaching assistant access'],

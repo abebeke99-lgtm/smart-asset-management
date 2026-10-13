@@ -59,3 +59,39 @@ test('updateProfile accepts camelCase payload and returns the updated user data'
   models.User.findByPk = originalFindByPk;
   models.AuditLog.create = originalAuditLogCreate;
 });
+
+test('updateProfile rejects malformed phone numbers without persisting profile changes', async (t) => {
+  const originalFindByPk = models.User.findByPk;
+  const originalAuditCreate = models.AuditLog.create;
+  const savedUser = {
+    id: 43,
+    fullName: 'Staff Member',
+    phone: '5551234567',
+    async update() {
+      assert.fail('invalid profile data must not be persisted');
+    },
+  };
+  models.User.findByPk = async () => savedUser;
+  models.AuditLog.create = async () => assert.fail('invalid profile data must not be audited as saved');
+  t.after(() => {
+    models.User.findByPk = originalFindByPk;
+    models.AuditLog.create = originalAuditCreate;
+  });
+
+  for (const phone of ['+++++++', '123456', '1234567890123456', '12+34567']) {
+    let responsePayload;
+    let statusCode;
+    const response = {
+      status(code) {
+        statusCode = code;
+        return this;
+      },
+      json(payload) {
+        responsePayload = payload;
+      },
+    };
+    await userController.updateProfile({ user: { id: savedUser.id }, body: { phone } }, response);
+    assert.equal(statusCode, 400);
+    assert.match(responsePayload.message, /7 to 15 digits/);
+  }
+});
