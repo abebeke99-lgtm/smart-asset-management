@@ -227,12 +227,15 @@ describe('Administrator route wiring', () => {
     }
   });
 
-  it('keeps unrelated Admin navigation and the Maintenance Oversight entry available', () => {
+  it('keeps unrelated Admin navigation while hiding the two analytics shortcuts', () => {
     const sidebarSource = appSource.match(/const adminSidebarSections = \[([\s\S]*?)\n\];/)?.[1] || '';
 
-    for (const label of ['Dashboard', 'All Assets', 'Users', 'Maintenance Oversight', 'Settings']) {
+    for (const label of ['Dashboard', 'All Assets', 'Users', 'Settings']) {
       expect(sidebarSource).toContain(`label: '${label}'`);
     }
+    expect(sidebarSource).not.toContain("label: 'Maintenance Oversight'");
+    expect(sidebarSource).not.toContain("label: 'Asset Analytics'");
+    expect(sidebarSource).not.toContain("label: 'System Analytics'");
     expect(sidebarSource).not.toContain("label: 'Roles & Permissions'");
     expect(appSource).not.toContain("label: 'Roles & Permissions', icon: ShieldCheck");
     expect(appSource).toContain("path: '/maintenance/technicians'");

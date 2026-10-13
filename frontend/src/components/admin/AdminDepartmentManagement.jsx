@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { apiBase } from "../../utils/api";
+import { apiBase, apiFetch } from "../../utils/api";
 
 const API_URL = `${apiBase()}/api/departments`;
 const COLLEGES_API_URL = `${apiBase()}/api/colleges`;
@@ -107,7 +107,7 @@ export default function Departments() {
       setLoading(true);
       setError("");
 
-      const response = await fetch(API_URL, {
+      const response = await apiFetch(API_URL, {
         method: "GET",
         credentials: "include",
         headers: getHeaders(),
@@ -131,7 +131,7 @@ export default function Departments() {
 
   const loadColleges = async () => {
     try {
-      const response = await fetch(COLLEGES_API_URL, {
+      const response = await apiFetch(COLLEGES_API_URL, {
         method: "GET",
         credentials: "include",
         headers: getHeaders(),
@@ -314,7 +314,7 @@ export default function Departments() {
         ? `${API_URL}/${departmentId}`
         : API_URL;
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method: isEditing ? "PUT" : "POST",
         credentials: "include",
         headers: getHeaders(true),
@@ -385,7 +385,7 @@ export default function Departments() {
       setError("");
       setSuccess("");
 
-      const response = await fetch(`${API_URL}/${departmentId}`, {
+      const response = await apiFetch(`${API_URL}/${departmentId}`, {
         method: "PUT",
         credentials: "include",
         headers: getHeaders(true),
@@ -453,7 +453,7 @@ export default function Departments() {
       setError("");
       setSuccess("");
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_URL}/${departmentId}`,
         {
           method: "DELETE",

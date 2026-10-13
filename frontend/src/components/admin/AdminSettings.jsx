@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { apiBase, apiClient } from '../../utils/api';
+import { apiBase, apiClient, apiFetch } from '../../utils/api';
 
 const API_URL = `${apiBase()}/api/settings`;
 
@@ -151,7 +151,7 @@ export default function Settings() {
     setError("");
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         API_URL,
         {
           method: "GET",
@@ -230,7 +230,7 @@ export default function Settings() {
           settings.overdueNotifications,
       };
 
-      const response = await fetch(
+      const response = await apiFetch(
         API_URL,
         {
           method: "PUT",

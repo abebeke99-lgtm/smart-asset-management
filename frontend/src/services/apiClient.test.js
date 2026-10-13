@@ -1,4 +1,4 @@
-import { clearExpiredSession, isCurrentAuthRequest, SESSION_EXPIRED_STORAGE_KEY } from './apiClient';
+import { clearExpiredSession, isCurrentAuthRequest, SESSION_EXPIRED_EVENT, SESSION_EXPIRED_STORAGE_KEY } from './apiClient';
 
 describe('API base URL configuration', () => {
   it('normalizes a Render backend hostname into an HTTPS API base URL', () => {
@@ -130,6 +130,42 @@ describe('authenticated API requests and session expiry', () => {
     expect(localStorage.getItem('token')).toBeNull();
     expect(localStorage.getItem('user')).toBeNull();
     expect(sessionStorage.getItem(SESSION_EXPIRED_STORAGE_KEY)).toBe('true');
+  });
+
+  it('notifies the authenticated app once when the active token expires', () => {
+    localStorage.setItem('token', 'expired-session-token');
+    const onExpired = jest.fn();
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+
+    const error = {
+      response: { status: 401 },
+      config: { headers: { Authorization: 'Bearer expired-session-token' } },
+    };
+    expect(clearExpiredSession(error)).toBe(true);
+    expect(clearExpiredSession(error)).toBe(false);
+    expect(onExpired).toHaveBeenCalledTimes(1);
+    window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  });
+
+  it('rejects a successful HTML response with a readable API error instead of a JSON parse error', async () => {
+    let client;
+    jest.isolateModules(() => {
+      client = require('./apiClient').default;
+    });
+
+    await expect(client.get('/admin/enam', {
+      adapter: (config) => Promise.resolve({
+        config,
+        data: '<!doctype html><html></html>',
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+        request: {},
+        status: 200,
+        statusText: 'OK',
+      }),
+    })).rejects.toMatchObject({
+      code: 'API_NON_JSON_RESPONSE',
+      message: 'The API returned an unexpected HTML response.',
+    });
   });
 
   it('does not clear a replacement session after a late unauthorized response', () => {

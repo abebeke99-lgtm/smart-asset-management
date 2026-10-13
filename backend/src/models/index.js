@@ -6,6 +6,7 @@ const RolePermission = require('./RolePermission');
 const UserRole = require('./UserRole');
 const UserActivityLog = require('./UserActivityLog');
 const PasswordRecovery = require('./PasswordRecovery');
+const VerificationCode = require('./VerificationCode');
 const College = require('./College');
 const CollegeRegistrationApplication = require('./CollegeRegistrationApplication');
 const Asset = require('./Asset');
@@ -380,6 +381,8 @@ MaintenanceHistory.belongsTo(User, { foreignKey: 'userId' });
 // RFID and Audit Relationships
 User.hasMany(PasswordRecovery, { foreignKey: 'userId', onDelete: 'CASCADE' });
 PasswordRecovery.belongsTo(User, { foreignKey: 'userId' });
+User.hasMany(VerificationCode, { foreignKey: 'userId', onDelete: 'CASCADE' });
+VerificationCode.belongsTo(User, { foreignKey: 'userId' });
 Asset.hasMany(RFIDLog, { foreignKey: 'assetId' });
 RFIDLog.belongsTo(Asset, { foreignKey: 'assetId' });
 RFIDLog.belongsTo(User, { foreignKey: 'scannedBy', as: 'ScannedByUser' });
@@ -406,6 +409,8 @@ VerificationSession.hasMany(VerificationItem, { foreignKey: 'sessionId' });
 VerificationItem.belongsTo(VerificationSession, { foreignKey: 'sessionId' });
 Asset.hasMany(VerificationItem, { foreignKey: 'assetId' });
 VerificationItem.belongsTo(Asset, { foreignKey: 'assetId' });
+User.hasMany(VerificationItem, { foreignKey: 'verifiedBy', as: 'VerifiedItems' });
+VerificationItem.belongsTo(User, { foreignKey: 'verifiedBy', as: 'Verifier' });
 Department.hasMany(DepartmentAssetVerification, { foreignKey: 'departmentId' });
 DepartmentAssetVerification.belongsTo(Department, { foreignKey: 'departmentId' });
 Asset.hasMany(DepartmentAssetVerification, { foreignKey: 'assetId' });
@@ -531,6 +536,7 @@ module.exports = {
   UserRole,
   UserActivityLog,
   PasswordRecovery,
+  VerificationCode,
   College,
   CollegeRegistrationApplication,
   Asset,

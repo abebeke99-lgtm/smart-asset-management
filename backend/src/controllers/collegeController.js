@@ -1068,13 +1068,23 @@ const listCollegeVerification = async (req, res, next) => {
     const collegeId = Number(req.organizationScope?.collegeId);
     if (!collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
 
+    const scopedDepartmentId = Number(req.organizationScope?.departmentId);
+    const organizationWhere = {
+      collegeId,
+      ...(Number.isSafeInteger(scopedDepartmentId) && scopedDepartmentId > 0 ? { departmentId: scopedDepartmentId } : {}),
+    };
     const { page, limit, offset } = pagination(req.query, 10);
     const search = String(req.query.search || '').trim();
     const departmentId = req.query.departmentId ? Number(req.query.departmentId) : null;
     const verificationStatus = String(req.query.status || '').trim();
+    const resultState = String(req.query.resultState || '').trim();
     const assetStatus = String(req.query.assetStatus || '').trim();
     const location = String(req.query.locationId || req.query.location || '').trim();
-    const departmentWhere = { collegeId };
+    const resultStates = ['verified', 'pending', 'missing', 'wrong_location', 'damaged', 'needs_review'];
+    if (resultState && !resultStates.includes(resultState)) {
+      return res.status(400).json({ success: false, message: 'Verification result status is invalid' });
+    }
+    const departmentWhere = { ...organizationWhere };
 
     const departments = await Department.findAll({ where: departmentWhere, attributes: ['id', 'name', 'code'], order: [['name', 'ASC']], raw: true });
     const departmentIds = departments.map((department) => Number(department.id));
@@ -1082,25 +1092,25 @@ const listCollegeVerification = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Department is not part of your college' });
     }
 
-    const sessionWhere = { collegeId };
+    const sessionWhere = { ...organizationWhere };
     if (departmentId) sessionWhere.departmentId = departmentId;
     if (verificationStatus) sessionWhere.status = verificationStatus;
+    const sessionConditions = [];
+    let textSearchCondition;
     if (search) {
-      // Sequelize wraps the main model in a subquery here (hasMany include + limit), so joined
-      // columns cannot be referenced from the top-level where. Resolve them to ids first.
       const searchLike = { [Op.like]: `%${search}%` };
       const [departmentMatches, starterMatches] = await Promise.all([
         Department.findAll({ where: { collegeId, name: searchLike }, attributes: ['id'], raw: true }),
         User.findAll({ where: { collegeId, fullName: searchLike }, attributes: ['id'], raw: true }),
       ]);
-      sessionWhere[Op.or] = [
+      textSearchCondition = { [Op.or]: [
         { name: searchLike },
         { departmentId: { [Op.in]: departmentMatches.map((row) => row.id) } },
         { startedBy: { [Op.in]: starterMatches.map((row) => row.id) } },
-      ];
+      ] };
     }
 
-    const assetWhere = { collegeId };
+    const assetWhere = { ...organizationWhere };
     if (assetStatus) assetWhere.status = assetStatus;
     if (location) assetWhere.location = { [Op.like]: `%${location}%` };
     if (search) {
@@ -1112,15 +1122,38 @@ const listCollegeVerification = async (req, res, next) => {
       ];
     }
 
+    const requiresAssetMatch = Boolean(search || assetStatus || location || resultState);
+    if (requiresAssetMatch) {
+      const matchingItems = await VerificationItem.findAll({
+        where: resultState ? { state: resultState } : {},
+        attributes: ['sessionId'],
+        include: [
+          { model: VerificationSession, where: { collegeId }, required: true, attributes: [] },
+          { model: Asset, where: assetWhere, required: true, attributes: [] },
+        ],
+        raw: true,
+      });
+      const matchingSessionIds = [...new Set(matchingItems.map((item) => Number(item.sessionId)).filter(Number.isSafeInteger))];
+      const assetSessionCondition = { id: { [Op.in]: matchingSessionIds } };
+      if (textSearchCondition && search) sessionConditions.push({ [Op.or]: [textSearchCondition, assetSessionCondition] });
+      else sessionConditions.push(assetSessionCondition);
+    }
+    else if (textSearchCondition) sessionConditions.push(textSearchCondition);
+    if (sessionConditions.length) sessionWhere[Op.and] = sessionConditions;
+
     const sessions = await VerificationSession.findAndCountAll({
       where: sessionWhere,
+      distinct: true,
       include: [
         { model: Department, attributes: ['id', 'name', 'code'], required: false },
         { model: User, as: 'Starter', attributes: ['id', 'fullName', 'username'], required: false },
         {
           model: VerificationItem,
           required: false,
-          include: [{ model: Asset, where: assetWhere, required: false, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'rfidTag', 'status', 'condition', 'departmentId', 'location', 'collegeId'] }],
+          include: [
+            { model: Asset, where: { collegeId }, required: false, attributes: ['id', 'name', 'assetCode', 'serialNumber', 'rfidTag', 'status', 'condition', 'departmentId', 'location', 'collegeId'] },
+            { model: User, as: 'Verifier', attributes: ['id', 'fullName', 'username'], required: false },
+          ],
         },
       ],
       order: [['createdAt', 'DESC']],
@@ -1131,10 +1164,10 @@ const listCollegeVerification = async (req, res, next) => {
     const sessionRows = sessions.rows.map((session) => {
       const data = session.toJSON();
       const items = Array.isArray(data.VerificationItems) ? data.VerificationItems : [];
-      const pendingCount = items.filter((item) => ['needs_review', 'pending'].includes(String(item.state || '').trim().toLowerCase())).length;
+      const pendingCount = items.filter((item) => String(item.state || '').trim().toLowerCase() === 'pending').length;
       const verifiedCount = items.filter((item) => String(item.state || '').trim().toLowerCase() === 'verified').length;
       const notFoundCount = items.filter((item) => String(item.state || '').trim().toLowerCase() === 'missing').length;
-      const discrepancyCount = items.filter((item) => ['wrong_location', 'damaged', 'unidentified', 'missing', 'needs_review'].includes(String(item.state || '').trim().toLowerCase())).length;
+      const discrepancyCount = items.filter((item) => ['wrong_location', 'damaged', 'unidentified', 'needs_review'].includes(String(item.state || '').trim().toLowerCase())).length;
       return {
         ...data,
         department: data.Department || null,
@@ -1164,33 +1197,50 @@ const listCollegeVerification = async (req, res, next) => {
       condition: item.Asset?.condition || '',
       verificationStatus: item.state,
       notes: item.notes || '',
+      observedLocation: item.observedLocation || null,
       verificationDate: item.updatedAt || item.createdAt || session.updatedAt || session.createdAt,
-      verifiedBy: session.Starter || null,
+      verifiedBy: item.Verifier || null,
     })));
 
-    const allItems = await VerificationItem.findAll({
-      include: [
-        { model: VerificationSession, where: { collegeId }, required: true, attributes: ['id', 'status'] },
-        { model: Asset, where: { collegeId }, required: true, attributes: ['id', 'status', 'location', 'condition'] },
-      ],
-      attributes: ['id', 'state'],
+    const authorizedSessionWhere = organizationWhere;
+    const reportingSession = await VerificationSession.findOne({
+      where: { ...authorizedSessionWhere, status: 'in_progress' },
+      order: [['updatedAt', 'DESC']],
+    }) || await VerificationSession.findOne({
+      where: authorizedSessionWhere,
+      order: [['updatedAt', 'DESC']],
     });
-
-    const totalAssets = await Asset.count({ where: { collegeId } });
+    const reportingWhere = reportingSession
+      ? { collegeId, ...(reportingSession.departmentId ? { departmentId: reportingSession.departmentId } : {}) }
+      : organizationWhere;
+    const totalAssets = await Asset.count({ where: reportingWhere });
+    const reportingItems = reportingSession
+      ? await VerificationItem.findAll({ where: { sessionId: reportingSession.id }, attributes: ['state'] })
+      : [];
+    const statusCounts = Object.fromEntries(resultStates.map((state) => [
+      state,
+      reportingItems.filter((item) => String(item.state || '').trim().toLowerCase() === state).length,
+    ]));
+    if (reportingSession) {
+      const inspectedCount = reportingItems.filter((item) => String(item.state || '').trim().toLowerCase() !== 'pending').length;
+      statusCounts.pending = Math.max(statusCounts.pending, totalAssets - inspectedCount);
+    }
     const summary = {
       totalAssets,
-      verified: allItems.filter((item) => String(item.state || '').trim().toLowerCase() === 'verified').length,
-      pending: allItems.filter((item) => ['needs_review', 'pending'].includes(String(item.state || '').trim().toLowerCase())).length,
-      notFound: allItems.filter((item) => String(item.state || '').trim().toLowerCase() === 'missing').length,
-      discrepancies: allItems.filter((item) => ['wrong_location', 'damaged', 'unidentified', 'missing', 'needs_review'].includes(String(item.state || '').trim().toLowerCase())).length,
-      sessions: await VerificationSession.count({ where: { collegeId } }),
+      verified: statusCounts.verified,
+      pending: statusCounts.pending,
+      notFound: statusCounts.missing,
+      discrepancies: statusCounts.wrong_location + statusCounts.damaged + statusCounts.needs_review
+        + reportingItems.filter((item) => String(item.state || '').trim().toLowerCase() === 'unidentified').length,
+      sessions: await VerificationSession.count({ where: organizationWhere }),
+      statusCounts,
     };
 
     const filters = {
       departments,
       statuses: ['draft', 'in_progress', 'submitted', 'finalized'],
-      locations: [...new Set((await Asset.findAll({ where: { collegeId, location: { [Op.ne]: '' } }, attributes: ['location'], raw: true })).map((row) => row.location).filter(Boolean))],
-      assetStatuses: [...new Set((await Asset.findAll({ where: { collegeId }, attributes: ['status'], raw: true })).map((row) => row.status).filter(Boolean))],
+      locations: [...new Set((await Asset.findAll({ where: { ...organizationWhere, location: { [Op.ne]: '' } }, attributes: ['location'], raw: true })).map((row) => row.location).filter(Boolean))],
+      assetStatuses: [...new Set((await Asset.findAll({ where: organizationWhere, attributes: ['status'], raw: true })).map((row) => row.status).filter(Boolean))],
     };
 
     res.json({

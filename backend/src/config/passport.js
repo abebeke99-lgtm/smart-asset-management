@@ -26,7 +26,7 @@ passport.use(
       if (Number(jwt_payload.sessionVersion || 0) !== Number(user.sessionVersion || 0)) {
         return done(null, false);
       }
-      return done(null, user);
+      return done(null, user, { scope: jwt_payload.scope || null });
     } catch (error) {
       return done(error, false);
     }

@@ -89,6 +89,27 @@ Low-stock alerts use the inventory row's `availableQuantity` as the authoritativ
 | `PASSWORD_RESET_OTP_MAX_ATTEMPTS` | `5` | The implementation caps this setting at five. |
 | `UPLOAD_DIR` | Optional | Defaults to backend-local `uploads/`. Render local disk is ephemeral. Use a persistent Render disk mounted at a path such as `/var/data/uploads`, or move uploads to external object storage (for example, an S3-compatible bucket) before relying on production persistence. |
 
+### First-login password setup
+
+Before deploying the first-login application version, take a database backup and apply `backend/database/migrations/20261014_first_login_verification.sql` once to the application MySQL database. The migration defaults `must_change_password` to false, so existing accounts keep their current login behavior; administrator-created accounts are marked true in the application. Do not run this migration against a production database until the target database and backup have been verified.
+
+The new first-login and Forgot Password code flows share the `verification_codes` table. Codes are SHA-256 hashed, expire after 10 minutes, are limited to five incorrect attempts, and are single-use. Per-IP rate limits are enforced in the API process and per-user limits are persisted in the table. In development (`NODE_ENV=development`), verification codes are printed to the backend console; production never logs codes or passwords.
+
+| Platform | Variables | Notes |
+| --- | --- | --- |
+| Railway backend | `JWT_SECRET` | Keep the existing strong, private signing secret configured. First-login tokens expire after 15 minutes and cannot call non-first-login API routes. |
+| Railway backend | `MAIL_DRIVER=smtp`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | The existing mailer accepts these names (or the equivalent `EMAIL_*` names). Use your SMTP provider's real host, port, credentials, and sender; never use development logging in production. |
+| Railway backend | `SMS_PROVIDER`, `SMS_API_KEY`, `SMS_SENDER_ID` | Configure a supported SMS provider. Provider-specific credentials may also be required; for current Twilio/Africa's Talking drivers configure `SMS_API_SECRET` as well. |
+| Vercel frontend | `REACT_APP_API_URL` | Set to the public Railway backend URL ending in `/api`. No first-login secret belongs in Vercel. Rebuild/redeploy after changing this build-time variable. |
+
+### Admin API deployment (Vercel + Railway)
+
+For `smart-asset-management-six.vercel.app`, set Railway `FRONTEND_URL` to `https://smart-asset-management-six.vercel.app`. Add each approved Vercel preview origin as an exact, comma-separated entry in Railway `CORS_ORIGINS`; the backend intentionally does not allow wildcard origins. CORS permits `Authorization` and JSON headers and handles `OPTIONS` preflight requests.
+
+Set Vercel `REACT_APP_API_URL` to `https://smart-asset-management-3-production-9258.up.railway.app/api` for Production and the intended preview environments. Rebuild/redeploy Vercel after changing this build-time setting. The frontend also has a production fallback to this Railway API origin, while local development continues to use the configured development proxy.
+
+The code expiry and maximum-attempt policy are fixed at 10 minutes and five attempts for both flows. The resend cooldown is 60 seconds. Existing `PASSWORD_RESET_OTP_*` variables still apply to legacy recovery routes but do not weaken the shared verification-code policy.
+
 Password-recovery and general API rate limiters currently keep state in process memory. They do not coordinate across multiple Render instances and reset on process restart. Run a single backend instance until a shared rate-limit store is implemented and configured.
 
 For local `.env` setup, the development default is `MAIL_DRIVER=log` with blank SMTP credentials. To test real delivery, switch to `MAIL_DRIVER=smtp` and set the SMTP host, port, secure mode, username, password/app password, and sender address. The backend runs an SMTP `verify()` check at startup and logs connection/authentication diagnostics; check these server logs without exposing credentials. You can also check connectivity from `backend/` with `node scripts/check-smtp.js`.
@@ -171,3 +192,9 @@ To preserve existing XAMPP data, first verify the source schema, take a verified
 **Secret rotation:** a populated `JWT_SECRET` was present in the repository's initial Git history before `.env` was ignored. Treat it as exposed. Replace any production JWT secret that may match it with a new unique high-entropy value in Render, then redeploy; this invalidates existing JWTs. Do not print or reuse the historical value.
 
 The existing monitoring screen calls `/admin/monitoring/overview`, which resolves through the shared API client to `/api/admin/monitoring/overview` and remains admin-authenticated. `GET /health` and `GET /api/health` run `SELECT 1` and return HTTP 200 only when MySQL is reachable; they return HTTP 503 when it is unavailable. Database initialization completes before the listener starts. Verify backend logs for successful Sequelize authentication and schema initialization after configuring Render variables.
+
+## Backup Storage
+
+The admin backup service stores backup metadata as JSON sidecars and SQL dumps as files; it does not use a `backups` database table. The backend creates the configured backup directory recursively and records `in_progress`, `completed`, or `failed` in metadata. On Railway, attach a persistent Volume and set `BACKUP_DIR` to a directory on its mount (for example, `/data/backups`); without a Volume, Railway may discard local backup files during redeploys or restarts. `BACKUP_STORAGE_PATH` remains supported as a legacy alternative.
+
+The Nixpacks setup installs `default-mysql-client` so `mysqldump` is available at runtime. Redeploy the backend after applying the build configuration. If using a custom image or build, install a compatible MySQL client or set `MYSQLDUMP_PATH` to the executable. Backup failures include the original error message in restricted admin API responses and log the message and stack server-side; inspect sanitized Railway logs for the operational cause.

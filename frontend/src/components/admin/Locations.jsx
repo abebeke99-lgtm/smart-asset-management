@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { apiBase } from "../../utils/api";
+import { apiBase, apiFetch } from "../../utils/api";
 
 const API_URL = `${apiBase()}/api/locations`;
 
@@ -118,7 +118,7 @@ export default function Locations() {
       setLoading(true);
       setError("");
 
-      const response = await fetch(API_URL, {
+      const response = await apiFetch(API_URL, {
         method: "GET",
         headers: getHeaders(),
       });
@@ -333,7 +333,7 @@ export default function Locations() {
         ? `${API_URL}/${locationId}`
         : API_URL;
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method: editing ? "PUT" : "POST",
         headers: getHeaders(true),
         body: JSON.stringify(payload),
@@ -408,7 +408,7 @@ export default function Locations() {
       setError("");
       setSuccess("");
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_URL}/${locationId}`,
         {
           method: "PUT",
@@ -478,7 +478,7 @@ export default function Locations() {
       setError("");
       setSuccess("");
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_URL}/${locationId}`,
         {
           method: "DELETE",

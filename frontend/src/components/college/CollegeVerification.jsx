@@ -41,38 +41,43 @@ const CollegeVerification = () => {
   const auth = useAuth() || {};
   const navigate = useNavigate();
   const canManage = Boolean(auth.hasPermission?.('college.verification.manage'));
+  const canRegisterAssets = Boolean(auth.hasPermission?.('college.assets.create'));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState([]);
-  const [summary, setSummary] = useState({ totalAssets: 0, verified: 0, pending: 0, notFound: 0, discrepancies: 0, sessions: 0 });
+  const [summary, setSummary] = useState({ totalAssets: 0, verified: 0, pending: 0, notFound: 0, discrepancies: 0, sessions: 0, statusCounts: {} });
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1, pages: 1 });
+  const [currentPage, setCurrentPage] = useState(1);
   const [filters, setFilters] = useState({ departments: [], statuses: [], locations: [], assetStatuses: [] });
-  const [query, setQuery] = useState({ search: '', departmentId: '', status: '', assetStatus: '', location: '' });
+  const [query, setQuery] = useState({ search: '', departmentId: '', status: '', resultState: '', assetStatus: '', location: '' });
   const [submitting, setSubmitting] = useState(false);
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
   const [sessionName, setSessionName] = useState('');
+  const [sessionDepartmentId, setSessionDepartmentId] = useState('');
   const [activeSession, setActiveSession] = useState(null);
   const [sessionAssets, setSessionAssets] = useState([]);
   const [assetIndex, setAssetIndex] = useState(0);
   const [assetState, setAssetState] = useState('verified');
   const [assetNotes, setAssetNotes] = useState('');
+  const [observedLocation, setObservedLocation] = useState('');
   const [sessionLoading, setSessionLoading] = useState(false);
   const [sessionError, setSessionError] = useState('');
   const [sessionNotice, setSessionNotice] = useState('');
 
-  const loadVerification = async (showLoader = true) => {
+  const loadVerification = async (showLoader = true, requestedPage = currentPage) => {
     try {
       if (showLoader) setLoading(true);
       setError('');
       const response = await apiClient.get('/api/college/verification', {
         params: {
-          page: 1,
+          page: requestedPage,
           limit: pagination.limit,
           ...query,
           search: query.search || undefined,
           departmentId: query.departmentId || undefined,
           status: query.status || undefined,
+          resultState: query.resultState || undefined,
           assetStatus: query.assetStatus || undefined,
           locationId: query.location || undefined,
         },
@@ -83,6 +88,9 @@ const CollegeVerification = () => {
       setSummary(payload.summary || summary);
       setFilters(payload.filters || filters);
       setPagination(payload.pagination || pagination);
+      if (Number(payload.pagination?.page) > 0 && Number(payload.pagination.page) !== requestedPage) {
+        setCurrentPage(Number(payload.pagination.page));
+      }
     } catch (requestError) {
       const message = requestError.response?.data?.message || 'Failed to load verification data.';
       setError(message);
@@ -93,8 +101,9 @@ const CollegeVerification = () => {
   };
 
   useEffect(() => {
-    loadVerification(true);
-  }, []);
+    const timer = setTimeout(() => loadVerification(true), query.search ? 300 : 0);
+    return () => clearTimeout(timer);
+  }, [currentPage, query.search, query.departmentId, query.status, query.resultState, query.assetStatus, query.location]);
 
   const hasFilters = Object.values(query).some(Boolean);
 
@@ -109,32 +118,30 @@ const CollegeVerification = () => {
 
   const handleFilterChange = (field, value) => {
     const nextValue = value === 'All' ? '' : value;
+    setCurrentPage(1);
     setQuery((current) => ({ ...current, [field]: nextValue }));
   };
 
-  const clearFilters = () => setQuery({ search: '', departmentId: '', status: '', assetStatus: '', location: '' });
+  const clearFilters = () => {
+    setCurrentPage(1);
+    setQuery({ search: '', departmentId: '', status: '', resultState: '', assetStatus: '', location: '' });
+  };
 
   const refresh = () => {
     setRefreshing(true);
     loadVerification(false);
   };
 
-  const handleSearch = (event) => {
-    event.preventDefault();
-    setRefreshing(true);
-    loadVerification(false);
-  };
-
-  const loadCollegeAssets = async () => {
+  const loadCollegeAssets = async (departmentId) => {
     const firstResponse = await apiClient.get('/api/college/assets', { params: { page: 1, limit: 100 } });
     const firstPayload = firstResponse.data;
     if (!firstPayload || !Array.isArray(firstPayload.data)) throw new Error('The server returned invalid college asset data.');
-    const assets = [...firstPayload.data];
+    const assets = [...firstPayload.data].filter((asset) => !departmentId || Number(asset.departmentId) === Number(departmentId));
     const totalPages = Math.max(1, Number(firstPayload.pagination?.pages || firstPayload.pagination?.totalPages) || 1);
     for (let page = 2; page <= totalPages; page += 1) {
       const response = await apiClient.get('/api/college/assets', { params: { page, limit: 100 } });
       if (!Array.isArray(response.data?.data)) throw new Error('The server returned invalid college asset data.');
-      assets.push(...response.data.data);
+      assets.push(...response.data.data.filter((asset) => !departmentId || Number(asset.departmentId) === Number(departmentId)));
     }
     return assets;
   };
@@ -144,22 +151,25 @@ const CollegeVerification = () => {
     setSessionError('');
     setSessionNotice('');
     try {
-      const [sessionResponse, assets] = await Promise.all([
-        apiClient.get(`/api/college/verification/${session.id}`),
-        loadCollegeAssets(),
-      ]);
+      const sessionResponse = await apiClient.get(`/api/college/verification/${session.id}`);
       const data = sessionResponse.data?.data;
-      if (!data || !Array.isArray(assets)) throw new Error('The server returned invalid verification data.');
+      if (!data) throw new Error('The server returned invalid verification data.');
       const sessionItems = data.VerificationItems || data.verificationItems || [];
+      let assets = sessionItems.map((item) => item.Asset || item.asset).filter(Boolean);
+      if (!assets.length) assets = await loadCollegeAssets(data.departmentId);
+      if (!Array.isArray(assets)) throw new Error('The server returned invalid verification data.');
       setActiveSession({ ...data, VerificationItems: sessionItems });
       setSessionAssets(assets);
-      const checkedAssetIds = new Set(sessionItems.map((item) => Number(item.assetId)));
+      const checkedAssetIds = new Set(sessionItems
+        .filter((item) => item.state !== 'pending')
+        .map((item) => Number(item.assetId)));
       const nextIndex = assets.findIndex((asset) => !checkedAssetIds.has(Number(asset.id)));
       const selectedIndex = nextIndex >= 0 ? nextIndex : 0;
       const selectedItem = sessionItems.find((item) => Number(item.assetId) === Number(assets[selectedIndex]?.id));
       setAssetIndex(selectedIndex);
-      setAssetState(selectedItem?.state || 'verified');
+      setAssetState(selectedItem?.state && selectedItem.state !== 'pending' ? selectedItem.state : 'verified');
       setAssetNotes(selectedItem?.notes || '');
+      setObservedLocation(selectedItem?.observedLocation || selectedItem?.observed_location || '');
     } catch (requestError) {
       setSessionError(requestError.response?.data?.message || requestError.message || 'Unable to load verification session.');
     } finally {
@@ -172,12 +182,16 @@ const CollegeVerification = () => {
     setSessionLoading(true);
     setSessionError('');
     try {
-      const response = await apiClient.post('/api/college/verification', { name: sessionName.trim() });
+      const response = await apiClient.post('/api/college/verification', {
+        name: sessionName.trim(),
+        ...(sessionDepartmentId ? { department_id: Number(sessionDepartmentId) } : {}),
+      });
       const session = response.data?.data;
       if (!session?.id) throw new Error(response.data?.message || 'Unable to create verification session.');
       setSessionDialogOpen(false);
       setSessionName('');
-      await loadVerification(false);
+      if (currentPage === 1) await loadVerification(false, 1);
+      else setCurrentPage(1);
       await openSession(session);
     } catch (requestError) {
       setSessionError(requestError.response?.data?.message || requestError.message || 'Unable to start verification session.');
@@ -198,6 +212,7 @@ const CollegeVerification = () => {
         asset_id: asset.id,
         state: assetState,
         notes: assetNotes.trim(),
+        observed_location: observedLocation.trim(),
       });
       const item = response.data?.data;
       if (!item?.id) throw new Error(response.data?.message || 'The verification result was not saved.');
@@ -205,15 +220,18 @@ const CollegeVerification = () => {
         const currentItems = current.VerificationItems || [];
         const existingIndex = currentItems.findIndex((record) => Number(record.assetId) === Number(item.assetId));
         const nextItems = existingIndex >= 0
-          ? currentItems.map((record, index) => index === existingIndex ? item : record)
+          ? currentItems.map((record, index) => index === existingIndex ? { ...record, ...item, Asset: record.Asset || record.asset } : record)
           : [...currentItems, item];
         return { ...current, VerificationItems: nextItems };
       });
       setSessionNotice(`${asset.name || asset.assetCode} recorded as ${stateLabelMap[assetState] || assetState}.`);
       setAssetNotes('');
+      setObservedLocation('');
       setAssetState('verified');
       const recordedIds = new Set([
-        ...(activeSession.VerificationItems || []).map((record) => Number(record.assetId)),
+        ...(activeSession.VerificationItems || [])
+          .filter((record) => record.state !== 'pending')
+          .map((record) => Number(record.assetId)),
         Number(item.assetId),
       ]);
       const nextIndex = sessionAssets.findIndex((candidate, index) => index > assetIndex && !recordedIds.has(Number(candidate.id)));
@@ -249,9 +267,14 @@ const CollegeVerification = () => {
     const asset = sessionAssets[index];
     const recordedItem = (activeSession?.VerificationItems || []).find((item) => Number(item.assetId) === Number(asset?.id));
     setAssetIndex(index);
-    setAssetState(recordedItem?.state || 'verified');
+    setAssetState(recordedItem?.state && recordedItem.state !== 'pending' ? recordedItem.state : 'verified');
     setAssetNotes(recordedItem?.notes || '');
+    setObservedLocation(recordedItem?.observedLocation || recordedItem?.observed_location || '');
     setSessionNotice('');
+  };
+
+  const selectStatus = (state) => {
+    handleFilterChange('resultState', query.resultState === state ? '' : state);
   };
 
   if (loading) {
@@ -283,7 +306,8 @@ const CollegeVerification = () => {
           <h3>Physical verification for the authorized college</h3>
         </div>
         <div className="college-verification-header-actions">
-          {canManage && <button type="button" className="college-verification-start" onClick={() => { setSessionError(''); setSessionDialogOpen(true); }} disabled={!summary.totalAssets}><Plus size={15} /> Start verification</button>}
+          {canRegisterAssets && <button type="button" className="college-verification-action" onClick={() => navigate('/college/assets')}><Package size={15} /> Register asset</button>}
+          {canManage && <button type="button" className="college-verification-start" onClick={() => { setSessionError(''); setSessionDepartmentId(''); setSessionDialogOpen(true); }} disabled={!summary.totalAssets}><Plus size={15} /> Start verification</button>}
           <button type="button" className="college-verification-refresh" onClick={refresh} disabled={refreshing}>
             <RefreshCw size={15} className={refreshing ? 'spin' : ''} /> {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
@@ -307,11 +331,14 @@ const CollegeVerification = () => {
       </section>
 
       <section className="college-verification-toolbar" aria-label="Verification filters">
-        <form onSubmit={handleSearch} className="college-verification-search">
+        <form onSubmit={(event) => event.preventDefault()} className="college-verification-search">
           <Search size={16} />
           <input
             value={query.search}
-            onChange={(event) => setQuery((current) => ({ ...current, search: event.target.value }))}
+            onChange={(event) => {
+              setCurrentPage(1);
+              setQuery((current) => ({ ...current, search: event.target.value }));
+            }}
             placeholder="Search asset code, asset tag, name or department"
             aria-label="Search verification assets"
           />
@@ -325,9 +352,16 @@ const CollegeVerification = () => {
         </select>
 
         <select value={query.status} onChange={(event) => handleFilterChange('status', event.target.value)}>
-          <option value="">All statuses</option>
+          <option value="">All session statuses</option>
           {filters.statuses.map((status) => (
             <option key={status} value={status}>{stateLabelMap[status] || status}</option>
+          ))}
+        </select>
+
+        <select value={query.resultState} onChange={(event) => handleFilterChange('resultState', event.target.value)} aria-label="Verification result status">
+          <option value="">All verification results</option>
+          {['verified', 'pending', 'missing', 'wrong_location', 'damaged', 'needs_review'].map((state) => (
+            <option key={state} value={state}>{stateLabelMap[state]}</option>
           ))}
         </select>
 
@@ -402,22 +436,32 @@ const CollegeVerification = () => {
 
       <section className="college-verification-panel secondary">
         <div className="college-verification-panel-header">
-          <h4>Verification Status</h4>
+          <div>
+            <h4>Verification Status</h4>
+            <p className="college-verification-panel-description">Counts reflect the latest active session, or the most recent session when none is active.</p>
+          </div>
         </div>
         <div className="college-verification-status-list">
           {['verified', 'pending', 'missing', 'wrong_location', 'damaged', 'needs_review'].map((code) => (
-            <div key={code} className="college-verification-status-item">
+            <button
+              type="button"
+              key={code}
+              className={`college-verification-status-item${query.resultState === code ? ' is-selected' : ''}`}
+              aria-pressed={query.resultState === code}
+              aria-label={`Filter by ${stateLabelMap[code]} verification result`}
+              onClick={() => selectStatus(code)}
+            >
               <span className={`status-pill ${statusBadges[code] || 'status-muted'}`}>{stateLabelMap[code] || code}</span>
-              <strong>{code === 'verified' ? summary.verified : code === 'pending' ? summary.pending : code === 'missing' ? summary.notFound : code === 'wrong_location' ? summary.discrepancies : code === 'damaged' ? summary.discrepancies : summary.discrepancies}</strong>
-            </div>
+              <strong>{summary.statusCounts?.[code] ?? (code === 'verified' ? summary.verified : code === 'pending' ? summary.pending : code === 'missing' ? summary.notFound : 0)}</strong>
+            </button>
           ))}
         </div>
       </section>
 
       <div className="college-verification-pagination">
-        <button type="button" disabled={pagination.page <= 1} onClick={() => {}}>Previous</button>
-        <span>Page {pagination.page} of {Math.max(1, pagination.totalPages)}</span>
-        <button type="button" disabled={pagination.page >= pagination.totalPages} onClick={() => {}}>Next</button>
+        <button type="button" disabled={refreshing || pagination.page <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>Previous</button>
+        <span aria-live="polite">Page {pagination.page} of {Math.max(1, pagination.totalPages)}</span>
+        <button type="button" disabled={refreshing || pagination.page >= pagination.totalPages} onClick={() => setCurrentPage((page) => Math.min(pagination.totalPages, page + 1))}>Next</button>
       </div>
 
       {summary.totalAssets === 0 && canManage && (
@@ -439,6 +483,15 @@ const CollegeVerification = () => {
             <form onSubmit={startSession}>
               <label htmlFor="verification-session-name">Session name</label>
               <input id="verification-session-name" value={sessionName} onChange={(event) => setSessionName(event.target.value)} required minLength={2} maxLength={255} placeholder="e.g. Laboratory inventory check" />
+              {filters.departments.length > 0 && (
+                <>
+                  <label htmlFor="verification-session-department">Department scope</label>
+                  <select id="verification-session-department" value={sessionDepartmentId} onChange={(event) => setSessionDepartmentId(event.target.value)}>
+                    <option value="">All college departments</option>
+                    {filters.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+                  </select>
+                </>
+              )}
               <p>Assets are checked and recorded one at a time. The session will use assets registered to your college.</p>
               <button type="submit" disabled={sessionLoading || sessionName.trim().length < 2}>{sessionLoading ? 'Starting...' : 'Start session'}</button>
             </form>
@@ -459,16 +512,21 @@ const CollegeVerification = () => {
               <>
                 <div className="college-verification-progress">
                   <strong>Asset {assetIndex + 1} of {sessionAssets.length}</strong>
-                  <span>{(activeSession.VerificationItems || []).length} recorded</span>
+                  <span>{(activeSession.VerificationItems || []).filter((item) => item.state !== 'pending').length} recorded</span>
                 </div>
                 <div className="college-verification-asset-card">
                   <span>{sessionAssets[assetIndex]?.assetCode || 'Asset code unavailable'}</span>
                   <h4>{sessionAssets[assetIndex]?.name || 'Unnamed asset'}</h4>
                   <p>{[sessionAssets[assetIndex]?.category, sessionAssets[assetIndex]?.departmentName || sessionAssets[assetIndex]?.department, sessionAssets[assetIndex]?.location].filter(Boolean).join(' · ') || 'No additional asset details'}</p>
                   {(activeSession.VerificationItems || []).some((item) => Number(item.assetId) === Number(sessionAssets[assetIndex]?.id)) && (
-                    <span className={`college-verification-recorded ${statusBadges[(activeSession.VerificationItems || []).find((item) => Number(item.assetId) === Number(sessionAssets[assetIndex]?.id))?.state] || 'status-muted'}`}>
-                      Recorded: {stateLabelMap[(activeSession.VerificationItems || []).find((item) => Number(item.assetId) === Number(sessionAssets[assetIndex]?.id))?.state] || 'Needs review'}
-                    </span>
+                    (() => {
+                      const currentItem = (activeSession.VerificationItems || []).find((item) => Number(item.assetId) === Number(sessionAssets[assetIndex]?.id));
+                      return (
+                        <span className={`college-verification-recorded ${statusBadges[currentItem?.state] || 'status-muted'}`}>
+                          {currentItem?.state === 'pending' ? 'Not yet inspected' : `Recorded: ${stateLabelMap[currentItem?.state] || 'Needs review'}`}
+                        </span>
+                      );
+                    })()
                   )}
                 </div>
                 {sessionError && <p className="college-verification-modal-error" role="alert">{sessionError}</p>}
@@ -481,6 +539,8 @@ const CollegeVerification = () => {
                     </select>
                     <label htmlFor="verification-asset-notes">Notes (optional)</label>
                     <textarea id="verification-asset-notes" value={assetNotes} onChange={(event) => setAssetNotes(event.target.value)} maxLength={2000} rows={3} />
+                    <label htmlFor="verification-observed-location">Observed location (optional)</label>
+                    <input id="verification-observed-location" value={observedLocation} onChange={(event) => setObservedLocation(event.target.value)} maxLength={255} />
                     <button type="submit" className="college-verification-start" disabled={submitting}>{submitting ? 'Saving...' : 'Save result and continue'}</button>
                   </form>
                 )}

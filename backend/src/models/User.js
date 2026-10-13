@@ -80,6 +80,27 @@ const User = sequelize.define('User', {
     defaultValue: false,
     field: 'force_password_change',
   },
+  mustChangePassword: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'must_change_password',
+  },
+  emailVerifiedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'email_verified_at',
+  },
+  phoneVerifiedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'phone_verified_at',
+  },
+  passwordChangedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'password_changed_at',
+  },
   sessionVersion: {
     type: DataTypes.INTEGER,
     allowNull: false,

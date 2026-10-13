@@ -7,7 +7,8 @@ const { requireRole } = require('../middlewares/auth');
 
 const originals = {};
 originals['sequelize.query'] = models.sequelize.query;
-for (const name of ['findAll', 'findByPk', 'findOne']) {
+originals['sequelize.transaction'] = models.sequelize.transaction;
+for (const name of ['findAll', 'findByPk', 'findOne', 'findAndCountAll', 'count']) {
   originals[`Asset.${name}`] = models.Asset[name];
 }
 for (const name of ['findAll', 'findOne']) {
@@ -74,6 +75,85 @@ test('tracking summary reports a database failure as an explicit 500 response', 
   }
 });
 
+test('tracking summary returns zero counts for an empty assets table', async () => {
+  models.sequelize.query = async () => [{ totalAssets: '0', rfidAssigned: '0', qrAssigned: '0', fullyTracked: '0' }];
+  const res = createResponse();
+  await controller.summary({}, res);
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body.data, {
+    totalAssets: 0,
+    rfidAssigned: 0,
+    qrAssigned: 0,
+    fullyTracked: 0,
+    notFullyTracked: 0,
+  });
+});
+
+test('asset listing returns real rows and valid pagination when assets exist', async () => {
+  models.Asset.findAndCountAll = async (options) => {
+    assert.equal(options.limit, 20);
+    assert.equal(options.offset, 0);
+    return {
+      count: 1,
+      rows: [{
+        id: 21, assetCode: 'AST-0001', name: 'Laptop', status: 'available',
+        qrCode: 'QR-21', rfidTag: 'RFID-21', DepartmentRecord: { name: 'ICT' },
+      }],
+    };
+  };
+  const res = createResponse();
+  await controller.listAssets({ query: { page: '1', limit: '20' } }, res, (error) => { throw error; });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body.data.items, [{
+    id: 21, assetCode: 'AST-0001', name: 'Laptop', category: undefined,
+    serialNumber: undefined, status: 'available', condition: undefined,
+    department: 'ICT', qrCode: 'QR-21', rfidTag: 'RFID-21',
+  }]);
+  assert.deepEqual(res.body.data.pagination, { page: 1, limit: 20, total: 1, pages: 1 });
+});
+
+test('empty asset listing returns a one-page empty result', async () => {
+  models.Asset.findAndCountAll = async () => ({ count: 0, rows: [] });
+  const res = createResponse();
+  await controller.listAssets({ query: {} }, res, (error) => { throw error; });
+  assert.deepEqual(res.body, {
+    success: true,
+    data: { items: [], pagination: { page: 1, limit: 20, total: 0, pages: 1 } },
+    message: 'Tracking assets loaded.',
+  });
+});
+
+test('asset ID lookup trims scanner control characters and accepts case-insensitive asset codes', async () => {
+  const found = {
+    id: 1, assetCode: 'AST-0001', name: 'Laptop', status: 'available',
+    DepartmentRecord: { name: 'ICT' },
+  };
+  let lookupOptions;
+  models.Asset.findAll = async (options) => {
+    lookupOptions = options;
+    return [found];
+  };
+  const res = createResponse();
+  await controller.lookupAssetId({ params: { assetId: '\u200b ast-0001\r\n' } }, res, (error) => { throw error; });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.data.asset.assetCode, 'AST-0001');
+  assert.equal(res.body.data.asset.department, 'ICT');
+  assert.ok(lookupOptions.where[require('sequelize').Op.or].length === 1);
+});
+
+test('asset ID lookup accepts numeric IDs and returns the expected JSON not-found contract', async () => {
+  let lookupOptions;
+  models.Asset.findAll = async (options) => {
+    lookupOptions = options;
+    return [];
+  };
+  const res = createResponse();
+  await controller.lookupAssetId({ params: { assetId: '28' } }, res, (error) => { throw error; });
+  assert.equal(res.statusCode, 404);
+  assert.deepEqual(res.body, { success: false, data: null, message: 'No asset found for this ID' });
+  assert.deepEqual(lookupOptions.where[require('sequelize').Op.or][1], { id: 28 });
+});
+
 test('exact tracking lookup returns 404 when no QR or RFID matches', async () => {
   models.Asset.findAll = async () => [];
   const res = createResponse();
@@ -81,6 +161,7 @@ test('exact tracking lookup returns 404 when no QR or RFID matches', async () =>
   assert.equal(res.statusCode, 404);
   assert.equal(res.body.success, false);
   assert.equal(res.body.data, null);
+  assert.equal(res.body.message, 'No asset found for this code');
 });
 
 test('exact tracking lookup returns 409 if legacy duplicate tags are found', async () => {
@@ -89,6 +170,23 @@ test('exact tracking lookup returns 409 if legacy duplicate tags are found', asy
   await controller.lookupCode({ params: { code: 'DUPLICATE' } }, res, (error) => { throw error; });
   assert.equal(res.statusCode, 409);
   assert.match(res.body.message, /more than one asset/i);
+});
+
+test('duplicate RFID assignment is rejected before the asset is updated', async () => {
+  let rolledBack = false;
+  const transaction = {
+    LOCK: { UPDATE: 'UPDATE' },
+    finished: null,
+    async rollback() { rolledBack = true; this.finished = 'rollback'; },
+  };
+  models.sequelize.transaction = async () => transaction;
+  models.Asset.findByPk = async () => ({ id: 12, update: async () => assert.fail('duplicate RFID must not update the asset') });
+  models.Asset.count = async () => 1;
+  const res = createResponse();
+  await controller.assignTags({ params: { id: '12' }, body: { rfidTag: ' RFID-12 ' }, user: { id: 1, role: 'admin' } }, res, (error) => { throw error; });
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body.message, 'That RFID value is already assigned.');
+  assert.equal(rolledBack, true);
 });
 
 test('tracking details include the asset, current location, current assignment, and histories', async () => {

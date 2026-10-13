@@ -56,11 +56,27 @@ test('bulk notification deletion is registered before the id-scoped notification
 
 test('app registers a JSON 404 handler for unmatched /api routes before the error middleware', () => {
   const appSource = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
-  const api404Index = appSource.indexOf("app.use('/api', (req, res) => {");
-  const errorIndex = appSource.indexOf('app.use((err, req, res, next) => {');
+  const errorSource = fs.readFileSync(path.join(__dirname, '../middlewares/apiErrors.js'), 'utf8');
+  const api404Index = appSource.indexOf("app.use('/api', apiNotFoundHandler);");
+  const errorIndex = appSource.indexOf('app.use(apiErrorHandler);');
   assert.ok(api404Index >= 0, 'expected a JSON 404 handler for unmatched /api routes');
   assert.ok(errorIndex > api404Index, 'expected the /api 404 handler to be registered before the error middleware');
-  assert.match(appSource, /status\(404\)\.json\(\{ success: false, message: 'API endpoint not found' \}\)/);
+  assert.match(errorSource, /status\(404\)\.json\(\{ success: false, message: 'API endpoint not found' \}\)/);
+});
+
+test('all /api/admin routes are gated by authentication and the administrator role', () => {
+  const appSource = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
+  const adminGateIndex = appSource.indexOf("app.use('/api/admin', requireAuth, requireRole('admin'));");
+  const firstAdminMountIndex = appSource.indexOf("app.use('/api/admin");
+  assert.ok(adminGateIndex >= 0, 'expected an authentication and administrator-role gate');
+  assert.equal(adminGateIndex, firstAdminMountIndex, 'expected the admin gate before every admin router mount');
+});
+
+test('CORS permits authenticated JSON requests and OPTIONS preflight from configured origins', () => {
+  const appSource = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
+  assert.match(appSource, /allowedHeaders:\s*\['Content-Type', 'Authorization'\]/);
+  assert.match(appSource, /methods:\s*\['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'\]/);
+  assert.match(appSource, /process\.env\.CORS_ORIGINS/);
 });
 
 test('disposal financial records page uses finance-authorized API routes', () => {

@@ -1,24 +1,23 @@
 import React, { useEffect, useMemo, useState } from "react";
+import apiClient from "../../services/apiClient";
 
-const API_URL = "/api/enam";
+const API_URL = "/enam";
 const EMPTY_STATISTICS = {};
 
-const getToken = () =>
-  localStorage.getItem("token") ||
-  localStorage.getItem("accessToken") ||
-  localStorage.getItem("authToken") ||
-  "";
+const getEnamPayload = (response) => {
+  const contentType = response.headers?.["content-type"] || "";
+  if (!contentType.toLowerCase().includes("application/json") || !response.data || typeof response.data !== "object") {
+    throw new Error("ENAM service is unavailable. Please try again later.");
+  }
+  return response.data;
+};
 
-const getHeaders = (json = false) => {
-  const token = getToken();
-
-  return {
-    Accept: "application/json",
-    ...(json ? { "Content-Type": "application/json" } : {}),
-    ...(token
-      ? { Authorization: `Bearer ${token}` }
-      : {}),
-  };
+const getEnamErrorMessage = (error, fallback) => {
+  if (error.message === "ENAM service is unavailable. Please try again later.") return error.message;
+  if (error.response?.status >= 500 || error.code === "ERR_NETWORK" || error.code === "ECONNABORTED") {
+    return "ENAM service is unavailable. Please try again later.";
+  }
+  return error.response?.data?.message || error.message || fallback;
 };
 
 const normalizeData = (payload) => {
@@ -126,18 +125,8 @@ export default function EnamIntegration() {
     setError("");
 
     try {
-      const response = await fetch(API_URL, {
-        method: "GET",
-        headers: getHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          `Unable to load ENAM integration: ${response.status} ${response.statusText}`
-        );
-      }
-
-      const payload = await response.json();
+      const response = await apiClient.get(API_URL, { headers: { Accept: "application/json" } });
+      const payload = getEnamPayload(response);
       const normalized = normalizeData(payload);
 
       setData(normalized);
@@ -201,8 +190,7 @@ export default function EnamIntegration() {
       );
 
       setError(
-        err.message ||
-          "Unable to load ENAM integration."
+        getEnamErrorMessage(err, "Unable to load ENAM integration.")
       );
     } finally {
       setLoading(false);
@@ -221,12 +209,9 @@ export default function EnamIntegration() {
     setSuccess("");
 
     try {
-      const response = await fetch(
+      const response = await apiClient.put(
         API_URL,
         {
-          method: "PUT",
-          headers: getHeaders(true),
-          body: JSON.stringify({
             enabled: form.enabled,
             baseUrl: form.baseUrl,
             apiKey: form.apiKey,
@@ -242,19 +227,10 @@ export default function EnamIntegration() {
               form.autoSync,
             syncInterval:
               Number(form.syncInterval) || 60,
-          }),
-        }
+        },
+        { headers: { Accept: "application/json" } }
       );
-
-      if (!response.ok) {
-        const message =
-          await response.text();
-
-        throw new Error(
-          message ||
-            `Unable to save ENAM settings: ${response.status}`
-        );
-      }
+      getEnamPayload(response);
 
       setSuccess(
         "ENAM integration settings saved successfully."
@@ -269,8 +245,7 @@ export default function EnamIntegration() {
       );
 
       setError(
-        err.message ||
-          "Unable to save ENAM settings."
+        getEnamErrorMessage(err, "Unable to save ENAM settings.")
       );
     } finally {
       setSaving(false);
@@ -283,34 +258,19 @@ export default function EnamIntegration() {
     setSuccess("");
 
     try {
-      const response = await fetch(
+      const response = await apiClient.post(
         `${API_URL}/sync`,
         {
-          method: "POST",
-          headers: getHeaders(true),
-          body: JSON.stringify({
             syncAssets:
               form.syncAssets,
             syncUsers:
               form.syncUsers,
             syncOrganizations:
               form.syncOrganizations,
-          }),
-        }
+        },
+        { headers: { Accept: "application/json" } }
       );
-
-      if (!response.ok) {
-        const message =
-          await response.text();
-
-        throw new Error(
-          message ||
-            `ENAM synchronization failed: ${response.status}`
-        );
-      }
-
-      const payload =
-        await response.json();
+      const payload = getEnamPayload(response);
 
       setSuccess(
         payload?.message ||
@@ -325,8 +285,7 @@ export default function EnamIntegration() {
       );
 
       setError(
-        err.message ||
-          "Unable to synchronize with ENAM."
+        getEnamErrorMessage(err, "Unable to synchronize with ENAM.")
       );
     } finally {
       setSyncing(false);
@@ -338,32 +297,17 @@ export default function EnamIntegration() {
     setSuccess("");
 
     try {
-      const response = await fetch(
+      const response = await apiClient.post(
         `${API_URL}/test`,
         {
-          method: "POST",
-          headers: getHeaders(true),
-          body: JSON.stringify({
             baseUrl: form.baseUrl,
             apiKey: form.apiKey,
             organizationCode:
               form.organizationCode,
-          }),
-        }
+        },
+        { headers: { Accept: "application/json" } }
       );
-
-      if (!response.ok) {
-        const message =
-          await response.text();
-
-        throw new Error(
-          message ||
-            `Connection test failed: ${response.status}`
-        );
-      }
-
-      const payload =
-        await response.json();
+      const payload = getEnamPayload(response);
 
       setSuccess(
         payload?.message ||
@@ -378,8 +322,7 @@ export default function EnamIntegration() {
       );
 
       setError(
-        err.message ||
-          "Unable to test ENAM connection."
+        getEnamErrorMessage(err, "Unable to test ENAM connection.")
       );
     }
   };

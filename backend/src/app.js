@@ -64,7 +64,8 @@ const { startAssetRetentionScheduler } = require('./services/assetRetentionServi
 const { requestMetricsMiddleware } = require('./middlewares/requestMetrics');
 const { requestContextMiddleware } = require('./middlewares/requestContext');
 const noStore = require('./middlewares/noStore');
-const { requireAuth, requireRole } = require('./middlewares/auth');
+const { requireAuth, requireRole, denyFirstLoginTokenOutsideFlow } = require('./middlewares/auth');
+const { apiErrorHandler, apiNotFoundHandler } = require('./middlewares/apiErrors');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -159,6 +160,8 @@ app.use(passport.initialize());
 app.use(requestContextMiddleware);
 app.use(requestMetricsMiddleware);
 app.use('/api', noStore);
+app.use('/api', denyFirstLoginTokenOutsideFlow);
+app.use('/api/admin', requireAuth, requireRole('admin'));
 
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
@@ -219,40 +222,8 @@ app.use('/api/technical-support', technicalSupportRoutes);
 app.use('/api/incidents', incidentRoutes);
 app.use('/api/contact', contactRoutes);
 
-app.use('/api', (req, res) => {
-  res.status(404).json({ success: false, message: 'API endpoint not found' });
-});
-
-app.use((err, req, res, next) => {
-  const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 600 ? err.status : 500;
-
-  if (err?.code === 'CORS_ORIGIN_NOT_ALLOWED') {
-    console.warn('Blocked a request from a disallowed CORS origin.');
-    return res.status(403).json({
-      success: false,
-      code: 'CORS_ORIGIN_NOT_ALLOWED',
-      message: 'Origin is not allowed',
-    });
-  }
-
-  console.error('Server Error:', {
-    requestId: req.requestId || null,
-    operation: `${req.method} ${req.path}`,
-    errorCategory: err.name || 'Error',
-    name: err.name,
-    message: err.message,
-    code: err.original?.code || err.parent?.code || err.code,
-    sqlMessage: err.original?.sqlMessage || err.parent?.sqlMessage,
-    sql: err.sql || err.original?.sql,
-    stack: err.stack,
-    ip: req.ip,
-  });
-  res.status(status).json({
-    success: false,
-    message: status >= 500 || process.env.NODE_ENV === 'production' ? 'Internal server error' : (err.message || 'Request failed'),
-    ...(status < 500 && err.errors ? { errors: err.errors } : {}),
-  });
-});
+app.use('/api', apiNotFoundHandler);
+app.use(apiErrorHandler);
 
 async function schemaRepairRequired() {
   try {

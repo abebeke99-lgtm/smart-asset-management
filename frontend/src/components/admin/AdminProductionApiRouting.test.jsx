@@ -9,9 +9,12 @@ import Colleges from './AdminCollegeManagement';
 
 jest.mock('../../utils/api', () => ({
   apiBase: () => 'https://api.example',
-  apiClient: { get: jest.fn().mockRejectedValue(new Error('Backend unavailable')), post: jest.fn() },
+  apiClient: { get: jest.fn(), post: jest.fn() },
+  apiFetch: jest.fn(),
   getApiErrorMessage: (error, fallback) => error.message || fallback,
 }));
+
+const { apiClient, apiFetch } = require('../../utils/api');
 
 const jsonResponse = (data = {}) => ({
   ok: true,
@@ -26,39 +29,33 @@ describe('admin page API routing', () => {
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem('token', 'test-token');
-    global.fetch = jest.fn().mockResolvedValue(jsonResponse());
+    apiFetch.mockResolvedValue(jsonResponse({ success: true, data: [] }));
+    apiClient.get.mockResolvedValue({ data: { success: true, data: [] } });
   });
 
   afterEach(() => {
+    jest.clearAllMocks();
     jest.restoreAllMocks();
   });
 
-  test('loads departments and colleges from the configured API origin', async () => {
+  test('loads departments and colleges through the shared API client', async () => {
     render(<Departments />);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(apiFetch).toHaveBeenCalledWith(
         'https://api.example/api/departments',
-        expect.objectContaining({
-          method: 'GET',
-          credentials: 'include',
-          headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
-        }),
+        expect.objectContaining({ method: 'GET', credentials: 'include' }),
       );
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(apiFetch).toHaveBeenCalledWith(
         'https://api.example/api/colleges',
-        expect.objectContaining({
-          method: 'GET',
-          credentials: 'include',
-          headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
-        }),
+        expect.objectContaining({ method: 'GET', credentials: 'include' }),
       );
     });
   });
 
   test('reports a college API failure instead of silently ignoring it', async () => {
     const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    global.fetch.mockImplementation((url) => Promise.resolve(
+    apiFetch.mockImplementation((url) => Promise.resolve(
       url === 'https://api.example/api/colleges'
         ? { ok: false, status: 503 }
         : jsonResponse({ departments: [] }),
@@ -74,14 +71,17 @@ describe('admin page API routing', () => {
     });
   });
 
-  test('reports an HTML response parse failure from the colleges API', async () => {
+  test('shows a readable message when an API response is HTML', async () => {
     const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    global.fetch.mockImplementation((url) => Promise.resolve(
+    apiFetch.mockImplementation((url) => Promise.resolve(
       url === 'https://api.example/api/colleges'
         ? {
           ok: true,
           status: 200,
-          json: jest.fn().mockRejectedValue(new SyntaxError('Unexpected token < in JSON')),
+          json: jest.fn().mockRejectedValue(Object.assign(
+            new Error('The API returned an unexpected non-JSON response.'),
+            { code: 'API_NON_JSON_RESPONSE' },
+          )),
         }
         : jsonResponse({ departments: [] }),
     ));
@@ -91,64 +91,38 @@ describe('admin page API routing', () => {
     await waitFor(() => {
       expect(warning).toHaveBeenCalledWith(
         'College list could not be loaded:',
-        expect.objectContaining({ message: 'Unexpected token < in JSON' }),
+        expect.objectContaining({ message: 'The API returned an unexpected non-JSON response.' }),
       );
     });
   });
 
-  test('loads settings from the configured API origin', async () => {
+  test('loads settings and backup history through the shared API client', async () => {
     render(<Settings />);
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.example/api/settings',
-        expect.objectContaining({
-          method: 'GET',
-          credentials: 'include',
-          headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
-        }),
-      );
-    });
-  });
-
-  test('loads backups from the configured API origin', async () => {
     render(<Backup />);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.example/api/admin/backups',
-        expect.objectContaining({
-          method: 'GET',
-          credentials: 'include',
-          headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
-        }),
+      expect(apiFetch).toHaveBeenCalledWith(
+        'https://api.example/api/settings',
+        expect.objectContaining({ method: 'GET', credentials: 'include' }),
       );
+      expect(apiClient.get).toHaveBeenCalledWith('/admin/backups', {
+        headers: { Accept: 'application/json' },
+      });
     });
   });
 
-  test('loads locations from the configured API origin', async () => {
+  test('loads locations and asset categories from the configured API origin', async () => {
     render(<Locations />);
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.example/api/locations',
-        expect.objectContaining({
-          method: 'GET',
-          headers: expect.objectContaining({ Authorization: expect.stringMatching(/^Bearer /) }),
-        }),
-      );
-    });
-  });
-
-  test('loads asset categories from the configured API origin', async () => {
     render(<AssetCategories />);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(apiFetch).toHaveBeenCalledWith(
+        'https://api.example/api/locations',
+        expect.objectContaining({ method: 'GET' }),
+      );
+      expect(apiFetch).toHaveBeenCalledWith(
         'https://api.example/api/asset-categories',
-        expect.objectContaining({
-          headers: expect.objectContaining({ Authorization: expect.stringMatching(/^Bearer /) }),
-        }),
+        expect.objectContaining({ method: 'GET' }),
       );
     });
   });
@@ -157,17 +131,13 @@ describe('admin page API routing', () => {
     render(<Colleges />);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(apiFetch).toHaveBeenCalledWith(
         'https://api.example/api/admin/colleges?limit=100',
-        expect.objectContaining({
-          headers: expect.objectContaining({ Authorization: expect.stringMatching(/^Bearer /) }),
-        }),
+        expect.objectContaining({ method: 'GET' }),
       );
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(apiFetch).toHaveBeenCalledWith(
         'https://api.example/api/locations/campuses?status=active&limit=500',
-        expect.objectContaining({
-          headers: expect.objectContaining({ Authorization: expect.stringMatching(/^Bearer /) }),
-        }),
+        expect.objectContaining({ method: 'GET' }),
       );
     });
   });

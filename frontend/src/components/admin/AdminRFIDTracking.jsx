@@ -19,6 +19,10 @@ const formatDate = (value) => {
 };
 const display = (value) => value === null || value === undefined || value === '' ? '—' : String(value);
 const apiMessage = (error, fallback) => getApiErrorMessage(error, fallback) || fallback;
+const normalizeLookupValue = (value) => String(value || '')
+  .replace(/[\u200B-\u200D\uFEFF]/g, '')
+  .replace(/\p{Cc}/gu, '')
+  .trim();
 const assetFromResponse = (response) => {
   const payload = response?.data ?? {};
   const directAsset = payload.asset ?? payload.data?.asset ?? payload.data ?? null;
@@ -48,6 +52,7 @@ export default function AdminRFIDTracking() {
   const [codeInput, setCodeInput] = useState('');
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState('');
+  const [lookupNotFound, setLookupNotFound] = useState(false);
   const [scanLogError, setScanLogError] = useState('');
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [tracking, setTracking] = useState(null);
@@ -146,8 +151,11 @@ export default function AdminRFIDTracking() {
     })
       .then((response) => {
         if (controller.signal.aborted) return;
-        const data = response.data?.data || {};
-        setAssets(Array.isArray(data.items) ? data.items : []);
+        const data = response.data?.data;
+        if (response.data?.success !== true || !Array.isArray(data?.items)) {
+          throw new Error(tr('assetsLoadError'));
+        }
+        setAssets(data.items);
         setPagination((current) => ({ ...current, ...(data.pagination || {}), page }));
       })
       .catch((error) => {
@@ -209,7 +217,12 @@ export default function AdminRFIDTracking() {
     lookupControllerRef.current = controller;
     setLookupLoading(true);
     setLookupError('');
+    setLookupNotFound(false);
     setScanLogError('');
+    trackingControllerRef.current?.abort();
+    setSelectedAsset(null);
+    setTracking(null);
+    setTrackingState('idle');
     try {
       const response = await apiClient.get(url, { signal: controller.signal });
       if (controller.signal.aborted) return;
@@ -226,16 +239,18 @@ export default function AdminRFIDTracking() {
       await openAsset(asset);
     } catch (error) {
       if (controller.signal.aborted) return;
-      console.error('Admin RFID tracking lookup failed:', {
-        status: error.response?.status || 0,
-        responseBody: error.response?.data || null,
-        message: error.message,
-      });
-      const message = error.response?.status === 404
-        ? tr('assetNotFound')
-        : apiMessage(error, tr('lookupError'));
-      setLookupError(message);
-      toast.error(message);
+      if (error.response?.status === 404) {
+        setLookupNotFound(true);
+      } else {
+        console.error('Admin RFID tracking lookup failed:', {
+          status: error.response?.status || 0,
+          responseBody: error.response?.data || null,
+          message: error.message,
+        });
+        const message = apiMessage(error, tr('lookupError'));
+        setLookupError(message);
+        toast.error(message);
+      }
     } finally {
       if (mountedRef.current && !controller.signal.aborted) setLookupLoading(false);
     }
@@ -243,13 +258,13 @@ export default function AdminRFIDTracking() {
 
   const submitAssetId = (event) => {
     event.preventDefault();
-    const value = assetIdInput.trim();
+    const value = normalizeLookupValue(assetIdInput);
     if (value && !lookupLoading) void lookup(`${API_ROOT}/lookup/asset-id/${encodeURIComponent(value)}`, value, 'manual');
   };
 
   const submitCode = (event) => {
     event.preventDefault();
-    const value = codeInput.trim();
+    const value = normalizeLookupValue(codeInput);
     if (value && !lookupLoading) void lookup(`${API_ROOT}/lookup/code/${encodeURIComponent(value)}`, value, 'manual');
   };
 
@@ -283,12 +298,13 @@ export default function AdminRFIDTracking() {
       const onDecode = (decodedText) => {
         if (scanHandledRef.current) return;
         scanHandledRef.current = true;
-        const value = String(decodedText || '').trim();
+        const value = normalizeLookupValue(decodedText);
         void stopScanner().then(() => {
           if (!value) {
             setLookupError(tr('invalidCode'));
             return;
           }
+          setCodeInput(value);
           void lookup(`${API_ROOT}/lookup/code/${encodeURIComponent(value)}`, value, 'qr');
         });
       };
@@ -361,7 +377,22 @@ export default function AdminRFIDTracking() {
     setTrackingState('idle');
   };
 
-  const reload = () => setRefreshKey((current) => current + 1);
+  const clearLookupResult = () => {
+    lookupControllerRef.current?.abort();
+    trackingControllerRef.current?.abort();
+    setLookupLoading(false);
+    setLookupError('');
+    setLookupNotFound(false);
+    setScanLogError('');
+    setSelectedAsset(null);
+    setTracking(null);
+    setTrackingState('idle');
+  };
+
+  const reload = () => {
+    clearLookupResult();
+    setRefreshKey((current) => current + 1);
+  };
 
   const updateTags = async (event) => {
     event.preventDefault();
@@ -637,20 +668,21 @@ export default function AdminRFIDTracking() {
             <h2>{tr('assetIdLookup')}</h2>
             <form className="rfid-form" onSubmit={submitAssetId}>
               <label className="rfid-visually-hidden" htmlFor="rfid-asset-id">{tr('assetIdPlaceholder')}</label>
-              <input id="rfid-asset-id" className="rfid-control" value={assetIdInput} onChange={(event) => setAssetIdInput(event.target.value)} placeholder={tr('assetIdPlaceholder')} />
-              <button className="rfid-button rfid-button-primary" type="submit" disabled={lookupLoading || !assetIdInput.trim()}><Search size={16} aria-hidden="true" />{tr('search')}</button>
+              <input id="rfid-asset-id" className="rfid-control" value={assetIdInput} onChange={(event) => { setAssetIdInput(event.target.value); clearLookupResult(); }} placeholder={tr('assetIdPlaceholder')} />
+              <button className="rfid-button rfid-button-primary" type="submit" disabled={lookupLoading || !normalizeLookupValue(assetIdInput)}><Search size={16} aria-hidden="true" />{tr('search')}</button>
             </form>
           </div>
           <div className="rfid-panel">
             <h2>{tr('codeLookup')}</h2>
             <form className="rfid-form" onSubmit={submitCode}>
               <label className="rfid-visually-hidden" htmlFor="rfid-code">{tr('codePlaceholder')}</label>
-              <input id="rfid-code" className="rfid-control" value={codeInput} onChange={(event) => setCodeInput(event.target.value)} placeholder={tr('codePlaceholder')} autoComplete="off" />
-              <button className="rfid-button rfid-button-primary" type="submit" disabled={lookupLoading || !codeInput.trim()}><Search size={16} aria-hidden="true" />{tr('search')}</button>
+              <input id="rfid-code" className="rfid-control" value={codeInput} onChange={(event) => { setCodeInput(event.target.value); clearLookupResult(); }} placeholder={tr('codePlaceholder')} autoComplete="off" />
+              <button className="rfid-button rfid-button-primary" type="submit" disabled={lookupLoading || !normalizeLookupValue(codeInput)}><Search size={16} aria-hidden="true" />{tr('search')}</button>
             </form>
           </div>
         </section>
 
+        {lookupNotFound && <p className="rfid-no-match" role="status">{tr('assetNotFound')}</p>}
         {lookupError && <p className="rfid-error" role="alert">{lookupError}</p>}
         {lookupLoading && <p className="rfid-inline-message" role="status">{tr('searching')}</p>}
         {scanLogError && <p className="rfid-error" role="alert">{scanLogError}</p>}
@@ -663,7 +695,7 @@ export default function AdminRFIDTracking() {
           <div className="rfid-table-scroll"><table className="rfid-table">
             <thead><tr><th scope="col">{tr('assetId')}</th><th scope="col">{tr('name')}</th><th scope="col">{tr('department')}</th><th scope="col">{tr('status')}</th><th scope="col">QR</th><th scope="col">RFID</th></tr></thead>
             <tbody>
-              {assets.map((asset) => <tr key={asset.id} tabIndex={0} onClick={() => { void openAsset(asset); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void openAsset(asset); } }}>
+              {assets.map((asset) => <tr className={selectedAsset?.id === asset.id ? 'is-selected' : undefined} key={asset.id} tabIndex={0} onClick={() => { void openAsset(asset); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void openAsset(asset); } }}>
                 <td className="rfid-code">{display(asset.assetCode || asset.id)}</td>
                 <td>{display(asset.name)}{asset.serialNumber && <span className="rfid-subtext">{tr('serial')}: {asset.serialNumber}</span>}</td>
                 <td>{display(asset.department)}</td>
@@ -671,7 +703,7 @@ export default function AdminRFIDTracking() {
                 <td className="rfid-code">{display(asset.qrCode)}</td>
                 <td className="rfid-code">{display(asset.rfidTag)}</td>
               </tr>)}
-              {!loading && assets.length === 0 && <tr><td colSpan="6" className="rfid-empty">{tr('emptyAssets')}</td></tr>}
+              {!loading && !listError && assets.length === 0 && <tr><td colSpan="6" className="rfid-empty">{tr('emptyAssets')}</td></tr>}
               {loading && <tr><td colSpan="6" className="rfid-empty" role="status">{tr('loading')}</td></tr>}
             </tbody>
           </table></div>

@@ -1,25 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
-import { apiClient, getApiErrorMessage, isCurrentAuthRequest } from '../utils/api';
+import { apiClient, SESSION_EXPIRED_EVENT, SESSION_EXPIRED_STORAGE_KEY } from '../utils/api';
 import { sanitizeAuthToken } from '../utils/auth';
-
-let diagnosticsInstalled = false;
-
-const installApiDiagnostics = () => {
-  if (diagnosticsInstalled) return;
-  diagnosticsInstalled = true;
-  axios.interceptors.response.use(
-    response => response,
-    error => {
-      console.error('API request failed', {
-        url: error.config?.baseURL ? `${error.config.baseURL}${error.config.url || ''}` : error.config?.url,
-        method: error.config?.method?.toUpperCase(),
-        status: error.response?.status || 0,
-      });
-      return Promise.reject(error);
-    }
-  );
-};
 
 const AuthContext = createContext();
 
@@ -75,83 +56,59 @@ const normalizeUser = (userData) => {
   };
 };
 
-const isExpiredToken = (token) => {
-  if (!token) return true;
+const decodeTokenPayload = (token) => {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return !payload.exp || payload.exp * 1000 <= Date.now();
+    const encoded = token.split('.')[1];
+    if (!encoded) return null;
+    const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    return JSON.parse(atob(padded));
   } catch (error) {
-    return true;
+    return null;
   }
+};
+
+const isExpiredToken = (token) => {
+  const payload = token ? decodeTokenPayload(token) : null;
+  return !payload?.exp || payload.exp * 1000 <= Date.now();
 };
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [firstLoginUser, setFirstLoginUser] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  axios.defaults.timeout = 30000;
-  axios.defaults.withCredentials = true;
-  axios.defaults.headers.common['Content-Type'] = 'application/json';
-  installApiDiagnostics();
 
   const api = apiClient;
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const onUnauthorized = () => {
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
-      delete axios.defaults.headers.common.Authorization;
-      if (window.location.pathname !== '/login') {
-        window.location.assign('/login');
-      }
+      clearStoredAuth();
+      setFirstLoginUser(null);
+      setUser(null);
     };
 
-    const interceptor = api.interceptors.response.use(
-      response => response,
-      error => {
-        if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
-          const networkError = new Error('Unable to connect to server. Please try again.');
-          networkError.code = 'NETWORK_ERROR';
-          throw networkError;
-        }
-        if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
-          const networkError = new Error('Unable to connect to server. Please try again.');
-          networkError.code = 'NETWORK_ERROR';
-          throw networkError;
-        }
-        if (error.response) {
-          if (error.response.status === 401 && isCurrentAuthRequest(error)) {
-            onUnauthorized();
-          }
-          const status = error.response.status ? ` (${error.response.status})` : '';
-          const fallbackMessage = `Server error occurred${status}`;
-          error.message = getApiErrorMessage(error, fallbackMessage) || fallbackMessage;
-          error.status = error.response.status;
-          throw error;
-        }
-        if (error.request) {
-          const networkError = new Error('Unable to connect to server. Please try again.');
-          networkError.code = 'NETWORK_ERROR';
-          throw networkError;
-        }
-        throw error;
-      }
-    );
-
-    return () => api.interceptors.response.eject(interceptor);
-  }, [api]);
+    window.addEventListener(SESSION_EXPIRED_EVENT, onUnauthorized);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onUnauthorized);
+  }, []);
 
   const login = async (username, password) => {
     try {
       const response = await api.post('/api/auth/login', { username, password });
       
       if (response.data.success && sanitizeAuthToken(response.data.token)) {
+        const token = sanitizeAuthToken(response.data.token);
         const userData = normalizeUser(response.data.user);
-        setUser(userData);
         localStorage.setItem('user', JSON.stringify(userData));
-        localStorage.setItem('token', sanitizeAuthToken(response.data.token));
-        axios.defaults.headers.common.Authorization = `Bearer ${sanitizeAuthToken(response.data.token)}`;
+        localStorage.setItem('token', token);
+        sessionStorage.removeItem(SESSION_EXPIRED_STORAGE_KEY);
+        if (response.data.requiresFirstLogin) {
+          setUser(null);
+          setFirstLoginUser(userData);
+          return { success: true, requiresFirstLogin: true, user: userData };
+        }
+        setFirstLoginUser(null);
+        setUser(userData);
         return { success: true, user: userData };
       }
       return { success: false, error: response.data.message || 'Login failed' };
@@ -178,7 +135,19 @@ export const AuthProvider = ({ children }) => {
       console.error('Logout audit request failed:', err);
     }
     setUser(null);
+    setFirstLoginUser(null);
     clearStoredAuth();
+  };
+
+  const completeFirstLogin = (session) => {
+    const token = sanitizeAuthToken(session?.token);
+    const userData = normalizeUser(session?.user);
+    if (!token || !userData) throw new Error('The server returned an invalid session.');
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(userData));
+    sessionStorage.removeItem(SESSION_EXPIRED_STORAGE_KEY);
+    setUser(userData);
+    setFirstLoginUser(null);
   };
 
   const updateUser = (userData) => {
@@ -200,7 +169,15 @@ export const AuthProvider = ({ children }) => {
       }
 
       try {
-        axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+        const claims = decodeTokenPayload(token);
+        if (claims.scope === 'first_login') {
+          const pendingUser = normalizeUser(JSON.parse(storedUser));
+          if (mounted) {
+            setUser(null);
+            setFirstLoginUser(pendingUser);
+          }
+          return;
+        }
         const response = await api.get('/api/users/profile');
         if (sanitizeAuthToken(localStorage.getItem('token')) !== token) return;
         const currentUser = response.data?.data || response.data?.user;
@@ -212,7 +189,10 @@ export const AuthProvider = ({ children }) => {
         const currentToken = sanitizeAuthToken(localStorage.getItem('token'));
         if (currentToken === token) {
           clearStoredAuth();
-          if (mounted) setUser(null);
+          if (mounted) {
+            setUser(null);
+            setFirstLoginUser(null);
+          }
         }
       } finally {
         if (mounted) setLoading(false);
@@ -282,7 +262,9 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     user,
+    firstLoginUser,
     login,
+    completeFirstLogin,
     logout,
     updateUser,
     loading,
@@ -303,5 +285,5 @@ const clearStoredAuth = () => {
   localStorage.removeItem('user');
   localStorage.removeItem('token');
   localStorage.removeItem('authToken');
-  delete axios.defaults.headers.common.Authorization;
+  localStorage.removeItem('accessToken');
 };

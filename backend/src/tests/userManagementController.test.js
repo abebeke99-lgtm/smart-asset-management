@@ -6,6 +6,7 @@ const { getAllUsers, getUserStats, getStoreManagerAccounts, getRoles, createUser
 const userRoutes = require('../routes/userRoutes');
 const { requireAuth } = require('../middlewares/auth');
 const passport = require('../config/passport');
+const { DEFAULT_ROLE_PERMISSIONS, normalizeRoleForStorage } = require('../constants/rolePermissions');
 
 const makeResponse = () => ({
   statusCode: 200,
@@ -31,6 +32,25 @@ test('user-management models map the documented status, password and activity co
   assert.equal(Role.getTableName(), 'roles');
   assert.equal(UserActivityLog.getTableName(), 'user_activity_logs');
   assert.equal(UserActivityLog.rawAttributes.userId.field, 'user_id');
+});
+
+test('Maintenance Coordinator resolves to the established maintenance role without elevated permissions', () => {
+  assert.equal(normalizeRoleForStorage('Maintenance Coordinator'), 'maintenance');
+  assert.ok(User.rawAttributes.role.type.values.includes('maintenance'));
+  assert.deepEqual(DEFAULT_ROLE_PERMISSIONS.maintenance, [
+    'assets.view',
+    'maintenance.view',
+    'maintenance.request.create',
+    'maintenance.technician.assign',
+    'maintenance.update',
+    'maintenance.complete',
+    'reports.view',
+    'notifications.view',
+    'notifications.delete',
+  ]);
+  assert.ok(!DEFAULT_ROLE_PERMISSIONS.maintenance.includes('assets.delete'));
+  assert.ok(!DEFAULT_ROLE_PERMISSIONS.maintenance.includes('users.view'));
+  assert.ok(!DEFAULT_ROLE_PERMISSIONS.maintenance.includes('financial.view'));
 });
 
 test('user statistics report all explicit account statuses and retain legacy aliases', async (t) => {
@@ -252,7 +272,7 @@ test('Store Manager registration entry is read-only and account creation remains
   assert.equal(maintenanceDenied.statusCode, 403);
 });
 
-test('role catalog exposes one canonical Admin and Maintenance option with consistent labels', async (t) => {
+test('role catalog exposes one canonical Admin and Maintenance Coordinator option with consistent labels', async (t) => {
   const originalFindAll = Role.findAll;
   Role.findAll = async () => [
     { name: 'maintenance_coordinator', displayName: 'Maintenance Coordinator' },
@@ -267,7 +287,7 @@ test('role catalog exposes one canonical Admin and Maintenance option with consi
   await getRoles({}, res, (error) => { throw error; });
 
   assert.deepEqual(res.payload.roles.map(({ name, displayName }) => ({ name, displayName })), [
-    { name: 'maintenance', displayName: 'Maintenance' },
+    { name: 'maintenance', displayName: 'Maintenance Coordinator' },
     { name: 'admin', displayName: 'Admin' },
   ]);
   assert.equal(res.payload.data, res.payload.roles);
@@ -406,7 +426,25 @@ test('Maintenance account creation accepts and persists the canonical role', asy
   assert.equal(res.statusCode, 201);
   assert.equal(roleQuery.where.name, 'maintenance');
   assert.equal(creation.role, 'maintenance');
+  assert.equal(creation.mustChangePassword, true);
+  assert.equal(creation.passwordChangedAt, null);
   assert.equal(res.payload.data.role, 'maintenance');
+});
+
+test('administrator cannot create a first-login account without a contact method', async () => {
+  const res = makeResponse();
+  await createUser({
+    body: {
+      username: 'no-contact',
+      fullName: 'No Contact',
+      role: 'maintenance',
+      password: 'Temporary1!',
+      confirmPassword: 'Temporary1!',
+    },
+    user: { id: 1, username: 'administrator', role: 'admin' },
+  }, res);
+  assert.equal(res.statusCode, 400);
+  assert.match(res.payload.message, /at least one contact method/i);
 });
 
 test('Admin account creation persists the canonical role and password hash', async (t) => {

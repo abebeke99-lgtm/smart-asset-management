@@ -97,6 +97,19 @@ test('keeps summary skeletons visible until the summary request resolves', async
   expect(document.querySelectorAll('.rfid-summary-skeleton')).toHaveLength(0);
 });
 
+test('does not show the empty-asset message when loading the asset list fails', async () => {
+  apiClient.get.mockImplementation((url) => {
+    if (url === '/api/admin/rfid/summary') return Promise.resolve({ data: { success: true, data: EMPTY_SUMMARY } });
+    if (url === '/api/admin/rfid/assets') return Promise.reject({
+      response: { status: 500, data: { message: 'Asset list database error' } },
+    });
+    return Promise.resolve({ data: { success: true, data: tracking } });
+  });
+  renderPage();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load assets.');
+  expect(screen.queryByText('No assets to display')).not.toBeInTheDocument();
+});
+
 test('disables empty lookup and opens tracking details after an asset ID lookup', async () => {
   renderPage();
   const searchButtons = await screen.findAllByRole('button', { name: 'Search' });
@@ -106,32 +119,34 @@ test('disables empty lookup and opens tracking details after an asset ID lookup'
   fireEvent.click(searchButtons[0]);
   const dialog = await screen.findByRole('dialog');
   expect(await within(dialog).findByText('Laptop')).toBeInTheDocument();
+  expect(document.querySelector('.rfid-table tbody tr.is-selected')).toBeInTheDocument();
+  expect(document.querySelector('.rfid-table tbody tr.is-selected')).toBeInTheDocument();
   expect(apiClient.get).toHaveBeenCalledWith('/api/admin/rfid/lookup/asset-id/ASSET-17', expect.objectContaining({ signal: expect.any(AbortSignal) }));
   expect(apiClient.post).toHaveBeenCalledWith('/api/admin/rfid/scan-log', {
     asset_id: 17, method: 'manual', value: 'ASSET-17',
   }, expect.objectContaining({ signal: expect.any(AbortSignal) }));
 });
 
-test('uses the keyboard-wedge Enter submit and displays a not-found error for an unknown tag', async () => {
+test('handles an unknown tag as a neutral no-match state without logging or toasting an error', async () => {
   const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
   apiClient.get.mockImplementation((url, config) => {
     if (url === '/api/admin/rfid/summary') return Promise.resolve({ data: { success: true, data: EMPTY_SUMMARY } });
-    if (url === '/api/admin/rfid/assets') return Promise.resolve({ data: { data: { items: [], pagination: { page: 1, pages: 0, total: 0 } } } });
+    if (url === '/api/admin/rfid/assets') return Promise.resolve({ data: { success: true, data: { items: [], pagination: { page: 1, pages: 1, total: 0 } } } });
     if (url.includes('/lookup/code/')) return Promise.reject({ response: { status: 404, data: { message: 'missing' } } });
     return Promise.resolve({ data: { data: tracking } });
   });
   renderPage();
   const input = await screen.findByLabelText('Scan or enter code');
-  fireEvent.change(input, { target: { value: 'UNKNOWN-TAG' } });
+  fireEvent.change(input, { target: { value: '\u200b UNKNOWN-TAG\r\n' } });
   fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 });
   fireEvent.submit(input.closest('form'));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Asset not found');
+  expect(await screen.findByText('Asset not found')).toHaveClass('rfid-no-match');
   expect(apiClient.get).toHaveBeenCalledWith('/api/admin/rfid/lookup/code/UNKNOWN-TAG', expect.objectContaining({ signal: expect.any(AbortSignal) }));
   expect(apiClient.post).not.toHaveBeenCalled();
-  expect(errorLog).toHaveBeenCalledWith('Admin RFID tracking lookup failed:', expect.objectContaining({
-    status: 404,
-    responseBody: { message: 'missing' },
-  }));
+  expect(errorLog).not.toHaveBeenCalledWith('Admin RFID tracking lookup failed:', expect.anything());
+  expect(toast.error).not.toHaveBeenCalled();
+  fireEvent.change(input, { target: { value: 'NEW-VALUE' } });
+  expect(screen.queryByText('Asset not found')).not.toBeInTheDocument();
   errorLog.mockRestore();
 });
 
@@ -178,23 +193,25 @@ test('opens the camera, decodes a QR value, logs the scan, and loads its detail 
   expect(scanner.stop).toHaveBeenCalled();
 });
 
-test('stops scanning and displays the not-found error when the camera reads an unknown QR', async () => {
+test('stops scanning and displays a neutral no-match state when the camera reads an unknown QR', async () => {
   const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
   const scanner = { start: jest.fn().mockResolvedValue(), stop: jest.fn().mockResolvedValue(), clear: jest.fn() };
   Html5Qrcode.mockImplementation(() => scanner);
   apiClient.get.mockImplementation((url) => {
     if (url === '/api/admin/rfid/summary') return Promise.resolve({ data: { success: true, data: EMPTY_SUMMARY } });
-    if (url === '/api/admin/rfid/assets') return Promise.resolve({ data: { data: { items: [], pagination: { page: 1, pages: 0, total: 0 } } } });
+    if (url === '/api/admin/rfid/assets') return Promise.resolve({ data: { success: true, data: { items: [], pagination: { page: 1, pages: 1, total: 0 } } } });
     if (url.includes('/lookup/code/')) return Promise.reject({ response: { status: 404, data: { message: 'missing' } } });
     return Promise.resolve({ data: { data: tracking } });
   });
   renderPage();
   fireEvent.click(await screen.findByRole('button', { name: 'Start Scan' }));
   await waitFor(() => expect(scanner.start).toHaveBeenCalled());
-  scanner.start.mock.calls[0][2]('UNKNOWN-QR');
-  expect(await screen.findByRole('alert')).toHaveTextContent('Asset not found');
+  scanner.start.mock.calls[0][2]('\u200bUNKNOWN-QR\r\n');
+  expect(await screen.findByText('Asset not found')).toHaveClass('rfid-no-match');
   expect(scanner.stop).toHaveBeenCalled();
-  expect(errorLog).toHaveBeenCalledWith('Admin RFID tracking lookup failed:', expect.objectContaining({ status: 404 }));
+  expect(apiClient.get).toHaveBeenCalledWith('/api/admin/rfid/lookup/code/UNKNOWN-QR', expect.any(Object));
+  expect(errorLog).not.toHaveBeenCalledWith('Admin RFID tracking lookup failed:', expect.anything());
+  expect(toast.error).not.toHaveBeenCalled();
 });
 
 test('reports denied camera permission and provides an HTTPS requirement for remote insecure origins', async () => {
@@ -261,7 +278,7 @@ test('debounces search and sends status and pagination parameters to the server'
   apiClient.get.mockImplementation((url, config) => {
     if (url === '/api/admin/rfid/summary') return Promise.resolve({ data: { success: true, data: EMPTY_SUMMARY } });
     const requestedPage = config?.params?.page || 1;
-    return Promise.resolve({ data: { data: { items: [asset], pagination: { page: requestedPage, limit: 20, total: 41, pages: 3 } } } });
+    return Promise.resolve({ data: { success: true, data: { items: [asset], pagination: { page: requestedPage, limit: 20, total: 41, pages: 3 } } } });
   });
   renderPage();
   const searchInput = await screen.findByLabelText('Search asset ID, name, serial, RFID, QR, department...');

@@ -70,10 +70,43 @@ test('starts a college-scoped session and records assets one at a time', async (
     asset_id: 11,
     state: 'verified',
     notes: '',
+    observed_location: '',
   }));
   expect(await within(workflow).findByText('Projector')).toBeInTheDocument();
   expect(within(workflow).getByText('Asset 2 of 2')).toBeInTheDocument();
   expect(apiClient.get).toHaveBeenCalledWith('/api/college/assets', { params: { page: 1, limit: 100 } });
+});
+
+test('search filters, status categories, and session pagination request the selected records', async () => {
+  apiClient.get.mockImplementation((url, options = {}) => {
+    const page = Number(options.params?.page) || 1;
+    const response = listResponse([session]);
+    response.data.data.pagination = { page, limit: 10, total: 11, totalPages: 2, pages: 2 };
+    return Promise.resolve(response);
+  });
+
+  renderPage();
+  await screen.findByRole('button', { name: 'Filter by Verified verification result' });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Filter by Verified verification result' }));
+  await waitFor(() => expect(apiClient.get).toHaveBeenLastCalledWith('/api/college/verification', expect.objectContaining({
+    params: expect.objectContaining({ page: 1, resultState: 'verified' }),
+  })));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await waitFor(() => expect(apiClient.get).toHaveBeenLastCalledWith('/api/college/verification', expect.objectContaining({
+    params: expect.objectContaining({ page: 2, resultState: 'verified' }),
+  })));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Clear Filters' }));
+  await waitFor(() => expect(apiClient.get).toHaveBeenLastCalledWith('/api/college/verification', expect.objectContaining({
+    params: expect.objectContaining({ page: 1, resultState: undefined }),
+  })));
+
+  fireEvent.change(screen.getByLabelText('Search verification assets'), { target: { value: 'ENG-011' } });
+  await waitFor(() => expect(apiClient.get).toHaveBeenLastCalledWith('/api/college/verification', expect.objectContaining({
+    params: expect.objectContaining({ page: 1, search: 'ENG-011' }),
+  })));
 });
 
 test('reports asset loading errors when a session cannot load its college inventory', async () => {

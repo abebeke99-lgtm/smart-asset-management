@@ -112,20 +112,23 @@ const rankLoginMatch = (user, identity, candidateNames = []) => {
   return 4;
 };
 
-const generateToken = async (user) => {
+const generateToken = async (user, { scope } = {}) => {
   const settings = await getSecuritySettings();
   const jwtSeconds = Math.max(1, Number(settings.jwt_expiry) || 7) * 24 * 60 * 60;
   const sessionSeconds = Math.max(1, Number(settings.session_timeout) || 60) * 60;
-  const expiresIn = Math.min(jwtSeconds, sessionSeconds);
+  const expiresIn = scope === 'first_login' ? 15 * 60 : Math.min(jwtSeconds, sessionSeconds);
   const signingSecret = getJwtSecret({ allowFallback: true });
   return jwt.sign(
   {
     id: user.id,
-    role: user.role,
-    email: user.email,
     sessionVersion: user.sessionVersion || 0,
-    collegeId: user.collegeId ?? null,
-    departmentId: user.departmentId ?? null,
+    ...(!scope ? {
+      role: user.role,
+      email: user.email,
+      collegeId: user.collegeId ?? null,
+      departmentId: user.departmentId ?? null,
+    } : {}),
+    ...(scope ? { scope } : {}),
   },
   signingSecret,
   { expiresIn }
@@ -249,6 +252,32 @@ const login = async (req, res) => {
       lastLoginAt: user.lastLoginAt,
       forcePasswordChange: Boolean(user.forcePasswordChange),
     };
+    if (user.mustChangePassword) {
+      const email = String(user.email || '').trim();
+      const phone = String(user.phone || '').trim();
+      const maskedEmail = email ? `${email[0]}***@${email.split('@')[1] || ''}` : null;
+      const digits = phone.replace(/\D/g, '');
+      const maskedPhone = phone
+        ? `${phone.startsWith('+') ? '+' : ''}${digits.slice(0, 3)}${'*'.repeat(Math.max(0, digits.length - 5))}${digits.slice(-2)}`
+        : null;
+      const firstLoginUser = {
+        id: user.id,
+        username: user.username,
+        fullName: user.fullName,
+        role: user.role,
+        contactMethods: [
+          ...(email ? [{ channel: 'email', masked: maskedEmail }] : []),
+          ...(phone ? [{ channel: 'phone', masked: maskedPhone }] : []),
+        ],
+      };
+      await recordAuthEvent({ userId: user.id, action: 'LOGIN', result: 'First login required', req });
+      return res.json({
+        success: true,
+        requiresFirstLogin: true,
+        token: await generateToken(user, { scope: 'first_login' }),
+        user: firstLoginUser,
+      });
+    }
     const rolePermissions = await getConfiguredRolePermissions(user.role);
     if (rolePermissions !== null) safeUser.permissions = [
       ...new Set([...rolePermissions, ...await getDatabasePermissionKeys(user)]),

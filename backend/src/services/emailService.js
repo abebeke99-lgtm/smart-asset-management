@@ -237,7 +237,7 @@ const sendNotificationEmail = async ({ recipient, notification }) => {
   });
 };
 
-const sendOtpEmail = async ({ to, fullName, otp, ttlMinutes }) => {
+const sendOtpEmail = async ({ to, fullName, otp, ttlMinutes, purpose = 'forgot_password' }) => {
   const mailer = getEmailTransport();
   if (!mailer) {
     const error = new Error('Email service is not configured');
@@ -247,11 +247,16 @@ const sendOtpEmail = async ({ to, fullName, otp, ttlMinutes }) => {
 
   const greetingName = escapeHtml(fullName || 'there');
   const safeOtp = escapeHtml(String(otp || ''));
+  const isFirstLogin = purpose === 'first_login';
+  const emailTitle = isFirstLogin ? 'Secure your account' : 'Password Recovery';
+  const emailDescription = isFirstLogin
+    ? 'Use this verification code to set your own account password.'
+    : 'Use this verification code to continue your password recovery.';
   return sendMailWithTransport(mailer, {
     to,
-    subject: 'Your verification code for password recovery',
-    text: `Mekdela Amba University Asset Management System\n\nHello ${fullName || 'there'},\n\nYour password recovery verification code is ${otp}.\n\nThis code expires in ${ttlMinutes} minutes. Do not share it with anyone. If you did not request this code, you can safely ignore this email.`,
-    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#172033"><div style="background:#0EA5E9;padding:24px;color:#fff"><h1 style="margin:0;font-size:22px">Mekdela Amba University</h1><p style="margin:8px 0 0">Asset Management System</p></div><div style="padding:28px;border:1px solid #dbe4ef"><h2>Password Recovery</h2><p>Hello ${greetingName},</p><p>Your six-digit verification code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:22px 0">${safeOtp}</p><p>This code expires in ${ttlMinutes} minutes. Do not share it with anyone.</p><p>If you did not request this code, you can safely ignore this email.</p></div></div>`,
+    subject: isFirstLogin ? 'Set up your university account password' : 'Your verification code for password recovery',
+    text: `Mekdela Amba University Asset Management System\n\nHello ${fullName || 'there'},\n\n${emailDescription}\n\nYour verification code is ${otp}.\n\nThis code expires in ${ttlMinutes} minutes. Do not share it with anyone. If you did not request this code, you can safely ignore this email.`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#172033"><div style="background:#0EA5E9;padding:24px;color:#fff"><h1 style="margin:0;font-size:22px">Mekdela Amba University</h1><p style="margin:8px 0 0">Asset Management System</p></div><div style="padding:28px;border:1px solid #dbe4ef"><h2>${emailTitle}</h2><p>Hello ${greetingName},</p><p>${emailDescription}</p><p>Your six-digit verification code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:22px 0">${safeOtp}</p><p>This code expires in ${ttlMinutes} minutes. Do not share it with anyone.</p><p>If you did not request this code, you can safely ignore this email.</p></div></div>`,
   });
 };
 

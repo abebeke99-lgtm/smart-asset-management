@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { apiFetch } from "../../utils/api";
 
 const ASSETS_API = "/api/assets";
 const ASSIGNMENTS_API = "/api/asset-assignments";
@@ -40,7 +41,7 @@ async function apiRequest(url, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     ...options,
     headers,
   });

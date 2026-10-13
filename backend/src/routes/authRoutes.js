@@ -14,7 +14,9 @@ const {
   verifyForgotPasswordOtp,
   resetPasswordWithOtp,
 } = require('../controllers/authController');
-const { requireAuth } = require('../middlewares/auth');
+const { requireAuth, requireFirstLoginScope } = require('../middlewares/auth');
+const firstLoginController = require('../controllers/firstLoginController');
+const sharedRecoveryController = require('../controllers/sharedRecoveryController');
 
 const router = express.Router();
 
@@ -55,12 +57,15 @@ const resetLimiter = rateLimit({
 });
 
 router.post('/login', loginLimiter, login);
+router.post('/first-login/send-code', requireAuth, requireFirstLoginScope, otpLimiter, firstLoginController.sendCode);
+router.post('/first-login/verify-code', requireAuth, requireFirstLoginScope, otpLimiter, firstLoginController.verifyCode);
+router.post('/first-login/complete', requireAuth, requireFirstLoginScope, resetLimiter, firstLoginController.completeFirstLogin);
 router.post('/register', register);
 router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
-router.post('/forgot-password/request', forgotPasswordLimiter, requestForgotPasswordOtp);
-router.post('/forgot-password/request-otp', forgotPasswordLimiter, requestForgotPasswordOtp);
-router.post('/forgot-password/verify', otpLimiter, verifyForgotPassword);
-router.post('/forgot-password/verify-otp', otpLimiter, verifyForgotPasswordOtp);
+router.post('/forgot-password/request', forgotPasswordLimiter, sharedRecoveryController.requestCode);
+router.post('/forgot-password/request-otp', forgotPasswordLimiter, sharedRecoveryController.requestCode);
+router.post('/forgot-password/verify', otpLimiter, sharedRecoveryController.verifyCode);
+router.post('/forgot-password/verify-otp', otpLimiter, sharedRecoveryController.verifyCode);
 router.post('/forgot-password/reset', resetLimiter, resetPasswordWithOtp);
 router.post('/forgot-password/reset-password', resetLimiter, resetPasswordWithOtp);
 router.post('/verify-reset-otp', otpLimiter, verifyResetOtp);

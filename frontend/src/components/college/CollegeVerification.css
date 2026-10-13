@@ -267,6 +267,13 @@
   font-weight: 700;
 }
 
+.college-verification-panel-description {
+  margin: 5px 0 0;
+  color: #72839a;
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
 .college-verification-panel-header > span {
   padding: 5px 10px;
   border-radius: 999px;
@@ -385,6 +392,27 @@
   border: 1px solid #e6edf3;
   border-radius: 10px;
   background: #fbfcfe;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.college-verification-status-item:hover {
+  border-color: #b4cbe0;
+  background: #f4f8fc;
+}
+
+.college-verification-status-item:focus-visible {
+  outline: 3px solid rgb(48 116 179 / 22%);
+  outline-offset: 2px;
+}
+
+.college-verification-status-item.is-selected {
+  border-color: #3074b3;
+  background: #f0f7fd;
+  box-shadow: 0 0 0 2px rgb(48 116 179 / 10%);
 }
 
 .college-verification-status-item .status-pill {
@@ -600,6 +628,7 @@
 
 .college-verification-modal form > input,
 .college-verification-record-form select,
+.college-verification-record-form input,
 .college-verification-record-form textarea {
   width: 100%;
   min-height: 42px;

@@ -1,4 +1,6 @@
 const passport = require('../config/passport');
+const jwt = require('jsonwebtoken');
+const { getJwtSecret } = require('../config/jwt');
 const { Role } = require('../models');
 const { DEFAULT_ROLE_PERMISSIONS, getConfiguredRolePermissions } = require('../services/rolePermissionService');
 const { normalizeRoleForStorage } = require('../constants/rolePermissions');
@@ -31,7 +33,7 @@ const resolveUserPermissions = (user) => {
 };
 
 const requireAuth = (req, res, next) => {
-  return passport.authenticate('jwt', { session: false }, async (error, user) => {
+  return passport.authenticate('jwt', { session: false }, async (error, user, authInfo) => {
     if (error) {
       return next(error);
     }
@@ -41,6 +43,10 @@ const requireAuth = (req, res, next) => {
     }
 
     req.user = user;
+    req.tokenScope = authInfo?.scope || null;
+    if (req.tokenScope === 'first_login' && !String(req.originalUrl || '').startsWith('/api/auth/first-login/')) {
+      return res.status(403).json({ success: false, message: 'Complete first login before accessing this resource.' });
+    }
     try {
       const normalizedRole = normalizeRoleValue(req.user.role);
       req.user.role = normalizedRole;
@@ -73,6 +79,32 @@ const requireAuth = (req, res, next) => {
       return next(authorizationError);
     }
   })(req, res, next);
+};
+
+const denyFirstLoginTokenOutsideFlow = (req, res, next) => {
+  const authorization = String(req.headers.authorization || '');
+  const token = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!token) return next();
+
+  let claims;
+  try {
+    claims = jwt.verify(token, getJwtSecret({ allowFallback: true }));
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) return next();
+    return next(error);
+  }
+  const requestPath = `${req.baseUrl || ''}${req.path || ''}`;
+  if (claims?.scope === 'first_login' && !requestPath.startsWith('/api/auth/first-login/')) {
+    return res.status(403).json({ success: false, message: 'Complete first login before accessing this resource.' });
+  }
+  return next();
+};
+
+const requireFirstLoginScope = (req, res, next) => {
+  if (req.tokenScope !== 'first_login' || !req.user?.mustChangePassword) {
+    return res.status(403).json({ success: false, message: 'A valid first-login session is required.' });
+  }
+  return next();
 };
 
 const requireActiveAccount = (req, res, next) => {
@@ -156,4 +188,4 @@ const requireAnyPermission = (...permissions) => function requireAnyPermissionMi
   return next();
 };
 
-module.exports = { requireAuth, requireActiveAccount, requireRole, requirePermission, requireAnyPermission, normalizeRoleValue, normalizePermissionValue, resolveUserPermissions };
+module.exports = { requireAuth, requireActiveAccount, requireRole, requirePermission, requireAnyPermission, normalizeRoleValue, normalizePermissionValue, resolveUserPermissions, denyFirstLoginTokenOutsideFlow, requireFirstLoginScope };

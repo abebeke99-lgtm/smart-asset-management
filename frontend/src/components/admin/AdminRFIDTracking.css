@@ -216,6 +216,16 @@
   font-size: 0.875rem;
 }
 
+.rfid-no-match {
+  margin: 0 0 var(--spacing-md);
+  padding: 10px 12px;
+  border: 1px solid #f1c75b;
+  border-radius: var(--radius-sm);
+  background: #fff8df;
+  color: #735400;
+  font-size: 0.875rem;
+}
+
 .rfid-error {
   margin: 0 0 var(--spacing-md);
   padding: 12px 14px;
@@ -276,6 +286,11 @@
 .rfid-table tbody tr:hover,
 .rfid-table tbody tr:focus-visible {
   background: var(--color-table-hover);
+}
+
+.rfid-table tbody tr.is-selected {
+  background: var(--color-table-hover);
+  box-shadow: inset 3px 0 0 var(--color-primary);
 }
 
 .rfid-code {

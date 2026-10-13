@@ -63,6 +63,7 @@ const Register = lazy(() => import('./components/public/Register'));
 const CollegeSelfRegistration = lazy(() => import('./components/public/CollegeSelfRegistration'));
 const ForgotPassword = lazy(() => import('./components/public/ForgotPassword'));
 const ResetPassword = lazy(() => import('./components/public/ResetPassword'));
+const FirstLogin = lazy(() => import('./components/public/FirstLogin'));
 const AssetCreate = lazy(() => import('./components/shared/AssetCreate'));
 const AssetDetails = lazy(() => import('./components/shared/AssetDetails'));
 const AdminUserManagement = lazy(() => import('./components/admin/AdminUserManagement'));
@@ -293,7 +294,7 @@ export const getActiveSidebarPath = (items, pathname, fallback) => [...items]
   .find((item) => pathname === item.path || pathname.startsWith(`${item.path}/`))?.path
   || fallback;
 
-const publicPaths = ['/home', '/about', '/services', '/contact', '/contac', '/register', '/college-registration', '/forgot-password', '/reset-password'];
+const publicPaths = ['/home', '/about', '/services', '/contact', '/contac', '/register', '/college-registration', '/forgot-password', '/reset-password', '/first-login'];
 
 const AccessDenied = () => {
   const { user } = useAuth();
@@ -481,7 +482,7 @@ export const isPublicRoute = (path = '') => {
   const normalized = normalizeAppPath(path);
   if (!normalized || normalized === '/') return true;
   if (normalized === '/home') return true;
-  if (['/about', '/services', '/contact', '/contac', '/help', '/register', '/college-registration', '/forgot-password'].includes(normalized)) return true;
+  if (['/about', '/services', '/contact', '/contac', '/help', '/register', '/college-registration', '/forgot-password', '/first-login'].includes(normalized)) return true;
   if (/^\/reset-password(?:\/.*)?$/.test(normalized)) return true;
   return false;
 };
@@ -2383,7 +2384,7 @@ const adminSidebarSections = [
       { to: '/admin/assets/assign', label: 'Asset Assignment', icon: ClipboardList },
       { to: '/admin/assets/transfer', label: 'Asset Transfer', icon: ArrowLeftRight },
       { to: '/admin/assets/disposal', label: 'Disposal & Retirement', icon: Archive },
-      { to: '/admin/maintenance', label: 'Maintenance Oversight', icon: Wrench },
+      { to: '/admin/maintenance', label: 'Maintenance', icon: Wrench },
       { to: '/admin/rfid', label: 'RFID / QR Tracking', icon: Radio },
     ]
   },
@@ -2402,8 +2403,6 @@ const adminSidebarSections = [
     heading: 'ANALYTICS',
     items: [
       { to: '/admin/reports', label: 'Reports & Analytics', icon: BarChart3 },
-      { to: '/admin/reports/analytics', label: 'Asset Analytics', icon: BarChart3 },
-      { to: '/admin/analytics/system', label: 'System Analytics', icon: BarChart3 },
     ]
   },
   {
@@ -2677,22 +2676,33 @@ function AppContent() {
     }
 
     let active = true;
+    let controller;
 
     const fetchUnreadNotificationCount = async () => {
+      if (!active || document.visibilityState !== 'visible') return;
+      controller?.abort();
+      controller = new AbortController();
       try {
-        const unreadResponse = await apiClient.get('/api/notifications/unread-count');
+        const unreadResponse = await apiClient.get('/api/notifications/unread-count', { signal: controller.signal });
         const unreadCount = Number(unreadResponse?.data?.unreadCount ?? unreadResponse?.data?.count ?? 0);
         if (active) setUnreadNotificationCount(unreadCount);
       } catch (error) {
-        if (active) setUnreadNotificationCount(0);
+        if (active && error.code !== 'ERR_CANCELED') setUnreadNotificationCount(0);
       }
     };
 
     fetchUnreadNotificationCount();
     const interval = window.setInterval(fetchUnreadNotificationCount, 30000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') fetchUnreadNotificationCount();
+      else controller?.abort();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       active = false;
+      controller?.abort();
       window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user, user?.id, user?.role, location.pathname]);
 
@@ -3141,6 +3151,7 @@ function AppContent() {
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/first-login" element={<FirstLogin />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/college-registration" element={<CollegeSelfRegistration />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />

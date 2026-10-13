@@ -133,7 +133,7 @@ test('assignment reassign validates typed targets and closes the previous histor
 });
 
 test('backend error middleware never serializes internal 500 details to clients', () => {
-  const source = read('../app.js');
+  const source = read('../middlewares/apiErrors.js');
   assert.match(source, /message:\s*status >= 500 \|\| process\.env\.NODE_ENV === 'production' \? 'Internal server error'/);
   assert.match(source, /name:\s*err\.name/);
   assert.match(source, /code:\s*err\.original\?\.code/);

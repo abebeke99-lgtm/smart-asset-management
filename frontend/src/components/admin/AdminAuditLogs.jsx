@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Eye } from 'lucide-react';
 import { useLanguage, useTheme } from '../../contexts/UiContext';
 import { toast } from 'react-toastify';
-import { apiClient, apiBase } from '../../utils/api';
+import { apiClient, apiBase, apiFetchStream } from '../../utils/api';
 
 const getCategoryForLog = (log) => {
   const action = String(log?.action || log?.event || 'Unknown').toLowerCase();
@@ -729,12 +729,11 @@ const AdminAuditLogs = () => {
 
     const streamAuditEvents = async () => {
       try {
-        const response = await fetch(
+        const response = await apiFetchStream(
           `${apiBase()}/api/admin/audit/stream`,
           {
             method: 'GET',
             headers: {
-              Authorization: `Bearer ${token}`,
               Accept: 'text/event-stream'
             },
             signal: controller.signal

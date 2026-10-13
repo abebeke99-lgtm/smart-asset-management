@@ -73,7 +73,7 @@ const respondToApiRequests = () => {
 const openCreateForm = async () => {
   render(<Users />);
   fireEvent.click(await screen.findByRole('button', { name: /add user/i }));
-  await screen.findByLabelText('Password *');
+  await screen.findByLabelText('Temporary Password *');
   await screen.findAllByRole('option', { name: 'ict_officer' });
 };
 
@@ -82,8 +82,8 @@ const fillValidNewUser = () => {
   fireEvent.change(screen.getByLabelText('Username *'), { target: { value: 'new.user' } });
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new.user@example.edu' } });
   fireEvent.change(screen.getByLabelText('Role *'), { target: { value: 'ict_officer' } });
-  fireEvent.change(screen.getByLabelText('Password *'), { target: { value: 'ManageMe#42' } });
-  fireEvent.change(screen.getByLabelText('Confirm Password *'), { target: { value: 'ManageMe#42' } });
+  fireEvent.change(screen.getByLabelText('Temporary Password *'), { target: { value: 'ManageMe#42' } });
+  fireEvent.change(screen.getByLabelText('Confirm Temporary Password *'), { target: { value: 'ManageMe#42' } });
 };
 
 beforeEach(() => {
@@ -115,14 +115,14 @@ test('shows organization fields only when an existing account is being edited or
   expect(visibleRoleNames).toContain('admin');
   expect(visibleRoleNames).toContain('ict_officer');
   expect(within(roleSelect).getByRole('option', { name: 'Admin' })).toHaveValue('admin');
-  expect(within(roleSelect).getAllByRole('option', { name: 'Maintenance' })).toHaveLength(1);
-  expect(within(roleSelect).getByRole('option', { name: 'Maintenance' })).toHaveValue('maintenance');
+  expect(within(roleSelect).getAllByRole('option', { name: 'Maintenance Coordinator' })).toHaveLength(1);
+  expect(within(roleSelect).getByRole('option', { name: 'Maintenance Coordinator' })).toHaveValue('maintenance');
   expect(within(roleSelect).queryByRole('option', { name: 'Staff' })).not.toBeInTheDocument();
   expect(within(roleSelect).queryByRole('option', { name: 'Student' })).not.toBeInTheDocument();
   expect(within(roleSelect).queryByRole('option', { name: 'Technical Assistant' })).not.toBeInTheDocument();
 
-  const password = screen.getByLabelText('Password *');
-  const confirmPassword = screen.getByLabelText('Confirm Password *');
+  const password = screen.getByLabelText('Temporary Password *');
+  const confirmPassword = screen.getByLabelText('Confirm Temporary Password *');
   expect(password).toBeRequired();
   expect(confirmPassword).toBeRequired();
   expect(password).toHaveAttribute('type', 'password');
@@ -163,8 +163,8 @@ test('rejects mismatched passwords without submitting', async () => {
   fireEvent.change(document.querySelector('[name="username"]'), { target: { value: 'new.user' } });
   fireEvent.change(document.querySelector('[name="email"]'), { target: { value: 'new.user@example.edu' } });
   fireEvent.change(document.querySelector('[name="roleId"]'), { target: { value: 'ict_officer' } });
-  fireEvent.change(screen.getByLabelText('Password *'), { target: { value: 'ManageMe#42' } });
-  fireEvent.change(screen.getByLabelText('Confirm Password *'), { target: { value: 'Different#42' } });
+  fireEvent.change(screen.getByLabelText('Temporary Password *'), { target: { value: 'ManageMe#42' } });
+  fireEvent.change(screen.getByLabelText('Confirm Temporary Password *'), { target: { value: 'Different#42' } });
 
   fireEvent.submit(document.querySelector('form'));
 
@@ -184,8 +184,8 @@ test('validates required fields, email format, and password policy before submit
   fireEvent.change(screen.getByLabelText('Username *'), { target: { value: 'new.user' } });
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'invalid-email' } });
   fireEvent.change(screen.getByLabelText('Role *'), { target: { value: 'ict_officer' } });
-  fireEvent.change(screen.getByLabelText('Password *'), { target: { value: 'weakpass' } });
-  fireEvent.change(screen.getByLabelText('Confirm Password *'), { target: { value: 'weakpass' } });
+  fireEvent.change(screen.getByLabelText('Temporary Password *'), { target: { value: 'weakpass' } });
+  fireEvent.change(screen.getByLabelText('Confirm Temporary Password *'), { target: { value: 'weakpass' } });
   fireEvent.submit(document.querySelector('form'));
 
   expect(await screen.findByText('Enter a valid email address.')).toBeInTheDocument();
@@ -214,13 +214,13 @@ test('submits the add-user form, closes it, and refreshes the visible user list'
   expect(createRequest.data.confirmPassword).toBe('ManageMe#42');
   expect(createRequest.data).not.toHaveProperty('collegeId');
   expect(createRequest.data).not.toHaveProperty('departmentId');
-  await waitFor(() => expect(screen.queryByLabelText('Password *')).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByLabelText('Temporary Password *')).not.toBeInTheDocument());
   expect(await screen.findByText('new.user@example.edu')).toBeInTheDocument();
 });
 
-test('creates and displays Maintenance using its canonical role identifier', async () => {
+test('creates and displays Maintenance Coordinator using its canonical role identifier', async () => {
   await openCreateForm();
-  expect(within(screen.getByLabelText('Role *')).getByRole('option', { name: 'Maintenance' })).toHaveValue('maintenance');
+  expect(within(screen.getByLabelText('Role *')).getByRole('option', { name: 'Maintenance Coordinator' })).toHaveValue('maintenance');
 
   fillValidNewUser();
   fireEvent.change(screen.getByLabelText('Role *'), { target: { value: 'maintenance' } });
@@ -233,10 +233,10 @@ test('creates and displays Maintenance using its canonical role identifier', asy
   })));
 
   const userEmail = await screen.findByText('new.user@example.edu');
-  expect(within(userEmail.closest('tr')).getByText('Maintenance')).toBeInTheDocument();
+  expect(within(userEmail.closest('tr')).getByText('Maintenance Coordinator')).toBeInTheDocument();
 });
 
-test('updates an existing user to the canonical Maintenance role', async () => {
+test('updates an existing user to the canonical Maintenance Coordinator role', async () => {
   usersResponse = [{
     id: 17,
     fullName: 'Existing User',
@@ -249,6 +249,7 @@ test('updates an existing user to the canonical Maintenance role', async () => {
 
   fireEvent.click(await screen.findByRole('button', { name: 'Edit Existing User' }));
   const roleSelect = await screen.findByLabelText('Role *');
+  expect(within(roleSelect).getByRole('option', { name: 'Maintenance Coordinator' })).toHaveValue('maintenance');
   fireEvent.change(roleSelect, { target: { value: 'maintenance' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
@@ -257,6 +258,16 @@ test('updates an existing user to the canonical Maintenance role', async () => {
     method: 'PUT',
     data: expect.objectContaining({ role: 'maintenance' }),
   })));
+});
+
+test('includes the canonical Maintenance Coordinator role in the users-table filter', async () => {
+  render(<Users />);
+
+  const roleFilter = document.querySelector('.toolbar select:last-of-type');
+  const coordinatorOption = await screen.findByRole('option', { name: 'Maintenance Coordinator' });
+  expect(roleFilter).not.toBeNull();
+  expect(coordinatorOption).toHaveValue('maintenance');
+  expect(roleFilter).toContainElement(coordinatorOption);
 });
 
 test('administrator Store Manager creation refreshes the account count from the existing API workflow', async () => {
@@ -408,8 +419,8 @@ test('keeps the add-user form open and shows the API error when user creation is
   expect(screen.queryByLabelText('College')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Department')).not.toBeInTheDocument();
   expect(screen.getByLabelText('Account Status')).toHaveValue('Suspended');
-  expect(screen.getByLabelText('Password *')).toHaveValue('');
-  expect(screen.getByLabelText('Confirm Password *')).toHaveValue('');
+  expect(screen.getByLabelText('Temporary Password *')).toHaveValue('');
+  expect(screen.getByLabelText('Confirm Temporary Password *')).toHaveValue('');
   expect(apiClient.request.mock.calls.filter(([request]) => request.method === 'POST' && request.url === '/api/users')).toHaveLength(1);
 });
 
@@ -437,7 +448,7 @@ test('prevents duplicate add-user submissions while the create request is pendin
 
   await waitFor(() => expect(finishCreate).toBeDefined());
   finishCreate();
-  await waitFor(() => expect(screen.queryByLabelText('Password *')).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByLabelText('Temporary Password *')).not.toBeInTheDocument());
 });
 
 test('keeps reset-password and activity workflows connected to their existing endpoints', async () => {

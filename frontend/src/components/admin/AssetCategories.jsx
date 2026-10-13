@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { apiBase } from "../../utils/api";
+import { apiBase, apiFetch } from "../../utils/api";
 import { useTranslation } from "../../contexts/UiContext";
 
 const API_BASE = `${apiBase()}/api/asset-categories`;
@@ -34,8 +34,9 @@ async function apiRequest(url, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     ...options,
+    method: options.method || "GET",
     headers,
   });
 

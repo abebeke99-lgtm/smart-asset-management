@@ -13,8 +13,9 @@ test('infrastructure transformer route is mounted under the real API namespace',
 });
 
 test('shared API client uses the authenticated API namespace and transformer page calls the mounted route', () => {
-  assert.match(apiClientSource, /baseURL:\s*API_BASE_URL/);
-  assert.match(apiClientSource, /http:\/\/localhost:5000\/api|\/api\$/);
+  assert.match(apiClientSource, /const apiClient = axios;/);
+  assert.match(apiClientSource, /apiClient\.defaults\.baseURL = API_BASE_URL/);
+  assert.match(apiClientSource, /requestUrl\.startsWith\('\/api'\) \? requestUrl : `\/api\$\{requestUrl\}`/);
   assert.match(transformersComponentSource, /['\"]\/api\/infrastructure\/transformers['\"]/);
   assert.doesNotMatch(transformersComponentSource, /['\"]\/infrastructure\/transformers['\"]/);
 });

@@ -28,6 +28,10 @@ const respond = (res, status, data, message) => res.status(status).json({
   message: message || (status < 400 ? 'Request completed.' : 'Request failed.'),
 });
 const normalizeCode = (value) => String(value ?? '').trim().toUpperCase();
+const normalizeLookupValue = (value) => String(value ?? '')
+  .replace(/[\u200B-\u200D\uFEFF]/g, '')
+  .replace(/\p{Cc}/gu, '')
+  .trim();
 const notBlank = (field) => where(col(TRACKING_COLUMNS[field]), { [Op.regexp]: '[^[:space:]]' });
 const normalizeStatus = (value) => String(value ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
 const TRACKING_COLUMNS = { qrCode: 'qr_code', rfidTag: 'rfid_tag', digitalId: 'digital_id' };
@@ -134,7 +138,7 @@ const listAssets = async (req, res, next) => {
         page,
         limit,
         total: result.count,
-        pages: Math.ceil(result.count / limit),
+        pages: Math.max(1, Math.ceil(result.count / limit)),
       },
     }, 'Tracking assets loaded.');
   } catch (error) {
@@ -173,7 +177,7 @@ const serializeLookupAsset = (asset) => ({
 
 const lookupAssetId = async (req, res, next) => {
   try {
-    const value = String(req.params.assetId ?? '').trim();
+    const value = normalizeLookupValue(req.params.assetId);
     if (!value || value.length > 255) return respond(res, 400, null, 'A valid asset ID is required.');
     const matches = await Asset.findAll({
       where: {
@@ -186,7 +190,7 @@ const lookupAssetId = async (req, res, next) => {
       limit: 2,
     });
     if (matches.length > 1) return respond(res, 409, null, 'More than one asset matches this ID.');
-    if (!matches[0]) return respond(res, 404, null, 'Asset not found.');
+    if (!matches[0]) return respond(res, 404, null, 'No asset found for this ID');
     return respond(res, 200, { asset: serializeLookupAsset(matches[0]) }, 'Asset found.');
   } catch (error) {
     return next(error);
@@ -195,13 +199,13 @@ const lookupAssetId = async (req, res, next) => {
 
 const lookupCode = async (req, res, next) => {
   try {
-    const raw = String(req.params.code ?? '').trim();
-    if (!raw || raw.length > 255 || /[\u0000-\u001f]/.test(raw)) {
+    const raw = normalizeLookupValue(req.params.code);
+    if (!raw || raw.length > 255) {
       return respond(res, 400, null, 'A valid QR or RFID value is required.');
     }
     const matches = await findUniqueExact(['qrCode', 'rfidTag', 'digitalId'], raw);
     if (matches.duplicate) return respond(res, 409, null, 'This tracking value is assigned to more than one asset.');
-    if (!matches.asset) return respond(res, 404, null, 'Asset not found.');
+    if (!matches.asset) return respond(res, 404, null, 'No asset found for this code');
     return respond(res, 200, { asset: serializeLookupAsset(matches.asset) }, 'Asset found.');
   } catch (error) {
     return next(error);
@@ -410,7 +414,7 @@ const isUniqueConstraintError = (error) => error?.name === 'SequelizeUniqueConst
 const isCodeUsed = async (field, value, excludeId, transaction) => {
   const columns = field === 'qrCode' ? ['qr_code', 'digital_id'] : ['rfid_tag'];
   const clauses = columns.map((name) => where(fn('UPPER', fn('TRIM', col(`Asset.${name}`))), normalizeCode(value)));
-  return Asset.count({
+  return (await Asset.count({
     where: {
       [Op.and]: [
         { [Op.or]: clauses },
@@ -418,7 +422,7 @@ const isCodeUsed = async (field, value, excludeId, transaction) => {
       ],
     },
     transaction,
-  }) > 0;
+  })) > 0;
 };
 
 const saveTags = async (req, res, next, regenerate = false) => {

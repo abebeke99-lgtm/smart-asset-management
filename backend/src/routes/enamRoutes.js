@@ -29,25 +29,13 @@ const defaultSettings = {
   lastError: null,
 };
 
-const defaultMappings = [
-  { id: 'asset-category-map', localField: 'Computer Equipment', enamField: 'computer_equipment', entity: 'asset_category', status: 'Active', updatedAt: new Date().toISOString() },
-  { id: 'asset-category-map-furniture', localField: 'Furniture', enamField: 'furniture', entity: 'asset_category', status: 'Active', updatedAt: new Date().toISOString() },
-  { id: 'asset-category-map-vehicle', localField: 'Vehicle', enamField: 'vehicle', entity: 'asset_category', status: 'Active', updatedAt: new Date().toISOString() },
-  { id: 'department-map-1', localField: 'IT Department', enamField: 'it_department', entity: 'department', status: 'Active', updatedAt: new Date().toISOString() },
-  { id: 'campus-map-1', localField: 'Main Campus', enamField: 'main_campus', entity: 'campus', status: 'Active', updatedAt: new Date().toISOString() },
-];
+const defaultMappings = [];
 
 const readJsonStore = async (key, fallback) => {
-  try {
-    const record = await Config.findByPk(key);
-    if (!record || !record.value) {
-      return fallback;
-    }
-    const parsed = JSON.parse(record.value);
-    return parsed ?? fallback;
-  } catch (error) {
-    return fallback;
-  }
+  const record = await Config.findByPk(key);
+  if (!record || !record.value) return fallback;
+  const parsed = JSON.parse(record.value);
+  return parsed ?? fallback;
 };
 
 const writeJsonStore = async (key, value) => {
@@ -219,6 +207,19 @@ router.get('/', ...requireAdmin, async (req, res, next) => {
     const totalSynced = jobs.reduce((sum, job) => sum + Number(job.processed || 0), 0);
     const successfulSyncs = jobs.filter((job) => ['completed', 'completed_with_errors'].includes(job.status)).length;
     const failedSyncs = jobs.filter((job) => job.status === 'failed').length;
+    const statistics = {
+      totalSynced,
+      successful: successfulSyncs,
+      successfulSyncs,
+      failed: failedSyncs,
+      failedSyncs,
+      mappings: defaultMappings.length,
+      created: jobs.reduce((sum, job) => sum + Number(job.created || 0), 0),
+      updated: jobs.reduce((sum, job) => sum + Number(job.updated || 0), 0),
+      unchanged: jobs.reduce((sum, job) => sum + Number(job.unchanged || 0), 0),
+      skipped: jobs.reduce((sum, job) => sum + Number(job.skipped || 0), 0),
+      failedRecords: jobs.reduce((sum, job) => sum + Number(job.failed || 0), 0),
+    };
 
     const responsePayload = {
       success: true,
@@ -231,16 +232,8 @@ router.get('/', ...requireAdmin, async (req, res, next) => {
         lastSync: lastSuccessfulSync || lastSyncAttempt,
         lastError,
         settings: sanitizeSettings(settings),
-        statistics: {
-          totalSynced,
-          successfulSyncs,
-          failedSyncs,
-          created: jobs.reduce((sum, job) => sum + Number(job.created || 0), 0),
-          updated: jobs.reduce((sum, job) => sum + Number(job.updated || 0), 0),
-          unchanged: jobs.reduce((sum, job) => sum + Number(job.unchanged || 0), 0),
-          skipped: jobs.reduce((sum, job) => sum + Number(job.skipped || 0), 0),
-          failed: jobs.reduce((sum, job) => sum + Number(job.failed || 0), 0),
-        },
+        statistics,
+        stats: statistics,
         logs: logs.slice(0, 50),
         mappings: defaultMappings,
         errors: errors.slice(0, 50),

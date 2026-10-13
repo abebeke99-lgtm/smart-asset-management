@@ -104,6 +104,10 @@ const Login = () => {
         setError(result?.error || t.invalidCredentials);
         return;
       }
+      if (result.requiresFirstLogin) {
+        navigate('/first-login', { replace: true });
+        return;
+      }
       const roleRoutes = {
         admin: '/admin',
         ict_officer: '/ict',

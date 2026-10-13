@@ -1,25 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { apiBase } from "../../utils/api";
+import { apiClient } from "../../utils/api";
 
-const API_URL = `${apiBase()}/api/admin/backups`;
-
-const getToken = () =>
-  localStorage.getItem("token") ||
-  localStorage.getItem("accessToken") ||
-  localStorage.getItem("authToken") ||
-  "";
-
-const getHeaders = (json = false) => {
-  const token = getToken();
-
-  return {
-    Accept: "application/json",
-    ...(json ? { "Content-Type": "application/json" } : {}),
-    ...(token
-      ? { Authorization: `Bearer ${token}` }
-      : {}),
-  };
-};
+const API_URL = "/admin/backups";
 
 const normalizeBackups = (payload) => {
   if (Array.isArray(payload)) return payload;
@@ -120,7 +102,8 @@ const statusStyle = (status) => {
 
   if (
     value === "running" ||
-    value === "processing"
+    value === "processing" ||
+    value === "in_progress"
   ) {
     return {
       background: "#EAF2FA",
@@ -180,23 +163,8 @@ export default function Backup() {
     setError("");
 
     try {
-      const response = await fetch(
-        API_URL,
-        {
-          method: "GET",
-          credentials: "include",
-          headers: getHeaders(),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          `Unable to load backups: ${response.status} ${response.statusText}`
-        );
-      }
-
-      const payload =
-        await response.json();
+      const response = await apiClient.get(API_URL, { headers: { Accept: "application/json" } });
+      const payload = response.data;
 
       setBackups(
         normalizeBackups(payload)
@@ -208,8 +176,7 @@ export default function Backup() {
       );
 
       setError(
-        err.message ||
-          "Unable to load backup history."
+        err.response?.data?.message || err.message || "Unable to load backup history."
       );
     } finally {
       setLoading(false);
@@ -275,41 +242,15 @@ export default function Backup() {
     setSuccess("");
 
     try {
-      const response = await fetch(
+      await apiClient.post(
         API_URL,
         {
-          method: "POST",
-          credentials: "include",
-          headers: getHeaders(true),
-          body: JSON.stringify({
             type: backupType,
             backupType,
             includeFiles,
-          }),
-        }
+        },
+        { headers: { Accept: "application/json" } }
       );
-
-      const text =
-        await response.text();
-
-      let data = null;
-
-      try {
-        data = text
-          ? JSON.parse(text)
-          : null;
-      } catch {
-        data = null;
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          data?.message ||
-            data?.error ||
-            text ||
-            `Backup creation failed (${response.status})`
-        );
-      }
 
       setSuccess(
         "System backup created successfully."
@@ -323,8 +264,7 @@ export default function Backup() {
       );
 
       setError(
-        err.message ||
-          "Unable to create system backup."
+        err.response?.data?.message || err.message || "Unable to create system backup."
       );
     } finally {
       setCreating(false);
@@ -349,27 +289,11 @@ export default function Backup() {
     setSuccess("");
 
     try {
-      const response = await fetch(
+      const response = await apiClient.get(
         `${API_URL}/download/${encodeURIComponent(filename)}`,
-        {
-          method: "GET",
-          credentials: "include",
-          headers: getHeaders(),
-        }
+        { responseType: "blob" }
       );
-
-      if (!response.ok) {
-        const text =
-          await response.text();
-
-        throw new Error(
-          text ||
-            `Unable to download backup (${response.status})`
-        );
-      }
-
-      const blob =
-        await response.blob();
+      const blob = response.data;
 
       const url =
         window.URL.createObjectURL(
@@ -406,8 +330,7 @@ export default function Backup() {
       );
 
       setError(
-        err.message ||
-          "Unable to download backup."
+        err.response?.data?.message || err.message || "Unable to download backup."
       );
     } finally {
       setDownloading(null);
@@ -441,39 +364,13 @@ export default function Backup() {
     setSuccess("");
 
     try {
-      const response = await fetch(
+      await apiClient.post(
         `${API_URL}/restore/${encodeURIComponent(filename)}`,
         {
-          method: "POST",
-          credentials: "include",
-          headers: getHeaders(true),
-          body: JSON.stringify({
             backupId: getBackupId(backup),
-          }),
-        }
+        },
+        { headers: { Accept: "application/json" } }
       );
-
-      const text =
-        await response.text();
-
-      let data = null;
-
-      try {
-        data = text
-          ? JSON.parse(text)
-          : null;
-      } catch {
-        data = null;
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          data?.message ||
-            data?.error ||
-            text ||
-            `Unable to restore backup (${response.status})`
-        );
-      }
 
       setSuccess(
         "Backup restoration request completed successfully."
@@ -487,8 +384,7 @@ export default function Backup() {
       );
 
       setError(
-        err.message ||
-          "Unable to restore backup."
+        err.response?.data?.message || err.message || "Unable to restore backup."
       );
     } finally {
       setRestoring(null);
@@ -523,36 +419,9 @@ export default function Backup() {
     setSuccess("");
 
     try {
-      const response = await fetch(
-        `${API_URL}/${encodeURIComponent(filename)}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-          headers: getHeaders(),
-        }
-      );
-
-      const text =
-        await response.text();
-
-      let data = null;
-
-      try {
-        data = text
-          ? JSON.parse(text)
-          : null;
-      } catch {
-        data = null;
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          data?.message ||
-            data?.error ||
-            text ||
-            `Unable to delete backup (${response.status})`
-        );
-      }
+      await apiClient.delete(`${API_URL}/${encodeURIComponent(filename)}`, {
+        headers: { Accept: "application/json" },
+      });
 
       setBackups(
         (current) =>
@@ -572,8 +441,7 @@ export default function Backup() {
       );
 
       setError(
-        err.message ||
-          "Unable to delete backup."
+        err.response?.data?.message || err.message || "Unable to delete backup."
       );
     } finally {
       setDeleting(null);
@@ -833,7 +701,7 @@ export default function Backup() {
             </div>
 
             <h3 style={styles.emptyTitle}>
-              No backups found
+              No backups yet
             </h3>
 
             <p style={styles.emptyText}>

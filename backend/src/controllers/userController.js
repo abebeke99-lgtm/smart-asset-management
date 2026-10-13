@@ -12,26 +12,31 @@ const { getDatabasePermissionKeys } = require('../middlewares/authorize');
 const { getSecuritySettings, validatePassword } = require('../services/passwordPolicyService');
 const { ROLE_NAMES, normalizeRoleForStorage } = require('../constants/rolePermissions');
 const { isValidUsername } = require('../utils/validators');
+const { normalizePhoneNumber } = require('../services/smsService');
 
 const roles = ROLE_NAMES;
 const STORE_MANAGER_ACCOUNT_LIMIT = 8;
 const collegeScopedRoles = new Set(['college', 'college_manager', 'department_head']);
 const normalizeLookupValue = (value) => String(value ?? '').trim().toLowerCase();
+const normalizePhoneLookup = (value) => normalizePhoneNumber(value) || normalizeLookupValue(value).replace(/[^\d+]/g, '');
 const isValidPhone = (value) => {
   const phone = String(value || '').trim();
   const digits = phone.replace(/\D/g, '');
   return !phone || (/^\+?[\d\s().-]+$/.test(phone) && digits.length >= 7 && digits.length <= 15);
 };
 
-const findDuplicateUser = async ({ username = '', email = '', excludeUserId = null, transaction } = {}) => {
+const findDuplicateUser = async ({ username = '', email = '', phone = '', excludeUserId = null, transaction } = {}) => {
   const normalizedUsername = normalizeLookupValue(username);
   const normalizedEmail = normalizeLookupValue(email);
-  if (!normalizedUsername && !normalizedEmail) return null;
+  const normalizedPhone = normalizePhoneLookup(phone);
+  if (!normalizedUsername && !normalizedEmail && !normalizedPhone) return null;
+  const phoneSearchValue = normalizedPhone.replace(/\D/g, '').slice(-8);
 
   const where = {
     [Op.or]: [
       ...(normalizedUsername ? [{ username: { [Op.like]: `%${normalizedUsername}%` } }] : []),
       ...(normalizedEmail ? [{ email: { [Op.like]: `%${normalizedEmail}%` } }] : []),
+      ...(phoneSearchValue ? [{ phone: { [Op.like]: `%${phoneSearchValue}%` } }] : []),
     ],
   };
   if (excludeUserId) where.id = { [Op.ne]: excludeUserId };
@@ -40,7 +45,10 @@ const findDuplicateUser = async ({ username = '', email = '', excludeUserId = nu
   return matches.find((candidate) => {
     const candidateUsername = normalizeLookupValue(candidate.username);
     const candidateEmail = normalizeLookupValue(candidate.email ?? '');
-    return (normalizedUsername && candidateUsername === normalizedUsername) || (normalizedEmail && candidateEmail === normalizedEmail);
+    const candidatePhone = normalizePhoneLookup(candidate.phone);
+    return (normalizedUsername && candidateUsername === normalizedUsername)
+      || (normalizedEmail && candidateEmail === normalizedEmail)
+      || (normalizedPhone && candidatePhone === normalizedPhone);
   }) || null;
 };
 
@@ -236,7 +244,7 @@ const getRoles = async (_req, res, next) => {
       seenRoles.add(canonicalRole);
       role.name = canonicalRole;
       if (canonicalRole === 'admin') role.displayName = 'Admin';
-      if (canonicalRole === 'maintenance') role.displayName = 'Maintenance';
+      if (canonicalRole === 'maintenance') role.displayName = 'Maintenance Coordinator';
       return [role];
     });
     return res.json({ success: true, data: roleRows, roles: roleRows });
@@ -268,7 +276,7 @@ const createUser = async (req, res) => {
     if (typeof body.confirmPassword !== 'string' || !body.confirmPassword) return res.status(400).json({ success: false, message: 'Confirm Password is required.' });
     if (body.password !== body.confirmPassword) return res.status(400).json({ success: false, message: 'Passwords do not match.' });
     const username = String(body.username || '').trim();
-    const email = String(body.email || '').trim();
+    const email = String(body.email || '').trim().toLowerCase();
     const role = normalizeRoleForStorage(body.role || body.roleId);
     if (!role) return res.status(400).json({ success: false, message: 'Role is required' });
     if (!roles.includes(role)) return res.status(400).json({ success: false, message: 'Invalid user role' });
@@ -297,6 +305,8 @@ const createUser = async (req, res) => {
     const status = String(body.status || 'active').toLowerCase();
     if (!['active', 'inactive', 'suspended'].includes(status)) return res.status(400).json({ success: false, message: 'Status must be active, inactive, or suspended' });
     const phone = String(body.phone ?? body.phone_number ?? '').trim();
+    if (!email && !phone) return res.status(400).json({ success: false, message: 'Provide at least one contact method: email or mobile phone.' });
+    if (phone && !isValidPhone(phone)) return res.status(400).json({ success: false, message: 'Invalid phone number.' });
     const validationError = await validateUserInput({ fullName, username, email, role, phone });
     if (validationError) return res.status(400).json({ success: false, message: validationError });
 
@@ -373,9 +383,14 @@ const createUser = async (req, res) => {
         throw error;
       }
 
-      const existing = await findDuplicateUser({ username, email, transaction });
+      const existing = await findDuplicateUser({ username, email, phone, transaction });
       if (existing) {
-        const error = new Error('Username or email is already in use');
+        const duplicateField = normalizeLookupValue(existing.username) === normalizeLookupValue(username)
+          ? 'Username'
+          : email && normalizeLookupValue(existing.email) === normalizeLookupValue(email)
+            ? 'Email'
+            : 'Phone number';
+        const error = new Error(`${duplicateField} is already in use.`);
         error.statusCode = 409;
         throw error;
       }
@@ -392,6 +407,8 @@ const createUser = async (req, res) => {
         active: status === 'active',
         status,
         password: await bcrypt.hash(body.password, 10),
+        mustChangePassword: true,
+        passwordChangedAt: null,
       }, { transaction });
 
       const createdUserData = safeUser(createdUser);
@@ -412,7 +429,7 @@ const createUser = async (req, res) => {
     res.status(201).json({ success: true, data: safeUser(user) });
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
-    if (error.name === 'SequelizeUniqueConstraintError') return res.status(409).json({ success: false, message: 'Username or email is already in use' });
+    if (error.name === 'SequelizeUniqueConstraintError') return res.status(409).json({ success: false, message: 'Username, email, or phone number is already in use.' });
     if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeForeignKeyConstraintError') {
       return res.status(400).json({ success: false, message: 'User details are invalid' });
     }
@@ -500,8 +517,14 @@ const updateUser = async (req, res) => {
     if (
       (Object.prototype.hasOwnProperty.call(updates, 'username') && updates.username !== user.username)
       || (Object.prototype.hasOwnProperty.call(updates, 'email') && updates.email !== user.email)
+      || (Object.prototype.hasOwnProperty.call(updates, 'phone') && normalizePhoneLookup(updates.phone) !== normalizePhoneLookup(user.phone))
     ) {
-      const duplicate = await findDuplicateUser({ username: updates.username || user.username, email: updates.email !== undefined ? updates.email : user.email, excludeUserId: user.id });
+      const duplicate = await findDuplicateUser({
+        username: updates.username || user.username,
+        email: updates.email !== undefined ? updates.email : user.email,
+        phone: updates.phone !== undefined ? updates.phone : user.phone,
+        excludeUserId: user.id,
+      });
       if (duplicate) return res.status(409).json({ success: false, message: 'Username or email is already in use' });
     }
     let updatedUser = user;

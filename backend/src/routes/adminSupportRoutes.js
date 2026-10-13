@@ -32,7 +32,6 @@ const decryptMfaSecret = (payload) => {
 };
 const generateBackupCodes = () => Array.from({ length: 8 }, () => crypto.randomBytes(5).toString('hex').toUpperCase());
 const hashBackupCodes = async (codes) => Promise.all(codes.map((code) => require('bcryptjs').hash(code, 10)));
-const backupDirectory = path.join(__dirname, '../../backups');
 const backupFilePattern = /^backup_[0-9]{8}T[0-9]{6}_[a-f0-9]{8}\.json$/;
 const backupModels = { users: User, assets: Asset, assignments: Assignment, transfers: Transfer, maintenance: Maintenance, rfidLogs: RFIDLog, categories: Category, departments: Department, notifications: Notification, inventory: Inventory, inventoryTransactions: InventoryTransaction, approvals: Approval, financialRecords: FinancialRecord, disposalRequests: DisposalRequest };
 const safeJson = (record) => {
@@ -42,8 +41,7 @@ const safeJson = (record) => {
 };
 const resolveBackupPath = (filename) => {
   if (!backupFilePattern.test(filename)) return null;
-  const resolved = path.resolve(backupDirectory, filename);
-  return resolved.startsWith(`${path.resolve(backupDirectory)}${path.sep}`) ? resolved : null;
+  return backupService.resolveBackupFilePath(filename);
 };
 
 const normalizeUser = (user) => {
@@ -2020,14 +2018,50 @@ router.get('/backups/stats', ...requireAdmin, async (req, res, next) => {
 });
 
 router.post('/backups', ...requireAdmin, async (req, res, next) => {
+  let backup;
   try {
-    const createdBy = req.user?.username || req.user?.fullName || 'System';
-    const backup = await backupService.createManualBackup({ createdBy, type: 'Manual', source: 'database' });
-    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'BACKUP_OPERATION', entity: `backup:${backup.filename}`, entityId: backup.filename, oldValue: null, newValue: { filename: backup.filename, size: backup.size, checksum: backup.checksum, status: backup.status, type: backup.type }, details: { operation: 'create', legacyAction: 'BACKUP_CREATED' } });
-    res.status(201).json({ success: true, data: backup, message: 'Database backup created successfully.' });
+    backup = await backupService.createManualBackup({
+      createdBy: {
+        id: req.user?.id,
+        username: req.user?.username,
+        fullName: req.user?.fullName,
+      },
+      type: 'Manual',
+      source: 'database',
+    });
   } catch (error) {
-    next(error);
+    console.error('Backup creation failed:', {
+      message: error.message || error.original?.message || error.parent?.message || 'Unknown backup error',
+      name: error.name || null,
+      stack: error.stack,
+      code: error.code || null,
+      databaseError: error.original?.message || error.parent?.message || null,
+      metadataPersistenceError: error.metadataPersistenceError?.message || null,
+    });
+    return res.status(500).json({
+      success: false,
+      message: `Backup failed: ${error.message || error.original?.message || error.parent?.message || 'Unknown backup error'}`,
+    });
   }
+
+  let auditWarning = null;
+  try {
+    await createAuditLog({ userId: req.user.id, role: req.user.role, action: 'BACKUP_OPERATION', entity: `backup:${backup.filename}`, entityId: backup.filename, oldValue: null, newValue: { filename: backup.filename, size: backup.size, checksum: backup.checksum, status: backup.status, type: backup.type }, details: { operation: 'create', legacyAction: 'BACKUP_CREATED' } });
+  } catch (error) {
+    auditWarning = 'The backup completed, but its audit event could not be recorded.';
+    console.error('Backup completed but audit logging failed:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code || null,
+    });
+  }
+
+  return res.status(201).json({
+    success: true,
+    data: backup,
+    message: auditWarning || 'Database backup created successfully.',
+    warning: auditWarning,
+  });
 });
 
 router.get('/backups/verify/:filename', ...requireAdmin, async (req, res, next) => {

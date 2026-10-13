@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const fs = require('node:fs');
 const { Op } = require('sequelize');
 const path = require('node:path');
@@ -10,7 +11,7 @@ const userController = require('../src/controllers/userController');
 const authController = require('../src/controllers/authController');
 const { requirePermission, requireRole } = require('../src/middlewares/auth');
 
-test('admin-created user stores a bcrypt password and can log in normally', async () => {
+test('admin-created user stores a bcrypt temporary password and receives a scoped first-login token', async () => {
   const originalFindOne = models.User.findOne;
   const originalFindAll = models.User.findAll;
   const originalCreate = models.User.create;
@@ -91,6 +92,8 @@ test('admin-created user stores a bcrypt password and can log in normally', asyn
     assert.equal(createdUser.fullName, 'New Staff Member');
     assert.equal(createdUser.status, 'active');
     assert.equal(createdUser.active, true);
+    assert.equal(createdUser.mustChangePassword, true);
+    assert.equal(createdUser.passwordChangedAt, null);
     assert.notEqual(createdUser.password, password);
     assert.match(createdUser.password, /^\$2[aby]\$/);
     assert.equal(await bcrypt.compare(password, createdUser.password), true);
@@ -107,8 +110,12 @@ test('admin-created user stores a bcrypt password and can log in normally', asyn
 
     assert.equal(loginResponse.statusCode, 200);
     assert.equal(loginResponse.payload.success, true);
-    assert.equal(loginResponse.payload.user.email, createdUser.email);
-    assert.deepEqual(loginResponse.payload.user.permissions, ['assets.view']);
+    assert.equal(loginResponse.payload.requiresFirstLogin, true);
+    assert.deepEqual(loginResponse.payload.user.contactMethods, [
+      { channel: 'email', masked: 'n***@example.edu' },
+      { channel: 'phone', masked: '091*****00' },
+    ]);
+    assert.equal(jwt.decode(loginResponse.payload.token).scope, 'first_login');
     assert.equal(typeof loginResponse.payload.token, 'string');
     assert.equal(Object.hasOwn(loginResponse.payload.user, 'password'), false);
   } finally {
@@ -213,6 +220,7 @@ test('admin user creation rejects invalid email, unsupported password, and inact
   const body = {
     fullName: 'New Staff',
     username: 'new.staff',
+    email: 'new.staff@example.edu',
     role: 'staff',
     password: 'weakpass',
     confirmPassword: 'weakpass',
@@ -326,7 +334,7 @@ test('admin user creation rejects duplicate username and email regardless of cas
     }, response);
 
     assert.equal(response.statusCode, 409);
-    assert.equal(response.payload.message, 'Username or email is already in use');
+    assert.equal(response.payload.message, 'Username is already in use.');
 
     const duplicateEmailResponse = makeResponse();
     await userController.createUser({
@@ -341,6 +349,7 @@ test('admin user creation rejects duplicate username and email regardless of cas
       },
     }, duplicateEmailResponse);
     assert.equal(duplicateEmailResponse.statusCode, 409);
+    assert.equal(duplicateEmailResponse.payload.message, 'Email is already in use.');
   } finally {
     models.User.findOne = originalFindOne;
     models.User.findAll = originalFindAll;
@@ -442,7 +451,7 @@ test('admin user creation validates database-backed role and organization IDs an
   assert.equal(response.statusCode, 201);
   assert.equal(createOptions.transaction, transaction);
   assert.deepEqual(Object.keys(createValues).sort(), [
-    'active', 'collegeId', 'department', 'departmentId', 'email', 'fullName', 'password', 'phone', 'role', 'status', 'username',
+    'active', 'collegeId', 'department', 'departmentId', 'email', 'fullName', 'mustChangePassword', 'password', 'passwordChangedAt', 'phone', 'role', 'status', 'username',
   ]);
   assert.equal(createValues.collegeId, 3);
   assert.equal(createValues.departmentId, 8);

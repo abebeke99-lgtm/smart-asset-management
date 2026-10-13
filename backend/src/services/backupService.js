@@ -11,14 +11,15 @@ const METADATA_FILE_PATTERN = /^backup_[0-9]{8}T[0-9]{6}_[a-f0-9]{8}\.json$/;
 function normalizeBackupPath(candidatePath) {
   if (!candidatePath) return null;
   const absolutePath = path.resolve(candidatePath);
-  if (!absolutePath.startsWith(`${BACKUP_DIRECTORY}${path.sep}`) && absolutePath !== BACKUP_DIRECTORY) {
+  const backupDirectory = getBackupStorageLocation();
+  if (!absolutePath.startsWith(`${backupDirectory}${path.sep}`) && absolutePath !== backupDirectory) {
     return null;
   }
   return absolutePath;
 }
 
 function getBackupStorageLocation() {
-  return process.env.BACKUP_STORAGE_PATH || BACKUP_DIRECTORY;
+  return path.resolve(process.env.BACKUP_DIR || process.env.BACKUP_STORAGE_PATH || BACKUP_DIRECTORY);
 }
 
 async function ensureBackupDirectory() {
@@ -82,11 +83,17 @@ function resolveBackupMetadataPath(filename) {
   if (!filename || !METADATA_FILE_PATTERN.test(filename)) {
     return null;
   }
-  const filePath = path.resolve(BACKUP_DIRECTORY, filename);
-  if (!filePath.startsWith(`${BACKUP_DIRECTORY}${path.sep}`) && filePath !== BACKUP_DIRECTORY) {
+  const backupDirectory = getBackupStorageLocation();
+  const filePath = path.resolve(backupDirectory, filename);
+  if (!filePath.startsWith(`${backupDirectory}${path.sep}`) && filePath !== backupDirectory) {
     return null;
   }
   return filePath;
+}
+
+function resolveBackupFilePath(filename) {
+  if (!filename || path.basename(filename) !== filename) return null;
+  return normalizeBackupPath(path.join(getBackupStorageLocation(), filename));
 }
 
 async function readMetadataFile(filename) {
@@ -151,7 +158,6 @@ async function runMysqlDump(databaseConfig) {
     '--host', databaseConfig.host,
     '--port', String(databaseConfig.port || 3306),
     '--user', databaseConfig.username,
-    '--password=' + (databaseConfig.password || ''),
     '--single-transaction',
     '--routines',
     '--triggers',
@@ -183,7 +189,11 @@ async function runMysqlDump(databaseConfig) {
 
     child.on('error', (error) => {
       if (outStream.destroy) outStream.destroy();
-      reject(new Error(`mysqldump failed to start: ${error.message}`));
+      if (error.code === 'ENOENT') {
+        reject(new Error('mysqldump is unavailable. Install a MySQL-compatible client or set MYSQLDUMP_PATH.'));
+        return;
+      }
+      reject(error);
     });
 
     child.on('close', async (code) => {
@@ -258,8 +268,8 @@ async function verifyBackupContents(dumpPath, metadata) {
 }
 
 async function listBackupHistory({ search = '', status = '', type = '', page = 1, limit = 25 } = {}) {
-  await ensureBackupDirectory();
-  const entries = await fs.readdir(BACKUP_DIRECTORY, { withFileTypes: true });
+  const backupDirectory = await ensureBackupDirectory();
+  const entries = await fs.readdir(backupDirectory, { withFileTypes: true });
   const metadataFiles = entries.filter((entry) => entry.isFile() && METADATA_FILE_PATTERN.test(entry.name)).map((entry) => entry.name).sort().reverse();
   const backups = [];
 
@@ -268,8 +278,8 @@ async function listBackupHistory({ search = '', status = '', type = '', page = 1
     if (!metadataPath) continue;
     try {
       const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf8'));
-      const dumpFilePath = metadata.dumpFilePath ? normalizeBackupPath(metadata.dumpFilePath) : path.join(BACKUP_DIRECTORY, extractDumpFileName(filename));
-      const sourceFile = metadata.encrypted ? (metadata.encryptedFile ? normalizeBackupPath(metadata.encryptedFile) : null) : dumpFilePath;
+      const dumpFilePath = metadata.dumpFilePath ? normalizeBackupPath(metadata.dumpFilePath) : path.join(backupDirectory, extractDumpFileName(filename));
+      const sourceFile = metadata.encrypted ? (metadata.encryptedFile ? resolveBackupFilePath(metadata.encryptedFile) : null) : dumpFilePath;
       let fileSize = metadata.size || 0;
       let checksum = metadata.checksum || null;
       let verificationStatus = metadata.verificationStatus || 'Not Verified';
@@ -309,6 +319,7 @@ async function listBackupHistory({ search = '', status = '', type = '', page = 1
         createdBy: metadata.createdBy || 'System',
         fileName: metadata.dumpFileName || extractDumpFileName(filename),
         fileSize: fileSize,
+        errorMessage: metadata.errorMessage || metadata.error_message || null,
         backupType: metadata.backupType || 'Database Backup',
         database: metadata.database || getDatabaseConfig().database,
         format: metadata.format || 'smart-asset-management-backup',
@@ -350,7 +361,7 @@ async function listBackupHistory({ search = '', status = '', type = '', page = 1
 async function getBackupStats() {
   const history = await listBackupHistory({ page: 1, limit: 1000 });
   const items = history.items || [];
-  const successful = items.filter((item) => String(item.status).toLowerCase() === 'successful').length;
+  const successful = items.filter((item) => ['completed', 'successful'].includes(String(item.status).toLowerCase())).length;
   const failed = items.filter((item) => ['failed', 'verification failed', 'restore failed'].includes(String(item.status).toLowerCase())).length;
   const verified = items.filter((item) => String(item.verificationStatus).toLowerCase() === 'verified' || item.verified === true).length;
   const storageUsed = items.reduce((sum, item) => sum + Number(item.size || 0), 0);
@@ -365,80 +376,118 @@ async function getBackupStats() {
     latestBackup: latest ? latest.createdAt : null,
     latestStatus: latest ? latest.status : 'Not Available',
     verificationStatus: latest ? latest.verificationStatus : 'Not Available',
+    inProgress: items.filter((item) => String(item.status).toLowerCase() === 'in_progress').length,
     database: getDatabaseConfig().database,
   };
 }
 
 async function createManualBackup({ createdBy = 'system', type = 'Manual', source = 'database' } = {}) {
-  const databaseConfig = getDatabaseConfig();
   const backupDirectory = await ensureBackupDirectory();
-  let dumpPath;
-
-  try {
-    dumpPath = await runMysqlDump(databaseConfig);
-  } catch (error) {
-    throw new Error(`Backup creation failed: ${error.message}`);
-  }
-
-  const dumpStats = await fs.stat(dumpPath);
-  const checksum = await computeFileChecksum(dumpPath);
-  const encryption = await encryptFile(dumpPath);
-  const encryptedFilePath = encryption.encrypted ? encryption.outputPath : null;
   const now = new Date();
+  const timestamp = buildTimestampLabel(now);
+  const backupId = `backup_${timestamp}_${randomSuffix()}`;
+  const filename = `${backupId}.json`;
+  const metadataPath = path.join(backupDirectory, filename);
   const metadata = {
     format: 'smart-asset-management-backup',
     version: 1,
-    id: `backup_${buildTimestampLabel(now).replace(/:/g, '-')}_${randomSuffix()}`,
-    filename: `backup_${buildTimestampLabel(now).replace(/:/g, '-')}_${randomSuffix()}.json`,
+    id: backupId,
+    filename,
     type,
     backupType: source === 'database' ? 'Database Backup' : 'System Backup',
-    status: 'Successful',
+    status: 'in_progress',
     createdAt: now.toISOString(),
-    completedAt: now.toISOString(),
-    createdBy,
-    storage: 'Local backup directory',
-    database: databaseConfig.database,
-    dumpFileName: path.basename(dumpPath),
-    dumpFilePath: dumpPath,
-    encrypted: Boolean(encryption.encrypted),
-    encryption: encryption.encrypted ? encryption.algorithm : 'None',
-    encryptedFile: encryptedFilePath ? path.basename(encryptedFilePath) : null,
-    fileSize: dumpStats.size,
-    size: dumpStats.size,
-    checksum,
+    completedAt: null,
+    createdBy: typeof createdBy === 'object' ? (createdBy.username || createdBy.fullName || 'System') : createdBy,
+    createdById: typeof createdBy === 'object' ? createdBy.id || null : null,
+    storage: process.env.BACKUP_STORAGE_PROVIDER || 'Local backup directory',
+    database: null,
+    dumpFileName: null,
+    dumpFilePath: null,
+    encrypted: false,
+    encryption: 'None',
+    encryptedFile: null,
+    fileSize: 0,
+    size: 0,
+    checksum: null,
     verified: false,
     verificationStatus: 'Not Verified',
+    errorMessage: null,
   };
-
-  const metadataPath = path.join(backupDirectory, metadata.filename);
+  metadata.file_name = filename;
+  metadata.file_path = metadataPath;
+  metadata.include_files = false;
+  metadata.created_by = metadata.createdById;
+  metadata.created_at = metadata.createdAt;
+  metadata.completed_at = null;
+  metadata.error_message = null;
   await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf8');
 
-  const verification = await verifyBackupFile(metadata.filename, { skipPersist: true });
-  metadata.verified = verification.valid;
-  metadata.verificationStatus = verification.valid ? 'Verified' : 'Verification Failed';
-  metadata.verification = verification;
-  metadata.status = verification.valid ? 'Successful' : 'Failed';
-  await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf8');
+  let dumpPath;
 
-  return {
-    id: metadata.id,
-    filename: metadata.filename,
-    dumpFileName: metadata.dumpFileName,
-    type: metadata.type,
-    backupType: metadata.backupType,
-    status: metadata.status,
-    size: metadata.size,
-    storage: metadata.storage,
-    encrypted: metadata.encrypted,
-    verified: metadata.verified,
-    verificationStatus: metadata.verificationStatus,
-    createdAt: metadata.createdAt,
-    completedAt: metadata.completedAt,
-    createdBy: metadata.createdBy,
-    checksum: metadata.checksum,
-    checksumValid: verification.checksumValid,
-    database: metadata.database,
-  };
+  try {
+    const databaseConfig = getDatabaseConfig();
+    metadata.database = databaseConfig.database;
+    dumpPath = await runMysqlDump(databaseConfig);
+    metadata.dumpFileName = path.basename(dumpPath);
+    metadata.dumpFilePath = dumpPath;
+    const dumpStats = await fs.stat(dumpPath);
+    const checksum = await computeFileChecksum(dumpPath);
+    const encryption = await encryptFile(dumpPath);
+    const encryptedFilePath = encryption.encrypted ? encryption.outputPath : null;
+    const verification = await verifyBackupFile(filename, { skipPersist: true });
+    if (!verification.valid) throw new Error(verification.message || 'Backup verification failed.');
+
+    metadata.encrypted = Boolean(encryption.encrypted);
+    metadata.encryption = encryption.encrypted ? encryption.algorithm : 'None';
+    metadata.encryptedFile = encryptedFilePath ? path.basename(encryptedFilePath) : null;
+    metadata.fileSize = dumpStats.size;
+    metadata.size = dumpStats.size;
+    metadata.checksum = checksum;
+    metadata.verified = true;
+    metadata.verificationStatus = 'Verified';
+    metadata.verification = verification;
+    metadata.status = 'completed';
+    metadata.completedAt = new Date().toISOString();
+    metadata.completed_at = metadata.completedAt;
+    await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf8');
+
+    return {
+      id: metadata.id,
+      filename: metadata.filename,
+      dumpFileName: metadata.dumpFileName,
+      type: metadata.type,
+      backupType: metadata.backupType,
+      status: metadata.status,
+      size: metadata.size,
+      storage: metadata.storage,
+      encrypted: metadata.encrypted,
+      verified: metadata.verified,
+      verificationStatus: metadata.verificationStatus,
+      createdAt: metadata.createdAt,
+      completedAt: metadata.completedAt,
+      createdBy: metadata.createdBy,
+      checksum: metadata.checksum,
+      checksumValid: verification.checksumValid,
+      database: metadata.database,
+    };
+  } catch (error) {
+    metadata.status = 'failed';
+    metadata.completedAt = new Date().toISOString();
+    metadata.completed_at = metadata.completedAt;
+    metadata.errorMessage = error.message || 'Unknown backup error';
+    metadata.error_message = metadata.errorMessage;
+    if (dumpPath) {
+      metadata.dumpFileName = path.basename(dumpPath);
+      metadata.dumpFilePath = dumpPath;
+    }
+    try {
+      await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf8');
+    } catch (metadataError) {
+      error.metadataPersistenceError = metadataError;
+    }
+    throw error;
+  }
 }
 
 async function verifyBackupFile(filename, { skipPersist = false } = {}) {
@@ -449,8 +498,9 @@ async function verifyBackupFile(filename, { skipPersist = false } = {}) {
 
   const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf8'));
   const dumpFileName = metadata.dumpFileName || extractDumpFileName(filename);
-  const dumpPath = normalizeBackupPath(metadata.dumpFilePath) || path.join(BACKUP_DIRECTORY, dumpFileName);
-  const encryptedFilePath = metadata.encryptedFile ? normalizeBackupPath(path.join(BACKUP_DIRECTORY, metadata.encryptedFile)) : null;
+  const backupDirectory = getBackupStorageLocation();
+  const dumpPath = normalizeBackupPath(metadata.dumpFilePath) || path.join(backupDirectory, dumpFileName);
+  const encryptedFilePath = metadata.encryptedFile ? resolveBackupFilePath(metadata.encryptedFile) : null;
 
   if (metadata.encrypted && encryptedFilePath) {
     const decrypted = await decryptFile(encryptedFilePath);
@@ -522,15 +572,16 @@ async function restoreBackup(filename, { requestedBy = 'system' } = {}) {
 
   const databaseConfig = getDatabaseConfig();
   const dumpFileName = metadata.encrypted ? (metadata.encryptedFile ? metadata.encryptedFile.replace(/\.enc$/, '') : metadata.dumpFileName) : metadata.dumpFileName;
-  let dumpPath = normalizeBackupPath(metadata.dumpFilePath) || path.join(BACKUP_DIRECTORY, dumpFileName);
+  const backupDirectory = getBackupStorageLocation();
+  let dumpPath = normalizeBackupPath(metadata.dumpFilePath) || path.join(backupDirectory, dumpFileName);
 
   if (metadata.encrypted) {
-    const encryptedFilePath = metadata.encryptedFile ? normalizeBackupPath(path.join(BACKUP_DIRECTORY, metadata.encryptedFile)) : null;
+    const encryptedFilePath = metadata.encryptedFile ? resolveBackupFilePath(metadata.encryptedFile) : null;
     if (!encryptedFilePath) {
       throw new Error('Encrypted backup is missing its payload');
     }
     const decrypted = await decryptFile(encryptedFilePath);
-    dumpPath = path.join(BACKUP_DIRECTORY, `restore_${path.basename(metadata.dumpFileName || 'database_restore.sql')}`);
+    dumpPath = path.join(backupDirectory, `restore_${path.basename(metadata.dumpFileName || 'database_restore.sql')}`);
     await fs.writeFile(dumpPath, decrypted.content);
   }
 
@@ -562,7 +613,10 @@ async function deleteBackup(filename) {
   }
 
   const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf8'));
-  const relatedFiles = [metadata.dumpFilePath, metadata.encryptedFile ? path.join(BACKUP_DIRECTORY, metadata.encryptedFile) : null].filter(Boolean);
+  const relatedFiles = [
+    normalizeBackupPath(metadata.dumpFilePath),
+    metadata.encryptedFile ? resolveBackupFilePath(metadata.encryptedFile) : null,
+  ].filter(Boolean);
   for (const filePath of relatedFiles) {
     try {
       await fs.unlink(filePath);
@@ -577,6 +631,8 @@ async function deleteBackup(filename) {
 
 module.exports = {
   BACKUP_DIRECTORY,
+  getBackupStorageLocation,
+  resolveBackupFilePath,
   getDatabaseConfig,
   buildTimestampLabel,
   resolveMysqlDumpBinary: () => resolveMysqlBinary('mysqldump'),

@@ -170,7 +170,7 @@ function normalizeRoleName(value) {
 
 function getRoleLabel(role, displayName) {
   if (role === "admin") return "Admin";
-  if (role === "maintenance") return "Maintenance";
+  if (role === "maintenance") return "Maintenance Coordinator";
   return displayName || role.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
@@ -480,6 +480,7 @@ export default function Users() {
     }
     if (form.email && form.email.length > 255) nextErrors.email = "Email must be 255 characters or fewer.";
     else if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) nextErrors.email = "Enter a valid email address.";
+    if (!editingUser && !form.email.trim() && !form.phone.trim()) nextErrors.email = "Provide an email address or mobile phone.";
     const phoneDigits = form.phone.replace(/\D/g, "");
     if (form.phone.trim() && (!/^\+?[\d\s().-]+$/.test(form.phone.trim()) || phoneDigits.length < 7 || phoneDigits.length > 15)) nextErrors.phone = "Enter a valid phone number.";
     if (Object.values(nextErrors).some(Boolean)) {
@@ -1867,7 +1868,7 @@ export default function Users() {
               <div className="form-row users-form-row users-form-row-password">
                   <div className="form-group">
                     <label className="form-label" htmlFor="new-user-password">
-                      Password {!editingUser && <span className="required">*</span>}
+                      {editingUser ? "Password" : "Temporary Password"} {!editingUser && <span className="required">*</span>}
                     </label>
                     <div className="password-field">
                       <input
@@ -1898,7 +1899,7 @@ export default function Users() {
 
                   <div className="form-group">
                     <label className="form-label" htmlFor="new-user-confirm-password">
-                      Confirm Password {!editingUser && <span className="required">*</span>}
+                      {editingUser ? "Confirm Password" : "Confirm Temporary Password"} {!editingUser && <span className="required">*</span>}
                     </label>
                     <div className="password-field">
                       <input
