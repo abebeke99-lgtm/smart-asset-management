@@ -5,7 +5,6 @@
 // ==============================================
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from 'react';
-import axios from 'axios';
 import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import './App.css';
 import './admin-design-system.css';
@@ -154,6 +153,7 @@ const InfrastructureAssets = lazy(() => import('./components/infrastructure/Infr
 const RegisterInfrastructureAsset = lazy(() => import('./components/infrastructure/RegisterInfrastructureAsset'));
 const InfrastructureInventory = lazy(() => import('./components/infrastructure/InfrastructureInventory'));
 const InfrastructureAssignment = lazy(() => import('./components/infrastructure/InfrastructureAssignment'));
+const InfrastructureTransfer = lazy(() => import('./components/infrastructure/InfrastructureTransfer'));
 const InfrastructureVerification = lazy(() => import('./components/infrastructure/InfrastructureVerification'));
 const InfrastructureBuildings = lazy(() => import('./components/infrastructure/InfrastructureBuildings'));
 const InfrastructureElectrical = lazy(() => import('./components/infrastructure/InfrastructureElectrical'));
@@ -613,11 +613,11 @@ const AdminAssetCategories = () => {
     setLoading(true);
     setError('');
     try {
-      const response = await axios.get('/api/categories', { params: { page: 1, limit: 100 } });
+      const response = await apiClient.get('/api/categories', { params: { page: 1, limit: 100 } });
       const rows = normalizeListResponse(response?.data ?? []);
       const totalPages = Math.max(1, Number(response?.data?.pagination?.totalPages) || 1);
       const remainingPages = await Promise.all(
-        Array.from({ length: totalPages - 1 }, (_, index) => axios.get('/api/categories', {
+        Array.from({ length: totalPages - 1 }, (_, index) => apiClient.get('/api/categories', {
           params: { page: index + 2, limit: 100 },
         }))
       );
@@ -773,13 +773,13 @@ const AdminAssetCategories = () => {
       const payload = { name, code, description, icon, status };
 
       if (editingId) {
-        const response = await axios.put(`/api/categories/${editingId}`, payload);
+        const response = await apiClient.put(`/api/categories/${editingId}`, payload);
         const updatedItem = normalizeListResponse(response?.data ?? []);
         setCategories((previous) => previous.map((category) => String(category.id) === String(editingId)
           ? normalizeAssetCategory({ ...category, ...(Array.isArray(updatedItem) ? updatedItem[0] : updatedItem) })
           : category));
       } else {
-        const response = await axios.post('/api/categories', payload);
+        const response = await apiClient.post('/api/categories', payload);
         const createdItem = normalizeListResponse(response?.data ?? []);
         setCategories((previous) => [normalizeAssetCategory(createdItem.length > 0 ? createdItem[0] : createdItem), ...previous]);
       }
@@ -804,7 +804,7 @@ const AdminAssetCategories = () => {
     setError('');
     setNotice('');
     try {
-      await axios.delete(`/api/categories/${deleteCandidate?.id}`);
+      await apiClient.delete(`/api/categories/${deleteCandidate?.id}`);
       await loadData();
       setDeleteCandidate(null);
       setMenuOpenId(null);
@@ -831,7 +831,7 @@ const AdminAssetCategories = () => {
     setError('');
     setNotice('');
     try {
-      await axios.put(`/api/categories/${category.id}`, { ...category, status: nextStatus });
+      await apiClient.put(`/api/categories/${category.id}`, { ...category, status: nextStatus });
       await loadData();
       setStatusCandidate(null);
       setNotice(`Category ${nextStatus === 'active' ? 'activated' : 'deactivated'} successfully.`);
@@ -1526,7 +1526,7 @@ const AdminAssetLifecycle = () => {
     const loadAssets = async () => {
       setLoading(true);
       try {
-        const response = await axios.get('/api/assets').catch(() => ({ data: { assets: [] } }));
+        const response = await apiClient.get('/api/assets').catch(() => ({ data: { assets: [] } }));
         const rows = normalizeListResponse(response?.data ?? []);
         setAssets(rows);
       } catch (error) {
@@ -1658,13 +1658,13 @@ const AdminAssetDisposal = () => {
     setError('');
     try {
       const [assetsResponse, disposalsResponse] = await Promise.all([
-        axios.get('/api/assets', { params: { page: 1, limit: 50 } }),
-        axios.get('/api/admin/disposals', { params: { page: 1, limit: 500, sortBy: 'createdAt', sortOrder: 'DESC' } }).catch(() => ({ data: { disposals: [] } }))
+        apiClient.get('/api/assets', { params: { page: 1, limit: 50 } }),
+        apiClient.get('/api/admin/disposals', { params: { page: 1, limit: 500, sortBy: 'createdAt', sortOrder: 'DESC' } }).catch(() => ({ data: { disposals: [] } }))
       ]);
 
       const assetPageCount = Math.max(1, Number(assetsResponse?.data?.pagination?.pages) || 1);
       const remainingAssetPages = await Promise.all(Array.from({ length: assetPageCount - 1 }, (_, index) =>
-        axios.get('/api/assets', { params: { page: index + 2, limit: 50 } })
+        apiClient.get('/api/assets', { params: { page: index + 2, limit: 50 } })
       ));
       const assetRows = [assetsResponse, ...remainingAssetPages]
         .flatMap((response) => normalizeListResponse(response?.data ?? []))
@@ -1736,7 +1736,7 @@ const AdminAssetDisposal = () => {
     setNotice('');
 
     try {
-      await axios.post('/api/admin/disposals', {
+      await apiClient.post('/api/admin/disposals', {
         assetId,
         reason,
         type: String(form.type || 'Retirement').trim(),
@@ -1758,15 +1758,15 @@ const AdminAssetDisposal = () => {
   const updateStatus = async (requestId, action) => {
     try {
       if (action === 'approve') {
-        await axios.post(`/api/admin/disposals/${requestId}/approve`);
+        await apiClient.post(`/api/admin/disposals/${requestId}/approve`);
       } else if (action === 'reject') {
         const rejectionReason = window.prompt('Rejection reason:', '');
         if (!rejectionReason || !String(rejectionReason).trim()) return;
-        await axios.post(`/api/admin/disposals/${requestId}/reject`, { reason: String(rejectionReason).trim() });
+        await apiClient.post(`/api/admin/disposals/${requestId}/reject`, { reason: String(rejectionReason).trim() });
       } else if (action === 'retire') {
-        await axios.post(`/api/admin/disposals/${requestId}/retire`);
+        await apiClient.post(`/api/admin/disposals/${requestId}/retire`);
       } else if (action === 'dispose') {
-        await axios.post(`/api/admin/disposals/${requestId}/execute`);
+        await apiClient.post(`/api/admin/disposals/${requestId}/execute`);
       }
 
       setNotice(action === 'dispose' ? 'Asset disposal executed and preserved in the historical record.' : 'Request updated successfully.');
@@ -2135,12 +2135,12 @@ const AdminAssetDocuments = () => {
       const queryId = assetId === 'all' ? null : String(assetId);
       let rows = [];
       if (queryId) {
-        const response = await axios.get(`/api/assets/${queryId}/documents`).catch(() => ({ data: { documents: [] } }));
+        const response = await apiClient.get(`/api/assets/${queryId}/documents`).catch(() => ({ data: { documents: [] } }));
         rows = normalizeListResponse(response?.data ?? []);
       } else {
         const targets = assets.slice(0, 40);
         const settled = await Promise.allSettled(
-          targets.map((asset) => axios.get(`/api/assets/${asset.id}/documents`).catch(() => ({ data: { documents: [] } })))
+          targets.map((asset) => apiClient.get(`/api/assets/${asset.id}/documents`).catch(() => ({ data: { documents: [] } })))
         );
         rows = settled.flatMap((entry) => (entry.status === 'fulfilled' ? normalizeListResponse(entry.value?.data ?? []) : []));
       }
@@ -2157,7 +2157,7 @@ const AdminAssetDocuments = () => {
     const loadData = async () => {
       setLoading(true);
       try {
-        const assetsResponse = await axios.get('/api/assets').catch(() => ({ data: { assets: [] } }));
+        const assetsResponse = await apiClient.get('/api/assets').catch(() => ({ data: { assets: [] } }));
         const assetRows = normalizeListResponse(assetsResponse?.data ?? []);
         setAssets(assetRows);
       } catch (error) {
@@ -2197,7 +2197,7 @@ const AdminAssetDocuments = () => {
     setNotice('');
     try {
       const base64 = await readFileAsBase64(file);
-      await axios.post(`/api/assets/${targetAssetId}/documents`, {
+      await apiClient.post(`/api/assets/${targetAssetId}/documents`, {
         fileName: file.name,
         mimeType: file.type,
         data: base64,
@@ -2215,7 +2215,7 @@ const AdminAssetDocuments = () => {
 
   const removeDocument = async (document) => {
     try {
-      await axios.delete(`/api/assets/${document.assetId}/documents/${document.id}`);
+      await apiClient.delete(`/api/assets/${document.assetId}/documents/${document.id}`);
       setDocuments((previous) => previous.filter((entry) => String(entry.id) !== String(document.id)));
     } catch (deleteError) {
       setNotice(deleteError?.response?.data?.message || 'Failed to remove document.');
@@ -2224,7 +2224,7 @@ const AdminAssetDocuments = () => {
 
   const openDocument = async (document) => {
     try {
-      const response = await axios.get(`/api/assets/${document.assetId}/documents/${document.id}/file`, { responseType: 'blob' });
+      const response = await apiClient.get(`/api/assets/${document.assetId}/documents/${document.id}/file`, { responseType: 'blob' });
       const url = URL.createObjectURL(response.data);
       window.open(url, '_blank');
     } catch (viewError) {
@@ -2375,48 +2375,6 @@ const adminSidebarSections = [
       { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     ]
   },
-  {
-    id: 'asset-governance',
-    heading: 'ASSET GOVERNANCE',
-    items: [
-      { to: '/admin/assets', label: 'All Assets', icon: Package },
-      { to: '/admin/assets/categories', label: 'Asset Categories', icon: Package },
-      { to: '/admin/assets/assign', label: 'Asset Assignment', icon: ClipboardList },
-      { to: '/admin/assets/transfer', label: 'Asset Transfer', icon: ArrowLeftRight },
-      { to: '/admin/assets/disposal', label: 'Disposal & Retirement', icon: Archive },
-      { to: '/admin/maintenance', label: 'Maintenance', icon: Wrench },
-      { to: '/admin/rfid', label: 'RFID / QR Tracking', icon: Radio },
-    ]
-  },
-  {
-    id: 'organization',
-    heading: 'ORGANIZATION',
-    items: [
-      { to: '/admin/users', label: 'Users', icon: Users },
-      { to: '/admin/colleges', label: 'Colleges', icon: Building2 },
-      { to: '/admin/departments', label: 'Departments', icon: Building2 },
-      { to: '/admin/locations', label: 'Locations', icon: MapPin },
-    ]
-  },
-  {
-    id: 'analytics',
-    heading: 'ANALYTICS',
-    items: [
-      { to: '/admin/reports', label: 'Reports & Analytics', icon: BarChart3 },
-    ]
-  },
-  {
-    id: 'system',
-    heading: 'SYSTEM',
-    items: [
-      { to: '/admin/settings', label: 'Settings', icon: Settings },
-      { to: '/admin/notifications', label: 'Notifications', icon: Bell },
-      { to: '/admin/audit-logs', label: 'Audit Logs', icon: FileText, permission: 'audit.view' },
-      { to: '/admin/backup', label: 'Backup', icon: DatabaseBackup },
-      { to: '/admin/enam', label: 'ENAM Integration', icon: GitBranch },
-      { to: '/admin/monitoring', label: 'System Monitoring', icon: BarChart3 },
-    ]
-  }
 ];
 
 const AdminNotFound = () => (
@@ -2628,9 +2586,11 @@ function AppContent() {
   const previousRouteRef = useRef(location.pathname);
 
   const closeSidebar = useCallback(() => {
+    if (isMobileViewport && sidebarRef.current?.contains(document.activeElement)) {
+      sidebarToggleRef.current?.focus();
+    }
     setIsSidebarOpen(false);
-    window.requestAnimationFrame(() => sidebarToggleRef.current?.focus());
-  }, []);
+  }, [isMobileViewport]);
 
   const toggleSidebar = useCallback(() => {
     if (!window.matchMedia?.(DASHBOARD_MOBILE_QUERY).matches) return;
@@ -2657,8 +2617,8 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    setIsSidebarOpen(false);
-  }, [location.pathname]);
+    closeSidebar();
+  }, [closeSidebar, location.pathname]);
 
   useEffect(() => {
     if (!isSidebarOpen) return undefined;
@@ -3274,51 +3234,10 @@ function AppContent() {
         { path: '/store/notifications', label: '🔔 ' + t.notifications, section: 'Notifications' }
       ],
       'maintenance': [
-        { path: '/maintenance', label: '📊 ' + t.dashboard, section: 'Dashboard' },
-        { path: '/maintenance/requests', label: '🔧 ' + t.requests, section: 'OPERATIONS' },
-        { path: '/maintenance/inspection', label: '🔍 Inspection', section: 'OPERATIONS' },
-        { path: '/maintenance/work-orders', label: '📋 Work Orders', section: 'OPERATIONS' },
-        { path: '/maintenance/repairs', label: '🛠️ Repairs', section: 'OPERATIONS' },
-        { path: '/maintenance/assets-under-maintenance', label: '📦 Assets Under Maintenance', section: 'OPERATIONS' },
-        { path: '/maintenance/schedule', label: '📅 Schedule', section: 'PREVENTIVE' },
-        { path: '/maintenance/preventive', label: '🛡️ Preventive Maintenance', section: 'PREVENTIVE' },
-        { path: '/maintenance/calendar', label: '📆 Calendar', section: 'PREVENTIVE' },
-        { path: '/maintenance/technicians', label: '👨‍🔧 Technicians', section: 'RESOURCES' },
-        { path: '/maintenance/spare-parts', label: '🧰 Spare Parts', section: 'RESOURCES' },
-        { path: '/maintenance/vendors', label: '🤝 Vendors', section: 'RESOURCES' },
-        { path: '/maintenance/testing-quality', label: '🧪 Testing', section: 'QUALITY' },
-        { path: '/maintenance/quality-control', label: '✅ Quality Control', section: 'QUALITY' },
-        { path: '/maintenance/history', label: '📜 History', section: 'ANALYTICS' },
-        { path: '/maintenance/reports', label: '📊 Reports', section: 'ANALYTICS' }
+        { path: '/maintenance/work-orders', label: 'Work Orders', section: 'FACILITY MAINTENANCE' }
       ],
       'infrastructure': [
-        { path: '/infrastructure', label: '📊 Dashboard', section: 'OVERVIEW' },
-        { path: '/infrastructure/assets', label: '🏢 Infrastructure Assets', section: 'ASSET MANAGEMENT' },
-        { path: '/infrastructure/assets/register', label: '➕ Register Asset', section: 'ASSET MANAGEMENT' },
-        { path: '/infrastructure/inventory', label: '📦 Asset Inventory', section: 'ASSET MANAGEMENT' },
-        { path: '/infrastructure/assignment', label: '👤 Asset Assignment', section: 'ASSET MANAGEMENT' },
-        { path: '/infrastructure/transfer', label: '🔄 Asset Transfer', section: 'ASSET MANAGEMENT' },
-        { path: '/infrastructure/verification', label: '✅ Asset Verification', section: 'ASSET MANAGEMENT' },
-        { path: '/infrastructure/buildings', label: '🏛️ Buildings & Facilities', section: 'BUILDINGS & FACILITIES' },
-        { path: '/infrastructure/electrical', label: '⚡ Electrical Systems', section: 'BUILDINGS & FACILITIES' },
-        { path: '/infrastructure/generators', label: '🔋 Generators', section: 'BUILDINGS & FACILITIES' },
-        { path: '/infrastructure/transformers', label: '🔌 Transformers', section: 'BUILDINGS & FACILITIES' },
-        { path: '/infrastructure/ups', label: '🔋 UPS / Inverters', section: 'BUILDINGS & FACILITIES' },
-        { path: '/infrastructure/solar', label: '☀️ Solar Energy', section: 'BUILDINGS & FACILITIES' },
-        { path: '/infrastructure/water', label: '💧 Water Systems', section: 'BUILDINGS & FACILITIES' },
-        { path: '/infrastructure/roads', label: '🛣️ Roads & Drainage', section: 'BUILDINGS & FACILITIES' },
-        { path: '/infrastructure/maintenance', label: '🔧 Facility Maintenance', section: 'MAINTENANCE & WORK ORDERS' },
-        { path: '/infrastructure/work-orders', label: '📋 Work Orders', section: 'MAINTENANCE & WORK ORDERS' },
-        { path: '/infrastructure/preventive', label: '📅 Preventive Maintenance', section: 'MAINTENANCE & WORK ORDERS' },
-        { path: '/infrastructure/inspection', label: '🔍 Inspections & Condition', section: 'MAINTENANCE & WORK ORDERS' },
-        { path: '/infrastructure/spare-parts', label: '🧰 Spare Parts', section: 'MAINTENANCE & WORK ORDERS' },
-        { path: '/infrastructure/energy', label: '⚡ Energy Management', section: 'ENERGY & FUEL' },
-        { path: '/infrastructure/fuel', label: '⛽ Fuel Management', section: 'ENERGY & FUEL' },
-        { path: '/infrastructure/tracking', label: '📡 RFID / QR Tracking', section: 'TRACKING' },
-        { path: '/infrastructure/requests', label: '📝 Requests', section: 'REQUESTS' },
-        { path: '/infrastructure/reports', label: '📊 Reports & Analytics', section: 'ANALYTICS' },
-        { path: '/infrastructure/documents', label: '📄 Documents', section: 'DOCUMENTS' },
-        { path: '/infrastructure/notifications', label: '🔔 Notifications', section: 'SYSTEM' }
+        { path: '/infrastructure/documents', label: '📄 Documents', section: 'DOCUMENTS' }
       ]
     };
     return items[normalizedRole] || [];
@@ -3555,6 +3474,7 @@ function AppContent() {
         className={`${dashboardSidebarClassName}${isSidebarOpen ? ' is-mobile-open' : ''}`}
         aria-label={t.primaryNavigation}
         aria-hidden={isMobileViewport && !isSidebarOpen}
+        inert={isMobileViewport && !isSidebarOpen}
       >
         <nav className="admin-sidebar-nav">
           {dashboardSidebarSections.map((section) => {
@@ -3896,7 +3816,7 @@ function AppContent() {
             <Route path="assets/register" element={<RegisterInfrastructureAsset />} />
             <Route path="inventory" element={<InfrastructureInventory />} />
             <Route path="assignment" element={<InfrastructureAssignment />} />
-            <Route path="transfer" element={<InfrastructureAssets />} />
+            <Route path="transfer" element={<InfrastructureTransfer />} />
             <Route path="verification" element={<InfrastructureVerification />} />
             
             {/* Infrastructure Categories */}

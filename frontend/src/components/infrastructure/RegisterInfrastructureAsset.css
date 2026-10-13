@@ -1,0 +1,285 @@
+.register-infrastructure-asset-page {
+  --ia-bg: #f4f7fb;
+  --ia-surface: #ffffff;
+  --ia-surface-alt: #f8fafc;
+  --ia-border: #dfe7f1;
+  --ia-text: #142033;
+  --ia-muted: #64748b;
+  --ia-primary: #2f6fa6;
+  --ia-primary-strong: #204f85;
+  --ia-primary-soft: #eaf2fa;
+  --ia-success: #0f766e;
+  --ia-success-soft: #dff7f5;
+  --ia-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+  font-family: Inter, "Segoe UI", sans-serif;
+  color: var(--ia-text);
+}
+
+.register-infrastructure-asset-header {
+  gap: 16px;
+}
+
+.register-infrastructure-asset-header button {
+  border: none;
+  background: transparent;
+  color: var(--ia-primary);
+  font-weight: 700;
+  font-size: 0.96rem;
+  padding: 0;
+  transition: opacity 0.2s ease;
+}
+
+.register-infrastructure-asset-header button:hover {
+  opacity: 0.8;
+}
+
+.register-infrastructure-asset-header .eyebrow {
+  color: var(--ia-muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.register-infrastructure-asset-header h1 {
+  margin: 8px 0 0;
+  font-size: clamp(1.6rem, 2vw, 2.15rem);
+  line-height: 1.2;
+  color: #1b2a41;
+}
+
+.register-infrastructure-asset-stepper {
+  border: 1px solid var(--ia-border);
+  box-shadow: var(--ia-shadow);
+}
+
+.register-infrastructure-asset-step {
+  min-width: 40px;
+  border: 2px solid transparent;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.register-infrastructure-asset-step.is-active {
+  box-shadow: 0 10px 22px rgba(47, 111, 166, 0.18);
+}
+
+.register-infrastructure-asset-step-divider {
+  border-radius: 999px;
+}
+
+.register-infrastructure-asset-card {
+  border: 1px solid var(--ia-border);
+  box-shadow: var(--ia-shadow);
+}
+
+.register-infrastructure-asset-step-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.register-infrastructure-asset-step-title {
+  margin: 0;
+  font-size: 1.35rem;
+  color: #1b2a41;
+}
+
+.register-infrastructure-asset-option-list {
+  display: grid;
+  gap: 12px;
+}
+
+.register-infrastructure-asset-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--ia-border);
+  background: #ffffff;
+  border-radius: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.register-infrastructure-asset-option:hover {
+  border-color: #c2d6f0;
+  box-shadow: 0 12px 20px rgba(15, 23, 42, 0.04);
+}
+
+.register-infrastructure-asset-option input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--ia-primary);
+  margin: 0;
+}
+
+.register-infrastructure-asset-option span {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1f2b3d;
+}
+
+.register-infrastructure-asset-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.register-infrastructure-asset-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.register-infrastructure-asset-label {
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #1f2b3d;
+}
+
+.register-infrastructure-asset-input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #cdd8e6;
+  background: #ffffff;
+  color: var(--ia-text);
+  font-size: 0.96rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.register-infrastructure-asset-input:focus {
+  outline: none;
+  border-color: var(--ia-primary);
+  box-shadow: 0 0 0 3px rgba(47, 111, 166, 0.12);
+}
+
+.register-infrastructure-asset-input::placeholder {
+  color: #94a3b8;
+}
+
+.register-infrastructure-asset-step-panel select,
+.register-infrastructure-asset-step-panel input,
+.register-infrastructure-asset-step-panel textarea {
+  min-height: 48px;
+}
+
+.register-infrastructure-asset-step-panel textarea {
+  resize: vertical;
+}
+
+.register-infrastructure-asset-review-card {
+  background: linear-gradient(180deg, #f8fbff 0%, #f2f7fb 100%);
+  border: 1px solid #dfeaf7;
+  border-radius: 14px;
+  padding: 18px;
+}
+
+.register-infrastructure-asset-review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.register-infrastructure-asset-review-grid > div {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.register-infrastructure-asset-review-grid .review-label {
+  display: block;
+  font-size: 0.74rem;
+  color: var(--ia-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.register-infrastructure-asset-review-grid .review-value {
+  font-weight: 700;
+  color: #19263d;
+}
+
+.register-infrastructure-asset-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.register-infrastructure-asset-secondary-button,
+.register-infrastructure-asset-primary-button {
+  min-height: 46px;
+  border-radius: 10px;
+  font-size: 0.96rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.register-infrastructure-asset-secondary-button {
+  flex: 0 0 auto;
+  background: #ffffff;
+  border: 1px solid #d4dce6;
+  color: #1f2b3d;
+  padding: 0 18px;
+}
+
+.register-infrastructure-asset-primary-button {
+  flex: 0 0 auto;
+  padding: 0 22px;
+  border: none;
+  color: #ffffff;
+  background: linear-gradient(180deg, var(--ia-primary) 0%, var(--ia-primary-strong) 100%);
+  box-shadow: 0 10px 22px rgba(47, 111, 166, 0.22);
+}
+
+.register-infrastructure-asset-secondary-button:hover,
+.register-infrastructure-asset-primary-button:hover {
+  transform: translateY(-1px);
+}
+
+.register-infrastructure-asset-secondary-button:disabled,
+.register-infrastructure-asset-primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
+.register-infrastructure-asset-page [role="alert"] {
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: #9b1c1c;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .register-infrastructure-asset-page {
+    padding: 16px;
+  }
+
+  .register-infrastructure-asset-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .register-infrastructure-asset-form-grid,
+  .register-infrastructure-asset-review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .register-infrastructure-asset-actions {
+    flex-direction: column-reverse;
+  }
+
+  .register-infrastructure-asset-secondary-button,
+  .register-infrastructure-asset-primary-button {
+    width: 100%;
+  }
+}

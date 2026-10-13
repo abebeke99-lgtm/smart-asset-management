@@ -15,9 +15,12 @@ import {
   Layers3,
   MapPin,
   PackageSearch,
+  Pencil,
   RefreshCw,
+  Save,
   Search,
   ShieldCheck,
+  Trash2,
   TriangleAlert,
   UserRound,
   Wrench,
@@ -25,6 +28,25 @@ import {
 } from "lucide-react";
 
 const PAGE_SIZE = 10;
+const EDITABLE_FIELDS = [
+  { key: "name", label: "Asset Name", required: true },
+  { key: "assetCode", label: "Asset Number" },
+  { key: "serialNumber", label: "Serial Number" },
+  { key: "category", label: "Category", required: true },
+  { key: "subcategory", label: "Subcategory" },
+  { key: "type", label: "Asset Type" },
+  { key: "status", label: "Status" },
+  { key: "condition", label: "Condition" },
+  { key: "location", label: "Location" },
+  { key: "building", label: "Building" },
+  { key: "department", label: "Department" },
+  { key: "purchaseDate", label: "Purchase Date", type: "date" },
+  { key: "purchasePrice", label: "Purchase Price", type: "number" },
+  { key: "manufacturer", label: "Manufacturer" },
+  { key: "model", label: "Model" },
+  { key: "supplier", label: "Supplier" },
+  { key: "notes", label: "Notes" },
+];
 
 const css = `
   * {
@@ -576,6 +598,17 @@ const css = `
     font-size: 13px;
   }
 
+  .success-box {
+    margin-bottom: 18px;
+    padding: 14px 16px;
+    border: 1px solid #bbf7d0;
+    border-radius: 12px;
+    background: #f0fdf4;
+    color: #166534;
+    font-size: 13px;
+    font-weight: 650;
+  }
+
   .error-content {
     display: flex;
     align-items: center;
@@ -752,6 +785,35 @@ const css = `
     word-break: break-word;
   }
 
+  .modal-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .modal-form-field {
+    display: grid;
+    gap: 6px;
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .modal-form-field input {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 1px solid #dbe3ec;
+    border-radius: 8px;
+    color: #0f172a;
+    font: inherit;
+  }
+
+  .modal-form-field input:focus {
+    outline: 2px solid rgba(14, 165, 233, 0.25);
+    border-color: #38bdf8;
+  }
+
   .modal-footer {
     padding: 15px 20px;
     border-top: 1px solid #e2e8f0;
@@ -837,6 +899,10 @@ const css = `
       grid-template-columns: 1fr;
     }
 
+    .modal-form-grid {
+      grid-template-columns: 1fr;
+    }
+
     .detail-item:nth-child(odd) {
       border-right: 0;
     }
@@ -902,30 +968,44 @@ const getCategory = (asset) =>
     "Uncategorized"
   );
 
+const getAssetType = (asset) =>
+  getValue(asset, ["subcategory", "assetType", "asset_type", "type"], "");
+
 const getStatus = (asset) =>
-  getValue(asset, ["status", "asset_status", "condition"], "Unknown");
+  getValue(asset, ["status", "asset_status", "assetStatus"], "Unknown");
 
 const getLocation = (asset) =>
   getValue(
     asset,
-    ["location", "location_name", "locationName", "building", "site"],
+    ["location", "location_name", "locationName"],
     "Unassigned"
   );
 
-const getAssignedTo = (asset) =>
-  getValue(
+const getAssignedTo = (asset) => {
+  const assignee = getValue(
     asset,
     [
+      "assignedToName",
+      "assigned_to_name",
+      "assignedUserName",
+      "assigned_user_name",
       "assigned_to",
-      "assignedTo",
       "assigned_user",
       "assignedUser",
       "custodian",
       "responsible_person",
       "responsiblePerson",
     ],
-    "Unassigned"
+    ""
   );
+  if (assignee && typeof assignee === "object") {
+    return assignee.fullName || assignee.full_name || assignee.username || "Assigned";
+  }
+  if (assignee && Number.isNaN(Number(assignee))) {
+    return assignee;
+  }
+  return asset?.assignedTo || asset?.assigned_to ? "Assigned" : "Unassigned";
+};
 
 const getId = (asset) =>
   getValue(asset, ["id", "asset_id", "assetId"], "");
@@ -985,6 +1065,12 @@ const formatDate = (value) => {
     month: "short",
     day: "2-digit",
   }).format(date);
+};
+
+const toDateInput = (value) => {
+  if (!value || value === "—") return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 };
 
 const getStatusClass = (status) => {
@@ -1151,6 +1237,12 @@ const InfrastructureInventory = () => {
   const [serverTotalPages, setServerTotalPages] = useState(1);
 
   const [selectedAsset, setSelectedAsset] = useState(null);
+  const [editingAsset, setEditingAsset] = useState(false);
+  const [editDraft, setEditDraft] = useState({});
+  const [savingAsset, setSavingAsset] = useState(false);
+  const [deletingAssetId, setDeletingAssetId] = useState(null);
+  const [modalError, setModalError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const loadInventory = useCallback(
     async ({ silent = false } = {}) => {
@@ -1228,6 +1320,65 @@ const InfrastructureInventory = () => {
     },
     [page, search, statusFilter, categoryFilter, locationFilter]
   );
+
+  const beginEdit = (asset) => {
+    const draft = Object.fromEntries(EDITABLE_FIELDS.map(({ key, type }) => {
+      const value = asset?.[key];
+      return [key, type === "date" ? toDateInput(value) : value ?? ""];
+    }));
+    setSelectedAsset(asset);
+    setEditDraft(draft);
+    setModalError("");
+    setEditingAsset(true);
+  };
+
+  const saveAsset = async (event) => {
+    event.preventDefault();
+    if (!String(editDraft.name || "").trim() || !String(editDraft.category || "").trim()) {
+      setModalError("Asset name and category are required.");
+      return;
+    }
+
+    setSavingAsset(true);
+    setModalError("");
+    try {
+      const payload = Object.fromEntries(EDITABLE_FIELDS.map(({ key, type }) => {
+        const value = editDraft[key];
+        return [key, value === "" ? null : type === "number" ? Number(value) : value];
+      }));
+      const response = await api.put(`/api/infrastructure/${getId(selectedAsset)}`, payload);
+      const updatedAsset = response.data?.data || { ...selectedAsset, ...payload };
+      setSelectedAsset(updatedAsset);
+      setEditingAsset(false);
+      setNotice(response.data?.message || "Infrastructure asset updated.");
+      await loadInventory({ silent: true });
+    } catch (err) {
+      setModalError(err?.response?.data?.message || "Unable to update infrastructure asset.");
+    } finally {
+      setSavingAsset(false);
+    }
+  };
+
+  const deleteAsset = async (asset) => {
+    const id = getId(asset);
+    if (!id || !window.confirm(`Delete "${getAssetName(asset)}"? This action cannot be undone.`)) return;
+
+    setDeletingAssetId(id);
+    setNotice("");
+    try {
+      const response = await api.delete(`/api/infrastructure/${id}`);
+      if (String(getId(selectedAsset)) === String(id)) {
+        setSelectedAsset(null);
+        setEditingAsset(false);
+      }
+      setNotice(response.data?.message || "Infrastructure asset deleted.");
+      await loadInventory({ silent: true });
+    } catch (err) {
+      setError(err?.response?.data?.message || "Unable to delete infrastructure asset.");
+    } finally {
+      setDeletingAssetId(null);
+    }
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => loadInventory(), 300);
@@ -1355,10 +1506,12 @@ const InfrastructureInventory = () => {
               className="action-button primary"
             >
               <Archive size={16} />
-              Register Asset
+              New Inventory
             </Link>
           </div>
         </header>
+
+        {notice && <div className="success-box" role="status">{notice}</div>}
 
         {error && (
           <div className="error-box">
@@ -1581,9 +1734,9 @@ const InfrastructureInventory = () => {
                 <table className="inventory-table">
                   <thead>
                     <tr>
-                      <th>Asset</th>
-                      <th>Category</th>
-                      <th>Serial Number</th>
+                      <th>Asset Name</th>
+                      <th>Asset Number / Serial Number</th>
+                      <th>Category / Asset Type</th>
                       <th>Status</th>
                       <th>Location</th>
                       <th>Assigned To</th>
@@ -1599,6 +1752,7 @@ const InfrastructureInventory = () => {
                       const tag = getAssetTag(asset);
                       const serial = getSerial(asset);
                       const category = getCategory(asset);
+                      const assetType = getAssetType(asset);
                       const status = getStatus(asset);
                       const location = getLocation(asset);
                       const assignedTo = getAssignedTo(asset);
@@ -1622,25 +1776,22 @@ const InfrastructureInventory = () => {
                                   {name}
                                 </div>
 
-                                <div className="asset-tag">
-                                  {tag}
-                                </div>
                               </div>
                             </div>
                           </td>
 
-                          <td>{category}</td>
+                          <td>
+                            <div>{tag}</div>
+                            <div className="asset-tag">
+                              {serial === "—" ? <span className="muted">No serial number</span> : serial}
+                            </div>
+                          </td>
 
                           <td>
-                            <span
-                              className={
-                                serial === "—"
-                                  ? "muted"
-                                  : undefined
-                              }
-                            >
-                              {serial}
-                            </span>
+                            <div>{category}</div>
+                            {assetType && normalize(assetType) !== normalize(category) && (
+                              <div className="asset-tag">{assetType}</div>
+                            )}
                           </td>
 
                           <td>
@@ -1678,13 +1829,34 @@ const InfrastructureInventory = () => {
                                 type="button"
                                 className="icon-button"
                                 title="View asset details"
-                                onClick={() =>
-                                  setSelectedAsset(asset)
-                                }
+                                aria-label="View asset details"
+                                onClick={() => {
+                                  setSelectedAsset(asset);
+                                  setEditingAsset(false);
+                                  setModalError("");
+                                }}
                               >
                                 <Eye size={16} />
                               </button>
-
+                              <button
+                                type="button"
+                                className="icon-button"
+                                title={`Edit ${name}`}
+                                aria-label={`Edit ${name}`}
+                                onClick={() => beginEdit(asset)}
+                              >
+                                <Pencil size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-button"
+                                title={`Delete ${name}`}
+                                aria-label={`Delete ${name}`}
+                                disabled={deletingAssetId === id}
+                                onClick={() => deleteAsset(asset)}
+                              >
+                                <Trash2 size={15} />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -1769,7 +1941,7 @@ const InfrastructureInventory = () => {
                   </h3>
 
                   <p>
-                    Infrastructure asset details
+                    {editingAsset ? "Edit infrastructure asset" : "Infrastructure asset details"}
                   </p>
                 </div>
               </div>
@@ -1826,6 +1998,30 @@ const InfrastructureInventory = () => {
                 </span>
               </div>
 
+              {editingAsset ? (
+                <form id="infrastructure-asset-edit-form" onSubmit={saveAsset}>
+                  <div className="modal-form-grid">
+                    {EDITABLE_FIELDS.map(({ key, label, type = "text", required }) => (
+                      <label className="modal-form-field" htmlFor={`inventory-edit-${key}`} key={key}>
+                        {label}{required ? " *" : ""}
+                        <input
+                          id={`inventory-edit-${key}`}
+                          name={key}
+                          type={type}
+                          value={editDraft[key] ?? ""}
+                          required={required}
+                          min={type === "number" ? "0" : undefined}
+                          step={type === "number" ? "0.01" : undefined}
+                          onChange={(event) => setEditDraft((current) => ({
+                            ...current,
+                            [key]: event.target.value,
+                          }))}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </form>
+              ) : (
               <div className="detail-grid">
                 <div className="detail-item">
                   <span className="detail-label">
@@ -1856,10 +2052,11 @@ const InfrastructureInventory = () => {
 
                 <div className="detail-item">
                   <span className="detail-label">
-                    Category
+                    Category / Asset Type
                   </span>
                   <span className="detail-value">
                     {getCategory(selectedAsset)}
+                    {getAssetType(selectedAsset) && ` / ${getAssetType(selectedAsset)}`}
                   </span>
                 </div>
 
@@ -1883,12 +2080,32 @@ const InfrastructureInventory = () => {
 
                 <div className="detail-item">
                   <span className="detail-label">
+                    Condition
+                  </span>
+                  <span className="detail-value">
+                    {getValue(selectedAsset, ["condition"], "—")}
+                  </span>
+                </div>
+
+                <div className="detail-item">
+                  <span className="detail-label">
                     Location
                   </span>
                   <span className="detail-value">
                     {getLocation(selectedAsset)}
                   </span>
                 </div>
+
+                {["building", "block", "floor", "room", "department"].map((field) => (
+                  <div className="detail-item" key={field}>
+                    <span className="detail-label">
+                      {field.charAt(0).toUpperCase() + field.slice(1)}
+                    </span>
+                    <span className="detail-value">
+                      {getValue(selectedAsset, [field], "—")}
+                    </span>
+                  </div>
+                ))}
 
                 <div className="detail-item">
                   <span className="detail-label">
@@ -1899,12 +2116,59 @@ const InfrastructureInventory = () => {
                   </span>
                 </div>
 
+                {["manufacturer", "model", "brand", "supplier"].map((field) => (
+                  <div className="detail-item" key={field}>
+                    <span className="detail-label">
+                      {field.charAt(0).toUpperCase() + field.slice(1)}
+                    </span>
+                    <span className="detail-value">
+                      {getValue(selectedAsset, [field], "—")}
+                    </span>
+                  </div>
+                ))}
+
                 <div className="detail-item">
                   <span className="detail-label">
                     Purchase Date
                   </span>
                   <span className="detail-value">
                     {formatDate(getPurchaseDate(selectedAsset))}
+                  </span>
+                </div>
+
+                <div className="detail-item">
+                  <span className="detail-label">
+                    Warranty Expiry
+                  </span>
+                  <span className="detail-value">
+                    {formatDate(getValue(selectedAsset, ["warrantyExpiry", "warranty_expiry"], "—"))}
+                  </span>
+                </div>
+
+                <div className="detail-item">
+                  <span className="detail-label">
+                    Last Maintenance
+                  </span>
+                  <span className="detail-value">
+                    {formatDate(getValue(selectedAsset, ["lastMaintenanceDate", "last_maintenance_date"], "—"))}
+                  </span>
+                </div>
+
+                <div className="detail-item">
+                  <span className="detail-label">
+                    RFID Tag
+                  </span>
+                  <span className="detail-value">
+                    {getValue(selectedAsset, ["rfidTag", "rfid_tag"], "—")}
+                  </span>
+                </div>
+
+                <div className="detail-item">
+                  <span className="detail-label">
+                    QR Code
+                  </span>
+                  <span className="detail-value">
+                    {getValue(selectedAsset, ["qrCode", "qr_code"], "—")}
                   </span>
                 </div>
 
@@ -1938,31 +2202,74 @@ const InfrastructureInventory = () => {
                     {getDescription(selectedAsset)}
                   </span>
                 </div>
+
+                <div className="detail-item">
+                  <span className="detail-label">
+                    Notes
+                  </span>
+                  <span className="detail-value">
+                    {getValue(selectedAsset, ["notes"], "—")}
+                  </span>
+                </div>
               </div>
+              )}
+
+              {modalError && <div className="error-box" role="alert">{modalError}</div>}
 
             </div>
 
             <div className="modal-footer">
-              {getId(selectedAsset) && (
-                <Link
-                  to={`/infrastructure/assets/${getId(
-                    selectedAsset
-                  )}`}
-                  className="action-button primary"
-                  onClick={() => setSelectedAsset(null)}
-                >
-                  <Eye size={15} />
-                  Open Asset
-                </Link>
+              {editingAsset ? (
+                <>
+                  <button
+                    type="button"
+                    className="action-button secondary"
+                    onClick={() => {
+                      setEditingAsset(false);
+                      setModalError("");
+                    }}
+                    disabled={savingAsset}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    form="infrastructure-asset-edit-form"
+                    className="action-button primary"
+                    disabled={savingAsset}
+                  >
+                    <Save size={15} />
+                    {savingAsset ? "Saving..." : "Save Changes"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="action-button secondary"
+                    onClick={() => beginEdit(selectedAsset)}
+                  >
+                    <Pencil size={15} />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="action-button secondary"
+                    onClick={() => deleteAsset(selectedAsset)}
+                    disabled={deletingAssetId === getId(selectedAsset)}
+                  >
+                    <Trash2 size={15} />
+                    Delete
+                  </button>
+                  <button
+                    type="button"
+                    className="action-button secondary"
+                    onClick={() => setSelectedAsset(null)}
+                  >
+                    Close
+                  </button>
+                </>
               )}
-
-              <button
-                type="button"
-                className="action-button secondary"
-                onClick={() => setSelectedAsset(null)}
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>

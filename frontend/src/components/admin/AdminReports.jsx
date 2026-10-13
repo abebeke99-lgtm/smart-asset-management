@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
 import { AlertTriangle, Download, FileText, Printer, RefreshCw, Search } from 'lucide-react';
 import { toast } from 'react-toastify';
+import apiClient, { getApiErrorMessage } from '../../services/apiClient';
 
 const REPORTS = [
   { value: 'assets', label: 'Asset Register', filters: ['department', 'location', 'category', 'status', 'condition'] },
@@ -59,7 +59,11 @@ const AdminReports = () => {
 
   useEffect(() => {
     let active = true;
-    Promise.allSettled([axios.get('/api/departments'), axios.get('/api/categories'), axios.get('/api/locations')]).then(([departments, categories, locations]) => {
+    Promise.allSettled([
+      apiClient.get('/api/departments'),
+      apiClient.get('/api/categories'),
+      apiClient.get('/api/locations'),
+    ]).then(([departments, categories, locations]) => {
       if (!active) return;
       setOptions({
         departments: departments.status === 'fulfilled' ? extractArray(departments.value.data, 'departments') : [],
@@ -88,10 +92,10 @@ const AdminReports = () => {
     setError('');
     setReport(null);
     try {
-      const response = await axios.get('/api/reports', { params: buildParams(), timeout: 30000 });
+      const response = await apiClient.get('/api/reports', { params: buildParams(), timeout: 30000 });
       setReport(response.data);
     } catch (requestError) {
-      const message = requestError?.response?.data?.message || 'The report could not be generated from the server.';
+      const message = getApiErrorMessage(requestError, 'The report could not be generated from the server.');
       setError(message);
       toast.error(message);
     } finally {
@@ -102,7 +106,7 @@ const AdminReports = () => {
   const exportCsv = async () => {
     if (!report) return;
     try {
-      const response = await axios.get('/api/reports/export', { params: buildParams(), responseType: 'blob', timeout: 30000 });
+      const response = await apiClient.get('/api/reports/export', { params: buildParams(), responseType: 'blob', timeout: 30000 });
       const url = window.URL.createObjectURL(new Blob([response.data], { type: 'text/csv;charset=utf-8' }));
       const link = document.createElement('a');
       link.href = url;
@@ -110,7 +114,7 @@ const AdminReports = () => {
       link.click();
       window.URL.revokeObjectURL(url);
     } catch (requestError) {
-      toast.error(requestError?.response?.data?.message || 'The report could not be exported.');
+      toast.error(getApiErrorMessage(requestError, 'The report could not be exported.'));
     }
   };
 

@@ -2,6 +2,7 @@ import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import EnamIntegration from "./EnamIntegration";
+import { getEnamBaseUrlError } from "./EnamIntegration";
 import apiClient from "../../services/apiClient";
 
 jest.mock("../../services/apiClient", () => ({
@@ -61,4 +62,15 @@ test("reports an HTML response as an unavailable ENAM service instead of a JSON 
     expect(screen.getByText(/ENAM service is unavailable/)).toBeInTheDocument();
   });
   expect(screen.queryByText(/Unexpected token/)).not.toBeInTheDocument();
+});
+
+test.each([
+  ["", false, ""],
+  ["", true, "Enter the ENAM base URL before enabling the integration."],
+  ["https://enam.example.org/api", true, ""],
+  ["not a URL", true, "Enter a valid public HTTP(S) URL."],
+  ["ftp://enam.example.org", true, "Enter a valid public HTTP(S) URL."],
+  ["http://localhost:8080", true, "Enter a valid public HTTP(S) URL."],
+])("validates ENAM URL %s when enabled is %s", (value, enabled, expected) => {
+  expect(getEnamBaseUrlError(value, enabled)).toBe(expected);
 });

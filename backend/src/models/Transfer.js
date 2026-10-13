@@ -3,6 +3,7 @@ const { sequelize } = require('../config/database');
 
 const Transfer = sequelize.define('Transfer', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  assetType: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'asset', field: 'asset_type' },
   transferNumber: { type: DataTypes.STRING(40), allowNull: true, unique: true, field: 'transfer_number' },
   assetId: { type: DataTypes.INTEGER, allowNull: false },
   sourceCampusId: { type: DataTypes.INTEGER, allowNull: true, field: 'source_campus_id' },
@@ -42,6 +43,9 @@ const Transfer = sequelize.define('Transfer', {
 }, {
   tableName: 'transfers',
   timestamps: true,
+  defaultScope: {
+    where: { assetType: 'asset' },
+  },
 });
 
 module.exports = Transfer;

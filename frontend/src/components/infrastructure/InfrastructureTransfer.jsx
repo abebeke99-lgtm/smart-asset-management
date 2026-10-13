@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars, no-dupe-keys, no-template-curly-in-string */
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import api from "../../services/api";
 import {
   AlertCircle,
@@ -611,6 +611,27 @@ const css = `
     font-size: 13px;
   }
 
+  .success-box {
+    margin-bottom: 18px;
+    padding: 13px 15px;
+    border: 1px solid #a7f3d0;
+    background: #ecfdf5;
+    border-radius: 12px;
+    color: #065f46;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+  }
+
+  .success-box button {
+    margin-left: auto;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+
   .error-message {
     display: flex;
     align-items: center;
@@ -1039,6 +1060,8 @@ const getCompletedDate = (item) =>
   getValue(
     item,
     [
+      "completedDate",
+      "completed_date",
       "completed_at",
       "completedAt",
       "completion_date",
@@ -1227,6 +1250,8 @@ const extractList = (data, keys = []) => {
 };
 
 const InfrastructureTransfer = () => {
+  const routerLocation = useLocation();
+  const navigate = useNavigate();
   const [transfers, setTransfers] = useState([]);
   const [assets, setAssets] = useState([]);
   const [locations, setLocations] = useState([]);
@@ -1236,6 +1261,7 @@ const InfrastructureTransfer = () => {
 
   const [error, setError] = useState("");
   const [modalError, setModalError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -1248,6 +1274,8 @@ const InfrastructureTransfer = () => {
 
   const [selectedTransfer, setSelectedTransfer] =
     useState(null);
+  const [loadingTransferDetails, setLoadingTransferDetails] =
+    useState(false);
 
   const [showCreateModal, setShowCreateModal] =
     useState(false);
@@ -1258,6 +1286,7 @@ const InfrastructureTransfer = () => {
     assetId: "",
     fromLocationId: "",
     toLocationId: "",
+    destinationDepartment: "",
     transferDate: new Date()
       .toISOString()
       .slice(0, 10),
@@ -1477,12 +1506,15 @@ const InfrastructureTransfer = () => {
   };
 
   const openCreateModal = async () => {
+    const preselectedAsset = routerLocation.state?.asset || null;
     setModalError("");
+    setNotice("");
 
     setForm({
-      assetId: "",
-      fromLocationId: "",
+      assetId: getValue(preselectedAsset, ["id", "asset_id", "assetId"], ""),
+      fromLocationId: getValue(preselectedAsset, ["location", "location_name", "locationName"], ""),
       toLocationId: "",
+      destinationDepartment: "",
       transferDate: new Date()
         .toISOString()
         .slice(0, 10),
@@ -1495,6 +1527,12 @@ const InfrastructureTransfer = () => {
     await loadFormData();
   };
 
+  useEffect(() => {
+    if (!routerLocation.state?.openCreate && !routerLocation.state?.asset) return;
+    openCreateModal();
+    navigate(routerLocation.pathname, { replace: true, state: null });
+  }, [routerLocation.key]);
+
   const closeCreateModal = () => {
     if (submitting) return;
 
@@ -1505,10 +1543,16 @@ const InfrastructureTransfer = () => {
   const handleFormChange = (event) => {
     const { name, value } = event.target;
 
-    setForm((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
+    if (name === "assetId") {
+      const selectedAsset = assets.find((asset) => String(getValue(asset, ["id", "asset_id", "assetId"], "")) === String(value));
+      setForm((previous) => ({
+        ...previous,
+        assetId: value,
+        fromLocationId: getValue(selectedAsset, ["location", "location_name", "locationName"], ""),
+      }));
+      return;
+    }
+    setForm((previous) => ({ ...previous, [name]: value }));
   };
 
   const submitTransfer = async (event) => {
@@ -1517,10 +1561,11 @@ const InfrastructureTransfer = () => {
     if (
       !form.assetId ||
       !form.fromLocationId ||
-      !form.toLocationId
+      !form.toLocationId ||
+      !form.reason.trim()
     ) {
       setModalError(
-        "Please select an asset, source location, and destination location."
+        "Select an asset and destination, and provide a transfer reason."
       );
       return;
     }
@@ -1539,17 +1584,18 @@ const InfrastructureTransfer = () => {
       setSubmitting(true);
       setModalError("");
 
-      await api.post("/api/infrastructure/transfer", {
+      const response = await api.post("/api/infrastructure/transfer", {
         assetId: form.assetId,
         fromLocationId: form.fromLocationId,
         toLocationId: form.toLocationId,
+        destinationDepartment: form.destinationDepartment.trim() || undefined,
         transferDate: form.transferDate || null,
-        reason: form.reason || null,
+        reason: form.reason.trim(),
         notes: form.notes || null,
       });
 
       setShowCreateModal(false);
-
+      setNotice(`${response?.data?.message || "Transfer request submitted."} The asset location will change only after approval and receipt are complete.`);
       await loadTransfers({ silent: true });
     } catch (err) {
       console.error(
@@ -1582,11 +1628,12 @@ const InfrastructureTransfer = () => {
     if (!confirmed) return;
 
     try {
-      await api.patch(
+      const response = await api.patch(
         `/api/infrastructure/transfer/${transferId}/cancel`
       );
 
       await loadTransfers({ silent: true });
+      setNotice(response?.data?.message || "Transfer cancelled.");
       setSelectedTransfer(null);
     } catch (err) {
       console.error(
@@ -1600,6 +1647,39 @@ const InfrastructureTransfer = () => {
           err?.message ||
           "Unable to cancel the transfer."
       );
+    }
+  };
+
+  const rejectTransfer = async (transfer) => {
+    const transferId = getId(transfer);
+    if (!transferId) return;
+    if (!window.confirm(`Reject the transfer of "${getAssetName(transfer)}"?`)) return;
+
+    try {
+      const response = await api.patch(`/api/infrastructure/transfer/${transferId}/reject`, {});
+      await loadTransfers({ silent: true });
+      setNotice(response?.data?.message || "Transfer rejected.");
+      setSelectedTransfer(null);
+    } catch (err) {
+      console.error("Transfer rejection error:", err);
+      window.alert(err?.response?.data?.message || err?.message || "Unable to reject the transfer.");
+    }
+  };
+
+  const openTransferDetails = async (transfer) => {
+    const transferId = getId(transfer);
+    if (!transferId) return;
+    setLoadingTransferDetails(true);
+    try {
+      const response = await api.get(`/api/infrastructure/transfer/${transferId}`);
+      const detail = response?.data?.data;
+      if (!detail) throw new Error("The server returned no transfer details.");
+      setSelectedTransfer(detail);
+    } catch (err) {
+      console.error("Transfer details loading error:", err);
+      setError(err?.response?.data?.message || err?.message || "Unable to load transfer details.");
+    } finally {
+      setLoadingTransferDetails(false);
     }
   };
 
@@ -1617,12 +1697,13 @@ const InfrastructureTransfer = () => {
     if (!confirmed) return;
 
     try {
-      await api.patch(
+      const response = await api.patch(
         `/api/infrastructure/transfer/${transferId}/approve`
       );
 
       await loadTransfers({ silent: true });
 
+      setNotice(response?.data?.message || "Transfer approved.");
       setSelectedTransfer(null);
     } catch (err) {
       console.error(
@@ -1653,12 +1734,13 @@ const InfrastructureTransfer = () => {
     if (!confirmed) return;
 
     try {
-      await api.patch(
+      const response = await api.patch(
         `/api/infrastructure/transfer/${transferId}/complete`
       );
 
       await loadTransfers({ silent: true });
 
+      setNotice(response?.data?.message || "Transfer receipt confirmed.");
       setSelectedTransfer(null);
     } catch (err) {
       console.error(
@@ -1726,6 +1808,7 @@ const InfrastructureTransfer = () => {
     total === 0
       ? 0
       : Math.min(page * PAGE_SIZE, total);
+  const selectedFormAsset = assets.find((asset) => String(getValue(asset, ["id", "asset_id", "assetId"], "")) === String(form.assetId));
 
   return (
     <div className="transfer-page">
@@ -1780,6 +1863,14 @@ const InfrastructureTransfer = () => {
             </button>
           </div>
         </header>
+
+        {notice && (
+          <div className="success-box" role="status">
+            <CheckCircle2 size={17} />
+            <span>{notice}</span>
+            <button type="button" onClick={() => setNotice("")} aria-label="Dismiss notice"><X size={15} /></button>
+          </div>
+        )}
 
         {error && (
           <div className="error-box">
@@ -2085,10 +2176,9 @@ const InfrastructureTransfer = () => {
                                   type="button"
                                   className="icon-button"
                                   title="View transfer"
+                                  disabled={loadingTransferDetails}
                                   onClick={() =>
-                                    setSelectedTransfer(
-                                      transfer
-                                    )
+                                    openTransferDetails(transfer)
                                   }
                                 >
                                   <Eye size={16} />
@@ -2412,6 +2502,34 @@ const InfrastructureTransfer = () => {
                   </span>
                 </div>
               </div>
+              {Array.isArray(selectedTransfer.history) && selectedTransfer.history.length > 0 && (
+                <section style={{ marginTop: 18 }}>
+                  <strong>Transfer History</strong>
+                  <div style={{ display: "grid", gap: 8, marginTop: 9 }}>
+                    {selectedTransfer.history.map((entry) => (
+                      <div key={entry.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "9px 11px", border: "1px solid #e2e8f0", borderRadius: 9, fontSize: 12 }}>
+                        <span>{entry.transferNumber || `Transfer ${entry.id}`} · {entry.status}</span>
+                        <span>{formatDate(entry.createdAt)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+              {Array.isArray(selectedTransfer.audit) && selectedTransfer.audit.length > 0 && (
+                <section style={{ marginTop: 18 }}>
+                  <strong>Audit Trail</strong>
+                  <div style={{ display: "grid", gap: 8, marginTop: 9 }}>
+                    {selectedTransfer.audit.map((entry) => (
+                      <div key={entry.id} style={{ padding: "9px 11px", border: "1px solid #e2e8f0", borderRadius: 9, fontSize: 12 }}>
+                        <strong>{String(entry.action || "Transfer updated").replace(/_/g, " ")}</strong>
+                        <span style={{ display: "block", marginTop: 3, color: "#64748b" }}>
+                          User {entry.userId || "—"} · {formatDate(entry.createdAt)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
             </div>
 
             <div className="modal-footer">
@@ -2422,18 +2540,24 @@ const InfrastructureTransfer = () => {
                       selectedTransfer
                     )
                   ).includes("pending") && (
-                    <button
-                      type="button"
-                      className="button button-primary"
-                      onClick={() =>
-                        approveTransfer(
-                          selectedTransfer
-                        )
-                      }
-                    >
-                      <CheckCircle2 size={15} />
-                      Approve Transfer
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="button button-primary"
+                        onClick={() => approveTransfer(selectedTransfer)}
+                      >
+                        <CheckCircle2 size={15} />
+                        Approve Transfer
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-danger"
+                        onClick={() => rejectTransfer(selectedTransfer)}
+                      >
+                        <XCircle size={15} />
+                        Reject Transfer
+                      </button>
+                    </>
                   )}
 
                   {normalize(
@@ -2451,7 +2575,7 @@ const InfrastructureTransfer = () => {
                       }
                     >
                       <Package size={15} />
-                      Complete Transfer
+                      Confirm Receipt
                     </button>
                   )}
 
@@ -2584,6 +2708,12 @@ const InfrastructureTransfer = () => {
                       Assets are loaded from the real
                       backend.
                     </span>
+                    {selectedFormAsset && (
+                      <span className="form-help">
+                        Current location: {getValue(selectedFormAsset, ["location", "location_name"], "Not assigned")}
+                        {" · "}Assigned to: {getValue(selectedFormAsset, ["assignedToName", "assigned_to_name"], "Unassigned")}
+                      </span>
+                    )}
                   </div>
 
                   <div className="form-group">
@@ -2599,7 +2729,7 @@ const InfrastructureTransfer = () => {
                       className="form-select"
                       value={form.fromLocationId}
                       onChange={handleFormChange}
-                      disabled={submitting}
+                      disabled={submitting || Boolean(form.assetId)}
                       required
                     >
                       <option value="">
@@ -2706,6 +2836,23 @@ const InfrastructureTransfer = () => {
 
                   <div className="form-group">
                     <label className="form-label">
+                      Destination Department
+                    </label>
+
+                    <input
+                      type="text"
+                      name="destinationDepartment"
+                      className="form-input"
+                      placeholder="Department or responsible unit"
+                      value={form.destinationDepartment}
+                      onChange={handleFormChange}
+                      disabled={submitting}
+                    />
+                    <span className="form-help">Optional; saved to the existing department field.</span>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">
                       Transfer Date
                     </label>
 
@@ -2721,7 +2868,8 @@ const InfrastructureTransfer = () => {
 
                   <div className="form-group">
                     <label className="form-label">
-                      Transfer Reason
+                      Transfer Reason{" "}
+                      <span className="required">*</span>
                     </label>
 
                     <input

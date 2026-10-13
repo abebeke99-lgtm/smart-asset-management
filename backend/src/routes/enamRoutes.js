@@ -317,6 +317,10 @@ router.put('/', ...requireAdmin, async (req, res, next) => {
       syncDirection: incoming.syncDirection || currentSettings.syncDirection || 'university_to_enam',
     });
 
+    if (nextSettings.enabled && !nextSettings.baseUrl) {
+      return res.status(400).json({ success: false, message: 'ENAM base URL is required when the integration is enabled.' });
+    }
+
     if (nextSettings.baseUrl && !isSafeRemoteUrl(nextSettings.baseUrl)) {
       return res.status(400).json({ success: false, message: 'ENAM base URL must be a valid public http(s) URL.' });
     }

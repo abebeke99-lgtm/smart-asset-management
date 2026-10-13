@@ -4,6 +4,44 @@ import apiClient from "../../services/apiClient";
 const API_URL = "/enam";
 const EMPTY_STATISTICS = {};
 
+export const getEnamBaseUrlError = (value, enabled) => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed && !enabled) return "";
+  if (!trimmed) return "Enter the ENAM base URL before enabling the integration.";
+
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return "Enter a valid public HTTP(S) URL.";
+  }
+
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const blockedHosts = [
+    /^localhost$/,
+    /\.localhost$/,
+    /\.local$/,
+    /\.internal$/,
+    /^0\.0\.0\.0$/,
+    /^127\./,
+    /^10\./,
+    /^192\.168\./,
+    /^169\.254\./,
+    /^172\.(1[6-9]|2\d|3[01])\./,
+    /^::1$/,
+    /^::$/,
+    /^fc[0-9a-f]{2}:/,
+    /^fd[0-9a-f]{2}:/,
+    /^fe80:/,
+  ];
+
+  if (!["http:", "https:"].includes(parsed.protocol) || !host || parsed.username || parsed.password
+    || blockedHosts.some((pattern) => pattern.test(host))) {
+    return "Enter a valid public HTTP(S) URL.";
+  }
+  return "";
+};
+
 const getEnamPayload = (response) => {
   const contentType = response.headers?.["content-type"] || "";
   if (!contentType.toLowerCase().includes("application/json") || !response.data || typeof response.data !== "object") {
@@ -204,10 +242,15 @@ export default function EnamIntegration() {
   const saveSettings = async (event) => {
     event?.preventDefault();
 
-    setSaving(true);
     setError("");
     setSuccess("");
+    const urlError = getEnamBaseUrlError(form.baseUrl, form.enabled);
+    if (urlError) {
+      setError(urlError);
+      return;
+    }
 
+    setSaving(true);
     try {
       const response = await apiClient.put(
         API_URL,

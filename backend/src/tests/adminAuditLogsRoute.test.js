@@ -89,3 +89,23 @@ test('audit category and status filters are applied to the server-side filtered 
   assert.equal(response.payload.stats.filtered, 3);
   assert.ok(countOptions.every((options) => options.include?.length));
 });
+
+test('audit list rejects invalid date filters as JSON instead of querying the database', async (t) => {
+  const originalFindAndCountAll = AuditLog.findAndCountAll;
+  let queryCalled = false;
+  AuditLog.findAndCountAll = async () => {
+    queryCalled = true;
+    return { count: 0, rows: [] };
+  };
+  t.after(() => { AuditLog.findAndCountAll = originalFindAndCountAll; });
+
+  const response = makeResponse();
+  await getAuditListHandler()({ query: { dateFrom: 'not-a-date' } }, response, (error) => { throw error; });
+
+  assert.equal(response.statusCode, 400);
+  assert.deepEqual(response.payload, {
+    success: false,
+    message: 'Audit date filters must be valid dates in YYYY-MM-DD format.',
+  });
+  assert.equal(queryCalled, false);
+});

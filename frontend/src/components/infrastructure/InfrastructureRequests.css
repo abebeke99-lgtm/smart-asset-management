@@ -1,0 +1,143 @@
+.infra-requests-page {
+  background: #eef2f7;
+  color: #0f172a;
+}
+
+.infra-requests-page .infra-requests-header,
+.infra-requests-page .infra-requests-summary-grid,
+.infra-requests-page .infra-requests-filter-card,
+.infra-requests-page .infra-requests-table-panel,
+.infra-requests-page .infra-requests-empty-state,
+.infra-requests-page .infra-requests-modal-card,
+.infra-requests-page .infra-requests-modal-card-large,
+.infra-requests-page .infra-requests-detail-card {
+  font-family: Inter, "Segoe UI", sans-serif;
+}
+
+.infra-requests-page .infra-requests-breadcrumb {
+  text-transform: uppercase !important;
+  letter-spacing: 0.12em !important;
+  font-weight: 700 !important;
+  color: #64748b !important;
+}
+
+.infra-requests-page .infra-requests-primary-button,
+.infra-requests-page .infra-requests-secondary-button,
+.infra-requests-page .infra-requests-pagination-button,
+.infra-requests-page .infra-requests-close-button,
+.infra-requests-page .infra-requests-icon-button,
+.infra-requests-page .infra-requests-filter-reset-button {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.infra-requests-page .infra-requests-primary-button:hover,
+.infra-requests-page .infra-requests-secondary-button:hover,
+.infra-requests-page .infra-requests-pagination-button:hover,
+.infra-requests-page .infra-requests-close-button:hover,
+.infra-requests-page .infra-requests-icon-button:hover,
+.infra-requests-page .infra-requests-filter-reset-button:hover {
+  transform: translateY(-1px);
+}
+
+.infra-requests-page .infra-requests-primary-button {
+  background: linear-gradient(180deg, #3f88c8 0%, #2f6fa6 100%) !important;
+  box-shadow: 0 12px 26px rgba(48, 116, 179, 0.24) !important;
+}
+
+.infra-requests-page .infra-requests-secondary-button,
+.infra-requests-page .infra-requests-pagination-button,
+.infra-requests-page .infra-requests-filter-reset-button,
+.infra-requests-page .infra-requests-close-button,
+.infra-requests-page .infra-requests-icon-button {
+  background: #ffffff !important;
+  border-color: #d4dce7 !important;
+  color: #1f2937 !important;
+}
+
+.infra-requests-page .infra-requests-form-grid input,
+.infra-requests-page .infra-requests-form-grid select,
+.infra-requests-page .infra-requests-form-grid textarea,
+.infra-requests-page .infra-requests-filter-card input,
+.infra-requests-page .infra-requests-filter-card select {
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.02);
+  font-family: inherit !important;
+}
+
+.infra-requests-page .infra-requests-form-grid input:focus,
+.infra-requests-page .infra-requests-form-grid select:focus,
+.infra-requests-page .infra-requests-form-grid textarea:focus,
+.infra-requests-page .infra-requests-filter-card input:focus,
+.infra-requests-page .infra-requests-filter-card select:focus {
+  outline: none !important;
+  border-color: #3074b3 !important;
+  box-shadow: 0 0 0 3px rgba(48, 116, 179, 0.12) !important;
+}
+
+.infra-requests-page .infra-requests-modal-card {
+  border-radius: 22px !important;
+  padding: 28px 28px 20px !important;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.18) !important;
+}
+
+.infra-requests-page .infra-requests-modal-card-large {
+  border-radius: 22px !important;
+  padding: 24px 22px 18px !important;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.18) !important;
+}
+
+.infra-requests-page .infra-requests-close-button {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 12px !important;
+  color: #334155 !important;
+}
+
+.infra-requests-page .infra-requests-form-grid {
+  gap: 18px !important;
+}
+
+.infra-requests-page .infra-requests-field-group {
+  min-height: 92px;
+}
+
+.infra-requests-page .infra-requests-field-label {
+  font-size: 0.74rem !important;
+  letter-spacing: 0.12em !important;
+  font-weight: 800 !important;
+  color: #1f2937 !important;
+}
+
+.infra-requests-page .infra-requests-summary-card {
+  border-radius: 16px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+}
+
+.infra-requests-page .infra-requests-empty-state strong {
+  font-size: 2.1rem !important;
+  color: #0f172a !important;
+}
+
+.infra-requests-page .infra-requests-empty-state p {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #475569;
+}
+
+.infra-requests-page .infra-requests-table-panel {
+  border-radius: 18px !important;
+}
+
+.infra-requests-page .infra-requests-summary-icon {
+  background: #eaf2fa !important;
+  color: #2f6fa6 !important;
+}
+
+.infra-requests-page .infra-requests-detail-card {
+  background: #f8fafc !important;
+  border-radius: 16px !important;
+}

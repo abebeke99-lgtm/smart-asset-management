@@ -43,14 +43,21 @@ export const resolveAssetUrl = (value = '') => {
   return `${API_BASE_URL}${cleanPath}`;
 };
 
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: Number(process.env.REACT_APP_API_TIMEOUT || process.env.VITE_API_TIMEOUT || 30000),
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
+const API_TIMEOUT_MS = Number(process.env.REACT_APP_API_TIMEOUT || process.env.VITE_API_TIMEOUT || 30000);
+
+// One shared Axios instance for the whole app so every caller reuses the same
+// base URL, defaults, and interceptors. Fall back to the Axios default export
+// when a lightweight test double does not implement `create`.
+const apiClient = typeof axios.create === 'function'
+  ? axios.create({
+    baseURL: API_BASE_URL,
+    timeout: API_TIMEOUT_MS,
+    withCredentials: true,
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  })
+  : axios;
 
 export const getApiErrorMessage = (error, fallback = 'Unable to connect to the server. Please try again.') => {
   if (!error) return fallback;
@@ -95,15 +102,30 @@ export const clearExpiredSession = (error) => {
     window.sessionStorage.setItem(SESSION_EXPIRED_STORAGE_KEY, 'true');
     window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
   }
-  delete apiClient.defaults.headers.common.Authorization;
+  if (apiClient.defaults?.headers?.common) delete apiClient.defaults.headers.common.Authorization;
   return true;
 };
 
+if (!apiClient.defaults) apiClient.defaults = {};
+if (!apiClient.defaults.headers) apiClient.defaults.headers = {};
+if (!apiClient.defaults.headers.common) apiClient.defaults.headers.common = {};
 apiClient.defaults.baseURL = API_BASE_URL;
-apiClient.defaults.timeout = Number(process.env.REACT_APP_API_TIMEOUT || process.env.VITE_API_TIMEOUT || 30000);
+apiClient.defaults.timeout = API_TIMEOUT_MS;
 apiClient.defaults.withCredentials = true;
 apiClient.defaults.headers.common['Content-Type'] = 'application/json';
 
+// Keep callers that import the Axios default export directly pointed at the
+// same API origin as the shared instance.
+if (axios.defaults) {
+  axios.defaults.baseURL = API_BASE_URL;
+  axios.defaults.timeout = API_TIMEOUT_MS;
+  axios.defaults.withCredentials = true;
+  axios.defaults.headers = axios.defaults.headers || {};
+  axios.defaults.headers.common = axios.defaults.headers.common || {};
+  axios.defaults.headers.common['Content-Type'] = 'application/json';
+}
+
+if (typeof apiClient.interceptors?.request?.use === 'function') {
 apiClient.interceptors.request.use(
   (config) => {
     const requestUrl = typeof config.url === 'string' ? config.url : '';
@@ -127,7 +149,9 @@ apiClient.interceptors.request.use(
   },
   (error) => Promise.reject(error)
 );
+}
 
+if (typeof apiClient.interceptors?.response?.use === 'function') {
 apiClient.interceptors.response.use(
   (response) => {
     if (response.config?.responseType === 'blob' || response.config?.responseType === 'arraybuffer') {
@@ -181,6 +205,7 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+}
 
 export const apiFetch = async (url, options = {}) => {
   const response = await apiClient.request({

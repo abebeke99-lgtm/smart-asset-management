@@ -1234,35 +1234,75 @@ const finishInfrastructureAssignment = async (req, res) => {
 // Get all infrastructure assets
 const getAllInfrastructureAssets = async (req, res) => {
   try {
-    const { department, status, condition, type, search } = req.query;
-    
-    let where = {};
-    
-    // Apply filters
-    if (department) where.department = department;
-    if (status) where.status = status;
-    if (condition) where.condition = condition;
-    if (type) where.type = type;
-    
-    // Search
+    const page = Math.max(1, Number.parseInt(req.query.page || '1', 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit || '10', 10) || 10));
+    const where = {};
+    const filters = {
+      status: req.query.status,
+      condition: req.query.condition,
+      type: req.query.type,
+      category: req.query.category,
+      location: req.query.location,
+      department: req.query.department,
+    };
+    Object.entries(filters).forEach(([field, value]) => {
+      if (value && value !== 'all') where[field] = String(value);
+    });
+    const search = String(req.query.search || '').trim();
     if (search) {
-      const { Op } = require('sequelize');
       where[Op.or] = [
         { name: { [Op.like]: `%${search}%` } },
         { assetCode: { [Op.like]: `%${search}%` } },
         { serialNumber: { [Op.like]: `%${search}%` } },
-        { location: { [Op.like]: `%${search}%` } }
+        { category: { [Op.like]: `%${search}%` } },
+        { type: { [Op.like]: `%${search}%` } },
+        { location: { [Op.like]: `%${search}%` } },
+        { building: { [Op.like]: `%${search}%` } },
       ];
     }
-    
-    const assets = await Infrastructure.findAll({
-      where,
-      order: [['createdAt', 'DESC']]
-    });
-    
+
+    const [{ count, rows }, summaryRows, categoryRows, locationRows, statusRows] = await Promise.all([
+      Infrastructure.findAndCountAll({
+        where,
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset: (page - 1) * limit,
+      }),
+      Infrastructure.findAll({ attributes: ['status', 'condition'], raw: true }),
+      Infrastructure.findAll({ attributes: ['category'], group: ['category'], order: [['category', 'ASC']], raw: true }),
+      Infrastructure.findAll({ attributes: ['location'], group: ['location'], order: [['location', 'ASC']], raw: true }),
+      Infrastructure.findAll({ attributes: ['status'], group: ['status'], order: [['status', 'ASC']], raw: true }),
+    ]);
+    const assigneeIds = [...new Set(rows.map((asset) => Number(asset.assignedTo)).filter((id) => Number.isInteger(id) && id > 0))];
+    const assignees = assigneeIds.length
+      ? await User.findAll({ where: { id: { [Op.in]: assigneeIds } }, attributes: ['id', 'fullName', 'username'], raw: true })
+      : [];
+    const assigneeNames = new Map(assignees.map((user) => [Number(user.id), user.fullName || user.username || '']));
+    const summary = summaryRows.reduce((counts, asset) => {
+      const status = String(asset.status || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+      const condition = String(asset.condition || '').trim().toLowerCase();
+      counts.total += 1;
+      if (['operational', 'active', 'available', 'working'].includes(status)) counts.operational += 1;
+      if (status.includes('maintenance') || status.includes('repair')) counts.maintenance += 1;
+      if (status === 'critical' || condition === 'critical') counts.critical += 1;
+      if (status === 'missing' || status === 'lost') counts.missing += 1;
+      return counts;
+    }, { total: 0, operational: 0, maintenance: 0, critical: 0, missing: 0 });
+    const pages = Math.max(1, Math.ceil(count / limit));
     return res.json({
       success: true,
-      data: assets
+      data: rows.map((asset) => ({
+        ...asset.toJSON(),
+        assignedToName: assigneeNames.get(Number(asset.assignedTo)) || '',
+        assigned_to_name: assigneeNames.get(Number(asset.assignedTo)) || '',
+      })),
+      summary,
+      filters: {
+        categories: categoryRows.map((row) => row.category).filter(Boolean),
+        locations: locationRows.map((row) => row.location).filter(Boolean),
+        statuses: statusRows.map((row) => row.status).filter(Boolean),
+      },
+      pagination: { page, limit, total: count, pages, totalPages: pages },
     });
   } catch (error) {
     console.error('Error fetching infrastructure assets:', error);
@@ -1290,18 +1330,20 @@ const getInfrastructureInventory = async (req, res) => {
     const sortOrder = String(req.query.sortOrder || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
     ['status', 'condition', 'category', 'location', 'department', 'type'].forEach((field) => {
-      if (req.query[field]) where[field] = String(req.query[field]);
+      const value = String(req.query[field] || '').trim();
+      if (value && value.toLowerCase() !== 'all') where[field] = value;
     });
 
-    if (req.query.search) {
+    const search = String(req.query.search || '').trim();
+    if (search) {
       where[Op.or] = [
-        { name: { [Op.like]: `%${req.query.search}%` } },
-        { assetCode: { [Op.like]: `%${req.query.search}%` } },
-        { category: { [Op.like]: `%${req.query.search}%` } },
-        { type: { [Op.like]: `%${req.query.search}%` } },
-        { location: { [Op.like]: `%${req.query.search}%` } },
-        { rfidTag: { [Op.like]: `%${req.query.search}%` } },
-        { serialNumber: { [Op.like]: `%${req.query.search}%` } }
+        { name: { [Op.like]: `%${search}%` } },
+        { assetCode: { [Op.like]: `%${search}%` } },
+        { category: { [Op.like]: `%${search}%` } },
+        { type: { [Op.like]: `%${search}%` } },
+        { location: { [Op.like]: `%${search}%` } },
+        { rfidTag: { [Op.like]: `%${search}%` } },
+        { serialNumber: { [Op.like]: `%${search}%` } }
       ];
     }
 
@@ -1312,34 +1354,43 @@ const getInfrastructureInventory = async (req, res) => {
       offset: (page - 1) * limit
     });
 
-    const summaryRows = await Infrastructure.findAll({
-      where,
-      attributes: ['status'],
-      raw: true
-    });
+    const [summaryRows, categoryRows, locationRows, conditionRows, statusRows] = await Promise.all([
+      Infrastructure.findAll({ attributes: ['status', 'condition', 'assignedTo'], raw: true }),
+      Infrastructure.findAll({ attributes: ['category'], group: ['category'], order: [['category', 'ASC']], raw: true }),
+      Infrastructure.findAll({ attributes: ['location'], group: ['location'], order: [['location', 'ASC']], raw: true }),
+      Infrastructure.findAll({ attributes: ['condition'], group: ['condition'], order: [['condition', 'ASC']], raw: true }),
+      Infrastructure.findAll({ attributes: ['status'], group: ['status'], order: [['status', 'ASC']], raw: true })
+    ]);
     const summary = summaryRows.reduce((counts, asset) => {
-      const status = String(asset.status || '').trim().toLowerCase();
+      const status = String(asset.status || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+      const condition = String(asset.condition || '').trim().toLowerCase();
       counts.total += 1;
-      if (['available', 'operational', 'active', 'working'].includes(status)) counts.available += 1;
-      if (['assigned', 'in use', 'in-use', 'issued'].includes(status)) counts.assigned += 1;
-      if (status.includes('maintenance') || status.includes('repair')) counts.maintenance += 1;
-      if (status.includes('missing') || status.includes('lost')) counts.missing += 1;
-      if (status.includes('damaged') || status.includes('critical')) counts.damaged += 1;
-      if (['disposed', 'retired'].includes(status)) counts.disposed += 1;
+      if (['disposed', 'retired'].includes(status)) {
+        counts.disposed += 1;
+        return counts;
+      }
+      if (['missing', 'lost'].includes(status)) counts.missing += 1;
+      else if (['damaged', 'critical'].includes(status) || ['damaged', 'critical'].includes(condition)) counts.damaged += 1;
+      else if (status.includes('maintenance') || status.includes('repair')) counts.maintenance += 1;
+      else if (['assigned', 'in use', 'issued'].includes(status) || asset.assignedTo) counts.assigned += 1;
+      else if (['available', 'operational', 'active', 'working'].includes(status)) counts.available += 1;
       return counts;
     }, { total: 0, available: 0, assigned: 0, maintenance: 0, missing: 0, damaged: 0, disposed: 0 });
 
-    const [categoryRows, locationRows, conditionRows, statusRows] = await Promise.all([
-      Infrastructure.findAll({ where, attributes: ['category'], group: ['category'], order: [['category', 'ASC']], raw: true }),
-      Infrastructure.findAll({ where, attributes: ['location'], group: ['location'], order: [['location', 'ASC']], raw: true }),
-      Infrastructure.findAll({ where, attributes: ['condition'], group: ['condition'], order: [['condition', 'ASC']], raw: true }),
-      Infrastructure.findAll({ where, attributes: ['status'], group: ['status'], order: [['status', 'ASC']], raw: true })
-    ]);
+    const assigneeIds = [...new Set(rows.map((asset) => Number(asset.assignedTo)).filter((id) => Number.isInteger(id) && id > 0))];
+    const assignees = assigneeIds.length
+      ? await User.findAll({ where: { id: { [Op.in]: assigneeIds } }, attributes: ['id', 'fullName', 'username'], raw: true })
+      : [];
+    const assigneeNames = new Map(assignees.map((user) => [Number(user.id), user.fullName || user.username || '']));
 
     return res.json({
       success: true,
       data: {
-        assets: rows,
+        assets: rows.map((asset) => ({
+          ...asset.toJSON(),
+          assignedToName: assigneeNames.get(Number(asset.assignedTo)) || '',
+          assigned_to_name: assigneeNames.get(Number(asset.assignedTo)) || '',
+        })),
         summary,
         filters: {
           categories: categoryRows.map((row) => row.category).filter(Boolean),
@@ -1634,7 +1685,9 @@ const createInfrastructureAsset = async (req, res) => {
     } = req.body;
     
     // Validate required fields
-    if (!name || !category) {
+    const normalizedName = String(name || '').trim();
+    const normalizedCategory = String(category || '').trim();
+    if (!normalizedName || !normalizedCategory) {
       return res.status(400).json({
         success: false,
         message: 'Asset name and category are required'
@@ -1642,16 +1695,29 @@ const createInfrastructureAsset = async (req, res) => {
     }
     
     // Generate asset code if not provided
-    let finalAssetCode = assetCode;
+    let finalAssetCode = String(assetCode || '').trim();
     if (!finalAssetCode) {
       const count = await Infrastructure.count();
       finalAssetCode = `INFRA-${Date.now()}-${count + 1}`;
     }
+
+    const uniqueIdentifiers = [
+      { assetCode: finalAssetCode },
+      { serialNumber: String(serialNumber || '').trim() },
+      { rfidTag: String(rfidTag || '').trim() },
+      { qrCode: String(qrCode || '').trim() },
+    ].filter((identifier) => Object.values(identifier)[0]);
+    if (await Infrastructure.findOne({ where: { [Op.or]: uniqueIdentifiers } })) {
+      return res.status(409).json({
+        success: false,
+        message: 'Asset number, serial number, RFID tag, or QR code already exists'
+      });
+    }
     
     const asset = await Infrastructure.create({
-      name,
+      name: normalizedName,
       type: type || 'Fixed Asset',
-      category,
+      category: normalizedCategory,
       subcategory,
       description,
       serialNumber,
@@ -1685,6 +1751,12 @@ const createInfrastructureAsset = async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating infrastructure asset:', error);
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({
+        success: false,
+        message: 'Asset number, serial number, RFID tag, or QR code already exists'
+      });
+    }
     return res.status(500).json({
       success: false,
       message: 'Failed to create infrastructure asset'
@@ -1696,14 +1768,52 @@ const createInfrastructureAsset = async (req, res) => {
 const updateInfrastructureAsset = async (req, res) => {
   try {
     const { id } = req.params;
-    const updatedData = req.body;
-    
     const asset = await Infrastructure.findByPk(id);
     
     if (!asset) {
       return res.status(404).json({
         success: false,
         message: 'Infrastructure asset not found'
+      });
+    }
+
+    const editableFields = [
+      'name', 'type', 'category', 'subcategory', 'description', 'serialNumber',
+      'assetCode', 'rfidTag', 'qrCode', 'location', 'building', 'block', 'floor',
+      'room', 'status', 'condition', 'purchaseDate', 'purchasePrice', 'supplier',
+      'manufacturer', 'model', 'brand', 'warrantyExpiry', 'specifications',
+      'department', 'notes',
+    ];
+    const updatedData = Object.fromEntries(
+      editableFields
+        .filter((field) => Object.prototype.hasOwnProperty.call(req.body, field))
+        .map((field) => [field, req.body[field]])
+    );
+    if (!Object.keys(updatedData).length) {
+      return res.status(400).json({ success: false, message: 'No editable asset fields were provided' });
+    }
+
+    if (updatedData.name !== undefined) updatedData.name = String(updatedData.name || '').trim();
+    if (updatedData.category !== undefined) updatedData.category = String(updatedData.category || '').trim();
+    if (updatedData.name === '' || updatedData.category === '') {
+      return res.status(400).json({ success: false, message: 'Asset name and category are required' });
+    }
+
+    const uniqueFields = ['assetCode', 'serialNumber', 'rfidTag', 'qrCode'];
+    uniqueFields.forEach((field) => {
+      if (updatedData[field] !== undefined) {
+        updatedData[field] = String(updatedData[field] || '').trim() || null;
+      }
+    });
+    const uniqueIdentifiers = uniqueFields
+      .filter((field) => updatedData[field])
+      .map((field) => ({ [field]: updatedData[field] }));
+    if (uniqueIdentifiers.length && await Infrastructure.findOne({
+      where: { id: { [Op.ne]: asset.id }, [Op.or]: uniqueIdentifiers },
+    })) {
+      return res.status(409).json({
+        success: false,
+        message: 'Asset number, serial number, RFID tag, or QR code already exists'
       });
     }
     
@@ -1716,6 +1826,18 @@ const updateInfrastructureAsset = async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating infrastructure asset:', error);
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({
+        success: false,
+        message: 'Asset number, serial number, RFID tag, or QR code already exists'
+      });
+    }
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({
+        success: false,
+        message: 'Asset number, serial number, RFID tag, or QR code already exists'
+      });
+    }
     return res.status(500).json({
       success: false,
       message: 'Failed to update infrastructure asset'

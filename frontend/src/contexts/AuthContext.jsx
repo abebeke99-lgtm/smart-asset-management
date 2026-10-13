@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { apiClient, SESSION_EXPIRED_EVENT, SESSION_EXPIRED_STORAGE_KEY } from '../utils/api';
+import { apiClient, getApiErrorMessage, isCurrentAuthRequest, SESSION_EXPIRED_EVENT, SESSION_EXPIRED_STORAGE_KEY } from '../utils/api';
 import { sanitizeAuthToken } from '../utils/auth';
 
 const AuthContext = createContext();
@@ -79,6 +79,39 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const api = apiClient;
+
+  useEffect(() => {
+    if (!api?.interceptors?.response?.use) return undefined;
+
+    const handleResponseError = (error) => {
+      if (error?.response?.status === 401 && isCurrentAuthRequest(error)) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('user');
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.setItem(SESSION_EXPIRED_STORAGE_KEY, 'true');
+          window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+        }
+      }
+
+      if (error?.response) {
+        const fallbackMessage = `Server error occurred (${error.response.status})`;
+        error.status = error.response.status;
+        error.message = getApiErrorMessage(error, fallbackMessage) || fallbackMessage;
+      }
+
+      throw error;
+    };
+
+    const interceptorId = api.interceptors.response.use((response) => response, handleResponseError);
+
+    return () => {
+      if (interceptorId !== undefined && api.interceptors.response.eject) {
+        api.interceptors.response.eject(interceptorId);
+      }
+    };
+  }, [api]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;

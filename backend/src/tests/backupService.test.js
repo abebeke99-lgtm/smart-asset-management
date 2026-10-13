@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+const { sequelize } = require('../config/database');
 const backupService = require('../services/backupService');
 
 test('backup service exposes real backup and verification capabilities', () => {
@@ -85,47 +86,66 @@ test('backup history and download paths use the configured storage directory', a
   assert.equal(backupService.resolveBackupFilePath('..\\outside.json'), null);
 });
 
-test('failed backup attempts are persisted with a failure reason for history and counters', async (t) => {
-  const storagePath = fs.mkdtempSync(path.join(os.tmpdir(), 'backup-failure-'));
-  const originalEnvironment = {
-    BACKUP_DIR: process.env.BACKUP_DIR,
-    BACKUP_STORAGE_PATH: process.env.BACKUP_STORAGE_PATH,
-    MYSQLDUMP_PATH: process.env.MYSQLDUMP_PATH,
-    MYSQL_BIN_DIR: process.env.MYSQL_BIN_DIR,
-    DB_TEST_HOST: process.env.DB_TEST_HOST,
-    DB_TEST_PORT: process.env.DB_TEST_PORT,
-    DB_TEST_NAME: process.env.DB_TEST_NAME,
-    DB_TEST_USER: process.env.DB_TEST_USER,
-    DB_TEST_PASSWORD: process.env.DB_TEST_PASSWORD,
-  };
+test('database dump generation uses Sequelize and writes schema and escaped rows', async (t) => {
+  const storagePath = fs.mkdtempSync(path.join(os.tmpdir(), 'backup-native-'));
+  const originalBackupDir = process.env.BACKUP_DIR;
+  const originalStoragePath = process.env.BACKUP_STORAGE_PATH;
+  const originalQuery = sequelize.query;
+  const originalTransaction = sequelize.transaction;
   process.env.BACKUP_DIR = storagePath;
   delete process.env.BACKUP_STORAGE_PATH;
-  process.env.MYSQLDUMP_PATH = path.join(storagePath, 'missing-mysqldump');
-  process.env.MYSQL_BIN_DIR = storagePath;
-  process.env.DB_TEST_HOST = 'backup-test.invalid';
-  process.env.DB_TEST_PORT = '3306';
-  process.env.DB_TEST_NAME = 'backup_failure_test';
-  process.env.DB_TEST_USER = 'backup_test_user';
-  process.env.DB_TEST_PASSWORD = 'backup-test-password';
-  t.after(() => {
-    for (const [name, value] of Object.entries(originalEnvironment)) {
-      if (value === undefined) delete process.env[name];
-      else process.env[name] = value;
+  sequelize.transaction = async (options, callback) => callback({});
+  sequelize.query = async (sql) => {
+    if (sql === 'SHOW FULL TABLES') {
+      return [{ Tables_in_test_database: 'assets', Table_type: 'BASE TABLE' }];
     }
+    if (sql === 'SHOW CREATE TABLE `assets`') {
+      return [{ Table: 'assets', 'Create Table': 'CREATE TABLE `assets` (`id` int NOT NULL, `name` varchar(80))' }];
+    }
+    if (sql === 'SELECT * FROM `assets` LIMIT 250 OFFSET 0') {
+      return [{ id: 8, name: "Director's chair" }];
+    }
+    if (sql === 'SELECT * FROM `assets` LIMIT 250 OFFSET 1') return [];
+    if (sql.startsWith('SHOW TRIGGERS FROM')) return [];
+    if (sql.startsWith('SHOW PROCEDURE STATUS')) return [];
+    if (sql.startsWith('SHOW FUNCTION STATUS')) return [];
+    throw new Error(`Unexpected backup query: ${sql}`);
+  };
+  t.after(() => {
+    sequelize.query = originalQuery;
+    sequelize.transaction = originalTransaction;
+    if (originalBackupDir === undefined) delete process.env.BACKUP_DIR;
+    else process.env.BACKUP_DIR = originalBackupDir;
+    if (originalStoragePath === undefined) delete process.env.BACKUP_STORAGE_PATH;
+    else process.env.BACKUP_STORAGE_PATH = originalStoragePath;
     fs.rmSync(storagePath, { recursive: true, force: true });
   });
 
-  await assert.rejects(
-    backupService.createManualBackup({ createdBy: { id: 42, username: 'test-admin' } }),
-    /mysqldump is unavailable/,
-  );
+  const dumpPath = await backupService.writeDatabaseDump({ database: 'test_database' });
+  const dump = fs.readFileSync(dumpPath, 'utf8');
+  assert.match(dump, /CREATE TABLE `assets`/);
+  assert.match(dump, /INSERT INTO `assets` \(`id`, `name`\)/);
+  assert.ok(dump.includes("Director\\'s chair"));
+  assert.match(dump, /SET FOREIGN_KEY_CHECKS=1/);
+});
 
-  const history = await backupService.listBackupHistory();
-  assert.equal(history.total, 1);
-  assert.equal(history.items[0].status, 'failed');
-  assert.equal(history.items[0].createdBy, 'test-admin');
-  assert.match(history.items[0].errorMessage, /mysqldump is unavailable/);
-  const stats = await backupService.getBackupStats();
-  assert.equal(stats.failed, 1);
-  assert.equal(stats.successful, 0);
+test('production backup creation requires persistent volume configuration', async (t) => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalBackupDir = process.env.BACKUP_DIR;
+  const originalStoragePath = process.env.BACKUP_STORAGE_PATH;
+  process.env.NODE_ENV = 'production';
+  delete process.env.BACKUP_DIR;
+  delete process.env.BACKUP_STORAGE_PATH;
+  t.after(() => {
+    if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = originalNodeEnv;
+    if (originalBackupDir === undefined) delete process.env.BACKUP_DIR;
+    else process.env.BACKUP_DIR = originalBackupDir;
+    if (originalStoragePath === undefined) delete process.env.BACKUP_STORAGE_PATH;
+    else process.env.BACKUP_STORAGE_PATH = originalStoragePath;
+  });
+
+  await assert.rejects(backupService.ensureBackupDirectory(), {
+    code: 'BACKUP_STORAGE_NOT_CONFIGURED',
+  });
 });

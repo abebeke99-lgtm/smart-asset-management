@@ -1698,8 +1698,22 @@ const countAuditResult = (where, values) => AuditLog.count({
 
 const auditInclude = [{ model: User, attributes: ['id', 'username', 'fullName', 'role'] }];
 
+const validateAuditDateRange = (query = {}) => {
+  const isValidDate = (value) => {
+    if (!value) return true;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return false;
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  };
+  if (!isValidDate(query.dateFrom) || !isValidDate(query.dateTo)) return false;
+  return !(query.dateFrom && query.dateTo && query.dateFrom > query.dateTo);
+};
+
 router.get(['/audit', '/audit-logs'], ...requireAdmin, async (req, res, next) => {
   try {
+    if (!validateAuditDateRange(req.query)) {
+      return res.status(400).json({ success: false, message: 'Audit date filters must be valid dates in YYYY-MM-DD format.' });
+    }
     const { page = '1', limit = '50' } = req.query;
     const currentPage = Math.max(1, Number.parseInt(page, 10) || 1);
     const pageSize = Math.min(100, Math.max(1, Number.parseInt(limit, 10) || 50));
@@ -1738,6 +1752,9 @@ const csvValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
 router.get(['/audit/export', '/audit-logs/export'], ...requireAdmin, async (req, res, next) => {
   try {
+    if (!validateAuditDateRange(req.query)) {
+      return res.status(400).json({ success: false, message: 'Audit date filters must be valid dates in YYYY-MM-DD format.' });
+    }
     const format = String(req.query.format || 'json').toLowerCase();
     if (!['json', 'csv'].includes(format)) return res.status(400).json({ success: false, message: 'Export format must be json or csv' });
     const rows = await AuditLog.findAll({ where: getAuditWhere(req.query), include: auditInclude, order: [['createdAt', 'DESC'], ['id', 'DESC']] });
@@ -2040,7 +2057,7 @@ router.post('/backups', ...requireAdmin, async (req, res, next) => {
     });
     return res.status(500).json({
       success: false,
-      message: `Backup failed: ${error.message || error.original?.message || error.parent?.message || 'Unknown backup error'}`,
+      message: 'Database backup could not be completed. Check the backup configuration and server logs.',
     });
   }
 

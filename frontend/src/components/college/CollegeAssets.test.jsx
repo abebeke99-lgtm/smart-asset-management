@@ -79,13 +79,72 @@ test('switches asset inventory labels immediately without repeating the API requ
   expect(apiClient.get).toHaveBeenCalledTimes(1);
 });
 
+test('inventory filters are sent together and reset pagination when changed', async () => {
+  apiClient.get.mockResolvedValue({
+    data: {
+      data: [],
+      summary: { total: 0, active: 0, assigned: 0, available: 0, maintenance: 0, damagedMissing: 0 },
+      filters: {
+        categories: ['Computers'],
+        statuses: ['available'],
+        conditions: ['Good'],
+        locations: ['Physics Lab'],
+        assignmentStatuses: ['active'],
+        departments: [{ id: 9, name: 'Physics' }]
+      },
+      pagination: { page: 1, limit: 20, total: 0, pages: 3 }
+    }
+  });
+
+  render(
+    <UiProvider>
+      <MemoryRouter><CollegeAssets inventory /></MemoryRouter>
+    </UiProvider>
+  );
+
+  expect(await screen.findByText('Page 1 of 3')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await waitFor(() => expect(apiClient.get).toHaveBeenLastCalledWith('/api/college/inventory', expect.objectContaining({
+    params: expect.objectContaining({ page: 2 })
+  })));
+
+  fireEvent.change(screen.getByPlaceholderText('Search tag, name, serial, maker...'), { target: { value: 'microscope' } });
+  fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Computers' } });
+  fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'available' } });
+  fireEvent.change(screen.getByLabelText('Condition'), { target: { value: 'Good' } });
+  fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Physics Lab' } });
+  fireEvent.change(screen.getByLabelText('Department'), { target: { value: '9' } });
+  fireEvent.change(screen.getByLabelText('Assignment Status'), { target: { value: 'active' } });
+  fireEvent.change(screen.getByLabelText('Purchase date from'), { target: { value: '2024-01-01' } });
+  fireEvent.change(screen.getByLabelText('Purchase date to'), { target: { value: '2024-12-31' } });
+  fireEvent.change(screen.getByLabelText('Sort assets'), { target: { value: 'assetCode' } });
+  fireEvent.change(screen.getByLabelText('Sort order'), { target: { value: 'ASC' } });
+
+  await waitFor(() => expect(apiClient.get).toHaveBeenLastCalledWith('/api/college/inventory', expect.objectContaining({
+    params: expect.objectContaining({
+      page: 1,
+      search: 'microscope',
+      category: 'Computers',
+      status: 'available',
+      condition: 'Good',
+      location: 'Physics Lab',
+      departmentId: '9',
+      assignmentStatus: 'active',
+      dateFrom: '2024-01-01',
+      dateTo: '2024-12-31',
+      sortBy: 'assetCode',
+      sortOrder: 'ASC'
+    })
+  })));
+});
+
 test('translates asset details and preserves the requested asset id', async () => {
   apiClient.get.mockImplementation((url) => Promise.resolve(url.includes('/api/college/assets/') ? {
     data: { data: { id: 3, name: 'Laboratory Microscope', assetCode: 'MAU-003', serialNumber: 'SN-003' } }
   } : {
     data: {
       data: [{ id: 3, name: 'Laboratory Microscope', assetCode: 'MAU-003' }],
-      summary: {},
+      summary: { total: 1, active: 0, assigned: 0, available: 1, maintenance: 0, damagedMissing: 0 },
       filters: { categories: [], statuses: [], conditions: [], locations: [], assignmentStatuses: [], departments: [] },
       pagination: { page: 1, limit: 20, total: 1, pages: 1 }
     }
@@ -127,7 +186,7 @@ test('college managers can register an asset with scoped reference data and refr
     return Promise.resolve({
       data: {
         data: [{ id: 3, assetCode: 'MAU-003', name: 'Laboratory Microscope', category: 'Laboratory Equipment' }],
-        summary: { total: 1 },
+        summary: { total: 1, active: 0, assigned: 0, available: 1, maintenance: 0, damagedMissing: 0 },
         filters: { categories: [], statuses: [], conditions: [], locations: [], assignmentStatuses: [], departments: [] },
         pagination: { page: 1, limit: 20, total: 1, pages: 1 },
         college: { id: 4, name: 'Engineering College' }
@@ -174,8 +233,8 @@ test('registered assets refresh into the College Inventory list', async () => {
     : {
       data: {
         data: registered ? [{ id: 30, assetCode: 'ENG-030', name: 'New microscope', category: 'Laboratory Equipment' }] : [],
-        summary: { total: registered ? 1 : 0 },
-        filters: {},
+        summary: { total: registered ? 1 : 0, active: 0, assigned: 0, available: registered ? 1 : 0, maintenance: 0, damagedMissing: 0 },
+        filters: { categories: [], statuses: [], conditions: [], locations: [], assignmentStatuses: [], departments: [] },
         pagination: { page: 1, limit: 20, total: registered ? 1 : 0, pages: 1 }
       }
     }));
@@ -217,7 +276,7 @@ test('college managers with update permission edit an existing asset through the
   });
   apiClient.get.mockImplementation((url) => Promise.resolve(url.endsWith('/registration-options')
     ? { data: { data: { college: { id: 4, name: 'Engineering College' }, categories: [{ id: 2, name: 'Laboratory Equipment' }], departments: [], custodians: [] } } }
-    : { data: { data: [{ id: 3, assetCode: 'MAU-003', name: 'Laboratory Microscope', category: 'Laboratory Equipment', purchaseDate: '2024-01-01', purchasePrice: 1200 }], summary: {}, filters: {}, pagination: { page: 1, limit: 20, total: 1, pages: 1 } } }));
+    : { data: { data: [{ id: 3, assetCode: 'MAU-003', name: 'Laboratory Microscope', category: 'Laboratory Equipment', purchaseDate: '2024-01-01', purchasePrice: 1200 }], summary: { total: 1, active: 0, assigned: 0, available: 1, maintenance: 0, damagedMissing: 0 }, filters: { categories: [], statuses: [], conditions: [], locations: [], assignmentStatuses: [], departments: [] }, pagination: { page: 1, limit: 20, total: 1, pages: 1 } } }));
   apiClient.put.mockResolvedValue({ data: { success: true, data: { id: 3 } } });
 
   render(
@@ -244,8 +303,8 @@ test('invalid list responses produce a visible error and Retry reloads the list'
     .mockResolvedValueOnce({
       data: {
         data: [],
-        summary: {},
-        filters: {},
+        summary: { total: 0, active: 0, assigned: 0, available: 0, maintenance: 0, damagedMissing: 0 },
+        filters: { categories: [], statuses: [], conditions: [], locations: [], assignmentStatuses: [], departments: [] },
         pagination: { page: 1, limit: 20, total: 0, pages: 1 }
       }
     });
@@ -260,4 +319,23 @@ test('invalid list responses produce a visible error and Retry reloads the list'
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
   expect(await screen.findAllByText('No assets found')).toHaveLength(2);
   expect(apiClient.get).toHaveBeenCalledTimes(2);
+});
+
+test('a successful response without authoritative summary counts is shown as an API error', async () => {
+  apiClient.get.mockResolvedValue({
+    data: {
+      data: [],
+      filters: { categories: [], statuses: [], conditions: [], locations: [], assignmentStatuses: [], departments: [] },
+      pagination: { page: 1, limit: 20, total: 0, pages: 0 }
+    }
+  });
+
+  render(
+    <UiProvider>
+      <MemoryRouter><CollegeAssets inventory /></MemoryRouter>
+    </UiProvider>
+  );
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('The server returned invalid asset data.');
+  expect(screen.queryByText('No assets found')).not.toBeInTheDocument();
 });

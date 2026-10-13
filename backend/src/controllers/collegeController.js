@@ -9,6 +9,7 @@ const sqlQualifiedColumn = (model, field) => col(`${model.name}.${snakeCaseColum
 const joinedColumn = (association, field) => `$${association}.${snakeCaseColumn(field)}$`;
 const { sequelize, Asset, User, Department, Maintenance, Approval, Transfer, AuditLog, College, AssetReturn, VerificationSession, VerificationItem, Assignment, Category, AssetMovement, RFIDLog, Campus, Building, Room, AssetCustody, Inventory } = require('../models');
 const { createAuditLog } = require('../services/auditLogService');
+const { buildCollegeAssetScope, getCollegeAssetScope } = require('../services/collegeAssetScope');
 
 const collegeScope = (req) => String(req.user?.department || '').trim();
 const normalizeStatus = (value) => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -1808,12 +1809,46 @@ const listCollegeStaff = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+const summarizeCollegeAssets = (assets) => {
+  const normalized = (value) => String(value || '').toLowerCase().replace(/[_-]+/g, '-').replace(/\s+/g, '-');
+  const isCurrent = (assignment) => !['returned', 'cancelled', 'closed'].includes(String(assignment.status || '').toLowerCase());
+
+  return assets.reduce((counts, asset) => {
+    const status = normalized(asset.status);
+    const condition = normalized(asset.condition);
+    const isDamagedMissing = ['damaged', 'missing', 'lost'].includes(status)
+      || ['damaged', 'missing', 'lost'].includes(condition);
+    const maintenanceStates = ['maintenance', 'under-maintenance', 'in-repair', 'repair'];
+    const isMaintenance = !isDamagedMissing
+      && [status, condition].some((value) => maintenanceStates.includes(value));
+    const isAssigned = !isDamagedMissing
+      && !isMaintenance
+      && (['in-use', 'assigned'].includes(status)
+        || asset.Assignments?.some(isCurrent)
+        || asset.AssetCustodies?.some((custody) => custody.status === 'active'));
+    const isAvailable = !isDamagedMissing
+      && !isMaintenance
+      && !isAssigned
+      && ['available', 'ready', 'idle'].includes(status);
+
+    counts.total += 1;
+    counts.active += status === 'active' && !isDamagedMissing && !isMaintenance && !isAssigned ? 1 : 0;
+    counts.assigned += isAssigned ? 1 : 0;
+    counts.available += isAvailable ? 1 : 0;
+    counts.maintenance += isMaintenance ? 1 : 0;
+    counts.damagedMissing += isDamagedMissing ? 1 : 0;
+    return counts;
+  }, { total: 0, active: 0, assigned: 0, available: 0, maintenance: 0, damagedMissing: 0 });
+};
+
 const listCollegeAssets = async (req, res, next) => {
   try {
     const { page, limit, offset } = pagination(req.query);
     const collegeId = Number(req.organizationScope?.collegeId);
     if (!collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
-    const where = { collegeId };
+    const departments = await Department.findAll({ where: { collegeId }, attributes: ['id', 'name'], order: [['name', 'ASC']] });
+    const collegeWhere = buildCollegeAssetScope(collegeId, departments.map((department) => department.id));
+    const where = { [Op.and]: [collegeWhere] };
     for (const field of ['departmentId', 'category', 'status', 'location', 'condition']) if (req.query[field]) where[field] = req.query[field];
     if (req.query.departmentId) {
       const departmentId = Number(req.query.departmentId);
@@ -1841,7 +1876,7 @@ const listCollegeAssets = async (req, res, next) => {
       where.purchaseDate = purchaseDate;
     }
     const search = String(req.query.search || '').trim();
-    if (search) where[Op.or] = [{ name: { [Op.like]: `%${search}%` } }, { assetCode: { [Op.like]: `%${search}%` } }, { serialNumber: { [Op.like]: `%${search}%` } }, { rfidTag: { [Op.like]: `%${search}%` } }, { manufacturer: { [Op.like]: `%${search}%` } }, { model: { [Op.like]: `%${search}%` } }, { department: { [Op.like]: `%${search}%` } }];
+    if (search) where[Op.and].push({ [Op.or]: [{ name: { [Op.like]: `%${search}%` } }, { assetCode: { [Op.like]: `%${search}%` } }, { serialNumber: { [Op.like]: `%${search}%` } }, { rfidTag: { [Op.like]: `%${search}%` } }, { manufacturer: { [Op.like]: `%${search}%` } }, { model: { [Op.like]: `%${search}%` } }, { department: { [Op.like]: `%${search}%` } }] });
     const assignmentInclude = { model: Assignment, required: false, include: [{ model: User, required: false, attributes: ['id', 'fullName', 'username'] }] };
     const custodyInclude = { model: AssetCustody, required: false, where: { status: 'active' }, include: [{ model: User, as: 'Custodian', required: false, attributes: ['id', 'fullName', 'username'] }] };
     if (req.query.assignmentStatus) { assignmentInclude.where = { status: req.query.assignmentStatus }; assignmentInclude.required = true; }
@@ -1849,16 +1884,13 @@ const listCollegeAssets = async (req, res, next) => {
     const requestedSort = String(req.query.sortBy || 'updatedAt');
     const sortBy = allowedSortFields.has(requestedSort) ? requestedSort : 'updatedAt';
     const sortOrder = String(req.query.sortOrder || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-    const [result, allAssets, departments] = await Promise.all([
+    const [result, allAssets] = await Promise.all([
       Asset.findAndCountAll({ where, include: [{ model: Department, as: 'DepartmentRecord', required: false, attributes: ['id', 'name'] }, assignmentInclude, custodyInclude], distinct: true, order: [[sortBy, sortOrder]], limit, offset }),
-      Asset.findAll({ where: { collegeId }, attributes: ['status', 'condition', 'category', 'location'], include: [{ model: Assignment, required: false, attributes: ['assetId', 'status'] }, { model: AssetCustody, required: false, where: { status: 'active' }, attributes: ['assetId', 'status'] }] }),
-      Department.findAll({ where: { collegeId }, attributes: ['id', 'name'], order: [['name', 'ASC']] }),
+      Asset.findAll({ where: collegeWhere, attributes: ['status', 'condition', 'category', 'location'], include: [{ model: Assignment, required: false, attributes: ['assetId', 'status'] }, { model: AssetCustody, required: false, where: { status: 'active' }, attributes: ['assetId', 'status'] }] }),
     ]);
     const values = (field) => [...new Set(allAssets.map((asset) => String(asset[field] || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     const isCurrent = (assignment) => !['returned', 'cancelled', 'closed'].includes(String(assignment.status || '').toLowerCase());
-    const activeAssignments = allAssets.filter((asset) => asset.Assignments?.some(isCurrent) || asset.AssetCustodies?.some((custody) => custody.status === 'active')).length;
-    const normalized = (value) => String(value || '').toLowerCase().replace(/[_-]+/g, '-').replace(/\s+/g, '-');
-    const countBy = (matches) => allAssets.filter((asset) => matches.includes(normalized(asset.status))).length;
+    const summary = summarizeCollegeAssets(allAssets);
     const data = result.rows.map((asset) => {
       const row = asset.toJSON();
       const currentAssignment = (row.Assignments || []).find(isCurrent);
@@ -1866,14 +1898,14 @@ const listCollegeAssets = async (req, res, next) => {
       const assignedUser = currentAssignment?.User || activeCustody?.Custodian;
       return { ...row, departmentName: row.DepartmentRecord?.name || row.department || '', assignedUser: assignedUser ? { id: assignedUser.id, name: assignedUser.fullName || assignedUser.username } : null };
     });
-    const summary = { total: allAssets.length, active: countBy(['active', 'available', 'in-use', 'assigned']), assigned: activeAssignments, available: countBy(['available', 'ready', 'idle']), maintenance: countBy(['maintenance', 'under-maintenance', 'in-repair', 'repair']), damagedMissing: countBy(['damaged', 'missing', 'lost']) };
     res.json({ success: true, data, college: { id: req.organizationScope.college.id, name: req.organizationScope.college.collegeName, code: req.organizationScope.college.collegeCode }, summary, filters: { categories: values('category'), statuses: values('status'), conditions: values('condition'), locations: values('location'), assignmentStatuses: [...new Set(allAssets.flatMap((asset) => (asset.Assignments || []).map((assignment) => assignment.status)).filter(Boolean))].sort(), departments }, pagination: { page, limit, total: result.count, pages: Math.ceil(result.count / limit), totalPages: Math.ceil(result.count / limit) } });
   } catch (error) { next(error); }
 };
 
 const getCollegeAsset = async (req, res, next) => {
   try {
-    const asset = await Asset.findOne({ where: { id: req.params.id, collegeId: req.organizationScope.collegeId }, include: [{ model: Department, as: 'DepartmentRecord', required: false, attributes: ['id', 'name'] }, { model: Assignment, required: false, include: [{ model: User, required: false, attributes: ['id', 'fullName', 'username'] }] }, { model: AssetCustody, required: false, where: { status: 'active' }, include: [{ model: User, as: 'Custodian', required: false, attributes: ['id', 'fullName', 'username'] }] }] });
+    const scope = await getCollegeAssetScope(req.organizationScope.collegeId);
+    const asset = await Asset.findOne({ where: { [Op.and]: [{ id: req.params.id }, scope] }, include: [{ model: Department, as: 'DepartmentRecord', required: false, attributes: ['id', 'name'] }, { model: Assignment, required: false, include: [{ model: User, required: false, attributes: ['id', 'fullName', 'username'] }] }, { model: AssetCustody, required: false, where: { status: 'active' }, include: [{ model: User, as: 'Custodian', required: false, attributes: ['id', 'fullName', 'username'] }] }] });
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found in your college' });
     return res.json({ success: true, data: asset });
   } catch (error) { return next(error); }
@@ -3828,6 +3860,7 @@ module.exports = {
   getCollegeStaffMember,
   listCollegeAssets,
   getCollegeInventory,
+  summarizeCollegeAssets,
   getCollegeAssetRegistrationOptions,
   getCollegeAsset,
   listCollegeRFIDTracking,

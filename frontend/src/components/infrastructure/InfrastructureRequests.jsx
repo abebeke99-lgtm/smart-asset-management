@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
+import './InfrastructureRequests.css';
 
 const EMPTY = {
   data: [],
@@ -178,10 +179,10 @@ const InfrastructureRequests = () => {
   }
 
   return (
-    <div style={styles.page}>
-      <header style={styles.header}>
+    <div style={styles.page} className="infra-requests-page">
+      <header style={styles.header} className="infra-requests-header">
         <div>
-          <div style={styles.breadcrumb}>
+          <div style={styles.breadcrumb} className="infra-requests-breadcrumb">
             <span>Infrastructure</span>
             <span style={{ color: '#94a3b8' }}> / </span>
             <span style={{ color: '#0f172a', fontWeight: 700 }}>Requests</span>
@@ -192,20 +193,20 @@ const InfrastructureRequests = () => {
           </p>
         </div>
 
-        <div style={styles.headerActions}>
-          <button type="button" style={styles.secondaryButton} onClick={() => load(true)} disabled={state.tableLoading}>
+        <div style={styles.headerActions} className="infra-requests-header-actions">
+          <button type="button" style={styles.secondaryButton} className="infra-requests-secondary-button" onClick={() => load(true)} disabled={state.tableLoading}>
             <RefreshCw size={16} /> Refresh
           </button>
-          <button type="button" style={styles.primaryButton} onClick={() => setShowForm(true)}>
+          <button type="button" style={styles.primaryButton} className="infra-requests-primary-button" onClick={() => setShowForm(true)}>
             <Plus size={16} /> New Request
           </button>
         </div>
       </header>
 
-      <section style={styles.summaryGrid} aria-label="Request summary">
+      <section style={styles.summaryGrid} className="infra-requests-summary-grid" aria-label="Request summary">
         {summaryCards.map(({ key, label, icon: Icon, value }) => (
-          <article key={key} style={styles.summaryCard}>
-            <div style={styles.summaryIconWrap}>
+          <article key={key} style={styles.summaryCard} className="infra-requests-summary-card">
+            <div style={styles.summaryIconWrap} className="infra-requests-summary-icon">
               <Icon size={18} />
             </div>
             <div>
@@ -216,7 +217,7 @@ const InfrastructureRequests = () => {
         ))}
       </section>
 
-      <section style={styles.filterCard} aria-label="Request filters">
+      <section style={styles.filterCard} className="infra-requests-filter-card" aria-label="Request filters">
         <div style={styles.searchWrap}>
           <Search size={16} color="#64748b" />
           <input
@@ -262,13 +263,13 @@ const InfrastructureRequests = () => {
         </div>
 
         {hasFilters && (
-          <button type="button" style={styles.filterResetButton} onClick={clearFilters}>
+          <button type="button" style={styles.filterResetButton} className="infra-requests-filter-reset-button" onClick={clearFilters}>
             <Filter size={15} /> Clear filters
           </button>
         )}
       </section>
 
-      <section style={styles.tablePanel}>
+      <section style={styles.tablePanel} className="infra-requests-table-panel">
         <div style={styles.tableMeta}>
           <span>
             {pagination.total
@@ -340,22 +341,22 @@ const InfrastructureRequests = () => {
             </table>
           </div>
         ) : (
-          <div style={styles.emptyState}>
+          <div style={styles.emptyState} className="infra-requests-empty-state">
             <ClipboardList size={28} color="#94a3b8" />
             <strong>No infrastructure requests found</strong>
             <p>Create a new request to begin tracking infrastructure work.</p>
-            <button type="button" style={styles.primaryButton} onClick={() => setShowForm(true)}>
+            <button type="button" style={styles.primaryButton} className="infra-requests-primary-button" onClick={() => setShowForm(true)}>
               <Plus size={16} /> New Request
             </button>
           </div>
         )}
 
         <div style={styles.paginationRow}>
-          <button type="button" style={styles.paginationButton} disabled={page <= 1 || state.tableLoading} onClick={() => setPage((current) => current - 1)}>
+          <button type="button" style={styles.paginationButton} className="infra-requests-pagination-button" disabled={page <= 1 || state.tableLoading} onClick={() => setPage((current) => current - 1)}>
             Previous
           </button>
           <span style={styles.pageMeta}>Page {pagination.page} of {pagination.totalPages || 1}</span>
-          <button type="button" style={styles.paginationButton} disabled={page >= (pagination.totalPages || 1) || state.tableLoading} onClick={() => setPage((current) => current + 1)}>
+          <button type="button" style={styles.paginationButton} className="infra-requests-pagination-button" disabled={page >= (pagination.totalPages || 1) || state.tableLoading} onClick={() => setPage((current) => current + 1)}>
             Next
           </button>
         </div>
@@ -363,20 +364,20 @@ const InfrastructureRequests = () => {
 
       {showForm && (
         <div style={styles.modalBackdrop} onMouseDown={(event) => event.target === event.currentTarget && setShowForm(false)}>
-          <div style={styles.modalCard} role="dialog" aria-modal="true" aria-labelledby="new-request-title">
+          <div style={styles.modalCard} className="infra-requests-modal-card" role="dialog" aria-modal="true" aria-labelledby="new-request-title">
             <div style={styles.modalHeader}>
               <div>
-                <div style={styles.breadcrumb}>Create infrastructure request</div>
+                <div style={styles.breadcrumb} className="infra-requests-breadcrumb">Create infrastructure request</div>
                 <h2 id="new-request-title" style={styles.modalTitle}>New Request</h2>
               </div>
-              <button type="button" style={styles.closeButton} onClick={() => setShowForm(false)} aria-label="Close form">
+              <button type="button" style={styles.closeButton} className="infra-requests-close-button" onClick={() => setShowForm(false)} aria-label="Close form">
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={submitRequest} style={styles.formGrid}>
-              <label style={styles.fieldGroup}>
-                <span style={styles.fieldLabel}>Request type</span>
+            <form onSubmit={submitRequest} style={styles.formGrid} className="infra-requests-form-grid">
+              <label style={styles.fieldGroup} className="infra-requests-field-group">
+                <span style={styles.fieldLabel} className="infra-requests-field-label">Request type</span>
                 <select
                   value={form.type}
                   onChange={(event) => setForm((previous) => ({ ...previous, type: event.target.value }))}
@@ -388,8 +389,8 @@ const InfrastructureRequests = () => {
                 </select>
               </label>
 
-              <label style={styles.fieldGroup}>
-                <span style={styles.fieldLabel}>Request title</span>
+              <label style={styles.fieldGroup} className="infra-requests-field-group">
+                <span style={styles.fieldLabel} className="infra-requests-field-label">Request title</span>
                 <input
                   type="text"
                   value={form.item}
@@ -399,8 +400,8 @@ const InfrastructureRequests = () => {
                 />
               </label>
 
-              <label style={styles.fieldGroup}>
-                <span style={styles.fieldLabel}>Priority</span>
+              <label style={styles.fieldGroup} className="infra-requests-field-group">
+                <span style={styles.fieldLabel} className="infra-requests-field-label">Priority</span>
                 <select
                   value={form.priority}
                   onChange={(event) => setForm((previous) => ({ ...previous, priority: event.target.value }))}
@@ -411,8 +412,8 @@ const InfrastructureRequests = () => {
                 </select>
               </label>
 
-              <label style={styles.fieldGroup}>
-                <span style={styles.fieldLabel}>Quantity</span>
+              <label style={styles.fieldGroup} className="infra-requests-field-group">
+                <span style={styles.fieldLabel} className="infra-requests-field-label">Quantity</span>
                 <input
                   type="number"
                   min="1"
@@ -421,8 +422,8 @@ const InfrastructureRequests = () => {
                 />
               </label>
 
-              <label style={{ ...styles.fieldGroup, gridColumn: '1 / -1' }}>
-                <span style={styles.fieldLabel}>Details</span>
+              <label style={{ ...styles.fieldGroup, gridColumn: '1 / -1' }} className="infra-requests-field-group infra-requests-field-group-full">
+                <span style={styles.fieldLabel} className="infra-requests-field-label">Details</span>
                 <textarea
                   rows="5"
                   value={form.reason}
@@ -433,10 +434,10 @@ const InfrastructureRequests = () => {
               </label>
 
               <div style={{ ...styles.modalActions, gridColumn: '1 / -1' }}>
-                <button type="button" style={styles.secondaryButton} onClick={() => setShowForm(false)}>
+                <button type="button" style={styles.secondaryButton} className="infra-requests-secondary-button" onClick={() => setShowForm(false)}>
                   Cancel
                 </button>
-                <button type="submit" style={styles.primaryButton} disabled={saving}>
+                <button type="submit" style={styles.primaryButton} className="infra-requests-primary-button" disabled={saving}>
                   {saving ? 'Submitting...' : 'Submit request'}
                 </button>
               </div>
@@ -447,19 +448,19 @@ const InfrastructureRequests = () => {
 
       {selected && (
         <div style={styles.modalBackdrop} onMouseDown={(event) => event.target === event.currentTarget && setSelected(null)}>
-          <div style={styles.modalCardLarge} role="dialog" aria-modal="true" aria-labelledby="request-detail-title">
+          <div style={styles.modalCardLarge} className="infra-requests-modal-card-large" role="dialog" aria-modal="true" aria-labelledby="request-detail-title">
             <div style={styles.modalHeader}>
               <div>
-                <div style={styles.breadcrumb}>Request details</div>
+                <div style={styles.breadcrumb} className="infra-requests-breadcrumb">Request details</div>
                 <h2 id="request-detail-title" style={styles.modalTitle}>{selected.requestNumber || `REQ-${String(selected.id).padStart(6, '0')}`}</h2>
               </div>
-              <button type="button" style={styles.closeButton} onClick={() => setSelected(null)} aria-label="Close detail view">
+              <button type="button" style={styles.closeButton} className="infra-requests-close-button" onClick={() => setSelected(null)} aria-label="Close detail view">
                 <X size={18} />
               </button>
             </div>
 
             <div style={styles.detailGrid}>
-              <div style={styles.detailCard}>
+              <div style={styles.detailCard} className="infra-requests-detail-card">
                 <div style={styles.detailHeading}><FileText size={16} /> Request Information</div>
                 <div style={styles.detailRow}><span>Type</span><strong>{title(selected.type)}</strong></div>
                 <div style={styles.detailRow}><span>Item</span><strong>{display(selected.item || selected.asset?.name)}</strong></div>
@@ -469,21 +470,21 @@ const InfrastructureRequests = () => {
                 <div style={styles.detailRow}><span>Updated</span><strong>{date(selected.updatedAt)}</strong></div>
               </div>
 
-              <div style={styles.detailCard}>
+              <div style={styles.detailCard} className="infra-requests-detail-card">
                 <div style={styles.detailHeading}><UserRound size={16} /> Requester</div>
                 <div style={styles.detailRow}><span>Name</span><strong>{display(selected.requester?.name || selected.requester?.username)}</strong></div>
                 <div style={styles.detailRow}><span>Department</span><strong>{display(selected.department?.name)}</strong></div>
                 <div style={styles.detailRow}><span>Reviewed by</span><strong>{display(selected.reviewer?.name || selected.reviewer?.username)}</strong></div>
               </div>
 
-              <div style={styles.detailCard}>
+              <div style={styles.detailCard} className="infra-requests-detail-card">
                 <div style={styles.detailHeading}><MapPin size={16} /> Location</div>
                 <div style={styles.detailRow}><span>Asset</span><strong>{display(selected.asset?.name || selected.asset?.assetCode)}</strong></div>
                 <div style={styles.detailRow}><span>Department</span><strong>{display(selected.department?.name)}</strong></div>
                 <div style={styles.detailRow}><span>Quantity</span><strong>{display(selected.quantity)}</strong></div>
               </div>
 
-              <div style={styles.detailCard}>
+              <div style={styles.detailCard} className="infra-requests-detail-card">
                 <div style={styles.detailHeading}><Building2 size={16} /> Details</div>
                 <div style={styles.detailRow}><span>Reason</span><strong>{display(selected.reason || selected.comment)}</strong></div>
               </div>

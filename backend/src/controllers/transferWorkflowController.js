@@ -282,6 +282,7 @@ const createTransfer = async (req, res, next) => {
     let transferNumber = number();
     while (await Transfer.findOne({ where: { transferNumber }, transaction, lock: transaction.LOCK.UPDATE })) transferNumber = number();
     const row = await Transfer.create({
+      assetType: 'asset',
       transferNumber,
       assetId: asset.id,
       sourceCampusId: asset.campusId || null,

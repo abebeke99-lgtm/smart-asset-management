@@ -5,6 +5,7 @@ const { createAuditLog } = require('../services/auditLogService');
 const { saveAssetDocument, removeStoredAssetDocument } = require('../services/assetDocumentStorage');
 const { getRecoveryDays } = require('../services/assetRetentionService');
 const { isCollegeScopedRole, getCollegeScopeId } = require('../middlewares/organizationScope');
+const { getCollegeAssetScope } = require('../services/collegeAssetScope');
 
 const serializeAsset = (asset, assignment = null, laboratoryName = null) => {
   const data = asset.toJSON ? asset.toJSON() : asset;
@@ -539,7 +540,7 @@ const updateAsset = async (req, res) => {
     const providedCollegeId = req.body?.collegeId ?? req.body?.college_id;
     if (scopedRole && (req.body?.collegeId !== undefined || req.body?.college_id !== undefined) && Number(providedCollegeId) !== collegeId) return res.status(403).json({ success: false, message: 'Asset College is outside your organization scope' });
     const asset = collegeId
-      ? await Asset.findOne({ where: { id: req.params.id, collegeId } })
+      ? await Asset.findOne({ where: { [Op.and]: [{ id: req.params.id }, await getCollegeAssetScope(collegeId)] } })
       : await Asset.findByPk(req.params.id);
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
     const previousValue = asset.toJSON();

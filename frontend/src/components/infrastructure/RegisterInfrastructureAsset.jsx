@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Plus } from 'lucide-react';
 import { apiClient } from '../../utils/api';
+import './RegisterInfrastructureAsset.css';
 
 const RegisterInfrastructureAsset = () => {
   const navigate = useNavigate();
@@ -100,9 +101,9 @@ const RegisterInfrastructureAsset = () => {
   const locations = ['Main Campus', 'East Wing', 'West Wing', 'Administrative Building', 'Technical Center', 'Ground Floor', 'Roof Area'];
 
   return (
-    <div style={{ padding: '24px', background: '#f3f4f6', minHeight: '100vh' }}>
+    <div className="register-infrastructure-asset-page" style={{ padding: '24px', background: '#f3f4f6', minHeight: '100vh' }}>
       {/* Header */}
-      <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div className="register-infrastructure-asset-header" style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
         <button
           onClick={() => navigate('/infrastructure/assets')}
           style={{
@@ -119,7 +120,7 @@ const RegisterInfrastructureAsset = () => {
           <ChevronLeft size={20} /> Back
         </button>
         <div>
-          <div style={{ color: '#6b7280', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div className="eyebrow" style={{ color: '#6b7280', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Infrastructure Asset Registration
           </div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1a365d', margin: '8px 0 0' }}>
@@ -129,10 +130,10 @@ const RegisterInfrastructureAsset = () => {
       </div>
 
       {/* Progress Indicator */}
-      <div style={{ background: '#ffffff', borderRadius: '12px', padding: '16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="register-infrastructure-asset-stepper" style={{ background: '#ffffff', borderRadius: '12px', padding: '16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         {[1, 2, 3, 4, 5].map(num => (
           <React.Fragment key={num}>
-            <div style={{
+            <div className={`register-infrastructure-asset-step ${num <= step ? 'is-active' : ''}`} style={{
               width: '40px',
               height: '40px',
               borderRadius: '50%',
@@ -146,7 +147,7 @@ const RegisterInfrastructureAsset = () => {
               {num}
             </div>
             {num < 5 && (
-              <div style={{
+              <div className={`register-infrastructure-asset-step-divider ${num < step ? 'is-active' : ''}`} style={{
                 flex: 1,
                 height: '2px',
                 background: num < step ? '#2b6cb0' : '#E2E8F0',
@@ -158,14 +159,14 @@ const RegisterInfrastructureAsset = () => {
       </div>
 
       {/* Form Steps */}
-      <div style={{ background: '#ffffff', borderRadius: '12px', padding: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+      <div className="register-infrastructure-asset-card" style={{ background: '#ffffff', borderRadius: '12px', padding: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
         {/* Step 1: Asset Type */}
         {step === 1 && (
-          <div>
-            <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#1a365d', marginBottom: '20px' }}>Select Asset Type</h2>
-            <div style={{ display: 'grid', gap: '12px' }}>
+          <div className="register-infrastructure-asset-step-panel">
+            <h2 className="register-infrastructure-asset-step-title" style={{ fontSize: '1.3rem', fontWeight: 700, color: '#1a365d', marginBottom: '20px' }}>Select Asset Type</h2>
+            <div className="register-infrastructure-asset-option-list" style={{ display: 'grid', gap: '12px' }}>
               {assetTypes.map(type => (
-                <label key={type} style={{ display: 'flex', alignItems: 'center', padding: '12px', border: formData.assetType === type ? '2px solid #2b6cb0' : '1px solid #E2E8F0', borderRadius: '8px', cursor: 'pointer', background: formData.assetType === type ? '#EAF2FA' : 'transparent' }}>
+                <label className="register-infrastructure-asset-option" key={type} style={{ display: 'flex', alignItems: 'center', padding: '12px', border: formData.assetType === type ? '2px solid #2b6cb0' : '1px solid #E2E8F0', borderRadius: '8px', cursor: 'pointer', background: formData.assetType === type ? '#EAF2FA' : 'transparent' }}>
                   <input
                     type="radio"
                     name="assetType"
@@ -183,12 +184,12 @@ const RegisterInfrastructureAsset = () => {
 
         {/* Step 2: Category & Subcategory */}
         {step === 2 && (
-          <div>
-            <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#1a365d', marginBottom: '20px' }}>Select Category</h2>
-            <div style={{ display: 'grid', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Category</label>
-                <select
+          <div className="register-infrastructure-asset-step-panel">
+            <h2 className="register-infrastructure-asset-step-title" style={{ fontSize: '1.3rem', fontWeight: 700, color: '#1a365d', marginBottom: '20px' }}>Select Category</h2>
+            <div className="register-infrastructure-asset-form-grid" style={{ display: 'grid', gap: '16px' }}>
+              <div className="register-infrastructure-asset-field">
+                <label className="register-infrastructure-asset-label" style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Category</label>
+                <select className="register-infrastructure-asset-input"
                   name="category"
                   value={formData.category}
                   onChange={handleInputChange}
@@ -206,12 +207,12 @@ const RegisterInfrastructureAsset = () => {
 
         {/* Step 3: Asset Information */}
         {step === 3 && (
-          <div>
-            <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#1a365d', marginBottom: '20px' }}>Asset Information</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Asset Name *</label>
-                <input
+          <div className="register-infrastructure-asset-step-panel">
+            <h2 className="register-infrastructure-asset-step-title" style={{ fontSize: '1.3rem', fontWeight: 700, color: '#1a365d', marginBottom: '20px' }}>Asset Information</h2>
+            <div className="register-infrastructure-asset-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div className="register-infrastructure-asset-field">
+                <label className="register-infrastructure-asset-label" style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Asset Name *</label>
+                <input className="register-infrastructure-asset-input"
                   type="text"
                   name="assetName"
                   value={formData.assetName}
@@ -220,9 +221,9 @@ const RegisterInfrastructureAsset = () => {
                   style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.95rem' }}
                 />
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Serial Number</label>
-                <input
+              <div className="register-infrastructure-asset-field">
+                <label className="register-infrastructure-asset-label" style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Serial Number</label>
+                <input className="register-infrastructure-asset-input"
                   type="text"
                   name="serialNumber"
                   value={formData.serialNumber}
@@ -231,9 +232,9 @@ const RegisterInfrastructureAsset = () => {
                   style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.95rem' }}
                 />
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Model</label>
-                <input
+              <div className="register-infrastructure-asset-field">
+                <label className="register-infrastructure-asset-label" style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Model</label>
+                <input className="register-infrastructure-asset-input"
                   type="text"
                   name="model"
                   value={formData.model}
@@ -242,9 +243,9 @@ const RegisterInfrastructureAsset = () => {
                   style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.95rem' }}
                 />
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Manufacturer</label>
-                <input
+              <div className="register-infrastructure-asset-field">
+                <label className="register-infrastructure-asset-label" style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Manufacturer</label>
+                <input className="register-infrastructure-asset-input"
                   type="text"
                   name="manufacturer"
                   value={formData.manufacturer}
@@ -253,9 +254,9 @@ const RegisterInfrastructureAsset = () => {
                   style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.95rem' }}
                 />
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Purchase Date</label>
-                <input
+              <div className="register-infrastructure-asset-field">
+                <label className="register-infrastructure-asset-label" style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Purchase Date</label>
+                <input className="register-infrastructure-asset-input"
                   type="date"
                   name="purchaseDate"
                   value={formData.purchaseDate}
@@ -263,9 +264,9 @@ const RegisterInfrastructureAsset = () => {
                   style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.95rem' }}
                 />
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Purchase Price</label>
-                <input
+              <div className="register-infrastructure-asset-field">
+                <label className="register-infrastructure-asset-label" style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Purchase Price</label>
+                <input className="register-infrastructure-asset-input"
                   type="number"
                   name="purchasePrice"
                   value={formData.purchasePrice}
@@ -281,12 +282,12 @@ const RegisterInfrastructureAsset = () => {
 
         {/* Step 4: Location & Identification */}
         {step === 4 && (
-          <div>
-            <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#1a365d', marginBottom: '20px' }}>Location & Identification</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Location</label>
-                <select
+          <div className="register-infrastructure-asset-step-panel">
+            <h2 className="register-infrastructure-asset-step-title" style={{ fontSize: '1.3rem', fontWeight: 700, color: '#1a365d', marginBottom: '20px' }}>Location & Identification</h2>
+            <div className="register-infrastructure-asset-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div className="register-infrastructure-asset-field">
+                <label className="register-infrastructure-asset-label" style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Location</label>
+                <select className="register-infrastructure-asset-input"
                   name="location"
                   value={formData.location}
                   onChange={handleInputChange}
@@ -298,9 +299,9 @@ const RegisterInfrastructureAsset = () => {
                   ))}
                 </select>
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Building</label>
-                <input
+              <div className="register-infrastructure-asset-field">
+                <label className="register-infrastructure-asset-label" style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Building</label>
+                <input className="register-infrastructure-asset-input"
                   type="text"
                   name="building"
                   value={formData.building}
@@ -309,9 +310,9 @@ const RegisterInfrastructureAsset = () => {
                   style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.95rem' }}
                 />
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>RFID Tag</label>
-                <input
+              <div className="register-infrastructure-asset-field">
+                <label className="register-infrastructure-asset-label" style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>RFID Tag</label>
+                <input className="register-infrastructure-asset-input"
                   type="text"
                   name="rfidTag"
                   value={formData.rfidTag}
@@ -320,9 +321,9 @@ const RegisterInfrastructureAsset = () => {
                   style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.95rem' }}
                 />
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Condition</label>
-                <select
+              <div className="register-infrastructure-asset-field">
+                <label className="register-infrastructure-asset-label" style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#1a365d', marginBottom: '8px' }}>Condition</label>
+                <select className="register-infrastructure-asset-input"
                   name="condition"
                   value={formData.condition}
                   onChange={handleInputChange}
@@ -341,25 +342,25 @@ const RegisterInfrastructureAsset = () => {
 
         {/* Step 5: Review */}
         {step === 5 && (
-          <div>
-            <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#1a365d', marginBottom: '20px' }}>Review & Submit</h2>
-            <div style={{ background: '#F5F7FA', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div className="register-infrastructure-asset-step-panel">
+            <h2 className="register-infrastructure-asset-step-title" style={{ fontSize: '1.3rem', fontWeight: 700, color: '#1a365d', marginBottom: '20px' }}>Review & Submit</h2>
+            <div className="register-infrastructure-asset-review-card" style={{ background: '#F5F7FA', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
+              <div className="register-infrastructure-asset-review-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
-                  <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '4px' }}>Asset Type</div>
-                  <div style={{ fontWeight: 600, color: '#1a365d' }}>{formData.assetType || 'Not selected'}</div>
+                  <div className="review-label" style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '4px' }}>Asset Type</div>
+                  <div className="review-value" style={{ fontWeight: 600, color: '#1a365d' }}>{formData.assetType || 'Not selected'}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '4px' }}>Category</div>
-                  <div style={{ fontWeight: 600, color: '#1a365d' }}>{formData.category || 'Not selected'}</div>
+                  <div className="review-label" style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '4px' }}>Category</div>
+                  <div className="review-value" style={{ fontWeight: 600, color: '#1a365d' }}>{formData.category || 'Not selected'}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '4px' }}>Asset Name</div>
-                  <div style={{ fontWeight: 600, color: '#1a365d' }}>{formData.assetName || 'Not provided'}</div>
+                  <div className="review-label" style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '4px' }}>Asset Name</div>
+                  <div className="review-value" style={{ fontWeight: 600, color: '#1a365d' }}>{formData.assetName || 'Not provided'}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '4px' }}>Location</div>
-                  <div style={{ fontWeight: 600, color: '#1a365d' }}>{formData.location || 'Not assigned'}</div>
+                  <div className="review-label" style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '4px' }}>Location</div>
+                  <div className="review-value" style={{ fontWeight: 600, color: '#1a365d' }}>{formData.location || 'Not assigned'}</div>
                 </div>
               </div>
             </div>
@@ -371,8 +372,9 @@ const RegisterInfrastructureAsset = () => {
 
         {/* Navigation Buttons */}
         {error && <div role="alert" style={{ color: '#b91c1c', background: '#fee2e2', padding: '12px 16px', borderRadius: '8px', marginTop: '16px' }}>{error}</div>}
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginTop: '24px' }}>
+        <div className="register-infrastructure-asset-actions" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginTop: '24px' }}>
           <button
+            className="register-infrastructure-asset-secondary-button"
             onClick={handlePrevious}
             disabled={step === 1}
             style={{
@@ -389,6 +391,7 @@ const RegisterInfrastructureAsset = () => {
           </button>
           {step < 5 ? (
             <button
+              className="register-infrastructure-asset-primary-button"
               onClick={handleNext}
               style={{
                 padding: '10px 20px',
@@ -404,6 +407,7 @@ const RegisterInfrastructureAsset = () => {
             </button>
           ) : (
             <button
+              className="register-infrastructure-asset-primary-button"
               onClick={handleSubmit}
               style={{
                 padding: '10px 20px',

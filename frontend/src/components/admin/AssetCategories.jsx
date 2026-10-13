@@ -847,6 +847,15 @@ export default function AssetCategories() {
         {error && (
           <div className="error-box">
             {error}
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={loadCategories}
+              disabled={loading}
+              style={{ marginLeft: 12 }}
+            >
+              {t("common.retry", "Retry")}
+            </button>
           </div>
         )}
 

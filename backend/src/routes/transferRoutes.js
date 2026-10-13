@@ -432,6 +432,7 @@ router.post('/', requireAuth, requireRole(...transferRoles), requireAnyPermissio
     const now = new Date();
     const sourceRoom = asset.roomId ? await Room.findByPk(asset.roomId, { transaction }) : null;
     const transfer = await Transfer.create({
+      assetType: 'asset',
       transferNumber,
       assetId: asset.id,
       sourceCampusId: asset.campusId || null,

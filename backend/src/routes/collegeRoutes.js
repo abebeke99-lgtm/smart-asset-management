@@ -1,6 +1,8 @@
 const express = require('express');
+const { Op } = require('sequelize');
 const { requireAuth, requireActiveAccount, requireRole, requirePermission } = require('../middlewares/auth');
 const { requireCollegeManager, resolveCollegeScope } = require('../middlewares/organizationScope');
+const { getCollegeAssetScope } = require('../services/collegeAssetScope');
 const { getCollegeDashboard, getCollegeProfile, updateCollegeProfile, listCollegeDepartments, getCollegeDepartmentOverview, getCollegeDepartmentPerformance, getCollegeDepartmentReports, listCollegeAssets, getCollegeInventory, getCollegeAssetRegistrationOptions, getCollegeAsset, listCollegeLocations, getCollegeLocation, createCollegeLocation, updateCollegeLocation, deleteCollegeLocation, createCollegeDepartment, updateCollegeDepartment, updateCollegeDepartmentStatus, deleteCollegeDepartment, getCollegeDepartmentDetails, listCollegeDepartmentStaff, listCollegeDepartmentAssets, listCollegeAssignments, getCollegeAssignmentOptions, listCollegeMaintenance, getCollegeMaintenance, listCollegeVerification, getCollegeReports, getCollegeAssetAnalytics, listCollegeRFIDTracking, lookupCollegeTrackingCode, recordCollegeTrackingScan, assignCollegeTrackingTags, regenerateCollegeQr } = require('../controllers/collegeController');
 const { listRequests, getRequest, decideRequest, listCollegeRequests, getCollegeRequest, listCollegeDepartmentRequests } = require('../controllers/workspaceRequestController');
 const verification = require('../controllers/verificationController');
@@ -11,7 +13,6 @@ const collegeAssetRequests = require('../controllers/collegeAssetRequestControll
 const collegeStaff = require('../controllers/collegeStaffController');
 
 const router = express.Router();
-const { Op } = require('sequelize');
 const { Notification, NotificationDelivery, sequelize } = require('../models');
 const { createAuditLog } = require('../services/auditLogService');
 const { normalizeRoleForStorage } = require('../constants/rolePermissions');
@@ -52,7 +53,8 @@ const buildCollegeNotificationScope = (req) => ({
 
 const requireCollegeAsset = async (req, res, next) => {
   try {
-    const asset = await Asset.findOne({ where: { id: req.params.id, collegeId: req.organizationScope.collegeId }, attributes: ['id'] });
+    const scope = await getCollegeAssetScope(req.organizationScope.collegeId);
+    const asset = await Asset.findOne({ where: { [Op.and]: [{ id: req.params.id }, scope] }, attributes: ['id'] });
     if (!asset) return res.status(404).json({ success: false, message: 'Asset not found in your college' });
     return next();
   } catch (error) {

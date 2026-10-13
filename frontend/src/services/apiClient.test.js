@@ -117,6 +117,33 @@ describe('authenticated API requests and session expiry', () => {
     expect(requestAuthorization).toBe('Bearer valid-session-token');
   });
 
+  it('sends Admin category lookups to the API with the active bearer token', async () => {
+    localStorage.setItem('token', 'admin-session-token');
+    let requestConfig;
+    let client;
+    jest.isolateModules(() => {
+      client = require('./apiClient').default;
+    });
+
+    await client.get('/api/categories?page=1&limit=100', {
+      adapter: (config) => {
+        requestConfig = config;
+        return Promise.resolve({
+          config,
+          data: { success: true, data: [] },
+          headers: { 'content-type': 'application/json' },
+          request: {},
+          status: 200,
+          statusText: 'OK',
+        });
+      },
+    });
+
+    expect(requestConfig.url).toBe('/api/categories?page=1&limit=100');
+    expect(requestConfig.headers.Authorization).toMatch(/^Bearer /);
+    expect(requestConfig.headers.Authorization).toContain('admin-session-token');
+  });
+
   it('clears the current expired session and preserves a one-time sign-in notice', () => {
     localStorage.setItem('token', 'expired-session-token');
     localStorage.setItem('user', JSON.stringify({ id: 4, role: 'college_manager' }));

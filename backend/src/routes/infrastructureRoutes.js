@@ -122,6 +122,7 @@ router.get('/transfer/locations', requireRole('admin', 'infrastructure'), infras
 router.get('/transfer/:id', requireRole('admin', 'infrastructure'), infrastructureTransfer.getOne);
 router.post('/transfer', requireRole('admin', 'infrastructure'), infrastructureTransfer.create);
 router.patch('/transfer/:id/approve', requireRole('admin', 'infrastructure'), infrastructureTransfer.approve);
+router.patch('/transfer/:id/reject', requireRole('admin', 'infrastructure'), infrastructureTransfer.reject);
 router.patch('/transfer/:id/complete', requireRole('admin', 'infrastructure'), infrastructureTransfer.complete);
 router.patch('/transfer/:id/cancel', requireRole('admin', 'infrastructure'), infrastructureTransfer.cancel);
 

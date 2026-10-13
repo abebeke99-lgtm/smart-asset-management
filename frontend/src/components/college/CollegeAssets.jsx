@@ -37,9 +37,28 @@ const CollegeAssets = ({ inventory = false }) => {
       const response = await apiClient.get(inventory ? '/api/college/inventory' : '/api/college/assets', { params: { ...query, page, limit: 20, search: query.search || undefined } });
       const payload = response.data;
       if (!payload || !Array.isArray(payload.data)) throw new Error(t('collegeAssets.invalidResponse', 'The server returned invalid asset data.'));
-      const filters = payload.filters && typeof payload.filters === 'object' ? payload.filters : {};
-      const summary = payload.summary && typeof payload.summary === 'object' ? payload.summary : emptySummary;
-      const pagination = payload.pagination && typeof payload.pagination === 'object' ? payload.pagination : {};
+      const filters = payload.filters;
+      const summaryFields = Object.keys(emptySummary);
+      const summary = payload.summary;
+      const pagination = payload.pagination;
+      const hasValidSummary = summary
+        && typeof summary === 'object'
+        && summaryFields.every((field) => Number.isSafeInteger(summary[field]) && summary[field] >= 0);
+      const hasValidFilters = filters
+        && typeof filters === 'object'
+        && Object.keys(emptyFilters).every((field) => Array.isArray(filters[field]));
+      const hasValidPagination = pagination
+        && Number.isSafeInteger(pagination.page)
+        && pagination.page > 0
+        && Number.isSafeInteger(pagination.limit)
+        && pagination.limit > 0
+        && Number.isSafeInteger(pagination.total)
+        && pagination.total >= 0
+        && Number.isSafeInteger(pagination.pages ?? pagination.totalPages)
+        && (pagination.pages ?? pagination.totalPages) >= 0;
+      if (!hasValidSummary || !hasValidFilters || !hasValidPagination) {
+        throw new Error(t('collegeAssets.invalidResponse', 'The server returned invalid asset data.'));
+      }
       setState((previous) => ({
         ...previous,
         loading: false,
@@ -48,10 +67,10 @@ const CollegeAssets = ({ inventory = false }) => {
         summary: { ...emptySummary, ...summary },
         filters: Object.fromEntries(Object.keys(emptyFilters).map((key) => [key, arrayOrEmpty(filters[key])])),
         pagination: {
-          page: Number(pagination.page) > 0 ? Number(pagination.page) : page,
-          limit: Number(pagination.limit) > 0 ? Number(pagination.limit) : 20,
-          total: Number.isFinite(Number(pagination.total)) ? Number(pagination.total) : payload.data.length,
-          pages: Number(pagination.pages || pagination.totalPages) > 0 ? Number(pagination.pages || pagination.totalPages) : 1
+          page: pagination.page,
+          limit: pagination.limit,
+          total: pagination.total,
+          pages: (pagination.pages ?? pagination.totalPages) > 0 ? (pagination.pages ?? pagination.totalPages) : 1
         },
         college: payload.college || previous.college
       }));

@@ -110,6 +110,15 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
   : [...configuredOrigins, ...localOrigins];
 
 const normalizeOrigin = (value = '') => value.replace(/\/+$/, '');
+const isAllowedVercelOrigin = (origin) => {
+  try {
+    const { protocol, hostname } = new URL(origin);
+    return protocol === 'https:'
+      && /^smart-asset-management-six(?:-[a-z0-9-]+)?\.vercel\.app$/i.test(hostname);
+  } catch {
+    return false;
+  }
+};
 const isLocalDevelopmentOrigin = (origin) => {
   try {
     const { protocol, hostname, port } = new URL(origin);
@@ -136,6 +145,7 @@ app.use(cors({
 
     const normalizedOrigin = normalizeOrigin(origin);
     const allowed = allowedOrigins.some((allowedOrigin) => normalizeOrigin(allowedOrigin) === normalizedOrigin)
+      || isAllowedVercelOrigin(normalizedOrigin)
       || (process.env.NODE_ENV !== 'production' && isLocalDevelopmentOrigin(normalizedOrigin));
 
     if (allowed) {

@@ -5,6 +5,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  ArrowRightLeft,
   Building2,
   CheckCircle2,
   ChevronLeft,
@@ -35,6 +36,8 @@ const InfrastructureAssets = () => {
 
   const [assets, setAssets] = useState([]);
   const [summary, setSummary] = useState(null);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [filterOptions, setFilterOptions] = useState({ categories: [], locations: [], statuses: [] });
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -49,6 +52,7 @@ const InfrastructureAssets = () => {
   const [selectedAsset, setSelectedAsset] = useState(null);
 
   const [page, setPage] = useState(1);
+  const [pageCount, setPageCount] = useState(1);
   const [pageSize] = useState(10);
 
   const loadAssets = useCallback(
@@ -73,51 +77,26 @@ const InfrastructureAssets = () => {
           },
         });
 
-        const responseData = response?.data?.data ?? response?.data ?? {};
-
-        let rows = [];
-
-        if (Array.isArray(responseData)) {
-          rows = responseData;
-        } else if (Array.isArray(responseData.assets)) {
-          rows = responseData.assets;
-        } else if (Array.isArray(responseData.rows)) {
-          rows = responseData.rows;
-        } else if (Array.isArray(response?.data?.assets)) {
-          rows = response.data.assets;
-        }
+        const payload = response?.data ?? {};
+        const responseData = payload.data ?? payload;
+        const rows = Array.isArray(responseData)
+          ? responseData
+          : Array.isArray(responseData.assets)
+            ? responseData.assets
+            : Array.isArray(responseData.rows)
+              ? responseData.rows
+              : Array.isArray(payload.assets)
+                ? payload.assets
+                : [];
 
         setAssets(rows);
-
-        setSummary({
-          total:
-            Number(
-              responseData.total ??
-                responseData.totalAssets ??
-                response?.data?.total ??
-                rows.length
-            ) || 0,
-
-          operational:
-            Number(
-              responseData.operational ??
-                responseData.operationalAssets
-            ) || 0,
-
-          maintenance:
-            Number(
-              responseData.maintenance ??
-                responseData.underMaintenance
-            ) || 0,
-
-          critical:
-            Number(
-              responseData.critical ??
-                responseData.criticalAssets
-            ) || 0,
-
-          missing:
-            Number(responseData.missing) || 0,
+        setSummary(payload.summary || responseData.summary || null);
+        setTotalRecords(Number(payload.pagination?.total ?? rows.length) || 0);
+        setPageCount(Number(payload.pagination?.totalPages ?? payload.pagination?.pages) || 1);
+        setFilterOptions({
+          categories: payload.filters?.categories || [],
+          locations: payload.filters?.locations || [],
+          statuses: payload.filters?.statuses || [],
         });
       } catch (err) {
         console.error("Infrastructure assets error:", err);
@@ -129,6 +108,9 @@ const InfrastructureAssets = () => {
         );
 
         setAssets([]);
+        setSummary(null);
+        setTotalRecords(0);
+        setPageCount(1);
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -186,11 +168,12 @@ const InfrastructureAssets = () => {
         "assetCategory",
         "category_name",
         "categoryName",
-        "type",
-        "asset_type",
       ],
-      "Uncategorized"
+      getValue(asset, ["type", "asset_type"], "Uncategorized")
     );
+
+  const getAssetType = (asset) =>
+    getValue(asset, ["type", "asset_type", "assetType"], "");
 
   const getLocation = (asset) =>
     getValue(
@@ -220,8 +203,8 @@ const InfrastructureAssets = () => {
     getValue(
       asset,
       [
-        "assigned_to",
-        "assignedTo",
+        "assignedToName",
+        "assigned_to_name",
         "assigned_name",
         "assignedName",
         "custodian",
@@ -230,79 +213,29 @@ const InfrastructureAssets = () => {
     );
 
   const categories = useMemo(() => {
-    const values = assets
+    const values = (filterOptions.categories.length ? filterOptions.categories : assets
       .map((asset) => getCategory(asset))
-      .filter(Boolean);
+      .filter(Boolean));
 
     return [...new Set(values)].sort();
-  }, [assets]);
+  }, [assets, filterOptions.categories]);
 
   const locations = useMemo(() => {
-    const values = assets
+    const values = (filterOptions.locations.length ? filterOptions.locations : assets
       .map((asset) => getLocation(asset))
-      .filter((value) => value && value !== "Not assigned");
+      .filter((value) => value && value !== "Not assigned"));
 
     return [...new Set(values)].sort();
   }, [assets]);
 
-  const filteredAssets = useMemo(() => {
-    let result = [...assets];
-
-    const query = search.trim().toLowerCase();
-
-    if (query) {
-      result = result.filter((asset) => {
-        const searchable = [
-          getAssetName(asset),
-          getAssetTag(asset),
-          getCategory(asset),
-          getLocation(asset),
-          getStatus(asset),
-          getSerial(asset),
-          getAssignedTo(asset),
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        return searchable.includes(query);
-      });
-    }
-
-    if (status !== "all") {
-      result = result.filter(
-        (asset) =>
-          String(getStatus(asset)).toLowerCase() ===
-          status.toLowerCase()
-      );
-    }
-
-    if (category !== "all") {
-      result = result.filter(
-        (asset) =>
-          String(getCategory(asset)).toLowerCase() ===
-          category.toLowerCase()
-      );
-    }
-
-    if (location !== "all") {
-      result = result.filter(
-        (asset) =>
-          String(getLocation(asset)).toLowerCase() ===
-          location.toLowerCase()
-      );
-    }
-
-    return result;
-  }, [assets, search, status, category, location]);
+  const filteredAssets = assets;
 
   const stats = useMemo(() => {
-    const total =
-      Number(summary?.total) ||
-      filteredAssets.length ||
-      assets.length;
+    const total = Number(summary?.total ?? assets.length) || 0;
 
-    const operational =
-      Number(summary?.operational) ||
+    const operational = summary?.operational !== undefined
+      ? Number(summary.operational) || 0
+      :
       assets.filter((asset) => {
         const value = String(getStatus(asset)).toLowerCase();
         return [
@@ -315,8 +248,9 @@ const InfrastructureAssets = () => {
         ].includes(value);
       }).length;
 
-    const maintenance =
-      Number(summary?.maintenance) ||
+    const maintenance = summary?.maintenance !== undefined
+      ? Number(summary.maintenance) || 0
+      :
       assets.filter((asset) => {
         const value = String(getStatus(asset)).toLowerCase();
 
@@ -329,8 +263,9 @@ const InfrastructureAssets = () => {
         ].includes(value);
       }).length;
 
-    const critical =
-      Number(summary?.critical) ||
+    const critical = summary?.critical !== undefined
+      ? Number(summary.critical) || 0
+      :
       assets.filter((asset) => {
         const value = String(getStatus(asset)).toLowerCase();
 
@@ -343,8 +278,9 @@ const InfrastructureAssets = () => {
         ].includes(value);
       }).length;
 
-    const missing =
-      Number(summary?.missing) ||
+    const missing = summary?.missing !== undefined
+      ? Number(summary.missing) || 0
+      :
       assets.filter((asset) => {
         const value = String(getStatus(asset)).toLowerCase();
         return ["missing", "lost", "unaccounted"].includes(value);
@@ -357,7 +293,7 @@ const InfrastructureAssets = () => {
       critical,
       missing,
     };
-  }, [summary, assets, filteredAssets.length]);
+  }, [summary, assets]);
 
   const getStatusClass = (value) => {
     const normalized = String(value || "")
@@ -467,15 +403,9 @@ const InfrastructureAssets = () => {
     category !== "all" ||
     location !== "all";
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(
-      (Number(summary?.total) || filteredAssets.length) /
-        pageSize
-    )
-  );
+  const totalPages = Math.max(1, Number(pageCount) || 1);
 
-  const displayedAssets = filteredAssets;
+  const displayedAssets = assets;
 
   if (loading) {
     return (
@@ -552,6 +482,15 @@ const InfrastructureAssets = () => {
           >
             <Plus size={17} />
             Register Asset
+          </Link>
+
+          <Link
+            to="/infrastructure/transfer"
+            state={{ openCreate: true }}
+            className="secondary-button"
+          >
+            <ArrowRightLeft size={16} />
+            Add Transfer
           </Link>
         </div>
       </header>
@@ -725,19 +664,9 @@ const InfrastructureAssets = () => {
                 }
               >
                 <option value="all">All statuses</option>
-                <option value="active">Active</option>
-                <option value="operational">
-                  Operational
-                </option>
-                <option value="available">
-                  Available
-                </option>
-                <option value="maintenance">
-                  Maintenance
-                </option>
-                <option value="damaged">Damaged</option>
-                <option value="critical">Critical</option>
-                <option value="missing">Missing</option>
+                {filterOptions.statuses.map((item) => (
+                  <option key={item} value={item}>{item}</option>
+                ))}
               </select>
             </div>
 
@@ -785,11 +714,8 @@ const InfrastructureAssets = () => {
       {/* RESULTS INFO */}
       <div className="results-bar">
         <div>
-          <strong>
-            {filteredAssets.length.toLocaleString()}
-          </strong>{" "}
-          asset
-          {filteredAssets.length !== 1 ? "s" : ""} displayed
+          Showing <strong>{filteredAssets.length.toLocaleString()}</strong> on this page, of{" "}
+          <strong>{totalRecords.toLocaleString()}</strong> matching assets
         </div>
 
         <div className="results-right">
@@ -849,14 +775,15 @@ const InfrastructureAssets = () => {
               <table className="assets-table">
                 <thead>
                   <tr>
-                    <th>Asset</th>
+                    <th>Asset Name</th>
                     <th>Asset Tag</th>
-                    <th>Category</th>
+                    <th>Serial Number</th>
+                    <th>Category / Asset Type</th>
                     <th>Location</th>
                     <th>Assigned To</th>
                     <th>Status</th>
-                    <th>Registered</th>
-                    <th></th>
+                    <th>Registered Date</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
 
@@ -879,15 +806,7 @@ const InfrastructureAssets = () => {
                             </div>
 
                             <div className="asset-info">
-                              <strong>
-                                {getAssetName(asset)}
-                              </strong>
-
-                              {getSerial(asset) && (
-                                <span>
-                                  SN: {getSerial(asset)}
-                                </span>
-                              )}
+                              <strong>{getAssetName(asset)}</strong>
                             </div>
                           </div>
                         </td>
@@ -901,8 +820,15 @@ const InfrastructureAssets = () => {
                         </td>
 
                         <td>
+                          {getSerial(asset) || <span className="muted">—</span>}
+                        </td>
+
+                        <td>
                           <div className="category-cell">
                             {getCategory(asset)}
+                            {getAssetType(asset) && (
+                              <span className="asset-type-label">{getAssetType(asset)}</span>
+                            )}
                           </div>
                         </td>
 
@@ -948,16 +874,26 @@ const InfrastructureAssets = () => {
                         </td>
 
                         <td>
-                          <button
-                            type="button"
-                            className="view-button"
-                            onClick={() =>
-                              setSelectedAsset(asset)
-                            }
-                            title="View asset"
-                          >
-                            <Eye size={16} />
-                          </button>
+                          <div className="asset-row-actions">
+                            <button
+                              type="button"
+                              className="view-button"
+                              onClick={() => setSelectedAsset(asset)}
+                              title="View asset"
+                              aria-label={`View ${getAssetName(asset)}`}
+                            >
+                              <Eye size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              className="view-button"
+                              onClick={() => navigate("/infrastructure/transfer", { state: { asset } })}
+                              title={`Transfer ${getAssetName(asset)}`}
+                              aria-label={`Transfer ${getAssetName(asset)}`}
+                            >
+                              <Truck size={16} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -970,10 +906,11 @@ const InfrastructureAssets = () => {
             <div className="pagination">
               <div className="pagination-info">
                 Showing{" "}
-                <strong>
-                  {displayedAssets.length}
-                </strong>{" "}
-                records
+                Showing{" "}
+                <strong>{totalRecords === 0 ? 0 : (page - 1) * pageSize + 1}</strong>
+                {" "}–{" "}
+                <strong>{Math.min(page * pageSize, totalRecords)}</strong>
+                {" "}of <strong>{totalRecords}</strong> records
               </div>
 
               <div className="pagination-controls">
@@ -997,8 +934,7 @@ const InfrastructureAssets = () => {
                 <button
                   type="button"
                   disabled={
-                    page >= totalPages ||
-                    displayedAssets.length < pageSize
+                    page >= totalPages
                   }
                   onClick={() =>
                     setPage((current) =>
@@ -1042,13 +978,13 @@ const InfrastructureAssets = () => {
 
           <Link to="/infrastructure/assignment">
             <ClipboardCheck size={16} />
-            Assignment
+            Assignments
             <ArrowRight size={14} />
           </Link>
 
           <Link to="/infrastructure/transfer">
             <Truck size={16} />
-            Transfer
+            Transfers
             <ArrowRight size={14} />
           </Link>
 
@@ -1835,10 +1771,19 @@ const css = `
 
   .category-cell {
     max-width: 160px;
-    overflow: hidden;
     color: #475569;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.4;
+  }
+
+  .asset-type-label {
+    display: block;
+    color: #94a3b8;
+    font-size: 10px;
+  }
+
+  .asset-row-actions {
+    display: flex;
+    gap: 6px;
   }
 
   .location-cell {

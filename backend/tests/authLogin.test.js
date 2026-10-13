@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 const { resolveLoginAliases, normalizeLoginIdentity, generateToken } = require('../src/controllers/authController');
 const { resolveDemoPassword } = require('../src/config/seed');
 const { isAccountActive } = require('../src/utils/accountStatus');
-const { findCollegeScopeForUser } = require('../src/middlewares/organizationScope');
+const { findCollegeScopeForUser, resolveCollegeScope } = require('../src/middlewares/organizationScope');
 const { normalizeOrganizationSettings, resolveOrganizationSettings } = require('../src/routes/adminSettingsRoutes');
 const { College, Department, User } = require('../src/models');
 
@@ -263,34 +263,55 @@ test('generateToken carries organization scope fields needed by the protected co
   assert.equal(payload.departmentId, 11);
 });
 
-test('college scope lookup resolves the only available college for a college manager when no assignment is present', async () => {
+test('an unassigned college manager does not inherit or create a college scope', async () => {
   assert.equal(typeof findCollegeScopeForUser, 'function');
   const originals = {
     collegeFindOne: College.findOne,
     collegeFindAll: College.findAll,
-    departmentFindOne: Department.findOne,
     userFindByPk: User.findByPk,
+    collegeCreate: College.create,
+    userUpdate: User.update,
   };
   College.findOne = async () => null;
   College.findAll = async () => [{ id: 7, status: 'active' }];
-  Department.findOne = async () => null;
   User.findByPk = async () => null;
+  let creates = 0;
+  let updates = 0;
+  College.create = async () => { creates += 1; };
+  User.update = async () => { updates += 1; };
 
   try {
     const scope = await findCollegeScopeForUser({
       id: 99,
-      role: 'college',
+      role: 'college_manager',
       department: 'Engineering',
       collegeId: null,
     });
-    assert.ok(scope && Number.isInteger(scope.collegeId));
-    assert.equal(scope.collegeId, scope.college.id);
-    assert.ok(scope.college);
+    assert.equal(scope, null);
+    assert.equal(creates, 0);
+    assert.equal(updates, 0);
+
+    let responseStatus;
+    let responseBody;
+    let continued = false;
+    await resolveCollegeScope(
+      { user: { id: 99, role: 'college_manager', collegeId: null } },
+      {
+        status(status) { responseStatus = status; return this; },
+        json(body) { responseBody = body; return this; },
+      },
+      () => { continued = true; },
+    );
+
+    assert.equal(responseStatus, 403);
+    assert.deepEqual(responseBody, { success: false, message: 'College scope is not configured for this account' });
+    assert.equal(continued, false);
   } finally {
     College.findOne = originals.collegeFindOne;
     College.findAll = originals.collegeFindAll;
-    Department.findOne = originals.departmentFindOne;
     User.findByPk = originals.userFindByPk;
+    College.create = originals.collegeCreate;
+    User.update = originals.userUpdate;
   }
 });
 

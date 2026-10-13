@@ -15,7 +15,7 @@ test.after(() => {
   auditLogService.createAuditLog = originalCreateAuditLog;
 });
 
-test('backup creation logs the original failure and returns it in a JSON error response', async (t) => {
+test('backup creation logs the original failure and returns a safe JSON error response', async (t) => {
   const originalCreateBackup = backupService.createManualBackup;
   const originalConsoleError = console.error;
   const failure = new Error('mysqldump is unavailable');
@@ -49,8 +49,9 @@ test('backup creation logs the original failure and returns it in a JSON error r
   assert.equal(res.statusCode, 500);
   assert.deepEqual(response, {
     success: false,
-    message: 'Backup failed: mysqldump is unavailable',
+    message: 'Database backup could not be completed. Check the backup configuration and server logs.',
   });
+  assert.equal(JSON.stringify(response).includes('mysqldump'), false);
 });
 
 test('backup creation passes the authenticated user identity to backup metadata', async (t) => {

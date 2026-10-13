@@ -3,7 +3,8 @@ const fsSync = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
-const { getDatabaseConfig } = require('../config/database');
+const { QueryTypes, Transaction } = require('sequelize');
+const { getDatabaseConfig, sequelize } = require('../config/database');
 
 const BACKUP_DIRECTORY = path.resolve(__dirname, '../../backups');
 const METADATA_FILE_PATTERN = /^backup_[0-9]{8}T[0-9]{6}_[a-f0-9]{8}\.json$/;
@@ -23,6 +24,15 @@ function getBackupStorageLocation() {
 }
 
 async function ensureBackupDirectory() {
+  if (
+    process.env.NODE_ENV === 'production'
+    && !process.env.BACKUP_DIR
+    && !process.env.BACKUP_STORAGE_PATH
+  ) {
+    const error = new Error('Configure BACKUP_DIR to a persistent mounted volume before creating production backups.');
+    error.code = 'BACKUP_STORAGE_NOT_CONFIGURED';
+    throw error;
+  }
   const targetDirectory = getBackupStorageLocation();
   await fs.mkdir(targetDirectory, { recursive: true });
   return targetDirectory;
@@ -150,68 +160,140 @@ function isValidSqlDump(content) {
   return buffer.length > 128 && /(CREATE TABLE|INSERT INTO|-- MySQL dump|-- MariaDB dump)/i.test(buffer);
 }
 
-async function runMysqlDump(databaseConfig) {
-  const dumpBinary = resolveMysqlBinary('mysqldump');
+async function writeDatabaseDump(databaseConfig) {
   const dumpPath = path.join(await ensureBackupDirectory(), `db_${buildTimestampLabel()}_${randomSuffix()}.sql`);
-
-  const args = [
-    '--host', databaseConfig.host,
-    '--port', String(databaseConfig.port || 3306),
-    '--user', databaseConfig.username,
-    '--single-transaction',
-    '--routines',
-    '--triggers',
-    '--databases',
-    databaseConfig.database,
-  ];
-
-  await new Promise((resolve, reject) => {
-    const child = spawn(dumpBinary, args, {
-      env: { ...process.env, MYSQL_PWD: databaseConfig.password || '' },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let stderr = '';
-    let fileHandle;
-
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString();
-    });
-
-    child.stdout.on('data', (chunk) => {
-      if (!fileHandle) {
-        fileHandle = true;
-      }
-    });
-
-    const outStream = require('fs').createWriteStream(dumpPath);
-    child.stdout.pipe(outStream);
-
-    child.on('error', (error) => {
-      if (outStream.destroy) outStream.destroy();
-      if (error.code === 'ENOENT') {
-        reject(new Error('mysqldump is unavailable. Install a MySQL-compatible client or set MYSQLDUMP_PATH.'));
-        return;
-      }
-      reject(error);
-    });
-
-    child.on('close', async (code) => {
-      try {
-        if (code !== 0) {
-          throw new Error(stderr.trim() || `mysqldump exited with code ${code}`);
-        }
-        if (!require('fs').existsSync(dumpPath)) {
-          throw new Error('Backup dump file was not created');
-        }
-        resolve();
-      } catch (error) {
-        reject(error);
-      }
+  const output = fsSync.createWriteStream(dumpPath, { flags: 'wx' });
+  let outputError;
+  output.on('error', (error) => { outputError = error; });
+  const writeChunk = (chunk) => new Promise((resolve, reject) => {
+    output.write(chunk, (error) => {
+      if (error || outputError) reject(error || outputError);
+      else resolve();
     });
   });
+  const quoteIdentifier = (value) => `\`${String(value).replace(/`/g, '``')}\``;
+  const getTableName = (row) => {
+    const tableNameKey = Object.keys(row).find((key) => /^Tables_in_/i.test(key)) || Object.keys(row)[0];
+    return row[tableNameKey];
+  };
+  const getCreateStatement = (row) => Object.entries(row)
+    .find(([key]) => /^Create (?:Table|View|Trigger|Procedure|Function)$/i.test(key) || /^SQL Original Statement$/i.test(key))?.[1];
+  const toSqlLiteral = (value) => (
+    value !== null
+    && typeof value === 'object'
+    && !(value instanceof Date)
+    && !Buffer.isBuffer(value)
+      ? sequelize.escape(JSON.stringify(value))
+      : sequelize.escape(value)
+  );
 
-  return dumpPath;
+  try {
+    await sequelize.transaction(
+      { isolationLevel: Transaction.ISOLATION_LEVELS.REPEATABLE_READ },
+      async (transaction) => {
+        await writeChunk(`-- Smart Asset Management database backup\n-- Database: ${String(databaseConfig.database).replace(/[\r\n]/g, '')}\nSET FOREIGN_KEY_CHECKS=0;\n\n`);
+        const tableRows = await sequelize.query('SHOW FULL TABLES', { type: QueryTypes.SELECT, transaction });
+        const views = [];
+        const triggers = [];
+
+        for (const tableRow of tableRows) {
+          const tableName = getTableName(tableRow);
+          const tableTypeKey = Object.keys(tableRow).find((key) => /^Table_type$/i.test(key));
+          const tableType = String(tableTypeKey ? tableRow[tableTypeKey] : 'BASE TABLE').toUpperCase();
+          if (!tableName) continue;
+
+          const quotedName = quoteIdentifier(tableName);
+          if (tableType !== 'VIEW' && tableType !== 'BASE TABLE') continue;
+          if (tableType === 'VIEW') {
+            const [viewRow] = await sequelize.query(`SHOW CREATE VIEW ${quotedName}`, {
+              type: QueryTypes.SELECT,
+              transaction,
+            });
+            const createView = viewRow && getCreateStatement(viewRow);
+            if (createView) views.push(`${createView};\n`);
+            continue;
+          }
+
+          const [schemaRow] = await sequelize.query(`SHOW CREATE TABLE ${quotedName}`, {
+            type: QueryTypes.SELECT,
+            transaction,
+          });
+          const createTable = schemaRow && getCreateStatement(schemaRow);
+          if (!createTable) throw new Error(`Could not read the schema for table ${tableName}.`);
+          await writeChunk(`-- Table ${tableName}\nDROP TABLE IF EXISTS ${quotedName};\n${createTable};\n`);
+
+          let offset = 0;
+          while (true) {
+            const records = await sequelize.query(`SELECT * FROM ${quotedName} LIMIT 250 OFFSET ${offset}`, {
+              type: QueryTypes.SELECT,
+              raw: true,
+              transaction,
+            });
+            if (!records.length) break;
+            const columns = Object.keys(records[0]);
+            const columnSql = columns.map(quoteIdentifier).join(', ');
+            const escapedRows = records.map((record) => `(${columns.map((column) => toSqlLiteral(record[column])).join(', ')})`);
+            await writeChunk(`INSERT INTO ${quotedName} (${columnSql}) VALUES\n${escapedRows.join(',\n')};\n`);
+            offset += records.length;
+            if (records.length < 250) break;
+          }
+        }
+
+        const triggerRows = await sequelize.query(`SHOW TRIGGERS FROM ${quoteIdentifier(databaseConfig.database)}`, {
+          type: QueryTypes.SELECT,
+          transaction,
+        });
+        for (const trigger of triggerRows) {
+          const triggerName = trigger.Trigger || trigger.trigger;
+          if (!triggerName) continue;
+          const [triggerDefinition] = await sequelize.query(
+            `SHOW CREATE TRIGGER ${quoteIdentifier(databaseConfig.database)}.${quoteIdentifier(triggerName)}`,
+            { type: QueryTypes.SELECT, transaction }
+          );
+          const createTrigger = triggerDefinition && getCreateStatement(triggerDefinition);
+          if (createTrigger) triggers.push(`${createTrigger}$$\n`);
+        }
+
+        const routines = [];
+        for (const routineType of ['PROCEDURE', 'FUNCTION']) {
+          const routineRows = await sequelize.query(
+            `SHOW ${routineType} STATUS WHERE Db = ${sequelize.escape(databaseConfig.database)}`,
+            { type: QueryTypes.SELECT, transaction }
+          );
+          for (const routine of routineRows) {
+            const routineName = routine.Name || routine.name;
+            if (!routineName) continue;
+            const [routineDefinition] = await sequelize.query(
+              `SHOW CREATE ${routineType} ${quoteIdentifier(databaseConfig.database)}.${quoteIdentifier(routineName)}`,
+              { type: QueryTypes.SELECT, transaction }
+            );
+            const createRoutine = routineDefinition && getCreateStatement(routineDefinition);
+            if (createRoutine) routines.push(`${createRoutine}$$\n`);
+          }
+        }
+
+        if (views.length || triggers.length || routines.length) await writeChunk('DELIMITER $$\n');
+        for (const view of views) await writeChunk(view);
+        for (const trigger of triggers) await writeChunk(trigger);
+        for (const routine of routines) await writeChunk(routine);
+        if (views.length || triggers.length || routines.length) await writeChunk('DELIMITER ;\n');
+        await writeChunk('\nSET FOREIGN_KEY_CHECKS=1;\n');
+      }
+    );
+    await new Promise((resolve, reject) => {
+      if (outputError) {
+        reject(outputError);
+        return;
+      }
+      output.once('error', reject);
+      output.end(() => (outputError ? reject(outputError) : resolve()));
+    });
+    return dumpPath;
+  } catch (error) {
+    output.destroy();
+    await fs.unlink(dumpPath).catch(() => {});
+    throw error;
+  }
 }
 
 async function runMysqlRestore(databaseConfig, dumpPath) {
@@ -400,7 +482,7 @@ async function createManualBackup({ createdBy = 'system', type = 'Manual', sourc
     completedAt: null,
     createdBy: typeof createdBy === 'object' ? (createdBy.username || createdBy.fullName || 'System') : createdBy,
     createdById: typeof createdBy === 'object' ? createdBy.id || null : null,
-    storage: process.env.BACKUP_STORAGE_PROVIDER || 'Local backup directory',
+    storage: process.env.BACKUP_STORAGE_PROVIDER || (process.env.NODE_ENV === 'production' ? 'Persistent volume' : 'Local backup directory'),
     database: null,
     dumpFileName: null,
     dumpFilePath: null,
@@ -428,7 +510,7 @@ async function createManualBackup({ createdBy = 'system', type = 'Manual', sourc
   try {
     const databaseConfig = getDatabaseConfig();
     metadata.database = databaseConfig.database;
-    dumpPath = await runMysqlDump(databaseConfig);
+    dumpPath = await writeDatabaseDump(databaseConfig);
     metadata.dumpFileName = path.basename(dumpPath);
     metadata.dumpFilePath = dumpPath;
     const dumpStats = await fs.stat(dumpPath);
@@ -638,6 +720,7 @@ module.exports = {
   resolveMysqlDumpBinary: () => resolveMysqlBinary('mysqldump'),
   resolveMysqlBinary: () => resolveMysqlBinary('mysql'),
   ensureBackupDirectory,
+  writeDatabaseDump,
   createManualBackup,
   listBackupHistory,
   verifyBackupFile,
@@ -648,7 +731,7 @@ module.exports = {
     automaticBackupEnabled: process.env.BACKUP_AUTO_ENABLE === 'true',
     schedule: process.env.BACKUP_SCHEDULE || '0 2 * * *',
     retention: process.env.BACKUP_RETENTION || '30 backups',
-    storage: process.env.BACKUP_STORAGE_PROVIDER || 'Local backup directory',
+    storage: process.env.BACKUP_STORAGE_PROVIDER || (process.env.NODE_ENV === 'production' ? 'Persistent volume' : 'Local backup directory'),
     encryptionEnabled: Boolean(getEncryptionKey()),
     verificationEnabled: true,
     timezone: process.env.TZ || 'UTC',
