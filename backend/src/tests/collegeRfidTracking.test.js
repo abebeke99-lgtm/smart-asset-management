@@ -104,6 +104,12 @@ test('college tracking dashboard returns full-scope counts and applies filters b
   assert.deepEqual(queryLog.recentCount.include[0].where, { collegeId: 22 });
   assert.equal(queryLog.recentCount.include[0].where.departmentId, undefined);
   assert.equal(queryLog.recentLogs.limit, 20);
+  assert.equal(queryLog.recentLogs.include[0].where.collegeId, 22);
+  assert.equal(queryLog.recentLogs.include[0].where.status, 'available');
+  assert.equal(queryLog.recentLogs.include[0].where.departmentId, 8);
+  assert.ok(Object.getOwnPropertySymbols(queryLog.recentLogs.include[0].where).includes(Op.or));
+  assert.equal(queryLog.recentCount.where.createdAt[Op.gte] instanceof Date, true);
+  assert.equal(queryLog.recentLogs.where.createdAt[Op.gte].getTime(), queryLog.recentCount.where.createdAt[Op.gte].getTime());
   assert.equal(queryLog.locationWhere.collegeId, 22);
 });
 
@@ -386,6 +392,109 @@ test('college tracking endpoints require the existing view or asset-update permi
   assert.equal(endpoint('post', '/rfid/scan'), true);
   assert.equal(endpoint('post', '/rfid/assets/:id/tags'), true);
   assert.equal(endpoint('post', '/rfid/assets/:id/qr/regenerate'), true);
+});
+
+test('recent scan count SQL qualifies the RFID log id once and keeps the college asset scope', async (t) => {
+  const originalQuery = models.sequelize.query;
+  let generatedSql = '';
+  models.sequelize.query = async (sql) => {
+    generatedSql = sql;
+    return { count: 4 };
+  };
+  t.after(() => { models.sequelize.query = originalQuery; });
+
+  const count = await models.RFIDLog.count({
+    include: [{
+      model: models.Asset,
+      where: { collegeId: 22 },
+      required: true,
+      attributes: ['id'],
+    }],
+    distinct: true,
+    col: 'id',
+  });
+
+  assert.equal(count, 4);
+  assert.match(generatedSql, /count\(DISTINCT\(`RFIDLog`\.`id`\)\)/i);
+  assert.doesNotMatch(generatedSql, /RFIDLog->RFIDLog/);
+  assert.match(generatedSql, /`Asset`\.`college_id` = 22/);
+});
+
+test('college asset analytics uses local id columns for grouped count aggregates', async (t) => {
+  const originalFindAll = {
+    department: models.Department.findAll,
+    asset: models.Asset.findAll,
+    assignment: models.Assignment.findAll,
+    maintenance: models.Maintenance.findAll,
+    verification: models.VerificationItem.findAll,
+    transfer: models.Transfer.findAll,
+    returns: models.AssetReturn.findAll,
+  };
+  const originalCount = {
+    asset: models.Asset.count,
+    assignment: models.Assignment.count,
+  };
+  const originalSum = models.Asset.sum;
+  const observed = [];
+
+  models.Department.findAll = async () => [{ id: 5, name: 'Computer Science', code: 'CS' }];
+  models.Asset.findAll = async (options) => {
+    observed.push({ kind: 'asset', options });
+    return [];
+  };
+  models.Asset.count = async () => 0;
+  models.Assignment.findAll = async (options) => {
+    observed.push({ kind: 'assignment', options });
+    return [];
+  };
+  models.Assignment.count = async () => 0;
+  models.Maintenance.findAll = async (options) => {
+    observed.push({ kind: 'maintenance', options });
+    return [];
+  };
+  models.VerificationItem.findAll = async (options) => {
+    observed.push({ kind: 'verification', options });
+    return [];
+  };
+  models.Transfer.findAll = async (options) => {
+    observed.push({ kind: 'transfer', options });
+    return [];
+  };
+  models.AssetReturn.findAll = async (options) => {
+    observed.push({ kind: 'returns', options });
+    return [];
+  };
+  models.Asset.sum = async () => 0;
+  t.after(() => {
+    models.Department.findAll = originalFindAll.department;
+    models.Asset.findAll = originalFindAll.asset;
+    models.Assignment.findAll = originalFindAll.assignment;
+    models.Maintenance.findAll = originalFindAll.maintenance;
+    models.VerificationItem.findAll = originalFindAll.verification;
+    models.Transfer.findAll = originalFindAll.transfer;
+    models.AssetReturn.findAll = originalFindAll.returns;
+    models.Asset.count = originalCount.asset;
+    models.Assignment.count = originalCount.assignment;
+    models.Asset.sum = originalSum;
+  });
+
+  const res = response();
+  await controller.getCollegeAssetAnalytics({
+    organizationScope: { collegeId: 22, college: { collegeName: 'Computer Science' } },
+    query: {},
+  }, res, (error) => { throw error; });
+
+  assert.equal(res.statusCode, 200);
+  const maintenanceOptions = observed.find((entry) => entry.kind === 'maintenance' && entry.options.group);
+  const verificationOptions = observed.find((entry) => entry.kind === 'verification' && entry.options.group);
+  assert.ok(maintenanceOptions, 'maintenance summary should run grouped status aggregation');
+  assert.ok(verificationOptions, 'verification summary should run grouped state aggregation');
+  assert.equal(maintenanceOptions.options.attributes[1][0].fn, 'COUNT');
+  assert.equal(maintenanceOptions.options.attributes[1][0].args[0].col, 'id');
+  assert.equal(maintenanceOptions.options.group[0].col, 'status');
+  assert.equal(verificationOptions.options.attributes[1][0].fn, 'COUNT');
+  assert.equal(verificationOptions.options.attributes[1][0].args[0].col, 'id');
+  assert.equal(verificationOptions.options.group[0].col, 'state');
 });
 
 function restoreModels() {

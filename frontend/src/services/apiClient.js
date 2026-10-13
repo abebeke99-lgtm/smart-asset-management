@@ -27,6 +27,7 @@ const normalizeApiBase = (value) => {
 };
 
 export const API_BASE_URL = normalizeApiBase(configuredApiUrl);
+export const SESSION_EXPIRED_STORAGE_KEY = 'uams-session-expired';
 
 export const resolveAssetUrl = (value = '') => {
   const trimmed = String(value || '').trim();
@@ -77,6 +78,19 @@ export const isCurrentAuthRequest = (error) => {
   return Boolean(requestToken && currentToken && requestToken === currentToken);
 };
 
+export const clearExpiredSession = (error) => {
+  if (error?.response?.status !== 401 || !isCurrentAuthRequest(error)) return false;
+
+  localStorage.removeItem('token');
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('user');
+  if (typeof window !== 'undefined') {
+    window.sessionStorage.setItem(SESSION_EXPIRED_STORAGE_KEY, 'true');
+  }
+  delete axios.defaults.headers.common.Authorization;
+  return true;
+};
+
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token') || localStorage.getItem('authToken');
@@ -114,11 +128,7 @@ apiClient.interceptors.response.use(
       });
     }
 
-    if (error.response?.status === 401 && isCurrentAuthRequest(error)) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('user');
-      delete axios.defaults.headers.common.Authorization;
+    if (clearExpiredSession(error)) {
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.assign('/login');
       }

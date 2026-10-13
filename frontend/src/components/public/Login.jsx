@@ -5,7 +5,7 @@ import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/UiContext';
 import { translateMessage } from '../../i18n/messages';
-import { apiBase } from '../../utils/api';
+import { apiBase, SESSION_EXPIRED_STORAGE_KEY } from '../../utils/api';
 import { Activity, ArrowRight, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 
 const normalizeRoleValue = (role) => {
@@ -68,6 +68,12 @@ const Login = () => {
       translateMessage(language, `auth.${messageKey}`)
     ])
   );
+
+  useEffect(() => {
+    if (sessionStorage.getItem(SESSION_EXPIRED_STORAGE_KEY) !== 'true') return;
+    sessionStorage.removeItem(SESSION_EXPIRED_STORAGE_KEY);
+    setError(t.sessionExpired);
+  }, [t.sessionExpired]);
 
   useEffect(() => {
     let mounted = true;
@@ -350,6 +356,7 @@ const loginMessageKeys = {
   signUp: 'signUp',
   backToHomepage: 'backToHomepage',
   invalidCredentials: 'invalidCredentials',
+  sessionExpired: 'sessionExpired',
   connectionError: 'connectionError',
   switchLanguage: 'switchLanguage',
 };

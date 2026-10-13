@@ -729,12 +729,13 @@ const buildDateRangeWhere = (dateField, dateFrom, dateTo, baseWhere = {}) => {
 };
 
 const buildTrendSeries = async (model, where, dateField = 'createdAt', include = []) => {
+  const periodColumn = literal(`DATE(${snakeCaseColumn(dateField)})`);
   const rows = await model.findAll({
     where,
     include,
-    attributes: [[literal(`DATE(${model.name}.${snakeCaseColumn(dateField)})`), 'period'], [fn('COUNT', sqlQualifiedColumn(model, 'id')), 'count']],
-    group: [literal(`DATE(${model.name}.${snakeCaseColumn(dateField)})`)],
-    order: [[literal(`DATE(${dateField})`), 'ASC']],
+    attributes: [[periodColumn, 'period'], [fn('COUNT', sqlColumn('id')), 'count']],
+    group: [periodColumn],
+    order: [[periodColumn, 'ASC']],
     raw: true,
   });
   return rows.map((row) => ({ period: row.period, count: Number(row.count || 0) }));
@@ -856,8 +857,8 @@ const getCollegeAssetAnalytics = async (req, res, next) => {
       }),
       Maintenance.findAll({
         include: [{ model: Asset, required: true, where: assetWhere, attributes: [] }],
-        attributes: ['status', [fn('COUNT', sqlQualifiedColumn(Maintenance, 'id')), 'count']],
-        group: [sqlQualifiedColumn(Maintenance, 'status')],
+        attributes: ['status', [fn('COUNT', sqlColumn('id')), 'count']],
+        group: [sqlColumn('status')],
         raw: true,
       }),
       VerificationItem.findAll({
@@ -873,8 +874,8 @@ const getCollegeAssetAnalytics = async (req, res, next) => {
           { model: Asset, required: true, where: assetWhere, attributes: [] },
           { model: VerificationSession, required: true, where: { collegeId }, attributes: [] },
         ],
-        attributes: ['state', [fn('COUNT', sqlQualifiedColumn(VerificationItem, 'id')), 'count']],
-        group: [sqlQualifiedColumn(VerificationItem, 'state')],
+        attributes: ['state', [fn('COUNT', sqlColumn('id')), 'count']],
+        group: [sqlColumn('state')],
         raw: true,
       }),
       Transfer.findAll({
@@ -1940,7 +1941,7 @@ const listCollegeRFIDTracking = async (req, res, next) => {
         attributes: [[sequelize.fn('DISTINCT', sequelize.fn('TRIM', sequelize.col('location'))), 'location']],
         raw: true,
       }),
-      RFIDLog.count({ where: recentLogWhere, include: [collegeLogAssetInclude], distinct: true, col: 'RFIDLog.id' }),
+      RFIDLog.count({ where: recentLogWhere, include: [collegeLogAssetInclude], distinct: true, col: 'id' }),
       RFIDLog.findAll({
         where: recentLogWhere,
         attributes: ['id', 'assetId', 'tag', 'readerId', 'scannedBy', 'action', 'location', 'notes', 'createdAt'],

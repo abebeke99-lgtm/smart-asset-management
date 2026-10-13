@@ -63,6 +63,9 @@ const translations = {
     'Generate QR': 'QR አመንጭ',
     'QR camera scans require HTTPS or localhost.': 'የQR ካሜራ ቅኝት HTTPS ወይም localhost ይፈልጋል።',
     'Could not access the camera. Check browser permission and try again.': 'ካሜራውን መድረስ አልተቻለም። የአሳሹን ፈቃድ ይመልከቱና ይሞክሩ።',
+    'A valid tracking identifier of 1 to 255 characters is required.': 'ከ1 እስከ 255 ቁምፊዎች ያሉት ትክክለኛ የክትትል መለያ ያስፈልጋል።',
+    'Unable to stop the QR camera. Close this page if the camera indicator remains active.': 'የQR ካሜራውን ማቆም አልተቻለም። የካሜራ ምልክቱ ከቀጠለ ይህን ገጽ ይዝጉ።',
+    'Starting camera…': 'ካሜራው በመጀመር ላይ…',
     'Asset found.': 'ንብረቱ ተገኝቷል።',
     'Scan recorded.': 'ቅኝቱ ተመዝግቧል።',
     'Tracking tag updated.': 'የክትትል መለያው ተዘምኗል።',
@@ -71,6 +74,11 @@ const translations = {
 };
 
 const text = (value, language) => translations[language]?.[value] || value;
+const containsControlCharacters = (value) => Array.from(value || '').some((character) => character.charCodeAt(0) < 32);
+const isValidTrackingIdentifier = (value) => typeof value === 'string'
+  && value.length > 0
+  && value.length <= 255
+  && !containsControlCharacters(value);
 
 const initialState = {
   loading: true,
@@ -99,8 +107,10 @@ const CollegeRFIDTracking = () => {
   const [actionError, setActionError] = useState('');
   const [actionBusy, setActionBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
   const [tagValues, setTagValues] = useState({});
   const scannerRef = useRef(null);
+  const scannerStartRef = useRef(null);
   const cameraScanHandledRef = useRef(false);
   const canManageTags = user?.role === 'college_manager' && hasPermission?.('college.assets.update');
 
@@ -143,7 +153,11 @@ const CollegeRFIDTracking = () => {
 
   const lookupIdentifier = async (value = identifier) => {
     const code = String(value || '').trim();
-    if (!code || actionBusy) return null;
+    if (!isValidTrackingIdentifier(code)) {
+      setActionError(t('A valid tracking identifier of 1 to 255 characters is required.'));
+      return null;
+    }
+    if (actionBusy) return null;
     setActionBusy(true);
     setActionError('');
     setFeedback('');
@@ -165,7 +179,11 @@ const CollegeRFIDTracking = () => {
 
   const recordScan = async (value = identifier, method = scanMethod) => {
     const code = String(value || '').trim();
-    if (!code || actionBusy) return;
+    if (!isValidTrackingIdentifier(code)) {
+      setActionError(t('A valid tracking identifier of 1 to 255 characters is required.'));
+      return;
+    }
+    if (actionBusy) return;
     setActionBusy(true);
     setActionError('');
     setFeedback('');
@@ -193,55 +211,106 @@ const CollegeRFIDTracking = () => {
     cameraScanHandledRef.current = false;
     const scanner = new Html5Qrcode('college-rfid-qr-reader');
     scannerRef.current = scanner;
-    setScanning(true);
+    setCameraStarting(true);
     try {
-      await scanner.start(
+      const startPromise = scanner.start(
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 230, height: 230 } },
         (decoded) => {
           const code = String(decoded || '').trim();
-          if (!code || cameraScanHandledRef.current || actionBusy) return;
+          if (!isValidTrackingIdentifier(code)) {
+            setActionError(t('A valid tracking identifier of 1 to 255 characters is required.'));
+            return;
+          }
+          if (cameraScanHandledRef.current || actionBusy) return;
           cameraScanHandledRef.current = true;
-          void stopCamera().then(() => recordScan(code, 'qr'));
+          setIdentifier(code);
+          void stopCamera().then((stopped) => {
+            if (stopped) void recordScan(code, 'qr');
+          });
         },
         () => {},
       );
-    } catch {
-      scannerRef.current = null;
-      setScanning(false);
-      try {
-        scanner.clear();
-      } catch (clearError) {
-        console.error('College tracking QR scanner cleanup failed:', clearError);
+      scannerStartRef.current = startPromise;
+      await startPromise;
+      if (scannerRef.current === scanner) {
+        scannerStartRef.current = null;
+        setCameraStarting(false);
+        setScanning(true);
       }
-      setActionError(t('Could not access the camera. Check browser permission and try again.'));
+    } catch {
+      if (scannerRef.current === scanner) {
+        scannerRef.current = null;
+        scannerStartRef.current = null;
+        setCameraStarting(false);
+        setScanning(false);
+        try {
+          scanner.clear();
+        } catch (clearError) {
+          console.error('College tracking QR scanner cleanup failed:', clearError);
+        }
+        setActionError(t('Could not access the camera. Check browser permission and try again.'));
+      }
     }
   };
 
   const stopCamera = async () => {
     const scanner = scannerRef.current;
-    if (!scanner) return;
+    if (!scanner) return true;
+    const startPromise = scannerStartRef.current;
+    scannerRef.current = null;
+    scannerStartRef.current = null;
+    cameraScanHandledRef.current = true;
+    let scannerStarted = !startPromise;
+    if (startPromise) {
+      try {
+        await startPromise;
+        scannerStarted = true;
+      } catch {
+        scannerStarted = false;
+      }
+    }
+    let stopFailed = false;
     try {
-      await scanner.stop();
+      if (scannerStarted) await scanner.stop();
     } catch (error) {
       console.error('College tracking QR scanner stop failed:', error);
+      stopFailed = true;
     }
     try {
       scanner.clear();
     } catch (error) {
       console.error('College tracking QR scanner clear failed:', error);
+      stopFailed = true;
     }
-    scannerRef.current = null;
+    setCameraStarting(false);
     setScanning(false);
+    if (stopFailed) {
+      setActionError(t('Unable to stop the QR camera. Close this page if the camera indicator remains active.'));
+      return false;
+    }
+    return true;
   };
 
   useEffect(() => () => {
     const scanner = scannerRef.current;
+    const startPromise = scannerStartRef.current;
+    scannerRef.current = null;
+    scannerStartRef.current = null;
     if (scanner) {
-      Promise.resolve(scanner.stop())
-        .then(() => scanner.clear())
-        .catch((error) => console.error('College tracking QR scanner cleanup failed:', error));
-      scannerRef.current = null;
+      void (async () => {
+        let scannerStarted = !startPromise;
+        if (startPromise) {
+          try {
+            await startPromise;
+            scannerStarted = true;
+          } catch {
+            scannerStarted = false;
+          }
+        }
+        if (scannerStarted) await scanner.stop();
+        scanner.clear();
+      })().catch((error) => console.error('College tracking QR scanner cleanup failed:', error));
     }
   }, []);
 
@@ -408,7 +477,12 @@ const CollegeRFIDTracking = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 220px) minmax(200px, 1fr) auto auto', gap: '10px', alignItems: 'end' }}>
           <label style={{ display: 'grid', gap: '6px', fontSize: '12px', color: '#475569' }}>
             {t('Scan method')}
-            <select value={scanMethod} onChange={(event) => { setScanMethod(event.target.value); setLookupResult(null); }} style={inputStyle}>
+            <select value={scanMethod} onChange={(event) => {
+              const nextMethod = event.target.value;
+              setScanMethod(nextMethod);
+              setLookupResult(null);
+              if (nextMethod !== 'qr' && scannerRef.current) void stopCamera();
+            }} style={inputStyle}>
               <option value="manual">{t('Manual lookup')}</option>
               <option value="qr">{t('QR camera scan')}</option>
               <option value="rfid">{t('RFID reader input')}</option>
@@ -434,8 +508,8 @@ const CollegeRFIDTracking = () => {
         {scanMethod === 'rfid' && <p style={{ margin: '8px 0 0', color: '#64748b', fontSize: '12px' }}>{t('RFID input uses a connected reader keyboard; hardware connectivity is not verified by this page.')}</p>}
         {scanMethod === 'qr' && (
           <div style={{ display: 'grid', justifyItems: 'start', gap: '8px', marginTop: '12px' }}>
-            <button type="button" onClick={() => scanning ? void stopCamera() : void startCamera()} disabled={actionBusy} style={buttonStyle}>
-              {t(scanning ? 'Stop camera' : 'Start QR camera')}
+            <button type="button" onClick={() => scanning ? void stopCamera() : void startCamera()} disabled={actionBusy || cameraStarting} style={buttonStyle}>
+              {t(scanning ? 'Stop camera' : cameraStarting ? 'Starting camera…' : 'Start QR camera')}
             </button>
             <div id="college-rfid-qr-reader" style={{ width: 'min(100%, 360px)' }} />
           </div>

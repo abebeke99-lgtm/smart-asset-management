@@ -1,4 +1,4 @@
-import { isCurrentAuthRequest } from './apiClient';
+import { clearExpiredSession, isCurrentAuthRequest, SESSION_EXPIRED_STORAGE_KEY } from './apiClient';
 
 describe('API base URL configuration', () => {
   it('normalizes a Render backend hostname into an HTTPS API base URL', () => {
@@ -83,5 +83,67 @@ describe('isCurrentAuthRequest', () => {
     expect(isCurrentAuthRequest({
       config: { headers: { Authorization: 'Bearer current-token' } },
     })).toBe(true);
+  });
+});
+
+describe('authenticated API requests and session expiry', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  it('attaches the current stored bearer token to protected API requests', async () => {
+    localStorage.setItem('token', 'valid-session-token');
+    let requestAuthorization;
+    let client;
+    jest.isolateModules(() => {
+      client = require('./apiClient').default;
+    });
+
+    await client.get('/college/rfid', {
+      adapter: (config) => {
+        requestAuthorization = config.headers.Authorization;
+        return Promise.resolve({
+          config,
+          data: {},
+          headers: {},
+          request: {},
+          status: 200,
+          statusText: 'OK',
+        });
+      },
+    });
+
+    expect(requestAuthorization).toBe('Bearer valid-session-token');
+  });
+
+  it('clears the current expired session and preserves a one-time sign-in notice', () => {
+    localStorage.setItem('token', 'expired-session-token');
+    localStorage.setItem('user', JSON.stringify({ id: 4, role: 'college_manager' }));
+
+    const wasCleared = clearExpiredSession({
+      response: { status: 401 },
+      config: { headers: { Authorization: 'Bearer expired-session-token' } },
+    });
+
+    expect(wasCleared).toBe(true);
+    expect(localStorage.getItem('token')).toBeNull();
+    expect(localStorage.getItem('user')).toBeNull();
+    expect(sessionStorage.getItem(SESSION_EXPIRED_STORAGE_KEY)).toBe('true');
+  });
+
+  it('does not clear a replacement session after a late unauthorized response', () => {
+    localStorage.setItem('token', 'replacement-session-token');
+    localStorage.setItem('user', JSON.stringify({ id: 8, role: 'admin' }));
+
+    const wasCleared = clearExpiredSession({
+      response: { status: 401 },
+      config: { headers: { Authorization: 'Bearer previous-session-token' } },
+    });
+
+    expect(wasCleared).toBe(false);
+    expect(localStorage.getItem('token')).toBe('replacement-session-token');
+    expect(localStorage.getItem('user')).not.toBeNull();
+    expect(sessionStorage.getItem(SESSION_EXPIRED_STORAGE_KEY)).toBeNull();
   });
 });

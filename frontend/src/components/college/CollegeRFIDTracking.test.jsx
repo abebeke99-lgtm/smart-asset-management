@@ -1,13 +1,22 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Html5Qrcode } from 'html5-qrcode';
 import { UiProvider } from '../../contexts/UiContext';
 import { useAuth } from '../../contexts/AuthContext';
 import apiClient from '../../services/apiClient';
 import CollegeRFIDTracking from './CollegeRFIDTracking';
 
+const mockStartScanner = jest.fn();
+const mockStopScanner = jest.fn();
+const mockClearScanner = jest.fn();
+
 jest.mock('../../services/apiClient', () => ({
   __esModule: true,
   default: { get: jest.fn(), post: jest.fn() },
+}));
+
+jest.mock('html5-qrcode', () => ({
+  Html5Qrcode: jest.fn(),
 }));
 
 jest.mock('../../contexts/AuthContext', () => ({
@@ -42,12 +51,29 @@ const dashboard = {
 
 const renderPage = () => render(<UiProvider><CollegeRFIDTracking /></UiProvider>);
 
+const createScanner = (startResult = Promise.resolve()) => {
+  const scanner = {
+    start: (...args) => {
+      mockStartScanner(...args);
+      return typeof startResult === 'function' ? startResult() : startResult;
+    },
+    stop: () => Promise.resolve(mockStopScanner()),
+    clear: () => mockClearScanner(),
+  };
+  Html5Qrcode.mockImplementation(() => scanner);
+  return scanner;
+};
+
 beforeEach(() => {
   localStorage.setItem('language', 'en');
   apiClient.get.mockReset();
   apiClient.post.mockReset();
+  Html5Qrcode.mockReset();
   apiClient.get.mockResolvedValue({ data: dashboard });
   apiClient.post.mockResolvedValue({ data: { success: true, data: { asset: dashboard.data[0] } } });
+  mockStartScanner.mockReset();
+  mockStopScanner.mockReset();
+  mockClearScanner.mockReset();
   useAuth.mockReturnValue({
     user: { id: 4, role: 'college_manager' },
     hasPermission: (permission) => permission === 'college.assets.update',
@@ -96,6 +122,102 @@ test('validates the lookup before recording a successful scan through the backen
     method: 'manual',
     value: 'QR-008',
   }));
+});
+
+test('camera QR scanning records the decoded identifier and releases the camera', async () => {
+  Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
+  createScanner();
+  renderPage();
+
+  fireEvent.change(await screen.findByLabelText('Scan method'), { target: { value: 'qr' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Start QR camera' }));
+  await waitFor(() => expect(mockStartScanner).toHaveBeenCalled());
+
+  const decodedQrHandler = mockStartScanner.mock.calls[0][2];
+  act(() => decodedQrHandler('QR-008'));
+
+  await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/api/college/rfid/scan', {
+    method: 'qr',
+    value: 'QR-008',
+  }));
+  expect(mockStopScanner).toHaveBeenCalled();
+  expect(mockClearScanner).toHaveBeenCalled();
+  expect(await screen.findByText('Scan recorded.')).toBeInTheDocument();
+});
+
+test('camera QR scan rejects invalid decoded values without calling the API', async () => {
+  Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
+  createScanner();
+  renderPage();
+
+  fireEvent.change(await screen.findByLabelText('Scan method'), { target: { value: 'qr' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Start QR camera' }));
+  await waitFor(() => expect(mockStartScanner).toHaveBeenCalled());
+  act(() => mockStartScanner.mock.calls[0][2]('Q'.repeat(256)));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('A valid tracking identifier of 1 to 255 characters is required.');
+  expect(apiClient.post).not.toHaveBeenCalled();
+});
+
+test('camera scan API failures remain visible and still release camera resources', async () => {
+  Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
+  createScanner();
+  apiClient.post.mockRejectedValueOnce({ response: { data: { message: 'Scan write failed.' } } });
+  renderPage();
+
+  fireEvent.change(await screen.findByLabelText('Scan method'), { target: { value: 'qr' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Start QR camera' }));
+  await waitFor(() => expect(mockStartScanner).toHaveBeenCalled());
+  act(() => mockStartScanner.mock.calls[0][2]('QR-008'));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Scan write failed.');
+  expect(apiClient.post).toHaveBeenCalledWith('/api/college/rfid/scan', { method: 'qr', value: 'QR-008' });
+  expect(mockStopScanner).toHaveBeenCalled();
+  expect(mockClearScanner).toHaveBeenCalled();
+});
+
+test('camera stops when the scan method changes away from QR', async () => {
+  Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
+  createScanner();
+  renderPage();
+
+  const methodSelect = await screen.findByLabelText('Scan method');
+  fireEvent.change(methodSelect, { target: { value: 'qr' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Start QR camera' }));
+  await waitFor(() => expect(mockStartScanner).toHaveBeenCalled());
+
+  fireEvent.change(methodSelect, { target: { value: 'manual' } });
+  await waitFor(() => expect(mockStopScanner).toHaveBeenCalled());
+  expect(mockClearScanner).toHaveBeenCalled();
+  expect(apiClient.post).not.toHaveBeenCalled();
+});
+
+test('camera stops when the tracking component unmounts', async () => {
+  Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
+  createScanner();
+  const view = renderPage();
+
+  fireEvent.change(await screen.findByLabelText('Scan method'), { target: { value: 'qr' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Start QR camera' }));
+  await waitFor(() => expect(mockStartScanner).toHaveBeenCalled());
+
+  view.unmount();
+  await waitFor(() => expect(mockStopScanner).toHaveBeenCalled());
+  expect(mockClearScanner).toHaveBeenCalled();
+});
+
+test('camera permission failures show a useful message and clear the scanner', async () => {
+  Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
+  createScanner(() => Promise.reject(new Error('permission denied')));
+  renderPage();
+
+  fireEvent.change(await screen.findByLabelText('Scan method'), { target: { value: 'qr' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Start QR camera' }));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Could not access the camera. Check browser permission and try again.');
+  expect(mockClearScanner).toHaveBeenCalled();
+  expect(mockStopScanner).not.toHaveBeenCalled();
+  expect(apiClient.post).not.toHaveBeenCalled();
 });
 
 test('College Manager can update RFID tags and request a unique QR code', async () => {

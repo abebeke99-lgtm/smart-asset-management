@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import Login from './Login';
 import { UiProvider } from '../../contexts/UiContext';
 
+const SESSION_EXPIRED_STORAGE_KEY = 'uams-session-expired';
+
 const mockLogin = jest.fn();
 
 jest.mock('../../contexts/AuthContext', () => ({
@@ -12,6 +14,7 @@ jest.mock('../../contexts/AuthContext', () => ({
 
 jest.mock('../../utils/api', () => ({
   apiBase: () => '',
+  SESSION_EXPIRED_STORAGE_KEY: 'uams-session-expired',
 }));
 
 jest.mock('axios', () => ({
@@ -34,6 +37,8 @@ const renderLogin = async () => {
 describe('Login error feedback', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    localStorage.setItem('language', 'en');
+    sessionStorage.clear();
   });
 
   test('uses the provided university photo as the login page background', async () => {
@@ -71,5 +76,15 @@ describe('Login error feedback', () => {
 
     await waitFor(() => expect(mockLogin).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password.');
+  });
+
+  test('explains that the session expired and leaves the login form available', async () => {
+    sessionStorage.setItem(SESSION_EXPIRED_STORAGE_KEY, 'true');
+
+    await renderLogin();
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Your session has expired. Please sign in again.');
+    expect(screen.getByLabelText('Username or Email')).toBeInTheDocument();
+    expect(sessionStorage.getItem(SESSION_EXPIRED_STORAGE_KEY)).toBeNull();
   });
 });
