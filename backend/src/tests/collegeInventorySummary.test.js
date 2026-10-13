@@ -1,8 +1,11 @@
-const test = require('node:test');
+const { after, test } = require('node:test');
 const assert = require('node:assert/strict');
 const { Op } = require('sequelize');
+const { sequelize } = require('../models');
 const { buildCollegeAssetScope } = require('../services/collegeAssetScope');
 const { summarizeCollegeAssets } = require('../controllers/collegeController');
+
+after(() => sequelize.close());
 
 test('college asset scope includes direct college ownership and legacy college departments only', () => {
   const scope = buildCollegeAssetScope(4, [7, 9, 7, null, 'invalid']);

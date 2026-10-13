@@ -16,7 +16,6 @@ import {
   Mail,
   Send,
   ShieldCheck,
-  Smartphone,
 } from 'lucide-react';
 
 const OTP_RESEND_SECONDS = 60;
@@ -31,26 +30,10 @@ const isValidEmail = (value) => {
   ));
 };
 
-const normalizePhoneNumber = (value) => {
-  let raw = String(value || '').trim().replace(/[\s().-]/g, '');
-  if (!raw) return null;
-
-  if (raw.startsWith('00')) raw = `+${raw.slice(2)}`;
-  if (!/^\+?\d+$/.test(raw)) return null;
-
-  const international = raw.replace(/^\+/, '');
-  const ethiopianMobile = international.match(/^(?:251)?0?([97]\d{8})$/);
-  if (ethiopianMobile) return `+251${ethiopianMobile[1]}`;
-
-  return null;
-};
-
-const extractServerMessage = (error, fallback, method = 'email') => {
+const extractServerMessage = (error, fallback) => {
   const status = error?.response?.status || error?.status;
   const serverMessage = error?.response?.data?.message;
-  const code = error?.response?.data?.code;
-  if (code === 'SMS_NOT_CONFIGURED') return fallback.smsUnavailable;
-  if (status === 503) return method === 'phone' ? fallback.smsUnavailable : fallback.emailServiceUnavailable;
+  if (status === 503) return fallback.emailServiceUnavailable;
   if (status === 429) return fallback.rateLimitError;
   if (!status) return fallback.networkError;
   return serverMessage || fallback.errorMessage;
@@ -59,8 +42,8 @@ const extractServerMessage = (error, fallback, method = 'email') => {
 // Errors raised by this screen carry a message that is safe and already localised.
 const userFacingError = (message) => Object.assign(new Error(message), { isUserFacing: true });
 
-const resolveErrorMessage = (error, fallback, method) => (
-  error?.isUserFacing ? error.message : extractServerMessage(error, fallback, method)
+const resolveErrorMessage = (error, fallback) => (
+  error?.isUserFacing ? error.message : extractServerMessage(error, fallback)
 );
 
 const ForgotPassword = () => {
@@ -69,7 +52,6 @@ const ForgotPassword = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [method, setMethod] = useState('email');
   const [identifier, setIdentifier] = useState('');
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
@@ -161,38 +143,11 @@ const ForgotPassword = () => {
     toast.error(message);
   });
 
-  const handlePhoneRequest = () => runRequest('otp', async () => {
-    const normalizedPhone = normalizePhoneNumber(identifier);
-    if (!normalizedPhone) {
-      setError(t.invalidPhone);
-      return;
-    }
-
-    const response = await apiClient.post('/api/auth/forgot-password/request', {
-      phoneNumber: normalizedPhone,
-    });
-
-    if (!response.data?.success) {
-      throw userFacingError(response.data?.message || t.errorMessage);
-    }
-
-    setSuccessMessage(response.data.message || t.otpSent);
-    setOtp('');
-    setResendCountdown(OTP_RESEND_SECONDS);
-    setStep('verify');
-    toast.success(response.data.message || t.otpSent);
-  }).catch((err) => {
-    const message = resolveErrorMessage(err, t, 'phone');
-    setError(message);
-    toast.error(message);
-  });
-
   const handleOtpVerification = (event) => {
     event.preventDefault();
     runRequest('verify', async () => {
-      const normalizedPhone = method === 'phone' ? normalizePhoneNumber(identifier) : null;
-      if (method === 'email' ? !isValidEmail(identifier.trim()) : !normalizedPhone) {
-        setError(method === 'email' ? t.invalidEmail : t.invalidPhone);
+      if (!isValidEmail(identifier.trim())) {
+        setError(t.invalidEmail);
         return;
       }
       if (!/^\d{6}$/.test(otp.trim())) {
@@ -200,11 +155,11 @@ const ForgotPassword = () => {
         return;
       }
 
-      const payload = method === 'email'
-        ? { method: 'email', email: identifier.trim().toLowerCase(), otp: otp.trim() }
-        : { phoneNumber: normalizedPhone, otp: otp.trim() };
-
-      const response = await apiClient.post('/api/auth/forgot-password/verify', payload);
+      const response = await apiClient.post('/api/auth/forgot-password/verify', {
+        method: 'email',
+        email: identifier.trim().toLowerCase(),
+        otp: otp.trim(),
+      });
 
       if (!response.data?.success || !response.data.resetToken) {
         throw userFacingError(response.data?.message || t.otpExpired);
@@ -216,7 +171,7 @@ const ForgotPassword = () => {
       setError('');
       toast.success(response.data.message || t.verifyOtpSuccess);
     }).catch((err) => {
-      const message = resolveErrorMessage(err, t, method);
+      const message = resolveErrorMessage(err, t);
       setError(message);
       toast.error(message);
     });
@@ -264,14 +219,9 @@ const ForgotPassword = () => {
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    if (method === 'email') {
-      handleEmailRequest();
-      return;
-    }
-    handlePhoneRequest();
+    handleEmailRequest();
   };
 
-  const isEmailMethod = method === 'email';
   const goToLogin = () => navigate('/login');
   const spinner = <LoaderCircle className="spinner" size={17} aria-hidden="true" />;
 
@@ -285,43 +235,27 @@ const ForgotPassword = () => {
   const renderRequestForm = () => (
     <form onSubmit={handleSubmit} noValidate>
       <div className="method-group" role="group" aria-label={t.recoveryMethod}>
-        <button
-          type="button"
-          className={`method-option ${isEmailMethod ? 'active' : ''}`}
-          aria-pressed={isEmailMethod}
-          onClick={() => { setMethod('email'); setError(''); }}
-        >
+        <button type="button" className="method-option active" aria-pressed="true">
           <Mail size={16} aria-hidden="true" />
           <span>{t.email}</span>
-        </button>
-        <button
-          type="button"
-          className={`method-option ${!isEmailMethod ? 'active' : ''}`}
-          aria-pressed={!isEmailMethod}
-          onClick={() => { setMethod('phone'); setError(''); }}
-        >
-          <Smartphone size={16} aria-hidden="true" />
-          <span>{t.mobilePhone}</span>
         </button>
       </div>
 
       <div className="field">
         <label className="field-label" htmlFor="forgot-identifier">
-          {isEmailMethod ? t.emailAddress : t.mobilePhoneNumber}
+          {t.emailAddress}
         </label>
         <div className="field-control">
-          {isEmailMethod
-            ? <Mail size={17} aria-hidden="true" />
-            : <Smartphone size={17} aria-hidden="true" />}
+          <Mail size={17} aria-hidden="true" />
           <input
             id="forgot-identifier"
             className="text-input"
-            type={isEmailMethod ? 'email' : 'tel'}
+            type="email"
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
-            placeholder={isEmailMethod ? t.emailPlaceholder : t.phonePlaceholder}
-            autoComplete={isEmailMethod ? 'email' : 'tel'}
-            inputMode={isEmailMethod ? 'email' : 'tel'}
+            placeholder={t.emailPlaceholder}
+            autoComplete="email"
+            inputMode="email"
             disabled={loading}
             aria-describedby={error ? 'forgot-error' : undefined}
           />
@@ -379,7 +313,7 @@ const ForgotPassword = () => {
         type="button"
         className="btn-secondary"
         disabled={loading || resendCountdown > 0}
-        onClick={() => (method === 'email' ? handleEmailRequest() : handlePhoneRequest())}
+        onClick={handleEmailRequest}
       >
         {resendCountdown > 0 ? `${t.resendOtp} (${resendCountdown}s)` : t.resendOtp}
       </button>
@@ -551,10 +485,8 @@ const ForgotPassword = () => {
           color: #334155;
           font-size: 0.88rem;
           font-weight: 700;
-          cursor: pointer;
         }
         .method-option.active { border-color: #536575; background: #EEF2F5; color: #17212B; }
-        .method-option:disabled { opacity: 0.6; cursor: not-allowed; }
         .field { margin-bottom: 16px; }
         .field-label { display: block; margin-bottom: 8px; color: #334155; font-size: 0.8rem; font-weight: 700; }
         .forgot-page.forgot-dark .field-label { color: #C8D1D9; }
@@ -690,7 +622,6 @@ const ForgotPassword = () => {
         @media (max-width: 640px) {
           .forgot-page { padding: 18px 14px; }
           .forgot-card { padding: 24px 18px; }
-          .method-group { flex-direction: column; }
         }
       `}</style>
 
@@ -731,11 +662,8 @@ export const englishTranslations = {
   instructions: 'Choose how you want to recover access and we will send the right instructions.',
   recoveryMethod: 'Recovery method',
   email: 'Email',
-  mobilePhone: 'Mobile Phone',
   emailAddress: 'Email address',
-  mobilePhoneNumber: 'Mobile phone number',
   emailPlaceholder: 'name@university.edu',
-  phonePlaceholder: '+251 9XXXXXXXX',
   sendResetLink: 'Send Reset Link',
   sendOtp: 'Send Verification Code',
   sending: 'Sending...',
@@ -756,11 +684,9 @@ export const englishTranslations = {
   otpExpired: 'This verification code has expired or is invalid. Please request a new one.',
   invalidEmail: 'Please enter a valid email address.',
   emailRequired: 'Please enter your email address.',
-  invalidPhone: 'Please enter a valid Ethiopian mobile number, for example 0912345678.',
   errorMessage: 'Something went wrong. Please try again later.',
   networkError: 'Unable to reach the server. Please check your connection.',
   emailServiceUnavailable: 'Email service is temporarily unavailable. Please try again later.',
-  smsUnavailable: 'SMS service is not available yet.',
   rateLimitError: 'Too many requests. Please wait a moment and try again.',
   successMessage: 'Password reset instructions will be sent if the account matches.',
   otpSent: 'If this recovery destination is registered, a verification code has been sent.',
@@ -786,11 +712,8 @@ export const amharicTranslations = {
   instructions: 'መግቢያዎን እንደምትን ማግኘት ያለውን ዘዴ ይምረጡ፤ ትክክለኛውን መመሪያ እንልክልዎታለን።',
   recoveryMethod: 'የመልሶ ማግኛ ዘዴ',
   email: 'ኢሜይል',
-  mobilePhone: 'ሞባይል',
   emailAddress: 'የኢሜይል አድራሻ',
-  mobilePhoneNumber: 'የሞባይል ቁጥር',
   emailPlaceholder: 'name@university.edu',
-  phonePlaceholder: '+251 9XXXXXXXX',
   sendResetLink: 'የይለፍ ቃል መልሶ ማግኛ ሊንክ ላክ',
   sendOtp: 'የማረጋገጫ ኮድ ላክ',
   sending: 'በመላክ ላይ...',
@@ -810,11 +733,9 @@ export const amharicTranslations = {
   otpExpired: 'ይህ ኮድ ጊዜው አልፎበታል ወይም ልክ አይደለም። አዲስ ኮድ ይጠይቁ።',
   invalidEmail: 'እባክዎ ትክክለኛ ኢሜይል አድራሻ ያስገቡ።',
   emailRequired: 'እባክዎ የኢሜይል አድራሻዎን ያስገቡ።',
-  invalidPhone: 'እባክዎ ትክክለኛ የኢትዮጵያ ሞባይል ቁጥር ያስገቡ፤ ለምሳሌ 0912345678።',
   errorMessage: 'ችግር ተከስቷል። እባክዎ ቆይተው እንደገና ይሞክሩ።',
   networkError: 'ከአገልጋዩ ጋር መገናኘት አልተቻለም። ግንኙነትዎን አረጋግጡ።',
   emailServiceUnavailable: 'የኢሜይል አገልግሎቱ ለጊዜው አይገኝም። እባክዎ ቆይተው እንደገና ይሞክሩ።',
-  smsUnavailable: 'የSMS አገልግሎት ገና አይገኝም።',
   rateLimitError: 'በጣም ብዙ ጥያቄዎች ተልከዋል። እባክዎ ቆይተው ይሞክሩ።',
   successMessage: 'መለያው ከመለያው ጋር ከሚዛመድ ከሆነ የይለፍ ቃል መልሶ ማግኛ መመሪያዎች ይላካሉ።',
   otpSent: 'ይህ የመልሶ ማግኛ አድራሻ ከተመዘገበ የማረጋገጫ ኮድ ተልኳል።',

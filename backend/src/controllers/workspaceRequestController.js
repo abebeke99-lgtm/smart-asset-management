@@ -1,5 +1,7 @@
 const { sequelize, Approval, Asset, Department, User, AuditLog } = require('../models');
 const { Op } = require('sequelize');
+const { getApprovalHistory, supportedApprovalTypes } = require('./approvalController');
+const { getCollegeAssetScope } = require('../services/collegeAssetScope');
 
 // Sequelize does not apply attribute-to-column mapping inside `$association.attribute$` where paths,
 // so those paths must reference the real (snake_cased) database column.
@@ -16,16 +18,24 @@ const scopedWhere = (req) => req.organizationScope.departmentId
   : { [joinedColumn('Department', 'collegeId')]: req.organizationScope.collegeId };
 const isCollegeScope = (req) => Boolean(req.organizationScope.collegeId && !req.organizationScope.departmentId);
 
+const buildCollegeApprovalScope = (departmentIds, assetIds) => {
+  const scopedDepartmentIds = departmentIds.length ? departmentIds : [-1];
+  const scopedAssetIds = assetIds.length ? assetIds : [-1];
+  return { [Op.and]: [
+    { [Op.or]: [{ departmentId: { [Op.in]: scopedDepartmentIds } }, { departmentId: null }] },
+    { [Op.or]: [{ assetId: { [Op.in]: scopedAssetIds } }, { assetId: null }] },
+    { [Op.or]: [{ departmentId: { [Op.in]: scopedDepartmentIds } }, { assetId: { [Op.in]: scopedAssetIds } }] },
+  ] };
+};
+
 const collegeApprovalScope = async (req) => {
   const collegeId = Number(req.organizationScope?.collegeId);
+  const assetScope = await getCollegeAssetScope(collegeId);
   const [departments, assets] = await Promise.all([
     Department.findAll({ where: { collegeId }, attributes: ['id'], raw: true }),
-    Asset.findAll({ where: { collegeId }, attributes: ['id'], raw: true }),
+    Asset.findAll({ where: assetScope, attributes: ['id'], raw: true }),
   ]);
-  return { [Op.or]: [
-    { departmentId: { [Op.in]: departments.length ? departments.map((department) => department.id) : [-1] } },
-    { assetId: { [Op.in]: assets.length ? assets.map((asset) => asset.id) : [-1] } },
-  ] };
+  return buildCollegeApprovalScope(departments.map((department) => department.id), assets.map((asset) => asset.id));
 };
 
 const collegeRequestInclude = [
@@ -40,6 +50,7 @@ const normalizeCollegeRequest = (record) => {
   return {
     ...data,
     requestNumber: `REQ-${String(record.id).padStart(6, '0')}`,
+    reviewedAt: record.reviewedBy ? record.updatedAt : null,
     requester: record.Requester ? { id: record.Requester.id, name: record.Requester.fullName || record.Requester.username, username: record.Requester.username } : null,
     department: record.Department ? { id: record.Department.id, name: record.Department.name, code: record.Department.code } : null,
     asset: record.Asset ? { id: record.Asset.id, name: record.Asset.name, assetCode: record.Asset.assetCode, category: record.Asset.category } : null,
@@ -163,12 +174,13 @@ const listCollegeRequests = async (req, res, next) => {
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 20));
     const offset = (page - 1) * limit;
-    const [departments, collegeAssets] = await Promise.all([
+    const [departments, assetScope] = await Promise.all([
       Department.findAll({ where: { collegeId }, attributes: ['id', 'name', 'code'], order: [['name', 'ASC']] }),
-      Asset.findAll({ where: { collegeId }, attributes: ['id'], raw: true }),
+      getCollegeAssetScope(collegeId),
     ]);
+    const collegeAssets = await Asset.findAll({ where: assetScope, attributes: ['id'], raw: true });
     const departmentIds = departments.map((department) => department.id);
-    const scopeWhere = { [Op.or]: [{ departmentId: { [Op.in]: departmentIds.length ? departmentIds : [-1] } }, { assetId: { [Op.in]: collegeAssets.length ? collegeAssets.map((asset) => asset.id) : [-1] } }] };
+    const scopeWhere = buildCollegeApprovalScope(departmentIds, collegeAssets.map((asset) => asset.id));
     const where = { [Op.and]: [scopeWhere] };
     const status = String(req.query.status || '').trim().toLowerCase();
     const type = String(req.query.requestType || req.query.type || '').trim();
@@ -206,6 +218,28 @@ const listCollegeRequests = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+const getCollegeApprovalOptions = async (req, res, next) => {
+  try {
+    const collegeId = Number(req.organizationScope?.collegeId);
+    if (!collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
+    const [departments, assets] = await Promise.all([
+      Department.findAll({ where: { collegeId, status: 'active' }, attributes: ['id', 'name', 'code'], order: [['name', 'ASC']] }),
+      Asset.findAll({ where: { collegeId }, attributes: ['id', 'assetCode', 'name', 'category'], order: [['name', 'ASC']] }),
+    ]);
+    return res.json({
+      success: true,
+      data: {
+        departments,
+        assets,
+        types: supportedApprovalTypes,
+        priorities: ['low', 'normal', 'high', 'urgent'],
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const getCollegeRequest = async (req, res, next) => {
   try {
     const collegeId = Number(req.organizationScope?.collegeId);
@@ -213,7 +247,7 @@ const getCollegeRequest = async (req, res, next) => {
     const scopeWhere = await collegeApprovalScope(req);
     const record = await Approval.findOne({ where: { [Op.and]: [{ id: req.params.id }, scopeWhere] }, include: collegeRequestInclude });
     if (!record) return res.status(404).json({ success: false, message: 'Request not found in your college' });
-    res.json({ success: true, data: normalizeCollegeRequest(record) });
+    res.json({ success: true, data: { ...normalizeCollegeRequest(record), history: await getApprovalHistory(record.id) } });
   } catch (error) { next(error); }
 };
 
@@ -277,6 +311,7 @@ module.exports = {
   decideRequest,
   isCollegeScope,
   listCollegeRequests,
+  getCollegeApprovalOptions,
   getCollegeRequest,
   listCollegeDepartmentRequests,
 };

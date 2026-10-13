@@ -87,6 +87,9 @@ describe('authenticated dashboard sidebar', () => {
     expect(within(sidebar).queryByText('Mekdela Amba University')).not.toBeInTheDocument();
     expect(screen.getByText('Mekdela Amba University')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Users' })).toHaveAttribute('aria-current', 'page');
+    expect(within(sidebar).getByRole('link', { name: 'Assets' })).toBeInTheDocument();
+    expect(within(sidebar).getByRole('link', { name: 'Reports' })).toBeInTheDocument();
+    expect(within(sidebar).getByRole('link', { name: 'Roles & Permissions' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Transactions' })).not.toBeInTheDocument();
     expect(within(sidebar).queryByRole('button', { name: 'Logout' })).not.toBeInTheDocument();
   });
@@ -178,6 +181,30 @@ describe('authenticated dashboard sidebar', () => {
     expect(within(sidebar).queryByText('University Asset Management System')).not.toBeInTheDocument();
     expect(within(sidebar).getByRole('link', { name: expectedMenu })).toBeInTheDocument();
     expect(within(sidebar).queryByRole('button', { name: 'Logout' })).not.toBeInTheDocument();
+  });
+
+  it('shows the infrastructure feature navigation', async () => {
+    mockAuthUser = {
+      id: 41,
+      role: 'infrastructure',
+      username: 'infrastructure.user',
+      fullName: 'Infrastructure User',
+    };
+    window.history.pushState({}, '', '/infrastructure/dashboard');
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    const sidebar = within(screen.getByLabelText('Primary navigation'));
+    expect(sidebar.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(sidebar.getByRole('link', { name: 'Infrastructure Assets' })).toBeInTheDocument();
+    expect(sidebar.getByRole('link', { name: 'Inventory' })).toBeInTheDocument();
+    expect(sidebar.getByRole('link', { name: 'Buildings' })).toBeInTheDocument();
+    expect(sidebar.getByRole('link', { name: 'Maintenance' })).toBeInTheDocument();
+    expect(sidebar.getByRole('link', { name: 'Work Orders' })).toBeInTheDocument();
+    expect(sidebar.getByRole('link', { name: 'Reports' })).toBeInTheDocument();
+    expect(sidebar.getByRole('link', { name: 'Documents' })).toBeInTheDocument();
   });
 
   it('opens and closes the mobile navigation with its button and Escape key', async () => {

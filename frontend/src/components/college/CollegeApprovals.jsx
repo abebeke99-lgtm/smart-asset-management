@@ -1,16 +1,22 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, ClipboardCheck, Eye, FileEdit, RefreshCw, Search, X, XCircle } from 'lucide-react';
+import { Check, ClipboardCheck, Eye, FileEdit, Plus, RefreshCw, Search, X, XCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import apiClient from '../../services/apiClient';
+import { useAuth } from '../../contexts/AuthContext';
 import './CollegeApprovals.css';
 
 const emptyState = { summary: { total: 0, pending: 0, approved: 0, rejected: 0 }, approvals: [], filters: { departments: [], statuses: [], types: [], priorities: [] }, pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
 const title = (value) => String(value || 'Not recorded').replace(/[_-]+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
 const valueOr = (value) => value === null || value === undefined || value === '' ? 'Not recorded' : value;
 const date = (value) => value ? new Date(value).toLocaleString() : 'Not recorded';
-const errorMessage = (error, action = 'load approvals') => ({ 401: 'Your session has expired. Please sign in again.', 403: 'You are not authorized to access college approvals.', 404: 'The approval request was not found in your college.', 409: 'This request has already changed. The approvals list has been refreshed.', 422: 'The approval decision could not be processed.' }[error.response?.status] || `Unable to ${action}.`);
+const errorMessage = (error, action = 'load approvals') => ({ 401: 'Your session has expired. Please sign in again.', 403: 'You are not authorized to access college approvals.', 404: 'The approval request was not found in your college.', 409: 'This request has already changed. The approvals list has been refreshed.', 422: 'The approval decision could not be processed.' }[error.response?.status] || error.response?.data?.message || `Unable to ${action}.`);
 
 const CollegeApprovals = () => {
+  const { user, hasPermission } = useAuth();
+  const canCreate = user?.role === 'college_manager' && hasPermission?.('college.requests.create');
+  const canApprove = hasPermission?.('college.approvals.approve');
+  const canReject = hasPermission?.('college.approvals.reject');
+  const canRequestChanges = hasPermission?.('college.approvals.request_changes');
   const [state, setState] = useState({ ...emptyState, loading: true, error: '', tableLoading: false });
   const [query, setQuery] = useState({ search: '', status: '', departmentId: '', requestType: '', priority: '' });
   const [page, setPage] = useState(1);
@@ -18,14 +24,23 @@ const CollegeApprovals = () => {
   const [confirmation, setConfirmation] = useState(null);
   const [reason, setReason] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createOptions, setCreateOptions] = useState({ departments: [], assets: [], types: [], priorities: [] });
+  const [createForm, setCreateForm] = useState({ item: '', type: '', department_id: '', asset_id: '', quantity: 1, priority: 'normal', reason: '' });
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const firstLoad = useRef(true);
 
   const load = useCallback(async (initial = false) => {
     setState((previous) => ({ ...previous, loading: initial, tableLoading: !initial, error: '' }));
     try {
       const response = await apiClient.get('/api/college/approvals', { params: { ...query, page, limit: 20, search: query.search || undefined } });
-      const data = response.data?.data || emptyState;
-      setState((previous) => ({ ...previous, ...data, approvals: data.requests || [], loading: false, tableLoading: false, error: '' }));
+      const data = response.data?.data;
+      if (!Array.isArray(data?.requests) || !data.summary || !data.pagination || !data.filters) {
+        throw new Error('The approvals service returned an incomplete response.');
+      }
+      setState((previous) => ({ ...previous, ...data, approvals: data.requests, loading: false, tableLoading: false, error: '' }));
     } catch (error) {
       setState((previous) => ({ ...previous, loading: false, tableLoading: false, error: errorMessage(error) }));
     }
@@ -37,7 +52,7 @@ const CollegeApprovals = () => {
   }, [load]);
 
   useEffect(() => {
-    const closeOnEscape = (event) => { if (event.key === 'Escape') { setSelected(null); setConfirmation(null); } };
+    const closeOnEscape = (event) => { if (event.key === 'Escape') { setSelected(null); setConfirmation(null); setCreateOpen(false); } };
     document.addEventListener('keydown', closeOnEscape);
     return () => document.removeEventListener('keydown', closeOnEscape);
   }, []);
@@ -46,6 +61,62 @@ const CollegeApprovals = () => {
   const clearFilters = () => { setPage(1); setQuery({ search: '', status: '', departmentId: '', requestType: '', priority: '' }); };
   const hasFilters = Object.values(query).some(Boolean);
   const openDecision = (approval, decision) => { setSelected(null); setReason(''); setConfirmation({ approval, decision }); };
+  const openDetails = async (approval) => {
+    setSelected(approval);
+    setDetailLoading(true);
+    try {
+      const response = await apiClient.get(`/api/college/approvals/${approval.id}`);
+      if (!response.data?.success || !response.data?.data) throw new Error('The approval details response was incomplete.');
+      setSelected(response.data.data);
+    } catch (error) {
+      toast.error(errorMessage(error, 'load approval details'));
+    } finally { setDetailLoading(false); }
+  };
+  const openCreate = async () => {
+    setCreateOpen(true);
+    setCreateLoading(true);
+    try {
+      const response = await apiClient.get('/api/college/approvals/options');
+      const options = response.data?.data;
+      if (!response.data?.success || !Array.isArray(options?.departments) || !Array.isArray(options?.assets) || !Array.isArray(options?.types) || !Array.isArray(options?.priorities)) {
+        throw new Error('The approval form options response was incomplete.');
+      }
+      setCreateOptions(options);
+      setCreateForm((previous) => ({ ...previous, type: options.types[0] || '', department_id: options.departments[0] ? String(options.departments[0].id) : '' }));
+    } catch (error) {
+      setCreateOpen(false);
+      toast.error(errorMessage(error, 'load approval form options'));
+    } finally { setCreateLoading(false); }
+  };
+  const submitNewApproval = async (event) => {
+    event.preventDefault();
+    if (saving) return;
+    const needsAsset = createForm.type.toLowerCase().includes('issue');
+    if (!createForm.item.trim() || !createForm.reason.trim() || !createForm.department_id || (needsAsset && !createForm.asset_id) || Number(createForm.quantity) < 1) {
+      toast.error('Complete the required title, department, reason, quantity, and asset fields.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await apiClient.post('/api/college/approvals', {
+        type: createForm.type,
+        item: createForm.item.trim(),
+        department_id: Number(createForm.department_id),
+        asset_id: createForm.asset_id ? Number(createForm.asset_id) : undefined,
+        quantity: Number(createForm.quantity),
+        priority: createForm.priority,
+        reason: createForm.reason.trim(),
+      });
+      if (!response.data?.success) throw new Error(response.data?.message || 'The approval request was not saved.');
+      toast.success('Approval request submitted.');
+      setCreateOpen(false);
+      setCreateForm({ item: '', type: '', department_id: '', asset_id: '', quantity: 1, priority: 'normal', reason: '' });
+      setPage(1);
+      await load(true);
+    } catch (error) {
+      toast.error(errorMessage(error, 'submit the approval request'));
+    } finally { setSaving(false); }
+  };
   const submitDecision = async () => {
     if (!confirmation || processing || (['reject', 'request-changes'].includes(confirmation.decision) && !reason.trim())) return;
     setProcessing(true);
@@ -69,11 +140,12 @@ const CollegeApprovals = () => {
   const approvals = state.approvals || [];
 
   return <div className="college-approvals-page">
-    <header className="college-approvals-heading"><div><span className="college-approvals-eyebrow"><ClipboardCheck size={15} /> College Manager</span><h1>Approvals</h1><p>Review and process approval requests within your college.</p></div><button className="college-approvals-refresh" type="button" onClick={() => load()} disabled={state.tableLoading}><RefreshCw size={16} className={state.tableLoading ? 'college-approvals-spin' : ''} /> Refresh</button></header>
+    <header className="college-approvals-heading"><div><span className="college-approvals-eyebrow"><ClipboardCheck size={15} /> College Manager</span><h1>Approvals</h1><p>Review and process approval requests within your college.</p></div><div className="college-approvals-heading-actions">{canCreate && <button className="college-approvals-create" type="button" onClick={openCreate}><Plus size={16} /> New Approval</button>}<button className="college-approvals-refresh" type="button" onClick={() => load()} disabled={state.tableLoading}><RefreshCw size={16} className={state.tableLoading ? 'college-approvals-spin' : ''} /> Refresh</button></div></header>
     <section className="college-approvals-summary" aria-label="Approval summary">{[['total', 'Total Approval Items'], ['pending', 'Pending'], ['approved', 'Approved'], ['rejected', 'Rejected']].map(([key, label]) => <div className="college-approvals-stat" key={key}><span>{label}</span><strong>{Number(state.summary?.[key] || 0).toLocaleString()}</strong></div>)}</section>
     <section className="college-approvals-toolbar" aria-label="Approval filters"><label className="college-approvals-search"><Search size={17} /><span className="sr-only">Search approvals</span><input value={query.search} onChange={(event) => updateQuery('search', event.target.value)} placeholder="Search ID, requester, item, department..." /></label><label><span className="sr-only">Status</span><select value={query.status} onChange={(event) => updateQuery('status', event.target.value)}><option value="">All statuses</option>{(state.filters?.statuses || []).map((item) => <option value={item} key={item}>{title(item)}</option>)}</select></label><label><span className="sr-only">Department</span><select value={query.departmentId} onChange={(event) => updateQuery('departmentId', event.target.value)}><option value="">All departments</option>{(state.filters?.departments || []).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label><span className="sr-only">Request type</span><select value={query.requestType} onChange={(event) => updateQuery('requestType', event.target.value)}><option value="">All types</option>{(state.filters?.types || []).map((item) => <option value={item} key={item}>{title(item)}</option>)}</select></label><label><span className="sr-only">Priority</span><select value={query.priority} onChange={(event) => updateQuery('priority', event.target.value)}><option value="">All priorities</option>{(state.filters?.priorities || []).map((item) => <option value={item} key={item}>{title(item)}</option>)}</select></label>{hasFilters && <button className="college-approvals-clear" type="button" onClick={clearFilters}><X size={15} /> Clear Filters</button>}</section>
-    <section className="college-approvals-table-panel"><div className="college-approvals-table-meta"><strong>{pagination.total ? `Showing ${first}-${last} of ${pagination.total} approval items` : hasFilters ? 'No approvals match your filters' : 'No approval records found'}</strong>{state.tableLoading && <RefreshCw size={15} className="college-approvals-spin" />}</div>{approvals.length ? <div className="college-approvals-table-wrap"><table><caption className="sr-only">College approval requests</caption><thead><tr><th>Request ID</th><th>Request Date</th><th>Requester</th><th>Department</th><th>Type</th><th>Requested Item</th><th>Qty</th><th>Priority</th><th>Status</th><th>Actions</th></tr></thead><tbody>{approvals.map((approval) => <tr key={approval.id}><td><strong>{approval.requestNumber}</strong></td><td>{date(approval.createdAt)}</td><td>{valueOr(approval.requester?.name)}</td><td>{valueOr(approval.department?.name)}</td><td>{title(approval.type)}</td><td>{valueOr(approval.item || approval.asset?.name)}{approval.asset?.assetCode && <small>{approval.asset.assetCode}</small>}</td><td>{valueOr(approval.quantity)}</td><td><span className={`college-approvals-badge priority-${approval.priority}`}>{title(approval.priority)}</span></td><td><span className={`college-approvals-badge status-${approval.status}`}>{title(approval.status)}</span></td><td className="college-approvals-actions"><button type="button" onClick={() => setSelected(approval)} aria-label={`View ${approval.requestNumber} details`} title="View details"><Eye size={16} /></button>{approval.status === 'pending' && <><button className="approve" type="button" onClick={() => openDecision(approval, 'approve')} aria-label={`Approve ${approval.requestNumber}`} title="Approve"><Check size={16} /></button><button className="reject" type="button" onClick={() => openDecision(approval, 'reject')} aria-label={`Reject ${approval.requestNumber}`} title="Reject"><XCircle size={16} /></button></>}</td></tr>)}</tbody></table></div> : <div className="college-approvals-empty"><ClipboardCheck size={30} /><strong>{hasFilters ? 'No approvals match your current filters.' : 'No approval records found.'}</strong>{hasFilters && <button type="button" onClick={clearFilters}>Clear Filters</button>}</div>}<nav className="college-approvals-pagination" aria-label="Approval pages"><button type="button" disabled={pagination.page <= 1} onClick={() => setPage((current) => current - 1)}>Previous</button><span>Page {pagination.page} of {Math.max(1, pagination.totalPages || 1)}</span><button type="button" disabled={pagination.page >= (pagination.totalPages || 1)} onClick={() => setPage((current) => current + 1)}>Next</button></nav></section>
-    {selected && <div className="college-approvals-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setSelected(null)}><section className="college-approvals-modal" role="dialog" aria-modal="true" aria-labelledby="approval-details-title"><div className="college-approvals-modal-head"><div><span className="college-approvals-eyebrow">Approval details</span><h2 id="approval-details-title">{selected.requestNumber}</h2></div><button type="button" onClick={() => setSelected(null)} aria-label="Close approval details"><X /></button></div><div className="college-approvals-details">{[['Request Date', date(selected.createdAt)], ['Type', title(selected.type)], ['Status', title(selected.status)], ['Priority', title(selected.priority)], ['Requester', valueOr(selected.requester?.name)], ['Username', valueOr(selected.requester?.username)], ['Department', valueOr(selected.department?.name)], ['Requested Item', valueOr(selected.item || selected.asset?.name)], ['Category', valueOr(selected.asset?.category)], ['Quantity', valueOr(selected.quantity)], ['Reviewed By', valueOr(selected.reviewer?.name)], ['Last Updated', date(selected.updatedAt)]].map(([label, display]) => <div key={label}><span>{label}</span><strong>{display}</strong></div>)}</div><div className="college-approvals-description"><span>Reason</span><p>{valueOr(selected.reason)}</p></div>{selected.status === 'pending' && <div className="college-approvals-modal-actions"><button type="button" className="approve-button" onClick={() => openDecision(selected, 'approve')}><Check size={16} /> Approve</button><button type="button" className="reject-button" onClick={() => openDecision(selected, 'reject')}><XCircle size={16} /> Reject</button><button type="button" onClick={() => openDecision(selected, 'request-changes')}><FileEdit size={16} /> Request changes</button></div>}</section></div>}
+    <section className="college-approvals-table-panel"><div className="college-approvals-table-meta"><strong>{pagination.total ? `Showing ${first}-${last} of ${pagination.total} approval items` : hasFilters ? 'No approvals match your filters' : 'No approval records found'}</strong>{state.tableLoading && <RefreshCw size={15} className="college-approvals-spin" />}</div>{approvals.length ? <div className="college-approvals-table-wrap"><table><caption className="sr-only">College approval requests</caption><thead><tr><th>Request ID</th><th>Request Date</th><th>Requester</th><th>Department</th><th>Type</th><th>Requested Item</th><th>Qty</th><th>Priority</th><th>Status</th><th>Reviewed By</th><th>Reviewed Date</th><th>Actions</th></tr></thead><tbody>{approvals.map((approval) => <tr key={approval.id}><td><strong>{approval.requestNumber}</strong></td><td>{date(approval.createdAt)}</td><td>{valueOr(approval.requester?.name)}</td><td>{valueOr(approval.department?.name)}</td><td>{title(approval.type)}</td><td>{valueOr(approval.item || approval.asset?.name)}{approval.asset?.assetCode && <small>{approval.asset.assetCode}</small>}</td><td>{valueOr(approval.quantity)}</td><td><span className={`college-approvals-badge priority-${approval.priority}`}>{title(approval.priority)}</span></td><td><span className={`college-approvals-badge status-${approval.status}`}>{title(approval.status)}</span></td><td>{valueOr(approval.reviewer?.name)}</td><td>{date(approval.reviewedAt)}</td><td className="college-approvals-actions"><button type="button" onClick={() => openDetails(approval)} aria-label={`View ${approval.requestNumber} details`} title="View details"><Eye size={16} /></button>{approval.status === 'pending' && canApprove && <button className="approve" type="button" onClick={() => openDecision(approval, 'approve')} aria-label={`Approve ${approval.requestNumber}`} title="Approve"><Check size={16} /></button>}{approval.status === 'pending' && canReject && <button className="reject" type="button" onClick={() => openDecision(approval, 'reject')} aria-label={`Reject ${approval.requestNumber}`} title="Reject"><XCircle size={16} /></button>}</td></tr>)}</tbody></table></div> : <div className="college-approvals-empty"><ClipboardCheck size={30} /><strong>{hasFilters ? 'No approvals match your current filters.' : 'No approval records found.'}</strong>{hasFilters ? <button type="button" onClick={clearFilters}>Clear Filters</button> : canCreate && <button type="button" onClick={openCreate}>Create Approval</button>}</div>}<nav className="college-approvals-pagination" aria-label="Approval pages"><button type="button" disabled={pagination.page <= 1} onClick={() => setPage((current) => current - 1)}>Previous</button><span>Page {pagination.page} of {Math.max(1, pagination.totalPages || 1)}</span><button type="button" disabled={pagination.page >= (pagination.totalPages || 1)} onClick={() => setPage((current) => current + 1)}>Next</button></nav></section>
+    {createOpen && <div className="college-approvals-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !saving && setCreateOpen(false)}><section className="college-approvals-modal" role="dialog" aria-modal="true" aria-labelledby="approval-create-title"><div className="college-approvals-modal-head"><div><span className="college-approvals-eyebrow">College Manager</span><h2 id="approval-create-title">New Approval Request</h2></div><button type="button" onClick={() => setCreateOpen(false)} aria-label="Close new approval" disabled={saving}><X /></button></div>{createLoading ? <p role="status">Loading college approval options...</p> : <form className="college-approvals-form" onSubmit={submitNewApproval}><label>Request title<input required maxLength="255" value={createForm.item} onChange={(event) => setCreateForm((form) => ({ ...form, item: event.target.value }))} /></label><label>Request type<select required value={createForm.type} onChange={(event) => setCreateForm((form) => ({ ...form, type: event.target.value }))}><option value="">Select type</option>{createOptions.types.map((type) => <option key={type} value={type}>{title(type)}</option>)}</select></label><label>Department<select required value={createForm.department_id} onChange={(event) => setCreateForm((form) => ({ ...form, department_id: event.target.value }))}><option value="">Select department</option>{createOptions.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label><label>Related asset (optional)<select value={createForm.asset_id} onChange={(event) => setCreateForm((form) => ({ ...form, asset_id: event.target.value }))}><option value="">No related asset</option>{createOptions.assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.assetCode} — {asset.name}</option>)}</select></label><label>Quantity<input type="number" min="1" step="1" required value={createForm.quantity} onChange={(event) => setCreateForm((form) => ({ ...form, quantity: event.target.value }))} /></label><label>Priority<select value={createForm.priority} onChange={(event) => setCreateForm((form) => ({ ...form, priority: event.target.value }))}>{createOptions.priorities.map((priority) => <option key={priority} value={priority}>{title(priority)}</option>)}</select></label><label className="college-approvals-form-wide">Reason<textarea required maxLength="5000" rows="4" value={createForm.reason} onChange={(event) => setCreateForm((form) => ({ ...form, reason: event.target.value }))} /></label><div className="college-approvals-modal-actions college-approvals-form-wide"><button type="button" onClick={() => setCreateOpen(false)} disabled={saving}>Cancel</button><button type="submit" className="approve-button" disabled={saving || !createOptions.departments.length || !createOptions.types.length}>{saving ? 'Submitting...' : 'Submit for Approval'}</button></div></form>}</section></div>}
+    {selected && <div className="college-approvals-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !detailLoading && setSelected(null)}><section className="college-approvals-modal" role="dialog" aria-modal="true" aria-labelledby="approval-details-title"><div className="college-approvals-modal-head"><div><span className="college-approvals-eyebrow">Approval details</span><h2 id="approval-details-title">{selected.requestNumber}</h2></div><button type="button" onClick={() => setSelected(null)} aria-label="Close approval details"><X /></button></div>{detailLoading ? <p role="status">Loading approval details...</p> : <><div className="college-approvals-details">{[['Request Date', date(selected.createdAt)], ['Type', title(selected.type)], ['Status', title(selected.status)], ['Priority', title(selected.priority)], ['Requester', valueOr(selected.requester?.name)], ['Username', valueOr(selected.requester?.username)], ['Department', valueOr(selected.department?.name)], ['Requested Item', valueOr(selected.item || selected.asset?.name)], ['Category', valueOr(selected.asset?.category)], ['Quantity', valueOr(selected.quantity)], ['Reviewed By', valueOr(selected.reviewer?.name)], ['Last Updated', date(selected.updatedAt)]].map(([label, display]) => <div key={label}><span>{label}</span><strong>{display}</strong></div>)}</div><div className="college-approvals-description"><span>Reason</span><p>{valueOr(selected.reason)}</p></div><div className="college-approvals-history"><h3>Approval history</h3>{selected.history?.length ? selected.history.map((entry) => <div key={entry.id}><strong>{title(entry.action)}</strong><span>{entry.changedBy ? `Reviewer #${entry.changedBy}` : 'System'} · {date(entry.createdAt)}</span>{entry.comment && <p>{entry.comment}</p>}</div>) : <p>No history recorded.</p>}</div>{selected.status === 'pending' && <div className="college-approvals-modal-actions">{canApprove && <button type="button" className="approve-button" onClick={() => openDecision(selected, 'approve')}><Check size={16} /> Approve</button>}{canReject && <button type="button" className="reject-button" onClick={() => openDecision(selected, 'reject')}><XCircle size={16} /> Reject</button>}{canRequestChanges && <button type="button" onClick={() => openDecision(selected, 'request-changes')}><FileEdit size={16} /> Request changes</button>}</div>}</>}</section></div>}
     {confirmation && <div className="college-approvals-backdrop" role="presentation"><section className="college-approvals-confirm" role="dialog" aria-modal="true" aria-labelledby="approval-confirm-title"><h2 id="approval-confirm-title">{confirmation.decision === 'approve' ? 'Approve request?' : confirmation.decision === 'reject' ? 'Reject request?' : 'Request changes?'}</h2><p><strong>{confirmation.approval.requestNumber}</strong> for {valueOr(confirmation.approval.item || confirmation.approval.asset?.name)}.</p>{['reject', 'request-changes'].includes(confirmation.decision) && <label>Reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} rows="4" required /></label>}<div className="college-approvals-modal-actions"><button type="button" onClick={() => setConfirmation(null)} disabled={processing}>Cancel</button><button type="button" className={confirmation.decision === 'approve' ? 'approve-button' : 'reject-button'} onClick={submitDecision} disabled={processing || (['reject', 'request-changes'].includes(confirmation.decision) && !reason.trim())}>{processing && <RefreshCw size={15} className="college-approvals-spin" />}{processing ? 'Processing...' : `Confirm ${confirmation.decision === 'request-changes' ? 'request changes' : confirmation.decision}`}</button></div></section></div>}
   </div>;
 };

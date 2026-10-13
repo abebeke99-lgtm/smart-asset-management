@@ -66,12 +66,13 @@ describe('ForgotPassword', () => {
     expect(getTranslationShape(englishTranslations)).toEqual(getTranslationShape(amharicTranslations));
   });
 
-  it('offers both recovery methods and a single route back to login', () => {
+  it('offers email recovery only and a single route back to login', () => {
     renderPage();
 
     expect(screen.getByRole('heading', { name: 'Forgot Password?' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Email$/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Mobile Phone/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Mobile Phone/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Mobile phone number')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Email address')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Send Verification Code/ })).toBeInTheDocument();
 
@@ -229,29 +230,6 @@ describe('ForgotPassword', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Email service is temporarily unavailable. Please try again later.');
   });
 
-  it('shows the translated SMS-unavailable message when no SMS provider is configured', async () => {
-    apiClient.post.mockRejectedValue({ response: { status: 503, data: { code: 'SMS_NOT_CONFIGURED' } } });
-
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /Mobile Phone/ }));
-    fireEvent.change(screen.getByLabelText('Mobile phone number'), { target: { value: '0912345678' } });
-    fireEvent.click(screen.getByRole('button', { name: /Send Verification Code/ }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('SMS service is not available yet.');
-  });
-
-  it('shows an SMS error for a phone request that fails with HTTP 503', async () => {
-    apiClient.post.mockRejectedValue({ response: { status: 503 } });
-
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /Mobile Phone/ }));
-    fireEvent.change(screen.getByLabelText('Mobile phone number'), { target: { value: '0912345678' } });
-    fireEvent.click(screen.getByRole('button', { name: /Send Verification Code/ }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('SMS service is not available yet.');
-    expect(screen.queryByText('Email service is temporarily unavailable. Please try again later.')).not.toBeInTheDocument();
-  });
-
   it('translates the email service error into Amharic', async () => {
     window.localStorage.setItem('language', 'am');
     apiClient.post.mockRejectedValue({ response: { status: 503 } });
@@ -263,75 +241,6 @@ describe('ForgotPassword', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('የኢሜይል አገልግሎቱ ለጊዜው አይገኝም። እባክዎ ቆይተው እንደገና ይሞክሩ።');
   });
 
-  it('runs the phone recovery flow from code request through to a new password', async () => {
-    apiClient.post
-      .mockResolvedValueOnce({ data: { success: true, message: 'If this phone number is registered, a verification code has been sent.' } })
-      .mockResolvedValueOnce({ data: { success: true, message: 'Verification successful.', resetToken: 'a'.repeat(64) } })
-      .mockResolvedValueOnce({ data: { success: true, message: 'Password reset successfully.' } });
-
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /Mobile Phone/ }));
-    fireEvent.change(screen.getByLabelText('Mobile phone number'), { target: { value: '0912345678' } });
-    fireEvent.click(screen.getByRole('button', { name: /Send Verification Code/ }));
-
-    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith(
-      '/api/auth/forgot-password/request',
-      { phoneNumber: '+251912345678' },
-    ));
-
-    expect(await screen.findByRole('heading', { name: 'Verification Code' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Resend code (60s)' })).toBeDisabled();
-
-    fireEvent.change(screen.getByLabelText('Verification Code'), { target: { value: '123456' } });
-    fireEvent.click(screen.getByRole('button', { name: /Verify Code/ }));
-
-    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith(
-      '/api/auth/forgot-password/verify',
-      { phoneNumber: '+251912345678', otp: '123456' },
-    ));
-
-    expect(await screen.findByLabelText('New password')).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'Str0ng!Pass' } });
-    fireEvent.change(screen.getByLabelText('Confirm New Password'), { target: { value: 'Str0ng!Pass' } });
-    fireEvent.click(screen.getByRole('button', { name: /Update Password/ }));
-
-    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith(
-      '/api/auth/forgot-password/reset',
-      { resetToken: 'a'.repeat(64), newPassword: 'Str0ng!Pass', confirmPassword: 'Str0ng!Pass' },
-    ));
-
-    expect(await screen.findByRole('heading', { name: 'Password Reset Successfully' })).toBeInTheDocument();
-  });
-
-  it.each([
-    ['0912345678', '+251912345678'],
-    ['+251 9 1234 5678', '+251912345678'],
-    ['00251 09 1234 5678', '+251912345678'],
-    ['0712345678', '+251712345678'],
-  ])('accepts Ethiopian mobile format %s', async (phoneNumber, normalizedPhone) => {
-    apiClient.post.mockResolvedValue({ data: { success: true, message: 'Code sent.' } });
-
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /Mobile Phone/ }));
-    fireEvent.change(screen.getByLabelText('Mobile phone number'), { target: { value: phoneNumber } });
-    fireEvent.click(screen.getByRole('button', { name: /Send Verification Code/ }));
-
-    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith(
-      '/api/auth/forgot-password/request',
-      { phoneNumber: normalizedPhone },
-    ));
-  });
-
-  it('rejects a phone number that is not a valid Ethiopian mobile number', async () => {
-    renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /Mobile Phone/ }));
-    fireEvent.change(screen.getByLabelText('Mobile phone number'), { target: { value: '12345' } });
-    fireEvent.click(screen.getByRole('button', { name: /Send Verification Code/ }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(/valid Ethiopian mobile number/i);
-    expect(apiClient.post).not.toHaveBeenCalled();
-  });
 
   it('enforces the password policy on the new password before calling the API', async () => {
     apiClient.post
@@ -339,9 +248,8 @@ describe('ForgotPassword', () => {
       .mockResolvedValueOnce({ data: { success: true, resetToken: 'b'.repeat(64) } });
 
     renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /Mobile Phone/ }));
-    fireEvent.change(screen.getByLabelText('Mobile phone number'), { target: { value: '0912345678' } });
-    fireEvent.click(screen.getByRole('button', { name: /Send Verification Code/ }));
+    typeEmail('student@university.edu');
+    submitForm();
     await screen.findByRole('heading', { name: 'Verification Code' });
 
     fireEvent.change(screen.getByLabelText('Verification Code'), { target: { value: '123456' } });
@@ -364,9 +272,8 @@ describe('ForgotPassword', () => {
       .mockResolvedValueOnce({ data: { success: true, resetToken: 'c'.repeat(64) } });
 
     renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /Mobile Phone/ }));
-    fireEvent.change(screen.getByLabelText('Mobile phone number'), { target: { value: '0912345678' } });
-    fireEvent.click(screen.getByRole('button', { name: /Send Verification Code/ }));
+    typeEmail('student@university.edu');
+    submitForm();
     await screen.findByRole('heading', { name: 'Verification Code' });
 
     fireEvent.change(screen.getByLabelText('Verification Code'), { target: { value: '123456' } });
@@ -389,9 +296,8 @@ describe('ForgotPassword', () => {
       .mockResolvedValueOnce({ data: { success: false, message: 'Invalid verification code.' } });
 
     renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /Mobile Phone/ }));
-    fireEvent.change(screen.getByLabelText('Mobile phone number'), { target: { value: '0912345678' } });
-    fireEvent.click(screen.getByRole('button', { name: /Send Verification Code/ }));
+    typeEmail('student@university.edu');
+    submitForm();
     await screen.findByRole('heading', { name: 'Verification Code' });
 
     fireEvent.change(screen.getByLabelText('Verification Code'), { target: { value: '000000' } });
@@ -408,9 +314,8 @@ describe('ForgotPassword', () => {
       .mockResolvedValueOnce({ data: { success: true, resetToken: 'd'.repeat(64) } });
 
     renderPage();
-    fireEvent.click(screen.getByRole('button', { name: /Mobile Phone/ }));
-    fireEvent.change(screen.getByLabelText('Mobile phone number'), { target: { value: '0912345678' } });
-    fireEvent.click(screen.getByRole('button', { name: /Send Verification Code/ }));
+    typeEmail('student@university.edu');
+    submitForm();
     await screen.findByRole('heading', { name: 'Verification Code' });
 
     fireEvent.change(screen.getByLabelText('Verification Code'), { target: { value: '123456' } });

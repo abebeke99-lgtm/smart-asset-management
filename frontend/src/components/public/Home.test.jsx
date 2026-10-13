@@ -132,6 +132,7 @@ describe('Home', () => {
     const footer = screen.getByRole('contentinfo');
     const footerContent = within(footer);
 
+    expect(footer.querySelector('.footer-brand-logo, .footer-brand-mark')).not.toBeInTheDocument();
     expect(footerContent.getByText('University Asset Management System')).toBeInTheDocument();
     const quickLinks = within(footerContent.getByRole('navigation', { name: 'Quick Links' }));
     expect(quickLinks.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/home');

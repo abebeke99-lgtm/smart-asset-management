@@ -4,6 +4,7 @@ const { createFinanceNotification, createBulkNotification, createEventNotificati
 const { getCollegeScopeId } = require('../middlewares/organizationScope');
 const { normalizeRoleValue } = require('../middlewares/auth');
 
+const supportedApprovalTypes = ['new_asset', 'asset_issue', 'replacement', 'transfer', 'return', 'maintenance', 'other', 'purchase', 'purchase_request'];
 const isStoreManager = (req) => normalizeRoleValue(req.user?.role) === 'store_manager';
 const getRole = (req) => normalizeRoleValue(req.user?.role);
 const isIssueRequest = (record) => String(record.type || '').toLowerCase().includes('issue');
@@ -152,7 +153,7 @@ const getApprovalHistory = async (approvalId) => {
       action: data.action,
       previousStatus: details.beforeStatus || (data.action === 'STORE_REQUEST_FULFILLED' ? 'approved' : null),
       newStatus: details.afterStatus || (data.action === 'REQUEST_SUBMITTED' ? 'pending' : data.action === 'STORE_REQUEST_FULFILLED' ? 'fulfilled' : null),
-      comment: details.comment || '',
+      comment: details.comment || details.reason || '',
       createdAt: data.createdAt,
     };
   });
@@ -243,9 +244,8 @@ const createApproval = async (req, res, next) => {
     const normalizedPriority = String(priority || '').trim().toLowerCase();
     const parsedQuantity = Number(quantity);
     const role = getRole(req);
-    const supportedTypes = new Set(['new_asset', 'asset_issue', 'replacement', 'transfer', 'return', 'maintenance', 'other', 'purchase', 'purchase_request']);
     if (!requestType || requestType.length > 100
-      || (!supportedTypes.has(requestType.toLowerCase()) && !requestType.toLowerCase().includes('purchase'))
+      || (!supportedApprovalTypes.includes(requestType.toLowerCase()) && !requestType.toLowerCase().includes('purchase'))
       || !requestReason || requestReason.length > 5000
       || !Number.isSafeInteger(parsedQuantity) || parsedQuantity <= 0) {
       return res.status(400).json({ success: false, message: 'A supported request type, reason (up to 5000 characters), and a positive whole-number quantity are required' });
@@ -265,9 +265,14 @@ const createApproval = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'You may only submit requests for yourself' });
     }
     const storeManager = isStoreManager(req);
+    const collegeManager = role === 'college_manager';
     const collegeId = storeManager ? getCollegeScopeId(req) : null;
+    const managerCollegeId = collegeManager ? getCollegeScopeId(req) : null;
     if (storeManager && !collegeId) return res.status(403).json({ success: false, message: 'College scope is not configured for this account' });
     if (storeManager && (!asset_id || !department_id)) return res.status(400).json({ success: false, message: 'A valid asset and department are required' });
+    if (collegeManager && (!managerCollegeId || !department_id || (!requestItem && !asset_id))) {
+      return res.status(400).json({ success: false, message: 'A request title and department are required' });
+    }
     if (requestType.toLowerCase().includes('issue') && (!asset_id || !department_id)) {
       return res.status(400).json({ success: false, message: 'An asset and department are required for an asset issue request' });
     }
@@ -299,7 +304,7 @@ const createApproval = async (req, res, next) => {
       return await reject(404, 'Requested-for user not found in the selected department scope');
     }
     const authenticatedDepartment = req.user.department_id || req.user.departmentId || (Number.isInteger(Number(req.user.department)) ? Number(req.user.department) : null);
-    const mayRequestAcrossDepartments = ['admin', 'ict_officer', 'finance', 'store_manager'].includes(role);
+    const mayRequestAcrossDepartments = ['admin', 'ict_officer', 'finance', 'store_manager', 'college_manager'].includes(role);
     if (!mayRequestAcrossDepartments && departmentIdInput && String(departmentIdInput) !== String(authenticatedDepartment) && String(departmentIdInput) !== String(req.user.department)) {
       return await reject(403, 'Department authorization required');
     }
@@ -347,8 +352,8 @@ const createApproval = async (req, res, next) => {
       assetId: asset?.id || null,
       requestedBy: req.user.id,
       requestedFor: requestedForId,
-      departmentId: storeManager ? department.id : authenticatedDepartment || departmentIdInput || null,
-      item: asset?.name || requestItem,
+      departmentId: storeManager || collegeManager ? department.id : authenticatedDepartment || departmentIdInput || null,
+      item: requestItem || asset?.name || '',
       quantity: parsedQuantity,
       priority: normalizedPriority,
       reason: requestReason,
@@ -392,7 +397,9 @@ const createApproval = async (req, res, next) => {
     if (!String(record.type).toLowerCase().includes('purchase')) {
       try {
         const isIssue = isIssueRequest(record);
-        const reviewerWhere = isIssue
+        const reviewerWhere = collegeManager
+          ? { role: 'college_manager', collegeId: managerCollegeId, active: true, id: { [Op.ne]: req.user.id } }
+          : isIssue
           ? {
             [Op.or]: [
               { role: 'store_manager', collegeId: department?.collegeId || asset?.collegeId },
@@ -596,4 +603,4 @@ const decideApproval = async (req, res, next) => {
   }
 };
 
-module.exports = { listApprovals, getApprovalById, createApproval, decideApproval };
+module.exports = { listApprovals, getApprovalById, createApproval, decideApproval, getApprovalHistory, supportedApprovalTypes };

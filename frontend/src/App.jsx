@@ -12,7 +12,7 @@ import './styles/admin/index.css';
 import './components/ict/ICTModuleThemes.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, Folder, GitBranch, House, Info, Layers, LayoutDashboard, LifeBuoy, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, QrCode, Radio, Search, Settings, ShieldCheck, Sun, TrendingUp, Undo2, UserCircle, UserRound, Users, Wrench, X } from 'lucide-react';
+import { Activity, Archive, ArrowLeftRight, BarChart3, BatteryCharging, Bell, BriefcaseBusiness, Building, Building2, CalendarCheck, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, Droplets, FilePlus2, FileText, FlaskConical, Folder, Fuel, GitBranch, House, Info, Layers, LayoutDashboard, LifeBuoy, Link2, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, QrCode, Radio, Search, Settings, ShieldCheck, Sun, TrendingUp, Trash2, Undo2, UserCircle, UserRound, Users, Wrench, X, Zap } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 
@@ -2369,11 +2369,63 @@ const DASHBOARD_MOBILE_QUERY = '(max-width: 1023px)';
 // Admin Layout with Sidebar
 const adminSidebarSections = [
   {
-    id: 'administrator',
-    heading: 'ADMINISTRATOR',
+    id: 'overview',
+    heading: 'OVERVIEW',
     items: [
       { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     ]
+  },
+  {
+    id: 'assets',
+    heading: 'ASSET MANAGEMENT',
+    items: [
+      { to: '/admin/assets', label: 'Assets', icon: Package },
+      { to: '/admin/assets/categories', label: 'Categories', icon: Layers },
+      { to: '/admin/assets/assign', label: 'Assignments', icon: UserRound },
+      { to: '/admin/assets/transfer', label: 'Transfers', icon: ArrowLeftRight },
+      { to: '/admin/assets/disposal', label: 'Disposal', icon: Trash2 },
+      { to: '/admin/inventory/quarantine', label: 'Chemical Quarantine', icon: FlaskConical },
+    ],
+  },
+  {
+    id: 'operations',
+    heading: 'OPERATIONS',
+    items: [
+      { to: '/admin/maintenance', label: 'Maintenance', icon: Wrench },
+      { to: '/admin/rfid', label: 'RFID / QR Tracking', icon: Radio },
+    ],
+  },
+  {
+    id: 'organization',
+    heading: 'ORGANIZATION',
+    items: [
+      { to: '/admin/users', label: 'Users', icon: Users },
+      { to: '/admin/colleges', label: 'Colleges', icon: Building2 },
+      { to: '/admin/departments', label: 'Departments', icon: Building },
+      { to: '/admin/locations', label: 'Locations', icon: MapPin },
+    ],
+  },
+  {
+    id: 'reporting',
+    heading: 'REPORTS & ANALYTICS',
+    items: [
+      { to: '/admin/reports', label: 'Reports', icon: BarChart3 },
+      { to: '/admin/analytics/system', label: 'Analytics', icon: TrendingUp },
+    ],
+  },
+  {
+    id: 'system',
+    heading: 'SYSTEM',
+    items: [
+      { to: '/admin/audit-logs', label: 'Audit Logs', icon: ClipboardList, permission: 'audit.view' },
+      { to: '/admin/settings', label: 'Settings', icon: Settings },
+      { to: '/admin/profile', label: 'Profile', icon: UserCircle },
+      { to: '/admin/notifications', label: 'Notifications', icon: Bell },
+      { to: '/admin/backup', label: 'Backup', icon: DatabaseBackup },
+      { to: '/admin/enam', label: 'ENAM Integration', icon: Link2 },
+      { to: '/admin/monitoring', label: 'System Monitoring', icon: Activity },
+      { to: '/admin/roles-permissions', label: 'Roles & Permissions', icon: ShieldCheck, permission: 'roles_permissions.configure' },
+    ],
   },
 ];
 
@@ -3237,7 +3289,32 @@ function AppContent() {
         { path: '/maintenance/work-orders', label: 'Work Orders', section: 'FACILITY MAINTENANCE' }
       ],
       'infrastructure': [
-        { path: '/infrastructure/documents', label: '📄 Documents', section: 'DOCUMENTS' }
+        { path: '/infrastructure/dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'OVERVIEW', permission: 'infrastructure.dashboard.view' },
+        { path: '/infrastructure/assets', label: 'Infrastructure Assets', icon: Package, section: 'ASSET MANAGEMENT', permission: 'infrastructure.assets.view' },
+        { path: '/infrastructure/inventory', label: 'Inventory', icon: ClipboardList, section: 'ASSET MANAGEMENT', permission: 'infrastructure.assets.view' },
+        { path: '/infrastructure/assignment', label: 'Assignments', icon: UserRound, section: 'ASSET MANAGEMENT', permission: 'infrastructure.assets.view' },
+        { path: '/infrastructure/transfer', label: 'Transfers', icon: ArrowLeftRight, section: 'ASSET MANAGEMENT', permission: 'infrastructure.assets.update' },
+        { path: '/infrastructure/verification', label: 'Verification', icon: Check, section: 'ASSET MANAGEMENT', permission: 'infrastructure.assets.view' },
+        { path: '/infrastructure/buildings', label: 'Buildings', icon: Building2, section: 'FACILITIES' },
+        { path: '/infrastructure/electrical', label: 'Electrical', icon: Zap, section: 'FACILITIES' },
+        { path: '/infrastructure/generators', label: 'Generators', icon: Settings, section: 'FACILITIES' },
+        { path: '/infrastructure/transformers', label: 'Transformers', icon: Zap, section: 'FACILITIES' },
+        { path: '/infrastructure/ups', label: 'UPS', icon: BatteryCharging, section: 'FACILITIES' },
+        { path: '/infrastructure/solar', label: 'Solar', icon: Sun, section: 'FACILITIES' },
+        { path: '/infrastructure/water', label: 'Water', icon: Droplets, section: 'FACILITIES' },
+        { path: '/infrastructure/roads', label: 'Roads', icon: GitBranch, section: 'FACILITIES' },
+        { path: '/infrastructure/maintenance', label: 'Maintenance', icon: Wrench, section: 'OPERATIONS', permission: 'infrastructure.maintenance.view' },
+        { path: '/infrastructure/work-orders', label: 'Work Orders', icon: ClipboardList, section: 'OPERATIONS', permission: 'infrastructure.workorders.view' },
+        { path: '/infrastructure/preventive', label: 'Preventive Maintenance', icon: CalendarCheck, section: 'OPERATIONS', permission: 'infrastructure.workorders.view' },
+        { path: '/infrastructure/spare-parts', label: 'Spare Parts', icon: Package, section: 'RESOURCES' },
+        { path: '/infrastructure/energy', label: 'Energy', icon: Zap, section: 'RESOURCES' },
+        { path: '/infrastructure/fuel', label: 'Fuel', icon: Fuel, section: 'RESOURCES' },
+        { path: '/infrastructure/inspection', label: 'Inspection', icon: ClipboardCheck, section: 'MONITORING' },
+        { path: '/infrastructure/tracking', label: 'Tracking', icon: Radio, section: 'MONITORING', permission: 'infrastructure.tracking.view' },
+        { path: '/infrastructure/requests', label: 'Requests', icon: FileText, section: 'ADMINISTRATION' },
+        { path: '/infrastructure/documents', label: 'Documents', icon: FileText, section: 'ADMINISTRATION' },
+        { path: '/infrastructure/reports', label: 'Reports', icon: BarChart3, section: 'REPORTS & SYSTEM', permission: 'infrastructure.reports.view' },
+        { path: '/infrastructure/notifications', label: 'Notifications', icon: Bell, section: 'REPORTS & SYSTEM', permission: 'infrastructure.notifications.view' },
       ]
     };
     return items[normalizedRole] || [];

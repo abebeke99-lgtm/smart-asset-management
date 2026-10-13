@@ -4,7 +4,8 @@ const { requireAuth, requireActiveAccount, requireRole, requirePermission } = re
 const { requireCollegeManager, resolveCollegeScope } = require('../middlewares/organizationScope');
 const { getCollegeAssetScope } = require('../services/collegeAssetScope');
 const { getCollegeDashboard, getCollegeProfile, updateCollegeProfile, listCollegeDepartments, getCollegeDepartmentOverview, getCollegeDepartmentPerformance, getCollegeDepartmentReports, listCollegeAssets, getCollegeInventory, getCollegeAssetRegistrationOptions, getCollegeAsset, listCollegeLocations, getCollegeLocation, createCollegeLocation, updateCollegeLocation, deleteCollegeLocation, createCollegeDepartment, updateCollegeDepartment, updateCollegeDepartmentStatus, deleteCollegeDepartment, getCollegeDepartmentDetails, listCollegeDepartmentStaff, listCollegeDepartmentAssets, listCollegeAssignments, getCollegeAssignmentOptions, listCollegeMaintenance, getCollegeMaintenance, listCollegeVerification, getCollegeReports, getCollegeAssetAnalytics, listCollegeRFIDTracking, lookupCollegeTrackingCode, recordCollegeTrackingScan, assignCollegeTrackingTags, regenerateCollegeQr } = require('../controllers/collegeController');
-const { listRequests, getRequest, decideRequest, listCollegeRequests, getCollegeRequest, listCollegeDepartmentRequests } = require('../controllers/workspaceRequestController');
+const { listRequests, getRequest, decideRequest, listCollegeRequests, getCollegeApprovalOptions, getCollegeRequest, listCollegeDepartmentRequests } = require('../controllers/workspaceRequestController');
+const { createApproval } = require('../controllers/approvalController');
 const verification = require('../controllers/verificationController');
 const { getAssetHistory, createAsset, updateAsset } = require('../controllers/assetController');
 const { Asset } = require('../models');
@@ -89,6 +90,8 @@ router.post('/requests/:id/reject', requireRole('college_manager'), requirePermi
 router.post('/requests/:id/request-changes', requireRole('college_manager'), requirePermission('college.approvals.request_changes'), collegeAssetRequests.decide('requestChanges'));
 router.get('/department-requests', requirePermission('college.requests.view'), listCollegeDepartmentRequests);
 router.get('/approvals', requirePermission('college.approvals.view'), listCollegeRequests);
+router.get('/approvals/options', requireRole('college_manager'), requirePermission('college.requests.create'), getCollegeApprovalOptions);
+router.post('/approvals', requireRole('college_manager'), requirePermission('college.requests.create'), createApproval);
 router.get('/approvals/:id', requirePermission('college.approvals.view'), getCollegeRequest);
 router.get('/assignments', requirePermission('college.assignments.view'), listCollegeAssignments);
 router.get('/assignment-options', requireRole('college_manager'), requirePermission('college.assignments.manage'), getCollegeAssignmentOptions);

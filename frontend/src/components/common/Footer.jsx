@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BarChart3, Building2, ClipboardList, LockKeyhole, Mail, MapPin, Package, Phone, Radio, Scale, ShieldCheck, Wrench } from 'lucide-react';
+import { BarChart3, ClipboardList, LockKeyhole, Mail, MapPin, Package, Phone, Radio, Scale, ShieldCheck, Wrench } from 'lucide-react';
 
 const publicLinks = [
   { to: '/home', key: 'home' },
@@ -52,11 +52,6 @@ const Footer = ({ t, organization, role, onPublicNavigation }) => {
       <div className="footer-grid">
         <section className="footer-brand" aria-labelledby="footer-brand-title">
           <div className="footer-brand-header">
-            {organization?.logo ? (
-              <img className="footer-brand-logo" src={organization.logo} alt="" />
-            ) : (
-              <span className="footer-brand-mark"><Building2 size={22} aria-hidden="true" /></span>
-            )}
             <div>
               <p className="footer-university-name">{organizationName}</p>
               <h2 id="footer-brand-title">{t.footerBrandTitle}</h2>
