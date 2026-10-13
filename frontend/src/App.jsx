@@ -3286,6 +3286,7 @@ function AppContent() {
         { path: '/store/notifications', label: '🔔 ' + t.notifications, section: 'Notifications' }
       ],
       'maintenance': [
+        { path: ROUTES.MAINT_REQUESTS, label: 'Requests', section: 'FACILITY MAINTENANCE', permission: 'maintenance.requests.view' },
         { path: '/maintenance/work-orders', label: 'Work Orders', section: 'FACILITY MAINTENANCE' }
       ],
       'infrastructure': [
