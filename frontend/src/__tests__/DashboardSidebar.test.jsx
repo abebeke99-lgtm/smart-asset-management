@@ -196,15 +196,39 @@ describe('authenticated dashboard sidebar', () => {
       render(<App />);
     });
 
-    const sidebar = within(screen.getByLabelText('Primary navigation'));
-    expect(sidebar.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
-    expect(sidebar.getByRole('link', { name: 'Infrastructure Assets' })).toBeInTheDocument();
-    expect(sidebar.getByRole('link', { name: 'Inventory' })).toBeInTheDocument();
-    expect(sidebar.getByRole('link', { name: 'Buildings' })).toBeInTheDocument();
-    expect(sidebar.getByRole('link', { name: 'Maintenance' })).toBeInTheDocument();
-    expect(sidebar.getByRole('link', { name: 'Work Orders' })).toBeInTheDocument();
-    expect(sidebar.getByRole('link', { name: 'Reports' })).toBeInTheDocument();
-    expect(sidebar.getByRole('link', { name: 'Documents' })).toBeInTheDocument();
+    const sidebarElement = screen.getByLabelText('Primary navigation');
+    const sidebar = within(sidebarElement);
+    expect(sidebarElement.querySelectorAll('.sidebar-section')).toHaveLength(1);
+    [
+      'Dashboard',
+      'Infrastructure Assets',
+      'Inventory',
+      'Assignments',
+      'Transfers',
+      'Verification',
+      'Buildings',
+      'Electrical',
+      'Generators',
+      'Transformers',
+      'UPS',
+      'Solar',
+      'Water',
+      'Roads',
+      'Maintenance',
+      'Work Orders',
+      'Preventive Maintenance',
+      'Spare Parts',
+      'Energy',
+      'Fuel',
+      'Inspection',
+      'Tracking',
+      'Requests',
+      'Documents',
+      'Reports',
+      'Notifications',
+    ].forEach((label) => {
+      expect(sidebar.getByRole('link', { name: label })).toBeInTheDocument();
+    });
   });
 
   it('opens and closes the mobile navigation with its button and Escape key', async () => {

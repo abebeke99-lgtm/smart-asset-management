@@ -3519,6 +3519,8 @@ function AppContent() {
       heading: section.heading,
       items: section.items.map((item) => ({ ...item, path: item.to })),
     }))
+    : sidebarRole === 'infrastructure'
+      ? [{ heading: 'INFRASTRUCTURE', items: sidebarItems }]
     : sidebarRole === 'college_manager'
       ? [
         { heading: 'MAIN', items: collegeOverviewItems },
