@@ -1,9 +1,22 @@
-import { messages, translateMessage, translateNavigationLabel, translateStatus } from "./messages";
+import { getShellTranslations, messages, translateMessage, translateNavigationLabel, translateStatus } from "./messages";
 
 describe("central English and Amharic translations", () => {
   test("translates Department Head labels without changing their source route labels", () => {
     expect(translateNavigationLabel("am", "Tickets")).toBe("ቲኬቶች");
     expect(translateNavigationLabel("am", "Asset Requests")).toBe("የንብረት ጥያቄዎች");
+  });
+
+  test("translates shared dashboard sidebar labels and logout in Amharic", () => {
+    expect(translateNavigationLabel("am", "Dashboard")).toBe("ዳሽቦርድ");
+    expect(translateNavigationLabel("am", "Assets")).toBe("ንብረቶች");
+    expect(translateNavigationLabel("am", "Requests")).toBe("ጥያቄዎች");
+    expect(translateNavigationLabel("am", "Assignments")).toBe("የንብረት ምደባዎች");
+    expect(translateNavigationLabel("am", "Returns")).toBe("የንብረት መመለሻዎች");
+    expect(translateNavigationLabel("am", "Transfers")).toBe("የንብረት ማስተላለፎች");
+    expect(getShellTranslations("am").logout).toBe("ውጣ");
+    expect(translateNavigationLabel("en", "Assignments")).toBe("Assignments");
+    expect(translateNavigationLabel("en", "Returns")).toBe("Returns");
+    expect(translateNavigationLabel("en", "Transfers")).toBe("Transfers");
   });
 
   test("translates known statuses and preserves unknown database values", () => {

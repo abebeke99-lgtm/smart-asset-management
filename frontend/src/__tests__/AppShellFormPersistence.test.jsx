@@ -90,14 +90,14 @@ describe('Authenticated shell identity across re-renders', () => {
     expect(screen.getByLabelText('Email')).toHaveValue('persist@example.edu');
     expect(screen.getByRole('button', { name: 'AM — Amharic (አማርኛ)' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'EN — English (እንግሊዝኛ)' })).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByText('ዳሽቦርድ')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'ዳሽቦርድ' })).toBeInTheDocument();
     expect(localStorage.getItem('language')).toBe('am');
     expect(window.location.pathname).toBe('/admin/users');
 
     fireEvent.click(screen.getByRole('button', { name: 'EN — English (እንግሊዝኛ)' }));
     expect(screen.getByRole('button', { name: 'EN — English (እንግሊዝኛ)' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'AM — Amharic (አማርኛ)' })).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
     expect(localStorage.getItem('language')).toBe('en');
     expect(screen.getByLabelText('Username *')).toHaveValue('persist.user');
   });

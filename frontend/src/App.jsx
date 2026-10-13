@@ -16,10 +16,6 @@ import 'react-toastify/dist/ReactToastify.css';
 import { Archive, ArrowLeftRight, BarChart3, Bell, BriefcaseBusiness, Building2, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, FilePlus2, FileText, Folder, GitBranch, House, Info, Layers, LayoutDashboard, LifeBuoy, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, QrCode, Radio, Search, Settings, ShieldCheck, Sun, TrendingUp, Undo2, UserCircle, UserRound, Users, Wrench, X } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
-import CollegeDepartments from './pages/college/CollegeDepartments';
-import DepartmentDetails from './components/college/DepartmentDetails';
-import DepartmentMaintenance from './components/department/DepartmentMaintenance';
-import DepartmentReturns from './components/department/DepartmentReturns';
 
 // ==========================================
 // IMPORT UI CONTEXT
@@ -37,147 +33,149 @@ import { DataProvider } from './contexts/DataContext';
 import { apiClient, getApiErrorMessage } from './utils/api';
 import { ROUTES } from './constants/routes';
 import Footer from './components/common/Footer';
-import StoreTracking from './components/store/StoreTracking';
 
-import Home from './components/public/Home';
-import AboutUs from './components/public/AboutUs';
-import Services from './components/public/Services';
-import Contact from './components/public/Contact';
-import Help from './components/public/Help';
-import Register from './components/public/Register';
-import ForgotPassword from './components/public/ForgotPassword';
-import ResetPassword from './components/public/ResetPassword';
 
-import AssetCreate from './components/shared/AssetCreate';
-import AssetDetails from './components/shared/AssetDetails';
 
-import AdminUserManagement from './components/admin/AdminUserManagement';
-import AdminSettings from './components/admin/AdminSettings';
-import AdminProfile from './components/admin/AdminProfile';
-import AdminNotifications from './components/admin/AdminNotifications';
-import AdminBackup from './components/admin/AdminBackup';
-import AdminRolesPermissions from './components/admin/AdminRolesPermissions';
-import AdminAuditLogs from './components/admin/AdminAuditLogs';
-import AdminDepartmentManagement from './components/admin/AdminDepartmentManagement';
-import AdminChemicalQuarantine from './components/admin/AdminChemicalQuarantine';
-import SystemMonitoring from './components/admin/SystemMonitoring';
-import AdminCollegeManagement from './components/admin/AdminCollegeManagement';
-import EnamIntegration from './components/admin/EnamIntegration';
 
-import ICTDashboard from './components/ict/ICTDashboard';
-import ICTAssets from './components/ict/ICTAssets';
-import ICTMaintenance from './components/ict/ICTMaintenance';
-import ICTRepairHistory from './components/ict/ICTRepairHistory';
-import ICTDeviceHealth from './components/ict/ICTDeviceHealth';
-import ICTRFIDTracking from './components/ict/ICTRFIDTracking';
-import ICTAssetHistory from './components/ict/ICTAssetHistory';
-import ICTInventory from './components/ict/ICTInventory';
-import ICTAssetRequests from './components/ict/ICTAssetRequests';
-import ICTEquipment from './components/ict/ICTEquipment';
-import ICTNetwork from './components/ict/ICTNetwork';
-import ICTNetworkEquipment from './components/ict/ICTNetworkEquipment';
-import ICTSoftwareLicenses from './components/ict/ICTSoftwareLicenses';
-import ICTTechnicalSupport from './components/ict/ICTTechnicalSupport';
-import IncidentManagement from './components/ict/IncidentManagement';
-import ICTNotifications from './components/ict/ICTNotifications';
-import ICTDocuments from './components/ict/ICTDocuments';
-import ICTWarranty from './components/ict/ICTWarranty';
-import ICTPhotoEvidence from './components/ict/ICTPhotoEvidence';
 import GlobalSearch from './components/common/GlobalSearch';
 
-import DeptProfile from './components/department/DeptProfile';
-import DeptLaboratories from './components/department/DeptLaboratories';
-import ApprovalQueue from './components/department/ApprovalQueue';
-import DeptAssetRequests from './components/department/DeptAssetRequests';
-import DeptVerification from './components/department/DeptVerification';
-import DeptNotifications from './components/department/DeptNotifications';
-import DeptAssetHistory from './components/department/DeptAssetHistory';
-import DepartmentActivityHistory from './components/department/DepartmentActivityHistory';
-import DepartmentAssetHistory from './components/department/DepartmentAssetHistory';
-import DeptTickets from './components/department/DeptTickets';
-import TeachingAssistantAssets from './components/department/TeachingAssistantAssets';
-import StudentDashboard from './components/student/StudentDashboard';
 
-import FinancePurchaseRequests from './components/finance/FinancePurchaseRequests';
-import FinancePurchaseOrders from './components/finance/FinancePurchaseOrders';
-import FinanceSuppliers from './components/finance/FinanceSuppliers';
-import FinancePurchaseHistory from './components/finance/FinancePurchaseHistory';
-import FinanceInvoices from './components/finance/FinanceInvoices';
-import FinancePayments from './components/finance/FinancePayments';
-import FinanceTransactions from './components/finance/FinanceTransactions';
-import FinanceBudgetManagement from './components/finance/FinanceBudgetManagement';
-import FinanceValuation from './components/finance/FinanceValuation';
-import Capitalization from './components/finance/Capitalization';
-import DisposalFinancialRecords from './components/finance/DisposalFinancialRecords';
-import FinanceBudgetReports from './components/finance/FinanceBudgetReports';
-import FinanceDepreciationReports from './components/finance/FinanceDepreciationReports';
-import FinanceAssetValueReports from './components/finance/FinanceAssetValueReports';
-import FinanceAudit from './components/finance/FinanceAudit';
-import FinanceNotifications from './components/finance/FinanceNotifications';
 
-import StoreReceivePage from './components/store/StoreReceivePage';
-import StoreIssuePage from './components/store/StoreIssuePage';
-import StoreReturnsPage from './components/store/StoreReturnsPage';
-import StoreReturnLifecycle from './components/store/StoreReturnLifecycle';
-import StoreAssetRequests from './components/store/StoreAssetRequests';
-import StoreHistory from './components/store/StoreHistory';
-import StoreMaintenance from './components/store/StoreMaintenance';
-import StoreNotifications from './components/store/StoreNotifications';
-import StoreManagerAccounts from './components/store/StoreManagerAccounts';
 
-import MaintDashboard from './components/maintenance/MaintDashboard';
-import MaintRequests from './components/maintenance/MaintRequests';
-import MaintAssetInspection from './components/maintenance/MaintAssetInspection';
-import MaintWorkOrders from './components/maintenance/MaintWorkOrders';
-import MaintRepairs from './components/maintenance/MaintRepairs';
-import MaintPreventive from './components/maintenance/MaintPreventive';
-import MaintTechnicians from './components/maintenance/MaintTechnicians';
-import MaintSpareParts from './components/maintenance/MaintSpareParts';
-import MaintVendors from './components/maintenance/MaintVendors';
-import MaintAssetsUnderMaintenance from './components/maintenance/MaintAssetsUnderMaintenance';
-import MaintTestingQuality from './components/maintenance/MaintTestingQuality';
-import MaintTechnicalTesting from './components/maintenance/MaintTechnicalTesting';
-import MaintAssigned from './components/maintenance/MaintAssigned';
-import MaintNotifications from './components/maintenance/MaintNotifications';
-import MaintHistory from './components/maintenance/MaintHistory';
-import MaintReports from './components/maintenance/MaintReports';
 
-import InfrastructureLayout from './components/infrastructure/InfrastructureLayout';
-import InfrastructureDashboard from './components/infrastructure/InfrastructureDashboard';
-import InfrastructureAssets from './components/infrastructure/InfrastructureAssets';
-import RegisterInfrastructureAsset from './components/infrastructure/RegisterInfrastructureAsset';
-import InfrastructureInventory from './components/infrastructure/InfrastructureInventory';
-import InfrastructureAssignment from './components/infrastructure/InfrastructureAssignment';
-import InfrastructureVerification from './components/infrastructure/InfrastructureVerification';
-import InfrastructureBuildings from './components/infrastructure/InfrastructureBuildings';
-import InfrastructureElectrical from './components/infrastructure/InfrastructureElectrical';
-import InfrastructureGenerators from './components/infrastructure/InfrastructureGenerators';
-import InfrastructureTransformers from './components/infrastructure/InfrastructureTransformers';
-import InfrastructureUPS from './components/infrastructure/InfrastructureUPS';
-import InfrastructureSolar from './components/infrastructure/InfrastructureSolar';
-import InfrastructureWater from './components/infrastructure/InfrastructureWater';
-import InfrastructureRoads from './components/infrastructure/InfrastructureRoads';
-import InfrastructureMaintenance from './components/infrastructure/InfrastructureMaintenance';
-import InfrastructureWorkOrders from './components/infrastructure/InfrastructureWorkOrders';
-import InfrastructurePreventive from './components/infrastructure/InfrastructurePreventive';
-import InfrastructureSpareParts from './components/infrastructure/InfrastructureSpareParts';
-import InfrastructureEnergy from './components/infrastructure/InfrastructureEnergy';
-import InfrastructureFuel from './components/infrastructure/InfrastructureFuel';
-import InfrastructureInspection from './components/infrastructure/InfrastructureInspection';
-import InfrastructureTracking from './components/infrastructure/InfrastructureTracking';
-import InfrastructureRequests from './components/infrastructure/InfrastructureRequests';
-import InfrastructureReports from './components/infrastructure/InfrastructureReports';
-import InfrastructureDocuments from './components/infrastructure/InfrastructureDocuments';
-import InfrastructureNotifications from './components/infrastructure/InfrastructureNotifications';
 
 // ==========================================
 // LAZY LOAD ALL COMPONENTS
 // ==========================================
 
 // Admin Components
+const CollegeDepartments = lazy(() => import('./pages/college/CollegeDepartments'));
+const DepartmentDetails = lazy(() => import('./components/college/DepartmentDetails'));
+const DepartmentMaintenance = lazy(() => import('./components/department/DepartmentMaintenance'));
+const DepartmentReturns = lazy(() => import('./components/department/DepartmentReturns'));
+const StoreTracking = lazy(() => import('./components/store/StoreTracking'));
+const Home = lazy(() => import('./components/public/Home'));
+const AboutUs = lazy(() => import('./components/public/AboutUs'));
+const Services = lazy(() => import('./components/public/Services'));
+const Contact = lazy(() => import('./components/public/Contact'));
+const Help = lazy(() => import('./components/public/Help'));
+const Register = lazy(() => import('./components/public/Register'));
+const ForgotPassword = lazy(() => import('./components/public/ForgotPassword'));
+const ResetPassword = lazy(() => import('./components/public/ResetPassword'));
+const AssetCreate = lazy(() => import('./components/shared/AssetCreate'));
+const AssetDetails = lazy(() => import('./components/shared/AssetDetails'));
+const AdminUserManagement = lazy(() => import('./components/admin/AdminUserManagement'));
+const AdminSettings = lazy(() => import('./components/admin/AdminSettings'));
+const AdminProfile = lazy(() => import('./components/admin/AdminProfile'));
+const AdminNotifications = lazy(() => import('./components/admin/AdminNotifications'));
+const AdminBackup = lazy(() => import('./components/admin/AdminBackup'));
+const AdminRolesPermissions = lazy(() => import('./components/admin/AdminRolesPermissions'));
+const AdminDepartmentManagement = lazy(() => import('./components/admin/AdminDepartmentManagement'));
+const AdminChemicalQuarantine = lazy(() => import('./components/admin/AdminChemicalQuarantine'));
+const SystemMonitoring = lazy(() => import('./components/admin/SystemMonitoring'));
+const AdminCollegeManagement = lazy(() => import('./components/admin/AdminCollegeManagement'));
+const EnamIntegration = lazy(() => import('./components/admin/EnamIntegration'));
+const ICTDashboard = lazy(() => import('./components/ict/ICTDashboard'));
+const ICTAssets = lazy(() => import('./components/ict/ICTAssets'));
+const ICTMaintenance = lazy(() => import('./components/ict/ICTMaintenance'));
+const ICTRepairHistory = lazy(() => import('./components/ict/ICTRepairHistory'));
+const ICTDeviceHealth = lazy(() => import('./components/ict/ICTDeviceHealth'));
+const ICTRFIDTracking = lazy(() => import('./components/ict/ICTRFIDTracking'));
+const ICTAssetHistory = lazy(() => import('./components/ict/ICTAssetHistory'));
+const ICTInventory = lazy(() => import('./components/ict/ICTInventory'));
+const ICTAssetRequests = lazy(() => import('./components/ict/ICTAssetRequests'));
+const ICTEquipment = lazy(() => import('./components/ict/ICTEquipment'));
+const ICTNetwork = lazy(() => import('./components/ict/ICTNetwork'));
+const ICTNetworkEquipment = lazy(() => import('./components/ict/ICTNetworkEquipment'));
+const ICTSoftwareLicenses = lazy(() => import('./components/ict/ICTSoftwareLicenses'));
+const ICTTechnicalSupport = lazy(() => import('./components/ict/ICTTechnicalSupport'));
+const IncidentManagement = lazy(() => import('./components/ict/IncidentManagement'));
+const ICTNotifications = lazy(() => import('./components/ict/ICTNotifications'));
+const ICTDocuments = lazy(() => import('./components/ict/ICTDocuments'));
+const ICTWarranty = lazy(() => import('./components/ict/ICTWarranty'));
+const ICTPhotoEvidence = lazy(() => import('./components/ict/ICTPhotoEvidence'));
+const DeptProfile = lazy(() => import('./components/department/DeptProfile'));
+const DeptLaboratories = lazy(() => import('./components/department/DeptLaboratories'));
+const ApprovalQueue = lazy(() => import('./components/department/ApprovalQueue'));
+const DeptAssetRequests = lazy(() => import('./components/department/DeptAssetRequests'));
+const DeptVerification = lazy(() => import('./components/department/DeptVerification'));
+const DeptNotifications = lazy(() => import('./components/department/DeptNotifications'));
+const DeptAssetHistory = lazy(() => import('./components/department/DeptAssetHistory'));
+const DepartmentActivityHistory = lazy(() => import('./components/department/DepartmentActivityHistory'));
+const DepartmentAssetHistory = lazy(() => import('./components/department/DepartmentAssetHistory'));
+const DeptTickets = lazy(() => import('./components/department/DeptTickets'));
+const TeachingAssistantAssets = lazy(() => import('./components/department/TeachingAssistantAssets'));
+const StudentDashboard = lazy(() => import('./components/student/StudentDashboard'));
+const FinancePurchaseRequests = lazy(() => import('./components/finance/FinancePurchaseRequests'));
+const FinancePurchaseOrders = lazy(() => import('./components/finance/FinancePurchaseOrders'));
+const FinanceSuppliers = lazy(() => import('./components/finance/FinanceSuppliers'));
+const FinancePurchaseHistory = lazy(() => import('./components/finance/FinancePurchaseHistory'));
+const FinanceInvoices = lazy(() => import('./components/finance/FinanceInvoices'));
+const FinancePayments = lazy(() => import('./components/finance/FinancePayments'));
+const FinanceBudgetManagement = lazy(() => import('./components/finance/FinanceBudgetManagement'));
+const FinanceValuation = lazy(() => import('./components/finance/FinanceValuation'));
+const Capitalization = lazy(() => import('./components/finance/Capitalization'));
+const DisposalFinancialRecords = lazy(() => import('./components/finance/DisposalFinancialRecords'));
+const FinanceBudgetReports = lazy(() => import('./components/finance/FinanceBudgetReports'));
+const FinanceDepreciationReports = lazy(() => import('./components/finance/FinanceDepreciationReports'));
+const FinanceAssetValueReports = lazy(() => import('./components/finance/FinanceAssetValueReports'));
+const FinanceAudit = lazy(() => import('./components/finance/FinanceAudit'));
+const FinanceNotifications = lazy(() => import('./components/finance/FinanceNotifications'));
+const StoreReceivePage = lazy(() => import('./components/store/StoreReceivePage'));
+const StoreIssuePage = lazy(() => import('./components/store/StoreIssuePage'));
+const StoreReturnsPage = lazy(() => import('./components/store/StoreReturnsPage'));
+const StoreReturnLifecycle = lazy(() => import('./components/store/StoreReturnLifecycle'));
+const StoreAssetRequests = lazy(() => import('./components/store/StoreAssetRequests'));
+const StoreHistory = lazy(() => import('./components/store/StoreHistory'));
+const StoreMaintenance = lazy(() => import('./components/store/StoreMaintenance'));
+const StoreNotifications = lazy(() => import('./components/store/StoreNotifications'));
+const StoreManagerAccounts = lazy(() => import('./components/store/StoreManagerAccounts'));
+const MaintDashboard = lazy(() => import('./components/maintenance/MaintDashboard'));
+const MaintRequests = lazy(() => import('./components/maintenance/MaintRequests'));
+const MaintAssetInspection = lazy(() => import('./components/maintenance/MaintAssetInspection'));
+const MaintWorkOrders = lazy(() => import('./components/maintenance/MaintWorkOrders'));
+const MaintRepairs = lazy(() => import('./components/maintenance/MaintRepairs'));
+const MaintPreventive = lazy(() => import('./components/maintenance/MaintPreventive'));
+const MaintTechnicians = lazy(() => import('./components/maintenance/MaintTechnicians'));
+const MaintSpareParts = lazy(() => import('./components/maintenance/MaintSpareParts'));
+const MaintVendors = lazy(() => import('./components/maintenance/MaintVendors'));
+const MaintAssetsUnderMaintenance = lazy(() => import('./components/maintenance/MaintAssetsUnderMaintenance'));
+const MaintTestingQuality = lazy(() => import('./components/maintenance/MaintTestingQuality'));
+const MaintTechnicalTesting = lazy(() => import('./components/maintenance/MaintTechnicalTesting'));
+const MaintAssigned = lazy(() => import('./components/maintenance/MaintAssigned'));
+const MaintNotifications = lazy(() => import('./components/maintenance/MaintNotifications'));
+const MaintHistory = lazy(() => import('./components/maintenance/MaintHistory'));
+const MaintReports = lazy(() => import('./components/maintenance/MaintReports'));
+const InfrastructureLayout = lazy(() => import('./components/infrastructure/InfrastructureLayout'));
+const InfrastructureDashboard = lazy(() => import('./components/infrastructure/InfrastructureDashboard'));
+const InfrastructureAssets = lazy(() => import('./components/infrastructure/InfrastructureAssets'));
+const RegisterInfrastructureAsset = lazy(() => import('./components/infrastructure/RegisterInfrastructureAsset'));
+const InfrastructureInventory = lazy(() => import('./components/infrastructure/InfrastructureInventory'));
+const InfrastructureAssignment = lazy(() => import('./components/infrastructure/InfrastructureAssignment'));
+const InfrastructureVerification = lazy(() => import('./components/infrastructure/InfrastructureVerification'));
+const InfrastructureBuildings = lazy(() => import('./components/infrastructure/InfrastructureBuildings'));
+const InfrastructureElectrical = lazy(() => import('./components/infrastructure/InfrastructureElectrical'));
+const InfrastructureGenerators = lazy(() => import('./components/infrastructure/InfrastructureGenerators'));
+const InfrastructureTransformers = lazy(() => import('./components/infrastructure/InfrastructureTransformers'));
+const InfrastructureUPS = lazy(() => import('./components/infrastructure/InfrastructureUPS'));
+const InfrastructureSolar = lazy(() => import('./components/infrastructure/InfrastructureSolar'));
+const InfrastructureWater = lazy(() => import('./components/infrastructure/InfrastructureWater'));
+const InfrastructureRoads = lazy(() => import('./components/infrastructure/InfrastructureRoads'));
+const InfrastructureMaintenance = lazy(() => import('./components/infrastructure/InfrastructureMaintenance'));
+const InfrastructureWorkOrders = lazy(() => import('./components/infrastructure/InfrastructureWorkOrders'));
+const InfrastructurePreventive = lazy(() => import('./components/infrastructure/InfrastructurePreventive'));
+const InfrastructureSpareParts = lazy(() => import('./components/infrastructure/InfrastructureSpareParts'));
+const InfrastructureEnergy = lazy(() => import('./components/infrastructure/InfrastructureEnergy'));
+const InfrastructureFuel = lazy(() => import('./components/infrastructure/InfrastructureFuel'));
+const InfrastructureTracking = lazy(() => import('./components/infrastructure/InfrastructureTracking'));
+const InfrastructureRequests = lazy(() => import('./components/infrastructure/InfrastructureRequests'));
+const InfrastructureReports = lazy(() => import('./components/infrastructure/InfrastructureReports'));
+const InfrastructureDocuments = lazy(() => import('./components/infrastructure/InfrastructureDocuments'));
+const InfrastructureNotifications = lazy(() => import('./components/infrastructure/InfrastructureNotifications'));
 const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'));
 const CollegeManagerPages = lazy(() => import('./components/college/CollegeManagerPages'));
 const AdminAssets = lazy(() => import('./components/admin/AdminAssets'));
+const AdminAuditLogs = lazy(() => import('./components/admin/AdminAuditLogs'));
 const AdminAssignment = lazy(() => import('./components/admin/AdminAssignment'));
 const AdminTransfer = lazy(() => import('./components/admin/AdminTransfer'));
 const AdminMaintenance = lazy(() => import('./components/admin/AdminMaintenance'));
@@ -200,6 +198,7 @@ const DeptLocations = lazy(() => import('./components/department/DeptLocations')
 const DeptAnalytics = lazy(() => import('./components/department/DeptAnalytics'));
 const FinanceReports = lazy(() => import('./components/finance/FinanceReports'));
 const FinanceDashboard = lazy(() => import('./components/finance/FinanceDashboard'));
+const FinanceTransactions = lazy(() => import('./components/finance/FinanceTransactions'));
 const FinanceDepreciation = lazy(() => import('./components/finance/FinanceDepreciation'));
 const FinanceFinancialReports = lazy(() => import('./components/finance/FinanceFinancialReports'));
 const DeptTracking = lazy(() => import('./components/department/DeptTracking'));
@@ -213,6 +212,7 @@ const StoreTransfers = lazy(() => import('./components/store/StoreTransfers'));
 const StoreWarranty = lazy(() => import('./components/store/StoreWarranty'));
 const StoreReports = lazy(() => import('./components/store/StoreReports'));
 const ScopedWorkflowPage = lazy(() => import('./components/shared/ScopedWorkflowPage'));
+const InfrastructureInspection = lazy(() => import('./components/infrastructure/InfrastructureInspection'));
 
 export const normalizeRole = (role) => {
   if (!role) return 'user';
@@ -502,8 +502,7 @@ export const isDashboardRoute = (path = '') => {
 };
 
 export const shouldHideSidebarForPath = (path = '') => {
-  const normalized = normalizeAppPath(path);
-  return /\/assets\/create(?:\/|$)/.test(normalized);
+  return !isDashboardRoute(path);
 };
 
 export const shouldShowDashboardSidebar = (path = '') => {
@@ -2410,7 +2409,7 @@ const adminSidebarSections = [
     items: [
       { to: '/admin/settings', label: 'Settings', icon: Settings },
       { to: '/admin/notifications', label: 'Notifications', icon: Bell },
-      { to: '/admin/audit-logs', label: 'Audit Logs', icon: FileText },
+      { to: '/admin/audit-logs', label: 'Audit Logs', icon: FileText, permission: 'audit.view' },
       { to: '/admin/backup', label: 'Backup', icon: DatabaseBackup },
       { to: '/admin/enam', label: 'ENAM Integration', icon: GitBranch },
       { to: '/admin/monitoring', label: 'System Monitoring', icon: BarChart3 },
@@ -2489,13 +2488,20 @@ const AdminRecovery = () => {
   );
 };
 
-const MenuToggleButton = ({ isOpen, onToggle, toggleRef, controls = 'application-navigation-panel' }) => (
+const MenuToggleButton = ({
+  isOpen,
+  onToggle,
+  toggleRef,
+  controls = 'application-navigation-panel',
+  openLabel = 'Open navigation menu',
+  closeLabel = 'Close navigation menu',
+}) => (
   <button
     ref={toggleRef}
     type="button"
     className="dashboard-menu-toggle"
     onClick={onToggle}
-    aria-label={isOpen ? 'Close navigation menu' : 'Open navigation menu'}
+    aria-label={isOpen ? closeLabel : openLabel}
     aria-expanded={isOpen}
     aria-controls={controls}
   >
@@ -2612,6 +2618,9 @@ function AppContent() {
   const logoutDestinationRef = useRef(null);
   const notificationMenuRef = useRef(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(() => (
+    typeof window !== 'undefined' && Boolean(window.matchMedia?.(DASHBOARD_MOBILE_QUERY).matches)
+  ));
   const sidebarRef = useRef(null);
   const sidebarToggleRef = useRef(null);
   const previousRouteRef = useRef(location.pathname);
@@ -2622,9 +2631,40 @@ function AppContent() {
   }, []);
 
   const toggleSidebar = useCallback(() => {
-    if (!window.matchMedia(DASHBOARD_MOBILE_QUERY).matches) return;
+    if (!window.matchMedia?.(DASHBOARD_MOBILE_QUERY).matches) return;
     if (isSidebarOpen) closeSidebar();
     else setIsSidebarOpen(true);
+  }, [closeSidebar, isSidebarOpen]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia?.(DASHBOARD_MOBILE_QUERY);
+    if (!mediaQuery) return undefined;
+
+    const updateViewport = (event) => {
+      setIsMobileViewport(event.matches);
+      if (!event.matches) setIsSidebarOpen(false);
+    };
+    setIsMobileViewport(mediaQuery.matches);
+    if (mediaQuery.addEventListener) mediaQuery.addEventListener('change', updateViewport);
+    else mediaQuery.addListener?.(updateViewport);
+
+    return () => {
+      if (mediaQuery.removeEventListener) mediaQuery.removeEventListener('change', updateViewport);
+      else mediaQuery.removeListener?.(updateViewport);
+    };
+  }, []);
+
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isSidebarOpen) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') closeSidebar();
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
   }, [closeSidebar, isSidebarOpen]);
 
   useEffect(() => {
@@ -2944,6 +2984,15 @@ function AppContent() {
     return (
       <header className="dashboard-header dashboard-layout-header">
         <div className="dashboard-header-left">
+          {showDashboardSidebar && (
+            <MenuToggleButton
+              isOpen={isSidebarOpen}
+              onToggle={toggleSidebar}
+              toggleRef={sidebarToggleRef}
+              openLabel={t.expandNavigation}
+              closeLabel={t.collapseNavigation}
+            />
+          )}
           <img className="dashboard-menu-logo" src={UNIVERSITY_LOGO} alt="Mekdela Amba University" />
           <div className="dashboard-header-brand-copy">
             <strong>Mekdela Amba University</strong>
@@ -3033,7 +3082,7 @@ function AppContent() {
     <div className="App">
       <DashboardLayout
         className="role-dashboard-layout"
-        bodyClassName={`authenticated-shell${isStoreManager ? ' store-manager-body' : ''}`}
+        bodyClassName={`authenticated-shell${isStoreManager ? ' store-manager-body' : ''}${showDashboardSidebar ? ' has-dashboard-sidebar' : ''}`}
         header={dashboardHeaderVisible ? <DashboardHeader /> : null}
       >
         {showDashboardSidebar && (
@@ -3041,7 +3090,8 @@ function AppContent() {
             <h1>{dashboardPageTitle}</h1>
           </div>
         )}
-        <main id="admin-main-content" className={`admin-main-content app-main-content${isStoreManager ? ' store-manager-main' : ''}${hideSidebar ? ' create-asset-main' : ''}`} style={{ width: '100%', maxWidth: '100%', marginLeft: 0 }}>
+        {showDashboardSidebar && renderDashboardSidebar()}
+        <main id="admin-main-content" className={`admin-main-content app-main-content${isStoreManager ? ' store-manager-main' : ''}`}>
           {children}
         </main>
       </DashboardLayout>
@@ -3136,7 +3186,7 @@ function AppContent() {
         { path: '/ict/device-health', label: 'Device Health', section: 'MAINTENANCE' },
         { path: '/ict/tracking', label: 'RFID / QR Tracking', section: 'TRACKING' },
         { path: '/ict/asset-history', label: 'Asset History', section: 'TRACKING' },
-        { path: '/ict/reports', label: 'ICT Reports', section: 'ANALYTICS & REPORTS' },
+        { path: '/ict/reports', label: 'ICT Reports', section: 'ANALYTICS & REPORTS', permission: 'ict.reports.view' },
         { path: '/ict/analytics', label: 'Asset Analytics', section: 'ANALYTICS & REPORTS' },
         { path: '/ict/notifications', label: 'Notifications', section: 'SYSTEM' }
       ],
@@ -3168,7 +3218,7 @@ function AppContent() {
         { path: '/college/notifications', label: 'Notifications', icon: Bell }
       ],
       'teaching_assistant': [
-        { path: '/teaching-assistant/dashboard', label: 'Department Assets', icon: Package }
+        { path: '/teaching-assistant/dashboard', label: 'Department Assets', icon: Package, permission: 'assets.view' }
       ],
       'staff': [
         { path: '/department', label: 'Dashboard', icon: LayoutDashboard },
@@ -3262,16 +3312,35 @@ function AppContent() {
 
   const sidebarRole = normalizeRole(user?.role || user?.roles);
   const isStoreManager = sidebarRole === 'store_manager';
-  const hideSidebar = shouldHideSidebarForPath(location.pathname);
-  const showDashboardSidebar = shouldShowDashboardSidebar(location.pathname) && !hideSidebar;
+  const showDashboardSidebar = shouldShowDashboardSidebar(location.pathname);
   const sidebarItems = getSidebarItems(sidebarRole);
   const storeManagerSidebarSections = ['OVERVIEW', 'INVENTORY MANAGEMENT', 'ASSET OPERATIONS', 'ACCOUNT MANAGEMENT'].map((sectionName) => sectionName);
-  const translateLabel = (label) => translateNavigationLabel(language, String(label ?? ''));
+  const translateLabel = (label) => translateNavigationLabel(language, stripLeadingDecoration(label));
+  const sidebarRoleNames = {
+    admin: 'Administrator',
+    college_manager: 'College Manager',
+    department_head: 'Department Head',
+    finance: 'Finance',
+    ict_officer: 'ICT Officer',
+    infrastructure: 'Infrastructure',
+    maintenance: 'Maintenance',
+    store_manager: 'Store Manager',
+    teaching_assistant: 'Teaching Assistant',
+    college: 'College',
+    staff: 'Staff',
+    student: 'Student'
+  };
+  const sidebarRoleLabel = translateLabel(sidebarRoleNames[sidebarRole] || sidebarRole);
   const dashboardRootPath = getDashboardRoute(user?.role || user?.roles);
-  const matchingSidebarItems = sidebarItems.filter((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
-  const activeDashboardItem = matchingSidebarItems.find((item) => item.path === dashboardRootPath)
-    || matchingSidebarItems.sort((left, right) => right.path.length - left.path.length)[0];
-  const dashboardPageTitle = translateLabel(activeDashboardItem?.label || t.dashboard);
+  const topLevelDashboardPath = (() => {
+    const segments = normalizeAppPath(location.pathname).split('/').filter(Boolean);
+    return segments.length ? `/${segments[0]}` : '/';
+  })();
+  const dashboardPageTitle = translateLabel(
+    sidebarItems.find((item) => [dashboardRootPath, topLevelDashboardPath, `${topLevelDashboardPath}/dashboard`].includes(item.path))?.label
+      || sidebarItems.find((item) => item.path === '/admin' || item.path === '/college' || item.path === '/department' || item.path === '/finance' || item.path === '/store' || item.path === '/maintenance' || item.path === '/infrastructure' || item.path === '/student' || item.path === '/department-head' || item.path === '/ict')?.label
+      || t.dashboard
+  );
   const responsibility = String(user?.departmentRole || user?.responsibility || user?.position || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
   const isDepartmentStaff = sidebarRole === 'staff' || responsibility === 'department staff';
   const isDepartmentDean = responsibility === 'department dean' || responsibility === 'dean';
@@ -3301,7 +3370,7 @@ function AppContent() {
   const collegeManagementItems = [
     { path: '/college/profile', label: 'College Profile', icon: UserCircle, group: translateCollegeNavigation('COLLEGE MANAGEMENT') },
     { path: '/college/staff', label: 'College Staff', icon: Users, group: translateCollegeNavigation('COLLEGE MANAGEMENT') },
-    { path: '/college/locations', label: 'Locations', icon: MapPin, group: translateCollegeNavigation('COLLEGE MANAGEMENT') },
+    { path: '/college/locations', label: 'Locations', icon: MapPin, group: translateCollegeNavigation('COLLEGE MANAGEMENT'), permission: 'college.locations.view' },
     { path: '/college/departments', label: 'Departments', icon: Building2, group: translateCollegeNavigation('COLLEGE MANAGEMENT') }
   ];
   const collegeAssetItems = [
@@ -3331,11 +3400,11 @@ function AppContent() {
     { path: '/department-head/assets', label: 'Assets', icon: Package },
     { path: '/department-head/inventory', label: 'Inventory', icon: Layers },
     { path: '/department-head/requests', label: 'Asset Requests', icon: ClipboardList },
-    { path: '/department-head/assignments', label: 'Assignments', icon: UserRound },
+    { path: '/department-head/assignments', label: 'Assignments', icon: UserRound, permission: 'assets.view' },
     { path: '/department-head/transfers', label: 'Transfers', icon: ArrowLeftRight },
     { path: '/department-head/returns', label: 'Returns', icon: Undo2 },
     { path: '/department-head/verification', label: 'Verification', icon: Check },
-    { path: '/department-head/tracking', label: 'Tracking', icon: Radio },
+    { path: '/department-head/tracking', label: 'Tracking', icon: Radio, permission: 'assets.view' },
     { path: '/department-head/reports', label: 'Reports', icon: BarChart3 },
     { path: '/department-head/analytics', label: 'Analytics', icon: TrendingUp },
     { path: '/department-head/notifications', label: 'Notifications', icon: Bell }
@@ -3346,7 +3415,7 @@ function AppContent() {
     { path: '/department-head/staff', label: 'Department Staff', icon: Users },
     { path: '/department-head/locations', label: 'Department Locations', icon: MapPin },
     { path: '/department-head/assets', label: 'Assets', icon: Package },
-    { path: '/department-head/assignments', label: 'Asset Assignments', icon: ClipboardList },
+    { path: '/department-head/assignments', label: 'Asset Assignments', icon: ClipboardList, permission: 'assets.view' },
     { path: '/department-head/inventory', label: 'Inventory', icon: Package },
     { path: '/department-head/verification', label: 'Asset Verification', icon: Radio },
     { path: '/department-head/requests', label: 'Asset Requests', icon: ClipboardList },
@@ -3390,7 +3459,14 @@ function AppContent() {
   const navigationItems = [
     ...(sidebarRole === 'department_head'
       ? departmentHeadItems
-      : [...sidebarItems, ...(isDepartmentDean ? departmentDeanItems : isDepartmentStaff ? departmentStaffItems : [])]),
+      : [
+        ...sidebarItems,
+        ...(sidebarRole !== 'staff' && isDepartmentDean
+          ? departmentDeanItems
+          : sidebarRole !== 'staff' && isDepartmentStaff
+            ? departmentStaffItems
+            : []),
+      ]),
   ];
   const currentActiveSidebar = getActiveSidebarPath(navigationItems, location.pathname, getDashboardRoute(user?.role));
 
@@ -3426,6 +3502,9 @@ function AppContent() {
         aria-current={isActive ? 'page' : undefined}
         title={stripLeadingDecoration(itemLabel)}
         style={nested ? { paddingLeft: '34px', fontSize: '0.86rem' } : undefined}
+        onClick={() => {
+          if (window.matchMedia?.(DASHBOARD_MOBILE_QUERY).matches) closeSidebar();
+        }}
       >
         <Icon size={17} strokeWidth={1.9} aria-hidden="true" />
         <span>{stripLeadingDecoration(itemLabel)}</span>
@@ -3440,6 +3519,92 @@ function AppContent() {
     </div>
   ));
   const dashboardSidebarClassName = `admin-sidebar${sidebarRole === 'department_head' ? ' department-head-sidebar' : ''}${isStoreManager ? ' store-manager-sidebar' : ''}`;
+  const dashboardSidebarSections = sidebarRole === 'admin'
+    ? adminSidebarSections.map((section) => ({
+      heading: section.heading,
+      items: section.items.map((item) => ({ ...item, path: item.to })),
+    }))
+    : sidebarRole === 'college_manager'
+      ? [
+        { heading: 'MAIN', items: collegeOverviewItems },
+        { heading: 'COLLEGE MANAGEMENT', items: collegeManagementItems },
+        { heading: 'ASSET MANAGEMENT', items: collegeAssetItems },
+        { heading: 'OPERATIONS', items: collegeOperationsItems },
+        { heading: 'REPORTS & ANALYTICS', items: collegeAnalyticsItems },
+      ]
+      : sidebarRole === 'department_head'
+        ? departmentManagerSections.map((section) => ({ heading: section.label, items: section.items }))
+        : Object.values(navigationItems.reduce((groups, item) => {
+          const heading = item.group || item.section || 'NAVIGATION';
+          if (!groups[heading]) groups[heading] = { heading, items: [] };
+          groups[heading].items.push(item);
+          return groups;
+        }, {}));
+
+  const renderDashboardSidebar = () => (
+    <>
+      {isSidebarOpen && (
+        <button
+          type="button"
+          className="dashboard-sidebar-backdrop"
+          onClick={closeSidebar}
+          aria-label={t.closeNavigationMenu}
+        />
+      )}
+      <aside
+        id="application-navigation-panel"
+        ref={sidebarRef}
+        className={`${dashboardSidebarClassName}${isSidebarOpen ? ' is-mobile-open' : ''}`}
+        aria-label={t.primaryNavigation}
+        aria-hidden={isMobileViewport && !isSidebarOpen}
+      >
+        <div className="admin-sidebar-profile">
+          <strong className="sidebar-user-name">{user.fullName || user.username || t.user}</strong>
+          <div className="sidebar-role">{sidebarRoleLabel}</div>
+          {(user.collegeName || user.college?.collegeName) && (
+            <div className="sidebar-organization">{user.collegeName || user.college.collegeName}</div>
+          )}
+          <div className="sidebar-status"><span aria-hidden="true" /> {translateLabel('Active')}</div>
+        </div>
+        <div className="sidebar-brand">
+          <img
+            src={logoError ? UNIVERSITY_LOGO : organizationProfile.logo || UNIVERSITY_LOGO}
+            alt=""
+            aria-hidden="true"
+            onError={handleLogoError}
+          />
+          <div>
+            <strong>{organizationProfile.name || t.university}</strong>
+            <span>{t.systemName || t.footerBrandTitle}</span>
+          </div>
+        </div>
+        <nav className="admin-sidebar-nav">
+          {dashboardSidebarSections.map((section) => {
+            const visibleItems = section.items.filter((item) => !item.permission || hasPermission(item.permission));
+            if (visibleItems.length === 0) return null;
+            return (
+              <section className="sidebar-section" key={section.heading}>
+                {section.heading && <div className="sidebar-section-label">{translateLabel(section.heading)}</div>}
+                {visibleItems.map((item) => renderSidebarLink(item))}
+              </section>
+            );
+          })}
+        </nav>
+        <div className="admin-sidebar-footer">
+          <div className="sidebar-account">
+            <UserCircle size={30} aria-hidden="true" />
+            <div>
+              <strong>{user.fullName || user.username || t.user}</strong>
+              <span>{sidebarRoleLabel}</span>
+            </div>
+          </div>
+          <button type="button" className="sidebar-logout" onClick={handleLogout}>
+            <LogOut size={15} aria-hidden="true" /> {t.logout}
+          </button>
+        </div>
+      </aside>
+    </>
+  );
 
   const renderCollapsibleSection = (label, open, setOpen, children, sectionKey) => (
     <div className="sidebar-collapsible-section" key={sectionKey}>

@@ -80,15 +80,13 @@ jest.mock('./services/apiClient', () => ({
   getApiErrorMessage: jest.fn((error, fallback) => fallback || 'Request failed'),
 }));
 
-describe('Create Asset route visibility', () => {
-  it('hides the sidebar on the create asset route', () => {
-    expect(shouldHideSidebarForPath('/ict/assets/create')).toBe(true);
-    expect(shouldHideSidebarForPath('/ict/assets/create/step-two')).toBe(true);
-  });
-
-  it('keeps the sidebar for normal dashboard routes', () => {
+describe('Dashboard sidebar visibility', () => {
+  it('keeps the sidebar visible on every dashboard page, including asset creation', () => {
+    expect(shouldHideSidebarForPath('/ict/assets/create')).toBe(false);
+    expect(shouldHideSidebarForPath('/ict/assets/create/step-two')).toBe(false);
     expect(shouldHideSidebarForPath('/ict')).toBe(false);
     expect(shouldHideSidebarForPath('/ict/assets')).toBe(false);
+    expect(shouldHideSidebarForPath('/home')).toBe(true);
   });
 });
 
@@ -132,6 +130,7 @@ describe('Public and dashboard route rules', () => {
   it('shows the dashboard sidebar only on authenticated dashboard routes', () => {
     expect(shouldShowDashboardSidebar('/admin')).toBe(true);
     expect(shouldShowDashboardSidebar('/admin/assets')).toBe(true);
+    expect(shouldShowDashboardSidebar('/ict/assets/create')).toBe(true);
     expect(shouldShowDashboardSidebar('/dashboard')).toBe(true);
     expect(shouldShowDashboardSidebar('/dashboard/assets')).toBe(true);
     expect(shouldShowDashboardSidebar('/home')).toBe(false);
@@ -391,7 +390,7 @@ describe('ICT Officer sidebar specification', () => {
   const appSource = fs.readFileSync(path.resolve(__dirname, 'App.jsx'), 'utf8');
   const dashboardSource = fs.readFileSync(path.resolve(__dirname, 'components/ict/ICTDashboard.jsx'), 'utf8');
   const sidebarMatch = appSource.match(/'ict_officer': \[([\s\S]*?)\],\s*'college_manager':/);
-  const sidebarItems = [...(sidebarMatch?.[1] || '').matchAll(/\{ path: '([^']+)', label: '([^']+)',(?: icon: [^,}]+,)? section: '([^']+)' \}/g)]
+  const sidebarItems = [...(sidebarMatch?.[1] || '').matchAll(/\{ path: '([^']+)', label: '([^']+)',(?: icon: [^,}]+,)? section: '([^']+)'(?:, permission: '[^']+')? \}/g)]
     .map(([, route, label, section]) => ({ route, label, section }));
   const expectedSidebarItems = [
     { route: '/ict/dashboard', label: 'Dashboard', section: 'DASHBOARD' },
