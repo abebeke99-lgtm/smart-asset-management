@@ -225,7 +225,20 @@ const getAllUsers = async (req, res) => {
 
 const getRoles = async (_req, res, next) => {
   try {
-    const roleRows = await Role.findAll({ where: { active: true }, order: [['displayName', 'ASC']] });
+    const activeRoleRows = await Role.findAll({ where: { active: true }, order: [['displayName', 'ASC']] });
+    const canonicalRoles = new Set(roles);
+    const seenRoles = new Set();
+    const roleRows = activeRoleRows.flatMap((roleRecord) => {
+      const role = roleRecord.toJSON ? roleRecord.toJSON() : { ...roleRecord };
+      const roleName = String(role.name || '').trim().toLowerCase();
+      const canonicalRole = normalizeRoleForStorage(roleName);
+      if (!canonicalRoles.has(canonicalRole) || roleName !== canonicalRole || seenRoles.has(canonicalRole)) return [];
+      seenRoles.add(canonicalRole);
+      role.name = canonicalRole;
+      if (canonicalRole === 'admin') role.displayName = 'Admin';
+      if (canonicalRole === 'maintenance') role.displayName = 'Maintenance';
+      return [role];
+    });
     return res.json({ success: true, data: roleRows, roles: roleRows });
   } catch (error) {
     return next(error);

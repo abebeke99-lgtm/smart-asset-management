@@ -36,8 +36,9 @@ jest.mock('../utils/api', () => ({
 
 jest.mock('../services/apiClient', () => ({
   __esModule: true,
+  getApiErrorMessage: (_error, fallback) => fallback || 'Request failed',
   default: {
-    get: jest.fn(() => Promise.resolve({ data: { data: {} } })),
+    get: jest.fn(() => Promise.resolve({ data: { data: { statistics: {} } } })),
     post: jest.fn(() => Promise.resolve({ data: {} })),
   },
 }));
@@ -79,12 +80,15 @@ describe('authenticated dashboard sidebar', () => {
     const sidebar = screen.getByLabelText('Primary navigation');
     expect(sidebar).toBeInTheDocument();
     expect(sidebar).toHaveClass('admin-sidebar');
-    expect(sidebar).toHaveTextContent('Mekdela Amba University');
-    expect(sidebar).toHaveTextContent('Asset Management System');
-    expect(sidebar).toHaveTextContent('Admin User');
+    expect(sidebar.querySelector('.admin-sidebar-profile')).not.toBeInTheDocument();
+    expect(sidebar.querySelector('.sidebar-brand')).not.toBeInTheDocument();
+    expect(sidebar.querySelector('.sidebar-account')).not.toBeInTheDocument();
+    expect(within(sidebar).queryByText('Admin User')).not.toBeInTheDocument();
+    expect(within(sidebar).queryByText('Mekdela Amba University')).not.toBeInTheDocument();
+    expect(screen.getByText('Mekdela Amba University')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Users' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByRole('link', { name: 'Transactions' })).not.toBeInTheDocument();
-    expect(sidebar.querySelector('.sidebar-logout')).toHaveTextContent('Logout');
+    expect(within(sidebar).getByRole('button', { name: 'Logout' })).toBeInTheDocument();
   });
 
   it('updates the available menu when the authenticated role changes', async () => {
@@ -106,7 +110,7 @@ describe('authenticated dashboard sidebar', () => {
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument();
   });
 
-  it('removes duplicate identity and branding from the college manager sidebar while retaining header logout', async () => {
+  it('removes duplicate identity and branding from the college manager sidebar while retaining its menus and Logout', async () => {
     mockAuthUser = {
       id: 3,
       role: 'college_manager',
@@ -124,7 +128,7 @@ describe('authenticated dashboard sidebar', () => {
     expect(sidebarElement.querySelector('.admin-sidebar-profile')).not.toBeInTheDocument();
     expect(sidebarElement.querySelector('.sidebar-brand')).not.toBeInTheDocument();
     expect(sidebarElement.querySelector('.sidebar-account')).not.toBeInTheDocument();
-    expect(sidebarElement.querySelector('.sidebar-logout')).not.toBeInTheDocument();
+    expect(sidebar.getByRole('button', { name: 'Logout' })).toBeInTheDocument();
     expect(sidebar.queryByText('bekele')).not.toBeInTheDocument();
     expect(sidebar.queryByText('COLLEGE MANAGER')).not.toBeInTheDocument();
     expect(sidebar.queryByText('Active')).not.toBeInTheDocument();
@@ -135,10 +139,46 @@ describe('authenticated dashboard sidebar', () => {
     expect(sidebar.getByRole('link', { name: 'Asset Requests' })).toBeInTheDocument();
     expect(screen.getByText('Mekdela Amba University')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open user menu' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Logout' }));
+    fireEvent.click(sidebar.getByRole('button', { name: 'Logout' }));
 
     await waitFor(() => expect(mockLogout).toHaveBeenCalledTimes(1));
+  });
+
+  it.each([
+    ['admin', 'Users'],
+    ['ict_officer', 'ICT Assets'],
+    ['college_manager', 'Assignments'],
+    ['college', 'Assets'],
+    ['department_head', 'Asset Requests'],
+    ['teaching_assistant', 'Department Assets'],
+    ['staff', 'Department Assets'],
+    ['student', 'Dashboard'],
+    ['finance', 'Transactions'],
+    ['store_manager', 'Inventory'],
+    ['maintenance', 'Requests'],
+    ['maintenance_coordinator', 'Requests'],
+    ['infrastructure', 'Infrastructure Assets'],
+  ])('keeps the %s menu and Logout while removing all duplicate sidebar cards', async (role, expectedMenu) => {
+    mockAuthUser = {
+      id: 40,
+      role,
+      username: `${role}.user`,
+      fullName: `${role} User`,
+    };
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    const sidebar = screen.getByLabelText('Primary navigation');
+    expect(sidebar.querySelector('.admin-sidebar-profile')).not.toBeInTheDocument();
+    expect(sidebar.querySelector('.sidebar-brand')).not.toBeInTheDocument();
+    expect(sidebar.querySelector('.sidebar-account')).not.toBeInTheDocument();
+    expect(within(sidebar).queryByText(`${role} User`)).not.toBeInTheDocument();
+    expect(within(sidebar).queryByText('Active')).not.toBeInTheDocument();
+    expect(within(sidebar).queryByText('University Asset Management System')).not.toBeInTheDocument();
+    expect(within(sidebar).getByRole('link', { name: expectedMenu })).toBeInTheDocument();
+    expect(within(sidebar).getByRole('button', { name: 'Logout' })).toBeInTheDocument();
   });
 
   it('opens and closes the mobile navigation with its button and Escape key', async () => {

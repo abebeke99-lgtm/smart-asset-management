@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { apiBase } from "../../utils/api";
+import CollegeRegistrationApplications from "./CollegeRegistrationApplications";
 
 const COLLEGES_API = `${apiBase()}/api/admin/colleges`;
 const CAMPUSES_API = `${apiBase()}/api/locations/campuses`;
@@ -944,6 +945,8 @@ export default function Colleges() {
             + Add College
           </button>
         </div>
+
+        <CollegeRegistrationApplications />
 
         {error && (
           <div className="error-box">

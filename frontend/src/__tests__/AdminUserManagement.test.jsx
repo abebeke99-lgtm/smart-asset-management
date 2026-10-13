@@ -62,8 +62,8 @@ const respondToApiRequests = () => {
     }
     if (url === '/api/roles') return Promise.resolve({ data: { roles: roleNames.map((name) => ({
       name,
-      displayName: ({ staff: 'Staff', student: 'Student', technical_assistant: 'Technical Assistant', maintenance: 'Maintenance Coordinator' })[name] || name,
-    })) } });
+      displayName: ({ admin: 'System Administrator', staff: 'Staff', student: 'Student', technical_assistant: 'Technical Assistant', maintenance: 'Maintenance Coordinator' })[name] || name,
+    })).concat([{ name: 'maintenance_coordinator', displayName: 'Maintenance Coordinator' }]) } });
     if (/^\/api\/colleges\/\d+\/departments$/.test(url)) return Promise.resolve({ data: { departments: [{ id: 8, name: 'Computer Science' }] } });
     if (url.startsWith('/api/colleges')) return Promise.resolve({ data: { colleges: [{ id: 3, collegeName: 'College of Engineering' }] } });
     return Promise.resolve({ data: { departments: [] } });
@@ -111,9 +111,12 @@ test('shows organization fields only when an existing account is being edited or
   expect(screen.queryByLabelText('Department')).not.toBeInTheDocument();
   const roleSelect = document.querySelector('[name="roleId"]');
   const visibleRoleNames = Array.from(roleSelect.options).slice(1).map((option) => option.value);
-  expect(visibleRoleNames).toEqual(roleNames.filter((name) => !['staff', 'student', 'technical_assistant'].includes(name)));
+  expect(visibleRoleNames).toEqual([...new Set(roleNames.filter((name) => !['staff', 'student', 'technical_assistant'].includes(name)))]);
   expect(visibleRoleNames).toContain('admin');
   expect(visibleRoleNames).toContain('ict_officer');
+  expect(within(roleSelect).getByRole('option', { name: 'Admin' })).toHaveValue('admin');
+  expect(within(roleSelect).getAllByRole('option', { name: 'Maintenance' })).toHaveLength(1);
+  expect(within(roleSelect).getByRole('option', { name: 'Maintenance' })).toHaveValue('maintenance');
   expect(within(roleSelect).queryByRole('option', { name: 'Staff' })).not.toBeInTheDocument();
   expect(within(roleSelect).queryByRole('option', { name: 'Student' })).not.toBeInTheDocument();
   expect(within(roleSelect).queryByRole('option', { name: 'Technical Assistant' })).not.toBeInTheDocument();
@@ -215,9 +218,9 @@ test('submits the add-user form, closes it, and refreshes the visible user list'
   expect(await screen.findByText('new.user@example.edu')).toBeInTheDocument();
 });
 
-test('creates and displays a Maintenance Coordinator using the canonical role identifier', async () => {
+test('creates and displays Maintenance using its canonical role identifier', async () => {
   await openCreateForm();
-  expect(within(screen.getByLabelText('Role *')).getByRole('option', { name: 'Maintenance Coordinator' })).toHaveValue('maintenance');
+  expect(within(screen.getByLabelText('Role *')).getByRole('option', { name: 'Maintenance' })).toHaveValue('maintenance');
 
   fillValidNewUser();
   fireEvent.change(screen.getByLabelText('Role *'), { target: { value: 'maintenance' } });
@@ -230,10 +233,10 @@ test('creates and displays a Maintenance Coordinator using the canonical role id
   })));
 
   const userEmail = await screen.findByText('new.user@example.edu');
-  expect(within(userEmail.closest('tr')).getByText('Maintenance Coordinator')).toBeInTheDocument();
+  expect(within(userEmail.closest('tr')).getByText('Maintenance')).toBeInTheDocument();
 });
 
-test('updates an existing user to the canonical Maintenance Coordinator role', async () => {
+test('updates an existing user to the canonical Maintenance role', async () => {
   usersResponse = [{
     id: 17,
     fullName: 'Existing User',
@@ -269,6 +272,22 @@ test('administrator Store Manager creation refreshes the account count from the 
     data: expect.objectContaining({ role: 'store_manager' }),
   }));
   expect(await screen.findByText('new.user@example.edu')).toBeInTheDocument();
+});
+
+test('creates an Admin account through the administrator user-management form', async () => {
+  await openCreateForm();
+  expect(within(screen.getByLabelText('Role *')).getByRole('option', { name: 'Admin' })).toHaveValue('admin');
+  fillValidNewUser();
+  fireEvent.change(screen.getByLabelText('Role *'), { target: { value: 'admin' } });
+  fireEvent.submit(document.querySelector('form'));
+
+  await waitFor(() => expect(apiClient.request).toHaveBeenCalledWith(expect.objectContaining({
+    url: '/api/users',
+    method: 'POST',
+    data: expect.objectContaining({ role: 'admin' }),
+  })));
+  const createdUser = await screen.findByText('new.user@example.edu');
+  expect(within(createdUser.closest('tr')).getByText('Admin')).toBeInTheDocument();
 });
 
 test('allows creating an inactive user and refreshes the user list and status counts', async () => {

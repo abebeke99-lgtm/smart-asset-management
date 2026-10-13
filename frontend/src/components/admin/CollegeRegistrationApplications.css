@@ -1,0 +1,143 @@
+.college-registration-review {
+  margin: 0 0 26px;
+  padding: 22px;
+  border: 1px solid #d7e2ef;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(30, 64, 175, 0.06);
+}
+
+.college-registration-review-heading,
+.college-registration-review-card-heading,
+.college-registration-review-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.college-registration-review-heading h2,
+.college-registration-review-card h3 {
+  margin: 0 0 5px;
+  color: #17365d;
+}
+
+.college-registration-review-heading p,
+.college-registration-review-card-heading span,
+.college-registration-review-empty {
+  margin: 0;
+  color: #52657c;
+}
+
+.college-registration-review button {
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid #3074b3;
+  border-radius: 7px;
+  background: #fff;
+  color: #245f93;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
+.college-registration-review button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.college-registration-review-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.college-registration-review-card {
+  padding: 17px;
+  border: 1px solid #d7e2ef;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.college-registration-review-pending {
+  padding: 5px 9px;
+  border-radius: 99px;
+  background: #fff4d6;
+  color: #805b00 !important;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.college-registration-review-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+  margin: 17px 0;
+}
+
+.college-registration-review-card dl div {
+  min-width: 0;
+}
+
+.college-registration-review-card dt {
+  color: #52657c;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.college-registration-review-card dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  color: #17365d;
+}
+
+.college-registration-review-reason {
+  display: grid;
+  gap: 6px;
+  color: #273f5d;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.college-registration-review-reason textarea {
+  width: 100%;
+  min-height: 58px;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: 1px solid #bdcbdc;
+  border-radius: 7px;
+  font: inherit;
+}
+
+.college-registration-review-actions {
+  justify-content: flex-start;
+  margin-top: 12px;
+}
+
+.college-registration-review-actions .approve {
+  background: #176b38;
+  border-color: #176b38;
+  color: #fff;
+}
+
+.college-registration-review-actions .reject {
+  background: #fff;
+  border-color: #b42318;
+  color: #9e2820;
+}
+
+.college-registration-review-error {
+  color: #9e2820;
+}
+
+@media (max-width: 640px) {
+  .college-registration-review-heading,
+  .college-registration-review-card-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .college-registration-review-card dl {
+    grid-template-columns: 1fr;
+  }
+}

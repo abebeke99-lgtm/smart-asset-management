@@ -9,7 +9,8 @@ import Colleges from './AdminCollegeManagement';
 
 jest.mock('../../utils/api', () => ({
   apiBase: () => 'https://api.example',
-  apiClient: { post: jest.fn() },
+  apiClient: { get: jest.fn().mockRejectedValue(new Error('Backend unavailable')), post: jest.fn() },
+  getApiErrorMessage: (error, fallback) => error.message || fallback,
 }));
 
 const jsonResponse = (data = {}) => ({

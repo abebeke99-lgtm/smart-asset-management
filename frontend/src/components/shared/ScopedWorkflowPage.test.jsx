@@ -79,4 +79,113 @@ describe('ScopedWorkflowPage transfers', () => {
     expect(apiClient.post.mock.calls[0][1]).not.toHaveProperty('quantity');
     expect(await screen.findByText('Transfer created successfully.')).toBeInTheDocument();
   });
+
+  it('lets a college manager register a transfer through the college-scoped endpoint', async () => {
+    useAuth.mockReturnValue({
+      user: { id: 22, role: 'college_manager', collegeId: 5, fullName: 'College Manager' },
+    });
+    apiClient.get.mockImplementation((url) => {
+      if (url === '/api/college/transfers') {
+        return Promise.resolve({
+          data: {
+            data: [],
+            pagination: { page: 1, pages: 1, total: 0 },
+            summary: { total: 0, pending: 0, approved: 0, received: 0, rejectedCancelled: 0 },
+          },
+        });
+      }
+      if (url === '/api/departments') {
+        return Promise.resolve({
+          data: {
+            data: [{ id: 8, name: 'Laboratory', status: 'active', collegeId: 5 }],
+            pagination: { page: 1, pages: 1 },
+          },
+        });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    render(<ScopedWorkflowPage scope="college" type="transfers" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Register New Transfer' }));
+    fireEvent.change(screen.getByLabelText('Asset'), { target: { value: '31' } });
+    fireEvent.change(screen.getByLabelText('Destination department'), { target: { value: '8' } });
+    fireEvent.change(screen.getByLabelText('Destination location'), { target: { value: 'Lab 1' } });
+    fireEvent.change(screen.getByLabelText('Transfer reason / notes'), { target: { value: 'Move for scheduled testing' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Transfer' }));
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith('/api/college/transfers', expect.objectContaining({
+        asset_id: 31,
+        destination_department_id: 8,
+        destination_location: 'Lab 1',
+        reason: 'Move for scheduled testing',
+        transfer_date: expect.any(String),
+        expected_return_date: '',
+      }));
+    });
+    const [, submitted] = apiClient.post.mock.calls[0];
+    expect(submitted).not.toHaveProperty('college_id');
+    expect(submitted).not.toHaveProperty('requested_by');
+    expect(await screen.findByText('Transfer created successfully.')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(apiClient.get).toHaveBeenCalledWith('/api/college/transfers', expect.any(Object));
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Register New Transfer' }));
+    expect(screen.getByLabelText('Asset')).toHaveValue('');
+  });
+
+  it('shows the backend rejection and keeps the college transfer form usable', async () => {
+    useAuth.mockReturnValue({
+      user: { id: 22, role: 'college_manager', collegeId: 5, fullName: 'College Manager' },
+    });
+    apiClient.get.mockImplementation((url) => {
+      if (url === '/api/college/transfers') {
+        return Promise.resolve({
+          data: { data: [], pagination: { page: 1, pages: 1, total: 0 }, summary: {} },
+        });
+      }
+      if (url === '/api/departments') {
+        return Promise.resolve({ data: { data: [{ id: 8, name: 'Laboratory', status: 'active' }], pagination: { pages: 1 } } });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+    apiClient.post.mockRejectedValueOnce({
+      response: { data: { message: 'Asset already has an active transfer' } },
+    });
+
+    render(<ScopedWorkflowPage scope="college" type="transfers" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Register New Transfer' }));
+    fireEvent.change(screen.getByLabelText('Asset'), { target: { value: '31' } });
+    fireEvent.change(screen.getByLabelText('Destination department'), { target: { value: '8' } });
+    fireEvent.change(screen.getByLabelText('Destination location'), { target: { value: 'Lab 1' } });
+    fireEvent.change(screen.getByLabelText('Transfer reason / notes'), { target: { value: 'Move for scheduled testing' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Transfer' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Asset already has an active transfer');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('validates required college transfer fields before submission', async () => {
+    useAuth.mockReturnValue({
+      user: { id: 22, role: 'college_manager', collegeId: 5, fullName: 'College Manager' },
+    });
+    apiClient.get.mockImplementation((url) => {
+      if (url === '/api/college/transfers') {
+        return Promise.resolve({
+          data: { data: [], pagination: { page: 1, pages: 1, total: 0 }, summary: {} },
+        });
+      }
+      if (url === '/api/departments') {
+        return Promise.resolve({ data: { data: [{ id: 8, name: 'Laboratory', status: 'active' }], pagination: { pages: 1 } } });
+      }
+      return Promise.resolve({ data: { data: [] } });
+    });
+
+    render(<ScopedWorkflowPage scope="college" type="transfers" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Register New Transfer' }));
+    fireEvent.submit(screen.getByRole('dialog').querySelector('form'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Asset, destination department, destination location and reason are required.');
+    expect(apiClient.post).not.toHaveBeenCalled();
+  });
 });

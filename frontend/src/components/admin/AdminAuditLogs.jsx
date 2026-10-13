@@ -74,6 +74,13 @@ const AdminAuditLogs = () => {
   const itemsPerPage = 15;
 
   const [totalEvents, setTotalEvents] = useState(0);
+  const [filteredEventsTotal, setFilteredEventsTotal] = useState(0);
+  const [serverStats, setServerStats] = useState({
+    successful: 0,
+    failed: 0,
+    securityEvents: 0,
+    uniqueUsers: 0
+  });
   const [totalPages, setTotalPages] = useState(1);
 
   const [selectedLog, setSelectedLog] = useState(null);
@@ -643,24 +650,38 @@ const AdminAuditLogs = () => {
         data?.pagination?.pages ??
         data?.pages;
 
-      const calculatedTotal =
-        Number(serverTotal) ||
-        logs.length;
+      const parsedFilteredTotal = Number(serverTotal);
+      const calculatedFilteredTotal = Number.isFinite(parsedFilteredTotal)
+        ? parsedFilteredTotal
+        : logs.length;
+      const parsedTotalEvents = Number(data?.totalEvents ?? serverTotal);
+      const calculatedTotalEvents = Number.isFinite(parsedTotalEvents)
+        ? parsedTotalEvents
+        : calculatedFilteredTotal;
 
       const calculatedPages =
         Number(serverPages) ||
         Math.max(
           1,
-          Math.ceil(calculatedTotal / itemsPerPage)
+          Math.ceil(calculatedFilteredTotal / itemsPerPage)
         );
 
-      setTotalEvents(calculatedTotal);
+      setTotalEvents(calculatedTotalEvents);
+      setFilteredEventsTotal(calculatedFilteredTotal);
+      setServerStats({
+        successful: Number(data?.stats?.successful) || 0,
+        failed: Number(data?.stats?.failed) || 0,
+        securityEvents: Number(data?.stats?.securityEvents) || 0,
+        uniqueUsers: Number(data?.stats?.uniqueUsers) || 0
+      });
       setTotalPages(calculatedPages);
     } catch (error) {
       console.error('Error fetching audit logs:', error);
 
       setAuditLogs([]);
       setTotalEvents(0);
+      setFilteredEventsTotal(0);
+      setServerStats({ successful: 0, failed: 0, securityEvents: 0, uniqueUsers: 0 });
       setTotalPages(1);
 
       toast.error(t.loadFailed);
@@ -928,55 +949,15 @@ const AdminAuditLogs = () => {
   // ============================================================
 
   const statistics = useMemo(() => {
-    const successful = auditLogs.filter((log) => {
-      const status =
-        getStatus(log).toLowerCase();
-
-      return (
-        status === 'success' ||
-        status === 'successful' ||
-        status === 'completed' ||
-        status === 'approved'
-      );
-    }).length;
-
-    const failed = auditLogs.filter((log) => {
-      const status =
-        getStatus(log).toLowerCase();
-
-      return (
-        status === 'failed' ||
-        status === 'failure' ||
-        status === 'error' ||
-        status === 'rejected' ||
-        status === 'denied'
-      );
-    }).length;
-
-    const securityEvents = auditLogs.filter(
-      (log) =>
-        getCategoryForLog(log) ===
-        'security'
-    ).length;
-
-    const uniqueUsers = new Set(
-      auditLogs
-        .map(getUserId)
-        .filter(Boolean)
-    ).size;
-
     return {
       total: totalEvents,
-      filtered: filteredLogs.length,
-      successful,
-      failed,
-      securityEvents,
-      uniqueUsers
+      filtered: filteredEventsTotal,
+      ...serverStats
     };
   }, [
-    auditLogs,
-    filteredLogs,
-    totalEvents
+    totalEvents,
+    filteredEventsTotal,
+    serverStats
   ]);
 
   // ============================================================
@@ -2268,7 +2249,7 @@ const AdminAuditLogs = () => {
                       color: c.text
                     }}
                   >
-                    {totalEvents === 0
+                    {filteredEventsTotal === 0
                       ? 0
                       : (currentPage -
                           1) *
@@ -2284,7 +2265,7 @@ const AdminAuditLogs = () => {
                     {Math.min(
                       currentPage *
                         itemsPerPage,
-                      totalEvents
+                      filteredEventsTotal
                     )}
                   </strong>{' '}
                   {t.of}{' '}
@@ -2293,7 +2274,7 @@ const AdminAuditLogs = () => {
                       color: c.text
                     }}
                   >
-                    {totalEvents}
+                    {filteredEventsTotal}
                   </strong>
                 </div>
 

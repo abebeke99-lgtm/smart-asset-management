@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../../utils/api';
 import { getAllAssets } from '../../services/assetApi';
 import { useAuth } from '../../contexts/AuthContext';
@@ -73,9 +73,9 @@ const getAssetEndpoint = (scope) => {
 };
 
 const COLLEGE_TRANSFER_COPY = {
-  College: 'ኮሌጅ', Department: 'ዲፓርትመንት', Operations: 'ስራዎች', Transfers: 'ዝውውሮች', 'Asset Transfers': 'የንብረት ዝውውሮች', 'Export Excel': 'Excel ወደ ውጭ ላክ',
+  College: 'ኮሌጅ', Department: 'ዲፓርትመንት', Operations: 'ስራዎች', Transfers: 'ዝውውሮች', 'Asset Transfers': 'የንብረት ዝውውሮች', 'Track and manage transfers within your authorized college': 'በተፈቀደልዎ ኮሌጅ ውስጥ ዝውውሮችን ይከታተሉ እና ያስተዳድሩ', 'Track and manage transfers within your authorized department': 'በተፈቀደልዎ ዲፓርትመንት ውስጥ ዝውውሮችን ይከታተሉ እና ያስተዳድሩ', 'Export Excel': 'Excel ወደ ውጭ ላክ',
   Total: 'ጠቅላላ', Pending: 'በመጠባበቅ ላይ', pending: 'በመጠባበቅ ላይ', Approved: 'ጸድቋል', approved: 'ጸድቋል', Received: 'ተቀብሏል', received: 'ተቀብሏል', 'Rejected / Cancelled': 'ውድቅ / ተሰርዟል', 'All statuses': 'ሁሉም ሁኔታዎች', Requested: 'ተጠይቋል', requested: 'ተጠይቋል', Ready: 'ዝግጁ', 'In Transit': 'በመጓጓዝ ላይ', Inspected: 'ተመርምሯል', inspected: 'ተመርምሯል', Completed: 'ተጠናቋል', completed: 'ተጠናቋል', Rejected: 'ውድቅ ተደርጓል', rejected: 'ውድቅ ተደርጓል', Cancelled: 'ተሰርዟል', cancelled: 'ተሰርዟል',
-  Refresh: 'አድስ', 'Select real asset': 'እውነተኛ ንብረት ይምረጡ', 'Current Department': 'የአሁኑ ዲፓርትመንት', 'Current Location': 'የአሁኑ ቦታ', 'Asset Status': 'የንብረት ሁኔታ', 'Select destination department': 'መድረሻ ዲፓርትመንት ይምረጡ', 'Destination location': 'የመድረሻ ቦታ', 'Transfer reason / notes': 'የዝውውር ምክንያት / ማስታወሻ', 'Additional notes': 'ተጨማሪ ማስታወሻዎች', Submitting: 'በማስገባት ላይ...', 'Create Transfer': 'ዝውውር ፍጠር', Clear: 'አጽዳ',
+  Refresh: 'አድስ', 'Select real asset': 'እውነተኛ ንብረት ይምረጡ', 'Current Department': 'የአሁኑ ዲፓርትመንት', 'Current Location': 'የአሁኑ ቦታ', 'Asset Status': 'የንብረት ሁኔታ', 'Select destination department': 'መድረሻ ዲፓርትመንት ይምረጡ', 'Destination location': 'የመድረሻ ቦታ', 'Transfer reason / notes': 'የዝውውር ምክንያት / ማስታወሻ', 'Additional notes': 'ተጨማሪ ማስታወሻዎች', Submitting: 'በማስገባት ላይ...', 'Create Transfer': 'ዝውውር ፍጠር', 'Register New Transfer': 'አዲስ ዝውውር መዝግብ', Clear: 'አጽዳ',
   Asset: 'ንብረት', Status: 'ሁኔታ', 'Current → Destination': 'አሁን ያለበት → መድረሻ', Reason: 'ምክንያት', Date: 'ቀን', Actions: 'እርምጃዎች', Unknown: 'ያልታወቀ', 'No transfer records found.': 'ምንም የዝውውር መዝገብ አልተገኘም።', 'Loading transfer records...': 'የዝውውር መዝገቦችን በመጫን ላይ...', View: 'ይመልከቱ', Approve: 'አጽድቅ', Reject: 'ውድቅ አድርግ', Cancel: 'ሰርዝ', Complete: 'አጠናቅቅ', 'Transfer Details': 'የዝውውር ዝርዝር መረጃ', Close: 'ዝጋ',
   'Transfer ID': 'የዝውውር መለያ', 'Asset Code': 'የንብረት ኮድ', 'Serial Number': 'ተከታታይ ቁጥር', 'From Department': 'ከዲፓርትመንት', 'From Location': 'ከቦታ', 'To Department': 'ወደ ዲፓርትመንት', 'To Location': 'ወደ ቦታ', 'Requested By': 'የጠየቀው', 'Approved By': 'ያጸደቀው', 'Transfer Date': 'የዝውውር ቀን', 'Requested At': 'የተጠየቀበት', 'Approved At': 'የጸደቀበት', 'Ready At': 'ዝግጁ የሆነበት', 'Dispatched At': 'የተላከበት', 'Received At': 'የተቀበለበት', 'Transfer history': 'የዝውውር ታሪክ', 'to': 'ወደ', 'Transfer created successfully.': 'ዝውውሩ በተሳካ ሁኔታ ተፈጥሯል።', 'Transfer action failed.': 'የዝውውር እርምጃው አልተሳካም።', 'Unable to load transfer details.': 'የዝውውሩን ዝርዝር መጫን አልተቻለም።'
 };
@@ -202,12 +202,14 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
   const [processingId, setProcessingId] = useState(null);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const transferSubmissionInProgress = useRef(false);
   const [form, setForm] = useState({
     assetId: '',
     destinationDepartmentId: '',
     newLocation: '',
     transferReason: '',
     transferDate: new Date().toISOString().slice(0, 10),
+    expectedReturnDate: '',
     notes: '',
   });
 
@@ -309,7 +311,7 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
 
   const createTransfer = async (event) => {
     event.preventDefault();
-    if (saving) return;
+    if (saving || transferSubmissionInProgress.current) return;
     if (!form.assetId || !form.destinationDepartmentId || !form.newLocation.trim() || !form.transferReason.trim()) {
       setError('Asset, destination department, destination location and reason are required.');
       return;
@@ -338,11 +340,14 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
       return;
     }
 
-    if (role !== 'department_head' || scope !== 'department') {
+    const isAuthorizedCreator = (scope === 'department' && role === 'department_head')
+      || (scope === 'college' && role === 'college_manager');
+    if (!isAuthorizedCreator) {
       setError('You are not authorized to create transfers from this view.');
       return;
     }
 
+    transferSubmissionInProgress.current = true;
     setSaving(true); setError(''); setSuccessMessage('');
     try {
       await apiClient.post(getTransferListEndpoint(scope, role), {
@@ -351,6 +356,7 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
         destination_location: String(form.newLocation).trim(),
         reason: String(form.transferReason).trim(),
         transfer_date: form.transferDate,
+        expected_return_date: form.expectedReturnDate || '',
         notes: String(form.notes || '').trim(),
       });
       setSuccessMessage('Transfer created successfully.');
@@ -361,6 +367,7 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
         newLocation: '',
         transferReason: '',
         transferDate: new Date().toISOString().slice(0, 10),
+        expectedReturnDate: '',
         notes: '',
       });
       if (page !== 1) setPage(1);
@@ -368,6 +375,7 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
     } catch (createError) {
       setError(createError.response?.data?.message || 'Unable to create the transfer.');
     } finally {
+      transferSubmissionInProgress.current = false;
       setSaving(false);
     }
   };
@@ -473,16 +481,28 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
         <div>
           <div className="college-breadcrumb">{translate(scope === 'college' ? 'College' : 'Department')} / {translate('Transfers')}</div>
           <h1>{translate('Asset Transfers')}</h1>
-          <p>Track and manage transfers within your authorized department</p>
+          <p>{translate(`Track and manage transfers within your authorized ${scope}`)}</p>
         </div>
         <div className="scoped-transfer-header-actions">
-          {scope === 'department' && role === 'department_head' && (
+          {((scope === 'department' && role === 'department_head') || (scope === 'college' && role === 'college_manager')) && (
             <button
               type="button"
               className="scoped-transfer-button scoped-transfer-button--primary"
-              onClick={() => { setError(''); setCreateModalOpen(true); }}
+              onClick={() => {
+                setError('');
+                setForm({
+                  assetId: '',
+                  destinationDepartmentId: '',
+                  newLocation: '',
+                  transferReason: '',
+                  transferDate: new Date().toISOString().slice(0, 10),
+                  expectedReturnDate: '',
+                  notes: '',
+                });
+                setCreateModalOpen(true);
+              }}
             >
-              New Transfer
+              {scope === 'college' ? translate('Register New Transfer') : 'New Transfer'}
             </button>
           )}
           <button type="button" className="scoped-transfer-button scoped-transfer-button--secondary" onClick={exportTransfers} disabled={!rows.length || loading}>{translate('Export Excel')}</button>
@@ -540,7 +560,7 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
         <button type="button" className="scoped-transfer-button scoped-transfer-button--secondary" onClick={load} disabled={loading}>{translate('Refresh')}</button>
       </div>
 
-      {error && <div className="scoped-transfer-alert scoped-transfer-alert--error" role="alert">{error}</div>}
+      {error && !createModalOpen && <div className="scoped-transfer-alert scoped-transfer-alert--error" role="alert">{error}</div>}
       {successMessage && <div className="scoped-transfer-alert scoped-transfer-alert--success" role="status">{successMessage}</div>}
 
       {loading ? (
@@ -613,15 +633,17 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
         </nav>
       )}
 
-      {createModalOpen && scope === 'department' && role === 'department_head' && (
+      {createModalOpen && ((scope === 'department' && role === 'department_head') || (scope === 'college' && role === 'college_manager')) && (
         <div className="scoped-transfer-modal-backdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget && !saving) setCreateModalOpen(false);
         }}>
           <section className="scoped-transfer-modal scoped-transfer-create-modal" role="dialog" aria-modal="true" aria-labelledby="transfer-create-title">
             <div className="scoped-transfer-modal-heading">
               <div>
-                <h2 id="transfer-create-title">New Transfer</h2>
-                <p>Choose an eligible asset and an active destination department.</p>
+                <h2 id="transfer-create-title">{scope === 'college' ? translate('Register New Transfer') : 'New Transfer'}</h2>
+                <p>{scope === 'college'
+                  ? 'Transfer one eligible asset record to an active department in your college.'
+                  : 'Choose an eligible asset and an active destination department.'}</p>
               </div>
               <button className="scoped-transfer-button scoped-transfer-button--secondary" type="button" onClick={() => setCreateModalOpen(false)} disabled={saving}>Close</button>
             </div>
@@ -645,9 +667,10 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
 
               {selectedAsset && (
                 <div className="scoped-transfer-asset-summary">
-                  <div><strong>Source department</strong><span>{selectedAsset.department?.name || selectedAsset.department || user?.department || '—'}</span></div>
+                  <div><strong>Source department</strong><span>{selectedAsset.department?.name || selectedAsset.department || departments.find((department) => Number(department.id) === Number(selectedAsset.departmentId ?? selectedAsset.department_id))?.name || user?.department || '—'}</span></div>
                   <div><strong>Source location</strong><span>{selectedAsset.location || '—'}</span></div>
                   <div><strong>Asset status</strong><span>{translate(selectedAsset.status) || '—'}</span></div>
+                  {scope === 'college' && <div><strong>Destination college</strong><span>{selectedAsset.college?.name || selectedAsset.collegeName || user?.college?.name || user?.collegeName || 'Your authorized college'}</span></div>}
                 </div>
               )}
               {form.destinationDepartmentId && (
@@ -661,6 +684,9 @@ const ScopedWorkflowPage = ({ scope = 'department', type = 'transfers' }) => {
               </label>
               <label htmlFor="transfer-date">{translate('Transfer date')}
                 <input id="transfer-date" type="date" required value={form.transferDate} onChange={(event) => setForm((previous) => ({ ...previous, transferDate: event.target.value }))} />
+              </label>
+              <label htmlFor="transfer-expected-return-date">Expected return date (optional)
+                <input id="transfer-expected-return-date" type="date" value={form.expectedReturnDate} onChange={(event) => setForm((previous) => ({ ...previous, expectedReturnDate: event.target.value }))} />
               </label>
               <label htmlFor="transfer-requester">Requested by
                 <input id="transfer-requester" value={user?.fullName || user?.full_name || user?.username || 'Current user'} readOnly />

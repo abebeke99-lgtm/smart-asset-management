@@ -9,6 +9,11 @@ describe('normalizeRole', () => {
     expect(normalizeRole('infrastructure_directorate')).toBe('infrastructure');
   });
 
+  test('maps Maintenance Coordinator aliases to the canonical Maintenance role', () => {
+    expect(normalizeRole('maintenance_coordinator')).toBe('maintenance');
+    expect(normalizeRole('Maintenance Coordinator')).toBe('maintenance');
+  });
+
   test('maps every supported role to its own dashboard destination', () => {
     expect({
       admin: getDashboardRoute('admin'),

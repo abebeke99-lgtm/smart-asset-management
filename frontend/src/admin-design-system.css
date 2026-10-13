@@ -201,10 +201,6 @@
   border-right-color: var(--color-sidebar-divider) !important;
 }
 
-.admin-sidebar-profile {
-  background: var(--color-sidebar) !important;
-}
-
 .admin-nav-link {
   margin: 3px 10px;
   border-radius: 10px !important;

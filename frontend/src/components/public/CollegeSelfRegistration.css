@@ -1,0 +1,257 @@
+.college-registration-page {
+  min-height: calc(100vh - 100px);
+  padding: 36px 18px;
+  background: #f0f5ff;
+  color: #17365d;
+}
+
+.college-registration-card {
+  width: min(100%, 900px);
+  margin: 0 auto;
+  padding: clamp(22px, 4vw, 44px);
+  border: 1px solid #d7e2ef;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 32px rgba(30, 64, 175, 0.1);
+}
+
+.college-registration-header {
+  margin-bottom: 30px;
+}
+
+.college-registration-kicker {
+  color: #3074b3;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.college-registration-header h1 {
+  margin: 8px 0;
+  color: #17365d;
+  font-size: clamp(1.65rem, 4vw, 2.35rem);
+}
+
+.college-registration-header p {
+  max-width: 720px;
+  margin: 0;
+  color: #52657c;
+  line-height: 1.6;
+}
+
+.college-registration-card fieldset {
+  min-width: 0;
+  margin: 0 0 26px;
+  padding: 20px;
+  border: 1px solid #d7e2ef;
+  border-radius: 12px;
+}
+
+.college-registration-card legend {
+  padding: 0 8px;
+  color: #17365d;
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+
+.college-registration-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.college-registration-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+  color: #273f5d;
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.college-registration-field > span:first-child span {
+  color: #b42318;
+}
+
+.college-registration-field input,
+.college-registration-field select,
+.college-registration-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border: 1px solid #bdcbdc;
+  border-radius: 8px;
+  background: #fff;
+  color: #17365d;
+  font: inherit;
+  font-weight: 400;
+}
+
+.college-registration-field textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.college-registration-field input:focus,
+.college-registration-field select:focus,
+.college-registration-field textarea:focus {
+  border-color: #3074b3;
+  outline: 3px solid rgba(48, 116, 179, 0.18);
+}
+
+.college-registration-field [aria-invalid='true'] {
+  border-color: #b42318;
+}
+
+.college-registration-field-error,
+.college-registration-error {
+  color: #b42318;
+  font-size: 0.86rem;
+  font-weight: 500;
+}
+
+.college-registration-error {
+  padding: 11px 13px;
+  border: 1px solid #f0b4ae;
+  border-radius: 8px;
+  background: #fff4f2;
+}
+
+.college-registration-note {
+  margin: 0 0 18px;
+  color: #52657c;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.college-registration-primary,
+.college-registration-secondary {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 17px;
+  border: 1px solid #3074b3;
+  border-radius: 8px;
+  background: #3074b3;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.college-registration-primary:disabled,
+.college-registration-secondary:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.college-registration-secondary {
+  background: #fff;
+  color: #245f93;
+}
+
+.college-registration-submit {
+  width: 100%;
+}
+
+.college-registration-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 28px;
+  color: #52657c;
+  font-size: 0.9rem;
+}
+
+.college-registration-footer a {
+  color: #245f93;
+  font-weight: 650;
+  text-underline-offset: 3px;
+}
+
+.college-registration-status {
+  padding: 22px;
+  border: 1px solid #d7e2ef;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.college-registration-status h2 {
+  margin-top: 0;
+}
+
+.college-registration-status dl {
+  display: grid;
+  gap: 10px;
+}
+
+.college-registration-status dl div {
+  display: grid;
+  grid-template-columns: minmax(130px, 190px) 1fr;
+  gap: 12px;
+}
+
+.college-registration-status dt {
+  color: #52657c;
+  font-weight: 650;
+}
+
+.college-registration-status dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.college-registration-status-badge {
+  width: fit-content;
+  padding: 5px 10px;
+  border-radius: 99px;
+  background: #fff4d6;
+  color: #805b00;
+  font-weight: 750;
+  text-transform: capitalize;
+}
+
+.college-registration-status-badge.status-approved {
+  background: #e6f6ec;
+  color: #176b38;
+}
+
+.college-registration-status-badge.status-rejected,
+.college-registration-rejection {
+  color: #9e2820;
+}
+
+.college-registration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@media (max-width: 620px) {
+  .college-registration-page {
+    padding: 20px 12px;
+  }
+
+  .college-registration-card {
+    padding: 20px 15px;
+  }
+
+  .college-registration-card fieldset {
+    padding: 16px 12px;
+  }
+
+  .college-registration-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .college-registration-status dl div {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+}

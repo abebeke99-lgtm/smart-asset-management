@@ -7,6 +7,7 @@ const UserRole = require('./UserRole');
 const UserActivityLog = require('./UserActivityLog');
 const PasswordRecovery = require('./PasswordRecovery');
 const College = require('./College');
+const CollegeRegistrationApplication = require('./CollegeRegistrationApplication');
 const Asset = require('./Asset');
 const Infrastructure = require('./Infrastructure')(sequelize);
 const InfrastructureInspection = require('./InfrastructureInspection');
@@ -115,6 +116,7 @@ Department.belongsTo(Location, { foreignKey: 'locationId', as: 'LocationRecord' 
 Department.belongsTo(User, { foreignKey: 'headId', as: 'Head' });
 College.hasMany(User, { foreignKey: 'collegeId' });
 User.belongsTo(College, { foreignKey: 'collegeId' });
+CollegeRegistrationApplication.belongsTo(Campus, { foreignKey: 'campusId', as: 'CampusRecord', constraints: false });
 College.hasMany(Asset, { foreignKey: 'collegeId' });
 Asset.belongsTo(College, { foreignKey: 'collegeId' });
 Asset.hasMany(AssetMovement, { foreignKey: 'assetId' });
@@ -530,6 +532,7 @@ module.exports = {
   UserActivityLog,
   PasswordRecovery,
   College,
+  CollegeRegistrationApplication,
   Asset,
   CapitalizationRecord,
   DepreciationRecord,

@@ -253,8 +253,9 @@ const getTransfer = async (req, res, next) => {
 };
 
 const createTransfer = async (req, res, next) => {
-  const transaction = await sequelize.transaction();
+  let transaction;
   try {
+    transaction = await sequelize.transaction();
     const assetId = Number(req.body.asset_id ?? req.body.assetId);
     const destinationDepartmentId = Number(req.body.destination_department_id ?? req.body.destinationDepartmentId);
     const destinationLocation = req.body.destination_location ?? req.body.destinationLocation;
@@ -330,10 +331,20 @@ const createTransfer = async (req, res, next) => {
       transaction,
     });
     await notifyTransferUsers({ transfer: row, userIds: reviewers.map((user) => user.id), senderId: req.user.id, status: row.status, transaction });
+    const data = normalize(row);
     await transaction.commit();
     try { await notifyDepartmentHeads(row, row.status, req.user.id); } catch (notificationError) { console.error('Department transfer notification failed:', notificationError.message); }
-    res.status(201).json({ success: true, message: 'Transfer request created', data: normalize(row) });
-  } catch (error) { await transaction.rollback(); next(error); }
+    return res.status(201).json({ success: true, message: 'Transfer request created', data });
+  } catch (error) {
+    if (transaction && !transaction.finished) {
+      try {
+        await transaction.rollback();
+      } catch (rollbackError) {
+        return next(rollbackError);
+      }
+    }
+    return next(error);
+  }
 };
 
 const changeTransfer = (target, roles) => async (req, res, next) => {

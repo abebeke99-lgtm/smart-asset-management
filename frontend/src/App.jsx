@@ -60,6 +60,7 @@ const Services = lazy(() => import('./components/public/Services'));
 const Contact = lazy(() => import('./components/public/Contact'));
 const Help = lazy(() => import('./components/public/Help'));
 const Register = lazy(() => import('./components/public/Register'));
+const CollegeSelfRegistration = lazy(() => import('./components/public/CollegeSelfRegistration'));
 const ForgotPassword = lazy(() => import('./components/public/ForgotPassword'));
 const ResetPassword = lazy(() => import('./components/public/ResetPassword'));
 const AssetCreate = lazy(() => import('./components/shared/AssetCreate'));
@@ -247,6 +248,8 @@ export const normalizeRole = (role) => {
     store_manager: 'store_manager',
     'store-manager': 'store_manager',
     maintenance: 'maintenance',
+    maintenance_coordinator: 'maintenance',
+    'maintenance coordinator': 'maintenance',
     maint: 'maintenance',
     infrastructure: 'infrastructure',
     'infrastructure director': 'infrastructure',
@@ -290,7 +293,7 @@ export const getActiveSidebarPath = (items, pathname, fallback) => [...items]
   .find((item) => pathname === item.path || pathname.startsWith(`${item.path}/`))?.path
   || fallback;
 
-const publicPaths = ['/home', '/about', '/services', '/contact', '/contac', '/register', '/forgot-password', '/reset-password'];
+const publicPaths = ['/home', '/about', '/services', '/contact', '/contac', '/register', '/college-registration', '/forgot-password', '/reset-password'];
 
 const AccessDenied = () => {
   const { user } = useAuth();
@@ -478,7 +481,7 @@ export const isPublicRoute = (path = '') => {
   const normalized = normalizeAppPath(path);
   if (!normalized || normalized === '/') return true;
   if (normalized === '/home') return true;
-  if (['/about', '/services', '/contact', '/contac', '/help', '/register', '/forgot-password'].includes(normalized)) return true;
+  if (['/about', '/services', '/contact', '/contac', '/help', '/register', '/college-registration', '/forgot-password'].includes(normalized)) return true;
   if (/^\/reset-password(?:\/.*)?$/.test(normalized)) return true;
   return false;
 };
@@ -3139,6 +3142,7 @@ function AppContent() {
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/college-registration" element={<CollegeSelfRegistration />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/forgot-password/request" element={<ForgotPassword />} />
                 <Route path="/forgot-password/verify" element={<ForgotPassword />} />
@@ -3316,21 +3320,6 @@ function AppContent() {
   const sidebarItems = getSidebarItems(sidebarRole);
   const storeManagerSidebarSections = ['OVERVIEW', 'INVENTORY MANAGEMENT', 'ASSET OPERATIONS', 'ACCOUNT MANAGEMENT'].map((sectionName) => sectionName);
   const translateLabel = (label) => translateNavigationLabel(language, stripLeadingDecoration(label));
-  const sidebarRoleNames = {
-    admin: 'Administrator',
-    college_manager: 'College Manager',
-    department_head: 'Department Head',
-    finance: 'Finance',
-    ict_officer: 'ICT Officer',
-    infrastructure: 'Infrastructure',
-    maintenance: 'Maintenance',
-    store_manager: 'Store Manager',
-    teaching_assistant: 'Teaching Assistant',
-    college: 'College',
-    staff: 'Staff',
-    student: 'Student'
-  };
-  const sidebarRoleLabel = translateLabel(sidebarRoleNames[sidebarRole] || sidebarRole);
   const dashboardRootPath = getDashboardRoute(user?.role || user?.roles);
   const topLevelDashboardPath = (() => {
     const segments = normalizeAppPath(location.pathname).split('/').filter(Boolean);
@@ -3558,30 +3547,6 @@ function AppContent() {
         aria-label={t.primaryNavigation}
         aria-hidden={isMobileViewport && !isSidebarOpen}
       >
-        {sidebarRole !== 'college_manager' && (
-          <div className="admin-sidebar-profile">
-            <strong className="sidebar-user-name">{user.fullName || user.username || t.user}</strong>
-            <div className="sidebar-role">{sidebarRoleLabel}</div>
-            {(user.collegeName || user.college?.collegeName) && (
-              <div className="sidebar-organization">{user.collegeName || user.college.collegeName}</div>
-            )}
-            <div className="sidebar-status"><span aria-hidden="true" /> {translateLabel('Active')}</div>
-          </div>
-        )}
-        {sidebarRole !== 'college_manager' && (
-          <div className="sidebar-brand">
-            <img
-              src={logoError ? UNIVERSITY_LOGO : organizationProfile.logo || UNIVERSITY_LOGO}
-              alt=""
-              aria-hidden="true"
-              onError={handleLogoError}
-            />
-            <div>
-              <strong>{organizationProfile.name || t.university}</strong>
-              <span>{t.systemName || t.footerBrandTitle}</span>
-            </div>
-          </div>
-        )}
         <nav className="admin-sidebar-nav">
           {dashboardSidebarSections.map((section) => {
             const visibleItems = section.items.filter((item) => !item.permission || hasPermission(item.permission));
@@ -3594,20 +3559,11 @@ function AppContent() {
             );
           })}
         </nav>
-        {sidebarRole !== 'college_manager' && (
-          <div className="admin-sidebar-footer">
-            <div className="sidebar-account">
-              <UserCircle size={30} aria-hidden="true" />
-              <div>
-                <strong>{user.fullName || user.username || t.user}</strong>
-                <span>{sidebarRoleLabel}</span>
-              </div>
-            </div>
-            <button type="button" className="sidebar-logout" onClick={handleLogout}>
-              <LogOut size={15} aria-hidden="true" /> {t.logout}
-            </button>
-          </div>
-        )}
+        <div className="admin-sidebar-footer">
+          <button type="button" className="sidebar-logout" onClick={handleLogout}>
+            <LogOut size={15} aria-hidden="true" /> {t.logout}
+          </button>
+        </div>
       </aside>
     </>
   );
@@ -3643,6 +3599,7 @@ function AppContent() {
           <Route path="/contact" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
           <Route path="/help" element={<Help />} />
           <Route path="/login" element={<Navigate to={getDashboardRoute(user?.role)} replace />} />
+          <Route path="/college-registration" element={<CollegeSelfRegistration />} />
 
           <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><DashboardLayout /></ProtectedRoute>}>
             <Route index element={<DashboardOverview />} />

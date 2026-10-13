@@ -31,6 +31,66 @@ test('department heads can request transfers and destination departments can con
   assert.ok(routeHas('/department-head/transfers/:id/receive', 'post'));
 });
 
+test('college managers can create transfers through their permission-protected college route', async (t) => {
+  assert.ok(DEFAULT_ROLE_PERMISSIONS.college_manager.includes('college.transfers.manage'));
+  assert.ok(routeHas('/college/transfers', 'post'));
+
+  const originals = {
+    transaction: sequelize.transaction,
+    assetFindOne: Asset.findOne,
+    departmentFindOne: Department.findOne,
+    transferFindOne: Transfer.findOne,
+    transferCreate: Transfer.create,
+    userFindAll: User.findAll,
+    auditCreate: AuditLog.create,
+    notificationBulkCreate: Notification.bulkCreate,
+  };
+  const transaction = makeTransaction();
+  let assetWhere;
+  sequelize.transaction = async () => transaction;
+  Asset.findOne = async ({ where }) => {
+    assetWhere = where;
+    return {
+      id: 18, campusId: 2, collegeId: 5, departmentId: 12, buildingId: 3, roomId: 4,
+      department: 'Physics', location: 'Room 10', status: 'available',
+    };
+  };
+  Department.findOne = async ({ where }) => ({ id: Number(where.id), collegeId: 5, name: 'Chemistry' });
+  Transfer.findOne = async () => null;
+  Transfer.create = async (values) => ({
+    id: 91,
+    ...values,
+    toJSON() { return { ...this, toJSON: undefined }; },
+  });
+  User.findAll = async () => [];
+  AuditLog.create = async () => ({});
+  Notification.bulkCreate = async () => [];
+  t.after(() => {
+    sequelize.transaction = originals.transaction;
+    Asset.findOne = originals.assetFindOne;
+    Department.findOne = originals.departmentFindOne;
+    Transfer.findOne = originals.transferFindOne;
+    Transfer.create = originals.transferCreate;
+    User.findAll = originals.userFindAll;
+    AuditLog.create = originals.auditCreate;
+    Notification.bulkCreate = originals.notificationBulkCreate;
+  });
+
+  const response = makeResponse();
+  await workflow.createTransfer({
+    organizationScope: { collegeId: 5 },
+    user: { id: 22, role: 'college_manager' },
+    body: { asset_id: 18, destination_department_id: 13, destination_location: 'Chemistry Lab', reason: 'Reallocation' },
+    headers: {},
+  }, response, (error) => { throw error; });
+
+  assert.deepEqual(assetWhere, { id: 18, collegeId: 5 });
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.payload.data.status, 'Requested');
+  assert.equal(response.payload.data.requestedBy, 22);
+  assert.equal(transaction.finished, 'commit');
+});
+
 test('transfer request uses a real in-scope asset and writes the initial custody audit', async (t) => {
   const originals = {
     transaction: sequelize.transaction,
@@ -95,6 +155,20 @@ test('transfer request uses a real in-scope asset and writes the initial custody
   assert.equal(transaction.finished, 'commit');
   assert.equal(audits.length, 1);
   assert.equal(audits[0].action, 'TRANSFER_REQUESTED');
+});
+
+test('transfer creation forwards a transaction connection error to Express error handling', async (t) => {
+  const originalTransaction = sequelize.transaction;
+  const connectionError = new Error('test database connection unavailable');
+  sequelize.transaction = async () => { throw connectionError; };
+  t.after(() => { sequelize.transaction = originalTransaction; });
+
+  const response = makeResponse();
+  let forwardedError;
+  await workflow.createTransfer({ body: {} }, response, (error) => { forwardedError = error; });
+
+  assert.equal(forwardedError, connectionError);
+  assert.equal(response.statusCode, 200);
 });
 
 test('transfer requests cannot use an asset from another department', async (t) => {

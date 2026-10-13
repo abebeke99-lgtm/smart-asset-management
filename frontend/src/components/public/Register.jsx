@@ -123,7 +123,11 @@ const Register = () => {
           </label>
           <button type="submit" disabled={saving}>{saving ? 'Creating account…' : 'Create Account'}</button>
         </form>
-        <footer>Already registered? <Link to="/login">Sign in</Link></footer>
+        <footer>
+          Already registered? <Link to="/login">Sign in</Link>
+          {' · '}
+          <Link to="/college-registration">Register a college</Link>
+        </footer>
       </section>
     </main>
   );

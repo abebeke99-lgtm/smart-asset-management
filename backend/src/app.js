@@ -56,6 +56,8 @@ const technicalSupportRoutes = require('./routes/technicalSupportRoutes');
 const incidentRoutes = require('./routes/incidentRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const contactRoutes = require('./routes/contactRoutes');
+const collegeRegistrationRoutes = require('./routes/collegeRegistrationRoutes');
+const adminCollegeRegistrationRoutes = require('./routes/adminCollegeRegistrationRoutes');
 const backupService = require('./services/backupService');
 const { initializeEmailService } = require('./services/emailService');
 const { startAssetRetentionScheduler } = require('./services/assetRetentionService');
@@ -162,6 +164,8 @@ app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 
 app.use('/api/auth', authRoutes);
+app.use('/api/college-registration', collegeRegistrationRoutes);
+app.use('/api/admin/college-registrations', adminCollegeRegistrationRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/uploads', express.static(uploadRoot, { index: false, dotfiles: 'ignore' }));

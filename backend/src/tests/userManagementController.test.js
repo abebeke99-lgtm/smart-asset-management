@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { Op } = require('sequelize');
 const { sequelize, User, Role, UserActivityLog, AuditLog, Config } = require('../models');
-const { getAllUsers, getUserStats, getStoreManagerAccounts, createUser, updateUser } = require('../controllers/userController');
+const { getAllUsers, getUserStats, getStoreManagerAccounts, getRoles, createUser, updateUser } = require('../controllers/userController');
 const userRoutes = require('../routes/userRoutes');
 const { requireAuth } = require('../middlewares/auth');
 const passport = require('../config/passport');
@@ -247,6 +247,30 @@ test('Store Manager registration entry is read-only and account creation remains
   const managerDenied = makeResponse();
   createRoute.route.stack[1].handle({ user: { role: 'store_manager' } }, managerDenied, () => assert.fail('Store Managers must not create users'));
   assert.equal(managerDenied.statusCode, 403);
+  const maintenanceDenied = makeResponse();
+  createRoute.route.stack[1].handle({ user: { role: 'maintenance' } }, maintenanceDenied, () => assert.fail('Maintenance users must not create users'));
+  assert.equal(maintenanceDenied.statusCode, 403);
+});
+
+test('role catalog exposes one canonical Admin and Maintenance option with consistent labels', async (t) => {
+  const originalFindAll = Role.findAll;
+  Role.findAll = async () => [
+    { name: 'maintenance_coordinator', displayName: 'Maintenance Coordinator' },
+    { name: 'maintenance', displayName: 'Maintenance Coordinator' },
+    { name: 'admin', displayName: 'System Administrator' },
+    { name: 'admin', displayName: 'Administrator duplicate' },
+    { name: 'unknown_role', displayName: 'Unknown Role' },
+  ];
+  t.after(() => { Role.findAll = originalFindAll; });
+
+  const res = makeResponse();
+  await getRoles({}, res, (error) => { throw error; });
+
+  assert.deepEqual(res.payload.roles.map(({ name, displayName }) => ({ name, displayName })), [
+    { name: 'maintenance', displayName: 'Maintenance' },
+    { name: 'admin', displayName: 'Admin' },
+  ]);
+  assert.equal(res.payload.data, res.payload.roles);
 });
 
 test('account-list route returns HTTP 401 when JWT authentication finds no user', async (t) => {
@@ -383,6 +407,66 @@ test('Maintenance account creation accepts and persists the canonical role', asy
   assert.equal(roleQuery.where.name, 'maintenance');
   assert.equal(creation.role, 'maintenance');
   assert.equal(res.payload.data.role, 'maintenance');
+});
+
+test('Admin account creation persists the canonical role and password hash', async (t) => {
+  const originals = {
+    transaction: sequelize.transaction,
+    roleFindOne: Role.findOne,
+    userFindAll: User.findAll,
+    userCreate: User.create,
+    auditCreate: AuditLog.create,
+    activityCreate: UserActivityLog.create,
+    configFindByPk: Config.findByPk,
+  };
+  let creation;
+  let roleQuery;
+  const transaction = {};
+  sequelize.transaction = async (callback) => callback(transaction);
+  Role.findOne = async (query) => {
+    roleQuery = query;
+    return { id: 1, name: 'admin', active: true };
+  };
+  User.findAll = async () => [];
+  User.create = async (values, options) => {
+    assert.equal(options.transaction, transaction);
+    creation = values;
+    return { id: 30, ...values, toJSON() { return { id: this.id, ...values }; } };
+  };
+  AuditLog.create = async () => ({});
+  UserActivityLog.create = async () => ({});
+  Config.findByPk = async () => null;
+  t.after(() => {
+    sequelize.transaction = originals.transaction;
+    Role.findOne = originals.roleFindOne;
+    User.findAll = originals.userFindAll;
+    User.create = originals.userCreate;
+    AuditLog.create = originals.auditCreate;
+    UserActivityLog.create = originals.activityCreate;
+    Config.findByPk = originals.configFindByPk;
+  });
+
+  const res = makeResponse();
+  await createUser({
+    body: {
+      username: 'new.admin',
+      fullName: 'New Administrator',
+      email: 'new.admin@example.edu',
+      role: 'Admin',
+      status: 'active',
+      password: 'AdminPass123',
+      confirmPassword: 'AdminPass123',
+    },
+    user: { id: 1, username: 'administrator', role: 'admin' },
+    ip: '127.0.0.1',
+  }, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.deepEqual(roleQuery.where, { name: 'admin', active: true });
+  assert.equal(creation.role, 'admin');
+  assert.match(creation.password, /^\$2[aby]\$/);
+  assert.equal(res.payload.data.role, 'admin');
+  assert.equal(res.payload.data.password, undefined);
 });
 
 test('concurrent Store Manager creates serialize on the role lock and cannot exceed the account limit', async (t) => {

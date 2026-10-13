@@ -95,15 +95,10 @@ function normalizeUser(item, index) {
       item?.role ??
       "",
 
-    roleName:
-      item?.roleName ??
-      item?.role?.name ??
-      (typeof item?.role === "string"
-        ? item.role === "maintenance"
-          ? "Maintenance Coordinator"
-          : item.role.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
-        : "") ??
-      "",
+    roleName: getRoleLabel(
+      normalizeRoleName(item?.role?.name ?? item?.role ?? item?.roleName),
+      item?.roleName ?? item?.role?.displayName,
+    ),
 
     collegeId:
       item?.collegeId ??
@@ -164,6 +159,19 @@ function normalizeOption(item, index) {
       item?.displayName ??
       "",
   };
+}
+
+function normalizeRoleName(value) {
+  const role = String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (["administrator"].includes(role)) return "admin";
+  if (["maintenance_coordinator", "maint"].includes(role)) return "maintenance";
+  return role;
+}
+
+function getRoleLabel(role, displayName) {
+  if (role === "admin") return "Admin";
+  if (role === "maintenance") return "Maintenance";
+  return displayName || role.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function formatDate(value) {
@@ -288,12 +296,14 @@ export default function Users() {
       const pages = Math.max(1, Number(usersResponse?.pagination?.pages || 1));
       setPageCount(pages);
       if (requestedPage > pages) setPage(pages);
-      setRoles(extractArray(rolesResponse, ["roles"]).map((item, index) => ({
-        id: item?.name ?? item?.role ?? `role-${index}`,
-        name: item?.name === "maintenance"
-          ? item?.displayName || "Maintenance Coordinator"
-          : item?.displayName ?? item?.name ?? item?.role ?? "",
-      })));
+      const roleOptions = extractArray(rolesResponse, ["roles"]).flatMap((item, index) => {
+        const name = normalizeRoleName(item?.name ?? item?.role);
+        if (!name) return [];
+        return [{ id: name, name: getRoleLabel(name, item?.displayName), sourceIndex: index }];
+      });
+      const uniqueRoleOptions = [...new Map(roleOptions.map((role) => [role.id, role])).values()]
+        .map(({ id, name }) => ({ id, name }));
+      setRoles(uniqueRoleOptions);
       setStoreManagerCount(Number(storeManagerResponse?.data?.count) || 0);
       setStoreManagerLimit(Number(storeManagerResponse?.data?.limit) || 8);
       setColleges(extractArray(collegesResponse, ["colleges"]).map(normalizeOption));

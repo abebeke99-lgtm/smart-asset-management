@@ -1646,26 +1646,57 @@ const normalizeAuditLog = (log) => {
 };
 
 const getAuditWhere = (query) => {
-  const { search = '', action = '', module = '', user = '', dateFrom = '', dateTo = '' } = query;
+  const { search = '', action = '', module = '', user = '', dateFrom = '', dateTo = '', status = '', category = '' } = query;
   const where = {};
+  const andClauses = [];
   const normalizedSearch = String(search).trim();
   if (action) where.action = action;
   if (module) where.entity = { [Op.like]: `%${String(module).trim()}%` };
   if (user && Number.isInteger(Number(user))) where.userId = Number(user);
+  const categoryPatterns = {
+    login: [{ action: { [Op.or]: [{ [Op.like]: '%login%' }, { [Op.like]: '%logout%' }, { [Op.like]: '%password%' }] } }, { entity: { [Op.like]: '%authentication%' } }],
+    asset: [{ action: { [Op.or]: [{ [Op.like]: '%asset%' }, { [Op.like]: '%rfid%' }] } }, { entity: { [Op.or]: [{ [Op.like]: '%asset%' }, { [Op.like]: '%rfid%' }] } }],
+    assignment: [{ action: { [Op.or]: [{ [Op.like]: '%assignment%' }, { [Op.like]: '%assign%' }] } }, { entity: { [Op.like]: '%assignment%' } }],
+    transfer: [{ action: { [Op.like]: '%transfer%' } }, { entity: { [Op.like]: '%transfer%' } }],
+    maintenance: [{ action: { [Op.like]: '%maintenance%' } }, { entity: { [Op.like]: '%maintenance%' } }],
+    user: [{ action: { [Op.or]: [{ [Op.like]: '%user%' }, { [Op.like]: '%role%' }, { [Op.like]: '%permission%' }] } }, { entity: { [Op.like]: '%user%' } }],
+    settings: [{ action: { [Op.like]: '%setting%' } }, { entity: { [Op.like]: '%setting%' } }],
+    security: [{ action: { [Op.or]: [{ [Op.like]: '%unauthorized%' }, { [Op.like]: '%authentication%' }, { [Op.like]: '%suspicious%' }] } }, { entity: { [Op.like]: '%security%' } }],
+  };
+  if (categoryPatterns[category]) andClauses.push({ [Op.or]: categoryPatterns[category] });
+  if (status) {
+    const resultExpression = "LOWER(CASE WHEN JSON_VALID(details) THEN COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(details, '$.result')), ''), 'success') ELSE 'success' END)";
+    andClauses.push(Sequelize.where(Sequelize.literal(resultExpression), String(status).trim().toLowerCase()));
+  }
   if (dateFrom || dateTo) {
     where.createdAt = {};
     if (dateFrom) where.createdAt[Op.gte] = new Date(`${dateFrom}T00:00:00.000Z`);
     if (dateTo) where.createdAt[Op.lte] = new Date(`${dateTo}T23:59:59.999Z`);
   }
   if (normalizedSearch) {
-    where[Op.or] = [
+    andClauses.push({ [Op.or]: [
       { action: { [Op.like]: `%${normalizedSearch}%` } },
       { entity: { [Op.like]: `%${normalizedSearch}%` } },
       { details: { [Op.like]: `%${normalizedSearch}%` } },
-    ];
+      { '$User.username$': { [Op.like]: `%${normalizedSearch}%` } },
+      { '$User.full_name$': { [Op.like]: `%${normalizedSearch}%` } },
+    ] });
   }
+  if (andClauses.length) where[Op.and] = andClauses;
   return where;
 };
+
+const auditResultSql = "LOWER(CASE WHEN JSON_VALID(details) THEN COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(details, '$.result')), ''), 'success') ELSE 'success' END)";
+const countAuditResult = (where, values) => AuditLog.count({
+  where: {
+    [Op.and]: [
+      where,
+      Sequelize.where(Sequelize.literal(auditResultSql), { [Op.in]: values }),
+    ],
+  },
+  include: auditInclude,
+  distinct: true,
+});
 
 const auditInclude = [{ model: User, attributes: ['id', 'username', 'fullName', 'role'] }];
 
@@ -1674,16 +1705,34 @@ router.get(['/audit', '/audit-logs'], ...requireAdmin, async (req, res, next) =>
     const { page = '1', limit = '50' } = req.query;
     const currentPage = Math.max(1, Number.parseInt(page, 10) || 1);
     const pageSize = Math.min(100, Math.max(1, Number.parseInt(limit, 10) || 50));
-    const { count, rows } = await AuditLog.findAndCountAll({
-      where: getAuditWhere(req.query),
-      include: auditInclude,
-      order: [['createdAt', 'DESC'], ['id', 'DESC']],
-      limit: pageSize,
-      offset: (currentPage - 1) * pageSize,
-    });
+    const where = getAuditWhere(req.query);
+    const [filteredResult, totalEvents, successful, failed, securityEvents, uniqueUsers] = await Promise.all([
+      AuditLog.findAndCountAll({
+        where,
+        include: auditInclude,
+        distinct: true,
+        order: [['createdAt', 'DESC'], ['id', 'DESC']],
+        limit: pageSize,
+        offset: (currentPage - 1) * pageSize,
+      }),
+      AuditLog.count(),
+      countAuditResult(where, ['success', 'successful', 'completed', 'approved', 'ok']),
+      countAuditResult(where, ['failed', 'failure', 'error', 'rejected', 'denied']),
+      AuditLog.count({ where: getAuditWhere({ ...req.query, category: 'security' }), include: auditInclude, distinct: true }),
+      AuditLog.count({ where, include: auditInclude, distinct: true, col: 'userId' }),
+    ]);
+    const { count, rows } = filteredResult;
     const logs = rows.map(normalizeAuditLog);
     const pagination = { page: currentPage, limit: pageSize, total: count, pages: Math.max(1, Math.ceil(count / pageSize)) };
-    res.json({ success: true, data: logs, logs, total: count, pagination });
+    res.json({
+      success: true,
+      data: logs,
+      logs,
+      total: count,
+      totalEvents,
+      stats: { filtered: count, successful, failed, securityEvents, uniqueUsers },
+      pagination,
+    });
   } catch (error) { next(error); }
 });
 
