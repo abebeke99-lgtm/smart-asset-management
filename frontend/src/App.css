@@ -4674,3 +4674,27 @@ body.dark .department-head-sidebar .admin-nav-link:not(.is-active) > svg {
     margin-left: 0;
   }
 }
+
+.dashboard-layout-body.authenticated-shell > .admin-sidebar.infrastructure-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  overflow-x: hidden;
+}
+
+.dashboard-layout-body.authenticated-shell > .admin-sidebar.infrastructure-sidebar > .admin-sidebar-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 1023px) {
+  .dashboard-layout-body.authenticated-shell > .admin-sidebar.infrastructure-sidebar {
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+}

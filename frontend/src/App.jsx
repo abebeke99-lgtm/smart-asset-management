@@ -219,6 +219,7 @@ const InfrastructureInspection = lazy(() => import('./components/infrastructure/
 
 const infrastructureNavigationItems = [
   { path: '/infrastructure/dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'OVERVIEW', permission: 'infrastructure.dashboard.view', component: InfrastructureDashboard },
+  { path: '/infrastructure', label: 'Infrastructure', icon: Building2, section: 'OVERVIEW', permission: 'infrastructure.dashboard.view', navigationOnly: true },
   { path: '/infrastructure/assets', label: 'Assets', icon: Package, section: 'ASSETS', permission: 'infrastructure.assets.view', component: InfrastructureAssets },
   { path: '/infrastructure/assets/register', label: 'Register Asset', icon: PlusSquare, section: 'ASSETS', permission: 'infrastructure.assets.view', nested: true, component: RegisterInfrastructureAsset },
   { path: '/infrastructure/inventory', label: 'Inventory', icon: Boxes, section: 'ASSETS', permission: 'infrastructure.assets.view', component: InfrastructureInventory },
@@ -2430,7 +2431,6 @@ const adminSidebarSections = [
       { to: '/admin/assets/assign', label: 'Assignments', icon: UserRound },
       { to: '/admin/assets/transfer', label: 'Transfers', icon: ArrowLeftRight },
       { to: '/admin/assets/disposal', label: 'Disposal', icon: Trash2 },
-      { to: '/admin/inventory/quarantine', label: 'Chemical Quarantine', icon: FlaskConical },
     ],
   },
   {
@@ -2456,7 +2456,6 @@ const adminSidebarSections = [
     heading: 'REPORTS & ANALYTICS',
     items: [
       { to: '/admin/reports', label: 'Reports', icon: BarChart3 },
-      { to: '/admin/analytics/system', label: 'Analytics', icon: TrendingUp },
     ],
   },
   {
@@ -2465,12 +2464,10 @@ const adminSidebarSections = [
     items: [
       { to: '/admin/audit-logs', label: 'Audit Logs', icon: ClipboardList, permission: 'audit.view' },
       { to: '/admin/settings', label: 'Settings', icon: Settings },
-      { to: '/admin/profile', label: 'Profile', icon: UserCircle },
       { to: '/admin/notifications', label: 'Notifications', icon: Bell },
       { to: '/admin/backup', label: 'Backup', icon: DatabaseBackup },
       { to: '/admin/enam', label: 'ENAM Integration', icon: Link2 },
       { to: '/admin/monitoring', label: 'System Monitoring', icon: Activity },
-      { to: '/admin/roles-permissions', label: 'Roles & Permissions', icon: ShieldCheck, permission: 'roles_permissions.configure' },
     ],
   },
 ];
@@ -3539,7 +3536,7 @@ function AppContent() {
       {section.items.map((item) => renderSidebarLink(item))}
     </div>
   ));
-  const dashboardSidebarClassName = `admin-sidebar${sidebarRole === 'department_head' ? ' department-head-sidebar' : ''}${isStoreManager ? ' store-manager-sidebar' : ''}`;
+  const dashboardSidebarClassName = `admin-sidebar${sidebarRole === 'department_head' ? ' department-head-sidebar' : ''}${sidebarRole === 'infrastructure' ? ' infrastructure-sidebar' : ''}${isStoreManager ? ' store-manager-sidebar' : ''}`;
   const dashboardSidebarSections = sidebarRole === 'admin'
     ? adminSidebarSections.map((section) => ({
       heading: section.heading,
@@ -3920,7 +3917,7 @@ function AppContent() {
           {/* INFRASTRUCTURE ROUTES */}
           <Route path="/infrastructure" element={<ProtectedRoute allowedRoles={['infrastructure', 'admin']}><InfrastructureLayout /></ProtectedRoute>}>
             <Route index element={<Navigate to="/infrastructure/dashboard" replace />} />
-            {infrastructureNavigationItems.map(({ path, component: Page }) => (
+            {infrastructureNavigationItems.filter((item) => !item.navigationOnly).map(({ path, component: Page }) => (
               <Route key={path} path={path.slice('/infrastructure/'.length)} element={<Page />} />
             ))}
             <Route path="*" element={<InfrastructureNotFound />} />

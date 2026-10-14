@@ -24,23 +24,53 @@ jest.mock('../contexts/DataContext', () => ({
   DataProvider: ({ children }) => children,
 }));
 
+const createMockApiClient = () => {
+  const mockGet = jest.fn((url) => {
+    if (url === '/api/infrastructure/dashboard') {
+      return Promise.resolve({
+        data: {
+          data: {
+            totalInfrastructureAssets: 10,
+            buildings: 5,
+            operationalAssets: 8,
+            generators: 2,
+            transformers: 3,
+            criticalAlerts: 0,
+            recentAssets: [],
+            recentWorkOrders: [],
+            workflowDataNote: 'Test data',
+            summary: { totalInfrastructureAssets: 10, buildings: 5, operationalAssets: 8, criticalAlerts: 0 },
+            operational: { operationalAssets: 8, generators: 2, transformers: 3 },
+            statusBreakdown: {},
+          },
+        },
+      });
+    }
+    if (url === '/api/notifications/unread-count') {
+      return Promise.resolve({ data: { unreadCount: 0 } });
+    }
+    if (url.includes('/api/admin/settings')) {
+      return Promise.resolve({ data: { settings: { organization: {} } } });
+    }
+    return Promise.resolve({ data: { data: {} } });
+  });
+  return {
+    get: mockGet,
+    post: jest.fn(() => Promise.resolve({ data: {} })),
+  };
+};
+
 jest.mock('../utils/api', () => ({
   __esModule: true,
   apiBase: () => 'http://localhost',
-  apiClient: {
-    get: jest.fn(() => new Promise(() => {})),
-    post: jest.fn(async () => ({ data: {} })),
-  },
+  apiClient: createMockApiClient(),
   getApiErrorMessage: (_error, fallback) => fallback || 'Request failed',
 }));
 
 jest.mock('../services/apiClient', () => ({
   __esModule: true,
   getApiErrorMessage: (_error, fallback) => fallback || 'Request failed',
-  default: {
-    get: jest.fn(() => Promise.resolve({ data: { data: { statistics: {} } } })),
-    post: jest.fn(() => Promise.resolve({ data: {} })),
-  },
+  default: createMockApiClient(),
 }));
 
 jest.mock('../components/admin/AdminUserManagement', () => () => <div>Admin users page</div>);
@@ -89,7 +119,9 @@ describe('authenticated dashboard sidebar', () => {
     expect(screen.getByRole('link', { name: 'Users' })).toHaveAttribute('aria-current', 'page');
     expect(within(sidebar).getByRole('link', { name: 'Assets' })).toBeInTheDocument();
     expect(within(sidebar).getByRole('link', { name: 'Reports' })).toBeInTheDocument();
-    expect(within(sidebar).getByRole('link', { name: 'Roles & Permissions' })).toBeInTheDocument();
+    for (const label of ['Chemical Quarantine', 'Analytics', 'Profile', 'Roles & Permissions']) {
+      expect(within(sidebar).queryByRole('link', { name: label })).not.toBeInTheDocument();
+    }
     expect(screen.queryByRole('link', { name: 'Transactions' })).not.toBeInTheDocument();
     expect(within(sidebar).queryByRole('button', { name: 'Logout' })).not.toBeInTheDocument();
   });
@@ -197,10 +229,12 @@ describe('authenticated dashboard sidebar', () => {
     });
 
     const sidebarElement = screen.getByLabelText('Primary navigation');
+    expect(sidebarElement).toHaveClass('infrastructure-sidebar');
     const sidebar = within(sidebarElement);
     expect(sidebarElement.querySelectorAll('.sidebar-section')).toHaveLength(6);
     const expectedItems = [
       'Dashboard',
+      'Infrastructure',
       'Assets',
       'Register Asset',
       'Inventory',
@@ -235,8 +269,11 @@ describe('authenticated dashboard sidebar', () => {
 
     const infrastructureLinks = within(sidebarElement).getAllByRole('link');
     expect(infrastructureLinks.map((link) => link.textContent.trim())).toEqual(expectedItems);
+    expect(within(sidebarElement).getAllByRole('link', { name: 'Infrastructure' })).toHaveLength(1);
+    expect(within(sidebarElement).getAllByRole('link', { name: 'Dashboard' })).toHaveLength(1);
     expect(infrastructureLinks.map((link) => link.getAttribute('href'))).toEqual([
       '/infrastructure/dashboard',
+      '/infrastructure',
       '/infrastructure/assets',
       '/infrastructure/assets/register',
       '/infrastructure/inventory',
