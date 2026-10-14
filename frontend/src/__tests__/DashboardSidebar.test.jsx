@@ -201,6 +201,7 @@ describe('authenticated dashboard sidebar', () => {
     expect(sidebarElement.querySelectorAll('.sidebar-section')).toHaveLength(1);
     [
       'Dashboard',
+      'Register Asset',
       'Infrastructure Assets',
       'Inventory',
       'Assignments',
@@ -226,6 +227,7 @@ describe('authenticated dashboard sidebar', () => {
       'Documents',
       'Reports',
       'Notifications',
+      'Audit',
     ].forEach((label) => {
       expect(sidebar.getByRole('link', { name: label })).toBeInTheDocument();
     });

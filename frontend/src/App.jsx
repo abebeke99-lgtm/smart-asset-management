@@ -174,6 +174,7 @@ const InfrastructureRequests = lazy(() => import('./components/infrastructure/In
 const InfrastructureReports = lazy(() => import('./components/infrastructure/InfrastructureReports'));
 const InfrastructureDocuments = lazy(() => import('./components/infrastructure/InfrastructureDocuments'));
 const InfrastructureNotifications = lazy(() => import('./components/infrastructure/InfrastructureNotifications'));
+const InfrastructureAudit = lazy(() => import('./components/infrastructure/InfrastructureAudit'));
 const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'));
 const CollegeManagerPages = lazy(() => import('./components/college/CollegeManagerPages'));
 const AdminAssets = lazy(() => import('./components/admin/AdminAssets'));
@@ -498,11 +499,18 @@ export const AppFooter = (props) => {
 
 export const isDashboardRoute = (path = '') => {
   const normalized = normalizeAppPath(path);
-  return (
-    normalized === '/dashboard'
-    || /^\/dashboard(?:\/.*)?$/.test(normalized)
-    || /^\/(?:admin|ict|college-manager|college|department-head|department|finance|store|maintenance|infrastructure|staff|student)(?:\/.*)?$/.test(normalized)
-  );
+  if (!normalized || normalized === '/') return false;
+
+  const dashboardRoots = [
+    '/dashboard',
+    '/admin', '/ict', '/college', '/college-manager', '/college_manager',
+    '/department-head', '/department_head', '/department',
+    '/finance', '/store', '/store_manager', '/maintenance',
+    '/infrastructure', '/teaching-assistant', '/teaching_assistant',
+    '/staff', '/student'
+  ];
+
+  return dashboardRoots.some((root) => normalized === root || normalized.startsWith(`${root}/`));
 };
 
 export const shouldHideSidebarForPath = (path = '') => {
@@ -3291,6 +3299,7 @@ function AppContent() {
       ],
       'infrastructure': [
         { path: '/infrastructure/dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'OVERVIEW', permission: 'infrastructure.dashboard.view' },
+        { path: '/infrastructure/assets/register', label: 'Register Asset', icon: FilePlus2, section: 'ASSET MANAGEMENT', permission: 'infrastructure.assets.view' },
         { path: '/infrastructure/assets', label: 'Infrastructure Assets', icon: Package, section: 'ASSET MANAGEMENT', permission: 'infrastructure.assets.view' },
         { path: '/infrastructure/inventory', label: 'Inventory', icon: ClipboardList, section: 'ASSET MANAGEMENT', permission: 'infrastructure.assets.view' },
         { path: '/infrastructure/assignment', label: 'Assignments', icon: UserRound, section: 'ASSET MANAGEMENT', permission: 'infrastructure.assets.view' },
@@ -3314,8 +3323,9 @@ function AppContent() {
         { path: '/infrastructure/tracking', label: 'Tracking', icon: Radio, section: 'MONITORING', permission: 'infrastructure.tracking.view' },
         { path: '/infrastructure/requests', label: 'Requests', icon: FileText, section: 'ADMINISTRATION' },
         { path: '/infrastructure/documents', label: 'Documents', icon: FileText, section: 'ADMINISTRATION' },
-        { path: '/infrastructure/reports', label: 'Reports', icon: BarChart3, section: 'REPORTS & SYSTEM', permission: 'infrastructure.reports.view' },
         { path: '/infrastructure/notifications', label: 'Notifications', icon: Bell, section: 'REPORTS & SYSTEM', permission: 'infrastructure.notifications.view' },
+        { path: '/infrastructure/reports', label: 'Reports', icon: BarChart3, section: 'REPORTS & SYSTEM', permission: 'infrastructure.reports.view' },
+        { path: '/infrastructure/audit', label: 'Audit', icon: Archive, section: 'REPORTS & SYSTEM' },
       ]
     };
     return items[normalizedRole] || [];
@@ -3554,7 +3564,7 @@ function AppContent() {
         className={`${dashboardSidebarClassName}${isSidebarOpen ? ' is-mobile-open' : ''}`}
         aria-label={t.primaryNavigation}
         aria-hidden={isMobileViewport && !isSidebarOpen}
-        inert={isMobileViewport && !isSidebarOpen}
+        inert={isMobileViewport && !isSidebarOpen ? '' : undefined}
       >
         <nav className="admin-sidebar-nav">
           {dashboardSidebarSections.map((section) => {
@@ -3925,9 +3935,10 @@ function AppContent() {
             
             {/* Management */}
             <Route path="requests" element={<InfrastructureRequests />} />
-            <Route path="reports" element={<InfrastructureReports />} />
             <Route path="documents" element={<InfrastructureDocuments />} />
             <Route path="notifications" element={<InfrastructureNotifications />} />
+            <Route path="reports" element={<InfrastructureReports />} />
+            <Route path="audit" element={<InfrastructureAudit />} />
           </Route>
 
           <Route path="/teaching-assistant" element={<ProtectedRoute allowedRoles={['teaching_assistant']} allowedPermissions={['assets.view']}><RoleLayout /></ProtectedRoute>}>

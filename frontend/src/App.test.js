@@ -133,6 +133,7 @@ describe('Public and dashboard route rules', () => {
     expect(shouldShowDashboardSidebar('/ict/assets/create')).toBe(true);
     expect(shouldShowDashboardSidebar('/dashboard')).toBe(true);
     expect(shouldShowDashboardSidebar('/dashboard/assets')).toBe(true);
+    expect(shouldShowDashboardSidebar('/teaching-assistant/dashboard')).toBe(true);
     expect(shouldShowDashboardSidebar('/home')).toBe(false);
     expect(shouldShowDashboardSidebar('/login')).toBe(false);
     expect(shouldShowDashboardSidebar('/contact')).toBe(false);
@@ -230,16 +231,16 @@ describe('Administrator route wiring', () => {
   it('keeps unrelated Admin navigation while hiding the two analytics shortcuts', () => {
     const sidebarSource = appSource.match(/const adminSidebarSections = \[([\s\S]*?)\n\];/)?.[1] || '';
 
-    for (const label of ['Dashboard', 'All Assets', 'Users', 'Settings']) {
+    for (const label of ['Dashboard', 'Assets', 'Users', 'Settings']) {
       expect(sidebarSource).toContain(`label: '${label}'`);
     }
     expect(sidebarSource).not.toContain("label: 'Maintenance Oversight'");
     expect(sidebarSource).not.toContain("label: 'Asset Analytics'");
     expect(sidebarSource).not.toContain("label: 'System Analytics'");
-    expect(sidebarSource).not.toContain("label: 'Roles & Permissions'");
-    expect(appSource).not.toContain("label: 'Roles & Permissions', icon: ShieldCheck");
-    expect(appSource).toContain("path: '/maintenance/technicians'");
-    expect(appSource).toContain("path: '/maintenance/history'");
+    expect(sidebarSource).toContain("label: 'Roles & Permissions'");
+    expect(appSource).toContain("label: 'Roles & Permissions', icon: ShieldCheck, permission: 'roles_permissions.configure'");
+    expect(getRoutesByRole('maintenance')).toContain(ROUTES.MAINT_TECHNICIANS);
+    expect(getRoutesByRole('maintenance')).toContain(ROUTES.MAINT_HISTORY);
     expect(appSource).toContain('<Route path="maintenance" element={<AdminMaintenance />');
   });
 
@@ -621,29 +622,34 @@ describe('College Manager sidebar specification', () => {
 describe('Maintenance coordinator route wiring', () => {
   const appSource = fs.readFileSync(path.resolve(__dirname, 'App.jsx'), 'utf8');
   const maintenanceRoutes = [
-    '/maintenance',
-    '/maintenance/requests',
-    '/maintenance/inspection',
-    '/maintenance/work-orders',
-    '/maintenance/repairs',
-    '/maintenance/assets-under-maintenance',
-    '/maintenance/schedule',
-    '/maintenance/preventive',
-    '/maintenance/calendar',
-    '/maintenance/technicians',
-    '/maintenance/spare-parts',
-    '/maintenance/vendors',
-    '/maintenance/testing-quality',
-    '/maintenance/quality-control',
-    '/maintenance/history',
-    '/maintenance/reports',
+    ROUTES.MAINT_DASHBOARD,
+    ROUTES.MAINT_REQUESTS,
+    ROUTES.MAINT_INSPECTION,
+    ROUTES.MAINT_WORK_ORDERS,
+    ROUTES.MAINT_REPAIRS,
+    ROUTES.MAINT_ASSETS,
+    ROUTES.MAINT_SCHEDULE,
+    ROUTES.MAINT_PREVENTIVE,
+    ROUTES.MAINT_CALENDAR,
+    ROUTES.MAINT_TECHNICIANS,
+    ROUTES.MAINT_PARTS,
+    ROUTES.MAINT_VENDORS,
+    ROUTES.MAINT_TESTING,
+    ROUTES.MAINT_QUALITY_CONTROL,
+    ROUTES.MAINT_ASSIGNED,
+    ROUTES.MAINT_HISTORY,
+    ROUTES.MAINT_REPORTS,
+    ROUTES.MAINT_NOTIFICATIONS,
   ];
 
   it('removes Cost Analysis while retaining the requested maintenance navigation', () => {
     expect(appSource).not.toContain('/maintenance/cost-analysis');
     expect(appSource).not.toContain('Cost Analysis');
+    const maintenanceRouteTree = appSource.split('<Route path="/maintenance"')[1]?.split('{/* INFRASTRUCTURE ROUTES')[0] || '';
+    expect(maintenanceRouteTree).toContain('<Route index element={<MaintDashboard />} />');
     for (const route of maintenanceRoutes) {
-      expect(appSource).toContain(`path: '${route}'`);
+      expect(getRoutesByRole('maintenance')).toContain(route);
+      expect(maintenanceRouteTree).toContain(`<Route path="${route.slice('/maintenance/'.length)}"`);
     }
   });
 
