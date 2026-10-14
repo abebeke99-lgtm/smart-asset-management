@@ -228,17 +228,18 @@ describe('Administrator route wiring', () => {
     }
   });
 
-  it('keeps unrelated Admin navigation while hiding the two analytics shortcuts', () => {
+  it('removes only the requested Admin sidebar links while keeping the other navigation', () => {
     const sidebarSource = appSource.match(/const adminSidebarSections = \[([\s\S]*?)\n\];/)?.[1] || '';
 
     for (const label of ['Dashboard', 'Assets', 'Users', 'Settings']) {
       expect(sidebarSource).toContain(`label: '${label}'`);
     }
+    for (const label of ['Chemical Quarantine', 'Analytics', 'Profile', 'Roles & Permissions']) {
+      expect(sidebarSource).not.toContain(`label: '${label}'`);
+    }
     expect(sidebarSource).not.toContain("label: 'Maintenance Oversight'");
     expect(sidebarSource).not.toContain("label: 'Asset Analytics'");
     expect(sidebarSource).not.toContain("label: 'System Analytics'");
-    expect(sidebarSource).toContain("label: 'Roles & Permissions'");
-    expect(appSource).toContain("label: 'Roles & Permissions', icon: ShieldCheck, permission: 'roles_permissions.configure'");
     expect(getRoutesByRole('maintenance')).toContain(ROUTES.MAINT_TECHNICIANS);
     expect(getRoutesByRole('maintenance')).toContain(ROUTES.MAINT_HISTORY);
     expect(appSource).toContain('<Route path="maintenance" element={<AdminMaintenance />');
@@ -382,13 +383,52 @@ describe('Store Manager dashboard route wiring', () => {
 
 describe('Infrastructure dashboard route wiring', () => {
   const appSource = fs.readFileSync(path.resolve(__dirname, 'App.jsx'), 'utf8');
+  const navigationMatch = appSource.match(/const infrastructureNavigationItems = \[([\s\S]*?)\n\];/);
+  const navigationSource = navigationMatch?.[1] || '';
+  const navigationPaths = [...navigationSource.matchAll(/path: '([^']+)'/g)].map(([, route]) => route);
+  const requiredRoutes = [
+    '/infrastructure/assets',
+    '/infrastructure/assets/register',
+    '/infrastructure/inventory',
+    '/infrastructure/assignment',
+    '/infrastructure/transfer',
+    '/infrastructure/verification',
+    '/infrastructure/buildings',
+    '/infrastructure/electrical',
+    '/infrastructure/generators',
+    '/infrastructure/transformers',
+    '/infrastructure/ups',
+    '/infrastructure/solar',
+    '/infrastructure/water',
+    '/infrastructure/roads',
+    '/infrastructure/maintenance',
+    '/infrastructure/work-orders',
+    '/infrastructure/preventive',
+    '/infrastructure/inspection',
+    '/infrastructure/spare-parts',
+    '/infrastructure/energy',
+    '/infrastructure/fuel',
+    '/infrastructure/tracking',
+    '/infrastructure/requests',
+    '/infrastructure/reports',
+    '/infrastructure/documents',
+    '/infrastructure/notifications',
+  ];
 
   it('registers the Infrastructure Dashboard at the role redirect path within Infrastructure RBAC', () => {
     expect(getDashboardRoute('infrastructure')).toBe('/infrastructure/dashboard');
     expect(appSource).toContain('<Route path="/infrastructure" element={<ProtectedRoute allowedRoles={[\'infrastructure\', \'admin\']}><InfrastructureLayout /></ProtectedRoute>}>');
     expect(appSource).toContain("'infrastructure': infrastructureNavigationItems");
-    expect(appSource).toContain('infrastructureNavigationItems.map(({ path, component: Page })');
+    expect(appSource).toContain('infrastructureNavigationItems.filter((item) => !item.navigationOnly).map(({ path, component: Page })');
     expect(appSource).toContain('<Route index element={<Navigate to="/infrastructure/dashboard" replace />} />');
+    expect(navigationPaths.filter((route) => route === '/infrastructure')).toHaveLength(1);
+    expect(navigationSource).toMatch(/path: '\/infrastructure', label: 'Infrastructure'.*navigationOnly: true/);
+    expect(navigationSource).toContain("path: '/infrastructure/dashboard', label: 'Dashboard'");
+    expect(navigationPaths.filter((route) => route === '/infrastructure/dashboard')).toHaveLength(1);
+    for (const route of requiredRoutes) {
+      expect(navigationPaths.filter((registeredRoute) => registeredRoute === route)).toHaveLength(1);
+    }
+    expect(new Set(navigationPaths).size).toBe(navigationPaths.length);
   });
 });
 

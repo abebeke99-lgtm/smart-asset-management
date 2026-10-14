@@ -116,7 +116,7 @@ const InfrastructureVerification = () => {
           <p style={{ color: "var(--color-text-secondary)", margin: "0 0 4px" }}>
             Infrastructure / Verification
           </p>
-          <h1 style={{ margin: 0, fontSize: "1.6rem" }}>Infrastructure Asset Verification</h1>
+          <h1 style={{ margin: 0, fontSize: "1.6rem" }}>Asset Verification</h1>
         </div>
         <button
           type="button"

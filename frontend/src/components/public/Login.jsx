@@ -329,7 +329,6 @@ const Login = () => {
               <Link to="/forgot-password" className="forgot-link">{t.forgotPassword}</Link>
               <button type="submit" className="login-submit" disabled={loading}>{loading ? t.signingIn : <><span>{t.signIn}</span><ArrowRight size={17} aria-hidden="true" /></>}</button>
             </form>
-            <div className="login-signup"><span>{t.noAccount}</span> <Link to="/register">{t.signUp}</Link></div>
           </section>
           <a href="/home" className="login-back-link" aria-label={t.backToHomepage}>{t.backToHomepage}</a>
         </section>
@@ -356,8 +355,6 @@ const loginMessageKeys = {
   passwordPlaceholder: 'password',
   signIn: 'signIn',
   forgotPassword: 'forgotPassword',
-  noAccount: 'noAccount',
-  signUp: 'signUp',
   backToHomepage: 'backToHomepage',
   invalidCredentials: 'invalidCredentials',
   sessionExpired: 'sessionExpired',

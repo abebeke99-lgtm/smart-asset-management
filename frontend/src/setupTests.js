@@ -28,3 +28,15 @@ jest.mock('react-router-dom', () => {
 
   return { ...router, MemoryRouter };
 });
+
+const originalMatchMedia = window.matchMedia;
+const originalLocalStorage = global.localStorage;
+
+afterEach(() => {
+  jest.clearAllMocks();
+  jest.clearAllTimers();
+  jest.useRealTimers();
+  localStorage.clear();
+  window.matchMedia = originalMatchMedia;
+  Object.keys(localStorage).forEach(key => localStorage.removeItem(key));
+});

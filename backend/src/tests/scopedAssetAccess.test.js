@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { Op } = require('sequelize');
-const { Asset, Assignment, Inventory, sequelize } = require('../models');
+const { Asset, Assignment, Department, Inventory, sequelize } = require('../models');
 const { getAllAssets, getAssetById, updateAsset, createAsset } = require('../controllers/assetController');
 const { getInventory } = require('../controllers/inventoryController');
 const { restoreAsset, lookupByQr, permanentDeleteAsset } = require('../controllers/assetExtendedController');
@@ -256,9 +256,11 @@ test('department tracking history routes require asset-view permission and depar
 
 test('generic asset detail, update, and recovery cannot access another College asset', async () => {
   const originalFindOne = Asset.findOne;
+  const originalDepartmentFindAll = Department.findAll;
   const originalTransaction = sequelize.transaction;
   const lookups = [];
   Asset.findOne = async (options) => { lookups.push(options); return null; };
+  Department.findAll = async () => [];
   sequelize.transaction = async () => ({ rollback: async () => {}, commit: async () => {}, LOCK: { UPDATE: 'UPDATE' } });
   try {
     const detailResponse = makeResponse();
@@ -269,7 +271,8 @@ test('generic asset detail, update, and recovery cannot access another College a
     const updateResponse = makeResponse();
     await updateAsset(scopedRequest(), updateResponse);
     assert.equal(updateResponse.statusCode, 404);
-    assert.deepEqual(lookups[1].where, { id: '42', collegeId: 1 });
+    assert.deepEqual(lookups[1].where[Op.and][0], { id: '42' });
+    assert.deepEqual(lookups[1].where[Op.and][1][Op.or], [{ collegeId: 1 }]);
 
     const restoreResponse = makeResponse();
     await restoreAsset(scopedRequest(), restoreResponse, (error) => { throw error; });
@@ -278,6 +281,7 @@ test('generic asset detail, update, and recovery cannot access another College a
     assert.equal(lookups[2].paranoid, false);
   } finally {
     Asset.findOne = originalFindOne;
+    Department.findAll = originalDepartmentFindAll;
     sequelize.transaction = originalTransaction;
   }
 });

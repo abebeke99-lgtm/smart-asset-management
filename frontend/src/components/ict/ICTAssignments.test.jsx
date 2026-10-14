@@ -32,12 +32,15 @@ describe('ICTAssignments asset loading', () => {
   });
 
   test('shows loading state while requests are pending', () => {
-    getAllAssets.mockReturnValue(new Promise(() => {}));
+    let resolveAssets;
+    const pendingPromise = new Promise((resolve) => { resolveAssets = resolve; });
+    getAllAssets.mockReturnValue(pendingPromise);
 
     const { container } = render(<ICTAssignments />);
 
     expect(container.querySelector('.ia-skeletons')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Asset Assignments' })).toBeInTheDocument();
+    resolveAssets([asset]);
   });
 
   test('renders successfully loaded assets in the asset selector', async () => {

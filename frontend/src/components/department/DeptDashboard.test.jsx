@@ -46,12 +46,15 @@ beforeEach(() => {
 });
 
 test('shows an accessible dashboard skeleton while the API request is pending', () => {
-  apiClient.get.mockReturnValue(new Promise(() => {}));
+  let resolveDashboard;
+  const pendingPromise = new Promise((resolve) => { resolveDashboard = resolve; });
+  apiClient.get.mockReturnValue(pendingPromise);
   render(<StrictMode><DeptDashboard /></StrictMode>);
   expect(screen.getByRole('main', { name: 'Loading department dashboard' })).toHaveAttribute('aria-busy', 'true');
   expect(screen.getByRole('status')).toHaveTextContent('Loading department dashboard');
   expect(apiClient.get).toHaveBeenCalledTimes(1);
   expect(apiClient.get).toHaveBeenCalledWith('/department/dashboard');
+  resolveDashboard(successfulResponse());
 });
 
 test('renders authorized department, actual KPI values, and valid empty states', async () => {

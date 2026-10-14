@@ -128,11 +128,14 @@ test('retries an uncached 304 response before showing a load error', async () =>
 });
 
 test('shows a loading state until the low-stock API responds', () => {
-  apiClient.get.mockReturnValue(new Promise(() => {}));
+  let resolveLowStock;
+  const pendingPromise = new Promise((resolve) => { resolveLowStock = resolve; });
+  apiClient.get.mockReturnValue(pendingPromise);
 
   renderPage();
 
   expect(screen.getByText('Loading low-stock alerts...')).toBeInTheDocument();
+  resolveLowStock({ data: { success: true, data: [] } });
 });
 
 test('filters and sorts through the scoped API, including dashboard out-of-stock links', async () => {
