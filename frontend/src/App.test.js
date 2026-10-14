@@ -386,7 +386,9 @@ describe('Infrastructure dashboard route wiring', () => {
   it('registers the Infrastructure Dashboard at the role redirect path within Infrastructure RBAC', () => {
     expect(getDashboardRoute('infrastructure')).toBe('/infrastructure/dashboard');
     expect(appSource).toContain('<Route path="/infrastructure" element={<ProtectedRoute allowedRoles={[\'infrastructure\', \'admin\']}><InfrastructureLayout /></ProtectedRoute>}>');
-    expect(appSource).toContain('<Route path="dashboard" element={<InfrastructureDashboard />} />');
+    expect(appSource).toContain("'infrastructure': infrastructureNavigationItems");
+    expect(appSource).toContain('infrastructureNavigationItems.map(({ path, component: Page })');
+    expect(appSource).toContain('<Route index element={<Navigate to="/infrastructure/dashboard" replace />} />');
   });
 });
 

@@ -5,14 +5,14 @@
 // ==============================================
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate, useLocation, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, NavLink, Navigate, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import './App.css';
 import './admin-design-system.css';
 import './styles/admin/index.css';
 import './components/ict/ICTModuleThemes.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { Activity, Archive, ArrowLeftRight, BarChart3, BatteryCharging, Bell, BriefcaseBusiness, Building, Building2, CalendarCheck, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, Droplets, FilePlus2, FileText, FlaskConical, Folder, Fuel, GitBranch, House, Info, Layers, LayoutDashboard, LifeBuoy, Link2, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, QrCode, Radio, Search, Settings, ShieldCheck, Sun, TrendingUp, Trash2, Undo2, UserCircle, UserRound, Users, Wrench, X, Zap } from 'lucide-react';
+import { Activity, Archive, ArrowLeftRight, BarChart3, BatteryCharging, Bell, Boxes, BriefcaseBusiness, Building, Building2, CalendarCheck, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, DatabaseBackup, Droplets, FilePlus2, FileText, FlaskConical, Folder, Fuel, GitBranch, House, Info, Layers, LayoutDashboard, LifeBuoy, Link2, LogIn, LogOut, Mail, MapPin, Menu, Moon, MoreHorizontal, Package, PlusSquare, QrCode, Radio, ScanSearch, Search, Settings, ShieldCheck, Sun, TrendingUp, Trash2, Undo2, UserCheck, UserCircle, UserRound, Users, Wrench, X, Zap } from 'lucide-react';
 import MaintenanceLayout from './components/maintenance/MaintenanceLayout';
 import Login from './components/public/Login';
 
@@ -216,6 +216,37 @@ const StoreWarranty = lazy(() => import('./components/store/StoreWarranty'));
 const StoreReports = lazy(() => import('./components/store/StoreReports'));
 const ScopedWorkflowPage = lazy(() => import('./components/shared/ScopedWorkflowPage'));
 const InfrastructureInspection = lazy(() => import('./components/infrastructure/InfrastructureInspection'));
+
+const infrastructureNavigationItems = [
+  { path: '/infrastructure/dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'OVERVIEW', permission: 'infrastructure.dashboard.view', component: InfrastructureDashboard },
+  { path: '/infrastructure/assets', label: 'Assets', icon: Package, section: 'ASSETS', permission: 'infrastructure.assets.view', component: InfrastructureAssets },
+  { path: '/infrastructure/assets/register', label: 'Register Asset', icon: PlusSquare, section: 'ASSETS', permission: 'infrastructure.assets.view', nested: true, component: RegisterInfrastructureAsset },
+  { path: '/infrastructure/inventory', label: 'Inventory', icon: Boxes, section: 'ASSETS', permission: 'infrastructure.assets.view', component: InfrastructureInventory },
+  { path: '/infrastructure/buildings', label: 'Buildings', icon: Building2, section: 'INFRASTRUCTURE', component: InfrastructureBuildings },
+  { path: '/infrastructure/electrical', label: 'Electrical', icon: Zap, section: 'INFRASTRUCTURE', component: InfrastructureElectrical },
+  { path: '/infrastructure/generators', label: 'Generators', icon: Settings, section: 'INFRASTRUCTURE', component: InfrastructureGenerators },
+  { path: '/infrastructure/transformers', label: 'Transformers', icon: Zap, section: 'INFRASTRUCTURE', component: InfrastructureTransformers },
+  { path: '/infrastructure/ups', label: 'UPS', icon: BatteryCharging, section: 'INFRASTRUCTURE', component: InfrastructureUPS },
+  { path: '/infrastructure/solar', label: 'Solar', icon: Sun, section: 'INFRASTRUCTURE', component: InfrastructureSolar },
+  { path: '/infrastructure/water', label: 'Water', icon: Droplets, section: 'INFRASTRUCTURE', component: InfrastructureWater },
+  { path: '/infrastructure/roads', label: 'Roads', icon: GitBranch, section: 'INFRASTRUCTURE', component: InfrastructureRoads },
+  { path: '/infrastructure/spare-parts', label: 'Spare Parts', icon: Package, section: 'INFRASTRUCTURE', component: InfrastructureSpareParts },
+  { path: '/infrastructure/energy', label: 'Energy', icon: Zap, section: 'INFRASTRUCTURE', component: InfrastructureEnergy },
+  { path: '/infrastructure/fuel', label: 'Fuel', icon: Fuel, section: 'INFRASTRUCTURE', component: InfrastructureFuel },
+  { path: '/infrastructure/assignment', label: 'Assignment', icon: UserCheck, section: 'OPERATIONS', permission: 'infrastructure.assets.view', component: InfrastructureAssignment },
+  { path: '/infrastructure/tracking', label: 'Tracking', icon: Radio, section: 'OPERATIONS', permission: 'infrastructure.tracking.view', component: InfrastructureTracking },
+  { path: '/infrastructure/transfer', label: 'Transfer', icon: ArrowLeftRight, section: 'OPERATIONS', permission: 'infrastructure.assets.update', component: InfrastructureTransfer },
+  { path: '/infrastructure/inspection', label: 'Inspection', icon: ClipboardCheck, section: 'OPERATIONS', component: InfrastructureInspection },
+  { path: '/infrastructure/verification', label: 'Verification', icon: ScanSearch, section: 'OPERATIONS', permission: 'infrastructure.assets.view', component: InfrastructureVerification },
+  { path: '/infrastructure/maintenance', label: 'Maintenance', icon: Wrench, section: 'MAINTENANCE', permission: 'infrastructure.maintenance.view', component: InfrastructureMaintenance },
+  { path: '/infrastructure/preventive', label: 'Preventive Maintenance', icon: CalendarCheck, section: 'MAINTENANCE', permission: 'infrastructure.workorders.view', component: InfrastructurePreventive },
+  { path: '/infrastructure/work-orders', label: 'Work Orders', icon: ClipboardList, section: 'MAINTENANCE', permission: 'infrastructure.workorders.view', component: InfrastructureWorkOrders },
+  { path: '/infrastructure/requests', label: 'Requests', icon: FileText, section: 'REQUESTS & RECORDS', component: InfrastructureRequests },
+  { path: '/infrastructure/documents', label: 'Documents', icon: FileText, section: 'REQUESTS & RECORDS', component: InfrastructureDocuments },
+  { path: '/infrastructure/notifications', label: 'Notifications', icon: Bell, section: 'REQUESTS & RECORDS', permission: 'infrastructure.notifications.view', component: InfrastructureNotifications },
+  { path: '/infrastructure/reports', label: 'Reports', icon: BarChart3, section: 'REQUESTS & RECORDS', permission: 'infrastructure.reports.view', component: InfrastructureReports },
+  { path: '/infrastructure/audit', label: 'Audit', icon: Archive, section: 'REQUESTS & RECORDS', component: InfrastructureAudit },
+];
 
 export const normalizeRole = (role) => {
   if (!role) return 'user';
@@ -2348,6 +2379,13 @@ const DashboardOverview = () => (
   </div>
 );
 
+const InfrastructureNotFound = () => (
+  <main className="infrastructure-not-found">
+    <h1>Page not found</h1>
+    <p>The requested Infrastructure page is not available.</p>
+  </main>
+);
+
 const DashboardLayout = ({ header, sidebar, sidebarOpen, onCloseSidebar, className = '', bodyClassName = '', children }) => {
   if (header === undefined && children === undefined) {
     return (
@@ -3297,36 +3335,7 @@ function AppContent() {
         { path: ROUTES.MAINT_REQUESTS, label: 'Requests', section: 'FACILITY MAINTENANCE', permission: 'maintenance.requests.view' },
         { path: '/maintenance/work-orders', label: 'Work Orders', section: 'FACILITY MAINTENANCE' }
       ],
-      'infrastructure': [
-        { path: '/infrastructure/dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'OVERVIEW', permission: 'infrastructure.dashboard.view' },
-        { path: '/infrastructure/assets/register', label: 'Register Asset', icon: FilePlus2, section: 'ASSET MANAGEMENT', permission: 'infrastructure.assets.view' },
-        { path: '/infrastructure/assets', label: 'Infrastructure Assets', icon: Package, section: 'ASSET MANAGEMENT', permission: 'infrastructure.assets.view' },
-        { path: '/infrastructure/inventory', label: 'Inventory', icon: ClipboardList, section: 'ASSET MANAGEMENT', permission: 'infrastructure.assets.view' },
-        { path: '/infrastructure/assignment', label: 'Assignments', icon: UserRound, section: 'ASSET MANAGEMENT', permission: 'infrastructure.assets.view' },
-        { path: '/infrastructure/transfer', label: 'Transfers', icon: ArrowLeftRight, section: 'ASSET MANAGEMENT', permission: 'infrastructure.assets.update' },
-        { path: '/infrastructure/verification', label: 'Verification', icon: Check, section: 'ASSET MANAGEMENT', permission: 'infrastructure.assets.view' },
-        { path: '/infrastructure/buildings', label: 'Buildings', icon: Building2, section: 'FACILITIES' },
-        { path: '/infrastructure/electrical', label: 'Electrical', icon: Zap, section: 'FACILITIES' },
-        { path: '/infrastructure/generators', label: 'Generators', icon: Settings, section: 'FACILITIES' },
-        { path: '/infrastructure/transformers', label: 'Transformers', icon: Zap, section: 'FACILITIES' },
-        { path: '/infrastructure/ups', label: 'UPS', icon: BatteryCharging, section: 'FACILITIES' },
-        { path: '/infrastructure/solar', label: 'Solar', icon: Sun, section: 'FACILITIES' },
-        { path: '/infrastructure/water', label: 'Water', icon: Droplets, section: 'FACILITIES' },
-        { path: '/infrastructure/roads', label: 'Roads', icon: GitBranch, section: 'FACILITIES' },
-        { path: '/infrastructure/maintenance', label: 'Maintenance', icon: Wrench, section: 'OPERATIONS', permission: 'infrastructure.maintenance.view' },
-        { path: '/infrastructure/work-orders', label: 'Work Orders', icon: ClipboardList, section: 'OPERATIONS', permission: 'infrastructure.workorders.view' },
-        { path: '/infrastructure/preventive', label: 'Preventive Maintenance', icon: CalendarCheck, section: 'OPERATIONS', permission: 'infrastructure.workorders.view' },
-        { path: '/infrastructure/spare-parts', label: 'Spare Parts', icon: Package, section: 'RESOURCES' },
-        { path: '/infrastructure/energy', label: 'Energy', icon: Zap, section: 'RESOURCES' },
-        { path: '/infrastructure/fuel', label: 'Fuel', icon: Fuel, section: 'RESOURCES' },
-        { path: '/infrastructure/inspection', label: 'Inspection', icon: ClipboardCheck, section: 'MONITORING' },
-        { path: '/infrastructure/tracking', label: 'Tracking', icon: Radio, section: 'MONITORING', permission: 'infrastructure.tracking.view' },
-        { path: '/infrastructure/requests', label: 'Requests', icon: FileText, section: 'ADMINISTRATION' },
-        { path: '/infrastructure/documents', label: 'Documents', icon: FileText, section: 'ADMINISTRATION' },
-        { path: '/infrastructure/notifications', label: 'Notifications', icon: Bell, section: 'REPORTS & SYSTEM', permission: 'infrastructure.notifications.view' },
-        { path: '/infrastructure/reports', label: 'Reports', icon: BarChart3, section: 'REPORTS & SYSTEM', permission: 'infrastructure.reports.view' },
-        { path: '/infrastructure/audit', label: 'Audit', icon: Archive, section: 'REPORTS & SYSTEM' },
-      ]
+      'infrastructure': infrastructureNavigationItems,
     };
     return items[normalizedRole] || [];
   };
@@ -3496,14 +3505,21 @@ function AppContent() {
   };
 
   const renderSidebarLink = (item, nested = false) => {
-    const isActive = item.path === currentActiveSidebar;
+    const isActive = item.path === currentActiveSidebar
+      || (sidebarRole === 'infrastructure'
+        && item.path === '/infrastructure/assets'
+        && normalizeAppPath(location.pathname).startsWith('/infrastructure/assets/'));
     const Icon = getNavigationIcon(item);
     const itemLabel = translateLabel(item.label);
+    const SidebarLink = sidebarRole === 'infrastructure' ? NavLink : Link;
     return (
-      <Link
+      <SidebarLink
         key={item.path}
         to={item.path}
-        className={`admin-nav-link${isActive ? ' is-active' : ''}`}
+        end={sidebarRole === 'infrastructure' && item.path === '/infrastructure/dashboard' ? true : undefined}
+        className={sidebarRole === 'infrastructure'
+          ? ({ isActive: routeIsActive }) => `admin-nav-link${isActive || routeIsActive ? ' is-active' : ''}`
+          : `admin-nav-link${isActive ? ' is-active' : ''}`}
         aria-current={isActive ? 'page' : undefined}
         title={stripLeadingDecoration(itemLabel)}
         style={nested ? { paddingLeft: '34px', fontSize: '0.86rem' } : undefined}
@@ -3513,7 +3529,7 @@ function AppContent() {
       >
         <Icon size={17} strokeWidth={1.9} aria-hidden="true" />
         <span>{stripLeadingDecoration(itemLabel)}</span>
-      </Link>
+      </SidebarLink>
     );
   };
 
@@ -3530,7 +3546,12 @@ function AppContent() {
       items: section.items.map((item) => ({ ...item, path: item.to })),
     }))
     : sidebarRole === 'infrastructure'
-      ? [{ heading: 'INFRASTRUCTURE', items: sidebarItems }]
+      ? Object.values(sidebarItems.reduce((groups, item) => {
+        const heading = item.section || 'INFRASTRUCTURE';
+        if (!groups[heading]) groups[heading] = { heading, items: [] };
+        groups[heading].items.push(item);
+        return groups;
+      }, {}))
     : sidebarRole === 'college_manager'
       ? [
         { heading: 'MAIN', items: collegeOverviewItems },
@@ -3573,7 +3594,7 @@ function AppContent() {
             return (
               <section className="sidebar-section" key={section.heading}>
                 {section.heading && <div className="sidebar-section-label">{translateLabel(section.heading)}</div>}
-                {visibleItems.map((item) => renderSidebarLink(item))}
+                {visibleItems.map((item) => renderSidebarLink(item, item.nested))}
               </section>
             );
           })}
@@ -3898,47 +3919,11 @@ function AppContent() {
 
           {/* INFRASTRUCTURE ROUTES */}
           <Route path="/infrastructure" element={<ProtectedRoute allowedRoles={['infrastructure', 'admin']}><InfrastructureLayout /></ProtectedRoute>}>
-            <Route index element={<InfrastructureDashboard />} />
-            <Route path="dashboard" element={<InfrastructureDashboard />} />
-            
-            {/* Asset Management */}
-            <Route path="assets" element={<InfrastructureAssets />} />
-            <Route path="assets/register" element={<RegisterInfrastructureAsset />} />
-            <Route path="inventory" element={<InfrastructureInventory />} />
-            <Route path="assignment" element={<InfrastructureAssignment />} />
-            <Route path="transfer" element={<InfrastructureTransfer />} />
-            <Route path="verification" element={<InfrastructureVerification />} />
-            
-            {/* Infrastructure Categories */}
-            <Route path="buildings" element={<InfrastructureBuildings />} />
-            <Route path="electrical" element={<InfrastructureElectrical />} />
-            <Route path="generators" element={<InfrastructureGenerators />} />
-            <Route path="transformers" element={<InfrastructureTransformers />} />
-            <Route path="ups" element={<InfrastructureUPS />} />
-            <Route path="solar" element={<InfrastructureSolar />} />
-            <Route path="water" element={<InfrastructureWater />} />
-            <Route path="roads" element={<InfrastructureRoads />} />
-            
-            {/* Operations */}
-            <Route path="maintenance" element={<InfrastructureMaintenance />} />
-            <Route path="work-orders" element={<InfrastructureWorkOrders />} />
-            <Route path="preventive" element={<InfrastructurePreventive />} />
-            
-            {/* Inventory & Resources */}
-            <Route path="spare-parts" element={<InfrastructureSpareParts />} />
-            <Route path="energy" element={<InfrastructureEnergy />} />
-            <Route path="fuel" element={<InfrastructureFuel />} />
-            
-            {/* Monitoring & Tracking */}
-            <Route path="inspection" element={<InfrastructureInspection />} />
-            <Route path="tracking" element={<InfrastructureTracking />} />
-            
-            {/* Management */}
-            <Route path="requests" element={<InfrastructureRequests />} />
-            <Route path="documents" element={<InfrastructureDocuments />} />
-            <Route path="notifications" element={<InfrastructureNotifications />} />
-            <Route path="reports" element={<InfrastructureReports />} />
-            <Route path="audit" element={<InfrastructureAudit />} />
+            <Route index element={<Navigate to="/infrastructure/dashboard" replace />} />
+            {infrastructureNavigationItems.map(({ path, component: Page }) => (
+              <Route key={path} path={path.slice('/infrastructure/'.length)} element={<Page />} />
+            ))}
+            <Route path="*" element={<InfrastructureNotFound />} />
           </Route>
 
           <Route path="/teaching-assistant" element={<ProtectedRoute allowedRoles={['teaching_assistant']} allowedPermissions={['assets.view']}><RoleLayout /></ProtectedRoute>}>

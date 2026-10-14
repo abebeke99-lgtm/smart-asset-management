@@ -159,7 +159,7 @@ describe('authenticated dashboard sidebar', () => {
     ['store_manager', 'Inventory'],
     ['maintenance', 'Requests'],
     ['maintenance_coordinator', 'Requests'],
-    ['infrastructure', 'Infrastructure Assets'],
+    ['infrastructure', 'Assets'],
   ])('keeps the %s menu and removes sidebar Logout while removing all duplicate sidebar cards', async (role, expectedMenu) => {
     mockAuthUser = {
       id: 40,
@@ -198,15 +198,12 @@ describe('authenticated dashboard sidebar', () => {
 
     const sidebarElement = screen.getByLabelText('Primary navigation');
     const sidebar = within(sidebarElement);
-    expect(sidebarElement.querySelectorAll('.sidebar-section')).toHaveLength(1);
-    [
+    expect(sidebarElement.querySelectorAll('.sidebar-section')).toHaveLength(6);
+    const expectedItems = [
       'Dashboard',
+      'Assets',
       'Register Asset',
-      'Infrastructure Assets',
       'Inventory',
-      'Assignments',
-      'Transfers',
-      'Verification',
       'Buildings',
       'Electrical',
       'Generators',
@@ -215,22 +212,131 @@ describe('authenticated dashboard sidebar', () => {
       'Solar',
       'Water',
       'Roads',
-      'Maintenance',
-      'Work Orders',
-      'Preventive Maintenance',
       'Spare Parts',
       'Energy',
       'Fuel',
-      'Inspection',
+      'Assignment',
       'Tracking',
+      'Transfer',
+      'Inspection',
+      'Verification',
+      'Maintenance',
+      'Preventive Maintenance',
+      'Work Orders',
       'Requests',
       'Documents',
-      'Reports',
       'Notifications',
+      'Reports',
       'Audit',
-    ].forEach((label) => {
+    ];
+    expectedItems.forEach((label) => {
       expect(sidebar.getByRole('link', { name: label })).toBeInTheDocument();
     });
+
+    const infrastructureLinks = within(sidebarElement).getAllByRole('link');
+    expect(infrastructureLinks.map((link) => link.textContent.trim())).toEqual(expectedItems);
+    expect(infrastructureLinks.map((link) => link.getAttribute('href'))).toEqual([
+      '/infrastructure/dashboard',
+      '/infrastructure/assets',
+      '/infrastructure/assets/register',
+      '/infrastructure/inventory',
+      '/infrastructure/buildings',
+      '/infrastructure/electrical',
+      '/infrastructure/generators',
+      '/infrastructure/transformers',
+      '/infrastructure/ups',
+      '/infrastructure/solar',
+      '/infrastructure/water',
+      '/infrastructure/roads',
+      '/infrastructure/spare-parts',
+      '/infrastructure/energy',
+      '/infrastructure/fuel',
+      '/infrastructure/assignment',
+      '/infrastructure/tracking',
+      '/infrastructure/transfer',
+      '/infrastructure/inspection',
+      '/infrastructure/verification',
+      '/infrastructure/maintenance',
+      '/infrastructure/preventive',
+      '/infrastructure/work-orders',
+      '/infrastructure/requests',
+      '/infrastructure/documents',
+      '/infrastructure/notifications',
+      '/infrastructure/reports',
+      '/infrastructure/audit',
+    ]);
+  });
+
+  it.each([
+    ['/infrastructure/assets/register', 'Register Asset', 'Register New Asset'],
+    ['/infrastructure/assignment', 'Assignment', 'Asset Assignment'],
+    ['/infrastructure/transfer', 'Transfer', 'Asset Transfer'],
+    ['/infrastructure/verification', 'Verification', 'Asset Verification'],
+    ['/infrastructure/inventory', 'Inventory', 'Asset Inventory'],
+  ])('navigates to %s, renders its page in the dashboard content, and activates its link', async (path, label, heading) => {
+    mockAuthUser = {
+      id: 42,
+      role: 'infrastructure',
+      username: 'infrastructure.user',
+      fullName: 'Infrastructure User',
+    };
+    window.history.pushState({}, '', '/infrastructure/dashboard');
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    const sidebar = within(screen.getByLabelText('Primary navigation'));
+    const link = sidebar.getByRole('link', { name: label });
+    fireEvent.click(link);
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe(path);
+      expect(link).toHaveAttribute('aria-current', 'page');
+    });
+    if (path === '/infrastructure/assets/register') {
+      expect(sidebar.getByRole('link', { name: 'Assets' })).toHaveClass('is-active');
+    }
+    expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument();
+    expect(document.querySelector('.dashboard-layout-body')).toContainElement(
+      screen.getByRole('heading', { name: heading }),
+    );
+  });
+
+  it('redirects the Infrastructure root to the dashboard within the layout', async () => {
+    mockAuthUser = {
+      id: 45,
+      role: 'infrastructure',
+      username: 'infrastructure.user',
+      fullName: 'Infrastructure User',
+    };
+    window.history.pushState({}, '', '/infrastructure');
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    await waitFor(() => expect(window.location.pathname).toBe('/infrastructure/dashboard'));
+    await waitFor(() => {
+      expect(document.querySelector('.dashboard-layout-body')?.textContent.trim()).not.toBe('');
+    });
+  });
+
+  it('renders an Infrastructure not-found page inside the dashboard layout', async () => {
+    mockAuthUser = {
+      id: 43,
+      role: 'infrastructure',
+      username: 'infrastructure.user',
+      fullName: 'Infrastructure User',
+    };
+    window.history.pushState({}, '', '/infrastructure/unknown-page');
+
+    await act(async () => {
+      render(<App />);
+    });
+
+    const heading = await screen.findByRole('heading', { name: 'Page not found' });
+    expect(document.querySelector('.dashboard-layout-body')).toContainElement(heading);
   });
 
   it('opens and closes the mobile navigation with its button and Escape key', async () => {
