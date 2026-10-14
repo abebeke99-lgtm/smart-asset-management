@@ -446,10 +446,16 @@ export default function InfrastructureTransformers() {
 
         const rows = extractRows(response);
         const responseData = response?.data || {};
+        const responseFilters = responseData.filters || {};
 
         setTransformers(rows);
         setSummaryData(responseData.summary || {});
-        setFilterOptions(responseData.filters || {});
+        setFilterOptions({
+          types: Array.isArray(responseFilters.types) ? responseFilters.types : [],
+          statuses: Array.isArray(responseFilters.statuses) ? responseFilters.statuses : [],
+          conditions: Array.isArray(responseFilters.conditions) ? responseFilters.conditions : [],
+          locations: Array.isArray(responseFilters.locations) ? responseFilters.locations : [],
+        });
         setPagination(
           extractPagination(response, page)
         );
@@ -699,7 +705,7 @@ export default function InfrastructureTransformers() {
         }
 
         response = await api.put(
-          `/infrastructure/transformers/${id}`,
+          `/api/infrastructure/transformers/${id}`,
           payload
         );
       } else {

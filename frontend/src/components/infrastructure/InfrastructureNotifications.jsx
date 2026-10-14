@@ -412,7 +412,7 @@ export default function InfrastructureNotifications() {
 
         const response =
           await api.get(
-            "/infrastructure/notifications",
+            "/api/infrastructure/notifications",
             {
               params: {
                 page,
@@ -592,7 +592,7 @@ export default function InfrastructureNotifications() {
         );
 
         await api.patch(
-          `/infrastructure/notifications/${notification.id}/read`
+          `/api/infrastructure/notifications/${notification.id}/read`
         );
 
         setNotifications((current) =>
@@ -639,7 +639,7 @@ export default function InfrastructureNotifications() {
         );
 
         await api.patch(
-          `/infrastructure/notifications/${notification.id}/unread`
+          `/api/infrastructure/notifications/${notification.id}/unread`
         );
 
         setNotifications((current) =>
@@ -689,7 +689,7 @@ export default function InfrastructureNotifications() {
         );
 
         await api.delete(
-          `/infrastructure/notifications/${notification.id}`
+          `/api/infrastructure/notifications/${notification.id}`
         );
 
         setNotifications((current) =>
@@ -727,7 +727,7 @@ export default function InfrastructureNotifications() {
         );
 
         await api.patch(
-          "/infrastructure/notifications/read-all"
+          "/api/infrastructure/notifications/read-all"
         );
 
         setNotifications((current) =>

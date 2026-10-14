@@ -1228,7 +1228,7 @@ const InfrastructureAssignment = () => {
         }
 
         const response = await api.get(
-          "/infrastructure/assignment",
+          "/api/infrastructure/assignment",
           { params }
         );
 
@@ -1266,8 +1266,8 @@ const InfrastructureAssignment = () => {
     try {
       const [usersResponse, assetsResponse] =
         await Promise.all([
-          api.get("/infrastructure/assignment/users"),
-          api.get("/infrastructure/assignment/assets"),
+          api.get("/api/infrastructure/assignment/users"),
+          api.get("/api/infrastructure/assignment/assets"),
         ]);
 
       setUsers(
@@ -1446,7 +1446,7 @@ const InfrastructureAssignment = () => {
       setSubmitting(true);
       setModalError("");
 
-      await api.post("/infrastructure/assignment", {
+      await api.post("/api/infrastructure/assignment", {
         assetId: form.assetId,
         userId: form.userId,
         location: form.location || null,
@@ -1493,7 +1493,7 @@ const InfrastructureAssignment = () => {
 
     try {
       await api.patch(
-        `/infrastructure/assignment/${assignmentId}/cancel`
+        `/api/infrastructure/assignment/${assignmentId}/cancel`
       );
 
       await loadAssignments({ silent: true });
@@ -1533,7 +1533,7 @@ const InfrastructureAssignment = () => {
 
     try {
       await api.patch(
-        `/infrastructure/assignment/${assignmentId}/return`
+        `/api/infrastructure/assignment/${assignmentId}/return`
       );
 
       await loadAssignments({ silent: true });

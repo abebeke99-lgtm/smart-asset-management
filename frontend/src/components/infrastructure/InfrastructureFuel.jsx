@@ -477,7 +477,7 @@ export default function InfrastructureFuel() {
       setError("");
 
       const response = await api.get(
-        "/infrastructure/fuel",
+        "/api/infrastructure/fuel",
         {
           params: {
             page,
@@ -865,7 +865,7 @@ export default function InfrastructureFuel() {
 
       if (editingRecord?.id) {
         await api.put(
-          `/infrastructure/fuel/${editingRecord.id}`,
+          `/api/infrastructure/fuel/${editingRecord.id}`,
           payload
         );
 
@@ -874,7 +874,7 @@ export default function InfrastructureFuel() {
         );
       } else {
         await api.post(
-          "/infrastructure/fuel",
+          "/api/infrastructure/fuel",
           payload
         );
 
@@ -915,7 +915,7 @@ export default function InfrastructureFuel() {
       setError("");
 
       await api.delete(
-        `/infrastructure/fuel/${selectedRecord.id}`
+        `/api/infrastructure/fuel/${selectedRecord.id}`
       );
 
       setSuccess(

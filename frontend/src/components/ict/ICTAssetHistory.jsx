@@ -5,6 +5,7 @@ import apiClient, { getApiErrorMessage } from '../../services/apiClient';
 import { getAssetHistory, getAssetHistoryByAsset } from '../../services/ictAssetHistoryService';
 
 const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Not recorded';
+const asArray = (value) => Array.isArray(value) ? value : [];
 const displayValue = (value) => {
   if (value === null || value === undefined || value === '') return 'Not recorded';
   if (typeof value === 'object') return Object.entries(value).map(([key, item]) => `${key}: ${displayValue(item)}`).join(' | ');
@@ -41,7 +42,7 @@ const ICTAssetHistory = () => {
     apiClient.get('/ict/options').then((response) => {
       if (!mounted) return;
       const data = response.data || {};
-      setOptions({ categories: data.categories || [], departments: data.departments || [] });
+      setOptions({ categories: asArray(data.categories), departments: asArray(data.departments) });
     }).catch(() => {});
     return () => { mounted = false; };
   }, []);
@@ -54,9 +55,9 @@ const ICTAssetHistory = () => {
       getAssetHistory(query).then((response) => {
         if (!mounted) return;
         const body = response.data || {};
-        setRecords(body.data || []);
-        setEventTypes(body.eventTypes || []);
-        setPagination((current) => ({ ...current, ...(body.pagination || {}) }));
+        setRecords(asArray(body.data));
+        setEventTypes(asArray(body.eventTypes));
+        setPagination((current) => ({ ...current, ...(body.pagination && typeof body.pagination === 'object' ? body.pagination : {}) }));
       }).catch((requestError) => {
         if (mounted) setError(getApiErrorMessage(requestError, 'Unable to load asset history.'));
       }).finally(() => { if (mounted) setLoading(false); });
@@ -76,9 +77,9 @@ const ICTAssetHistory = () => {
     setRefreshing(true);
     getAssetHistory(query).then((response) => {
       const body = response.data || {};
-      setRecords(body.data || []);
-      setEventTypes(body.eventTypes || []);
-      setPagination((current) => ({ ...current, ...(body.pagination || {}) }));
+      setRecords(asArray(body.data));
+      setEventTypes(asArray(body.eventTypes));
+      setPagination((current) => ({ ...current, ...(body.pagination && typeof body.pagination === 'object' ? body.pagination : {}) }));
       setError('');
     }).catch((requestError) => setError(getApiErrorMessage(requestError, 'Unable to refresh asset history.'))).finally(() => setRefreshing(false));
   };
@@ -91,7 +92,7 @@ const ICTAssetHistory = () => {
     let mounted = true;
     setTimelineLoading(true);
     getAssetHistoryByAsset(selected.asset.id, { page: 1, limit: 100 }).then((response) => {
-      if (mounted) setTimeline(response.data?.data || []);
+      if (mounted) setTimeline(asArray(response.data?.data));
     }).catch(() => {
       if (mounted) setTimeline([]);
     }).finally(() => { if (mounted) setTimelineLoading(false); });

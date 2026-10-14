@@ -104,6 +104,10 @@ const InfrastructureDashboard = () => {
 
       openWorkOrders: Number(dashboard?.openWorkOrders) || 0,
 
+      openMaintenanceRequests: Number(dashboard?.openMaintenanceRequests) || 0,
+
+      pendingVerifications: Number(dashboard?.pendingVerifications) || 0,
+
       criticalAlerts: Number(dashboard?.criticalAlerts) || 0,
 
       operationalAssets: Number(dashboard?.operationalAssets) || 0,
@@ -221,6 +225,22 @@ const InfrastructureDashboard = () => {
       icon: ClipboardList,
       className: "purple",
       path: "/infrastructure/work-orders",
+    },
+    {
+      title: t("dashboard.infrastructureHome.openMaintenanceRequests", "Open Maintenance Requests"),
+      value: stats.openMaintenanceRequests,
+      description: t("dashboard.infrastructureHome.maintenanceRequestsDescription", "Requests not yet completed or closed"),
+      icon: Wrench,
+      className: "orange",
+      path: "/infrastructure/maintenance",
+    },
+    {
+      title: t("dashboard.infrastructureHome.pendingVerifications", "Pending Verifications"),
+      value: stats.pendingVerifications,
+      description: t("dashboard.infrastructureHome.pendingVerificationsDescription", "Assets awaiting verification"),
+      icon: ShieldCheck,
+      className: "blue",
+      path: "/infrastructure/verification",
     },
     {
       title: t("dashboard.infrastructureHome.criticalAlerts", "Critical Alerts"),
@@ -462,6 +482,15 @@ const InfrastructureDashboard = () => {
           );
         })}
       </section>
+      {dashboard?.workflowDataNote && (
+        <p
+          className="workflow-data-note"
+          role="note"
+          style={{ margin: "12px 30px 0", color: "var(--color-text-secondary)" }}
+        >
+          {dashboard.workflowDataNote}
+        </p>
+      )}
 
       {/* MAIN GRID */}
       <div className="main-grid">

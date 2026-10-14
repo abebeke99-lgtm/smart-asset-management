@@ -288,7 +288,7 @@ export default function InfrastructureWater() {
     setError("");
 
     try {
-      const response = await api.get("/infrastructure/water", {
+      const response = await api.get("/api/infrastructure/water", {
         params: {
           page,
           limit: PAGE_SIZE,
@@ -473,10 +473,10 @@ export default function InfrastructureWater() {
           throw new Error("The selected water system has no valid ID.");
         }
 
-        await api.put(`/infrastructure/water/${id}`, payload);
+        await api.put(`/api/infrastructure/water/${id}`, payload);
         setSuccess("Water system updated successfully.");
       } else {
-        await api.post("/infrastructure/water", payload);
+        await api.post("/api/infrastructure/water", payload);
         setSuccess("Water system registered successfully.");
       }
 
@@ -508,7 +508,7 @@ export default function InfrastructureWater() {
     setError("");
 
     try {
-      await api.delete(`/infrastructure/water/${id}`);
+      await api.delete(`/api/infrastructure/water/${id}`);
 
       setSuccess("Water system deleted successfully.");
       setShowDelete(null);

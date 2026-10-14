@@ -367,7 +367,7 @@ export default function InfrastructurePreventive() {
 
     try {
       const response = await api.get(
-        "/infrastructure/preventive",
+        "/api/infrastructure/preventive",
         {
           params: {
             page,
@@ -702,7 +702,7 @@ export default function InfrastructurePreventive() {
         }
 
         await api.put(
-          `/infrastructure/preventive/${id}`,
+          `/api/infrastructure/preventive/${id}`,
           payload
         );
 
@@ -711,7 +711,7 @@ export default function InfrastructurePreventive() {
         );
       } else {
         await api.post(
-          "/infrastructure/preventive",
+          "/api/infrastructure/preventive",
           payload
         );
 
@@ -751,7 +751,7 @@ export default function InfrastructurePreventive() {
 
     try {
       await api.delete(
-        `/infrastructure/preventive/${id}`
+        `/api/infrastructure/preventive/${id}`
       );
 
       setSuccess(

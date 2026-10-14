@@ -43,7 +43,7 @@ export default function InfrastructureEnergy() {
     setLoading(true);
     setError('');
     try {
-      const response = await api.get('/infrastructure/energy', {
+      const response = await api.get('/api/infrastructure/energy', {
         params: {
           page,
           limit: PAGE_SIZE,

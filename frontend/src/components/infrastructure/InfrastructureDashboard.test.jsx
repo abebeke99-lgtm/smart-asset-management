@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import InfrastructureDashboard from "./InfrastructureDashboard";
 import api from "../../services/api";
@@ -91,4 +91,32 @@ test("translates the dashboard error fallback without refetching", async () => {
   expect(await screen.findByText("የመሠረተ ልማት ዳይሬክቶሬት ዳሽቦርድን መጫን አልተቻለም።")).toBeInTheDocument();
   expect(screen.getByText("የዳሽቦርድ ውሂብ መጫን አልተቻለም")).toBeInTheDocument();
   expect(api.get).toHaveBeenCalledTimes(1);
+});
+
+test("shows maintenance request and pending verification counts from dashboard data", async () => {
+  api.get.mockResolvedValueOnce({
+    data: {
+      data: {
+        totalInfrastructureAssets: 10,
+        openWorkOrders: 2,
+        openMaintenanceRequests: 4,
+        pendingVerifications: 3,
+        workflowDataNote: "Workflow counts use the shared assets table.",
+      },
+    },
+  });
+
+  render(
+    <MemoryRouter>
+      <UIProvider>
+        <InfrastructureDashboard />
+      </UIProvider>
+    </MemoryRouter>
+  );
+
+  const requestsCard = await screen.findByText("Open Maintenance Requests");
+  const verificationCard = screen.getByText("Pending Verifications");
+  expect(within(requestsCard.closest("a")).getByText("4")).toBeInTheDocument();
+  expect(within(verificationCard.closest("a")).getByText("3")).toBeInTheDocument();
+  expect(screen.getByRole("note")).toHaveTextContent("Workflow counts use the shared assets table.");
 });

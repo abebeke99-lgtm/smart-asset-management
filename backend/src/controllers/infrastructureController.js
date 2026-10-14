@@ -395,7 +395,7 @@ const getInfrastructureDashboard = async (req, res) => {
     const infrastructureAssets = assets.filter((asset) => includesAny(asset, [
       'infrastructure', 'building', 'facility', 'electrical', 'generator',
       'transformer', 'ups', 'inverter', 'solar', 'water', 'pump', 'tank',
-      'road', 'drainage'
+      'road', 'drainage', 'spare', 'fuel', 'energy'
     ]));
     const count = (items) => items.length;
     const buildings = infrastructureAssets.filter((asset) => includesAny(asset, ['building', 'facility']));
@@ -418,20 +418,51 @@ const getInfrastructureDashboard = async (req, res) => {
       return breakdown;
     }, {});
 
-    let recentWorkOrders = [];
-    let openWorkOrders = 0;
-    try {
-      const workOrders = await MaintenanceWorkOrder.findAll({
-        where: { assetId: { [Op.in]: infrastructureAssets.map((asset) => asset.id) } },
+    const infrastructureAssetScope = infrastructureAssetWhere(req);
+    const closedStatuses = ['completed', 'cancelled', 'closed', 'resolved'];
+    const [workOrders, openWorkOrders, openMaintenanceRequests, verificationEvents] = await Promise.all([
+      MaintenanceWorkOrder.findAll({
+        where: { status: { [Op.notIn]: closedStatuses } },
+        include: [{
+          model: Asset,
+          attributes: ['id', 'name', 'assetCode', 'category', 'location'],
+          where: infrastructureAssetScope,
+          required: true
+        }],
         order: [['createdAt', 'DESC']],
-        limit: 6,
+        limit: 6
+      }),
+      MaintenanceWorkOrder.count({
+        where: { status: { [Op.notIn]: closedStatuses } },
+        include: [{ model: Asset, attributes: [], where: infrastructureAssetScope, required: true }]
+      }),
+      Maintenance.count({
+        where: { status: { [Op.notIn]: closedStatuses } },
+        include: [{ model: Asset, attributes: [], where: infrastructureAssetScope, required: true }]
+      }),
+      AuditLog.findAll({
+        attributes: ['entity'],
+        where: {
+          action: 'VERIFY_INFRASTRUCTURE_ASSET',
+          entity: { [Op.like]: 'infrastructure_asset:%' }
+        },
+        group: ['entity'],
         raw: true
-      });
-      recentWorkOrders = workOrders;
-      openWorkOrders = workOrders.filter((workOrder) => !['completed', 'cancelled'].includes(normalize(workOrder.status))).length;
-    } catch (error) {
-      console.warn('Could not load infrastructure work orders:', error.message);
-    }
+      })
+    ]);
+    const verifiedAssetEntities = new Set(verificationEvents.map((event) => event.entity));
+    const pendingVerifications = infrastructureAssets.filter((asset) => (
+      !verifiedAssetEntities.has(`infrastructure_asset:${asset.id}`)
+    )).length;
+    const recentWorkOrders = workOrders.map((workOrder) => {
+      const row = workOrder.toJSON();
+      return {
+        ...row,
+        assetName: row.Asset?.name || 'Unknown asset',
+        assetCode: row.Asset?.assetCode || '',
+        location: row.Asset?.location || ''
+      };
+    });
 
     const criticalAlertCount = criticalAlerts.length;
     const summary = {
@@ -440,6 +471,8 @@ const getInfrastructureDashboard = async (req, res) => {
       electricalSystems: count(electricalSystems),
       underMaintenance: count(underMaintenance),
       openWorkOrders,
+      openMaintenanceRequests,
+      pendingVerifications,
       criticalAlerts: criticalAlertCount
     };
     const operational = {
@@ -453,6 +486,7 @@ const getInfrastructureDashboard = async (req, res) => {
       data: {
         ...summary,
         ...operational,
+        workflowDataNote: 'Maintenance and work-order totals use existing infrastructure-category records in the shared assets table; those workflows are not yet linked to infrastructure_assets.',
         summary,
         operational,
         statusBreakdown,
@@ -1442,19 +1476,26 @@ const getInfrastructureTracking = async (req, res) => {
     const location = String(req.query.location || '').trim();
     const tagType = String(req.query.tagType || '').trim().toLowerCase();
 
-    const where = {};
+    const where = {
+      [Op.and]: [{
+        [Op.or]: [
+          { rfidTag: { [Op.not]: null, [Op.ne]: '' } },
+          { qrCode: { [Op.not]: null, [Op.ne]: '' } }
+        ]
+      }]
+    };
     if (status) where.status = status;
     if (location) {
-      where[Op.or] = [
+      where[Op.and].push({ [Op.or]: [
         { location: { [Op.like]: `%${location}%` } },
         { building: { [Op.like]: `%${location}%` } },
         { room: { [Op.like]: `%${location}%` } }
-      ];
+      ] });
     }
-    if (tagType === 'rfid') where.rfidTag = { [Op.ne]: '' };
-    if (tagType === 'qr') where.qrCode = { [Op.ne]: '' };
+    if (tagType === 'rfid') where[Op.and].push({ rfidTag: { [Op.not]: null, [Op.ne]: '' } });
+    if (tagType === 'qr') where[Op.and].push({ qrCode: { [Op.not]: null, [Op.ne]: '' } });
     if (search) {
-      where[Op.or] = [
+      where[Op.and].push({ [Op.or]: [
         { name: { [Op.like]: `%${search}%` } },
         { assetCode: { [Op.like]: `%${search}%` } },
         { serialNumber: { [Op.like]: `%${search}%` } },
@@ -1463,23 +1504,30 @@ const getInfrastructureTracking = async (req, res) => {
         { building: { [Op.like]: `%${search}%` } },
         { room: { [Op.like]: `%${search}%` } },
         { location: { [Op.like]: `%${search}%` } }
-      ];
+      ] });
     }
 
-    const { count, rows } = await Infrastructure.findAndCountAll({
-      where,
-      order: [['updatedAt', 'DESC'], ['id', 'DESC']],
-      limit,
-      offset: (page - 1) * limit,
-      raw: true,
-    });
+    const [{ count, rows }, summaryRows] = await Promise.all([
+      Infrastructure.findAndCountAll({
+        where,
+        order: [['updatedAt', 'DESC'], ['id', 'DESC']],
+        limit,
+        offset: (page - 1) * limit,
+        raw: true,
+      }),
+      Infrastructure.findAll({
+        where,
+        attributes: ['status', 'rfidTag', 'qrCode'],
+        raw: true,
+      })
+    ]);
 
     const data = rows.map(normalizeInfrastructureTrackingAsset);
     const summary = {
       total: count,
-      active: rows.filter((row) => ['Operational', 'Available', 'Active', 'Working'].includes(String(row.status || '').trim())).length,
-      rfid: rows.filter((row) => String(row.rfidTag || '').trim()).length,
-      qr: rows.filter((row) => String(row.qrCode || '').trim()).length,
+      active: summaryRows.filter((row) => ['operational', 'available', 'active', 'working'].includes(String(row.status || '').trim().toLowerCase())).length,
+      rfid: summaryRows.filter((row) => String(row.rfidTag || '').trim()).length,
+      qr: summaryRows.filter((row) => String(row.qrCode || '').trim()).length,
     };
 
     return res.json({
@@ -1501,6 +1549,106 @@ const getInfrastructureTracking = async (req, res) => {
   } catch (error) {
     console.error('Error fetching infrastructure tracking records:', error);
     return res.status(500).json({ success: false, message: 'Failed to fetch infrastructure tracking records' });
+  }
+};
+
+const saveInfrastructureTrackingTag = async (req, res) => {
+  try {
+    const editingId = req.params.id ? Number(req.params.id) : null;
+    const assetId = Number(req.body?.assetId);
+    const assetCode = String(req.body?.assetTag || '').trim();
+    const tagType = String(req.body?.tagType || '').trim().toLowerCase();
+    const qrCode = String(req.body?.qrCode || (tagType.includes('qr') ? req.body?.tagCode : '') || '').trim();
+    const rfidTag = String(req.body?.rfidUid || req.body?.rfidTag || (tagType.includes('rfid') ? req.body?.tagCode : '') || '').trim();
+    const setQr = ['qr', 'qr + rfid', 'qr+rfid'].includes(tagType);
+    const setRfid = ['rfid', 'qr + rfid', 'qr+rfid'].includes(tagType);
+
+    if (!setQr && !setRfid) {
+      return res.status(422).json({ success: false, message: 'Choose QR, RFID, or both.' });
+    }
+    if ((setQr && !qrCode) || (setRfid && !rfidTag)) {
+      return res.status(422).json({ success: false, message: 'Provide a unique identifier for each selected tag type.' });
+    }
+    if (qrCode.length > 255 || rfidTag.length > 255) {
+      return res.status(422).json({ success: false, message: 'Tag identifiers cannot exceed 255 characters.' });
+    }
+
+    let asset;
+    if (editingId) {
+      if (!Number.isSafeInteger(editingId) || editingId <= 0) {
+        return res.status(400).json({ success: false, message: 'Infrastructure asset ID is invalid.' });
+      }
+      asset = await Infrastructure.findByPk(editingId);
+    } else {
+      const lookups = [];
+      if (Number.isSafeInteger(assetId) && assetId > 0) lookups.push({ id: assetId });
+      if (assetCode) lookups.push({ assetCode });
+      if (!lookups.length) {
+        return res.status(422).json({ success: false, message: 'Provide an existing Infrastructure asset ID or asset code.' });
+      }
+      asset = await Infrastructure.findOne({ where: { [Op.or]: lookups } });
+    }
+
+    if (!asset) return res.status(404).json({ success: false, message: 'Infrastructure asset not found.' });
+
+    const tagConditions = [];
+    if (setQr) tagConditions.push({ qrCode });
+    if (setRfid) tagConditions.push({ rfidTag });
+    const duplicate = await Infrastructure.findOne({
+      where: {
+        id: { [Op.ne]: asset.id },
+        [Op.or]: tagConditions,
+      },
+    });
+    if (duplicate) return res.status(409).json({ success: false, message: 'This tag identifier is already assigned to another Infrastructure asset.' });
+
+    const changes = {};
+    if (setQr) changes.qrCode = qrCode;
+    if (setRfid) changes.rfidTag = rfidTag;
+    await asset.update(changes);
+    await AuditLog.create({
+      userId: req.user.id,
+      action: editingId ? 'UPDATE_INFRASTRUCTURE_ASSET_TAG' : 'REGISTER_INFRASTRUCTURE_ASSET_TAG',
+      entity: `infrastructure_asset:${asset.id}`,
+      details: JSON.stringify({ tagType, qrCode: setQr ? qrCode : null, rfidTag: setRfid ? rfidTag : null }),
+    });
+
+    return res.json({
+      success: true,
+      data: normalizeInfrastructureTrackingAsset(asset),
+      message: editingId ? 'Infrastructure asset tags updated successfully.' : 'Infrastructure asset tag registered successfully.',
+    });
+  } catch (error) {
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({ success: false, message: 'This tag identifier is already assigned to another Infrastructure asset.' });
+    }
+    console.error('Failed to save Infrastructure asset tag:', error);
+    return res.status(500).json({ success: false, message: 'Failed to save Infrastructure asset tag.' });
+  }
+};
+
+const clearInfrastructureTrackingTags = async (req, res) => {
+  try {
+    const assetId = Number(req.params.id);
+    if (!Number.isSafeInteger(assetId) || assetId <= 0) {
+      return res.status(400).json({ success: false, message: 'Infrastructure asset ID is invalid.' });
+    }
+    const asset = await Infrastructure.findByPk(assetId);
+    if (!asset) return res.status(404).json({ success: false, message: 'Infrastructure asset not found.' });
+
+    const removedTags = { qrCode: asset.qrCode || null, rfidTag: asset.rfidTag || null };
+    await asset.update({ qrCode: null, rfidTag: null });
+    await AuditLog.create({
+      userId: req.user.id,
+      action: 'REMOVE_INFRASTRUCTURE_ASSET_TAGS',
+      entity: `infrastructure_asset:${asset.id}`,
+      details: JSON.stringify(removedTags),
+    });
+
+    return res.json({ success: true, message: 'Infrastructure asset tags removed successfully.' });
+  } catch (error) {
+    console.error('Failed to remove Infrastructure asset tags:', error);
+    return res.status(500).json({ success: false, message: 'Failed to remove Infrastructure asset tags.' });
   }
 };
 
@@ -1535,8 +1683,15 @@ const scanInfrastructureTracking = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Asset not found.' });
     }
 
-    const openWorkOrders = await MaintenanceWorkOrder.count({
-      where: { assetId: asset.id, status: { [Op.notIn]: ['completed', 'cancelled'] } },
+    const scanLocation = String(req.body?.observedLocation || '').trim();
+    if (scanLocation.length > 255) {
+      return res.status(422).json({ success: false, message: 'Observed scan location cannot exceed 255 characters.' });
+    }
+    await AuditLog.create({
+      userId: req.user.id,
+      action: 'SCAN_INFRASTRUCTURE_ASSET',
+      entity: `infrastructure_asset:${asset.id}`,
+      details: JSON.stringify({ scanType, observedLocation: scanLocation || null }),
     });
     const recentAudit = await AuditLog.findAll({
       where: { entity: `infrastructure_asset:${asset.id}` },
@@ -1551,9 +1706,7 @@ const scanInfrastructureTracking = async (req, res) => {
       data: {
         ...payload,
         scanType,
-        maintenance: {
-          openWorkOrders,
-        },
+        workflowNote: 'Maintenance work orders are stored against the separate shared assets table and cannot be safely linked to this Infrastructure record without an approved schema relationship.',
         history: recentAudit.map((entry) => ({
           id: entry.id,
           action: entry.action,
@@ -2093,5 +2246,7 @@ module.exports = {
   updateInfrastructureAssignment,
   finishInfrastructureAssignment,
   getInfrastructureTracking,
-  scanInfrastructureTracking
+  scanInfrastructureTracking,
+  saveInfrastructureTrackingTag,
+  clearInfrastructureTrackingTags
 };

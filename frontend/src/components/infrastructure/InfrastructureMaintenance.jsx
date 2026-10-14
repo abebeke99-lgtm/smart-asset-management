@@ -466,7 +466,7 @@ export default function InfrastructureMaintenance() {
 
     try {
       const response = await api.get(
-        "/infrastructure/maintenance",
+        "/api/infrastructure/maintenance",
         {
           params: {
             page,
@@ -555,7 +555,7 @@ export default function InfrastructureMaintenance() {
 
   useEffect(() => {
     let active = true;
-    api.get("/infrastructure/maintenance/assets")
+    api.get("/api/infrastructure/maintenance/assets")
       .then((response) => {
         if (active) setAssets(response.data?.data || []);
       })
@@ -789,7 +789,7 @@ export default function InfrastructureMaintenance() {
         }
 
         await api.put(
-          `/infrastructure/maintenance/${id}`,
+          `/api/infrastructure/maintenance/${id}`,
           payload
         );
 
@@ -798,7 +798,7 @@ export default function InfrastructureMaintenance() {
         );
       } else {
         await api.post(
-          "/infrastructure/maintenance",
+          "/api/infrastructure/maintenance",
           payload
         );
 
@@ -838,7 +838,7 @@ export default function InfrastructureMaintenance() {
 
     try {
       await api.delete(
-        `/infrastructure/maintenance/${id}`
+        `/api/infrastructure/maintenance/${id}`
       );
 
       setSuccess(

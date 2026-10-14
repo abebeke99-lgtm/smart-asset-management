@@ -344,7 +344,7 @@ export default function InfrastructureRoads() {
 
     try {
       const response = await api.get(
-        "/infrastructure/roads",
+        "/api/infrastructure/roads",
         {
           params: {
             page,
@@ -644,7 +644,7 @@ export default function InfrastructureRoads() {
         }
 
         await api.put(
-          `/infrastructure/roads/${id}`,
+          `/api/infrastructure/roads/${id}`,
           payload
         );
 
@@ -653,7 +653,7 @@ export default function InfrastructureRoads() {
         );
       } else {
         await api.post(
-          "/infrastructure/roads",
+          "/api/infrastructure/roads",
           payload
         );
 
@@ -693,7 +693,7 @@ export default function InfrastructureRoads() {
 
     try {
       await api.delete(
-        `/infrastructure/roads/${id}`
+        `/api/infrastructure/roads/${id}`
       );
 
       setSuccess(

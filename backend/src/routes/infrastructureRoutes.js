@@ -50,7 +50,9 @@ const {
   updateInfrastructureFuel,
   deactivateInfrastructureFuel,
   getInfrastructureTracking,
-  scanInfrastructureTracking
+  scanInfrastructureTracking,
+  saveInfrastructureTrackingTag,
+  clearInfrastructureTrackingTags
 } = require('../controllers/infrastructureController');
 const { getInfrastructureUps, getInfrastructureUpsById, saveInfrastructureUps, deactivateInfrastructureUps } = require('../controllers/infrastructureController');
 const { getInfrastructureSolar, getInfrastructureSolarById, saveInfrastructureSolar, deactivateInfrastructureSolar } = require('../controllers/infrastructureController');
@@ -64,6 +66,8 @@ const preventiveController = require('../controllers/infrastructurePreventiveCon
 const infrastructureRequests = require('../controllers/infrastructureRequestController');
 const infrastructureReports = require('../controllers/infrastructureReportController');
 const infrastructureNotifications = require('../controllers/infrastructureNotificationController');
+const infrastructureAudit = require('../controllers/infrastructureAuditController');
+const infrastructureSpareParts = require('../controllers/infrastructureSparePartsController');
 
 // Middleware
 router.use(requireAuth);
@@ -71,6 +75,9 @@ router.use(requireAuth);
 router.get('/requests', requireRole('admin', 'infrastructure'), infrastructureRequests.listInfrastructureRequests);
 router.post('/requests', requireRole('admin', 'infrastructure'), infrastructureRequests.createInfrastructureRequest);
 router.patch('/requests/:id/decision', requireRole('admin', 'infrastructure'), infrastructureRequests.decideInfrastructureRequest);
+router.get('/audit', requireRole('admin', 'infrastructure'), infrastructureAudit.listInfrastructureAudit);
+router.get('/spare-parts', requireRole('admin', 'infrastructure'), infrastructureSpareParts.listInfrastructureSpareParts);
+router.get('/spare-parts/:id/transactions', requireRole('admin', 'infrastructure'), infrastructureSpareParts.listSparePartTransactions);
 
 router.get('/maintenance/assets', requireRole('admin', 'infrastructure'), getInfrastructureMaintenanceAssets);
 router.get('/maintenance', requireRole('admin', 'infrastructure'), getInfrastructureMaintenance);
@@ -186,6 +193,9 @@ router.put('/fuel/:id', requireRole('admin', 'infrastructure'), updateInfrastruc
 router.delete('/fuel/:id', requireRole('admin', 'infrastructure'), deactivateInfrastructureFuel);
 router.get('/tracking', requireRole('admin', 'infrastructure'), getInfrastructureTracking);
 router.post('/tracking/scan', requireRole('admin', 'infrastructure'), scanInfrastructureTracking);
+router.post('/tracking', requireRole('admin', 'infrastructure'), saveInfrastructureTrackingTag);
+router.put('/tracking/:id', requireRole('admin', 'infrastructure'), saveInfrastructureTrackingTag);
+router.delete('/tracking/:id', requireRole('admin', 'infrastructure'), clearInfrastructureTrackingTags);
 // Get all infrastructure assets
 router.get('/', requireRole('admin', 'infrastructure'), getAllInfrastructureAssets);
 

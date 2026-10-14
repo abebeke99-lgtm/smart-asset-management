@@ -253,7 +253,7 @@ export default function InfrastructureBuildings() {
         setError("");
 
         const response = await api.get(
-          "/infrastructure/buildings",
+          "/api/infrastructure/buildings",
           {
             params: {
               page,
@@ -509,12 +509,12 @@ export default function InfrastructureBuildings() {
         }
 
         response = await api.put(
-          `/infrastructure/buildings/${id}`,
+          `/api/infrastructure/buildings/${id}`,
           payload
         );
       } else {
         response = await api.post(
-          "/infrastructure/buildings",
+          "/api/infrastructure/buildings",
           payload
         );
       }
@@ -569,7 +569,7 @@ export default function InfrastructureBuildings() {
       setError("");
 
       await api.delete(
-        `/infrastructure/buildings/${id}`
+        `/api/infrastructure/buildings/${id}`
       );
 
       setSelectedBuilding(null);

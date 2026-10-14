@@ -59,7 +59,7 @@ const InfrastructureRequests = () => {
     setState((previous) => ({ ...previous, loading: initial, tableLoading: !initial, error: '' }));
 
     try {
-      const response = await api.get('/infrastructure/requests', {
+      const response = await api.get('/api/infrastructure/requests', {
         params: { ...query, page, limit: 20, search: query.search || undefined },
       });
 
@@ -107,7 +107,7 @@ const InfrastructureRequests = () => {
     setSaving(true);
 
     try {
-      await api.post('/infrastructure/requests', {
+      await api.post('/api/infrastructure/requests', {
         ...form,
         quantity: Number(form.quantity),
       });
@@ -129,7 +129,7 @@ const InfrastructureRequests = () => {
     setSaving(true);
 
     try {
-      await api.patch(`/infrastructure/requests/${decision.request.id}/decision`, {
+      await api.patch(`/api/infrastructure/requests/${decision.request.id}/decision`, {
         decision: decision.value,
         comment: reason.trim(),
       });

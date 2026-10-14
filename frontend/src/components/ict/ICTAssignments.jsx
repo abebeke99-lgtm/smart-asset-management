@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 const today = () => new Date().toISOString().split('T')[0];
+const asArray = (value) => Array.isArray(value) ? value : [];
 const dateLabel = (value) => value ? new Date(value).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : 'Not specified';
 const displayUser = (item) => item?.full_name || item?.fullName || item?.name || item?.username || `User #${item?.id || ''}`;
 const displayAsset = (item) => item?.name || item?.asset_name || 'Unnamed asset';
@@ -85,14 +86,14 @@ const ICTAssignments = () => {
         axios.get('/api/departments'),
         axios.get('/api/assignments', { params: { page: 1, limit: 500 } }),
       ]);
-      const assetRows = assetsResponse;
+      const assetRows = asArray(assetsResponse);
       setAssets(assetRows);
       if (requestedAssetId && assetRows.some((item) => String(item.id) === requestedAssetId && String(item.status || '').toLowerCase() === 'available')) {
         setForm((current) => ({ ...current, asset: requestedAssetId }));
       }
-      setUsers(usersResponse.data?.users || usersResponse.data?.data || []);
-      setDepartments(departmentsResponse.data?.departments || departmentsResponse.data?.data || []);
-      setAssignments(assignmentsResponse.data?.assignments || assignmentsResponse.data?.data || []);
+      setUsers(asArray(usersResponse.data?.users ?? usersResponse.data?.data));
+      setDepartments(asArray(departmentsResponse.data?.departments ?? departmentsResponse.data?.data));
+      setAssignments(asArray(assignmentsResponse.data?.assignments ?? assignmentsResponse.data?.data));
     } catch (error) {
       console.error('Failed to load ICT assignments:', error);
       setLoadError(error.response?.data?.message || error.message || 'Unable to load ICT assignment data.');

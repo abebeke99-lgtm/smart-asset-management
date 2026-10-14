@@ -128,13 +128,16 @@ function normalizeTracking(row) {
       firstValue(
         row.assetId,
         row.asset_id,
-        row.assetID
+        row.assetID,
+        row.id
       ) || "—",
 
     assetTag:
       firstValue(
         row.assetTag,
         row.asset_tag,
+        row.assetCode,
+        row.assetNumber,
         row.tag,
         row.tagNumber,
         row.tag_number
@@ -152,7 +155,8 @@ function normalizeTracking(row) {
       firstValue(
         row.tagType,
         row.tag_type,
-        row.type
+        row.type,
+        row.qrCode && row.rfidTag ? "QR + RFID" : row.rfidTag ? "RFID" : row.qrCode ? "QR" : undefined
       ) || "QR",
 
     tagCode:
@@ -161,6 +165,7 @@ function normalizeTracking(row) {
         row.tag_code,
         row.qrCode,
         row.qr_code,
+        row.rfidTag,
         row.code
       ) || "—",
 
@@ -169,6 +174,7 @@ function normalizeTracking(row) {
         row.rfidUid,
         row.rfid_uid,
         row.rfidUID,
+        row.rfidTag,
         row.uid
       ) || "—",
 
@@ -335,6 +341,7 @@ export default function InfrastructureTracking() {
 
   const [form, setForm] = useState(INITIAL_FORM);
   const [scanValue, setScanValue] = useState("");
+  const [scanLocation, setScanLocation] = useState("");
   const [scanType, setScanType] = useState("rfid");
   const [scanResult, setScanResult] = useState(null);
   const [scanError, setScanError] = useState("");
@@ -354,9 +361,10 @@ export default function InfrastructureTracking() {
     setScanError("");
     setScanResult(null);
     try {
-      const response = await api.post("/infrastructure/tracking/scan", {
+      const response = await api.post("/api/infrastructure/tracking/scan", {
         identifier,
         scanType,
+        observedLocation: scanLocation.trim() || undefined,
       });
       setScanResult(response.data?.data || null);
     } catch (err) {
@@ -387,7 +395,7 @@ export default function InfrastructureTracking() {
       setError("");
 
       const response = await api.get(
-        "/infrastructure/tracking",
+        "/api/infrastructure/tracking",
         {
           params: {
             page,
@@ -656,18 +664,15 @@ export default function InfrastructureTracking() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!form.assetName.trim()) {
-      setError("Asset name is required.");
+    if (!form.assetId.trim() && !form.assetTag.trim()) {
+      setError("Enter an existing Infrastructure asset ID or asset code.");
       return;
     }
 
-    if (
-      !form.tagCode.trim() &&
-      !form.rfidUid.trim()
-    ) {
-      setError(
-        "Enter a QR/tag code or RFID UID."
-      );
+    const usesQr = form.tagType.toLowerCase().includes("qr");
+    const usesRfid = form.tagType.toLowerCase().includes("rfid");
+    if ((usesQr && !form.tagCode.trim()) || (usesRfid && !form.rfidUid.trim() && !form.tagCode.trim())) {
+      setError("Enter an identifier for each selected tag type.");
       return;
     }
 
@@ -682,62 +687,30 @@ export default function InfrastructureTracking() {
         assetTag:
           form.assetTag.trim() || undefined,
 
-        assetName:
-          form.assetName.trim(),
-
         tagType:
           form.tagType,
 
         tagCode:
-          form.tagCode.trim() || undefined,
+          form.tagCode.trim() || (usesRfid ? form.rfidUid.trim() : undefined),
 
         rfidUid:
-          form.rfidUid.trim() || undefined,
-
-        location:
-          form.location.trim() || undefined,
-
-        assignedTo:
-          form.assignedTo.trim() || undefined,
-
-        status:
-          form.status,
-
-        condition:
-          form.condition,
-
-        lastScannedAt:
-          form.lastScannedAt || undefined,
-
-        lastScannedLocation:
-          form.lastScannedLocation.trim() ||
-          undefined,
-
-        description:
-          form.description.trim() || undefined,
-
-        remarks:
-          form.remarks.trim() || undefined,
+          usesRfid ? form.rfidUid.trim() || form.tagCode.trim() : undefined,
       };
 
       if (editingRecord?.id) {
         await api.put(
-          `/infrastructure/tracking/${editingRecord.id}`,
+          `/api/infrastructure/tracking/${editingRecord.id}`,
           payload
         );
 
-        setSuccess(
-          "Tracking record updated successfully."
-        );
+        setSuccess("Infrastructure asset tags updated successfully.");
       } else {
         await api.post(
-          "/infrastructure/tracking",
+          "/api/infrastructure/tracking",
           payload
         );
 
-        setSuccess(
-          "Tracking record created successfully."
-        );
+        setSuccess("Infrastructure asset tag registered successfully.");
       }
 
       setShowModal(false);
@@ -772,11 +745,11 @@ export default function InfrastructureTracking() {
       setError("");
 
       await api.delete(
-        `/infrastructure/tracking/${selectedRecord.id}`
+        `/api/infrastructure/tracking/${selectedRecord.id}`
       );
 
       setSuccess(
-        "Tracking record deleted successfully."
+        "Infrastructure asset tags removed successfully."
       );
 
       setShowDelete(false);
@@ -1746,6 +1719,15 @@ export default function InfrastructureTracking() {
               aria-label="RFID or QR identifier"
             />
 
+            <input
+              className="filter-select"
+              value={scanLocation}
+              onChange={(event) => setScanLocation(event.target.value)}
+              placeholder="Observed location (optional)"
+              aria-label="Observed scan location"
+              maxLength={255}
+            />
+
             <button
               type="submit"
               className="btn btn-primary"
@@ -1764,12 +1746,32 @@ export default function InfrastructureTracking() {
           )}
 
           {scanResult && (
-            <div className="alert alert-success" style={{ marginTop: 12 }}>
-              <CheckCircle2 size={17} />
-              <span>
-                {scanResult.name} ({scanResult.assetNumber}) | {scanResult.location || "Location not recorded"}
-              </span>
-            </div>
+            <>
+              <div className="alert alert-success" style={{ marginTop: 12 }}>
+                <CheckCircle2 size={17} />
+                <span>
+                  {scanResult.name} ({scanResult.assetNumber}) | {scanLocation.trim() || scanResult.location || "Location not recorded"}
+                </span>
+              </div>
+              {scanResult.workflowNote && (
+                <p role="note" style={{ margin: "0 0 0 26px", color: "var(--color-text-secondary)" }}>
+                  {scanResult.workflowNote}
+                </p>
+              )}
+              {Array.isArray(scanResult.history) && scanResult.history.length > 0 && (
+                <details style={{ margin: "12px 0 0 26px" }}>
+                  <summary>Recent scan and audit history</summary>
+                  <ul>
+                    {scanResult.history.map((entry) => (
+                      <li key={entry.id}>
+                        {formatDateTime(entry.createdAt)} — {entry.action}
+                        {entry.details && `: ${entry.details}`}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </>
           )}
         </form>
 
@@ -2279,8 +2281,8 @@ export default function InfrastructureTracking() {
                 </h2>
 
                 <p>
-                  Connect an identification tag to an
-                  infrastructure asset.
+                  Connect a QR or RFID identifier to an existing Infrastructure asset.
+                  Use Assignment or Transfer to change custody or location.
                 </p>
               </div>
 
@@ -2310,6 +2312,7 @@ export default function InfrastructureTracking() {
                       value={form.assetId}
                       onChange={handleChange}
                       placeholder="Existing asset ID"
+                      readOnly={Boolean(editingRecord)}
                     />
                   </div>
 
@@ -2323,22 +2326,8 @@ export default function InfrastructureTracking() {
                       name="assetTag"
                       value={form.assetTag}
                       onChange={handleChange}
-                      placeholder="Asset tag number"
-                    />
-                  </div>
-
-                  <div className="form-group full">
-                    <label className="form-label">
-                      Asset Name *
-                    </label>
-
-                    <input
-                      className="form-input"
-                      name="assetName"
-                      value={form.assetName}
-                      onChange={handleChange}
-                      placeholder="Infrastructure asset name"
-                      required
+                      placeholder="Existing asset code"
+                      readOnly={Boolean(editingRecord)}
                     />
                   </div>
 
@@ -2368,7 +2357,7 @@ export default function InfrastructureTracking() {
 
                   <div className="form-group">
                     <label className="form-label">
-                      QR / Tag Code
+                      QR Code / Tag Code
                     </label>
 
                     <input
@@ -2394,139 +2383,9 @@ export default function InfrastructureTracking() {
                     />
                   </div>
 
-                  <div className="form-group">
-                    <label className="form-label">
-                      Location
-                    </label>
-
-                    <input
-                      className="form-input"
-                      name="location"
-                      value={form.location}
-                      onChange={handleChange}
-                      placeholder="Current asset location"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">
-                      Assigned To
-                    </label>
-
-                    <input
-                      className="form-input"
-                      name="assignedTo"
-                      value={form.assignedTo}
-                      onChange={handleChange}
-                      placeholder="Responsible person"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">
-                      Status
-                    </label>
-
-                    <select
-                      className="form-select"
-                      name="status"
-                      value={form.status}
-                      onChange={handleChange}
-                    >
-                      {STATUS_OPTIONS.map(
-                        (status) => (
-                          <option
-                            key={status}
-                            value={status}
-                          >
-                            {status}
-                          </option>
-                        )
-                      )}
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">
-                      Condition
-                    </label>
-
-                    <select
-                      className="form-select"
-                      name="condition"
-                      value={form.condition}
-                      onChange={handleChange}
-                    >
-                      {CONDITION_OPTIONS.map(
-                        (condition) => (
-                          <option
-                            key={condition}
-                            value={condition}
-                          >
-                            {condition}
-                          </option>
-                        )
-                      )}
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">
-                      Last Scanned At
-                    </label>
-
-                    <input
-                      type="datetime-local"
-                      className="form-input"
-                      name="lastScannedAt"
-                      value={form.lastScannedAt}
-                      onChange={handleChange}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">
-                      Last Scanned Location
-                    </label>
-
-                    <input
-                      className="form-input"
-                      name="lastScannedLocation"
-                      value={
-                        form.lastScannedLocation
-                      }
-                      onChange={handleChange}
-                      placeholder="Location where tag was scanned"
-                    />
-                  </div>
-
-                  <div className="form-group full">
-                    <label className="form-label">
-                      Description
-                    </label>
-
-                    <textarea
-                      className="form-textarea"
-                      name="description"
-                      value={form.description}
-                      onChange={handleChange}
-                      placeholder="Tracking/tag description..."
-                    />
-                  </div>
-
-                  <div className="form-group full">
-                    <label className="form-label">
-                      Remarks
-                    </label>
-
-                    <textarea
-                      className="form-textarea"
-                      name="remarks"
-                      value={form.remarks}
-                      onChange={handleChange}
-                      placeholder="Additional remarks..."
-                    />
-                  </div>
+                  <p className="form-group full">
+                    Tags are stored on the Infrastructure asset. Scan history is recorded in the existing audit log; location changes must use Transfers.
+                  </p>
                 </div>
               </div>
 

@@ -431,7 +431,7 @@ export default function InfrastructureReports() {
       setError("");
 
       const response = await api.get(
-        "/infrastructure/reports",
+        "/api/infrastructure/reports",
         {
           params: {
             reportType,
@@ -566,7 +566,7 @@ export default function InfrastructureReports() {
       setError("");
 
       const response = await api.get(
-        "/infrastructure/reports/export",
+        "/api/infrastructure/reports/export",
         {
           params: {
             reportType,

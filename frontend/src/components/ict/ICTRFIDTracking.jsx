@@ -27,6 +27,7 @@ const emptyState = {
   pagination: { page: 1, limit: 25, total: 0, totalPages: 1 },
 };
 
+const asArray = (value) => (Array.isArray(value) ? value : []);
 const formatDate = (value) => (value ? new Date(value).toLocaleString() : "Not detected");
 const displayValue = (value, fallback = "Not available") => value || fallback;
 
@@ -54,7 +55,19 @@ const ICTRFIDTracking = () => {
         params: Object.fromEntries(Object.entries(query).filter(([, value]) => value !== "")),
         signal,
       });
-      setState({ ...emptyState, ...(response.data || {}), pagination: { ...emptyState.pagination, ...(response.data?.pagination || {}) } });
+      const payload = response.data || {};
+      setState({
+        ...emptyState,
+        ...payload,
+        data: asArray(payload.data),
+        filters: {
+          categories: asArray(payload.filters?.categories),
+          locations: asArray(payload.filters?.locations),
+          statuses: asArray(payload.filters?.statuses),
+          conditions: asArray(payload.filters?.conditions),
+        },
+        pagination: { ...emptyState.pagination, ...(payload.pagination || {}) },
+      });
     } catch (requestError) {
       if (requestError.code === "ERR_CANCELED") return;
       setError(getApiErrorMessage(requestError, "Unable to load tracking records. Please try again."));

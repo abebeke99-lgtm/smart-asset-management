@@ -1333,7 +1333,7 @@ body.dark .admin-sidebar {
   border-radius: 999px;
 }
 
-/* Section label: one step down in size, softened white for hierarchy. */
+/* Section labels use white for readable contrast against the blue sidebar. */
 .sidebar-section-label {
   padding: 14px 10px 6px;
   color: var(--color-sidebar-label);

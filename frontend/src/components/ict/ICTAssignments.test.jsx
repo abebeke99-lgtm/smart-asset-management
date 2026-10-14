@@ -57,6 +57,21 @@ describe('ICTAssignments asset loading', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  test('keeps the page usable when lookup responses contain non-array data', async () => {
+    getAllAssets.mockResolvedValue([]);
+    axios.get.mockImplementation((url) => {
+      if (url === '/api/departments') return Promise.resolve({ data: { data: {} } });
+      if (url === '/api/users') return Promise.resolve({ data: { users: {} } });
+      if (url === '/api/assignments') return Promise.resolve({ data: { assignments: {} } });
+      return Promise.reject(new Error(`Unexpected request: ${url}`));
+    });
+
+    render(<ICTAssignments />);
+
+    expect(await screen.findByRole('status')).toHaveTextContent('No assets are currently available to assign.');
+    expect(screen.getByRole('heading', { name: 'Asset Assignments' })).toBeInTheDocument();
+  });
+
   test('shows the API error and retry action without blanking the page', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
     const error = new Error('Request failed with status code 400');

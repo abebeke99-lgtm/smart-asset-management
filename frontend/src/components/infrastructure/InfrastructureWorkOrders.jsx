@@ -30,10 +30,10 @@ export default function InfrastructureWorkOrders() {
     setLoading(true); setError("");
     try {
       const [workOrders, optionResponse] = await Promise.all([
-        api.get("/infrastructure/work-orders", { params: { ...filters, page, limit: PAGE_SIZE } }),
-        api.get("/infrastructure/work-orders/options"),
+        api.get("/api/infrastructure/work-orders", { params: { ...filters, page, limit: PAGE_SIZE } }),
+        api.get("/api/infrastructure/work-orders/options"),
       ]);
-      setRows(workOrders.data.data || []);
+      setRows(Array.isArray(workOrders.data.data) ? workOrders.data.data : []);
       setPagination(workOrders.data.pagination || { page, pages: 1, total: 0 });
       setOptions(optionResponse.data.data || { assets: [], maintenances: [], technicians: [] });
     } catch (err) { setRows([]); setError(err?.response?.data?.message || "Unable to load infrastructure work orders."); }
@@ -50,13 +50,13 @@ export default function InfrastructureWorkOrders() {
     event.preventDefault(); setSaving(true); setError("");
     try {
       const payload = { ...form, maintenanceId: Number(form.maintenanceId), assetId: Number(form.assetId), technicianId: form.technicianId ? Number(form.technicianId) : null, estimatedCost: form.estimatedCost === "" ? 0 : Number(form.estimatedCost) };
-      if (editing) await api.put(`/infrastructure/work-orders/${editing.id}`, payload); else await api.post("/infrastructure/work-orders", payload);
+      if (editing) await api.put(`/api/infrastructure/work-orders/${editing.id}`, payload); else await api.post("/api/infrastructure/work-orders", payload);
       setSuccess(editing ? "Work order updated." : "Work order created."); closeForm(); await load();
     } catch (err) { setError(err?.response?.data?.message || "Unable to save the work order."); } finally { setSaving(false); }
   };
   const transition = async (row, status) => {
     setError("");
-    try { await api.patch(`/infrastructure/work-orders/${row.id}/status`, { status }); setSuccess(`Work order marked ${label(status)}.`); await load(); if (selected?.id === row.id) setSelected(null); }
+    try { await api.patch(`/api/infrastructure/work-orders/${row.id}/status`, { status }); setSuccess(`Work order marked ${label(status)}.`); await load(); if (selected?.id === row.id) setSelected(null); }
     catch (err) { setError(err?.response?.data?.message || "Unable to update work-order status."); }
   };
   const setField = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
